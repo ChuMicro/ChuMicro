@@ -58,7 +58,7 @@ def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
 
 def test_real_tls_handshake_and_recv() -> None:
     """Open TLS, send HTTPS GET, read response."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
 

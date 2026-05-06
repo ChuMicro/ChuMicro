@@ -43,7 +43,7 @@ _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaul
 
 
 def _merged_runtime_config_with_creds() -> dict | None:
-    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip."""
+    """Return the deep-merged + flattened runtime-config dict, or ``None``."""
     if not _WORKSPACE_YAML.is_file():
         return None
     try:
@@ -53,11 +53,8 @@ def _merged_runtime_config_with_creds() -> dict | None:
         )
     except Exception:  # noqa: BLE001 — silent skip on any config error
         return None
-    wifi = merged.get("wifi")
-    if not isinstance(wifi, dict):
-        return None
-    ssid = wifi.get("ssid")
-    password = wifi.get("password")
+    ssid = merged.get("wifi.ssid")
+    password = merged.get("wifi.password")
     if not isinstance(ssid, str) or not isinstance(password, str):
         return None
     if ssid == "replace-with-your-ap-ssid":
@@ -163,10 +160,8 @@ def pytest_configure(config: pytest.Config) -> None:
             if broker is not None:
                 _BROKER_PROCESS, broker_port = broker
                 _BROKER_WORKDIR = workdir
-                merged.setdefault("mqtt", {}).setdefault("broker", {}).update(
-                    host=lan_ip,
-                    port=broker_port,
-                )
+                merged["mqtt.broker.host"] = lan_ip
+                merged["mqtt.broker.port"] = broker_port
             else:
                 shutil.rmtree(workdir, ignore_errors=True)
 

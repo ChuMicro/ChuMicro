@@ -32,17 +32,17 @@ _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaul
 
 
 def _merged_runtime_config() -> dict | None:
-    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip.
+    """Return the deep-merged + flattened runtime-config dict, or ``None``.
 
     Returns ``None`` when:
 
     * ``workspace.yml`` is missing (fresh-clone before ``setup``).
-    * The merged config has no ``[wifi]`` section, or it lacks
-      ``ssid`` / ``password`` (typically because the gitignored
-      ``workspace.yml`` hasn't been filled in yet).
-    * The merged config carries the placeholder SSID — same
-      silent-skip path so a fresh-clone contributor isn't
-      surprised by a "real network error" against a nonsense SSID.
+    * The merged flat config lacks ``wifi.ssid`` / ``wifi.password``
+      (typically because the gitignored ``workspace.yml`` hasn't been
+      filled in yet).
+    * The merged config carries the placeholder SSID — same silent-
+      skip path so a fresh-clone contributor isn't surprised by a
+      "real network error" against a nonsense SSID.
     """
     if not _WORKSPACE_YAML.is_file():
         return None
@@ -53,15 +53,10 @@ def _merged_runtime_config() -> dict | None:
         )
     except Exception:  # noqa: BLE001 — silent skip on any config error
         return None
-    wifi = merged.get("wifi")
-    if not isinstance(wifi, dict):
-        return None
-    ssid = wifi.get("ssid")
-    password = wifi.get("password")
+    ssid = merged.get("wifi.ssid")
+    password = merged.get("wifi.password")
     if not isinstance(ssid, str) or not isinstance(password, str):
         return None
-    # The literal placeholder shipped in the unified workspace.yml
-    # starter — treat it as "no creds yet".
     if ssid == "replace-with-your-ap-ssid":
         return None
     return merged

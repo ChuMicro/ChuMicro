@@ -1,14 +1,14 @@
 """Phase 3a Slice 4 acceptance — connect to a real AP across all four boards.
 
 Reads credentials from ``/runtime_config.msgpack`` on the device via
-``WifiConfig.try_from_dict(config)`` — same surface user app code
+``WifiConfig.try_from_config(config)`` — same surface user app code
 uses.  The host-side ``functional_tests/conftest.py`` builds the
 merged config dict (workspace defaults + per-library overrides) and
 hands it to ``chumicro_pytest_device.set_runtime_config()``; the
 plugin encodes + stages the file alongside the test sources.
 
 When the wifi section isn't deployed (fresh-clone without
-credentials, RAM-mode skip) ``try_from_dict`` returns ``None`` and
+credentials, RAM-mode skip) ``try_from_config`` returns ``None`` and
 every test early-returns cleanly so the suite stays committable.
 
 The test source itself never contains credentials — only the
@@ -81,7 +81,7 @@ def _make_service(wifi_config):
 
 def test_connects_to_real_ap() -> None:
     """End-to-end: associate with the configured AP, observe linked state."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
     service = _make_service(wifi_cfg)
@@ -103,7 +103,7 @@ def test_connects_to_real_ap() -> None:
 
 def test_reconnect_after_deliberate_disconnect() -> None:
     """Drop the link via ``adapter.disconnect``, watch the reconnect cycle."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
     service = _make_service(wifi_cfg)
@@ -140,7 +140,7 @@ def test_reconnect_after_deliberate_disconnect() -> None:
 
 def test_state_callback_observes_transitions() -> None:
     """Registered ``on_state_change`` listener sees the full transition sequence."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
     transitions = []

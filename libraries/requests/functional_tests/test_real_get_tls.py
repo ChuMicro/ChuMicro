@@ -154,11 +154,11 @@ def _bring_wifi_up(
 
 def test_real_https_get_completes_runner_shaped() -> None:
     """Live HTTPS GET drives to completion via pinned-CA TLS context."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
 
-    _seed_rtc(config["requests"]["now_utc_tuple"])
+    _seed_rtc(config["requests.now_utc_tuple"])
 
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")

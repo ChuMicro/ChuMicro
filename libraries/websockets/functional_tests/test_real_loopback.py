@@ -98,7 +98,7 @@ def _is_pi_pico_w_rp2() -> bool:
 
 def test_real_websocket_loopback_round_trip() -> None:
     """Server + client on the same device exchange messages over real wifi."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
     if _is_pi_pico_w_rp2():

@@ -1,9 +1,15 @@
-"""``WifiConfig`` — typed connection settings + ``from_dict`` factory.
+"""``WifiConfig`` — typed connection settings + flat-key factory.
+
+Reads from the flat-key runtime config produced by
+``chumicro_workspace.compose_runtime_config``: keys ``wifi.ssid``,
+``wifi.password``, ``wifi.hostname``, etc. live at the top of the
+flat dict, joined to their values by dots.
 
 The required / optional vocabulary is duplicated between ``__init__``
-parameter defaults and ``from_dict``'s call: both construction paths
-(direct kwargs in tests, dict-based in production) must agree, and
-writing them twice is clearer than deriving one from the other.
+parameter defaults and the ``from_config`` call: both construction
+paths (direct kwargs in tests, runtime-config in production) must
+agree, and writing them twice is clearer than deriving one from the
+other.
 """
 
 from chumicro_config import load_section, try_load_section
@@ -54,20 +60,29 @@ class WifiConfig:
         self.power_save = power_save
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WifiConfig":
-        """Build a ``WifiConfig`` from a section dict.
+    def from_config(cls, config) -> "WifiConfig":
+        """Build a ``WifiConfig`` from the flat runtime config.
 
-        Delegates to ``chumicro_config.load_section`` for uniform
-        missing-required / missing-optional / non-dict semantics.
+        Reads ``wifi.ssid`` / ``wifi.password`` (required) plus any
+        present ``wifi.<optional>`` keys from *config*.  Delegates to
+        ``chumicro_config.load_section`` for uniform missing-required /
+        missing-optional / non-dict semantics.
 
         Args:
-            data: The ``"wifi"`` section dict, typically
-                ``config["wifi"]`` from
-                :func:`chumicro_config.load_runtime_config`.
+            config: A :class:`chumicro_config.RuntimeConfig` (typically
+                ``chumicro_config.config``) or plain flat dict.
+
+        Raises:
+            chumicro_config.MissingConfigKey: ``wifi.ssid`` or
+                ``wifi.password`` is absent from *config*.
+            chumicro_config.InvalidConfigType: *config* is ``None`` or
+                not a mapping — use :meth:`try_from_config` for the
+                soft path.
         """
         return load_section(
             cls,
-            data,
+            config,
+            prefix="wifi",
             required=("ssid", "password"),
             optional={
                 "hostname": None,
@@ -80,14 +95,12 @@ class WifiConfig:
         )
 
     @classmethod
-    def try_from_dict(cls, runtime_config: dict | None) -> "WifiConfig | None":
-        """Soft-load a ``WifiConfig`` from the whole runtime config.
+    def try_from_config(cls, config) -> "WifiConfig | None":
+        """Soft-load a ``WifiConfig`` — return ``None`` when not configured.
 
-        Unlike :meth:`from_dict` (which expects a section dict and
-        raises on missing keys), this method takes the **whole
-        runtime config dict** — typically ``chumicro_config.config``
-        — and returns ``None`` whenever the wifi section is missing,
-        non-dict, or lacks the required ``ssid`` / ``password`` keys.
+        Returns ``None`` whenever :meth:`from_config` would raise:
+        *config* is ``None``, *config* isn't a mapping, or any required
+        ``wifi.*`` key is missing.
 
         Use this as a "skip if not configured" gate in app or test
         code::
@@ -95,13 +108,14 @@ class WifiConfig:
             from chumicro_config import config
             from chumicro_wifi import WifiConfig, WifiService
 
-            wifi_cfg = WifiConfig.try_from_dict(config)
+            wifi_cfg = WifiConfig.try_from_config(config)
             if wifi_cfg is None:
                 return  # not configured — skip / use defaults
             service = WifiService(wifi_cfg)
 
         Args:
-            runtime_config: The whole runtime config dict, or ``None``.
+            config: A :class:`chumicro_config.RuntimeConfig`, plain
+                flat dict, or ``None``.
 
         Returns:
             A ``WifiConfig`` instance, or ``None`` if any short-circuit
@@ -109,8 +123,8 @@ class WifiConfig:
         """
         return try_load_section(
             cls,
-            runtime_config,
-            section_name="wifi",
+            config,
+            prefix="wifi",
             required=("ssid", "password"),
             optional={
                 "hostname": None,

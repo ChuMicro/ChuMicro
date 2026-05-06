@@ -6,8 +6,9 @@ unix-ports.
 
 Three test surfaces:
 
-1. ``WifiConfig`` round-trips through ``from_dict`` per the
-   ``chumicro-config`` convention (Decision 0036).
+1. ``WifiConfig`` round-trips through ``from_config`` /
+   ``try_from_config`` against the flat-key runtime config the
+   ``chumicro-config`` library exposes.
 2. ``WifiService`` state machine drives correctly through
    DISCONNECTED → CONNECTING → CONNECTED → RECONNECTING transitions
    under a ``FakeWifiAdapter``.
@@ -17,7 +18,7 @@ Three test surfaces:
 
 import sys
 
-from chumicro_config import MissingConfigKey
+from chumicro_config import MissingConfigKey, RuntimeConfig
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
 from chumicro_wifi import WifiConfig, WifiService, WifiState
@@ -27,7 +28,7 @@ _IS_CPYTHON = sys.implementation.name == "cpython"
 
 
 # ---------------------------------------------------------------------------
-# WifiConfig — direct construction + from_dict via chumicro-config
+# WifiConfig — direct construction + from_config via chumicro-config
 # ---------------------------------------------------------------------------
 
 
@@ -41,27 +42,39 @@ def test_wifi_config_direct_construction_with_required_only() -> None:
     assert config.power_save is False
 
 
-def test_wifi_config_from_dict_required_only() -> None:
-    """``from_dict`` extracts required keys + applies defaults for the rest."""
-    config = WifiConfig.from_dict({"ssid": "HomeNet", "password": "secret"})
+def test_wifi_config_from_config_required_only_via_dict() -> None:
+    """``from_config`` reads ``wifi.<key>`` flat keys + applies defaults."""
+    config = WifiConfig.from_config(
+        {"wifi.ssid": "HomeNet", "wifi.password": "secret"},
+    )
     assert config.ssid == "HomeNet"
     assert config.password == "secret"
     assert config.hostname is None
     assert config.reconnect_backoff_max_ms == 60_000
 
 
-def test_wifi_config_from_dict_all_keys() -> None:
+def test_wifi_config_from_config_via_runtime_config_wrapper() -> None:
+    """Reads through the ``RuntimeConfig`` wrapper too — same semantics."""
+    runtime = RuntimeConfig(
+        {"wifi.ssid": "HomeNet", "wifi.password": "secret"},
+    )
+    config = WifiConfig.from_config(runtime)
+    assert config.ssid == "HomeNet"
+    assert config.password == "secret"
+
+
+def test_wifi_config_from_config_all_keys() -> None:
     """Optional keys override their defaults when present."""
-    config = WifiConfig.from_dict(
+    config = WifiConfig.from_config(
         {
-            "ssid": "HomeNet",
-            "password": "secret",
-            "hostname": "back-porch",
-            "connect_timeout_ms": 5_000,
-            "reconnect_backoff_start_ms": 500,
-            "reconnect_backoff_max_ms": 30_000,
-            "reconnect_max": 10,
-            "power_save": True,
+            "wifi.ssid": "HomeNet",
+            "wifi.password": "secret",
+            "wifi.hostname": "back-porch",
+            "wifi.connect_timeout_ms": 5_000,
+            "wifi.reconnect_backoff_start_ms": 500,
+            "wifi.reconnect_backoff_max_ms": 30_000,
+            "wifi.reconnect_max": 10,
+            "wifi.power_save": True,
         },
     )
     assert config.hostname == "back-porch"
@@ -71,49 +84,54 @@ def test_wifi_config_from_dict_all_keys() -> None:
     assert config.power_save is True
 
 
-def test_wifi_config_from_dict_missing_ssid_raises() -> None:
-    """Missing required ``ssid`` raises via the chumicro-config helper."""
+def test_wifi_config_from_config_missing_ssid_raises() -> None:
+    """Missing required ``wifi.ssid`` raises via ``load_section``."""
     with raises(MissingConfigKey):
-        WifiConfig.from_dict({"password": "secret"})
+        WifiConfig.from_config({"wifi.password": "secret"})
 
 
-def test_wifi_config_from_dict_missing_password_raises() -> None:
-    """Missing required ``password`` raises via the chumicro-config helper."""
+def test_wifi_config_from_config_missing_password_raises() -> None:
+    """Missing required ``wifi.password`` raises via ``load_section``."""
     with raises(MissingConfigKey):
-        WifiConfig.from_dict({"ssid": "HomeNet"})
+        WifiConfig.from_config({"wifi.ssid": "HomeNet"})
 
 
-def test_wifi_config_from_dict_unknown_keys_ignored() -> None:
-    """Unknown keys pass through silently (Decision 0035 §7 forward-compat)."""
-    config = WifiConfig.from_dict(
-        {"ssid": "x", "password": "y", "future_key": "ignored"},
+def test_wifi_config_from_config_unknown_keys_ignored() -> None:
+    """Unrelated flat keys pass through silently (forward-compat)."""
+    config = WifiConfig.from_config(
+        {
+            "wifi.ssid": "x",
+            "wifi.password": "y",
+            "wifi.future_key": "ignored",
+            "app.unrelated": "irrelevant",
+        },
     )
     assert config.ssid == "x"
     assert not hasattr(config, "future_key")
 
 
-def test_wifi_config_try_from_dict_returns_config_when_section_present() -> None:
-    """``try_from_dict`` builds the config when the wifi section is present + valid."""
-    runtime_config = {"wifi": {"ssid": "Net", "password": "pw"}}
-    result = WifiConfig.try_from_dict(runtime_config)
+def test_wifi_config_try_from_config_returns_config_when_keys_present() -> None:
+    """``try_from_config`` builds the config when wifi keys are present."""
+    runtime_config = {"wifi.ssid": "Net", "wifi.password": "pw"}
+    result = WifiConfig.try_from_config(runtime_config)
     assert result is not None
     assert result.ssid == "Net"
     assert result.password == "pw"
 
 
-def test_wifi_config_try_from_dict_returns_none_when_runtime_config_is_none() -> None:
+def test_wifi_config_try_from_config_returns_none_when_runtime_config_is_none() -> None:
     """``runtime_config=None`` → ``None`` (no /runtime_config.msgpack deployed)."""
-    assert WifiConfig.try_from_dict(None) is None
+    assert WifiConfig.try_from_config(None) is None
 
 
-def test_wifi_config_try_from_dict_returns_none_when_section_missing() -> None:
-    """A runtime config without a ``[wifi]`` section returns ``None``."""
-    assert WifiConfig.try_from_dict({"mqtt": {"broker": "x"}}) is None
+def test_wifi_config_try_from_config_returns_none_when_keys_missing() -> None:
+    """A flat config with no ``wifi.*`` keys returns ``None``."""
+    assert WifiConfig.try_from_config({"mqtt.broker.host": "x"}) is None
 
 
-def test_wifi_config_try_from_dict_returns_none_when_required_key_missing() -> None:
-    """A wifi section without ``ssid``/``password`` returns ``None``."""
-    assert WifiConfig.try_from_dict({"wifi": {"hostname": "x"}}) is None
+def test_wifi_config_try_from_config_returns_none_when_required_key_missing() -> None:
+    """A flat config with only ``wifi.hostname`` returns ``None``."""
+    assert WifiConfig.try_from_config({"wifi.hostname": "x"}) is None
 
 
 # ---------------------------------------------------------------------------

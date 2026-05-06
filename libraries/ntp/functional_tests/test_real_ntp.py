@@ -60,7 +60,7 @@ def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
 
 def test_real_ntp_query_returns_plausible_timestamp() -> None:
     """SNTP exchange against pool.ntp.org returns a recent timestamp."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
 

@@ -9,7 +9,7 @@ Public API::
     from chumicro_config import load_runtime_config
 
     config = load_runtime_config()
-    wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
+    wifi = WifiService(WifiConfig.from_config(config))
     runner.add(wifi)            # tick-based check/handle integration
 
     # State + IP introspection any time:

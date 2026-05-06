@@ -31,11 +31,11 @@ _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaul
 
 
 def _merged_runtime_config() -> dict | None:
-    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip.
+    """Return the deep-merged + flattened runtime-config dict, or ``None``.
 
     Adds ``requests.now_utc_tuple`` — the bench-test RTC seed used by
-    the HTTPS test — into the merged dict so the on-device test reads
-    it via ``load_runtime_config()["requests"]["now_utc_tuple"]``.
+    the HTTPS test — into the flat dict so the on-device test reads
+    it via ``config["requests.now_utc_tuple"]``.
     """
     if not _WORKSPACE_YAML.is_file():
         return None
@@ -46,18 +46,16 @@ def _merged_runtime_config() -> dict | None:
         )
     except Exception:  # noqa: BLE001 — silent skip on any config error
         return None
-    wifi = merged.get("wifi")
-    if not isinstance(wifi, dict):
-        return None
-    ssid = wifi.get("ssid")
-    password = wifi.get("password")
+    ssid = merged.get("wifi.ssid")
+    password = merged.get("wifi.password")
     if not isinstance(ssid, str) or not isinstance(password, str):
         return None
     if ssid == "replace-with-your-ap-ssid":
         return None
     now = datetime.now(UTC)
-    now_tuple = (now.year, now.month, now.day, now.hour, now.minute, now.second)
-    merged.setdefault("requests", {})["now_utc_tuple"] = now_tuple
+    merged["requests.now_utc_tuple"] = (
+        now.year, now.month, now.day, now.hour, now.minute, now.second,
+    )
     return merged
 
 

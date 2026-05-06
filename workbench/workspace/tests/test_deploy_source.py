@@ -4,8 +4,9 @@ Covers :class:`WithRuntimeConfig`, :func:`project_directory_source`,
 :func:`find_project_config`, and the end-to-end "Deployer ships the
 msgpack alongside app code" path through ``FakeTransport``.
 
-Per Decision 0057, gitignored credentials live in
-``workspace.yml`` directly — no marker, no resolver, no overlay.
+The msgpack written here is the **flat** dotted-key shape produced
+by ``compose_runtime_config``'s flatten step — on-device readers see
+``"wifi.ssid"`` directly, no nested table walk.
 """
 
 from pathlib import Path
@@ -28,7 +29,16 @@ from msgpack import unpackb
 
 
 class TestFindProjectConfig:
-    def test_returns_toml_when_present(self, tmp_path: Path) -> None:
+    def test_returns_project_config_toml_when_present(self, tmp_path: Path) -> None:
+        (tmp_path / "project_config.toml").write_text("[wifi]\nssid = 'x'\n")
+        assert find_project_config(tmp_path) == tmp_path / "project_config.toml"
+
+    def test_returns_legacy_config_toml_when_only_legacy_present(
+        self, tmp_path: Path,
+    ) -> None:
+        # User-edited workspaces from before the rename still work —
+        # the legacy ``config.toml`` is found if no canonical sibling
+        # exists.
         (tmp_path / "config.toml").write_text("[wifi]\nssid = 'x'\n")
         assert find_project_config(tmp_path) == tmp_path / "config.toml"
 
@@ -40,8 +50,17 @@ class TestFindProjectConfig:
         (tmp_path / "config.yaml").write_text("wifi:\n  ssid: x\n")
         assert find_project_config(tmp_path) == tmp_path / "config.yaml"
 
-    def test_toml_wins_over_yml(self, tmp_path: Path) -> None:
-        """Decision 0035 §1: one config per project, TOML is canonical."""
+    def test_project_config_toml_wins_over_legacy_config_toml(
+        self, tmp_path: Path,
+    ) -> None:
+        # Both the canonical and the legacy filenames present — the
+        # canonical name wins so a partly-migrated workspace doesn't
+        # silently load the older file.
+        (tmp_path / "project_config.toml").write_text("[wifi]\nssid = 'new'\n")
+        (tmp_path / "config.toml").write_text("[wifi]\nssid = 'old'\n")
+        assert find_project_config(tmp_path) == tmp_path / "project_config.toml"
+
+    def test_legacy_toml_wins_over_yml(self, tmp_path: Path) -> None:
         (tmp_path / "config.toml").write_text("[wifi]\nssid = 'toml'\n")
         (tmp_path / "config.yml").write_text("wifi:\n  ssid: yml\n")
         assert find_project_config(tmp_path) == tmp_path / "config.toml"
@@ -62,7 +81,7 @@ class TestFindProjectConfig:
 
 
 def _seed_paths(tmp_path: Path) -> tuple[Path, Path]:
-    """Lay out workspace.yml + projects/back-porch/config.toml."""
+    """Lay out workspace.yml + projects/back-porch/project_config.toml."""
     workspace_yaml = tmp_path / "workspace.yml"
     workspace_yaml.write_text(
         "defaults:\n"
@@ -72,7 +91,7 @@ def _seed_paths(tmp_path: Path) -> tuple[Path, Path]:
     )
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
-    project_config = project_dir / "config.toml"
+    project_config = project_dir / "project_config.toml"
     project_config.write_text(
         "[wifi]\n"
         'ssid = "HomeNet"\n'
@@ -96,11 +115,9 @@ class TestWithRuntimeConfig:
         assert files["/code.py"] == b"print('hi')\n"
         decoded = unpackb(files[RUNTIME_CONFIG_DEVICE_PATH])
         assert decoded == {
-            "wifi": {
-                "hostname_prefix": "chu-",
-                "ssid": "HomeNet",
-                "password": "shh",
-            },
+            "wifi.hostname_prefix": "chu-",
+            "wifi.ssid": "HomeNet",
+            "wifi.password": "shh",
         }
 
     def test_forwards_inner_entrypoint(self, tmp_path: Path) -> None:
@@ -191,15 +208,15 @@ class TestWithRuntimeConfig:
     ) -> None:
         # Plumb a library root with a manifest — validation reads
         # the manifest, unions with itself, and checks the merged
-        # config against the union.  Wifi config is complete, so
-        # validation passes.
+        # flat config against the union.  Wifi config is complete,
+        # so validation passes.
         workspace_yaml, project_config = _seed_paths(tmp_path)
         wifi_lib = tmp_path / "libraries" / "wifi"
         wifi_lib.mkdir(parents=True)
         (wifi_lib / "pyproject.toml").write_text(
             '[project]\nname = "chumicro-wifi"\n'
-            "[tool.chumicro.config.sections.wifi]\n"
-            'required = ["ssid", "password"]\n'
+            "[tool.chumicro.config]\n"
+            'required_keys = ["wifi.ssid", "wifi.password"]\n'
         )
         inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
         decorated = WithRuntimeConfig(
@@ -222,16 +239,15 @@ class TestWithRuntimeConfig:
         workspace_yaml.write_text("defaults: {}\n")
         project_dir = tmp_path / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
-        project_config = project_dir / "config.toml"
-        # ssid present, password missing.
+        project_config = project_dir / "project_config.toml"
         project_config.write_text("[wifi]\nssid = 'HomeNet'\n")
 
         wifi_lib = tmp_path / "libraries" / "wifi"
         wifi_lib.mkdir(parents=True)
         (wifi_lib / "pyproject.toml").write_text(
             '[project]\nname = "chumicro-wifi"\n'
-            "[tool.chumicro.config.sections.wifi]\n"
-            'required = ["ssid", "password"]\n'
+            "[tool.chumicro.config]\n"
+            'required_keys = ["wifi.ssid", "wifi.password"]\n'
         )
 
         inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
@@ -241,7 +257,7 @@ class TestWithRuntimeConfig:
             project_config=project_config,
             library_roots=(wifi_lib,),
         )
-        with pytest.raises(ConfigManifestError, match="password"):
+        with pytest.raises(ConfigManifestError, match="wifi.password"):
             decorated.files()
 
     def test_files_regenerates_msgpack_each_call(self, tmp_path: Path) -> None:
@@ -261,8 +277,8 @@ class TestWithRuntimeConfig:
         )
         second = unpackb(decorated.files()[RUNTIME_CONFIG_DEVICE_PATH])
 
-        assert first["wifi"]["ssid"] == "HomeNet"
-        assert second["wifi"]["ssid"] == "OtherNet"
+        assert first["wifi.ssid"] == "HomeNet"
+        assert second["wifi.ssid"] == "OtherNet"
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +295,7 @@ def _seed_project_dir(tmp_path: Path) -> tuple[Path, Path]:
 
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
-    (project_dir / "config.toml").write_text(
+    (project_dir / "project_config.toml").write_text(
         "[wifi]\nssid = 'HomeNet'\n"
     )
     (project_dir / "code.py").write_text("print('hello')\n")
@@ -307,6 +323,7 @@ class TestProjectDirectorySource:
             workspace_yaml=workspace_yaml,
         )
         files = source.files()
+        assert "/project_config.toml" not in files
         assert "/config.toml" not in files
 
     def test_skips_generated_dir(self, tmp_path: Path) -> None:
@@ -426,6 +443,6 @@ class TestDeployerIntegration:
         assert files["/code.py"] == b"print('hello')\n"
 
         decoded = unpackb(files[RUNTIME_CONFIG_DEVICE_PATH])
-        assert decoded["wifi"]["ssid"] == "HomeNet"
-        assert decoded["wifi"]["password"] == "shh"
-        assert decoded["wifi"]["hostname_prefix"] == "chu-"
+        assert decoded["wifi.ssid"] == "HomeNet"
+        assert decoded["wifi.password"] == "shh"
+        assert decoded["wifi.hostname_prefix"] == "chu-"

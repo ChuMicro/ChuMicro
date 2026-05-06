@@ -883,7 +883,7 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
 
 def _suggest_add_device_id(
     *,
-    implementation: "DeviceImplementation",
+    implementation: DeviceImplementation,
     existing_ids: set[str],
 ) -> str:
     """Default ``add-device`` id when the user omits the positional.

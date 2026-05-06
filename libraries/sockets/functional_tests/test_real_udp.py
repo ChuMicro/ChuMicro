@@ -56,11 +56,11 @@ def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
 
 def test_real_udp_echo_round_trip() -> None:
     """Send one datagram to the host echo server, read it back."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
-    echo_host = config["sockets"]["echo"]["host"]
-    echo_port = config["sockets"]["echo"]["port"]
+    echo_host = config["sockets.echo.host"]
+    echo_port = config["sockets.echo.port"]
     if echo_host is None or echo_port is None:
         # Fixture didn't bring up an echo server (host wasn't on a
         # LAN, or detection failed).  Skip silently — TCP test still

@@ -37,7 +37,7 @@ _HOST_ECHO_SCRIPT = _HERE / "_host_echo_server.py"
 
 
 def _merged_runtime_config_with_creds() -> dict | None:
-    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip."""
+    """Return the deep-merged + flattened runtime-config dict, or ``None``."""
     if not _WORKSPACE_YAML.is_file():
         return None
     try:
@@ -47,11 +47,8 @@ def _merged_runtime_config_with_creds() -> dict | None:
         )
     except Exception:  # noqa: BLE001 — silent skip on any config error
         return None
-    wifi = merged.get("wifi")
-    if not isinstance(wifi, dict):
-        return None
-    ssid = wifi.get("ssid")
-    password = wifi.get("password")
+    ssid = merged.get("wifi.ssid")
+    password = merged.get("wifi.password")
     if not isinstance(ssid, str) or not isinstance(password, str):
         return None
     if ssid == "replace-with-your-ap-ssid":
@@ -138,11 +135,11 @@ _ECHO_PROCESS: subprocess.Popen[bytes] | None = None
 def pytest_configure(config: pytest.Config) -> None:
     """Spin up the host echo server; register the runtime-config payload.
 
-    Always shapes ``websockets.server`` with ``host``/``port`` keys when a
-    payload is registered — values are ``None`` when the fixture didn't
-    spawn, so on-device test code can read
-    ``config["websockets"]["server"]["host"]`` directly without
-    defensive ``.get()`` chaining.
+    Always emits ``websockets.server.host`` / ``websockets.server.port``
+    keys when a payload is registered — values are ``None`` when the
+    fixture didn't spawn, so on-device test code can read
+    ``config["websockets.server.host"]`` directly without defensive
+    ``.get()`` chaining.
     """
     global _ECHO_PROCESS
 
@@ -157,10 +154,8 @@ def pytest_configure(config: pytest.Config) -> None:
             if spawned is not None:
                 _ECHO_PROCESS, server_port = spawned
                 server_host = lan_ip
-        merged.setdefault("websockets", {})["server"] = {
-            "host": server_host,
-            "port": server_port,
-        }
+        merged["websockets.server.host"] = server_host
+        merged["websockets.server.port"] = server_port
 
     set_runtime_config(config, merged)
 

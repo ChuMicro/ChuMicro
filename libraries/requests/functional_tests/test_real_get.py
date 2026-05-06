@@ -64,7 +64,7 @@ def _bring_wifi_up(
 
 def test_real_http_get_completes_runner_shaped() -> None:
     """Live HTTP GET drives to completion; LED-blink counter keeps ticking."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
 

@@ -1,4 +1,4 @@
-"""Tests for ``chumicro_config`` — section loader + runtime config reader.
+"""Tests for ``chumicro_config`` — flat-key runtime config + section loader.
 
 Cross-runtime: runs on CPython pytest and (via
 ``test_harness.run_cross_runtime``) under MicroPython + CircuitPython
@@ -7,9 +7,8 @@ unix-ports.
 The ``load_runtime_config`` tests that need pytest fixtures
 (``tmp_path``, ``monkeypatch``) are CPython-only because the
 lightweight cross-runtime harness doesn't ship pytest's fixture
-machinery.  The non-fixture-using tests cover the section-loader
-shape on every runtime; the file-IO tests need CPython's tempfile
-ergonomics anyway.
+machinery.  The non-fixture-using tests cover the flat-key shape on
+every runtime.
 """
 
 import sys
@@ -19,6 +18,7 @@ from chumicro_config import (
     ConfigError,
     InvalidConfigType,
     MissingConfigKey,
+    RuntimeConfig,
     load_runtime_config,
     load_section,
     try_load_section,
@@ -48,67 +48,191 @@ class _ExampleConfig:
 
 
 # ---------------------------------------------------------------------------
-# load_section — required keys
+# RuntimeConfig — flat-key dict-like wrapper
 # ---------------------------------------------------------------------------
 
 
-def test_required_keys_extracted_into_kwargs() -> None:
-    """All required keys land as keyword args to the target class."""
+def test_runtime_config_get_returns_value_when_key_present() -> None:
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    assert config.get("wifi.ssid") == "HomeNet"
+
+
+def test_runtime_config_get_returns_none_on_miss() -> None:
+    """Standard ``.get`` semantics — missing key → None."""
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    assert config.get("wifi.password") is None
+
+
+def test_runtime_config_get_returns_default_when_supplied() -> None:
+    """``.get(key, default)`` falls back to *default* on miss."""
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    assert config.get("wifi.password", "fallback") == "fallback"
+
+
+def test_runtime_config_getitem_raises_missing_config_key_on_miss() -> None:
+    """``config[key]`` raises ``MissingConfigKey`` (not ``KeyError``).
+
+    Single-inheritance constraint on MicroPython rules out
+    multi-parenting from ``KeyError`` — see ``MissingConfigKey``
+    docstring.  Catch via ``ConfigError`` for cross-runtime portability.
+    """
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    with raises(MissingConfigKey):
+        _ = config["wifi.password"]
+
+
+def test_runtime_config_getitem_returns_value_when_present() -> None:
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    assert config["wifi.ssid"] == "HomeNet"
+
+
+def test_runtime_config_require_returns_value_when_present() -> None:
+    """``.require()`` is the named-intent version of ``[]``."""
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    assert config.require("wifi.ssid") == "HomeNet"
+
+
+def test_runtime_config_require_raises_missing_config_key_on_miss() -> None:
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    with raises(MissingConfigKey):
+        config.require("wifi.password")
+
+
+def test_runtime_config_contains_checks_membership() -> None:
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    assert "wifi.ssid" in config
+    assert "wifi.password" not in config
+
+
+def test_runtime_config_iterates_over_keys() -> None:
+    config = RuntimeConfig({"a": 1, "b": 2})
+    assert sorted(config) == ["a", "b"]
+
+
+def test_runtime_config_len_reflects_key_count() -> None:
+    assert len(RuntimeConfig({"a": 1, "b": 2})) == 2
+    assert len(RuntimeConfig({})) == 0
+
+
+def test_runtime_config_equality_with_dict() -> None:
+    """Equality with a plain dict works for ergonomic test assertions."""
+    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
+    assert config == {"wifi.ssid": "HomeNet"}
+    assert config != {"wifi.ssid": "Other"}
+
+
+def test_runtime_config_equality_with_other_runtime_config() -> None:
+    assert RuntimeConfig({"a": 1}) == RuntimeConfig({"a": 1})
+    assert RuntimeConfig({"a": 1}) != RuntimeConfig({"a": 2})
+
+
+def test_runtime_config_to_dict_returns_shallow_copy() -> None:
+    """``to_dict`` hands back a fresh dict — mutations don't leak in."""
+    source = {"wifi.ssid": "HomeNet"}
+    config = RuntimeConfig(source)
+    snapshot = config.to_dict()
+    snapshot["wifi.ssid"] = "Mutated"
+    assert config.get("wifi.ssid") == "HomeNet"
+
+
+def test_runtime_config_equality_with_unrelated_type_returns_not_implemented() -> None:
+    """Comparison with an unrelated type → Python falls back to ``!=``."""
+    config = RuntimeConfig({"a": 1})
+    assert config != 42
+    assert config != "string"
+
+
+def test_runtime_config_repr_includes_underlying_data() -> None:
+    """Repr is debugging-friendly — wraps the dict's repr."""
+    config = RuntimeConfig({"wifi.ssid": "x"})
+    text = repr(config)
+    assert "RuntimeConfig" in text
+    assert "wifi.ssid" in text
+
+
+def test_runtime_config_keys_items_values_match_dict_views() -> None:
+    """Standard mapping introspection methods delegate to the wrapped dict."""
+    config = RuntimeConfig({"a": 1, "b": 2})
+    assert sorted(config.keys()) == ["a", "b"]
+    assert sorted(config.items()) == [("a", 1), ("b", 2)]
+    assert sorted(config.values()) == [1, 2]
+
+
+def test_runtime_config_none_data_yields_empty() -> None:
+    """``RuntimeConfig(None)`` is valid — yields an empty config."""
+    config = RuntimeConfig(None)
+    assert len(config) == 0
+    assert config.get("anything") is None
+
+
+def test_missing_config_key_subclasses_config_error() -> None:
+    config = RuntimeConfig({})
+    with raises(ConfigError):
+        config["missing"]
+
+
+# ---------------------------------------------------------------------------
+# load_section — required keys with a shared prefix
+# ---------------------------------------------------------------------------
+
+
+def test_load_section_required_keys_extracted_into_kwargs() -> None:
+    """All required subkeys land as keyword args to the target class."""
     result = load_section(
         _ExampleConfig,
-        {"ssid": "HomeNet", "password": "secret"},
+        {"wifi.ssid": "HomeNet", "wifi.password": "secret"},
+        prefix="wifi",
         required=("ssid", "password"),
     )
     assert result.ssid == "HomeNet"
     assert result.password == "secret"
 
 
-def test_missing_required_key_raises_missing_config_key() -> None:
+def test_load_section_works_against_runtime_config_wrapper() -> None:
+    """Reads through ``RuntimeConfig`` too — same code path."""
+    runtime = RuntimeConfig({"wifi.ssid": "HomeNet", "wifi.password": "secret"})
+    result = load_section(
+        _ExampleConfig,
+        runtime,
+        prefix="wifi",
+        required=("ssid", "password"),
+    )
+    assert result.ssid == "HomeNet"
+
+
+def test_load_section_missing_required_key_raises_missing_config_key() -> None:
     """A required key absent from the dict triggers ``MissingConfigKey``."""
     with raises(MissingConfigKey):
         load_section(
             _ExampleConfig,
-            {"ssid": "HomeNet"},  # missing password
+            {"wifi.ssid": "HomeNet"},
+            prefix="wifi",
             required=("ssid", "password"),
         )
 
 
-def test_missing_required_caught_via_config_error() -> None:
-    """``MissingConfigKey`` subclasses the library's base ``ConfigError``.
-
-    Single-inheritance only (MP doesn't allow multiple inheritance
-    from differing-layout ``Exception`` subclasses, so we couldn't
-    also subclass ``KeyError`` even if we wanted the stdlib catch).
-    """
-    with raises(ConfigError):
-        load_section(
-            _ExampleConfig,
-            {"ssid": "HomeNet"},
-            required=("ssid", "password"),
-        )
-
-
-# ---------------------------------------------------------------------------
-# load_section — optional keys
-# ---------------------------------------------------------------------------
-
-
-def test_optional_key_present_overrides_default() -> None:
-    """When the optional key is in the dict, its value wins over the default."""
+def test_load_section_optional_key_present_overrides_default() -> None:
+    """Present optional keys win over the declared default."""
     result = load_section(
         _ExampleConfig,
-        {"ssid": "x", "password": "y", "hostname": "back-porch"},
+        {
+            "wifi.ssid": "x",
+            "wifi.password": "y",
+            "wifi.hostname": "back-porch",
+        },
+        prefix="wifi",
         required=("ssid", "password"),
         optional={"hostname": None, "connect_timeout_ms": 15_000},
     )
     assert result.hostname == "back-porch"
 
 
-def test_optional_key_absent_uses_default() -> None:
-    """When the optional key isn't in the dict, the default carries through."""
+def test_load_section_optional_key_absent_uses_default() -> None:
+    """Missing optional key → declared default carries through."""
     result = load_section(
         _ExampleConfig,
-        {"ssid": "x", "password": "y"},
+        {"wifi.ssid": "x", "wifi.password": "y"},
+        prefix="wifi",
         required=("ssid", "password"),
         optional={"hostname": None, "connect_timeout_ms": 15_000},
     )
@@ -116,41 +240,22 @@ def test_optional_key_absent_uses_default() -> None:
     assert result.connect_timeout_ms == 15_000
 
 
-def test_optional_keys_default_to_empty_mapping() -> None:
-    """Omitting *optional* entirely is the same as ``optional={}``."""
-    result = load_section(
-        _ExampleConfig,
-        {"ssid": "x", "password": "y"},
-        required=("ssid", "password"),
-    )
-    # __init__ default fires for hostname since load_section passed nothing.
-    assert result.hostname is None
+def test_load_section_unknown_keys_are_ignored() -> None:
+    """Keys outside the prefix's declared subkeys pass through silently.
 
-
-def test_required_only_works_without_optional() -> None:
-    """A library with no optional keys can omit the *optional* arg entirely."""
-    result = load_section(
-        _ExampleConfig,
-        {"ssid": "x", "password": "y", "extra": "ignored"},
-        required=("ssid", "password"),
-    )
-    assert result.ssid == "x"
-
-
-# ---------------------------------------------------------------------------
-# load_section — unknown keys + type-coercion policy
-# ---------------------------------------------------------------------------
-
-
-def test_unknown_keys_are_ignored() -> None:
-    """Keys not in required/optional pass through silently (ADR 0035 §7).
-
-    Forward-compat: a thing's config can carry keys for a future
-    library without breaking deploys against today's older library.
+    Forward-compat: a project's flat config can carry keys for a
+    future library without breaking deploys against today's older
+    library.
     """
     result = load_section(
         _ExampleConfig,
-        {"ssid": "x", "password": "y", "future_field": 42},
+        {
+            "wifi.ssid": "x",
+            "wifi.password": "y",
+            "wifi.future_field": 42,
+            "app.unrelated": "irrelevant",
+        },
+        prefix="wifi",
         required=("ssid", "password"),
         optional={"hostname": None},
     )
@@ -158,51 +263,56 @@ def test_unknown_keys_are_ignored() -> None:
     assert not hasattr(result, "future_field")
 
 
-def test_no_type_coercion_strings_stay_strings() -> None:
+def test_load_section_no_type_coercion() -> None:
     """``load_section`` doesn't coerce types — caller's __init__ is the gate."""
     result = load_section(
         _ExampleConfig,
-        {"ssid": "x", "password": "y", "connect_timeout_ms": "1500"},
+        {
+            "wifi.ssid": "x",
+            "wifi.password": "y",
+            "wifi.connect_timeout_ms": "1500",
+        },
+        prefix="wifi",
         required=("ssid", "password"),
         optional={"connect_timeout_ms": 15_000},
     )
     assert result.connect_timeout_ms == "1500"
 
 
-# ---------------------------------------------------------------------------
-# load_section — non-dict input
-# ---------------------------------------------------------------------------
-
-
-def test_non_dict_data_raises_invalid_config_type() -> None:
-    """Section value isn't a dict ⇒ ``InvalidConfigType``."""
+def test_load_section_none_config_raises_invalid_type() -> None:
+    """``config=None`` is wrong-shape — soft path lives in ``try_load_section``."""
     with raises(InvalidConfigType):
-        load_section(_ExampleConfig, "not a dict", required=("ssid",))
+        load_section(
+            _ExampleConfig,
+            None,
+            prefix="wifi",
+            required=("ssid",),
+        )
 
 
-def test_invalid_config_type_subclasses_config_error() -> None:
-    """``InvalidConfigType`` inherits ``ConfigError`` (single parent)."""
+def test_load_section_non_dict_config_raises_invalid_type() -> None:
+    """Strings, lists, scalars are not valid runtime configs."""
+    with raises(InvalidConfigType):
+        load_section(
+            _ExampleConfig,
+            "not a config",
+            prefix="wifi",
+            required=("ssid",),
+        )
+
+
+def test_load_section_invalid_type_subclasses_config_error() -> None:
     with raises(ConfigError):
-        load_section(_ExampleConfig, ["list", "not", "dict"], required=("ssid",))
+        load_section(
+            _ExampleConfig,
+            ["list", "not", "dict"],
+            prefix="wifi",
+            required=("ssid",),
+        )
 
 
-def test_none_section_raises_invalid_config_type() -> None:
-    """``None`` (forgotten/missing section) is treated as wrong-type."""
-    with raises(InvalidConfigType):
-        load_section(_ExampleConfig, None, required=("ssid",))
-
-
-# ---------------------------------------------------------------------------
-# load_section — composition with library from_dict pattern
-# ---------------------------------------------------------------------------
-
-
-def test_library_from_dict_pattern_round_trips() -> None:
-    """Libraries wrap load_section in a classmethod; this is the shape.
-
-    Not testing a real library — just confirming the pattern future
-    libraries (chumicro-wifi, chumicro-mqtt) will use works end to end.
-    """
+def test_load_section_library_pattern_round_trips() -> None:
+    """The shape every config-consuming library wraps: classmethod + load_section."""
 
     class WifiConfigShape:
         def __init__(self, ssid, password, hostname=None):
@@ -211,48 +321,44 @@ def test_library_from_dict_pattern_round_trips() -> None:
             self.hostname = hostname
 
         @classmethod
-        def from_dict(cls, data):
+        def from_config(cls, config):
             return load_section(
                 cls,
-                data,
+                config,
+                prefix="wifi",
                 required=("ssid", "password"),
                 optional={"hostname": None},
             )
 
-    full = {"wifi": {"ssid": "HomeNet", "password": "secret", "hostname": "back-porch"}}
-    config = WifiConfigShape.from_dict(full["wifi"])
-    assert config.ssid == "HomeNet"
-    assert config.hostname == "back-porch"
+    config = {
+        "wifi.ssid": "HomeNet",
+        "wifi.password": "secret",
+        "wifi.hostname": "back-porch",
+    }
+    built = WifiConfigShape.from_config(config)
+    assert built.ssid == "HomeNet"
+    assert built.hostname == "back-porch"
 
 
 # ---------------------------------------------------------------------------
-# try_load_section — soft-load wrapper (returns None instead of raising)
+# try_load_section — soft-load (returns None instead of raising)
 # ---------------------------------------------------------------------------
 
 
-def test_try_load_section_returns_none_when_runtime_config_is_none() -> None:
-    """``runtime_config=None`` short-circuits — no creds deployed."""
+def test_try_load_section_returns_none_when_config_is_none() -> None:
+    """``config=None`` short-circuits — no creds deployed."""
     result = try_load_section(
-        _ExampleConfig, None, "wifi",
-        required=("ssid", "password"),
+        _ExampleConfig, None,
+        prefix="wifi", required=("ssid", "password"),
     )
     assert result is None
 
 
-def test_try_load_section_returns_none_when_section_missing() -> None:
-    """A runtime config with no matching section returns ``None``, not KeyError."""
+def test_try_load_section_returns_none_when_config_not_dict_like() -> None:
+    """Non-dict, non-RuntimeConfig values short-circuit."""
     result = try_load_section(
-        _ExampleConfig, {"mqtt": {"broker": "x"}}, "wifi",
-        required=("ssid", "password"),
-    )
-    assert result is None
-
-
-def test_try_load_section_returns_none_when_section_not_a_dict() -> None:
-    """A non-dict section value returns ``None``, not InvalidConfigType."""
-    result = try_load_section(
-        _ExampleConfig, {"wifi": "scalar"}, "wifi",
-        required=("ssid", "password"),
+        _ExampleConfig, "scalar",
+        prefix="wifi", required=("ssid", "password"),
     )
     assert result is None
 
@@ -260,31 +366,30 @@ def test_try_load_section_returns_none_when_section_not_a_dict() -> None:
 def test_try_load_section_returns_none_when_required_key_missing() -> None:
     """Missing required key → ``None``, not MissingConfigKey."""
     result = try_load_section(
-        _ExampleConfig, {"wifi": {"ssid": "Net"}}, "wifi",
-        required=("ssid", "password"),
+        _ExampleConfig, {"wifi.ssid": "Net"},
+        prefix="wifi", required=("ssid", "password"),
     )
     assert result is None
 
 
-def test_try_load_section_returns_instance_when_section_valid() -> None:
-    """Section present + required keys present → built instance."""
+def test_try_load_section_returns_instance_when_keys_present() -> None:
+    """All required subkeys present → built instance."""
     result = try_load_section(
         _ExampleConfig,
-        {"wifi": {"ssid": "Net", "password": "pw"}},
-        "wifi",
+        {"wifi.ssid": "Net", "wifi.password": "pw"},
+        prefix="wifi",
         required=("ssid", "password"),
     )
     assert result is not None
     assert result.ssid == "Net"
-    assert result.password == "pw"
 
 
 def test_try_load_section_applies_optional_defaults() -> None:
-    """Optional keys that are absent receive their declared defaults."""
+    """Optional subkeys that are absent receive their declared defaults."""
     result = try_load_section(
         _ExampleConfig,
-        {"wifi": {"ssid": "Net", "password": "pw"}},
-        "wifi",
+        {"wifi.ssid": "Net", "wifi.password": "pw"},
+        prefix="wifi",
         required=("ssid", "password"),
         optional={"hostname": "fallback", "connect_timeout_ms": 99},
     )
@@ -293,35 +398,46 @@ def test_try_load_section_applies_optional_defaults() -> None:
     assert result.connect_timeout_ms == 99
 
 
+def test_try_load_section_works_with_runtime_config_wrapper() -> None:
+    runtime = RuntimeConfig(
+        {"wifi.ssid": "Net", "wifi.password": "pw"},
+    )
+    result = try_load_section(
+        _ExampleConfig, runtime,
+        prefix="wifi", required=("ssid", "password"),
+    )
+    assert result is not None
+    assert result.ssid == "Net"
+
+
 # ---------------------------------------------------------------------------
 # load_runtime_config — file IO
 # ---------------------------------------------------------------------------
 
 
-def test_default_path_constant_matches_adr() -> None:
-    """``DEFAULT_RUNTIME_CONFIG_PATH`` is the canonical on-device location.
-
-    Decision 0030 §1 / 0035 §8 fix this; guard against drift.
-    """
+def test_default_path_constant_is_root_runtime_config_msgpack() -> None:
+    """Canonical on-device location.  Changing this is an ABI break."""
     assert DEFAULT_RUNTIME_CONFIG_PATH == "/runtime_config.msgpack"
 
 
 if _IS_CPYTHON:
     # Pytest-fixture-using tests — only collected under CPython where
-    # the harness supports `tmp_path` / `monkeypatch`.  The lightweight
-    # cross-runtime harness on MP / CP unix-port doesn't ship these.
+    # the harness supports `tmp_path` / `monkeypatch`.
 
-    def test_load_runtime_config_round_trips_a_payload(tmp_path) -> None:
-        """A msgpack file written + read back yields the same section dict."""
+    def test_load_runtime_config_round_trips_a_flat_payload(tmp_path) -> None:
+        """A msgpack file written + read back yields the same flat dict."""
         payload = {
-            "wifi": {"ssid": "HomeNet", "password": "secret"},
-            "mqtt": {"broker": "mqtt.local", "port": 1883},
-            "app": {"sample_period_ms": 5000},
+            "wifi.ssid": "HomeNet",
+            "wifi.password": "secret",
+            "mqtt.broker.host": "mqtt.local",
+            "mqtt.broker.port": 1883,
+            "app.sample_period_ms": 5000,
         }
         path = str(tmp_path / "runtime_config.msgpack")
         with open(path, "wb") as handle:
             handle.write(packb(payload))
         loaded = load_runtime_config(path)
+        assert isinstance(loaded, RuntimeConfig)
         assert loaded == payload
 
     def test_load_runtime_config_missing_file_raises_oserror(tmp_path) -> None:
@@ -338,17 +454,17 @@ if _IS_CPYTHON:
         with raises(InvalidConfigType):
             load_runtime_config(path)
 
-    def test_load_runtime_config_default_path_is_used_when_unspecified(
+    def test_load_runtime_config_default_path_used_when_unspecified(
         monkeypatch, tmp_path,
     ) -> None:
         """Calling without an arg reads from ``DEFAULT_RUNTIME_CONFIG_PATH``."""
         seed_path = str(tmp_path / "seeded.msgpack")
         with open(seed_path, "wb") as handle:
-            handle.write(packb({"app": {"key": "value"}}))
+            handle.write(packb({"app.key": "value"}))
         import chumicro_config.runtime as runtime_module
         monkeypatch.setattr(runtime_module, "DEFAULT_RUNTIME_CONFIG_PATH", seed_path)
         loaded = load_runtime_config()
-        assert loaded == {"app": {"key": "value"}}
+        assert loaded.get("app.key") == "value"
 
     # -----------------------------------------------------------------
     # Module-level ``config`` attribute — PEP 562 lazy load + cache.
@@ -365,16 +481,16 @@ if _IS_CPYTHON:
     ) -> None:
         """``config`` reads the file only when first accessed."""
         seed_path = str(tmp_path / "seeded.msgpack")
-        payload = {"wifi": {"ssid": "Net", "password": "pw"}}
+        payload = {"wifi.ssid": "Net", "wifi.password": "pw"}
         with open(seed_path, "wb") as handle:
             handle.write(packb(payload))
         import chumicro_config.runtime as runtime_module
         monkeypatch.setattr(runtime_module, "DEFAULT_RUNTIME_CONFIG_PATH", seed_path)
         _reset_config_cache(monkeypatch)
 
-        # First access triggers the load.
         from chumicro_config import config
-        assert config == payload
+        assert config is not None
+        assert config["wifi.ssid"] == "Net"
 
     def test_config_attribute_caches_after_first_access(
         monkeypatch, tmp_path,
@@ -382,22 +498,19 @@ if _IS_CPYTHON:
         """Subsequent accesses don't re-read the file."""
         seed_path = str(tmp_path / "seeded.msgpack")
         with open(seed_path, "wb") as handle:
-            handle.write(packb({"wifi": {"ssid": "First"}}))
+            handle.write(packb({"wifi.ssid": "First"}))
         import chumicro_config.runtime as runtime_module
         monkeypatch.setattr(runtime_module, "DEFAULT_RUNTIME_CONFIG_PATH", seed_path)
         _reset_config_cache(monkeypatch)
 
-        # First access loads "First".
         from chumicro_config import config as first
-        assert first["wifi"]["ssid"] == "First"
+        assert first["wifi.ssid"] == "First"
 
-        # Mutate the file on disk; the cache should still hold the
-        # original load.
         with open(seed_path, "wb") as handle:
-            handle.write(packb({"wifi": {"ssid": "Second"}}))
+            handle.write(packb({"wifi.ssid": "Second"}))
 
         from chumicro_config import config as second
-        assert second["wifi"]["ssid"] == "First"
+        assert second["wifi.ssid"] == "First"
 
     def test_config_is_none_when_file_missing(monkeypatch, tmp_path) -> None:
         """A missing file resolves to ``config = None``, not OSError."""
@@ -410,12 +523,7 @@ if _IS_CPYTHON:
         assert config is None
 
     def test_config_propagates_invalid_type(monkeypatch, tmp_path) -> None:
-        """A malformed payload propagates ``InvalidConfigType`` on first access.
-
-        Corruption is a hard deploy failure, not a silent skip — apps
-        gating on ``if config is None:`` shouldn't silently degrade
-        when the file lands corrupt.
-        """
+        """A malformed payload propagates ``InvalidConfigType`` on first access."""
         path = str(tmp_path / "bad.msgpack")
         with open(path, "wb") as handle:
             handle.write(packb([1, 2, 3]))  # list, not dict

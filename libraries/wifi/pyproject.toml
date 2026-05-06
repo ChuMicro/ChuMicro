@@ -49,35 +49,33 @@ exclude = [".gitignore"]
 packages = ["src/chumicro_wifi"]
 
 # ---------------------------------------------------------------------
-# Runtime-config manifest — declares which sections this library reads
-# from the ``runtime_config.msgpack`` payload (Decision 0035) and what
-# keys each section's ``from_dict`` factory expects.  ``chumicro-workspace``
-# reads this at deploy time to validate a project's merged config
-# before baking the msgpack — missing required keys surface as a
-# precise ``ConfigManifestError`` instead of a cryptic on-device
-# ``MissingConfigKey`` boot failure.
+# Runtime-config manifest — declares which flat dotted keys this
+# library reads from the ``runtime_config.msgpack`` payload.
+# ``chumicro-workspace`` reads this at deploy time to validate a
+# project's merged config before baking the msgpack — missing required
+# keys surface as a precise ``ConfigManifestError`` instead of a
+# cryptic on-device ``MissingConfigKey`` boot failure.
 #
 # Schema:
 #
-#   [tool.chumicro.config.sections.<name>]
-#   required = ["<key>", ...]               # missing → deploy-time error
-#   optional = ["<key>", ...]               # missing → factory uses default
+#   [tool.chumicro.config]
+#   required_keys = ["<dotted.key>", ...]   # missing → deploy-time error
+#   optional_keys = ["<dotted.key>", ...]   # missing → factory uses default
 #
-# Section names are inferred from the table keys — one
-# ``[tool.chumicro.config.sections.<name>]`` per section.  An empty
-# table is valid and means "this library reads ``<name>`` but
-# doesn't pin keys yet" (forward-compat).
+# Keys are flat dotted strings — same vocabulary the runtime accessor
+# uses (``config["wifi.password"]``).  An empty table is valid and
+# means "this library reads runtime config but doesn't pin keys yet".
 #
-# Source of truth pairs with ``WifiConfig.from_dict`` in
+# Source of truth pairs with ``WifiConfig.from_config`` in
 # ``src/chumicro_wifi/config.py`` — keep them in sync.
 
-[tool.chumicro.config.sections.wifi]
-required = ["ssid", "password"]
-optional = [
-    "hostname",
-    "connect_timeout_ms",
-    "reconnect_backoff_start_ms",
-    "reconnect_backoff_max_ms",
-    "reconnect_max",
-    "power_save",
+[tool.chumicro.config]
+required_keys = ["wifi.ssid", "wifi.password"]
+optional_keys = [
+    "wifi.hostname",
+    "wifi.connect_timeout_ms",
+    "wifi.reconnect_backoff_start_ms",
+    "wifi.reconnect_backoff_max_ms",
+    "wifi.reconnect_max",
+    "wifi.power_save",
 ]

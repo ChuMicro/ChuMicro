@@ -81,7 +81,6 @@ from chumicro_workspace.boot_shim import (
 from chumicro_workspace.config_manifest import (
     ConfigManifest,
     ConfigManifestError,
-    SectionManifest,
     aggregate_manifests,
     find_library_roots,
     read_manifest,
@@ -96,6 +95,7 @@ from chumicro_workspace.deploy_source import (
 )
 from chumicro_workspace.deploy_targets import read_deploy_targets
 from chumicro_workspace.devices_yml_starter import read_devices_yml_starter
+from chumicro_workspace.flatten import flatten_config
 from chumicro_workspace.import_graph import (
     build_search_paths,
     project_import_graph_source,
@@ -139,7 +139,6 @@ __all__ = [
     "DevicesYamlError",
     "HardwareOverwriteError",
     "OnboardingDiagnosis",
-    "SectionManifest",
     "UnresolvedFirmwareError",
     "WithRuntimeConfig",
     "WorkspaceConfigError",
@@ -157,6 +156,7 @@ __all__ = [
     "find_library_roots",
     "find_project_config",
     "find_uf2_drive",
+    "flatten_config",
     "latest_circuitpython_url",
     "latest_circuitpython_version",
     "latest_micropython_url",
