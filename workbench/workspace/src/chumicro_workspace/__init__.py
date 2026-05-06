@@ -71,6 +71,7 @@ from chumicro_deploy.firmware_url import (
     micropython_board_for_machine,
 )
 
+from chumicro_workspace.additive_apply import additive_reapply
 from chumicro_workspace.boot_shim import (
     SHIM_ENTRYPOINT_SOURCE,
     boot_shim_files,
@@ -146,6 +147,7 @@ __all__ = [
     "WithRuntimeConfig",
     "WorkspaceConfigError",
     "add_device",
+    "additive_reapply",
     "aggregate_manifests",
     "boot_shim_files",
     "build_runtime_config",

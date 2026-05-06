@@ -6,9 +6,8 @@ Related: Decision 0030 (config vs persisted state), Decision 0035 (runtime confi
 
 ## Context
 
-Decision 0035 settled the runtime-config layout (section-namespaced
-dict, library basename = section key, `<Name>Config.from_dict`
-classmethod) but left the *implementation* of `from_dict` to each
+Decision 0035 settled the runtime-config layout but left the
+*implementation* of the per-library config-loading helpers to each
 library.  Without a shared helper:
 
 - Two libraries will inevitably disagree on what a missing optional
@@ -25,51 +24,68 @@ library.  Without a shared helper:
 The convention from ADR 0035 needs a code home so it actually stays
 uniform.  This ADR establishes that home.
 
+The shape evolved over time.  Today's API (post the
+config-shape-beginner-ergonomics workstream) treats the on-device
+runtime config as a **flat dict with dotted keys** — `wifi.ssid`,
+`mqtt.broker.host` — rather than nested sections.  Compose-time
+flattening on the host produces that shape so the device-side
+reader does one hash lookup per access, honoring the 256 KB-RAM
+floor.  The library exposes that flat dict through a small
+`RuntimeConfig` wrapper with beginner-friendly accessors (`.get`,
+`[]`, `.require`).  The descriptions below reflect the current API.
+
 ## Decisions
 
 ### 1. Publish a small device library: `chumicro-config`
 
-A new library at `libraries/config/` (cross-runtime: CPython +
+A library at `libraries/config/` (cross-runtime: CPython +
 MicroPython + CircuitPython) ships the helpers ADR 0035 implies.
-Two-module API:
+Surface:
 
-- `chumicro_config.section.load_section(cls, data, *, required, optional)`
-  — the standardized factory every library's `from_dict` calls.
-- `chumicro_config.section.try_load_section(cls, runtime_config, section_name, *, required, optional)`
-  — the soft-load sibling that returns ``None`` instead of raising
-  on missing/invalid input.  See §4 for the consumer pattern.
-- `chumicro_config.runtime.load_runtime_config(path=...)` — explicit
-  reader; raises `OSError` on missing file, `InvalidConfigType` on
-  malformed payload.  Used when callers want precise error semantics
-  or read a non-default path.
-- `chumicro_config.runtime.config` — module-level attribute carrying
-  the loaded `/runtime_config.msgpack` dict (or `None` when the file
-  is missing).  Lazy-loaded on first access via PEP 562 module-level
-  `__getattr__` and cached for the lifetime of the import; subsequent
-  accesses return the same dict reference.  See §4 for the user
+- `chumicro_config.RuntimeConfig` — flat-key dict-like wrapper.
+  `config.get("wifi.ssid")` returns `None` on miss;
+  `config.get("wifi.ssid", default)` falls back; `config["wifi.ssid"]`
+  raises `MissingConfigKey`; `config.require("wifi.ssid")` is the
+  named-intent version of `[]`.  Membership and iteration work like
+  a plain dict.
+- `chumicro_config.load_section(target_class, config, *, prefix, required, optional)`
+  — the standardized factory every library's `from_config` calls.
+  Reads `f"{prefix}.{subkey}"` from the flat config and instantiates
+  *target_class*.
+- `chumicro_config.try_load_section(target_class, config, *, prefix, required, optional)`
+  — soft-load sibling that returns `None` whenever `load_section`
+  would raise (see §4 for the consumer pattern).
+- `chumicro_config.load_runtime_config(path=...)` — explicit reader;
+  raises `OSError` on missing file, `InvalidConfigType` on malformed
+  payload.  Returns a `RuntimeConfig` directly so callers don't
+  re-wrap.
+- `chumicro_config.config` — module-level attribute carrying the
+  loaded `RuntimeConfig` (or `None` when the file is missing).
+  Lazy-loaded on first access via PEP 562 module-level `__getattr__`
+  and cached for the lifetime of the import.  See §4 for the user
   pattern.
 - `chumicro_config.MissingConfigKey` / `InvalidConfigType` /
   `ConfigError` — exception hierarchy.
 
 Public surface re-exported from the package root so consumers write
-`from chumicro_config import config, load_section, load_runtime_config, try_load_section`.
+`from chumicro_config import RuntimeConfig, config, load_section, load_runtime_config, try_load_section`.
 
 Depends on `chumicro-msgpack` for the decode in `load_runtime_config`.
 
-### 2. `load_section` is the standardized `from_dict` core
+### 2. `load_section` reads flat keys with a shared prefix
 
 ```python
-def load_section(target_class, data, *, required=(), optional=None):
-    """Build *target_class* from a config-dict slice.
+def load_section(target_class, config, *, prefix, required=(), optional=None):
+    """Build *target_class* by reading flat keys with a shared prefix.
 
     Args:
-        target_class: Called as ``target_class(**kwargs)`` with the
-            keys the function extracts from *data*.
-        data: The section dict, typically ``config["wifi"]``.
-        required: Tuple of key names that must be present.  Missing
-            ⇒ ``MissingConfigKey``.
-        optional: Mapping of key name → default value.  Missing key
-            ⇒ default; present key ⇒ value.
+        target_class: Called as ``target_class(**kwargs)`` where each
+            kwarg name is the *subkey* and the value comes from
+            ``config[f"{prefix}.{subkey}"]``.
+        config: A ``RuntimeConfig`` or plain flat dict.
+        prefix: Key prefix without trailing dot (e.g. ``"wifi"``).
+        required: Tuple of subkey names that must be present.
+        optional: Mapping of subkey name → default value.
     """
 ```
 
@@ -81,43 +97,42 @@ Behavior locked by this ADR (so libraries can't drift):
   appealing dual `(ConfigError, KeyError)` parent set isn't
   available cross-runtime; callers catch `ConfigError` instead).
 - Missing **optional** key ⇒ default from *optional* mapping.
-- *data* is not a dict ⇒ `InvalidConfigType` (subclass of
-  `ConfigError` only, same reason as above).
-- **Unknown keys are ignored**, matching ADR 0035 §7.  No warning
-  log, no exception — forward-compat for projects that stage future
-  config keys.
+- *config* is `None` or not dict-like ⇒ `InvalidConfigType` (single
+  parent for the same MP reason).
+- **Unknown keys are ignored** (forward-compat for projects that
+  stage future config keys).
 - **No type coercion.**  `"1883"` stays a string; if the library
   wants an int, the dataclass `__init__` (or a manual cast inside
   the library's wrapper) does the conversion.  Keeps `load_section`
   predictable.
 
-### 3. Library access pattern: thin `from_dict` + `try_from_dict` wrappers
+### 3. Library access pattern: thin `from_config` + `try_from_config` wrappers
 
-Each library declares its required + optional keys and exposes two
-classmethods on its `<Name>Config` dataclass:
+Each library declares its required + optional subkeys and exposes
+two classmethods on its `<Name>Config` dataclass.  Both methods
+take the **whole flat runtime config** — the wrappers know the
+section's prefix (e.g. `"wifi"`) and walk into the right keys.
 
-- `from_dict(section_data)` — wraps `load_section`.  Takes a *section*
-  dict (typically `config["wifi"]`).  Raises on missing required keys.
-- `try_from_dict(runtime_config)` — wraps `try_load_section`.  Takes
-  the **whole runtime config dict** (typically the value of
-  `chumicro_config.config`) and returns `None` when the section is
-  missing/invalid.  The skip-friendly gate for app + test code:
+- `from_config(config)` — wraps `load_section`.  Raises on missing
+  required keys.
+- `try_from_config(config)` — wraps `try_load_section`.  Returns
+  `None` when *config* is `None`, isn't dict-like, or any required
+  key is missing.  The skip-friendly gate for app + test code:
 
   ```python
   from chumicro_config import config
   from chumicro_wifi import WifiConfig, WifiService
 
-  wifi_cfg = WifiConfig.try_from_dict(config)
+  wifi_cfg = WifiConfig.try_from_config(config)
   if wifi_cfg is None:
       return  # not configured — skip / use defaults
   service = WifiService(wifi_cfg)
   ```
 
 The required / optional vocabulary is duplicated in `__init__`'s
-parameter defaults and the two factory calls — on purpose, so all
-three construction paths (direct kwargs, section dict, whole
-runtime config) agree without a metaclass deriving one from the
-other.
+parameter defaults and the two factory calls — on purpose, so both
+construction paths (direct kwargs, runtime-config) agree without a
+metaclass deriving one from the other.
 
 ```python
 class WifiConfig:
@@ -125,22 +140,32 @@ class WifiConfig:
         ...
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WifiConfig":
-        return load_section(cls, data, required=("ssid", "password"), optional={"hostname": None, "connect_timeout_ms": 15_000})
+    def from_config(cls, config) -> "WifiConfig":
+        return load_section(
+            cls, config,
+            prefix="wifi",
+            required=("ssid", "password"),
+            optional={"hostname": None, "connect_timeout_ms": 15_000},
+        )
 
     @classmethod
-    def try_from_dict(cls, runtime_config: dict | None) -> "WifiConfig | None":
-        return try_load_section(cls, runtime_config, section_name="wifi", required=("ssid", "password"), optional={"hostname": None, "connect_timeout_ms": 15_000})
+    def try_from_config(cls, config) -> "WifiConfig | None":
+        return try_load_section(
+            cls, config,
+            prefix="wifi",
+            required=("ssid", "password"),
+            optional={"hostname": None, "connect_timeout_ms": 15_000},
+        )
 ```
 
-**Rejected:** a `ConfigBase` mixin that introspects `_REQUIRED` / `_OPTIONAL` class attributes and auto-generates `from_dict` / `try_from_dict`.  The inheritance + class-attribute indirection saves three lines per library and adds magic the next reader has to chase.
+**Rejected:** a `ConfigBase` mixin that introspects `_REQUIRED` / `_OPTIONAL` class attributes and auto-generates the methods.  The inheritance + class-attribute indirection saves three lines per library and adds magic the next reader has to chase.
 
 ### 4. Reading the deployed runtime config — `config` attribute + `load_runtime_config()`
 
 Two surfaces, picked by the calling pattern:
 
 **`config` — the canonical user-facing attribute.**  Module-level
-`dict | None` lazy-loaded on first access via PEP 562
+`RuntimeConfig | None` lazy-loaded on first access via PEP 562
 `__getattr__`; cached for the lifetime of the import.  Apps that
 import `chumicro_config` for `InvalidConfigType` / `load_section`
 without touching `config` pay no file-read cost.  `None` when
@@ -157,14 +182,14 @@ from chumicro_wifi import WifiConfig, WifiService
 if config is None:
     return  # no runtime config deployed — skip / use defaults
 
-wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
+wifi = WifiService(WifiConfig.from_config(config))
 ```
 
 **`load_runtime_config(path=...)` — the explicit reader.**
 
 ```python
-def load_runtime_config(path: str = "/runtime_config.msgpack") -> dict:
-    """Return the deployed config as a section-namespaced dict.
+def load_runtime_config(path: str = "/runtime_config.msgpack") -> RuntimeConfig:
+    """Return the deployed config as a flat-key RuntimeConfig.
 
     Raises:
         OSError: file missing (device deployed without config).
@@ -199,6 +224,6 @@ Every library that consumes runtime config ships a starter TOML snippet at `src/
   lines).  Tiny scope, but distinct from existing libraries —
   doesn't fit `chumicro-compat` (compat is polyfills) or
   `chumicro-msgpack` (msgpack is the codec).
-- Decision 0035 §3 names `chumicro-config` as the home of `from_dict` — the library's `load_section` is the canonical implementation.  The "no magic dispatcher" rejection in 0035 §3 still stands; this library is helpers, not a dispatcher.
+- Decision 0035 §3 names `chumicro-config` as the home of the per-library config-loading factory — the library's `load_section` is the canonical implementation (now flat-key shaped per the config-shape-beginner-ergonomics workstream).  The "no magic dispatcher" rejection in 0035 §3 still stands; this library is helpers, not a dispatcher.
 - Every config-consuming library gains a dependency on `chumicro-config`.  The dep is workspace-internal and resolves through the existing topological-sort path in `validate-mip`.
 - Future evolution (env-var fallbacks, layered defaults, per-key validators, type coercion, workbench host helpers) extends `chumicro-config` rather than forking each library's hand-rolled implementation.

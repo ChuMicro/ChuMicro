@@ -353,11 +353,27 @@ def _cmd_setup(args: argparse.Namespace) -> int:
                         f"{chumicro_path}",
                     )
 
-    # Schema-drift surface: print fields the upstream starter has
-    # gained since the user materialised their workspace.yml.  No
-    # auto-application — the user decides whether to copy the new
-    # fields in.  Empty (no-op) when the user's file already covers
-    # the starter's schema.
+    # Additive re-apply: append upstream-starter keys missing from the
+    # user's workspace.yml / secrets.toml, in place, comments preserved.
+    # Existing edits are NEVER touched; only the missing keys land.
+    from chumicro_workspace.additive_apply import additive_reapply  # noqa: PLC0415
+
+    appended = additive_reapply(workspace.root)
+    if appended:
+        for filename, paths in appended.items():
+            plural = "key" if len(paths) == 1 else "keys"
+            joined = ", ".join(paths)
+            print(
+                f"setup: appended {len(paths)} {plural} to {filename} "
+                f"from the upstream starter: {joined}",
+            )
+
+    # Schema-drift report — informational pass after the additive
+    # apply.  Should be a no-op now (additive_reapply just landed
+    # everything safely-appendable), but the report still fires for
+    # paths additive_reapply chose to skip — e.g. a starter key whose
+    # parent table the user actively deleted (leave it deleted, don't
+    # resurrect).
     from chumicro_workspace.starter_drift import (  # noqa: PLC0415
         print_starter_drift_report,
     )
@@ -1979,6 +1995,86 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_config_validate(args: argparse.Namespace) -> int:
+    """Validate the merged runtime config for one or more projects.
+
+    Runs ``compose_runtime_config`` against each named project (or all
+    projects when none are named), unions the manifests of every
+    library reachable from the import graph, and validates the merged
+    flat dict against that union.
+
+    Exits 0 when every project validates; exits 1 with a per-project
+    summary when any fail.  Designed for CI: a fast pre-deploy gate
+    that surfaces missing required keys with the exact dotted name
+    the runtime accessor will request.
+    """
+    from chumicro_workspace.config_manifest import (  # noqa: PLC0415
+        ConfigManifestError,
+        aggregate_manifests,
+        find_library_roots,
+        read_manifest,
+        validate_runtime_config,
+    )
+    from chumicro_workspace.deploy_source import find_project_config  # noqa: PLC0415
+    from chumicro_workspace.import_graph import build_search_paths  # noqa: PLC0415
+    from chumicro_workspace.pipeline import compose_runtime_config  # noqa: PLC0415
+
+    workspace = _resolve_workspace(args)
+    project_names = (
+        list(args.projects) if args.projects else workspace.list_projects()
+    )
+    if not project_names:
+        print(
+            "config-validate: no projects under "
+            f"{workspace.projects_dir} — nothing to validate.",
+        )
+        return 0
+
+    search_paths = list(build_search_paths(workspace))
+    library_roots = find_library_roots(search_paths)
+    union = aggregate_manifests(read_manifest(root) for root in library_roots)
+    if union is None:
+        print(
+            "config-validate: no library declares a "
+            "[tool.chumicro.config] manifest — nothing to validate against.",
+        )
+        return 0
+
+    failed: list[tuple[str, str]] = []
+    passed: list[str] = []
+    for raw_name in project_names:
+        project_name = _resolve_project_name(workspace, raw_name)
+        project_dir = workspace.project_dir(project_name)
+        if not project_dir.is_dir():
+            failed.append((project_name, f"project directory not found: {project_dir}"))
+            continue
+        try:
+            project_config_path = find_project_config(project_dir)
+        except FileNotFoundError:
+            project_config_path = None
+        try:
+            resolved = compose_runtime_config(
+                secrets_toml=workspace.secrets_toml,
+                project_config=project_config_path,
+            )
+            validate_runtime_config(resolved, union)
+        except ConfigManifestError as error:
+            failed.append((project_name, str(error)))
+            continue
+        except FileNotFoundError as error:
+            failed.append((project_name, f"config source missing: {error}"))
+            continue
+        passed.append(project_name)
+
+    for name in passed:
+        print(f"config-validate: OK {name}")
+    for name, message in failed:
+        print(f"config-validate: FAIL {name}")
+        for line in message.splitlines():
+            print(f"  {line}")
+    return 1 if failed else 0
+
+
 def _cmd_lint(args: argparse.Namespace) -> int:
     """Run ``ruff check`` across the workspace.
 
@@ -3122,6 +3218,27 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     dump_config_parser.set_defaults(func=_cmd_dump_config)
+
+    # ----- config-validate ----------------------------------------------
+    config_validate_parser = subparsers.add_parser(
+        "config-validate",
+        help=(
+            "Validate the merged runtime config for one or more projects "
+            "against the union manifest of every library reachable from "
+            "the import graph.  Exits 1 on any failure — designed as a "
+            "fast pre-deploy / CI gate."
+        ),
+    )
+    _add_workspace_arg(config_validate_parser)
+    config_validate_parser.add_argument(
+        "projects",
+        nargs="*",
+        help=(
+            "Project names to validate (bare / slash / dotted).  When "
+            "omitted, every project under projects/ is validated."
+        ),
+    )
+    config_validate_parser.set_defaults(func=_cmd_config_validate)
 
     # ----- repl ----------------------------------------------------------
     repl_parser = subparsers.add_parser(

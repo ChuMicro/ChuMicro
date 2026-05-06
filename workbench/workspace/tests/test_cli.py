@@ -69,7 +69,7 @@ class TestParser:
         "discover", "devices", "deploy", "projects", "status", "doctor",
         "demo", "bootstrap", "sim", "test", "repl", "env", "use",
         "rename", "install-firmware", "upgrade-firmware", "sync", "upgrade",
-        "reset-board",
+        "reset-board", "config-validate", "dump-config",
     )
 
     def test_all_commands_register(self) -> None:
@@ -4630,6 +4630,107 @@ class TestCommandDumpConfig:
             cli.main([
                 "dump-config", "--workspace-dir", str(root), "ghost-project",
             ])
+
+
+class TestConfigValidate:
+    """``config-validate`` runs the manifest validator against projects."""
+
+    def _seed_with_wifi_lib(self, root: Path) -> None:
+        """Add a libraries/wifi/ alongside the workspace with a manifest."""
+        wifi_lib = root / "libraries" / "wifi"
+        (wifi_lib / "src" / "chumicro_wifi").mkdir(parents=True)
+        (wifi_lib / "src" / "chumicro_wifi" / "__init__.py").write_text("")
+        (wifi_lib / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-wifi"\n'
+            "[tool.chumicro.config]\n"
+            'required_keys = ["wifi.ssid", "wifi.password"]\n',
+        )
+
+    def test_passes_when_required_keys_present(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_project(root)
+        self._seed_with_wifi_lib(root)
+        # secrets.toml from _seed_workspace already carries
+        # wifi.password; the project's wifi.ssid covers the
+        # remaining required key via the project_config.toml seeded
+        # by _seed_project.
+        (root / "projects" / "back-porch" / "project_config.toml").write_text(
+            "[wifi]\nssid = 'HomeNet'\n",
+        )
+        exit_code = cli.main([
+            "config-validate", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "OK back-porch" in out
+
+    def test_fails_when_required_key_missing(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_project(root)
+        self._seed_with_wifi_lib(root)
+        # secrets.toml from _seed_workspace has no wifi.ssid; the
+        # project_config.toml override is empty too.
+        (root / "projects" / "back-porch" / "project_config.toml").write_text(
+            "[other]\nkey = 'value'\n",
+        )
+        exit_code = cli.main([
+            "config-validate", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 1
+        out = capsys.readouterr().out
+        assert "FAIL back-porch" in out
+        assert "wifi.ssid" in out
+
+    def test_validates_every_project_when_no_args(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_project(root, name="alpha")
+        _seed_project(root, name="beta")
+        self._seed_with_wifi_lib(root)
+        (root / "projects" / "alpha" / "project_config.toml").write_text(
+            "[wifi]\nssid = 'A'\n",
+        )
+        (root / "projects" / "beta" / "project_config.toml").write_text(
+            "[wifi]\nssid = 'B'\n",
+        )
+        exit_code = cli.main([
+            "config-validate", "--workspace-dir", str(root),
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "OK alpha" in out
+        assert "OK beta" in out
+
+    def test_no_op_when_no_libraries_declare_manifest(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # No libraries/ tree at all — no manifests to validate against.
+        # Validator short-circuits with a clear message and exit 0.
+        root = _seed_workspace(tmp_path)
+        _seed_project(root)
+        exit_code = cli.main([
+            "config-validate", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "no library declares" in out
+
+    def test_no_op_when_no_projects(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        # No projects/ directory at all.
+        exit_code = cli.main([
+            "config-validate", "--workspace-dir", str(root),
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "no projects" in out
 
 
 # ---------------------------------------------------------------------------
