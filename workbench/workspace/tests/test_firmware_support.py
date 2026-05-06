@@ -39,6 +39,35 @@ class TestParseVersionTuple:
     def test_partial_non_numeric_returns_none(self) -> None:
         assert parse_version_tuple("1.alpha.0") is None
 
+    def test_trailing_dot_from_cp_rc_build(self) -> None:
+        """CircuitPython RC builds report ``sys.implementation.version``
+        as a 4-tuple ``(10, 2, 0, '')`` where the empty string joins
+        to a trailing dot.  The parser must take the leading run of
+        ints and ignore the empty trailer.
+
+        F3 of the 2026-05-06 verification pass — the previous parser
+        flagged 10.2.0-rc.0 boards as UNPARSEABLE on every probe.
+        """
+        assert parse_version_tuple("10.2.0.") == (10, 2, 0)
+
+    def test_embedded_non_int_suffix_strips(self) -> None:
+        """``"10.2.0.rc.0"`` (alternate join shape) yields the 3-tuple."""
+        assert parse_version_tuple("10.2.0.rc.0") == (10, 2, 0)
+
+    def test_micropython_three_part_typical(self) -> None:
+        """MP final builds ship the canonical 3-tuple."""
+        assert parse_version_tuple("1.28.0") == (1, 28, 0)
+
+    def test_cpython_five_tuple_join_takes_leading_ints(self) -> None:
+        """CPython's 5-tuple ``(3, 12, 0, 'final', 0)`` joins to
+        ``"3.12.0.final.0"`` — must yield ``(3, 12, 0)`` (stop at 'final').
+
+        Defensive: chumicro doesn't run on CPython firmware in practice,
+        but unit tests do exercise this path against host CPython
+        when probe captures are replayed.
+        """
+        assert parse_version_tuple("3.12.0.final.0") == (3, 12, 0)
+
 
 class TestCheckFirmwareSupported:
     def test_micropython_at_floor_is_supported(self) -> None:

@@ -210,3 +210,96 @@ class TestProbeImplementationScript:
             if line.startswith("import ")
         ]
         assert imported_modules == ["sys"]
+
+
+class TestProbeVersionStringification:
+    """Verify the probe's leading-int-run version stringification.
+
+    F3 of the 2026-05-06 verification pass — the original probe
+    joined every element of ``sys.implementation.version`` with
+    dots, producing ``"10.2.0."`` (trailing dot) on CircuitPython
+    RC builds where ``version`` is ``(10, 2, 0, '')``.
+
+    These tests exec the probe script under simulated
+    ``sys.implementation.version`` shapes and assert the joined
+    string is clean dotted-ints with no trailing dot or non-int
+    components.
+    """
+
+    def _run_probe_with_version(
+        self, version_tuple: tuple[object, ...], name: str = "circuitpython",
+    ) -> str:
+        """Exec the probe under a simulated implementation version.
+
+        Patches ``sys.implementation`` with a fake ``version`` and
+        ``name``, captures stdout, returns the version segment of the
+        emitted ``__CHU_IMPL__:`` marker line.
+        """
+        import io  # noqa: PLC0415
+        import sys  # noqa: PLC0415
+        import types  # noqa: PLC0415
+        from contextlib import redirect_stdout  # noqa: PLC0415
+
+        fake_implementation = types.SimpleNamespace(
+            version=version_tuple,
+            name=name,
+            _machine="fake-machine",
+        )
+        original_implementation = sys.implementation
+        sys.implementation = fake_implementation  # type: ignore[assignment]
+        try:
+            buffer = io.StringIO()
+            namespace: dict[str, object] = {}
+            with redirect_stdout(buffer):
+                # The probe script does `import microcontroller` /
+                # `import machine` inside try/except for UID — those
+                # fail cleanly on host CPython.
+                exec(  # noqa: S102 — probe script under controlled namespace
+                    compile(PROBE_IMPLEMENTATION_SCRIPT, "<probe>", "exec"),
+                    namespace,
+                )
+            captured = buffer.getvalue()
+        finally:
+            sys.implementation = original_implementation  # type: ignore[assignment]
+
+        for line in captured.splitlines():
+            if line.startswith("__CHU_IMPL__:"):
+                payload = line[len("__CHU_IMPL__:"):]
+                _name, version_str, _machine = payload.split("|", 2)
+                return version_str
+        raise AssertionError(
+            f"probe did not emit __CHU_IMPL__ marker (output: {captured!r})",
+        )
+
+    def test_cp_rc_four_tuple_with_empty_string_strips_trailing_dot(
+        self,
+    ) -> None:
+        """``(10, 2, 0, '')`` (CP 10.2.0-rc.0 shape) → ``"10.2.0"``."""
+        assert self._run_probe_with_version((10, 2, 0, "")) == "10.2.0"
+
+    def test_cp_final_three_tuple(self) -> None:
+        """``(10, 1, 4)`` (CP 10.1.4 final shape) → ``"10.1.4"``."""
+        assert self._run_probe_with_version((10, 1, 4)) == "10.1.4"
+
+    def test_mp_three_tuple(self) -> None:
+        """``(1, 28, 0)`` (MicroPython 1.28.0 shape) → ``"1.28.0"``."""
+        assert self._run_probe_with_version(
+            (1, 28, 0), name="micropython",
+        ) == "1.28.0"
+
+    def test_cpython_five_tuple_stops_at_releaselevel(self) -> None:
+        """``(3, 12, 0, 'final', 0)`` (CPython shape) → ``"3.12.0"``.
+
+        Stops at the first non-int component — does NOT continue
+        through to the trailing serial int.
+        """
+        assert self._run_probe_with_version(
+            (3, 12, 0, "final", 0),
+        ) == "3.12.0"
+
+    def test_first_element_non_int_yields_empty(self) -> None:
+        """Defensive: a runtime that returns a string-first version
+        produces an empty version string (caller treats as
+        ``UNPARSEABLE``).
+        """
+        assert self._run_probe_with_version(("v", 1, 0)) == ""
