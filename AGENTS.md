@@ -54,7 +54,9 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 ### Skills
 
-Procedural knowledge lives in `.github/skills/`. Read the relevant skill file before performing the task.
+Procedural knowledge lives in `.github/skills/` (the canonical home).  The same tree is also reachable at `.claude/skills/` via a symlink so Claude Code auto-discovers them there — read whichever path your tooling prefers; both resolve to the same files.
+
+Read the relevant skill file before performing the task.
 
 | Skill | When to read it |
 |-------|-----------------|
