@@ -565,7 +565,220 @@ def recovery_plan_for(kind: DeployFailureKind) -> RecoveryPlan:
 _DEFAULT_MAX_ATTEMPTS = 3
 
 
-class InteractiveDeployer:
+class _RecoveringDeployer:
+    """Shared scaffolding for Deployer wrappers that surface recovery
+    output on transport failures.
+
+    Holds the classify → fskit-promote → format chain that's common
+    to both :class:`NonInteractiveDeployer` (raises after one report)
+    and :class:`InteractiveDeployer` (loops with a user prompt).
+    Not part of the public API — call sites pick one of the two
+    concrete subclasses based on whether they have a stdin to prompt
+    against.
+
+    Subclasses implement ``deploy`` / ``deploy_diff`` themselves;
+    this base only provides the helpers they share.
+    """
+
+    def __init__(
+        self,
+        deployer: Deployer,
+        *,
+        output: Callable[[str], None] = print,
+        fskit_wedge_detector: Callable[[], bool] = detect_fskit_wedge,
+    ) -> None:
+        self._deployer = deployer
+        self._output = output
+        self._fskit_wedge_detector = fskit_wedge_detector
+
+    @property
+    def deployer(self) -> Deployer:
+        """The underlying non-recovery :class:`Deployer`."""
+        return self._deployer
+
+    def _resolve_kind(self, error: Exception) -> DeployFailureKind:
+        """Classify *error* and promote ``CIRCUITPY_DRIVE_MISSING``
+        to ``MACOS_FSKIT_WEDGED`` when the macOS FSKit detector
+        flags the wedge.
+        """
+        kind = classify_deploy_failure(error)
+        if (
+            kind is DeployFailureKind.CIRCUITPY_DRIVE_MISSING
+            and self._fskit_wedge_detector()
+        ):
+            kind = DeployFailureKind.MACOS_FSKIT_WEDGED
+        return kind
+
+    def _report_failure(
+        self,
+        attempt: int,
+        max_attempts: int,
+        error: Exception,
+        kind: DeployFailureKind,
+        plan: RecoveryPlan,
+    ) -> None:
+        """Print the coached failure report for a transport error."""
+        self._output("")
+        self._output(
+            f"[chumicro-deploy] Attempt {attempt}/{max_attempts} "
+            f"failed: {kind.value}"
+        )
+        self._output(f"[chumicro-deploy] {plan.headline}")
+        self._output(f"[chumicro-deploy] Underlying error: {error}")
+        if kind is DeployFailureKind.PORT_UNAVAILABLE:
+            self._report_port_holders(error)
+        self._output("[chumicro-deploy] Try this:")
+        for step in plan.fix_steps:
+            self._output(f"  - {step}")
+
+    def _report_port_holders(self, error: Exception) -> None:
+        """Print the lsof diagnosis for ``PORT_UNAVAILABLE`` failures.
+
+        Pulls the port path out of *error*'s text, runs
+        :func:`diagnose_port_holders`, and emits a labelled section
+        when something is holding the port.  Silently no-ops when
+        the port can't be identified, lsof is unavailable, or the
+        port has no current holders (the user-action recovery
+        steps below will still surface the generic hint).
+
+        F6 of the 2026-05-06 verification pass.
+        """
+        port_path = _extract_port_path_from_error(error)
+        if port_path is None:
+            return
+        try:
+            holders = diagnose_port_holders(port_path)
+        except Exception:  # noqa: BLE001 — diagnosis is best-effort
+            return
+        if not holders:
+            return
+        self._output(
+            f"[chumicro-deploy] {port_path} is currently held by:",
+        )
+        for holder in holders:
+            self._output(f"  PID {holder.pid}: {holder.command}")
+        likely_ours = next(
+            (holder for holder in holders if _looks_like_chumicro(holder)),
+            None,
+        )
+        if likely_ours is not None:
+            self._output(
+                f"[chumicro-deploy] Looks like a stale chumicro-deploy "
+                f"or mpremote process from a previous run.  "
+                f"Terminate it with:  kill {likely_ours.pid}",
+            )
+
+    def _report_traceback(
+        self,
+        attempt: int,
+        traceback_text: str,
+        plan: RecoveryPlan,
+    ) -> None:
+        """Print the coached report for a board-side traceback."""
+        self._output("")
+        self._output(
+            f"[chumicro-deploy] Attempt {attempt} completed, but the "
+            f"entrypoint raised on the board."
+        )
+        self._output(f"[chumicro-deploy] {plan.headline}")
+        self._output("[chumicro-deploy] --- traceback ---")
+        self._output(traceback_text)
+        self._output("[chumicro-deploy] Try this:")
+        for step in plan.fix_steps:
+            self._output(f"  - {step}")
+
+
+class NonInteractiveDeployer(_RecoveringDeployer):
+    """:class:`Deployer` wrapper for CI / scripted flows.
+
+    On :class:`CircuitpythonTransportError` or
+    :class:`MicropythonTransportError`: classifies the failure,
+    prints the coached recovery output (headline + F6 lsof
+    diagnosis when applicable + canonical fix steps), and re-raises.
+    No retry loop, no user prompt — designed for callers that
+    have nowhere to read stdin from (CI runners, log-driven
+    automation, ``--non-interactive`` CLI flag).
+
+    On a :class:`DeployResult` with ``success=False`` and a
+    ``traceback``: prints the traceback + the ``TRACEBACK_RETURNED``
+    plan and returns the result unchanged — same contract as
+    :class:`InteractiveDeployer` for that case.
+
+    For interactive flows where a retry-prompt has somewhere to
+    go, use :class:`InteractiveDeployer` instead.
+
+    Args:
+        deployer: Underlying :class:`Deployer` that owns the device
+            and transport construction.
+        output: Injectable output sink.  Defaults to :func:`print`.
+        fskit_wedge_detector: Injectable probe for the macOS FSKit
+            wedge.  See :class:`_RecoveringDeployer` for the
+            promotion semantics.
+    """
+
+    def deploy(
+        self,
+        source: FileSource,
+        *,
+        on_progress: Callable[[float, str], None] | None = None,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> DeployResult:
+        """Deploy *source*; classify + report + re-raise on failure."""
+        return self._run(
+            lambda: self._deployer.deploy(
+                source,
+                on_progress=on_progress,
+                on_file_staged=on_file_staged,
+                on_execute_line=on_execute_line,
+            ),
+        )
+
+    def deploy_diff(
+        self,
+        source: FileSource,
+        *,
+        wipe: bool = False,
+        on_progress: Callable[[float, str], None] | None = None,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_file_deleted: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> DeployResult:
+        """Diff-deploy *source*; classify + report + re-raise on failure."""
+        return self._run(
+            lambda: self._deployer.deploy_diff(
+                source,
+                wipe=wipe,
+                on_progress=on_progress,
+                on_file_staged=on_file_staged,
+                on_file_deleted=on_file_deleted,
+                on_execute_line=on_execute_line,
+            ),
+        )
+
+    def _run(
+        self, call: Callable[[], DeployResult],
+    ) -> DeployResult:
+        """Run *call*; report transport / traceback failures and re-raise."""
+        try:
+            result = call()
+        except (
+            CircuitpythonTransportError,
+            MicropythonTransportError,
+        ) as error:
+            kind = self._resolve_kind(error)
+            plan = recovery_plan_for(kind)
+            # Single attempt — the "1/1" header makes the no-retry
+            # contract explicit in the output.
+            self._report_failure(1, 1, error, kind, plan)
+            raise
+        if not result.success and result.traceback is not None:
+            plan = recovery_plan_for(DeployFailureKind.TRACEBACK_RETURNED)
+            self._report_traceback(1, result.traceback, plan)
+        return result
+
+
+class InteractiveDeployer(_RecoveringDeployer):
     """:class:`Deployer` wrapper that coaches the user through failures.
 
     On :class:`CircuitpythonTransportError` or
@@ -581,6 +794,9 @@ class InteractiveDeployer:
     a source-level bug isn't something retrying the same bytes
     will fix.
 
+    For CI / scripted flows where the retry prompt has nowhere to
+    go, use :class:`NonInteractiveDeployer` instead.
+
     Args:
         deployer: Underlying :class:`Deployer` that owns the device
             and transport construction.
@@ -589,16 +805,10 @@ class InteractiveDeployer:
             :func:`input`.  Return an empty / whitespace-only string
             to continue, or ``"quit"`` / ``"q"`` / ``"abort"`` /
             ``"exit"`` to stop retrying and re-raise the last error.
-        output: Injectable output sink.  Defaults to
-            :func:`print` (so messages go to stdout).  Tests inject
-            a list-append to make assertions.
-        fskit_wedge_detector: Injectable probe for the macOS
-            FSKit / DiskArbitration wedge (see :mod:`macos_fskit`).
-            Called only on ``CIRCUITPY_DRIVE_MISSING`` failures; if
-            it returns ``True``, the kind is promoted to
-            :attr:`DeployFailureKind.MACOS_FSKIT_WEDGED` so the
-            user sees the exact ``sudo`` command that unsticks the
-            daemons instead of the generic "tap RESET" steps.
+        output: Injectable output sink.  Defaults to :func:`print`.
+        fskit_wedge_detector: Injectable probe for the macOS FSKit
+            wedge.  See :class:`_RecoveringDeployer` for the
+            promotion semantics.
     """
 
     def __init__(
@@ -614,16 +824,13 @@ class InteractiveDeployer:
             raise ValueError(
                 f"max_attempts must be >= 1, got {max_attempts}"
             )
-        self._deployer = deployer
+        super().__init__(
+            deployer,
+            output=output,
+            fskit_wedge_detector=fskit_wedge_detector,
+        )
         self._max_attempts = max_attempts
         self._prompt = prompt
-        self._output = output
-        self._fskit_wedge_detector = fskit_wedge_detector
-
-    @property
-    def deployer(self) -> Deployer:
-        """The underlying non-interactive :class:`Deployer`."""
-        return self._deployer
 
     def deploy(
         self,
@@ -696,14 +903,11 @@ class InteractiveDeployer:
                 MicropythonTransportError,
             ) as error:
                 last_error = error
-                kind = classify_deploy_failure(error)
-                if (
-                    kind is DeployFailureKind.CIRCUITPY_DRIVE_MISSING
-                    and self._fskit_wedge_detector()
-                ):
-                    kind = DeployFailureKind.MACOS_FSKIT_WEDGED
+                kind = self._resolve_kind(error)
                 plan = recovery_plan_for(kind)
-                self._report_failure(attempt, error, kind, plan)
+                self._report_failure(
+                    attempt, self._max_attempts, error, kind, plan,
+                )
                 if not plan.retryable:
                     raise
                 if attempt >= self._max_attempts:
@@ -724,83 +928,6 @@ class InteractiveDeployer:
         # fallback so static analysis is happy.
         assert last_error is not None
         raise last_error  # pragma: no cover
-
-    def _report_failure(
-        self,
-        attempt: int,
-        error: Exception,
-        kind: DeployFailureKind,
-        plan: RecoveryPlan,
-    ) -> None:
-        """Print the coached failure report for a transport error."""
-        self._output("")
-        self._output(
-            f"[chumicro-deploy] Attempt {attempt}/{self._max_attempts} "
-            f"failed: {kind.value}"
-        )
-        self._output(f"[chumicro-deploy] {plan.headline}")
-        self._output(f"[chumicro-deploy] Underlying error: {error}")
-        if kind is DeployFailureKind.PORT_UNAVAILABLE:
-            self._report_port_holders(error)
-        self._output("[chumicro-deploy] Try this:")
-        for step in plan.fix_steps:
-            self._output(f"  - {step}")
-
-    def _report_port_holders(self, error: Exception) -> None:
-        """Print the lsof diagnosis for ``PORT_UNAVAILABLE`` failures.
-
-        Pulls the port path out of *error*'s text, runs
-        :func:`diagnose_port_holders`, and emits a labelled section
-        when something is holding the port.  Silently no-ops when
-        the port can't be identified, lsof is unavailable, or the
-        port has no current holders (the user-action recovery
-        steps below will still surface the generic hint).
-
-        F6 of the 2026-05-06 verification pass.
-        """
-        port_path = _extract_port_path_from_error(error)
-        if port_path is None:
-            return
-        try:
-            holders = diagnose_port_holders(port_path)
-        except Exception:  # noqa: BLE001 — diagnosis is best-effort
-            return
-        if not holders:
-            return
-        self._output(
-            f"[chumicro-deploy] {port_path} is currently held by:",
-        )
-        for holder in holders:
-            self._output(f"  PID {holder.pid}: {holder.command}")
-        likely_ours = next(
-            (holder for holder in holders if _looks_like_chumicro(holder)),
-            None,
-        )
-        if likely_ours is not None:
-            self._output(
-                f"[chumicro-deploy] Looks like a stale chumicro-deploy "
-                f"or mpremote process from a previous run.  "
-                f"Terminate it with:  kill {likely_ours.pid}",
-            )
-
-    def _report_traceback(
-        self,
-        attempt: int,
-        traceback_text: str,
-        plan: RecoveryPlan,
-    ) -> None:
-        """Print the coached report for a board-side traceback."""
-        self._output("")
-        self._output(
-            f"[chumicro-deploy] Attempt {attempt} completed, but the "
-            f"entrypoint raised on the board."
-        )
-        self._output(f"[chumicro-deploy] {plan.headline}")
-        self._output("[chumicro-deploy] --- traceback ---")
-        self._output(traceback_text)
-        self._output("[chumicro-deploy] Try this:")
-        for step in plan.fix_steps:
-            self._output(f"  - {step}")
 
     def _ask_retry(self, attempt: int) -> bool:
         """Ask the user whether to retry; return ``True`` to continue.

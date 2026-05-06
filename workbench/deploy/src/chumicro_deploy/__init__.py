@@ -75,6 +75,7 @@ from .protocol import (
 from .recovery import (
     DeployFailureKind,
     InteractiveDeployer,
+    NonInteractiveDeployer,
     RecoveryPlan,
     classify_deploy_failure,
     recovery_plan_for,
@@ -116,6 +117,7 @@ __all__ = [
     "MicropythonMidDeployDisconnected",
     "MicropythonTransport",
     "MicropythonTransportError",
+    "NonInteractiveDeployer",
     "RecoveryPlan",
     "ReflashMethod",
     "RsyncMissingError",
