@@ -82,15 +82,31 @@ class FirmwareSupportResult:
 def parse_version_tuple(version: str) -> tuple[int, ...] | None:
     """Parse a dotted version string into an int tuple.
 
-    ``"10.1.4"`` → ``(10, 1, 4)``.  ``"1.26.0"`` → ``(1, 26, 0)``.
-    Returns ``None`` for empty input, non-numeric components, or
+    Takes the leading run of int-parseable dotted components and
+    returns them as a tuple:
+
+    * ``"10.1.4"`` → ``(10, 1, 4)``
+    * ``"1.26.0"`` → ``(1, 26, 0)``
+    * ``"10.2.0."`` → ``(10, 2, 0)`` — trailing dot from CP's
+      ``(10, 2, 0, '')`` 4-tuple shape on RC builds
+    * ``"10.2.0.rc.0"`` → ``(10, 2, 0)`` — non-int suffix stops parsing
+    * ``"10.1.0-rc1"`` / ``"1.27.0-dev"`` → ``(10, 1, 0)`` / ``(1, 27, 0)``
+      — release-suffix stripped before splitting
+    * ``""`` / ``"abc"`` / no leading ints → ``None``
+
+    Returns ``None`` for empty input, no leading int component, or
     any other parse failure — callers treat ``None`` as
     :attr:`FirmwareSupportStatus.UNPARSEABLE`.
 
-    Trailing release suffixes (``"1.27.0-dev"``, ``"10.1.0-rc1"``)
-    aren't expected from ``sys.implementation.version`` (which is
-    always a dotted-int tuple) but are stripped defensively to keep
-    the parse honest if a future runtime adds them.
+    Defensive against the empirically-observed shapes of
+    ``sys.implementation.version`` across runtimes and builds:
+    CircuitPython RC builds ship ``(10, 2, 0, '')`` (4-tuple with
+    empty string), MicroPython ships ``(1, 28, 0)`` (3-tuple),
+    CPython ships ``(3, 12, 0, 'final', 0)`` (5-tuple).  The probe
+    in :data:`chumicro_deploy.protocol.PROBE_IMPLEMENTATION_SCRIPT`
+    now stops at the first non-int element when stringifying, but
+    cached entries in older ``devices.yml`` files may carry the
+    legacy trailing-dot form.
 
     Args:
         version: Dotted version string from
@@ -99,11 +115,22 @@ def parse_version_tuple(version: str) -> tuple[int, ...] | None:
     if not version:
         return None
     head = version.split("-", 1)[0].split("+", 1)[0]
-    parts = head.split(".")
-    try:
-        return tuple(int(part) for part in parts)
-    except ValueError:
+    result: list[int] = []
+    for part in head.split("."):
+        try:
+            result.append(int(part))
+        except ValueError:
+            # Stop at first non-int; covers trailing dot ("10.2.0.")
+            # and embedded suffixes ("10.2.0.rc.0").
+            break
+    # Require at least major.minor — a single leading int (e.g.
+    # ``"1.alpha.0"``) is more likely malformed than a real
+    # one-component version, and tuple comparison against a
+    # floor would silently classify it as "below" rather than
+    # surfacing the parse failure.
+    if len(result) < 2:
         return None
+    return tuple(result)
 
 
 def check_firmware_supported(

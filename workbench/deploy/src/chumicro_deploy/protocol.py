@@ -125,6 +125,18 @@ class DeviceImplementation:
 PROBE_IMPLEMENTATION_SCRIPT = (
     "import sys\n"
     "_probe_version = sys.implementation.version\n"
+    # Stringify the leading run of int components.  ``sys.implementation.version``
+    # shape varies across runtimes / builds: CPython releases ship a 5-tuple
+    # ``(major, minor, micro, releaselevel, serial)``; CircuitPython release
+    # candidates ship a 4-tuple ``(major, minor, micro, '')`` where the empty
+    # string would join to a trailing dot; MicroPython final ships
+    # ``(major, minor, micro)``.  Stop at the first non-int element so the
+    # wire string is always clean dotted-ints.
+    "_probe_version_parts = []\n"
+    "for _probe_part in _probe_version:\n"
+    "    if not isinstance(_probe_part, int): break\n"
+    "    _probe_version_parts.append(str(_probe_part))\n"
+    "_probe_version_str = '.'.join(_probe_version_parts)\n"
     "_probe_machine = getattr(sys.implementation, '_machine', '')\n"
     "_probe_uid = ''\n"
     "try:\n"
@@ -137,7 +149,7 @@ PROBE_IMPLEMENTATION_SCRIPT = (
     "except Exception:\n"
     "    pass\n"
     "print('__CHU_IMPL__:' + sys.implementation.name"
-    " + '|' + '.'.join(str(_probe_part) for _probe_part in _probe_version)"
+    " + '|' + _probe_version_str"
     " + '|' + _probe_machine)\n"
     "print('__CHU_UID__:' + _probe_uid)\n"
 )
