@@ -13,12 +13,13 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 
 ## What gets configured
 
-`python scripts/run.py setup` creates two gitignored files when they do not already exist:
+`python scripts/run.py setup` creates three gitignored files at the repo root when they do not already exist:
 
 - `devices.yml` — your local board registry and default target selection
-- `workspace.yml` — workspace-wide defaults + your credentials in one gitignored file (Decisions 0035 + 0057).  Per-library `functional_tests/config.toml` overrides land on top via deep-merge.
+- `workspace.yml` — host-side machinery (library_sources, deploy_targets, quality knobs); not a credentials file
+- `secrets.toml` — workspace-wide credentials + device-bound defaults (wifi SSID/password, broker host/port/auth) that flow into `runtime_config.msgpack` at deploy time.  Per-library `functional_tests/config.toml` overrides land on top via deep-merge.
 
-They are intentionally local-only.  The mono-repo's `_workspace_template/workspace.yml` carries this repo's specific opinions (`mqtt.broker.host = test.mosquitto.org`, `wifi.ssid` placeholder); setup materialises that to the workspace root, then you fill in your wifi password / broker auth.  Do not commit them.
+The three-file split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md) (extended by the config-shape-beginner-ergonomics workstream): `workspace.yml` is host-only, `secrets.toml` is device-bound.  Setup materialises starters from the mono-repo's `_workspace_template/`; fill in your wifi password / broker auth in `secrets.toml`, then leave it gitignored.  Do not commit any of the three.
 
 ## 1. Generate the starter files
 
@@ -126,27 +127,28 @@ Supported fields today:
 
 Use `ram` for day-to-day functional-test iteration. Use `flash` when a board cannot hold the RAM-mode payload comfortably or when you need persistence semantics.
 
-## 3. Configure `workspace.yml`
+## 3. Configure `secrets.toml`
 
-Workspace-wide defaults + credentials that every functional test inherits at deploy time, in one gitignored file (Decision 0057).  Materialised by `setup` from the mono-repo's `_workspace_template/workspace.yml` (carrying `mqtt.broker.host = test.mosquitto.org` + the `wifi.ssid` placeholder); the workbench package `chumicro-workspace` owns the fallback canonical starter for repos that don't ship their own `_workspace_template/` override.
+Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the mono-repo's `_workspace_template/secrets.toml` (carrying `mqtt.broker.host = test.mosquitto.org` + a `wifi.ssid` placeholder); the workbench package `chumicro-workspace` owns the fallback canonical starter for repos that don't ship their own `_workspace_template/` override.
 
-Edit `workspace.yml` once per clone — fill in your wifi credentials + any broker auth:
+Edit `secrets.toml` once per clone — fill in your wifi credentials + any broker auth:
 
-```yaml
-defaults:
-  wifi:
-    ssid: my-actual-network
-    password: my-real-wifi-password
-  mqtt:
-    broker:
-      host: test.mosquitto.org
-      port: 1883
-      # auth:
-      #   username: my-user
-      #   password: my-mqtt-password
+```toml
+[wifi]
+ssid = "my-actual-network"
+password = "my-real-wifi-password"
+
+[mqtt.broker]
+host = "test.mosquitto.org"
+port = 1883
+# [mqtt.broker.auth]
+# username = "my-user"
+# password = "my-mqtt-password"
 ```
 
-The deploy-time deep-merge layers `workspace.yml` → per-library `functional_tests/config.toml`.  Both layers share the same section-namespaced shape; per-library configs win at any nesting depth.
+The deploy-time deep-merge layers `secrets.toml` → per-library `functional_tests/config.toml`.  Both layers share the same section-namespaced shape; per-library configs win at any nesting depth.  The result is flattened to dotted keys (`wifi.ssid`, `mqtt.broker.host`) and msgpack-encoded into `/runtime_config.msgpack`, which on-device tests read via `chumicro_config.load_runtime_config()` — the same API user code uses.
+
+How the staging happens: each library's `functional_tests/conftest.py` calls `chumicro_workspace.compose_runtime_config(secrets_toml=…, project_config=…)` from its `pytest_configure` hook, then hands the merged dict to `chumicro_pytest_device.set_runtime_config(config, payload)`.  The pytest-device plugin msgpack-encodes the payload once per session and stages it via `transport.stage(extra_files={"/runtime_config.msgpack": …})`.  When `secrets.toml` is missing or carries the placeholder SSID, the conftest registers `None` and the on-device test hits its silent-skip path (no creds, no run) — fresh-clone-friendly by default.
 
 Typical uses:
 
