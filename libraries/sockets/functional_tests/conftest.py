@@ -34,7 +34,7 @@ _MAX_DATAGRAM = 1500
 
 
 def _merged_runtime_config_with_creds() -> dict | None:
-    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip.
+    """Return the deep-merged + flattened runtime-config dict, or ``None``.
 
     Returns the dict only when wifi credentials are configured —
     matches the pre-migration behaviour where the on-device tests
@@ -49,11 +49,8 @@ def _merged_runtime_config_with_creds() -> dict | None:
         )
     except Exception:  # noqa: BLE001 — silent skip on any config error
         return None
-    wifi = merged.get("wifi")
-    if not isinstance(wifi, dict):
-        return None
-    ssid = wifi.get("ssid")
-    password = wifi.get("password")
+    ssid = merged.get("wifi.ssid")
+    password = merged.get("wifi.password")
     if not isinstance(ssid, str) or not isinstance(password, str):
         return None
     if ssid == "replace-with-your-ap-ssid":
@@ -119,10 +116,11 @@ _ECHO_STOP: threading.Event | None = None
 def pytest_configure(config: pytest.Config) -> None:
     """Spin up the host UDP echo server; register the runtime-config payload.
 
-    Always shapes ``sockets.echo`` with ``host``/``port`` keys when a
-    payload is registered — values are ``None`` when the fixture didn't
-    spawn, so on-device test code can read ``config["sockets"]["echo"]["host"]``
-    directly without defensive ``.get()`` chaining.
+    Always emits ``sockets.echo.host`` / ``sockets.echo.port`` keys when
+    a payload is registered — values are ``None`` when the fixture
+    didn't spawn, so on-device test code can read
+    ``config["sockets.echo.host"]`` directly without defensive ``.get()``
+    chaining.
     """
     global _ECHO_STOP
 
@@ -134,10 +132,8 @@ def pytest_configure(config: pytest.Config) -> None:
         lan_ip = _detect_lan_ip()
         if lan_ip is not None:
             echo_host, echo_port, _ECHO_STOP = _start_echo_server(lan_ip)
-        merged.setdefault("sockets", {})["echo"] = {
-            "host": echo_host,
-            "port": echo_port,
-        }
+        merged["sockets.echo.host"] = echo_host
+        merged["sockets.echo.port"] = echo_port
 
     set_runtime_config(config, merged)
 

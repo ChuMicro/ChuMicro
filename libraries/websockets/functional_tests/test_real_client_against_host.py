@@ -71,11 +71,11 @@ def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
 
 def test_real_client_round_trip_against_host_echo_server() -> None:
     """Device client connects to host echo server, round-trips 3 messages."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
-    server_host = config["websockets"]["server"]["host"]
-    server_port = config["websockets"]["server"]["port"]
+    server_host = config["websockets.server.host"]
+    server_port = config["websockets.server.port"]
     if server_host is None or server_port is None:
         # Host fixture didn't bring up the echo server (websockets PyPI
         # missing, LAN detection failed, etc.).  Skip silently — the

@@ -50,16 +50,21 @@ GENERATED_DIRNAME: str = "_generated"
 #: inputs, not runtime payload, and so are skipped when shipping the
 #: project's directory to the device.
 _SKIP_FILENAMES: frozenset[str] = frozenset(
-    {"config.toml", "config.yml", "config.yaml"},
+    {"project_config.toml", "config.toml", "config.yml", "config.yaml"},
 )
 
 
 def find_project_config(project_dir: Path) -> Path:
-    """Return the config file for *project_dir* — TOML wins over YAML.
+    """Return the per-project config file for *project_dir*.
 
-    Every project carries one config file.  This helper picks the
-    canonical name in priority order: ``config.toml``, then
-    ``config.yml``, then ``config.yaml``.
+    Picks the first existing file in this priority order:
+
+    1. ``project_config.toml`` — current canonical name.  Self-documenting
+       (a beginner reading the project directory immediately sees this
+       is project-specific config, not a generic ``config.toml``).
+    2. ``config.toml`` — legacy name, accepted so user-edited workspaces
+       from before the rename keep working without a migration.
+    3. ``config.yml`` / ``config.yaml`` — YAML opt-in.
 
     Args:
         project_dir: Path to ``projects/<name>/``.
@@ -67,12 +72,18 @@ def find_project_config(project_dir: Path) -> Path:
     Raises:
         FileNotFoundError: When no recognized config file exists.
     """
-    for filename in ("config.toml", "config.yml", "config.yaml"):
+    for filename in (
+        "project_config.toml",
+        "config.toml",
+        "config.yml",
+        "config.yaml",
+    ):
         candidate = project_dir / filename
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(
-        f"no config.toml / config.yml / config.yaml in {project_dir}",
+        f"no project_config.toml / config.toml / config.yml / config.yaml "
+        f"in {project_dir}",
     )
 
 
@@ -120,18 +131,16 @@ class WithRuntimeConfig:
             if output_path is not None
             else project_config.parent / GENERATED_DIRNAME / "runtime_config.msgpack"
         )
-        # ``library_roots`` enables Phase 2 of the unification
-        # workstream's manifest validation: each path is a library
-        # checkout (``libraries/<name>/`` with a ``pyproject.toml``);
-        # ``files()`` reads each one's
-        # ``[tool.chumicro.config.sections.<name>]`` block, unions
-        # them, and validates the merged-and-resolved config dict
-        # against the union before writing the msgpack.  Missing
-        # required keys surface as a precise
+        # ``library_roots`` enables manifest validation: each path is
+        # a library checkout (``libraries/<name>/`` with a
+        # ``pyproject.toml``); ``files()`` reads each one's
+        # ``[tool.chumicro.config]`` block, unions the required /
+        # optional flat keys, and validates the merged + flattened
+        # config dict against the union before writing the msgpack.
+        # Missing required keys surface as a precise
         # :class:`ConfigManifestError` instead of a cryptic
-        # ``MissingConfigKey`` at device boot.
-        # ``None`` (the default) skips validation — preserves
-        # backwards-compat for callers that don't yet plumb the
+        # ``MissingConfigKey`` at device boot.  ``None`` (the default)
+        # skips validation — for callers that don't yet plumb the
         # import-graph library list through.
         self._library_roots: tuple[Path, ...] = (
             tuple(library_roots) if library_roots else ()

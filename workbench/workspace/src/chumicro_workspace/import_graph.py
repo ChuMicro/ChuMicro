@@ -271,11 +271,10 @@ def project_import_graph_source(
 
     # Library roots extracted from the search paths so
     # ``WithRuntimeConfig`` can read each library's
-    # ``[tool.chumicro.config.sections.*]`` block and validate the
-    # merged config dict against the union manifest before writing
-    # the msgpack — Phase 2 of the unification workstream.  Local
-    # import keeps the import-graph module's import cost flat for
-    # callers who don't deploy.
+    # ``[tool.chumicro.config]`` block and validate the merged + flat
+    # config dict against the union manifest before writing the
+    # msgpack.  Local import keeps the import-graph module's import
+    # cost flat for callers who don't deploy.
     from chumicro_workspace.config_manifest import (  # noqa: PLC0415
         find_library_roots,
     )

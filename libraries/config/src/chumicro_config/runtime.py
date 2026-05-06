@@ -2,23 +2,31 @@
 
 Two surfaces:
 
-* :data:`config` — the loaded runtime config (or ``None`` when the
-  file is missing).  Lazy-loaded on first attribute access via
-  PEP 562 module-level ``__getattr__``: the file isn't read until
-  something actually touches ``config``, and the result is cached
-  for the lifetime of the import.  Apps gate on
+* :data:`config` — the loaded :class:`RuntimeConfig` (or ``None``
+  when the file is missing).  Lazy-loaded on first attribute access
+  via PEP 562 module-level ``__getattr__``: the file isn't read
+  until something actually touches ``config``, and the result is
+  cached for the lifetime of the import.  Apps gate on
   ``if config is None:`` to handle the no-deployed-config path;
-  direct chain access reads values: ``config["wifi"]["ssid"]``.
+  per-key access reads values: ``config["wifi.ssid"]`` (raises
+  :class:`MissingConfigKey` on miss) or ``config.get("wifi.ssid")``
+  (returns ``None`` on miss).
 * :func:`load_runtime_config` — the explicit reader; raises
   ``OSError`` on missing file, :class:`InvalidConfigType` on
-  malformed payload.  Used when a caller needs precise error
-  semantics, wants to re-read after a deploy, or reads a
+  malformed payload.  Returns a :class:`RuntimeConfig` directly so
+  callers don't have to re-wrap.  Used when a caller needs precise
+  error semantics, wants to re-read after a deploy, or reads a
   non-default path.
+
+The on-device payload is always the **flat** dotted-key shape
+produced by ``chumicro_workspace.compose_runtime_config`` — nested
+``[wifi]`` / ``[mqtt]`` TOML tables on disk become
+``"wifi.ssid"`` / ``"mqtt.broker.host"`` flat keys at compose time.
 """
 
 from chumicro_msgpack import unpackb
 
-from chumicro_config.section import InvalidConfigType
+from chumicro_config.section import InvalidConfigType, RuntimeConfig
 
 DEFAULT_RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
 """Canonical on-device location of the deployed runtime config.
@@ -28,7 +36,7 @@ template — don't.
 """
 
 
-def load_runtime_config(path: str | None = None) -> dict:
+def load_runtime_config(path: str | None = None) -> RuntimeConfig:
     """Read + decode the deployed runtime config.
 
     Args:
@@ -38,7 +46,7 @@ def load_runtime_config(path: str | None = None) -> dict:
             constant without losing the default-arg ergonomics.
 
     Returns:
-        The section-namespaced dict.
+        A :class:`RuntimeConfig` wrapping the decoded flat dict.
 
     Raises:
         OSError: File missing — device was deployed without a
@@ -54,14 +62,14 @@ def load_runtime_config(path: str | None = None) -> dict:
         raise InvalidConfigType(
             f"runtime config must decode to a dict, got {type(decoded).__name__}"
         )
-    return decoded
+    return RuntimeConfig(decoded)
 
 
-_config_cache: dict | None = None
+_config_cache: RuntimeConfig | None = None
 _config_loaded: bool = False
 
 
-def _ensure_config_loaded() -> dict | None:
+def _ensure_config_loaded() -> RuntimeConfig | None:
     """Load + cache the runtime config on first call; return the cached value."""
     global _config_cache, _config_loaded
     if not _config_loaded:

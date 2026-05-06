@@ -186,14 +186,14 @@ class TestProjectImportGraphSource:
         assert "/lib/unused_helper.py" not in files
 
     def test_runtime_config_msgpack_rides_along(self, tmp_path: Path) -> None:
-        """Slice 1's WithRuntimeConfig wraps the import graph too."""
+        """``WithRuntimeConfig`` wraps the import graph; flat msgpack rides."""
         workspace = _seed_project_with_imports(tmp_path)
         project_dir = workspace.project_dir("back-porch")
         source = project_import_graph_source(project_dir, workspace=workspace)
         files = source.files()
         assert RUNTIME_CONFIG_DEVICE_PATH in files
         decoded = unpackb(files[RUNTIME_CONFIG_DEVICE_PATH])
-        assert decoded["wifi"]["ssid"] == "HomeNet"
+        assert decoded["wifi.ssid"] == "HomeNet"
 
     def test_library_sources_override_routes_through_external_path(
         self,

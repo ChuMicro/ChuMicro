@@ -27,7 +27,6 @@ from chumicro_workspace import (
 from chumicro_workspace.workspace import WorkspaceLayout
 from msgpack import unpackb
 
-
 # ---------------------------------------------------------------------------
 # project_app_exports_run — the AST-based detection used by auto-detect
 # ---------------------------------------------------------------------------
@@ -212,7 +211,7 @@ class TestProjectBootSource:
         files = source.files()
         assert RUNTIME_CONFIG_DEVICE_PATH in files
         decoded = unpackb(files[RUNTIME_CONFIG_DEVICE_PATH])
-        assert decoded["wifi"]["password"] == "shh"
+        assert decoded["wifi.password"] == "shh"
 
     def test_entrypoint_is_code_py(self, tmp_path: Path) -> None:
         workspace, project_dir = _seed_project_for_boot(tmp_path)
@@ -412,7 +411,7 @@ class TestProjectBootWithImportGraphSource:
         files = source.files()
         assert RUNTIME_CONFIG_DEVICE_PATH in files
         decoded = unpackb(files[RUNTIME_CONFIG_DEVICE_PATH])
-        assert decoded["wifi"]["password"] == "shh"
+        assert decoded["wifi.password"] == "shh"
 
     def test_missing_project_entrypoint_raises(self, tmp_path: Path) -> None:
         """No app.py under the project directory is a clear failure."""

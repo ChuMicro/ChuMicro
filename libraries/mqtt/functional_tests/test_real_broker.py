@@ -87,11 +87,11 @@ def _unique_topic_root() -> str:
 
 def test_real_mqtt_publish_subscribe_round_trip() -> None:
     """Connect to a real broker, publish QoS 1, confirm receipt."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
-    broker_host = config["mqtt"]["broker"]["host"]
-    broker_port = config["mqtt"]["broker"]["port"]
+    broker_host = config["mqtt.broker.host"]
+    broker_port = config["mqtt.broker.port"]
 
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")

@@ -64,7 +64,7 @@ def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
 
 def test_real_tcp_connect_and_recv() -> None:
     """Open a TCP connection, send HTTP/1.0, read the response."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
 

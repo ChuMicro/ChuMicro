@@ -723,7 +723,7 @@ class TestDeploy:
         files, entrypoint = deploy_calls[0][1]
         assert entrypoint == "/main.py"  # MP default per Device.effective_entrypoint
         decoded = unpackb(files["/runtime_config.msgpack"])
-        assert decoded["wifi"]["password"] == "shh"
+        assert decoded["wifi.password"] == "shh"
 
     def test_missing_project_raises(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
@@ -2132,7 +2132,7 @@ class TestSuggestAddDeviceId:
     the positional id.
     """
 
-    def _impl(self, machine: str, runtime: str) -> "DeviceImplementation":
+    def _impl(self, machine: str, runtime: str) -> "DeviceImplementation":  # noqa: F821 — quoted forward ref; impl imports inline below
         from chumicro_deploy import DeviceImplementation  # noqa: PLC0415
 
         return DeviceImplementation(
@@ -4579,11 +4579,11 @@ class TestCommandDumpConfig:
         assert exit_code == 0
         import json
         printed = json.loads(capsys.readouterr().out)
-        # Workspace.yml defaults + project config.toml — Decision 0057's
-        # 2-layer pipeline.
-        assert printed["wifi"]["ssid"] == "HomeNet"
-        assert printed["wifi"]["password"] == "shh"  # from workspace.yml
-        assert printed["wifi"]["hostname_prefix"] == "chu-"
+        # Workspace.yml defaults + project config — flat dotted-key
+        # output (compose-time flatten produces wifi.ssid, etc.).
+        assert printed["wifi.ssid"] == "HomeNet"
+        assert printed["wifi.password"] == "shh"  # from workspace.yml
+        assert printed["wifi.hostname_prefix"] == "chu-"
 
     def test_repr_mode_uses_python_repr(
         self,
@@ -4599,7 +4599,7 @@ class TestCommandDumpConfig:
         # repr() of a dict starts with `{`, not `{\n  "key"`.
         out = capsys.readouterr().out
         assert out.startswith("{")
-        assert "'wifi'" in out
+        assert "'wifi.ssid'" in out
 
     def test_missing_project_raises(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)

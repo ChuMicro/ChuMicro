@@ -56,7 +56,7 @@ def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
 
 def test_real_serve_and_self_request_round_trip() -> None:
     """Start a server on the device, hit it with the device's own client."""
-    wifi_cfg = WifiConfig.try_from_dict(config)
+    wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
         return
 

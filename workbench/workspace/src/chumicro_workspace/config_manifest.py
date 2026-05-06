@@ -1,39 +1,34 @@
 """Read + aggregate + validate library config manifests.
 
 Each ChuMicro library that consumes ``runtime_config.msgpack``
-declares its required / optional keys in its ``pyproject.toml``::
+declares its required / optional flat dotted keys in its
+``pyproject.toml``::
 
-    [tool.chumicro.config.sections.wifi]
-    required = ["ssid", "password"]
-    optional = ["hostname", "connect_timeout_ms"]
+    [tool.chumicro.config]
+    required_keys = ["wifi.ssid", "wifi.password"]
+    optional_keys = ["wifi.hostname", "wifi.connect_timeout_ms"]
 
-Section names are inferred from the keys of
-``tool.chumicro.config.sections`` — one
-``[tool.chumicro.config.sections.<name>]`` table per section.  An
-empty table is valid and means "this library reads ``<name>`` but
-doesn't pin keys yet" (forward-compat).
+The keys live in the same vocabulary the runtime accessor uses
+(``config["wifi.ssid"]``) so the validator's failure message names
+the exact key the library code will request.
 
 This module reads those manifests, unions them across the libraries
-imported by a project, and validates a merged-and-resolved config
-dict against the union — turning a class of "config mismatch lands
-on device, fails at boot, prints a cryptic ``MissingConfigKey``"
+imported by a project, and validates a merged-and-resolved **flat**
+config dict against the union — turning a class of "config mismatch
+lands on device, fails at boot, prints a cryptic ``MissingConfigKey``"
 errors into precise deploy-time failures.
 
 Public surface:
 
-* :class:`SectionManifest` — one library's declaration for one section.
-* :class:`ConfigManifest` — the per-library top-level shape.
+* :class:`ConfigManifest` — one library's required / optional key sets.
 * :class:`ConfigManifestError` — raised when a config dict is missing
-  a required key (or has a section with the wrong type).
+  a required key.
 * :func:`read_manifest` — parse one library's ``pyproject.toml``.
-* :func:`aggregate_manifests` — union the section requirements
-  across multiple libraries.  When two libraries declare the same
-  section, ``required`` keys union (any library's "must have"
-  remains "must have") and ``optional`` keys union too.  A key
-  declared optional by one library and required by another is
-  required overall.
-* :func:`validate_runtime_config` — check a config dict against an
-  aggregated manifest; raise on missing required.
+* :func:`aggregate_manifests` — union the required + optional sets
+  across multiple libraries.  A key declared optional by one library
+  and required by another is required overall.
+* :func:`validate_runtime_config` — check a flat config dict against
+  an aggregated manifest; raise on missing required.
 
 Three-line example::
 
@@ -43,62 +38,49 @@ Three-line example::
 
     manifests = [read_manifest(library_root) for library_root in roots]
     union = aggregate_manifests(m for m in manifests if m is not None)
-    validate_runtime_config(merged_config_dict, union)
+    validate_runtime_config(flat_merged_config_dict, union)
 
 Libraries without a manifest (``read_manifest`` returns ``None``)
 contribute nothing to the union — they don't read runtime config,
 so there's nothing to validate against.  Forward-compat: a config
-can carry sections no library currently imports without raising.
+can carry keys no library currently requires without raising.
 """
 
 from __future__ import annotations
 
 import tomllib
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
 @dataclass(frozen=True)
-class SectionManifest:
-    """One library's declaration for one ``runtime_config`` section.
+class ConfigManifest:
+    """One library's flat-key declaration for ``runtime_config``.
 
     Attributes:
-        name: The section key in the merged config dict — typically
-            the library's basename without the ``chumicro-`` prefix
-            (e.g. ``chumicro-wifi`` reads from section ``wifi``).
-        required: Keys that must be present in this section.  Missing
-            any of them at deploy time raises :class:`ConfigManifestError`.
-        optional: Keys the library reads but tolerates missing —
-            ``load_section``'s factory uses its declared default when
-            absent.  Listed here so doc-generation tooling can render
-            the full surface, and so the union-aggregator can spot
-            "this library considers it optional but a sibling
-            library considers it required".
-        declared_by: Path to the ``pyproject.toml`` that declared
-            this manifest.  Used by error messages so users can
-            point at the right library when the union surfaces a
-            requirement.  Empty string when synthesized (e.g. by
-            tests).
-    """
-
-    name: str
-    required: frozenset[str]
-    optional: frozenset[str]
-    declared_by: str = ""
-
-
-@dataclass(frozen=True)
-class ConfigManifest:
-    """All ``runtime_config`` sections one library declares.
-
-    Empty ``sections`` is valid — a library can opt into the
-    manifest format (e.g. for forward-compat with tooling) without
-    declaring any required keys yet.
+        library_name: The library's PyPI name (``chumicro-wifi``,
+            etc.) — derived from ``[project].name`` in
+            ``pyproject.toml``, falling back to the library directory
+            name.
+        required_keys: Flat dotted keys that must be present in the
+            merged runtime config.  Missing any of them at deploy
+            time raises :class:`ConfigManifestError`.
+        optional_keys: Flat dotted keys the library reads but
+            tolerates missing — ``load_section``'s factory uses its
+            declared default when absent.  Listed here so doc
+            tooling can render the full surface, and so the
+            aggregator can spot "optional in lib A, required in lib B".
+        declared_by: Path(s) to the ``pyproject.toml`` that declared
+            this manifest.  After :func:`aggregate_manifests` joins
+            multiple libraries, this becomes a comma-separated list
+            of every contributor.  Used by error messages.
     """
 
     library_name: str
-    sections: tuple[SectionManifest, ...]
+    required_keys: frozenset[str] = field(default_factory=frozenset)
+    optional_keys: frozenset[str] = field(default_factory=frozenset)
+    declared_by: str = ""
 
 
 class ConfigManifestError(Exception):
@@ -132,10 +114,8 @@ def read_manifest(library_root: Path) -> ConfigManifest | None:
         config).
 
     Raises:
-        ConfigManifestError: ``pyproject.toml`` is malformed,
-            ``sections`` references a name with no
-            ``[tool.chumicro.config.sections.<name>]`` block, or a
-            section's ``required`` / ``optional`` value isn't a list
+        ConfigManifestError: ``pyproject.toml`` is malformed or the
+            ``required_keys`` / ``optional_keys`` value isn't a list
             of strings.
         FileNotFoundError: ``library_root / "pyproject.toml"`` does
             not exist.
@@ -157,43 +137,17 @@ def read_manifest(library_root: Path) -> ConfigManifest | None:
         )
 
     library_name = pyproject.get("project", {}).get("name", library_root.name)
-    sections_table = config_table.get("sections", {})
-    if not isinstance(sections_table, dict):
-        raise ConfigManifestError(
-            f"{pyproject_path}: [tool.chumicro.config].sections must be a "
-            f"sub-table (declare each section as "
-            f"[tool.chumicro.config.sections.<name>]), got "
-            f"{type(sections_table).__name__}",
-        )
-
-    section_manifests = tuple(
-        _parse_section(name, sub_table, pyproject_path)
-        for name, sub_table in sections_table.items()
-    )
     return ConfigManifest(
         library_name=library_name,
-        sections=section_manifests,
-    )
-
-
-def _parse_section(
-    name: str,
-    table: Mapping[str, object],
-    pyproject_path: Path,
-) -> SectionManifest:
-    """Parse one ``[tool.chumicro.config.sections.<name>]`` table."""
-    if not isinstance(table, dict):
-        raise ConfigManifestError(
-            f"{pyproject_path}: [tool.chumicro.config.sections.{name}] must "
-            f"be a table, got {type(table).__name__}",
-        )
-    return SectionManifest(
-        name=name,
-        required=_parse_key_list(
-            table.get("required", []), name, "required", pyproject_path,
+        required_keys=_parse_key_list(
+            config_table.get("required_keys", []),
+            "required_keys",
+            pyproject_path,
         ),
-        optional=_parse_key_list(
-            table.get("optional", []), name, "optional", pyproject_path,
+        optional_keys=_parse_key_list(
+            config_table.get("optional_keys", []),
+            "optional_keys",
+            pyproject_path,
         ),
         declared_by=str(pyproject_path),
     )
@@ -201,20 +155,18 @@ def _parse_section(
 
 def _parse_key_list(
     raw: object,
-    section_name: str,
     field_name: str,
     pyproject_path: Path,
 ) -> frozenset[str]:
     if not isinstance(raw, list):
         raise ConfigManifestError(
-            f"{pyproject_path}: [tool.chumicro.config.sections."
-            f"{section_name}].{field_name} must be a list, "
-            f"got {type(raw).__name__}",
+            f"{pyproject_path}: [tool.chumicro.config].{field_name} "
+            f"must be a list, got {type(raw).__name__}",
         )
     if not all(isinstance(item, str) for item in raw):
         raise ConfigManifestError(
-            f"{pyproject_path}: [tool.chumicro.config.sections."
-            f"{section_name}].{field_name} must contain only strings",
+            f"{pyproject_path}: [tool.chumicro.config].{field_name} "
+            f"must contain only strings",
         )
     return frozenset(raw)
 
@@ -254,10 +206,6 @@ def find_library_roots(
     seen: set[Path] = set()
     roots: list[Path] = []
     for search_path in search_paths:
-        # Two layouts to recognise:
-        #   1. ``libraries/<name>/src/`` — pyproject.toml at parent.
-        #   2. A bare directory that itself owns a pyproject.toml
-        #      (rare but valid for one-off library-source overrides).
         candidates = [search_path.parent, search_path]
         for candidate in candidates:
             if (candidate / "pyproject.toml").is_file():
@@ -275,16 +223,14 @@ def find_library_roots(
 
 
 def aggregate_manifests(
-    manifests: Iterable[ConfigManifest],
-) -> dict[str, SectionManifest]:
-    """Union the section requirements across multiple libraries.
+    manifests: Iterable[ConfigManifest | None],
+) -> ConfigManifest | None:
+    """Union the required + optional key sets across multiple libraries.
 
-    When two libraries declare the same section name, the result
-    section's ``required`` is the union of both — any library's
-    "must have" keeps the key required overall.  ``optional`` is
-    the union too, minus any keys that became required.  The
-    aggregated section's ``declared_by`` is a comma-joined list of
-    every library that contributed.
+    A key declared **optional** by one library and **required** by
+    another is required overall — the strictest declaration wins.
+    The aggregated ``declared_by`` is a comma-joined list of every
+    library that contributed.
 
     Args:
         manifests: Iterable of per-library manifests.  ``None``
@@ -293,34 +239,32 @@ def aggregate_manifests(
             filtering).
 
     Returns:
-        Dict keyed by section name.  Empty dict when no library
-        declares any section.
+        Aggregated :class:`ConfigManifest`, or ``None`` when every
+        input was ``None`` / no library declares any keys.
     """
-    aggregated: dict[str, SectionManifest] = {}
+    aggregated_required: set[str] = set()
+    aggregated_optional: set[str] = set()
+    sources: list[str] = []
+    saw_any = False
     for manifest in manifests:
         if manifest is None:
             continue
-        for section in manifest.sections:
-            existing = aggregated.get(section.name)
-            if existing is None:
-                aggregated[section.name] = section
-                continue
-            new_required = existing.required | section.required
-            # Optional keys that are required by either library
-            # are no longer "optional" overall — drop them from
-            # the optional set so validation is consistent.
-            new_optional = (existing.optional | section.optional) - new_required
-            sources = ", ".join(
-                source for source in (existing.declared_by, section.declared_by)
-                if source
-            )
-            aggregated[section.name] = SectionManifest(
-                name=section.name,
-                required=new_required,
-                optional=new_optional,
-                declared_by=sources,
-            )
-    return aggregated
+        saw_any = True
+        aggregated_required |= manifest.required_keys
+        aggregated_optional |= manifest.optional_keys
+        if manifest.declared_by:
+            sources.append(manifest.declared_by)
+    if not saw_any:
+        return None
+    # Required wins: an "optional" key in one library doesn't override
+    # a "required" declaration from another.
+    aggregated_optional -= aggregated_required
+    return ConfigManifest(
+        library_name="<aggregated>",
+        required_keys=frozenset(aggregated_required),
+        optional_keys=frozenset(aggregated_optional),
+        declared_by=", ".join(sources),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -330,67 +274,42 @@ def aggregate_manifests(
 
 def validate_runtime_config(
     config: Mapping[str, object],
-    manifest: Mapping[str, SectionManifest],
+    manifest: ConfigManifest | None,
 ) -> None:
-    """Check that ``config`` satisfies every section in ``manifest``.
+    """Check that ``config`` satisfies every required key in ``manifest``.
 
     Validation rules:
 
-    * Each section in ``manifest`` must be present as a top-level
-      key in ``config``.
-    * Each section's value must be a mapping.
-    * Every key in ``manifest[<section>].required`` must be present
-      in ``config[<section>]``.
-
-    Forward-compat:
-
-    * Sections in ``config`` not in ``manifest`` are ignored —
+    * Every key in ``manifest.required_keys`` must be present as a
+      top-level key in the flat *config* dict.
+    * Optional keys carry no constraint — present or absent, any
+      value is accepted.
+    * Keys in *config* not declared by any library are ignored —
       apps can carry app-specific config alongside library config.
-    * Keys in a section that aren't in ``required`` or ``optional``
-      are ignored — same forward-compat as
-      :func:`chumicro_config.load_section`.
 
     Args:
-        config: The merged-and-resolved runtime config dict that
-            would be written to ``runtime_config.msgpack``.
-        manifest: Aggregated section manifests, typically from
-            :func:`aggregate_manifests`.
+        config: The merged-and-flattened runtime config dict that
+            would be written to ``runtime_config.msgpack``.  Keys
+            are flat dotted strings.
+        manifest: Aggregated manifest, typically from
+            :func:`aggregate_manifests`.  ``None`` (no library
+            declares any keys) skips validation.
 
     Raises:
-        ConfigManifestError: A required section is missing, has the
-            wrong type, or is missing a required key.  The message
-            names every offending section + key in one multi-line
-            string so deploy-time errors don't ping-pong the user.
+        ConfigManifestError: One or more required keys are missing
+            from *config*.  The message names every offending key
+            in one multi-line string so deploy-time errors don't
+            ping-pong the user.
     """
-    problems: list[str] = []
-    for section_name, section_manifest in manifest.items():
-        section_value = config.get(section_name)
-        if section_value is None:
-            problems.append(
-                f"  [{section_name}] section missing — required keys: "
-                f"{', '.join(sorted(section_manifest.required))} "
-                f"(declared by: {section_manifest.declared_by})",
-            )
-            continue
-        if not isinstance(section_value, Mapping):
-            problems.append(
-                f"  [{section_name}] section must be a table, got "
-                f"{type(section_value).__name__} "
-                f"(declared by: {section_manifest.declared_by})",
-            )
-            continue
-        missing_required = sorted(
-            key for key in section_manifest.required
-            if key not in section_value
-        )
-        if missing_required:
-            problems.append(
-                f"  [{section_name}] missing required keys: "
-                f"{', '.join(missing_required)} "
-                f"(declared by: {section_manifest.declared_by})",
-            )
-    if problems:
-        raise ConfigManifestError(
-            "Runtime config does not satisfy the union manifest of "
-            "imported libraries:\n" + "\n".join(problems),
-        )
+    if manifest is None or not manifest.required_keys:
+        return
+    missing = sorted(key for key in manifest.required_keys if key not in config)
+    if not missing:
+        return
+    declared_by = manifest.declared_by or "<unknown>"
+    bullets = "\n".join(f"  - {key}" for key in missing)
+    raise ConfigManifestError(
+        "Runtime config is missing keys required by imported libraries:\n"
+        f"{bullets}\n"
+        f"(declared by: {declared_by})",
+    )
