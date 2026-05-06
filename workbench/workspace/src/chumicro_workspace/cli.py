@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -930,28 +931,38 @@ def _suggest_add_device_id(
     return f"{base_id}-{counter}"
 
 
-def _auto_detect_deploy_mode(
+@dataclass(frozen=True)
+class _ResolvedLayout:
+    """Resolved deploy layout — boot-shim and import-graph flags + user-error sentinel.
+
+    Returned by :func:`_resolve_deploy_layout` so the CLI dispatch
+    has the final flag values without mutating ``args.boot_shim``
+    or ``args.import_graph`` mid-flight (those represent what the
+    *user* passed; the resolver decides what to actually do).
+
+    When :attr:`user_error` is ``True`` the resolver has already
+    printed an actionable message to stderr and the caller should
+    treat the deploy as failed (exit code 2); :attr:`boot_shim`
+    and :attr:`import_graph` are meaningless in that case.
+    """
+
+    boot_shim: bool
+    import_graph: bool
+    user_error: bool = False
+
+
+def _resolve_deploy_layout(
     *,
     project_dir: Path,
     target_entrypoint: str,
     user_passed_boot_shim: bool,
     user_passed_import_graph: bool,
-) -> str:
-    """Pick the right deploy layout when the user passes no layout flags.
+) -> _ResolvedLayout:
+    """Resolve the deploy layout for *project_dir* against *target_entrypoint*.
 
-    Returns one of:
-
-    * ``"shim"`` — project ships ``app.py`` with ``run()`` and no
-      runtime-specific entrypoint; deploy synthesises ``/code.py``
-      or ``/main.py`` and routes through boot-shim + import-graph.
-    * ``"plain"`` — project ships the runtime-matching entrypoint
-      (``code.py`` for CP, ``main.py`` for MP); ship as-is, no shim.
-    * ``"_user_error"`` — project shape doesn't match the target
-      runtime (e.g., ``code.py`` only but target is MP, or no
-      entrypoint at all).  An actionable message has already been
-      printed; the caller treats this as exit code 2.
-    * ``"flag_set"`` — the user explicitly passed ``--boot-shim``
-      or ``--import-graph``; auto-detect is a no-op.
+    When the user passed an explicit ``--boot-shim`` or
+    ``--import-graph`` flag, those wins are preserved verbatim.
+    Otherwise the layout is auto-detected from the project's shape:
 
     Decision matrix (verification finding #5, 2026-05-06):
 
@@ -961,11 +972,18 @@ def _auto_detect_deploy_mode(
         *           Yes         *              MP          plain
         Yes         No          *              MP          USER ERROR
         No          Yes         *              CP          USER ERROR
-        No          No          Yes            any         shim
+        No          No          Yes            any         shim+import
         No          No          No             any         USER ERROR
+
+    User-error cases print an actionable message to stderr before
+    returning :attr:`_ResolvedLayout.user_error` = ``True``.
     """
     if user_passed_boot_shim or user_passed_import_graph:
-        return "flag_set"
+        # User-specified flags win; auto-detect is a no-op.
+        return _ResolvedLayout(
+            boot_shim=user_passed_boot_shim,
+            import_graph=user_passed_import_graph,
+        )
 
     has_code_py = (project_dir / "code.py").is_file()
     has_main_py = (project_dir / "main.py").is_file()
@@ -975,14 +993,12 @@ def _auto_detect_deploy_mode(
     target_is_mp = target_entrypoint == "main.py"
 
     # Plain deploy when the runtime-matching entrypoint is present.
-    if target_is_cp and has_code_py:
-        return "plain"
-    if target_is_mp and has_main_py:
-        return "plain"
+    if (target_is_cp and has_code_py) or (target_is_mp and has_main_py):
+        return _ResolvedLayout(boot_shim=False, import_graph=False)
 
-    # Wrong-runtime entrypoint present: user intended this project for
-    # the *other* runtime and targeted the wrong board.  Surface as a
-    # clear error rather than silently shimming around it.
+    # Wrong-runtime entrypoint present: user intended this project
+    # for the *other* runtime and targeted the wrong board.  Surface
+    # as a clear error rather than silently shimming around it.
     if target_is_mp and has_code_py and not has_main_py:
         print(
             f"deploy: project {project_dir.name!r} has code.py "
@@ -992,7 +1008,9 @@ def _auto_detect_deploy_mode(
             "deploy --runtime circuitpython.",
             file=sys.stderr,
         )
-        return "_user_error"
+        return _ResolvedLayout(
+            boot_shim=False, import_graph=False, user_error=True,
+        )
     if target_is_cp and has_main_py and not has_code_py:
         print(
             f"deploy: project {project_dir.name!r} has main.py "
@@ -1002,11 +1020,13 @@ def _auto_detect_deploy_mode(
             "deploy --runtime micropython.",
             file=sys.stderr,
         )
-        return "_user_error"
+        return _ResolvedLayout(
+            boot_shim=False, import_graph=False, user_error=True,
+        )
 
     # No runtime-specific entrypoint — try shim mode.
     if has_app_run:
-        return "shim"
+        return _ResolvedLayout(boot_shim=True, import_graph=True)
 
     # Nothing to dispatch on.
     app_py_present = (project_dir / "app.py").is_file()
@@ -1027,7 +1047,9 @@ def _auto_detect_deploy_mode(
         "       wrap your top-level code in `def run(): ...` in app.py.",
         file=sys.stderr,
     )
-    return "_user_error"
+    return _ResolvedLayout(
+        boot_shim=False, import_graph=False, user_error=True,
+    )
 
 
 def _cmd_deploy(args: argparse.Namespace) -> int:
@@ -1114,8 +1136,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             # ``--target-runtime`` overrides; otherwise the device's
             # configured runtime drives the filter.
             target_runtime = args.target_runtime or str(device.transport)
-            # Auto-detect deploy layout when the user passed no
-            # layout flags.  Project shape determines the mode:
+            # Resolve deploy layout from project shape + user flags.
+            # Project shape determines the auto-detected mode:
             #
             # * ``code.py`` at root    → plain (CP entrypoint, user-owned).
             # * ``main.py`` at root    → plain (MP entrypoint, user-owned).
@@ -1126,21 +1148,18 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             #   surfaces as a user error before any bytes leave the host.
             #
             # See finding #5 of the 2026-05-06 verification pass.
-            auto_detected_mode = _auto_detect_deploy_mode(
+            layout_choice = _resolve_deploy_layout(
                 project_dir=project_dir,
                 target_entrypoint=device.effective_entrypoint,
                 user_passed_boot_shim=args.boot_shim,
                 user_passed_import_graph=args.import_graph,
             )
-            if auto_detected_mode == "_user_error":
-                # Detector already printed the actionable message.
+            if layout_choice.user_error:
+                # Resolver already printed the actionable message.
                 exit_code = 2
                 continue
-            if auto_detected_mode == "shim":
-                args.boot_shim = True
-                args.import_graph = True
 
-            if args.boot_shim and args.import_graph:
+            if layout_choice.boot_shim and layout_choice.import_graph:
                 layout = "boot-shim+import-graph"
                 source = project_boot_with_import_graph_source(
                     project_dir,
@@ -1148,7 +1167,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                     entrypoint_filename=device.effective_entrypoint,
                     target_runtime=target_runtime,
                 )
-            elif args.boot_shim:
+            elif layout_choice.boot_shim:
                 layout = "boot-shim"
                 source = project_boot_source(
                     project_dir,
@@ -1156,7 +1175,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                     entrypoint_filename=device.effective_entrypoint,
                     target_runtime=target_runtime,
                 )
-            elif args.import_graph:
+            elif layout_choice.import_graph:
                 layout = "import-graph"
                 device_entrypoint = (
                     args.entrypoint or f"/{device.effective_entrypoint}"

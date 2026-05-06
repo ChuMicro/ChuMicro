@@ -57,13 +57,26 @@ MANAGED_MARKER = (
 )
 
 #: Match a top-level ``library_sources:`` block plus its indented
-#: children (zero or more).  ``(?m)^`` anchors at line starts so we
-#: don't catch ``library_sources:`` references inside comments or
-#: nested under another key.  Used for string-level surgery in
-#: :func:`sync_library_sources` — see that function's docstring for
-#: why we don't round-trip through ruamel.
+#: children, optionally preceded by our managed-marker comment line.
+#:
+#: ``(?m)^`` anchors at line starts so we don't catch
+#: ``library_sources:`` references inside comments or nested under
+#: another key.  The ``(?:# {marker}\n)?`` prefix is optional — when
+#: the file has the marker (re-runs in dev mode), the match starts
+#: at the marker line and the whole block (marker + key + children)
+#: gets replaced atomically; when the file has a bare
+#: ``library_sources:`` (legacy / non-dev-mode user content), the
+#: match starts at the key line and just the bare block gets
+#: replaced.  Either way, ``re.search`` returns the longer match
+#: at the earliest line.
+#:
+#: Used for string-level surgery in :func:`sync_library_sources` —
+#: see that function's docstring for why we don't round-trip
+#: through ruamel.
 _LIB_SOURCES_BLOCK_RE = re.compile(
-    r"(?m)^library_sources:[ \t]*\n"
+    r"(?m)^"
+    r"(?:\# " + re.escape(MANAGED_MARKER) + r"\n)?"
+    r"library_sources:[ \t]*\n"
     r"(?:[ \t]+[^\n]*\n)*",
 )
 
@@ -161,24 +174,26 @@ def sync_library_sources(
     existing block already matched the desired state (idempotent
     re-run).
 
-    Implementation note — string-level surgery, no YAML parser:
+    Implementation note — string-level surgery, parser-independent:
 
     The previous implementation round-tripped the entire
     ``workspace.yml`` through ruamel-rt, which dropped the file's
     leading comment header on the first sync against an
     all-comments-no-keys starter (ruamel attaches comments to keys;
     a leading header with no key under it has nothing to anchor to).
-    This rewrite instead locates the existing ``library_sources:``
-    block (with or without our marker comment) via a regex against
-    the raw bytes, replaces it byte-identically, and leaves every
-    other byte of the file untouched — comments, blank lines,
-    quoting, indentation choices.  The managed block REPLACES any
-    existing top-level ``library_sources:``; the contract is "dev
-    mode owns this key when ``chumicro-dev.toml`` is present."
+    This rewrite instead locates the existing managed block (the
+    optional marker comment + ``library_sources:`` key + indented
+    children) via a single regex against the raw bytes, replaces it
+    byte-identically, and leaves every other byte of the file
+    untouched — comments, blank lines, quoting, indentation
+    choices.
 
-    Decoupling from the YAML parser is a side benefit: the same
-    logic works unchanged if the file ever migrates to TOML (config-
-    shape research workstream, [Decision pending]).
+    The managed block REPLACES any existing top-level
+    ``library_sources:``, with or without our marker comment — the
+    contract is "dev mode owns this key when ``chumicro-dev.toml``
+    is present."  Decoupled from ruamel; tightly coupled to YAML's
+    indent-based block syntax.  A future migration to TOML would
+    need a different block-finder (the regex pattern is YAML-shaped).
 
     Paths in *libraries* are written relative to the workspace root
     when possible (sibling-checkout case produces
@@ -210,20 +225,16 @@ def sync_library_sources(
 
     match = _LIB_SOURCES_BLOCK_RE.search(existing_text)
     if match is not None:
-        # Extend the replacement span backward to absorb our marker
-        # comment when it sits immediately above ``library_sources:``,
-        # so re-runs don't accumulate stale marker lines.
-        replace_start = match.start()
-        marker_with_newline = f"# {MANAGED_MARKER}\n"
-        if existing_text[:replace_start].endswith(marker_with_newline):
-            replace_start -= len(marker_with_newline)
-        replace_end = match.end()
-        if existing_text[replace_start:replace_end] == new_block:
+        # The regex already absorbs the optional marker line above
+        # ``library_sources:`` — match.start() is the start of the
+        # marker when present, the start of ``library_sources:``
+        # otherwise.  Atomic replacement either way.
+        if match.group(0) == new_block:
             return False
         new_text = (
-            existing_text[:replace_start]
+            existing_text[:match.start()]
             + new_block
-            + existing_text[replace_end:]
+            + existing_text[match.end():]
         )
     else:
         # No existing block — append.  Add a separating blank line
