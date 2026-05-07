@@ -1470,7 +1470,7 @@ def _deselect_items_missing_required_features(
                 transport = transport_cache.get_transport(
                     device_entry, deploy_mode,
                 )
-                output = transport.execute(FEATURE_PROBE_SCRIPT)
+                output = transport.probe(FEATURE_PROBE_SCRIPT)
             except Exception as error:  # noqa: BLE001 — graceful per-device fallback
                 import warnings  # noqa: PLC0415 — only used on the failure path
 

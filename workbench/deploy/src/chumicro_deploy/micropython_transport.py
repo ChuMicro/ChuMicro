@@ -491,6 +491,31 @@ class MicropythonTransport:
             ) from error
         return _decode_exec_result(result)
 
+    def probe(self, script: str, *, timeout: float = 10.0) -> str:
+        """Run *script* via the persistent serial REPL with no staging.
+
+        Mirrors :meth:`probe_implementation` — opens the raw REPL if
+        needed and runs the script directly via ``exec_raw``.  The
+        ``stage()``-first precondition that :meth:`execute` enforces
+        is bypassed because *script* is expected to be self-contained
+        (no imports of staged modules).
+
+        Args:
+            script: Self-contained Python source to run.
+            timeout: Idle-timeout for the script's output, in seconds.
+
+        Returns:
+            Captured stdout from the device.
+        """
+        self._ensure_serial()
+        try:
+            result = self._serial.exec_raw(script, timeout=timeout)
+        except Exception as error:
+            raise MicropythonTransportError(
+                f"Device probe failed: {error}"
+            ) from error
+        return _decode_exec_result(result)
+
     def soft_reset(self) -> None:
         """Soft-reset the device to clear interpreter state.
 

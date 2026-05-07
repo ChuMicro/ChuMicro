@@ -1480,7 +1480,7 @@ class TestPytestCollectionModifyItemsFeatures:
             def __init__(self, response: str | Exception) -> None:
                 self._response = response
 
-            def execute(self, _script: str) -> str:
+            def probe(self, _script: str, **_kwargs: object) -> str:
                 if isinstance(self._response, Exception):
                     raise self._response
                 return self._response
@@ -1646,7 +1646,7 @@ class TestPytestCollectionModifyItemsFeatures:
                 self._output = output
                 self._identifier = identifier
 
-            def execute(self, _script: str) -> str:
+            def probe(self, _script: str, **_kwargs: object) -> str:
                 probe_calls.append(self._identifier)
                 return self._output
 

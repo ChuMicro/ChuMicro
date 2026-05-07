@@ -322,6 +322,27 @@ class TransportProtocol(Protocol):
         """Run *bootstrap_script* on the device and return captured stdout."""
         ...
 
+    def probe(self, script: str, *, timeout: float = 10.0) -> str:
+        """Run *script* on the device without staging and return captured stdout.
+
+        Sibling of :meth:`execute` for short, self-contained scripts
+        that don't need any staged sources / test files / harness —
+        e.g. a feature-detection probe (``try: import esp32`` etc.) or
+        a quick ``sys.implementation`` query.  Bypasses the
+        ``stage()-must-be-called-first`` precondition that
+        :meth:`execute` enforces.
+
+        Args:
+            script: Self-contained Python source to run via the raw
+                REPL.  No imports of staged modules — only built-ins
+                and runtime-provided modules.
+            timeout: Idle-timeout for the script's output, in seconds.
+
+        Returns:
+            Captured stdout from the device.
+        """
+        ...
+
     def soft_reset(self) -> None:
         """Soft-reset the interpreter to clear modules and free heap."""
         ...
