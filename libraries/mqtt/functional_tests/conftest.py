@@ -147,6 +147,15 @@ _BROKER_PROCESS: subprocess.Popen[bytes] | None = None
 _BROKER_WORKDIR: Path | None = None
 
 
+#: Placeholder broker hostname shipped in the workspace template's
+#: ``secrets.toml`` (``_workspace_template/secrets.toml`` and the
+#: published ``chumicro-workspace`` payload).  Treated as "broker
+#: unset" — the pytest-device plugin then skips at collection time
+#: with a clear missing-keys message instead of letting the test
+#: run against a hostname that won't resolve.
+_BROKER_PLACEHOLDER = "replace-with-your-broker-host"
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """Spin up the host Mosquitto broker; register the runtime-config payload."""
     global _BROKER_PROCESS, _BROKER_WORKDIR
@@ -165,6 +174,13 @@ def pytest_configure(config: pytest.Config) -> None:
                 merged["mqtt.broker.port"] = broker_port
             else:
                 shutil.rmtree(workdir, ignore_errors=True)
+
+        # If the local mosquitto fixture didn't take over, honour the
+        # workspace-template placeholder by suppressing the payload —
+        # ``required_keys`` then skips the session at collection time.
+        # Mirrors the wifi-ssid placeholder handling above.
+        if merged.get("mqtt.broker.host") == _BROKER_PLACEHOLDER:
+            merged = None
 
     set_runtime_config(
         config,
