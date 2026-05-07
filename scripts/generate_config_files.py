@@ -9,8 +9,8 @@ Two-phase materialisation (matches ``chumicro-workspace setup``):
 1. ``materialize_templates`` walks ``_workspace_template/`` and
    materialises any file under it whose target at the workspace
    root is missing.  The mono-repo's ``_workspace_template/secrets.toml``
-   carries this repo's opinions (wifi placeholder, mqtt broker =
-   ``test.mosquitto.org``) and lands at ``./secrets.toml``.
+   carries placeholder wifi creds and a placeholder
+   ``mqtt.broker.host`` and lands at ``./secrets.toml``.
 
 2. ``materialize_workbench_starters`` then fills in any remaining
    workbench-owned starters (``devices.yml``, ``workspace.yml``,

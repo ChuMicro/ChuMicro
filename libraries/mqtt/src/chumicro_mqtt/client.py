@@ -14,6 +14,7 @@ sit in :mod:`chumicro_mqtt._wire`.
 
 from collections import deque
 
+from chumicro_config import MissingConfigKey
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 from chumicro_mqtt._wire import (
@@ -237,16 +238,29 @@ def _force_non_blocking(socket):
 
 def _build_default_socket_factory(config, *, radio=None):
     """Return a socket factory that opens a TCPClientSocket using
-    config-supplied broker host/port (or sensible defaults).
+    config-supplied broker host/port.
 
     Used by :meth:`MQTTClient.from_config` when the caller doesn't
     pass a pre-built socket or a custom factory.  Reads
-    ``mqtt.broker.host`` / ``mqtt.broker.port`` from *config*; falls
-    back to the public test broker (``test.mosquitto.org:1883``) when
-    either key is absent.
+    ``mqtt.broker.host`` / ``mqtt.broker.port`` from *config* and
+    raises :class:`chumicro_config.MissingConfigKey` if either key
+    is absent — the library refuses to silently dial a third-party
+    broker on the user's behalf.
+
+    Raises:
+        chumicro_config.MissingConfigKey: ``mqtt.broker.host`` or
+            ``mqtt.broker.port`` is absent from *config*.
     """
-    host = config.get("mqtt.broker.host", "test.mosquitto.org")
-    port = config.get("mqtt.broker.port", 1883)
+    if "mqtt.broker.host" not in config:
+        raise MissingConfigKey(
+            "required config key 'mqtt.broker.host' is missing",
+        )
+    if "mqtt.broker.port" not in config:
+        raise MissingConfigKey(
+            "required config key 'mqtt.broker.port' is missing",
+        )
+    host = config["mqtt.broker.host"]
+    port = config["mqtt.broker.port"]
 
     def factory():
         from chumicro_sockets import tcp_client_socket  # noqa: PLC0415
@@ -280,12 +294,19 @@ class MQTTClient:
         """Build an :class:`MQTTClient` from runtime config.
 
         Reads the ``[tool.chumicro.config]`` keys declared in
-        ``libraries/mqtt/pyproject.toml``: ``mqtt.broker.host``,
-        ``mqtt.broker.port``, ``mqtt.client_id``,
-        ``mqtt.keep_alive_seconds``, ``mqtt.username``,
-        ``mqtt.password`` — all optional with sensible defaults
-        (``test.mosquitto.org:1883``, auto-derived ``client_id``,
-        60 s keepalive, no auth).
+        ``libraries/mqtt/pyproject.toml``:
+
+        * **Required** (when the auto-built socket factory is used):
+          ``mqtt.broker.host``, ``mqtt.broker.port``.  No fallback —
+          the library refuses to silently dial a third-party broker
+          on the user's behalf.
+        * **Optional** with sensible defaults: ``mqtt.client_id``
+          (``"chumicro-mqtt"``), ``mqtt.keep_alive_seconds`` (60 s),
+          ``mqtt.username`` / ``mqtt.password`` (anonymous CONNECT).
+
+        When *socket* or *socket_factory* is supplied, the broker
+        host/port keys are not consulted — the caller owns the
+        connection.
 
         Args:
             config: A :class:`chumicro_config.RuntimeConfig` (typically
@@ -302,6 +323,11 @@ class MQTTClient:
                 When supplied, the auto-built factory is skipped.
                 Useful for custom TLS contexts or non-default radio
                 wiring.
+
+        Raises:
+            chumicro_config.MissingConfigKey: Neither *socket* nor
+                *socket_factory* was supplied and ``mqtt.broker.host``
+                or ``mqtt.broker.port`` is absent from *config*.
 
         Returns:
             A configured ``MQTTClient`` ready for ``connect()``.
