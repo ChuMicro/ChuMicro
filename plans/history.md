@@ -11,12 +11,11 @@ This document is the **synthesized layer** for the project's brain. It holds:
 
 **Sibling layers** (each owns its own slice of the brain):
 
-- `plans/now.md` — 30-second snapshot, overwritten each checkpoint.
+- `plans/next-up.md` — single source of truth for the active queue. `## Now` is what's in flight; `## Done (recent)` is the last ~25 shipped items.
 - `plans/decisions/` — *why* we chose X. Tradeoffs.
 - `plans/patterns.md` — *how* to implement X correctly. Code shape.
 - `plans/learnings.md` — *facts about the world* (hardware quirks, tool gotchas).
-- `plans/next-up.md` — active queue. Not history.
-- `plans/workstreams/` — phased deep work, archived to `workstreams/archived/` once complete.
+- `plans/workstreams/` — phased deep work, archived to `workstreams/archive/` once complete.
 
 **Compression ritual:** `task-checkpoint` step 3. Lift durable signal into the right home *before* writing a dated entry — so the entry can be terse or skipped entirely.
 

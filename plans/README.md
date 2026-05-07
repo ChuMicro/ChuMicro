@@ -10,24 +10,22 @@ Project knowledge base — decisions, roadmap, and active work.
 
 | File / folder | Purpose | When to read it |
 |---|---|---|
-| `now.md` | 30-second brain snapshot — current phase, in-flight, blocked, last touched. Overwritten each `task-checkpoint`. | **First, every session.** The front door. |
+| `next-up.md` | **Single source of truth for the work queue.** `## Now` (active items) / `## Next` (backlog) / `## Out of scope` / `## Investigations` / `## Done (recent)` (last ~25 shipped items). Agent-managed. | **First, every session**, after a quick `git log -20`. |
 | `decisions/` | Durable decision records (ADRs) — *why* the workspace has its current shape | Before proposing structural or pattern changes |
 | `patterns.md` | Reusable implementation patterns with code examples | When writing a new library or implementing a common pattern |
 | `learnings.md` | Non-obvious facts about the world (hardware quirks, tool gotchas, classifier ordering rules). Compressed insight, not policy. | When touching a surface that has bitten before — hardware deploys, classifiers, IDE wiring |
 | `history.md` | Synthesized layer: design principles, rejected approaches, build-up timeline as terse pointers into `git log` | When you need to understand *why* something is the way it is, or to check whether an approach was already tried |
-| `next-up.md` | Active work queue (Now / Next / Blocked / Investigations / recent Done log) | When picking up work or checking priorities |
 | `open-questions.md` | Unresolved questions that need thought but aren't blocking | When exploring design tradeoffs or looking for things to investigate |
 | `roadmap.md` | Milestone status and trajectory | When you need the big picture of project phases |
 | `workstreams/` | Active bodies of work (only in-progress workstreams live at the top level; closed / shipped ones move to `workstreams/archive/`). Pair a `<name>.md` (the plan) with a `<name>-research.md` sibling (source-pinned facts, file:line references, URL list, alternatives surveyed) when research material would otherwise be re-derived each session. | When working on a tracked initiative |
 | `workstreams/archive/` | Historical record of closed / shipped workstreams. Read-only — preserved so future contributors can trace why a decision was made or how a phase rolled out. Cross-references from active docs and ADRs point here when the relevant work has shipped. | When tracing the history of a shipped feature |
 
-**Session warm-up (cold pickup):** read `now.md` → `git --no-pager log --oneline -20` → `next-up.md`. That's it. The other files are deep-dive on demand.
+**Session warm-up (cold pickup):** `git --no-pager log --oneline -20` → `next-up.md`. That's it. The other files are deep-dive on demand.
 
 ## Rules
 
-- **`now.md` is overwritten each `task-checkpoint`.**  Five lines max.  Older snapshots recoverable from `git log plans/now.md`.
+- **`next-up.md` is the working queue and the front door.**  Each top-level bullet ≤5 bullet markers; promote to `workstreams/<name>.md` when bigger (CHU011).  `## Done (recent)` ≤25 entries — drop the oldest when adding a new one.  Move checked-off items to Done in the same edit.  The Done log is a one-line pointer log, not a changelog — verbose detail belongs in commit messages, `history.md`, or workstream docs.
 - **Decisions are append-only.**  Record a new decision when tradeoffs matter or when the reasoning would otherwise have to be rediscovered.  Use the format in `decisions/README.md`.  Decisions can start as `proposed` and be promoted to `accepted` after review.
-- **`next-up.md` is the working queue.**  Move checked-off items to Done in the same edit.  Keep it focused on active work.  The `Done (recent)` section is a one-line pointer log, not a changelog — verbose detail belongs in `history.md` or workstream docs.
 - **Open questions are low-pressure.**  Add freely, resolve when the answer becomes clear.  Promote to a decision when the answer involves tradeoffs.
 - **Patterns are prescriptive.**  They show *how* to implement correctly.  Link to the decision that explains *why*.
 - **Learnings are descriptive.**  They show *what is true about the world* (hardware, tools, runtimes).  2–6 lines per entry.  Promote to a Decision if the right response is "we should change how we build", or to a Pattern if it grows enough reusable code surface.
@@ -51,7 +49,7 @@ Use these states consistently in planning documents:
 
 | Kind of knowledge | Home |
 |---|---|
-| **Right now** — what phase / what's in flight / what's blocking | `plans/now.md` |
+| **Right now** — what's in flight / what's blocking | `plans/next-up.md` `## Now` |
 | **Why** the workspace has its current shape (tradeoffs, alternatives rejected) | `plans/decisions/` (ADRs) |
 | **Reusable implementation patterns** (code shape, mpremote internals, subprocess-binary resolution) | `plans/patterns.md` |
 | **Facts about the world** — hardware quirks, tool gotchas, classifier ordering, runtime-specific behaviors that bit us | `plans/learnings.md` |
