@@ -54,23 +54,21 @@ The detailed prose lives in those artifacts now. `git log <range>` rebuilds the 
 
 **When NOT to add a dated history entry at all:** if the session is fully captured by its commit messages plus any artifacts you lifted, skip the dated entry. `history.md` is the synthesized layer, not a journal of record — that's what `git log` is for.
 
-## 4. Refresh `plans/now.md`
+## 4. Refresh `plans/next-up.md`
 
-Overwrite `plans/now.md` with the current 30-second brain snapshot. Five lines:
+`next-up.md` is the agent-managed work queue and the single source of truth for what's in flight, queued, blocked, and recently shipped. Every checkpoint touches it:
 
-- **Phase:** what workstream / milestone is active
-- **Last shipped:** subject line of the most recent commit that closed something
-- **In flight:** the one thing currently in progress (or "idle" if none)
-- **Blocked on:** anything waiting on user / hardware / external (or "—")
-- **Last touched:** decisions / workstreams / open-questions edited this session
+- **`## Now`** — update so it reflects what just shipped (move the closed item to `## Done`) and what (if anything) is now in flight.
+- **`## Done (recent)`** — add a one-line pointer for the unit of work just completed: `**Title** (YYYY-MM-DD, commit `<short>`) — terse summary + workstream / archive link if applicable.` Drop the oldest entry if the section is at its 25-entry cap (CHU011 will fail otherwise).
+- **`## Next` / `## Investigations`** — add follow-ups discovered during the work; mark check-boxes for items that just shipped and move them to `## Done`.
 
-This is the front door for the next session's context recovery. It replaces the first 60 seconds of "what was I doing".
+Each top-level bullet stays ≤5 bullet markers (lead + sub-bullets). If an entry needs more, promote to `plans/workstreams/<slug>.md` and link from a one-line pointer here.
 
 ## 5. Commit and push if the work is meaningful
 
 If the changes form a coherent unit, commit and push them. Use the `git-commit` skill, then `git push`.
 
-A coherent unit = one logical change that could be described in a single commit message subject line. The compression artifacts from step 3 and the `plans/now.md` refresh from step 4 ride along in the same commit — they are part of the unit of work, not a separate housekeeping commit.
+A coherent unit = one logical change that could be described in a single commit message subject line. The compression artifacts from step 3 and the `plans/next-up.md` refresh from step 4 ride along in the same commit — they are part of the unit of work, not a separate housekeeping commit.
 
 If the work is partial and not yet meaningful, it's fine to leave it uncommitted — but say so.
 
@@ -84,5 +82,5 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 - **Don't skip step 1.** A `git status` catches surprises — files you forgot, files you didn't mean to change, merge artifacts.
 - **Don't skip step 2.** Preflight is the single gate. If it passes, CI will pass. Narrow checks miss cross-cutting breakage.
 - **Step 3 is the compression tier.** `plans/history.md` is *synthesized* knowledge, not a journal — `git log` is the journal. If you find yourself writing a long dated entry, stop and ask whether the prose should be a Pattern, a Learning, a Decision, or a Principle instead.
-- **Step 4 is cheap.** `plans/now.md` is five lines. Always update it. The next session will thank you.
+- **Step 4 is cheap.** A one-line `## Done` entry + a refreshed `## Now` is all most checkpoints need. Always do it — the next session reads `next-up.md` cold.
 - **Commit and push early.** Small commits are easier to review and revert than large ones. The compression artifacts ride with the work — one commit, not two.

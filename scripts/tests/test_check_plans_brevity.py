@@ -8,8 +8,9 @@ from pathlib import Path
 from check_plans_brevity import (
     _BULLET_CAP,
     _CHU011,
-    _NOW_LINE_CAP,
+    _DONE_SECTION_CAP,
     _find_bullet_extents,
+    _find_done_section_top_level_bullets,
     check_file,
     main,
 )
@@ -62,7 +63,51 @@ class TestFindBulletExtents:
 
 
 # ---------------------------------------------------------------------------
-# next-up.md / now.md — bullet cap (CHU011 rule 1)
+# _find_done_section_top_level_bullets
+# ---------------------------------------------------------------------------
+
+
+class TestFindDoneSectionBullets:
+    """Top-level bullets after a ``## Done`` heading and before the next heading."""
+
+    def test_collects_bullets_under_done_heading(self) -> None:
+        lines = [
+            "## Next",
+            "- pending",
+            "## Done (recent)",
+            "- shipped one",
+            "- shipped two",
+        ]
+        # Bullet line indices: "- shipped one" at index 3, "- shipped two" at 4.
+        assert _find_done_section_top_level_bullets(lines) == [3, 4]
+
+    def test_done_heading_prefix_matches_with_suffix(self) -> None:
+        lines = [
+            "## Done — last 7 days",
+            "- shipped",
+        ]
+        assert _find_done_section_top_level_bullets(lines) == [1]
+
+    def test_excludes_bullets_before_done_heading(self) -> None:
+        lines = [
+            "## Next",
+            "- pending one",
+            "- pending two",
+        ]
+        assert _find_done_section_top_level_bullets(lines) == []
+
+    def test_subsequent_heading_closes_done_section(self) -> None:
+        lines = [
+            "## Done",
+            "- shipped",
+            "## Footer",
+            "- not in done",
+        ]
+        assert _find_done_section_top_level_bullets(lines) == [1]
+
+
+# ---------------------------------------------------------------------------
+# Bullet cap (CHU011 rule 1)
 # ---------------------------------------------------------------------------
 
 
@@ -114,7 +159,7 @@ class TestBulletCap:
         assert _CHU011 in errors[0]
         assert f"6 bullet markers (cap {_BULLET_CAP})" in errors[0]
 
-    def test_noqa_marker_suppresses_violation(self, tmp_path: Path) -> None:
+    def test_noqa_marker_suppresses_bullet_violation(self, tmp_path: Path) -> None:
         path = _write(
             tmp_path, "next-up.md",
             """
@@ -170,7 +215,7 @@ class TestBulletCap:
         # 5 markers exactly, at cap — passes.
         assert check_file(path) == []
 
-    def test_done_section_bullets_also_capped(self, tmp_path: Path) -> None:
+    def test_done_section_bullets_also_capped_per_bullet(self, tmp_path: Path) -> None:
         path = _write(
             tmp_path, "next-up.md",
             """
@@ -184,62 +229,67 @@ class TestBulletCap:
                 - sub five
             """,
         )
-        # Done entries are pointer log — the rule applies there too.
+        # Done entries are pointer log — the per-bullet rule applies there too.
         assert len(check_file(path)) == 1
 
 
 # ---------------------------------------------------------------------------
-# now.md — file line cap (CHU011 rule 2)
+# Done-section entry-count cap (CHU011 rule 2)
 # ---------------------------------------------------------------------------
 
 
-class TestNowMdFileCap:
-    """``plans/now.md`` totals at most ``_NOW_LINE_CAP`` lines."""
+class TestDoneSectionCap:
+    """``## Done (recent)`` may contain at most ``_DONE_SECTION_CAP`` entries."""
+
+    def _build_done_log(self, count: int) -> str:
+        bullets = "\n".join(f"- entry {index}" for index in range(count))
+        return f"## Done (recent)\n{bullets}\n"
 
     def test_under_cap_passes(self, tmp_path: Path) -> None:
-        path = _write(tmp_path, "now.md", "snapshot\n" * 10)
+        path = _write(tmp_path, "next-up.md", self._build_done_log(10))
         assert check_file(path) == []
 
     def test_at_cap_passes(self, tmp_path: Path) -> None:
-        # Build a file with exactly _NOW_LINE_CAP lines so the
-        # boundary is exercised.
-        path = _write(tmp_path, "now.md", "line\n" * _NOW_LINE_CAP)
+        path = _write(
+            tmp_path, "next-up.md", self._build_done_log(_DONE_SECTION_CAP),
+        )
         assert check_file(path) == []
 
     def test_one_over_cap_fails(self, tmp_path: Path) -> None:
-        path = _write(tmp_path, "now.md", "line\n" * (_NOW_LINE_CAP + 1))
-        errors = check_file(path)
-        assert len(errors) == 1
-        assert f"{_NOW_LINE_CAP + 1} lines" in errors[0]
-        assert f"cap {_NOW_LINE_CAP}" in errors[0]
-
-    def test_noqa_marker_suppresses_file_cap(self, tmp_path: Path) -> None:
-        content = "<!-- noqa: CHU011 -->\n" + "line\n" * (_NOW_LINE_CAP + 10)
-        path = _write(tmp_path, "now.md", content)
-        assert check_file(path) == []
-
-    def test_bullet_cap_still_applies_to_now_md(self, tmp_path: Path) -> None:
         path = _write(
-            tmp_path, "now.md",
-            """
-            - lead
-                - sub
-                - sub
-                - sub
-                - sub
-                - sub
-            """,
+            tmp_path, "next-up.md", self._build_done_log(_DONE_SECTION_CAP + 1),
         )
         errors = check_file(path)
         assert len(errors) == 1
-        assert "6 bullet markers" in errors[0]
+        assert f"{_DONE_SECTION_CAP + 1} entries" in errors[0]
+        assert f"cap {_DONE_SECTION_CAP}" in errors[0]
 
-    def test_other_filenames_skip_file_cap(self, tmp_path: Path) -> None:
-        # The 25-line cap is only for now.md — a generic markdown file
-        # named differently should not trigger the file-line check.
-        path = _write(tmp_path, "next-up.md", "line\n" * (_NOW_LINE_CAP + 50))
-        # A 75-line plain-prose file with no bullets has no top-level
-        # bullets to check, so check_file returns empty.
+    def test_noqa_marker_suppresses_section_cap(self, tmp_path: Path) -> None:
+        body = self._build_done_log(_DONE_SECTION_CAP + 5)
+        content = "<!-- noqa: CHU011 -->\n" + body
+        path = _write(tmp_path, "next-up.md", content)
+        assert check_file(path) == []
+
+    def test_section_cap_only_applies_to_next_up_md(self, tmp_path: Path) -> None:
+        # A different filename gets only the per-bullet check, not the
+        # section-cap check.
+        path = _write(
+            tmp_path, "other.md", self._build_done_log(_DONE_SECTION_CAP + 100),
+        )
+        # Each entry is a single bullet so the per-bullet check passes;
+        # the section cap is gated to next-up.md so it doesn't fire.
+        assert check_file(path) == []
+
+    def test_pre_done_bullets_dont_count_toward_cap(self, tmp_path: Path) -> None:
+        path = _write(
+            tmp_path, "next-up.md",
+            "## Next\n"
+            + "\n".join(f"- pending {index}" for index in range(50))
+            + "\n\n"
+            + self._build_done_log(_DONE_SECTION_CAP),
+        )
+        # ## Next bullets exceed the Done cap numerically, but only
+        # bullets after the ## Done heading are counted.
         assert check_file(path) == []
 
 
@@ -251,26 +301,34 @@ class TestNowMdFileCap:
 class TestMainEntry:
     """``main(argv)`` returns 0 on clean files, 1 with violations."""
 
-    def test_clean_files_return_zero(self, tmp_path: Path) -> None:
+    def test_clean_file_returns_zero(self, tmp_path: Path) -> None:
         next_up = _write(
             tmp_path, "next-up.md",
             """
             ## Next
 
             - One-line item.
+
+            ## Done
+
+            - Shipped one.
             """,
         )
-        now = _write(tmp_path, "now.md", "snapshot\n" * 5)
-        assert main([str(next_up), str(now)]) == 0
+        assert main([str(next_up)]) == 0
 
     def test_violations_return_one(self, tmp_path: Path) -> None:
-        path = _write(tmp_path, "now.md", "line\n" * (_NOW_LINE_CAP + 1))
+        path = _write(
+            tmp_path, "next-up.md",
+            "## Done\n"
+            + "\n".join(f"- entry {index}" for index in range(_DONE_SECTION_CAP + 1)),
+        )
         assert main([str(path)]) == 1
 
-    def test_repo_plans_files_clean(self) -> None:
-        """The actual ``plans/next-up.md`` + ``plans/now.md`` must satisfy CHU011.
+    def test_repo_next_up_clean(self) -> None:
+        """The actual ``plans/next-up.md`` must satisfy CHU011.
 
-        This locks the cleanup pass: anyone who later grows a bullet
-        past the cap or now.md past 25 lines fails this test.
+        Locks the cleanup pass: anyone who later grows a bullet past
+        the cap or lets the Done log accrete past 25 entries fails
+        this test.
         """
         assert main([]) == 0
