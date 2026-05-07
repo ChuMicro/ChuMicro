@@ -11,8 +11,8 @@ truth for the work queue.  Two checks:
 
 2. The ``## Done (recent)`` section contains at most 25 entries.  The
    pointer log is meant to age out — drop the oldest when adding a
-   new one.  Commit messages, ``plans/history.md`` (dated entries),
-   and ``plans/workstreams/archive/`` keep the durable record.
+   new one.  Commit messages and ``plans/workstreams/archive/`` keep
+   the durable record; ``git log`` is the journal.
 
 A bullet's "extent" runs from its top-level ``- `` line until the next
 top-level ``- ``, the next heading line (``# ...`` / ``## ...`` /
@@ -168,7 +168,7 @@ def _check_done_section_cap(filepath: Path, lines: list[str]) -> list[str]:
     return [
         f"{relative}:{bullets[_DONE_SECTION_CAP] + 1}: {_CHU011} `## Done` "
         f"section has {len(bullets)} entries (cap {_DONE_SECTION_CAP}).  "
-        f"Drop the oldest entries — commit messages, history.md, and "
+        f"Drop the oldest entries — commit messages and "
         f"workstreams/archive/ keep the durable record.",
     ]
 

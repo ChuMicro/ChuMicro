@@ -38,21 +38,12 @@ Ask: **did this session produce something that future sessions need to know with
 | `plans/decisions/NNNN-*.md` | A tradeoff or structural choice future contributors will need to know *why* about | New ADR via the `new-decision` skill |
 | `plans/patterns.md` | Reusable code shape, subprocess invocation, IDE wiring, transport contract — *how* to implement correctly | Append a section under the right heading |
 | `plans/learnings.md` | A non-obvious constraint discovered the hard way: hardware quirk, third-party-tool gotcha, classifier ordering, runtime-specific behavior. Not a rule, not a pattern — a *fact about the world* | Append under the right category |
-| `plans/history.md` §`Design principles` / §`Rejected approaches` | A general principle that surfaced from this work, or an approach that was tried and rejected and would otherwise be re-tried | Append a numbered bullet at the top of the right section |
 | `AGENTS.md` non-negotiables | An agent-facing rule whose violation already cost time | Append to the rules list |
+| Commit message body | Narrative context, what was tried and rejected, the rationale a future reader will want when running `git log <range>` | The commit you're about to write |
 
 If nothing lifts, fine — many sessions are routine. But **default to lifting one bullet** rather than zero; the bar is "would I want to know this if I picked up cold", not "is this a flagship insight". A 2-line learnings entry today is worth a 30-minute commit-archaeology session later.
 
-When you do lift, the dated history entry — if you write one — should shrink to a 1-2 line pointer naming the commit range and the lifted artifacts:
-
-```markdown
-### 2026-MM-DD — <topic>
-<one-sentence summary>. Commits `<short>..<short>`. Lifted: <Decision NNNN>, <Pattern X>, <Learning Y>.
-```
-
-The detailed prose lives in those artifacts now. `git log <range>` rebuilds the rest.
-
-**When NOT to add a dated history entry at all:** if the session is fully captured by its commit messages plus any artifacts you lifted, skip the dated entry. `history.md` is the synthesized layer, not a journal of record — that's what `git log` is for.
+`git log` is the journal — there's no separate dated-timeline file. Every session produces commit messages; durable cross-session signal gets lifted into the homes above so future sessions don't need to re-derive it from `git log`.
 
 ## 4. Refresh `plans/next-up.md`
 
@@ -81,6 +72,6 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 - **This is fast.** Preflight takes a few seconds. Step 3 takes under a minute on the average session and is skipped entirely on routine ones. The whole checkpoint should fit inside two minutes.
 - **Don't skip step 1.** A `git status` catches surprises — files you forgot, files you didn't mean to change, merge artifacts.
 - **Don't skip step 2.** Preflight is the single gate. If it passes, CI will pass. Narrow checks miss cross-cutting breakage.
-- **Step 3 is the compression tier.** `plans/history.md` is *synthesized* knowledge, not a journal — `git log` is the journal. If you find yourself writing a long dated entry, stop and ask whether the prose should be a Pattern, a Learning, a Decision, or a Principle instead.
+- **Step 3 is the compression tier.** `git log` is the journal. If you find yourself writing long planning-doc prose, stop and ask whether it should be a Pattern, a Learning, a Decision, or a commit-message body instead.
 - **Step 4 is cheap.** A one-line `## Done` entry + a refreshed `## Now` is all most checkpoints need. Always do it — the next session reads `next-up.md` cold.
 - **Commit and push early.** Small commits are easier to review and revert than large ones. The compression artifacts ride with the work — one commit, not two.

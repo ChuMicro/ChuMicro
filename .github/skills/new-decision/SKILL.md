@@ -89,7 +89,7 @@ If the new decision extends, narrows, or partially supersedes an existing one, *
 This rule from [`plans/decisions/README.md`](../../../plans/decisions/README.md) is load-bearing — the difference between an ADR that helps future contributors and one that misleads them.  When a decision changes, rewrite the affected paragraphs of the existing ADR so a reader landing cold gets accurate information.  Specifically:
 
 - **No dated revision banners** (no `Revised: YYYY-MM-DD — ...`).  Edit the prose; let `git log` carry history.
-- **No `## Amendments` / `## Update (YYYY-MM-DD)` / `## Progress notes` sections.**  Status updates belong in `plans/history.md` or `plans/workstreams/<name>.md`.
+- **No `## Amendments` / `## Update (YYYY-MM-DD)` / `## Progress notes` sections.**  Status updates belong in commit messages or `plans/workstreams/<name>.md`.
 - **No "this decision has been revised twice" preambles.**  If you find yourself writing one, stop and edit the body.
 - **The `Date:` field is the original decision date.**  Never parenthesize it (`Date: 2026-04-21 (revised 2026-05-02)`).
 - **No "Amended by Decision NNNN" blockquotes** — as covered in step 4, use inline cross-links instead.

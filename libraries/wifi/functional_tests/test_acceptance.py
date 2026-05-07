@@ -28,8 +28,8 @@ Per-board scenarios:
    connect / drop / reconnect sequence.
 
 Output deliberately prints SSID + state names + IP but **never**
-the password.  Commit messages + history.md never reference the
-SSID or password values either.
+the password.  Commit messages never reference the SSID or password
+values either.
 """
 
 import time

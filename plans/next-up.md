@@ -1,6 +1,6 @@
 # Next Up
 
-> **Agent-managed file.  Single source of truth for the work queue.**  Each top-level bullet is capped at 5 bullet points (lead + sub-bullets, CHU011) — anything that needs more lives in a workstream file under [`workstreams/`](workstreams/), surfaced from here as a one-line pointer.  `## Done (recent)` is capped at 25 entries — drop the oldest when adding a new one (commit messages + `workstreams/archive/` + `history.md` keep the durable record).  Session warm-up: `git --no-pager log --oneline -20` then this file.
+> **Agent-managed file.  Single source of truth for the work queue.**  Each top-level bullet is capped at 5 bullet points (lead + sub-bullets, CHU011) — anything that needs more lives in a workstream file under [`workstreams/`](workstreams/), surfaced from here as a one-line pointer.  `## Done (recent)` is capped at 25 entries — drop the oldest when adding a new one.  Commit messages + `workstreams/archive/` keep the durable record; `git log` is the journal.  Session warm-up: `git --no-pager log --oneline -20` then this file.
 
 ## Now
 
@@ -49,7 +49,7 @@ Independent items.  Most have either shipped phases (status in the linked workst
 
 ## Done (recent)
 
-> **Where the detail lives.**  This section is a one-line pointer log capped at 25 entries — drop the oldest when adding a new one.  Verbose session detail goes in commit messages, [`plans/history.md`](history.md) (dated entries), or [`plans/workstreams/<name>.md`](workstreams/) (per-phase acceptance).  Past entries link to those records — don't paste detail back into `next-up.md`.
+> **Where the detail lives.**  This section is a one-line pointer log capped at 25 entries — drop the oldest when adding a new one.  Verbose session detail lives in commit messages or [`plans/workstreams/<name>.md`](workstreams/) (per-phase acceptance).  Past entries link to those records — don't paste detail back into `next-up.md`.
 
 - [x] **Single-source-of-truth: retire now.md, age out Done log** (2026-05-07) — deleted `plans/now.md`; `next-up.md` `## Now` is the only active-work pointer.  CHU011 dropped its now.md file-line cap and gained a `## Done (recent)` entry-count cap (≤25 entries).  AGENTS.md non-negotiable + plans/README.md + task-checkpoint skill updated to match.  Pruned every Done entry dated 2026-05-01 or earlier — detail is in commit messages + workstream archives.
 - [x] **Plans-doc brevity sweep + CHU011 lint** (2026-05-07) — compacted now.md to ≤25 lines, swept next-up.md `## Now` / `## Next` paragraph-bodies into one-liner Done pointers, landed CHU011 lint capping each top-level bullet at 5 bullet points.
