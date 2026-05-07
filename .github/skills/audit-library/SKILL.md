@@ -87,7 +87,7 @@ These are non-negotiables from `AGENTS.md` and the relevant Decisions.  Most sho
   * `select.poll(timeout=`<positive> — banned (use `timeout=0` for non-blocking poll).
   * `await` / `async def` — banned everywhere in library code.
   * Synchronous DNS calls (`socket.getaddrinfo` without yielding) — banned.
-  * `check(now_ms)` / `handle(now_ms)` methods that *re-call* `ticks_ms()` instead of using the supplied `now_ms`.  Per the MQTT-CP timing bug (commit `ec1d133`-era), every service in a tick must see the same `now_ms` for deterministic intra-tick ordering.
+  * `check(now_ms)` / `handle(now_ms)` methods that *re-call* `ticks_ms()` instead of using the supplied `now_ms`.  Every service in a tick must see the same `now_ms` for deterministic intra-tick ordering, fairness, and composed deadlines — re-fetching mid-tick produces clock-domain misalignment that masquerades as protocol bugs.
 * **Constructor injection** (Decision [0010](../../../plans/decisions/0010-library-testability.md)) — time / I/O / network dependencies should be passed in, not imported directly.  Fakes live in `src/<name>/testing.py` with `__chumicro_runtimes__ = ("cpython",)`.
 * **Runtime markers** (Decisions [0037](../../../plans/decisions/0037-runtime-file-marking.md), [0044](../../../plans/decisions/0044-deploy-time-runtime-filtering.md)) — files whose body only makes sense on one runtime (`import wifi`, `import esp32`, `import socketpool`, `import microcontroller`, `import machine`) need `__chumicro_runtimes__ = ("circuitpython",)` or similar at module top.  Grep for runtime-specific imports without the marker.
 * **No `__future__` / no `typing` imports in device-library code** (Decision [0021](../../../plans/decisions/0021-docstring-type-policy.md)) — `from __future__ import annotations` and `from typing import ...` are banned in `libraries/*/src/` and `support/test_harness/src/`.  PEP 604 / 585 syntax only.  CPython-only trees (tests, scripts, workbench) may keep them.
@@ -112,16 +112,6 @@ Libraries ship to constrained devices — less source = less flash, less parse-t
 * **Sibling-file structural duplication.**  Pairs of files in the same library that share scaffolding while differing only in role-specific details: parallel state machines, parallel field-by-field property accessors, parallel error paths, parallel constructor wiring.  Diff the sibling files visually first to confirm the parallel — line-count alone is misleading.  Refactor via a shared base parameterized by the role-specific differences (a factory callback, a flag, a `_role_label` string for error message clarity).  Highest test churn of any leanness work — do this slice last, after the smaller cleanups have settled, so the diff is purely about the dedup.
 
 * **Final state matters less than the audit quality.**  A pass that cuts 20% of source but misses its self-set target by 15% is still a successful audit — base-class plus subclass deltas often cost more overhead than estimated.  The audit's goal is "find the unnecessary mass," not "hit a number."  Numbers are useful for triggering and bounding the work, not for grading it.
-
-### Recent cleanup patterns this repo has hit
-
-Reference these when calibrating the "honesty" lens — they're concrete examples of the patterns you're looking for:
-
-* **Class name lies about behaviour.**  Commit [`19405bd`](https://github.com/ChuMicro/ChuMicro/commit/19405bd) split `InteractiveDeployer(max_attempts=1, prompt=lambda)` into `NonInteractiveDeployer` + `InteractiveDeployer`.  Look for similar shapes — classes whose configuration disables what their name promises.
-* **Two-step state machine for one operation.**  Commit [`334ce44`](https://github.com/ChuMicro/ChuMicro/commit/334ce44) collapsed `sync_library_sources`'s "find block, then post-process to extend backward" into a single regex with optional prefix.  Look for find-then-fix-up patterns.
-* **String sentinels + caller-side mutation.**  Same commit replaced `"shim"` / `"plain"` / `"_user_error"` return strings + `args.boot_shim = True` mutation with a frozen `_ResolvedLayout` dataclass.  Look for return-string-then-mutate-args patterns.
-* **Parser round-trip dropping content.**  Commit [`8b21e18`](https://github.com/ChuMicro/ChuMicro/commit/8b21e18) replaced ruamel-rt round-trip with regex string-surgery for managed-block-in-user-file scenarios.  Look for files that load → modify-one-thing → dump that lose unrelated formatting.
-* **Multi-project layouts that don't earn complexity.**  Commit [`3fde27c`](https://github.com/ChuMicro/ChuMicro/commit/3fde27c) deleted `active.py` + `/lib/workspace_runtime/` + `/lib/projects/<name>/` namespace because nobody used multi-project-per-board.  Look for layered abstractions where the consumer count doesn't justify the indirection.
 
 ## Process
 

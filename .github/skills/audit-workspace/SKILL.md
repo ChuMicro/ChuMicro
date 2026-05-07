@@ -111,14 +111,9 @@ These cross-library invariants only show up at workspace scope.
 
 * **`requires_flash` flagging** (Decision [0047](../../../plans/decisions/0047-deploy-mode-flash-default.md)) — libraries that OOM in CP RAM-mode on minimum-tier boards should set `[tool.chumicro].requires_flash = true` in pyproject.  Audit which libraries have it; flag any large device libraries that don't but probably should.
 
-### Recent ecosystem-shaping commits worth referencing
+### Calibrating workstream scope
 
-When proposing workstream candidates, cite analogous past work to calibrate scope:
-
-* **`config-shape research workstream`** — design pass complete 2026-05-06; nine-step implementation sequence in [`plans/workstreams/config-shape-beginner-ergonomics.md`](../../../plans/workstreams/config-shape-beginner-ergonomics.md).  Example of "design lock-down before mechanical execution" for cross-cutting refactors.
-* **F1‑F6 verification cleanup chain (`4ac81fd` through `224c489`)** — six small bug fixes from one verification pass, each its own commit.  Example of "spin findings into per-issue commits, not one mega-commit."
-* **Boot-shim simplification (`3fde27c`)** — deleted ~756 lines, 466 added; one feature dropped (multi-project-per-board) that nobody used.  Example of YAGNI cleanup with hardware verification.
-* **NonInteractiveDeployer split (`19405bd`)** — separated a class doing two jobs via parameter tricks.  Example of "honesty refactor" at workspace scale (touched both deploy + workspace packages).
+When proposing a workstream candidate (merge / split / promote / cross-cutting refactor), calibrate its scope against analogous past work in this repo's history.  Use `git log --stat --since="6 months ago"` filtered to files in the relevant trees, or scan `plans/workstreams/archive/` for closed workstream summaries.  Knowing what a similarly-sized refactor cost last time ("ripped out 750 lines + dropped one feature" vs. "nine-step sequence with design lock-down") sharpens the proposal's size estimate beyond gut feel.
 
 ## Process
 

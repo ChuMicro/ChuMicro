@@ -74,14 +74,12 @@ The hardest pattern to spot.  Look for:
 
 These are non-negotiables that *only* surface at the boundary between libraries.
 
-* **Runner contract: one `now_ms` per tick** (Decision [0014](../../../plans/decisions/0014-runner-pattern.md)).  When library B calls into library A's `check(now_ms)` / `handle(now_ms)` method, B must pass the *same* `now_ms` the runner gave it — never call `ticks_ms()` mid-tick to get a "fresh" value.  Concrete bug from the repo's history: a CP MQTT functional test rolled its own `_ticks_ms()` helper that fell back to `time.monotonic() * 1000` (unwrapped float-derived ms), while `chumicro-mqtt` consumed deadlines computed via `chumicro-timing` (`supervisor.ticks_ms`, 29-bit-wrapped per Decision 0008).  The two clock domains misaligned and the connection failed on the very first tick.  Audit checklist:
+* **Runner contract: one `now_ms` per tick** (Decision [0014](../../../plans/decisions/0014-runner-pattern.md)).  When library B calls into library A's `check(now_ms)` / `handle(now_ms)` method, B must pass the *same* `now_ms` the runner gave it — never call `ticks_ms()` mid-tick to get a "fresh" value.  Mixing tick sources between libraries (e.g., one consumer uses `chumicro_timing.ticks_ms` while another rolls its own `time.monotonic()`-based shim) causes clock-domain misalignment, which manifests as deadlines firing on the wrong tick or never firing.  Audit checklist:
   * Does each tick-receiver use the supplied `now_ms` rather than re-fetching?
-  * If two libraries share a tick budget (e.g., wifi + mqtt), do they get the same `now_ms` value at every dispatch?
+  * If two libraries share a tick budget, do they get the same `now_ms` value at every dispatch?
   * Are tests rolling their own timer instead of using `chumicro_timing.ticks_ms`?
 
-* **chumicro-config manifest declarations** (Decision [0036](../../../plans/decisions/0036-chumicro-config-library.md)).  Every library that calls `chumicro_config.load_section(<name>)` or has a `<X>Config.from_dict()` method should declare `[tool.chumicro.config.sections.<name>]` in its `pyproject.toml` listing required + optional keys.  At deploy time, `chumicro_workspace.config_manifest` aggregates these and validates the merged config before bytes hit the device.
-
-  Today only `chumicro-wifi` declares a manifest.  Audit any pair of networking libraries (mqtt, requests, http_server, sockets, websockets, ntp) for missing manifests; flag for the config-shape research workstream's Q11 push.
+* **chumicro-config manifest declarations** (Decision [0036](../../../plans/decisions/0036-chumicro-config-library.md)).  Every library that calls `chumicro_config.load_section(<name>)` or has a `<X>Config.from_dict()` method should declare `[tool.chumicro.config.sections.<name>]` in its `pyproject.toml` listing required + optional keys.  At deploy time, `chumicro_workspace.config_manifest` aggregates these and validates the merged config before bytes hit the device.  Audit any pair of libraries that consume runtime config; if either is missing a manifest, flag it.
 
 * **Per-runtime adapter parity** (Decision [0049](../../../plans/decisions/0049-three-runtime-trinity.md)).  Each device library should ship CP + MP + CPython adapters / fakes with the same surface.  When auditing a pair of libraries:
   * Does each library have a `_adapters/{cp,mp,...}.py` (or `_adapters/base.py` + per-runtime subclass)?
