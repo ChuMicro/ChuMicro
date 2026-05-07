@@ -235,6 +235,26 @@ def _force_non_blocking(socket):
 # ---------------------------------------------------------------------------
 
 
+def _build_default_socket_factory(config, *, radio=None):
+    """Return a socket factory that opens a TCPClientSocket using
+    config-supplied broker host/port (or sensible defaults).
+
+    Used by :meth:`MQTTClient.from_config` when the caller doesn't
+    pass a pre-built socket or a custom factory.  Reads
+    ``mqtt.broker.host`` / ``mqtt.broker.port`` from *config*; falls
+    back to the public test broker (``test.mosquitto.org:1883``) when
+    either key is absent.
+    """
+    host = config.get("mqtt.broker.host", "test.mosquitto.org")
+    port = config.get("mqtt.broker.port", 1883)
+
+    def factory():
+        from chumicro_sockets import tcp_client_socket  # noqa: PLC0415
+        return tcp_client_socket(host, port, radio=radio)
+
+    return factory
+
+
 class MQTTClient:
     """Non-blocking MQTT 3.1.1 client (QoS 0 + 1).
 
@@ -242,7 +262,66 @@ class MQTTClient:
     user knobs; then drive via :meth:`check` / :meth:`handle` from a
     runner tick or a hand-rolled loop.  All callbacks fire from
     :meth:`handle` — never from a thread or interrupt.
+
+    For config-driven construction, see :meth:`from_config` —
+    one-line factory that reads broker host/port + identity + auth
+    from ``runtime_config.msgpack``.
     """
+
+    @classmethod
+    def from_config(
+        cls,
+        config,
+        *,
+        radio=None,
+        socket=None,
+        socket_factory=None,
+    ):
+        """Build an :class:`MQTTClient` from runtime config.
+
+        Reads the ``[tool.chumicro.config]`` keys declared in
+        ``libraries/mqtt/pyproject.toml``: ``mqtt.broker.host``,
+        ``mqtt.broker.port``, ``mqtt.client_id``,
+        ``mqtt.keep_alive_seconds``, ``mqtt.username``,
+        ``mqtt.password`` — all optional with sensible defaults
+        (``test.mosquitto.org:1883``, auto-derived ``client_id``,
+        60 s keepalive, no auth).
+
+        Args:
+            config: A :class:`chumicro_config.RuntimeConfig` (typically
+                ``chumicro_config.config``) or plain flat dict.  Keys
+                read are flat dotted strings (``"mqtt.broker.host"``).
+            radio: WiFi radio for the auto-built socket factory —
+                CircuitPython needs this; MicroPython auto-detects.
+                Ignored when *socket* or *socket_factory* is passed
+                directly.
+            socket: Pre-built :class:`TCPClientSocket`.  When supplied,
+                the auto-built factory is skipped — caller owns the
+                connection.
+            socket_factory: Custom ``callable() -> TCPClientSocket``.
+                When supplied, the auto-built factory is skipped.
+                Useful for custom TLS contexts or non-default radio
+                wiring.
+
+        Returns:
+            A configured ``MQTTClient`` ready for ``connect()``.
+
+        Notes:
+            App-level concerns (publish topics, subscription topics,
+            sensor identifiers, etc.) are not part of the library
+            manifest — they're application config the example /
+            project reads directly via ``config["…"]``.
+        """
+        if socket is None and socket_factory is None:
+            socket_factory = _build_default_socket_factory(config, radio=radio)
+        return cls(
+            socket=socket,
+            socket_factory=socket_factory,
+            client_id=config.get("mqtt.client_id", "chumicro-mqtt"),
+            keep_alive_seconds=config.get("mqtt.keep_alive_seconds", 60),
+            username=config.get("mqtt.username"),
+            password=config.get("mqtt.password"),
+        )
 
     def __init__(
         self,

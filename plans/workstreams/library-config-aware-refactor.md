@@ -1,6 +1,6 @@
 # Workstream: library `from_config` factories — config-aware constructors across the six networking libs
 
-Status: **open — Phases 0 (manifests) + 1 (pytest-device validation hook) shipped 2026-05-06; Phase 2 (per-library `from_config` factories with hardware validation) and Phase 3 (`deploy-example` CLI) still to do.**
+Status: **open — Phases 0 (manifests) + 1 (pytest-device validation hook) + 2-mqtt (`MQTTClient.from_config` factory + telemetry example refactor) shipped 2026-05-06; remaining Phase 2 libs (requests, http_server, ntp, websockets) and Phase 3 (`deploy-example` CLI) still to do.  mqtt's Phase 2 ships without hardware validation in this session — host-side from_config tests pass at 95 % coverage; four-board sweep to confirm the refactored telemetry example still publishes is queued for the next session.**
 
 The libraries `mqtt`, `requests`, `http_server`, `ntp`, `websockets`, and `wifi` were written before the runtime-config strategy ([Decision 0035](../decisions/0035-runtime-config-structure.md), [Decision 0057](../decisions/0057-two-file-config.md), [`config-shape-beginner-ergonomics`](archive/config-shape-beginner-ergonomics.md)).  Today only `chumicro_wifi.WifiConfig.from_config` exists — `WifiService(WifiConfig.from_config(config))` reads `wifi.ssid` / `wifi.password` straight off the deployed `runtime_config.msgpack`.
 
@@ -72,9 +72,12 @@ For each library that has a manifest:
 3. Update functional tests where applicable (some tests construct directly to test edge cases — leave those alone).
 4. Library minor VERSION bump per Decision 0023.
 
-Order: probably `ntp` first (smallest surface — three knobs), then `mqtt` (largest surface), then the rest in any order.
+Status:
 
-**Hardware validation is mandatory for Phase 2.**  Each library's refactor must pass the four-board canonical matrix (Pi Pico W CP/MP + Lolin S2 CP/MP) before landing.  CPython unit tests don't catch on-device config-load failure modes.
+* **mqtt — shipped 2026-05-06 (host-side; hardware queued).**  `MQTTClient.from_config(config, *, radio=None, socket=None, socket_factory=None)` reads `mqtt.broker.host` / `mqtt.broker.port` / `mqtt.client_id` / `mqtt.keep_alive_seconds` / `mqtt.username` / `mqtt.password` with sensible defaults (`test.mosquitto.org:1883`, `chumicro-mqtt`, 60 s keepalive, no auth).  Auto-builds a default socket factory using config-supplied broker host/port when caller doesn't pass `socket=` / `socket_factory=`.  `mqtt/examples/circuitpython_telemetry.py` rewritten to use `WifiConfig.try_from_config(config)` + `MQTTClient.from_config(config, radio=...)` + flat-key reads for app-level concerns (`telemetry.topic`, `telemetry.command_topic`, `telemetry.sensor_id`).  Fixes the post-migration broken nested-section reads (`config.get("telemetry")` was silently returning `None` and falling through to constants).  mqtt 0.1.6 → 0.2.0.  **Hardware validation gap: the four-board sweep confirming the refactored example actually publishes is queued for a follow-on session — not closed.**
+* **requests, http_server, ntp, websockets — not started.**  Each follows the same pattern.  Suggested order: `ntp` (smallest surface — three knobs) → `requests` → `websockets` → `http_server`.
+
+**Hardware validation is mandatory before each library's Phase 2 closes.**  Each refactor must pass the four-board canonical matrix (Pi Pico W CP/MP + Lolin S2 CP/MP).  CPython unit tests don't catch on-device config-load failure modes.  mqtt's host-side tests at 95 % coverage and the example imports clean — that's necessary but not sufficient.
 
 ### Phase 3 — `python scripts/run.py deploy-example <lib> <name>` (mono-repo)
 
