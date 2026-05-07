@@ -61,4 +61,8 @@ def _merged_runtime_config() -> dict | None:
 
 def pytest_configure(config: pytest.Config) -> None:
     """Register the runtime-config payload pytest-device will stage."""
-    set_runtime_config(config, _merged_runtime_config())
+    set_runtime_config(
+        config,
+        _merged_runtime_config(),
+        required_keys=("wifi.ssid", "wifi.password"),
+    )

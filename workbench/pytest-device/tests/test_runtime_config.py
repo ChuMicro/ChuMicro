@@ -24,7 +24,9 @@ from __future__ import annotations
 
 from chumicro_pytest_device.plugin import _encode_runtime_config_extra_files
 from chumicro_pytest_device.runtime_config import (
+    get_required_keys,
     get_runtime_config,
+    missing_required_keys,
     set_runtime_config,
 )
 from msgpack import unpackb
@@ -40,7 +42,7 @@ class _StashConfigStub:
 class TestSetRuntimeConfig:
     def test_round_trips_dict(self) -> None:
         config = _StashConfigStub()
-        payload = {"wifi": {"ssid": "Net", "password": "pw"}}
+        payload = {"wifi.ssid": "Net", "wifi.password": "pw"}
         set_runtime_config(config, payload)
         assert get_runtime_config(config) == payload
 
@@ -52,18 +54,83 @@ class TestSetRuntimeConfig:
         """Late-binding: a fixture overwriting an earlier ``pytest_configure``
         registration must win.  The plugin reads lazily at stage time."""
         config = _StashConfigStub()
-        set_runtime_config(config, {"wifi": {"ssid": "first"}})
-        set_runtime_config(config, {"wifi": {"ssid": "second"}})
+        set_runtime_config(config, {"wifi.ssid": "first"})
+        set_runtime_config(config, {"wifi.ssid": "second"})
         result = get_runtime_config(config)
         assert result is not None
-        assert result["wifi"]["ssid"] == "second"
+        assert result["wifi.ssid"] == "second"
 
     def test_explicit_none_clears_payload(self) -> None:
         """Passing ``None`` explicitly suppresses staging on the next stage call."""
         config = _StashConfigStub()
-        set_runtime_config(config, {"wifi": {"ssid": "x"}})
+        set_runtime_config(config, {"wifi.ssid": "x"})
         set_runtime_config(config, None)
         assert get_runtime_config(config) is None
+
+
+class TestRequiredKeys:
+    def test_default_is_empty_tuple(self) -> None:
+        config = _StashConfigStub()
+        set_runtime_config(config, {"wifi.ssid": "x"})
+        assert get_required_keys(config) == ()
+        assert missing_required_keys(config) == ()
+
+    def test_unset_returns_empty_tuple(self) -> None:
+        """No ``set_runtime_config`` call ever made — neither payload
+        nor required-keys are stashed."""
+        config = _StashConfigStub()
+        assert get_required_keys(config) == ()
+        assert missing_required_keys(config) == ()
+
+    def test_iterable_input_normalized_to_tuple(self) -> None:
+        """``required_keys`` accepts any iterable; storage is a tuple."""
+        config = _StashConfigStub()
+        set_runtime_config(
+            config,
+            {"wifi.ssid": "x", "wifi.password": "p"},
+            required_keys=["wifi.ssid", "wifi.password"],
+        )
+        assert get_required_keys(config) == ("wifi.ssid", "wifi.password")
+
+    def test_complete_payload_has_no_missing_keys(self) -> None:
+        config = _StashConfigStub()
+        set_runtime_config(
+            config,
+            {"wifi.ssid": "x", "wifi.password": "p", "extra.key": "ok"},
+            required_keys=("wifi.ssid", "wifi.password"),
+        )
+        assert missing_required_keys(config) == ()
+
+    def test_partial_payload_returns_missing_subset_in_order(self) -> None:
+        """Declared order is preserved so the user-facing skip message
+        reads naturally."""
+        config = _StashConfigStub()
+        set_runtime_config(
+            config,
+            {"wifi.password": "p"},
+            required_keys=("wifi.ssid", "wifi.password", "mqtt.broker.host"),
+        )
+        assert missing_required_keys(config) == ("wifi.ssid", "mqtt.broker.host")
+
+    def test_none_payload_with_required_keys_means_all_missing(self) -> None:
+        """Unconfigured-creds path: ``payload=None`` plus required keys
+        means every key is "missing" because nothing's staged."""
+        config = _StashConfigStub()
+        set_runtime_config(
+            config, None, required_keys=("wifi.ssid", "wifi.password"),
+        )
+        assert missing_required_keys(config) == ("wifi.ssid", "wifi.password")
+
+    def test_overwriting_resets_required_keys(self) -> None:
+        """Two ``set_runtime_config`` calls — second wins, including
+        clearing required-keys back to the default ``()``."""
+        config = _StashConfigStub()
+        set_runtime_config(
+            config, {"wifi.ssid": "x"}, required_keys=("wifi.ssid",),
+        )
+        set_runtime_config(config, {"wifi.ssid": "x"})  # no required_keys
+        assert get_required_keys(config) == ()
+        assert missing_required_keys(config) == ()
 
 
 class TestEncodeRuntimeConfigExtraFiles:

@@ -157,7 +157,16 @@ def pytest_configure(config: pytest.Config) -> None:
         merged["websockets.server.host"] = server_host
         merged["websockets.server.port"] = server_port
 
-    set_runtime_config(config, merged)
+    set_runtime_config(
+        config,
+        merged,
+        required_keys=(
+            "wifi.ssid",
+            "wifi.password",
+            "websockets.server.host",
+            "websockets.server.port",
+        ),
+    )
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001

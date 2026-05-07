@@ -135,7 +135,16 @@ def pytest_configure(config: pytest.Config) -> None:
         merged["sockets.echo.host"] = echo_host
         merged["sockets.echo.port"] = echo_port
 
-    set_runtime_config(config, merged)
+    set_runtime_config(
+        config,
+        merged,
+        required_keys=(
+            "wifi.ssid",
+            "wifi.password",
+            "sockets.echo.host",
+            "sockets.echo.port",
+        ),
+    )
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001 — pytest hook

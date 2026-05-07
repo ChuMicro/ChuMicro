@@ -70,7 +70,7 @@ from .pr_summary import (
     format_pr_summary_block,
 )
 from .result_parser import RunResult, TestResult, parse_output
-from .runtime_config import get_runtime_config
+from .runtime_config import get_runtime_config, missing_required_keys
 
 #: Canonical on-device path for the staged runtime-config payload —
 #: matches :data:`chumicro_config.runtime.DEFAULT_RUNTIME_CONFIG_PATH`.
@@ -1342,15 +1342,23 @@ def pytest_collect_file(
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item],
 ) -> None:
-    """Belt-and-suspenders: deselect any non-device items under functional tests.
+    """Two passes:
 
-    The :func:`pytest_pycollect_makemodule` hook already prevents the
-    default Module factory from importing files under
-    ``libraries/<name>/functional_tests/``, so duplicate items should
-    never be produced in practice.  This sweep exists as a safety net
-    in case another plugin re-introduces a non-:class:`DeviceTestItem`
-    item for one of these paths — the device transport remains the
-    sole execution surface.
+    1. Belt-and-suspenders: deselect any non-device items under
+       functional tests.  The :func:`pytest_pycollect_makemodule` hook
+       already prevents the default Module factory from importing
+       files under ``libraries/<name>/functional_tests/``, so duplicate
+       items should never be produced in practice.  This sweep exists
+       as a safety net in case another plugin re-introduces a
+       non-:class:`DeviceRuntimeItem` for one of these paths — the
+       device transport remains the sole execution surface.
+    2. Apply a session-wide skip marker to every
+       :class:`DeviceRuntimeItem` when the conftest declared required
+       runtime-config keys via :func:`set_runtime_config(...,
+       required_keys=...)` and one or more are absent from the staged
+       payload.  Catches "I forgot to populate ``mqtt.broker.host`` in
+       ``secrets.toml``" before the device boots and crashes with a
+       cryptic ``MissingConfigKey``.
     """
     deselected: list[pytest.Item] = []
     selected: list[pytest.Item] = []
@@ -1366,6 +1374,19 @@ def pytest_collection_modifyitems(
     if deselected:
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
+
+    missing = missing_required_keys(config)
+    if missing:
+        skip_reason = (
+            "Functional tests require runtime-config keys not present "
+            f"in the staged payload: {', '.join(missing)}.  Populate "
+            "them in your secrets.toml (or the per-project config) and "
+            "re-run."
+        )
+        skip_marker = pytest.mark.skip(reason=skip_reason)
+        for item in items:
+            if isinstance(item, DeviceRuntimeItem):
+                item.add_marker(skip_marker)
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:

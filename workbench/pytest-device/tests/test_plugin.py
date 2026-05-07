@@ -1313,3 +1313,122 @@ class TestDeviceTestItemRuntest:
             if name in ("execute", "execute_scripts")
         )
         assert batch_invocations == 1
+
+
+class TestPytestCollectionModifyItemsRequiredKeys:
+    """Skip-marker behavior for missing required runtime-config keys.
+
+    The hook reads the conftest's registered ``required_keys`` via
+    ``set_runtime_config(..., required_keys=...)`` and applies a
+    skip marker to every :class:`DeviceRuntimeItem` when one or more
+    keys are absent from the staged payload.
+    """
+
+    @staticmethod
+    def _make_device_item_mock(nodeid: str = "tests/test_x.py::test_y") -> object:
+        """Return a Mock satisfying ``isinstance(item, DeviceRuntimeItem)``.
+
+        The deselect-sweep guard reads ``item.nodeid`` as a string, so
+        we set it explicitly — leaving it as a Mock raises TypeError
+        on ``"functional_tests" in item.nodeid``.
+        """
+        from unittest.mock import Mock  # noqa: PLC0415
+
+        item = Mock(spec=pytest_device.DeviceRuntimeItem)
+        item.nodeid = nodeid
+        return item
+
+    @staticmethod
+    def _make_non_device_item_mock(
+        nodeid: str = "tests/test_x.py::test_y",
+    ) -> object:
+        """Return a plain Mock that's NOT a ``DeviceRuntimeItem`` subclass."""
+        from unittest.mock import Mock  # noqa: PLC0415
+
+        item = Mock(spec=pytest.Item)
+        item.nodeid = nodeid
+        return item
+
+    def _stub_config(
+        self,
+        payload: dict | None,
+        required_keys: tuple[str, ...] = (),
+    ) -> object:
+        from chumicro_pytest_device.runtime_config import set_runtime_config  # noqa: PLC0415
+
+        class _Stub:
+            def __init__(self) -> None:
+                self.stash: dict = {}
+                self.hook = SimpleNamespace(
+                    pytest_deselected=lambda **_kwargs: None,
+                )
+
+        config = _Stub()
+        set_runtime_config(config, payload, required_keys=required_keys)
+        return config
+
+    def test_no_required_keys_no_skip(self) -> None:
+        """Default behavior — no required_keys means no validation."""
+        config = self._stub_config(payload={"wifi.ssid": "x"})
+        device_item = self._make_device_item_mock()
+        items = [device_item]
+        pytest_device.pytest_collection_modifyitems(config, items)
+        device_item.add_marker.assert_not_called()
+
+    def test_complete_payload_no_skip(self) -> None:
+        """Required keys all present in payload → no skip marker."""
+        config = self._stub_config(
+            payload={"wifi.ssid": "x", "wifi.password": "p"},
+            required_keys=("wifi.ssid", "wifi.password"),
+        )
+        device_item = self._make_device_item_mock()
+        items = [device_item]
+        pytest_device.pytest_collection_modifyitems(config, items)
+        device_item.add_marker.assert_not_called()
+
+    def test_partial_payload_skips_with_named_missing_keys(self) -> None:
+        """Skip message names every missing key in declaration order."""
+        config = self._stub_config(
+            payload={"wifi.ssid": "x"},
+            required_keys=("wifi.ssid", "wifi.password", "mqtt.broker.host"),
+        )
+        device_item_a = self._make_device_item_mock()
+        device_item_b = self._make_device_item_mock()
+        items = [device_item_a, device_item_b]
+        pytest_device.pytest_collection_modifyitems(config, items)
+        # Both items got a skip marker.
+        device_item_a.add_marker.assert_called_once()
+        device_item_b.add_marker.assert_called_once()
+        # The skip reason names every missing key.
+        skip_marker = device_item_a.add_marker.call_args.args[0]
+        assert "wifi.password" in skip_marker.kwargs["reason"]
+        assert "mqtt.broker.host" in skip_marker.kwargs["reason"]
+        # Already-present keys aren't repeated as missing.
+        assert "wifi.ssid" not in skip_marker.kwargs["reason"].split(": ", 1)[1]
+
+    def test_none_payload_skips_naming_every_required_key(self) -> None:
+        """``payload=None`` + required_keys = unconfigured-creds path.
+        Skip names every required key (nothing's staged)."""
+        config = self._stub_config(
+            payload=None, required_keys=("wifi.ssid", "wifi.password"),
+        )
+        device_item = self._make_device_item_mock()
+        items = [device_item]
+        pytest_device.pytest_collection_modifyitems(config, items)
+        skip_marker = device_item.add_marker.call_args.args[0]
+        assert "wifi.ssid" in skip_marker.kwargs["reason"]
+        assert "wifi.password" in skip_marker.kwargs["reason"]
+
+    def test_non_device_items_not_marked(self) -> None:
+        """Skip marker applies only to ``DeviceRuntimeItem`` instances —
+        a plain pytest.Item that survived the deselect sweep is left
+        alone (the missing-keys check is functional-tests-specific)."""
+        config = self._stub_config(
+            payload=None, required_keys=("wifi.ssid",),
+        )
+        non_device_item = self._make_non_device_item_mock(
+            nodeid="tests/test_unrelated.py::test_x",
+        )
+        items = [non_device_item]
+        pytest_device.pytest_collection_modifyitems(config, items)
+        non_device_item.add_marker.assert_not_called()
