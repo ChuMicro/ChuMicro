@@ -762,6 +762,7 @@ class TestServerClose:
         server, _listener, _clock = _make_server()
         server.close()
         server.close()  # must not raise
+        assert server.closed is True
 
 
 # ---------------------------------------------------------------------------

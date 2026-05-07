@@ -171,6 +171,8 @@ def test_handle_with_no_in_flight_request_is_noop() -> None:
     sock = FakeUDPSocket()
     client = NTPClient(socket=sock)
     client.handle(now_ms=0)  # must not crash
+    # ``handle`` on an idle client must not accidentally mark the client busy.
+    assert client.busy is False
 
 
 def test_check_returns_false_when_idle() -> None:

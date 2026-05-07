@@ -16,6 +16,7 @@ builtin not available on MicroPython.  Tracking + fix queued in
 import gc
 import hashlib
 
+from chumicro_test_harness import skip
 from chumicro_websockets import (
     OPCODE_TEXT,
     WebSocketClient,
@@ -152,8 +153,9 @@ def test_inbound_text_no_leak_no_fragmentation():
     and the parser's internal buffer should reset for the next frame.
     """
     if not _HAS_SHA1:
-        # CP unix-port: no sha1, can't complete the WS handshake.
-        return
+        # CP unix-port lacks ``hashlib.sha1`` and ``hashlib.new`` — the
+        # WebSocket handshake (RFC 6455 §1.3) can't complete here.
+        skip("requires hashlib.sha1 — CP unix-port omits it")
     socket = FakeConnection()
     clock = TickClock()
     client = _make_client(socket, clock)

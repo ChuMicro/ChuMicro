@@ -61,15 +61,22 @@ class TestCPythonTCP:
         finally:
             sock.close()
 
-    def test_send_and_recv_round_trip(self, echo_server) -> None:
+    def test_send_returns_byte_count_on_connected_socket(self, echo_server) -> None:
+        """``tcp_client_socket`` returns a socket whose ``send`` reaches the kernel.
+
+        The fixture is a bind-and-listen target, not a real echo
+        server (no accept loop is running), so we can't drive a
+        round-trip here — that lives in
+        ``functional_tests/test_real_tcp.py`` against real hardware
+        + real network.  This test asserts the contract a host-side
+        unit test can: ``send`` returns the byte count, doesn't
+        raise, and doesn't silently drop bytes.
+        """
         host, port = echo_server
         sock = tcp_client_socket(host, port)
         try:
-            sock.send(b"hi")
-            # Server side accepts + echoes.
-            # We pull the connection from the listener side; tests
-            # don't need the round-trip — connecting + closing is
-            # enough to assert the factory works.
+            sent = sock.send(b"hi")
+            assert sent == 2
         finally:
             sock.close()
 
