@@ -62,8 +62,7 @@ requires_flash = true
 # tunables + bind target via constructor args.  This block describes
 # the forward-looking config-aware surface that an
 # ``HttpServer.from_config`` factory will consume — bind host/port,
-# limits, and optional TLS material paths.  See
-# plans/workstreams/library-config-aware-refactor.md.
+# limits, and optional TLS material paths.
 
 [tool.chumicro.config]
 required_keys = []

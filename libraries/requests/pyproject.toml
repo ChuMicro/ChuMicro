@@ -61,8 +61,7 @@ requires_flash = true
 # knows about.  All keys are optional today: HttpClient takes its
 # tunables via constructor args.  This block describes the
 # forward-looking config-aware surface that an ``HttpClient.from_config``
-# factory will consume.  See
-# plans/workstreams/library-config-aware-refactor.md.
+# factory will consume.
 
 [tool.chumicro.config]
 required_keys = []

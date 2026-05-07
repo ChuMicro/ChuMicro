@@ -4,7 +4,6 @@
 
 `chumicro-http-server` is a non-blocking HTTP/1.1 server that runs on CircuitPython, MicroPython, and CPython.  Each connection is a state machine the server advances one chunk per tick — an LED keeps blinking, a control loop keeps running, sensor reads keep happening, all while requests are being served.  Built on `chumicro-sockets` (TCP listener + accepted client sockets) and `chumicro-timing` (ticks) only; no `async`, no threads, no `chumicro-requests` dependency on the device.
 
-The shape was scoped in [Decision 0041](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0041-chumicro-http-server.md) and shipped end-to-end across slices 7a–7d.
 
 ## Getting started
 
@@ -158,7 +157,7 @@ Works identically on CPython, MicroPython, and CircuitPython.  The `chumicro-soc
 
 ## v1 non-goals
 
-WebSockets, sessions / cookies / auth helpers, multipart upload, sub-app mounting, async handlers.  See [Decision 0041](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0041-chumicro-http-server.md) §8.
+WebSockets, sessions / cookies / auth helpers, multipart upload, sub-app mounting, async handlers.  Out of scope for the v1 surface; reopen if a real consumer needs them.
 
 ## What's new
 

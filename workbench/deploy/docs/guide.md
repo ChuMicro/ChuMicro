@@ -51,7 +51,7 @@ chumicro-deploy deploy --devices-file devices.yml --device back-porch \
     --directory ./my_app --entrypoint /code.py
 ```
 
-When `defaults:` in the file pins a single runtime, omitting `--device` lets the loader pick that default. The schema is documented in [Decision 0027](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0027-device-testing-infrastructure.md) and lives at [`chumicro_deploy.config.default.load_devices_yml`](api.md#devicesyml-schema-and-loader-registry).
+When `defaults:` in the file pins a single runtime, omitting `--device` lets the loader pick that default. The schema lives at [`chumicro_deploy.config.default.load_devices_yml`](api.md#devicesyml-schema-and-loader-registry).
 
 ### Programmatic devices.yml
 
@@ -427,6 +427,3 @@ If your entrypoint is an infinite loop (no `return`), `deploy_files` times out a
 
 - [API Reference](api.md)
 - [Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy)
-- [Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md) — why this package lives in `workbench/` rather than `libraries/`.
-- [Decision 0027](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0027-device-testing-infrastructure.md) — transport protocol origin.
-- [Decision 0028](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0028-deploy-modes.md) — deploy-mode semantics per runtime.

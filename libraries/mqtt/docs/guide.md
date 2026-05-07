@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-mqtt` is a non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks); no `async`, no threads, no blocking on network I/O.  The runner pattern from [Decision 0014](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0014-tick-runner-shape.md) drives every protocol step:
+`chumicro-mqtt` is a non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks); no `async`, no threads, no blocking on network I/O.  The tick-based runner pattern (`check(now_ms)` / `handle(now_ms)`) drives every protocol step:
 
 * `client.check(now_ms) -> bool` — does the client have work to do this tick?
 * `client.handle(now_ms)` — do one tick of work (one recv, one parse, one queued send, one deadline check).

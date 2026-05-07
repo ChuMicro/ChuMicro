@@ -9,8 +9,7 @@ Current coverage: inbound frame parsing.  Outbound coverage
 (``send_text`` / ``send_binary`` / ``send_ping`` + pong round-trip)
 deferred — those paths hit ``BlockingIOError`` inside
 :func:`chumicro_websockets._session._is_eagain`, which is a CPython
-builtin not available on MicroPython.  Tracking + fix queued in
-``plans/next-up.md``.
+builtin not available on MicroPython.
 """
 
 import gc
@@ -34,8 +33,7 @@ from chumicro_websockets.testing import FakeConnection, TickClock
 # §1.3), so the WebSocketClient handshake itself can't run on that
 # runtime regardless of what this test does.  The fragmentation tests
 # below detect this at module load and become no-ops on runtimes
-# where the library's handshake can't complete.  Tracking +
-# pure-Python SHA-1 fallback queued in ``plans/next-up.md``.
+# where the library's handshake can't complete.
 _HAS_SHA1 = hasattr(hashlib, "sha1") or hasattr(hashlib, "new")
 
 # ---------------------------------------------------------------------------

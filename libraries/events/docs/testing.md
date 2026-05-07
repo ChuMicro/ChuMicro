@@ -68,7 +68,7 @@ Libraries that depend on `chumicro-events` can import the fakes directly:
 from chumicro_events.testing import RecordingSubscriber
 ```
 
-This follows the project convention from [Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md): libraries that expose injectable services ship their own test fakes.
+Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
 
 ## API Reference
 

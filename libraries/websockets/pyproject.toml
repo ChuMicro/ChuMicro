@@ -63,7 +63,7 @@ requires_flash = true
 # constructor args.  This block describes the forward-looking
 # config-aware surface that ``.from_config`` factories will consume —
 # client connect target + server bind target + per-side message-size
-# caps.  See plans/workstreams/library-config-aware-refactor.md.
+# caps.
 
 [tool.chumicro.config]
 required_keys = []

@@ -2,7 +2,7 @@
 
 Tiny mutable key-value store for persisted runtime state — counters, timestamps, tokens, retry budgets — across CircuitPython, MicroPython, and CPython.
 
-Backends auto-select per runtime (CP NVM with CRC framing, MP `esp32.NVS`, MP LittleFS, in-memory).  **Not** a config system — see [Decision 0030](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0030-config-and-state.md) and [Decision 0034](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0034-kvstore-api-and-backends.md) for the split rationale.
+Backends auto-select per runtime (CP NVM with CRC framing, MP `esp32.NVS`, MP LittleFS, in-memory).  **Not** a config system — config is read-only at deploy time and lives in `chumicro-config`; KVStore is read-write at runtime.
 
 ## Quick example
 

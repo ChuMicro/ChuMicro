@@ -1,9 +1,7 @@
 """Hardware-gated tests for ``ReplSession`` against connected boards.
 
-Phase 2 acceptance from ``plans/workstreams/project-workspace.md``:
-
-    [ ] Functional test: open REPL to at least one CP and one MP
-        board, exchange Ctrl-C / Ctrl-D, verify clean exit.
+Open a REPL to at least one CP and one MP board, exchange Ctrl-C /
+Ctrl-D, verify clean exit.
 
 These tests open a real raw-REPL session over pyserial and exercise
 the public API — ``exec``, ``call``, ``read_until`` — on each

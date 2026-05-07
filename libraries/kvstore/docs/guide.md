@@ -4,7 +4,7 @@
 
 `chumicro-kvstore` is a tiny mutable key-value store for runtime state that needs to survive a reboot — boot counters, last-seen timestamps, retry budgets, refreshed access tokens.  It exposes a familiar `dict`-shaped API (`store[key] = value`, `del store[key]`, `"key" in store`, iteration) plus three explicit lifecycle methods: `commit`, `commit_if_changed`, `reload`.
 
-It is **not** a config system.  Config is read-only at deploy time, structured by section, and lives at `/runtime_config.msgpack` ([`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config)).  KVStore is read-write at runtime, flat, and lives in the right per-runtime persistent substrate ([Decision 0030](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0030-config-and-state.md), [Decision 0034](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0034-kvstore-api-and-backends.md)).
+It is **not** a config system.  Config is read-only at deploy time, structured by section, and lives at `/runtime_config.msgpack` ([`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config)).  KVStore is read-write at runtime, flat, and lives in the right per-runtime persistent substrate (CP NVM with CRC framing, MP NVS, MP LittleFS, or in-memory).
 
 ## Getting started
 
@@ -149,7 +149,7 @@ store.commit_if_changed()
 
 ## What's new
 
-- **0.0.1**: Initial library — `KVStore` with `auto` / `nvm` / `nvs` / `littlefs` / `memory` backends per [Decision 0034](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0034-kvstore-api-and-backends.md).
+- **0.0.1**: Initial library — `KVStore` with `auto` / `nvm` / `nvs` / `littlefs` / `memory` backends.
 
 ---
 
