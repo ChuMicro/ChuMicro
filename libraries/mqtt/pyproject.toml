@@ -13,6 +13,7 @@ authors = [
     { name = "ChuMicro" },
 ]
 dependencies = [
+    "chumicro-config",
     "chumicro-sockets",
     "chumicro-timing",
 ]
@@ -61,18 +62,22 @@ requires_flash = true
 # validate the merged user config and to surface the documented
 # vocabulary via tooling.
 #
-# All keys are optional today — MQTTClient takes its config via
-# constructor args.  This block describes the forward-looking
-# config-aware surface (broker host/port + identity + auth) that the
-# library will consume once an ``MQTTClient.from_config`` factory
-# lands.  Until then, the manifest is documentation + future-drift
-# anchor.  See plans/workstreams/library-config-aware-refactor.md.
+# MQTTClient.from_config requires the broker host/port — without
+# them the default socket factory has nowhere to dial.  Identity +
+# auth keys remain optional (sensible defaults; auth omitted means
+# anonymous CONNECT).
+#
+# Callers passing a pre-built ``socket=`` or custom ``socket_factory=``
+# bypass the default factory and don't need ``mqtt.broker.*`` set —
+# but those callers are owning the connection themselves, not asking
+# the library to dial.
 
 [tool.chumicro.config]
-required_keys = []
-optional_keys = [
+required_keys = [
     "mqtt.broker.host",
     "mqtt.broker.port",
+]
+optional_keys = [
     "mqtt.client_id",
     "mqtt.keep_alive_seconds",
     "mqtt.username",

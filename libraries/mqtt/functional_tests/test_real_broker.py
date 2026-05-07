@@ -1,15 +1,15 @@
 """Real-network acceptance for chumicro-mqtt.
 
-End-to-end: bring wifi up on the device, connect to a public MQTT
-broker, publish + subscribe to a unique topic, verify the inbound
-PUBLISH round-trips back via QoS 1.
+End-to-end: bring wifi up on the device, connect to a configured
+MQTT broker, publish + subscribe to a unique topic, verify the
+inbound PUBLISH round-trips back via QoS 1.
 
 Skipped at collection time when no credentials are configured —
 the conftest's ``set_runtime_config(..., required_keys=...)`` declares
 ``wifi.ssid`` / ``wifi.password`` / ``mqtt.broker.host`` /
 ``mqtt.broker.port`` as required, so the host plugin applies
 ``pytest.mark.skip`` with a clear message before deploy.  Credentials +
-the dynamic broker host/port ship from the host conftest as
+the broker host/port ship from the host conftest as
 ``/runtime_config.msgpack`` and are read here via
 ``chumicro_config.load_runtime_config()``.
 
@@ -20,11 +20,12 @@ in flight and waiting for PUBACK.
 Broker
 ======
 
-``test.mosquitto.org:1883`` (plain MQTT, no auth) — the widely-used
-public test broker that's been online since 2008.  No creds, no
-TLS, intended for exactly this kind of acceptance test.  Topics
-are namespaced ``chumicro-test/<unique>/...`` so we don't collide
-with anyone else's experiments.
+The conftest spawns a host-side Mosquitto broker on the LAN when
+``mosquitto`` is on ``PATH``; otherwise the test uses whatever
+``mqtt.broker.host`` / ``mqtt.broker.port`` the user has set in
+``secrets.toml`` / per-library ``config.toml``.  Topics are
+namespaced ``chumicro-test/<unique>/...`` so we don't collide with
+anyone else's experiments.
 
 If the broker is unreachable from the device's network, the test
 fails with a clear timeout — that's a real network issue, not a

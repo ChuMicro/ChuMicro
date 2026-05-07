@@ -129,9 +129,9 @@ Use `ram` for day-to-day functional-test iteration. Use `flash` when a board can
 
 ## 3. Configure `secrets.toml`
 
-Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the mono-repo's `_workspace_template/secrets.toml` (carrying `mqtt.broker.host = test.mosquitto.org` + a `wifi.ssid` placeholder); the workbench package `chumicro-workspace` owns the fallback canonical starter for repos that don't ship their own `_workspace_template/` override.
+Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the mono-repo's `_workspace_template/secrets.toml` (carrying placeholders for `wifi.ssid` and `mqtt.broker.host`); the workbench package `chumicro-workspace` owns the fallback canonical starter for repos that don't ship their own `_workspace_template/` override.
 
-Edit `secrets.toml` once per clone — fill in your wifi credentials + any broker auth:
+Edit `secrets.toml` once per clone — fill in your wifi credentials + your broker host (the mqtt library refuses to silently dial a third-party broker, so this is required for mqtt-touching tests):
 
 ```toml
 [wifi]
@@ -139,7 +139,7 @@ ssid = "my-actual-network"
 password = "my-real-wifi-password"
 
 [mqtt.broker]
-host = "test.mosquitto.org"
+host = "10.0.0.5"  # a broker you control — a LAN Mosquitto, a private cloud broker, etc.
 port = 1883
 # [mqtt.broker.auth]
 # username = "my-user"

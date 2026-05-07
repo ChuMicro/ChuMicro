@@ -28,8 +28,8 @@ canonical ``workspace.yml`` starter (Decision 0057), shared with
 the workspace-template repo so both materialise from one source.
 
 The mono-repo's ``_workspace_template/workspace.yml`` carries this
-repo's specific opinions (``mqtt.broker.host = test.mosquitto.org``,
-``wifi.ssid`` placeholder); ``generate_config_files`` runs
+repo's specific opinions (placeholder ``wifi.ssid`` and
+``mqtt.broker.host``); ``generate_config_files`` runs
 ``materialize_templates`` first so that override wins, then falls
 through to the workbench starter for any file the override skipped.
 """
@@ -133,8 +133,8 @@ def test_workspace_template_override_wins_over_workbench_starter(
 ) -> None:
     """``_workspace_template/workspace.yml`` overrides the workbench starter.
 
-    The mono-repo carries its own opinions (``mqtt.broker.host =
-    test.mosquitto.org``, ``wifi.ssid`` placeholder).  Setup runs
+    The mono-repo carries its own opinions (placeholder
+    ``wifi.ssid`` and ``mqtt.broker.host``).  Setup runs
     ``materialize_templates`` first so the repo's override lands at
     the workspace root before the workbench-starter fallback gets a
     chance to fire.

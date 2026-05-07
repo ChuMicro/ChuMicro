@@ -5,22 +5,23 @@ Two responsibilities:
 1. Register the merged runtime-config dict (secrets.toml +
    per-library overrides) with pytest-device so it stages at
    ``/runtime_config.msgpack`` on the device — on-device tests read
-   wifi creds + the dynamic ``mqtt.broker`` host/port from there.
+   wifi creds + the ``mqtt.broker`` host/port from there.
 2. Spawn a host-side Mosquitto broker on the LAN interface so
-   ``test_real_broker.py`` has a counterparty.  ``test.mosquitto.org``
-   is unreachable from the Things Cat network and the public broker
-   isn't reliable enough for a CI-shaped functional test anyway.
+   ``test_real_broker.py`` has a counterparty.  We bring up our own
+   broker because the LAN-bound listener gives us a deterministic,
+   CI-shaped fixture — no flakiness from the open internet.
 
 The broker fixture mirrors the ``test_mosquitto_integration.py``
 ``mosquitto_broker`` fixture from the host-side test suite — same
 macOS ``setrlimit(RLIMIT_NOFILE)`` workaround for Mosquitto 2.0 on
 Apple Silicon.
 
-Skips the broker fixture (and so the real-broker test) silently
-when ``mosquitto`` is not on ``PATH`` or the LAN IP can't be
-detected; the workspace.yml-default broker host/port (typically
-``test.mosquitto.org:1883``) flow through unchanged for tests that
-can reach the public broker.
+If ``mosquitto`` is not on ``PATH`` or the LAN IP can't be detected,
+the broker fixture stays down and the test runs against whatever
+``mqtt.broker.host`` / ``mqtt.broker.port`` the user has put in
+``secrets.toml`` (or the per-library ``config.toml`` override) —
+``MQTTClient.from_config`` raises ``MissingConfigKey`` if neither
+source supplies them.
 """
 
 from __future__ import annotations

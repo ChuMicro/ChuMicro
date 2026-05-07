@@ -1056,24 +1056,19 @@ class TestFromConfig:
 
         assert captured == {"host": "10.0.0.42", "port": 8883, "radio": "fake-radio"}
 
-    def test_default_factory_falls_back_to_public_broker(self) -> None:
-        """No broker host/port in config → default factory uses
-        ``test.mosquitto.org:1883`` (the documented public test
-        broker)."""
-        captured: dict = {}
+    def test_default_factory_requires_broker_host(self) -> None:
+        """No broker host in config → ``from_config`` refuses to
+        construct.  The library does not silently dial a third-party
+        broker on the user's behalf."""
+        from chumicro_config import MissingConfigKey  # noqa: PLC0415
 
-        def fake_tcp_client_socket(host, port, *, radio=None):
-            captured["host"] = host
-            captured["port"] = port
-            return FakeSocket()
-
-        import chumicro_sockets  # noqa: PLC0415
-
-        original = chumicro_sockets.tcp_client_socket
-        chumicro_sockets.tcp_client_socket = fake_tcp_client_socket
-        try:
+        with raises(MissingConfigKey):
             MQTTClient.from_config({})
-        finally:
-            chumicro_sockets.tcp_client_socket = original
 
-        assert captured == {"host": "test.mosquitto.org", "port": 1883}
+    def test_default_factory_requires_broker_port(self) -> None:
+        """Host present but port missing still raises — both keys are
+        required by the auto-built socket factory."""
+        from chumicro_config import MissingConfigKey  # noqa: PLC0415
+
+        with raises(MissingConfigKey):
+            MQTTClient.from_config({"mqtt.broker.host": "10.0.0.42"})

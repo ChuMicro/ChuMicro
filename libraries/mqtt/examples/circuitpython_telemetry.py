@@ -28,9 +28,13 @@ deploy pipeline) via the flat-key API:
   ``telemetry.sensor_id``.
 
 When ``runtime_config.msgpack`` isn't present (raw single-file
-deploys), every value falls back to a hardcoded constant below
-— the public ``test.mosquitto.org:1883`` broker, a placeholder
-SSID, etc.  Edit the constants before deploying that way.
+deploys), wifi creds fall back to the placeholder constants below
+— edit them first.  The MQTT broker has no fallback: set
+``BROKER_HOST`` and ``BROKER_PORT`` (raw deploy) or
+``mqtt.broker.host`` / ``mqtt.broker.port`` in your
+``runtime_config.msgpack`` (workspace deploy) before running.  The
+library refuses to silently dial a third-party broker on your
+behalf.
 
 Deploying
 =========
@@ -49,7 +53,7 @@ Example output::
 
     ADAPTER: cp
     WIFI_OK ip=10.0.0.42
-    MQTT_CONNECTED broker=test.mosquitto.org:1883
+    MQTT_CONNECTED broker=10.0.0.5:1883
     Subscribed to chumicro-demo/cmd
     [tx 1] {"sensor": "demo-temp", "value": 21.4} led_ticks=27
     [tx 2] {"sensor": "demo-temp", "value": 21.6} led_ticks=24
@@ -68,6 +72,8 @@ from chumicro_wifi import WifiConfig, WifiService, WifiState
 # Fallback constants — used only when runtime_config.msgpack is absent.
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+BROKER_HOST = ""  # required for raw single-file deploys; e.g. "10.0.0.5"
+BROKER_PORT = 1883
 TOPIC = "chumicro-demo/telemetry"
 COMMAND_TOPIC = "chumicro-demo/cmd"
 SENSOR_ID = "demo-temp"
@@ -142,10 +148,23 @@ else:
     command_topic = COMMAND_TOPIC
     sensor_id = SENSOR_ID
 
-# Build the client.  When config is None, from_config receives an empty
-# RuntimeConfig and the library defaults apply (test.mosquitto.org:1883,
-# auto-derived client_id, 60 s keepalive).
-mqtt = MQTTClient.from_config(config or RuntimeConfig({}), radio=wifi_radio)
+# Build the client.  Resolve broker host/port from config first, then
+# the example constants — MQTTClient.from_config refuses to construct
+# without them, so dial-target is loud, not implicit.
+mqtt_config = config if config is not None else RuntimeConfig({})
+if "mqtt.broker.host" not in mqtt_config:
+    if not BROKER_HOST:
+        print("STATUS: FAIL_MQTT_BROKER_NOT_CONFIGURED")
+        print("ERROR: set mqtt.broker.host in runtime_config.msgpack "
+              "or BROKER_HOST in this file before deploying.")
+        raise SystemExit(1)
+    mqtt_config = RuntimeConfig({
+        **mqtt_config.to_dict(),
+        "mqtt.broker.host": BROKER_HOST,
+        "mqtt.broker.port": BROKER_PORT,
+    })
+
+mqtt = MQTTClient.from_config(mqtt_config, radio=wifi_radio)
 
 
 def on_message(topic, payload):
@@ -175,13 +194,9 @@ if not _drive_mqtt_until(mqtt.is_connected, 15_000):
     raise SystemExit(1)
 
 # Resolve broker host/port for the status print (the client already
-# has the connected socket; we re-read config for display).
-if config is not None:
-    broker_host = config.get("mqtt.broker.host", "test.mosquitto.org")
-    broker_port = config.get("mqtt.broker.port", 1883)
-else:
-    broker_host = "test.mosquitto.org"
-    broker_port = 1883
+# has the connected socket; we re-read the resolved config for display).
+broker_host = mqtt_config["mqtt.broker.host"]
+broker_port = mqtt_config["mqtt.broker.port"]
 
 print(f"MQTT_CONNECTED broker={broker_host}:{broker_port}")
 
