@@ -117,7 +117,7 @@ When proposing a workstream candidate (merge / split / promote / cross-cutting r
 
 ## Process
 
-1. **Read `plans/roadmap.md` and `plans/next-up.md`** first.  The audit's purpose is to find work that *isn't* already tracked; knowing what's tracked saves you from re-finding it.
+1. **Read `plans/next-up.md` (including its `## Done (recent)` log) and skim `plans/workstreams/`** first.  The audit's purpose is to find work that *isn't* already tracked; knowing what's tracked saves you from re-finding it.
 2. **Walk every library's README + `pyproject.toml`.**  Don't read the source yet — at workspace scope, the source is too much information.  README + pyproject is the contract.
 3. **Build the dependency graph.**  Either via `support/docs/dependency-graph.svg` (if up-to-date) or by grep through `pyproject.toml` files + `import` statements.  Look for cycles, sideways deps, libraries with too many or too few dependencies.
 4. **Run the audit dimensions** against the library inventory + dep graph.  Most findings will fall under "library shape" or "cross-library pattern."

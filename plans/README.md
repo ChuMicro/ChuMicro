@@ -15,7 +15,6 @@ Project knowledge base — decisions, roadmap, and active work.
 | `patterns.md` | Reusable implementation patterns with code examples | When writing a new library or implementing a common pattern |
 | `learnings.md` | Non-obvious facts about the world (hardware quirks, tool gotchas, classifier ordering rules). Compressed insight, not policy. | When touching a surface that has bitten before — hardware deploys, classifiers, IDE wiring |
 | `open-questions.md` | Unresolved questions that need thought but aren't blocking | When exploring design tradeoffs or looking for things to investigate |
-| `roadmap.md` | Milestone status and trajectory | When you need the big picture of project phases |
 | `workstreams/` | Active bodies of work (only in-progress workstreams live at the top level; closed / shipped ones move to `workstreams/archive/`). Pair a `<name>.md` (the plan) with a `<name>-research.md` sibling (source-pinned facts, file:line references, URL list, alternatives surveyed) when research material would otherwise be re-derived each session. | When working on a tracked initiative |
 | `workstreams/archive/` | Historical record of closed / shipped workstreams. Read-only — preserved so future contributors can trace why a decision was made or how a phase rolled out. Cross-references from active docs and ADRs point here when the relevant work has shipped. | When tracing the history of a shipped feature |
 
@@ -53,7 +52,7 @@ Use these states consistently in planning documents:
 | **Reusable implementation patterns** (code shape, mpremote internals, subprocess-binary resolution) | `plans/patterns.md` |
 | **Facts about the world** — hardware quirks, tool gotchas, classifier ordering, runtime-specific behaviors that bit us | `plans/learnings.md` |
 | **What was tried before** — rejected approaches with `git log <range>`; superseded designs noted inline in the relevant ADR | commit messages + `plans/decisions/` (ADR bodies edited in place when a decision changes) |
-| **What's next / what's active** — queue, milestones, in-flight workstreams | `plans/next-up.md`, `plans/roadmap.md`, `plans/workstreams/` |
+| **What's next / what's active** — queue + in-flight workstreams | `plans/next-up.md`, `plans/workstreams/` |
 | **What's unresolved** — open questions that aren't blocking | `plans/open-questions.md` |
 | **How to contribute as a human** — setup, workflow, per-IDE setup, PR process, release process, new library, new workbench package | [`docs/contributing/`](../docs/contributing/) |
 | **How to contribute as an agent** — workspace rules, skills table, context recovery, non-negotiable rules | [`AGENTS.md`](../AGENTS.md) |
