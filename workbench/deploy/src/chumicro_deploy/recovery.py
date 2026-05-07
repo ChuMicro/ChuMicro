@@ -20,10 +20,9 @@ This module provides:
 
 Keeping this as a sibling instead of baking it into
 :class:`Deployer` preserves the deterministic programmatic API
-that scripts like ``device_testing.py`` depend on.  Interactive
-use (the ``chumicro-deploy`` CLI, the workspace ``run.py deploy``
-shim, direct human invocation) opts in by instantiating
-:class:`InteractiveDeployer` instead.
+that programmatic callers depend on.  Interactive use (the
+``chumicro-deploy`` CLI, direct human invocation) opts in by
+instantiating :class:`InteractiveDeployer` instead.
 """
 
 from __future__ import annotations
@@ -319,7 +318,7 @@ _LIKELY_CHUMICRO_KEYWORDS = (
     "chumicro-deploy",
     "chumicro_workspace",
     "mpremote",
-    "run.py deploy",
+    "run.py deploy",  # noqa: CHU006 — workspace shim command name is data here, not prose
 )
 
 

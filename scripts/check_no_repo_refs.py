@@ -15,8 +15,13 @@ Flagged patterns:
   tree; not present after ``pip install`` or a CircuitPython-bundle
   install.
 * ``scripts/run.py`` — the mono-repo's developer command runner; not
-  the same as the workspace-template's own ``run.py`` shim, which is
-  fine to mention from inside ``chumicro_workspace`` source.
+  on consumer machines.
+* Bare ``run.py`` (without the ``scripts/`` prefix) — the
+  workspace-template's command-runner shim; only the
+  ``chumicro_workspace`` package legitimately knows about it (it's
+  what generates the shim).  Other packages should name the
+  installable CLI (``chumicro-deploy``, ``chumicro-workspace``, etc.)
+  instead.
 * ``chumicro mono-repo`` / ``chumicro monorepo`` — frames the package
   as a derivative of an upstream repo the consumer doesn't have.
 
@@ -34,32 +39,62 @@ from __future__ import annotations
 
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from repo_layout import ROOT
 
 _RULE_CODE = "CHU006"
 
-_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+
+def _everywhere(_filepath: Path) -> bool:
+    """Default scope predicate: pattern fires for every file we scan."""
+    return True
+
+
+def _outside_chumicro_workspace(filepath: Path) -> bool:
+    """Pattern fires everywhere except inside ``workbench/workspace/src/``.
+
+    The ``chumicro_workspace`` package owns the workspace-template's
+    ``run.py`` shim — generating it, parsing it, and teaching users
+    about it is its job.  Bare ``run.py`` mentions there are correct.
+    Anywhere else, ``run.py`` is the workspace shim's command name
+    leaking into a package that shouldn't know about it.
+    """
+    return "workbench/workspace/src" not in filepath.as_posix()
+
+
+_PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
     (
         re.compile(r"\bDecision\s*0\d{3}\b"),
         "Decision NNNN ref — ADRs live in plans/decisions/, not shipped to consumers",
+        _everywhere,
     ),
     (
         re.compile(r"\bplans/[A-Za-z0-9_./-]*\.md\b"),
         "plans/...md path — mono-repo planning tree, not on consumer machines",
+        _everywhere,
     ),
     (
         re.compile(r"\bplans/(?:decisions|workstreams|next-up|patterns|learnings)\b"),
         "plans/... path — mono-repo planning tree, not on consumer machines",
+        _everywhere,
     ),
     (
         re.compile(r"\bscripts/run\.py\b"),
         "scripts/run.py ref — mono-repo command runner, not on consumer machines",
+        _everywhere,
+    ),
+    (
+        re.compile(r"(?<!scripts/)\brun\.py\b"),
+        "bare run.py ref — name the installable CLI (chumicro-deploy, etc.) "
+        "instead of the workspace shim",
+        _outside_chumicro_workspace,
     ),
     (
         re.compile(r"\bchumicro\s+mono[\s-]?repo\b", re.IGNORECASE),
         "'chumicro mono-repo' framing — consumer reads this without that context",
+        _everywhere,
     ),
 )
 
@@ -127,7 +162,9 @@ def check_file(filepath: Path) -> list[str]:
     for line_number, line in enumerate(text.splitlines(), start=1):
         if _is_suppressed(line):
             continue
-        for pattern, message in _PATTERNS:
+        for pattern, message, applies_to in _PATTERNS:
+            if not applies_to(filepath):
+                continue
             if pattern.search(line):
                 errors.append(f"{relative}:{line_number}: {_RULE_CODE} {message}")
                 break

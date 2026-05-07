@@ -9,6 +9,7 @@ from check_no_repo_refs import (
     _PATTERNS,
     _RULE_CODE,
     _is_suppressed,
+    _outside_chumicro_workspace,
     check_file,
     check_paths,
 )
@@ -101,6 +102,24 @@ class TestPatterns:
     @pytest.mark.parametrize(
         "text",
         [
+            "via your workspace's run.py",
+            "Run python run.py deploy",
+            "as `run.py setup` does",
+        ],
+    )
+    def test_bare_run_py_pattern_hits(self, text: str) -> None:
+        """The bare-run.py pattern catches workspace-shim mentions outside chumicro_workspace."""
+        bare_run_py_re = _PATTERNS[4][0]
+        assert bare_run_py_re.search(text) is not None
+
+    def test_bare_run_py_pattern_skips_scripts_prefix(self) -> None:
+        """``scripts/run.py`` is not double-flagged by the bare-run.py rule."""
+        bare_run_py_re = _PATTERNS[4][0]
+        assert bare_run_py_re.search("python scripts/run.py setup") is None
+
+    @pytest.mark.parametrize(
+        "text",
+        [
             "the chumicro mono-repo",
             "Inside the chumicro Mono-Repo",
             "the chumicro monorepo",
@@ -108,8 +127,32 @@ class TestPatterns:
     )
     def test_mono_repo_pattern(self, text: str) -> None:
         """The mono-repo phrasing matches case-insensitively, with or without hyphen."""
-        mono_repo_re = _PATTERNS[4][0]
+        mono_repo_re = _PATTERNS[5][0]
         assert mono_repo_re.search(text) is not None
+
+
+class TestOutsideChumicroWorkspace:
+    """The bare-run.py predicate exempts the chumicro_workspace package."""
+
+    def test_inside_workspace_src_is_exempt(self) -> None:
+        """Files inside ``workbench/workspace/src/`` are exempt from bare-run.py."""
+        path = Path("workbench/workspace/src/chumicro_workspace/cli.py")
+        assert _outside_chumicro_workspace(path) is False
+
+    def test_other_workbench_packages_not_exempt(self) -> None:
+        """Other workbench packages still get the bare-run.py rule applied."""
+        path = Path("workbench/deploy/src/chumicro_deploy/cli.py")
+        assert _outside_chumicro_workspace(path) is True
+
+    def test_libraries_not_exempt(self) -> None:
+        """Library packages still get the bare-run.py rule applied."""
+        path = Path("libraries/wifi/src/chumicro_wifi/__init__.py")
+        assert _outside_chumicro_workspace(path) is True
+
+    def test_absolute_path_inside_workspace_is_exempt(self) -> None:
+        """Absolute paths into workspace src/ are also exempt."""
+        path = Path("/Users/foo/chumicro/workbench/workspace/src/chumicro_workspace/cli.py")
+        assert _outside_chumicro_workspace(path) is False
 
 
 class TestCheckFile:
@@ -166,6 +209,22 @@ class TestCheckFile:
         )
         errors = check_file(target)
         assert len(errors) == 1
+
+    def test_bare_run_py_outside_workspace_flagged(self, tmp_path: Path) -> None:
+        """A bare ``run.py`` reference outside chumicro_workspace is flagged."""
+        target = tmp_path / "src.py"
+        target.write_text("# tell users to invoke via run.py setup\n")
+        errors = check_file(target)
+        assert len(errors) == 1
+        assert "bare run.py" in errors[0]
+
+    def test_bare_run_py_inside_workspace_exempt(self, tmp_path: Path) -> None:
+        """A bare ``run.py`` reference inside chumicro_workspace src/ is exempt."""
+        workspace_dir = tmp_path / "workbench" / "workspace" / "src" / "chumicro_workspace"
+        workspace_dir.mkdir(parents=True)
+        target = workspace_dir / "cli.py"
+        target.write_text("# this package owns the run.py shim and writes it\n")
+        assert check_file(target) == []
 
 
 class TestCheckPaths:
