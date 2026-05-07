@@ -42,13 +42,14 @@ def _merged_runtime_config_with_creds() -> dict | None:
     """
     if not _SECRETS_TOML.is_file():
         return None
-    try:
-        merged = compose_runtime_config(
-            secrets_toml=_SECRETS_TOML,
-            project_config=_LIBRARY_CONFIG,
-        )
-    except Exception:  # noqa: BLE001 — silent skip on any config error
-        return None
+    # Any exception from ``compose_runtime_config`` propagates — a
+    # malformed ``secrets.toml`` is a real bug to surface, not the
+    # same shape as a fresh-clone "user hasn't filled it in yet."
+    # The missing-file path above is the only silent-skip case.
+    merged = compose_runtime_config(
+        secrets_toml=_SECRETS_TOML,
+        project_config=_LIBRARY_CONFIG,
+    )
     ssid = merged.get("wifi.ssid")
     password = merged.get("wifi.password")
     if not isinstance(ssid, str) or not isinstance(password, str):
