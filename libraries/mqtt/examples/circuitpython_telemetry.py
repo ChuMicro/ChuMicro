@@ -11,36 +11,39 @@ while a simple LED-style counter keeps incrementing — proof that
 the in-flight publish never block-calls the loop while waiting
 for PUBACK.
 
-WiFi + broker config
-====================
+Configuration
+=============
 
-Reads from ``runtime_config.msgpack`` (baked from workspace.yml
-by ``chumicro-workspace``):
+Reads the deployed ``runtime_config.msgpack`` (baked from
+``secrets.toml`` + per-example ``examples/config.toml`` by the
+deploy pipeline) via the flat-key API:
 
-* ``[wifi]`` — SSID + password
-* ``[telemetry]`` — broker host + port + topic + sensor_id +
-  client_id
+* WiFi: ``WifiConfig.from_config(config)`` reads ``wifi.ssid`` /
+  ``wifi.password`` plus optional tunables.
+* MQTT: ``MQTTClient.from_config(config, radio=…)`` reads
+  ``mqtt.broker.host`` / ``mqtt.broker.port`` / ``mqtt.client_id``
+  / ``mqtt.keep_alive_seconds`` plus optional auth.
+* App-level (this example's own concerns, not the library's):
+  ``telemetry.topic`` / ``telemetry.command_topic`` /
+  ``telemetry.sensor_id``.
 
-Falls back to the constants below for raw single-file deploys.
-
-The default broker is ``test.mosquitto.org:1883`` — the public
-test broker that's been online since 2008.  No auth, no TLS.
-Don't ship secrets through it; for production workloads point at
-your own broker via ``runtime_config.msgpack``.
+When ``runtime_config.msgpack`` isn't present (raw single-file
+deploys), every value falls back to a hardcoded constant below
+— the public ``test.mosquitto.org:1883`` broker, a placeholder
+SSID, etc.  Edit the constants before deploying that way.
 
 Deploying
 =========
 
-Recommended (workspace-managed)::
+Deploy from a chumicro fork or clone::
 
-    chumicro-workspace deploy telemetry
+    python scripts/run.py deploy-example mqtt circuitpython_telemetry --device <id>
 
-Raw (single-file copy)::
-
-    1. Edit WIFI_SSID, WIFI_PASSWORD, BROKER_HOST below.
-    2. Copy this file as ``/code.py`` (CP) or ``/main.py`` (MP).
-    3. Ensure chumicro-{wifi,sockets,mqtt,config,timing,runner,
-       msgpack} are present under ``/lib/``.
+Or from a workspace template repo (for user-authored projects
+that follow the same example shape).  Either path composes
+``secrets.toml`` + ``examples/config.toml`` into the staged
+``runtime_config.msgpack`` and validates against the manifest
+union before deploying.
 
 Example output::
 
@@ -58,62 +61,41 @@ import math
 import sys
 import time
 
+from chumicro_config import RuntimeConfig
 from chumicro_mqtt import MQTTClient
-from chumicro_sockets import tcp_client_socket
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-# Fallback constants — used only when runtime_config.msgpack absent.
+# Fallback constants — used only when runtime_config.msgpack is absent.
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
-BROKER_HOST = "test.mosquitto.org"
-BROKER_PORT = 1883
 TOPIC = "chumicro-demo/telemetry"
 COMMAND_TOPIC = "chumicro-demo/cmd"
 SENSOR_ID = "demo-temp"
-CLIENT_ID = "chumicro-telemetry-example"
 PUBLISH_INTERVAL_S = 5
-KEEPALIVE_S = 30
 
 
-def _load_runtime_settings():
-    """Return resolved wifi + telemetry settings."""
-    wifi_config = None
-    settings = {
-        "broker_host": BROKER_HOST,
-        "broker_port": BROKER_PORT,
-        "topic": TOPIC,
-        "command_topic": COMMAND_TOPIC,
-        "sensor_id": SENSOR_ID,
-        "client_id": CLIENT_ID,
-    }
+def _load_runtime_config():
+    """Return the deployed RuntimeConfig, or ``None`` when absent."""
     try:
         from chumicro_config import load_runtime_config
-
-        config = load_runtime_config()
-        if config:
-            wifi_section = config.get("wifi")
-            if wifi_section:
-                wifi_config = WifiConfig.from_dict(wifi_section)
-            telemetry_section = config.get("telemetry", {})
-            for key in settings:
-                if key in telemetry_section:
-                    settings[key] = telemetry_section[key]
+        return load_runtime_config()
     except (ImportError, OSError):
-        pass
-    if wifi_config is None:
-        wifi_config = WifiConfig(
-            ssid=WIFI_SSID,
-            password=WIFI_PASSWORD,
-            connect_timeout_ms=15_000,
-        )
-    return wifi_config, settings
+        return None
 
 
 # ---------------------------------------------------------------------------
 # Wifi up.
 # ---------------------------------------------------------------------------
 
-wifi_config, settings = _load_runtime_settings()
+config = _load_runtime_config()
+wifi_config = WifiConfig.try_from_config(config) if config is not None else None
+if wifi_config is None:
+    wifi_config = WifiConfig(
+        ssid=WIFI_SSID,
+        password=WIFI_PASSWORD,
+        connect_timeout_ms=15_000,
+    )
+
 service = WifiService(wifi_config)
 
 
@@ -150,14 +132,20 @@ if sys.implementation.name == "circuitpython":
 # MQTT connect + subscribe.
 # ---------------------------------------------------------------------------
 
-sock = tcp_client_socket(
-    settings["broker_host"], settings["broker_port"], radio=wifi_radio,
-)
-mqtt = MQTTClient(
-    sock,
-    client_id=settings["client_id"],
-    keepalive_secs=KEEPALIVE_S,
-)
+# App-level settings (this example's concerns, not in mqtt's manifest).
+if config is not None:
+    topic = config.get("telemetry.topic", TOPIC)
+    command_topic = config.get("telemetry.command_topic", COMMAND_TOPIC)
+    sensor_id = config.get("telemetry.sensor_id", SENSOR_ID)
+else:
+    topic = TOPIC
+    command_topic = COMMAND_TOPIC
+    sensor_id = SENSOR_ID
+
+# Build the client.  When config is None, from_config receives an empty
+# RuntimeConfig and the library defaults apply (test.mosquitto.org:1883,
+# auto-derived client_id, 60 s keepalive).
+mqtt = MQTTClient.from_config(config or RuntimeConfig({}), radio=wifi_radio)
 
 
 def on_message(topic, payload):
@@ -186,13 +174,19 @@ if not _drive_mqtt_until(mqtt.is_connected, 15_000):
     print("STATUS: FAIL_MQTT_CONNECT")
     raise SystemExit(1)
 
-print(
-    f"MQTT_CONNECTED broker={settings['broker_host']}:"
-    f"{settings['broker_port']}",
-)
+# Resolve broker host/port for the status print (the client already
+# has the connected socket; we re-read config for display).
+if config is not None:
+    broker_host = config.get("mqtt.broker.host", "test.mosquitto.org")
+    broker_port = config.get("mqtt.broker.port", 1883)
+else:
+    broker_host = "test.mosquitto.org"
+    broker_port = 1883
 
-mqtt.subscribe(settings["command_topic"], qos=1)
-print(f"Subscribed to {settings['command_topic']}")
+print(f"MQTT_CONNECTED broker={broker_host}:{broker_port}")
+
+mqtt.subscribe(command_topic, qos=1)
+print(f"Subscribed to {command_topic}")
 
 
 # ---------------------------------------------------------------------------
@@ -212,14 +206,14 @@ while True:
     attempt += 1
     elapsed = time.monotonic() - start_seconds
     payload = json.dumps({
-        "sensor": settings["sensor_id"],
+        "sensor": sensor_id,
         "value": _synthetic_reading(elapsed),
         "uptime_s": round(elapsed, 1),
     })
 
     publish_done = [False]
     mqtt.publish(
-        settings["topic"],
+        topic,
         payload.encode(),
         qos=1,
         on_publish=lambda _packet_id, flag=publish_done: flag.__setitem__(0, True),
