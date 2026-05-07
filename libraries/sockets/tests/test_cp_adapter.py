@@ -479,7 +479,10 @@ class TestUdpSocket:
         with pool_swap, _SwapAttribute(
             fake_pool_module.SocketPool, "socket", socket_without_setsockopt,
         ):
-            cp_adapter.udp_socket(radio=object(), broadcast=True)
+            wrapper = cp_adapter.udp_socket(radio=object(), broadcast=True)
+        # Wrapper still constructed; bind still happened — the missing
+        # ``setsockopt`` was swallowed, not propagated.
+        assert wrapper._sock.bound_to == ("0.0.0.0", 0)  # noqa: SLF001
 
 
 class TestCpUdpWrapper:

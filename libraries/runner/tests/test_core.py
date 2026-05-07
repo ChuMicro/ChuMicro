@@ -118,6 +118,7 @@ def test_task_handle_remove_idempotent() -> None:
     handle = runner.add(_GateTask())
     handle.remove()
     handle.remove()  # should not raise
+    assert handle.active is False
 
 
 def test_task_handle_repr() -> None:

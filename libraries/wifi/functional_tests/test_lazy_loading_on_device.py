@@ -16,11 +16,15 @@ This is part of the Phase 3a Slice 0 hardware verification.
 def test_chumicro_wifi_imports_cleanly_on_device() -> None:
     """The package + transitive deps load on real flash.
 
-    Implicitly exercises that ``chumicro_wifi`` doesn't try to
-    pull in ``importlib`` (workbench-only) or any other
-    CPython-only module at import time.
+    Exercises that ``chumicro_wifi`` doesn't try to pull in
+    ``importlib`` (workbench-only) or any other CPython-only module
+    at import time.  The post-import ``getattr`` confirms the
+    package object actually exposed its eager attribute set, so a
+    silent import-as-empty-module regression would fail the test
+    (rather than passing on the import-not-raising alone).
     """
-    import chumicro_wifi  # noqa: F401 - import-only check
+    import chumicro_wifi
+    assert getattr(chumicro_wifi, "WifiConfig", None) is not None
 
 
 def test_wifi_config_resolves_on_device() -> None:
@@ -37,24 +41,16 @@ def test_wifi_state_resolves_on_device() -> None:
 
 
 def test_wifi_service_resolves_on_device() -> None:
-    """``WifiService`` constructs (with the substrate adapter or its placeholder).
+    """``WifiService`` constructs against the substrate-selected adapter.
 
-    On a real board the auto-detect path picks the runtime-specific
-    adapter, which currently raises ``NotImplementedError``
-    (slices 1–3 fill those in).  Asserting that the
-    ``NotImplementedError`` propagates confirms the lazy adapter
-    selection inside ``_select_adapter`` reaches the right
-    submodule on each runtime.
+    The CP and MP adapters are both implemented now, so on every
+    real-board target the lazy ``_select_adapter`` lookup finds a
+    concrete adapter and ``WifiService`` constructs cleanly.  The
+    post-construction assertion confirms the lazy import path
+    resolved to a real object, not a placeholder or shim.
     """
     from chumicro_wifi import WifiConfig, WifiService
     config = WifiConfig(ssid="x", password="y")
-    try:
-        WifiService(config)
-    except NotImplementedError:
-        pass  # expected — real adapter lands in slices 1–3
-    else:
-        # If construction succeeded, we got a real adapter (e.g.
-        # CPython MP unix-port, which has no esp32 module and
-        # somehow falls through).  Either way is acceptable —
-        # the important thing is the import path resolved.
-        pass
+    service = WifiService(config)
+    assert service is not None
+    assert service.adapter_name in ("cp", "mp_esp32", "mp_rp2")

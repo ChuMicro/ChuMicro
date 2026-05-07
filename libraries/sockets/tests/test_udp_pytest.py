@@ -118,6 +118,9 @@ class TestCPythonUDP:
         sock = udp_socket("127.0.0.1", 0)
         sock.close()
         sock.close()  # second close: no exception.
+        # POSIX: a closed socket reports fileno() as -1.  Confirms the
+        # close actually took effect (vs. silently no-oping).
+        assert sock.fileno() == -1
 
     def test_broadcast_flag_sets_so_broadcast(self) -> None:
         """``broadcast=True`` allows sendto to a broadcast address."""

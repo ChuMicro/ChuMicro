@@ -1805,6 +1805,8 @@ class TestFakeHttpClient:
 
         fake = FakeHttpClient()
         fake.handle(now_ms=0)  # safe no-op
+        # ``handle`` on an idle client must not accidentally start work.
+        assert fake.check(now_ms=0) is False
 
     def test_responses_consumed_fifo(self):
         from chumicro_requests.testing import FakeHttpClient
