@@ -491,7 +491,7 @@ class MicropythonTransport:
             ) from error
         return _decode_exec_result(result)
 
-    def probe(self, script: str, *, timeout: float = 10.0) -> str:
+    def run_script(self, script: str, *, timeout: float = 10.0) -> str:
         """Run *script* via the persistent serial REPL with no staging.
 
         Mirrors :meth:`probe_implementation` — opens the raw REPL if
@@ -512,7 +512,7 @@ class MicropythonTransport:
             result = self._serial.exec_raw(script, timeout=timeout)
         except Exception as error:
             raise MicropythonTransportError(
-                f"Device probe failed: {error}"
+                f"Device run_script failed: {error}"
             ) from error
         return _decode_exec_result(result)
 
