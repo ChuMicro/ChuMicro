@@ -184,7 +184,7 @@ These aren't arbitrary — each traces to a design decision with rationale.  The
 
 ## Project decisions
 
-Major design choices live in [`plans/decisions/`](plans/decisions/) — each file explains what was decided, why, and when.  Current direction lives in [`plans/next-up.md`](plans/next-up.md) and [`plans/workstreams/`](plans/workstreams/).  Hard-won empirical findings (hardware quirks, runtime gotchas) live in [`plans/learnings.md`](plans/learnings.md); browse it before debugging a class of problem you suspect someone else has already hit.
+Major design choices live in [`plans/decisions/`](plans/decisions/) — each file explains what was decided, why, and when.  Current direction lives in [`plans/next-up.md`](plans/next-up.md) and [`plans/workstreams/`](plans/workstreams/).  When debugging a class of problem you suspect someone else has already hit, search `git log` for the area you're touching — workarounds for hardware / runtime gotchas live in inline code comments next to the workaround, with the originating commit message carrying the rationale.
 
 **Search these before proposing structural changes** — if your idea was already considered, the decision doc tells you the reasoning and whether circumstances have changed.
 

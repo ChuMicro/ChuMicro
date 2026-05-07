@@ -156,8 +156,7 @@ The same constraints apply verbatim:
 `chumicro_sockets.tls_listening_socket`'s reality: works on
 MicroPython everywhere, works on CircuitPython on the ESP32 family
 (S2 / S3), refused up-front by `UnsupportedSSLConfigError` on
-CircuitPython on the Pi Pico W (rp2 port).  See
-`plans/learnings.md` for the full per-board status.
+CircuitPython on the Pi Pico W (rp2 port).
 
 ## Per-tick knobs
 

@@ -93,9 +93,9 @@ def prepare_circuitpython() -> int:
             #    source tree (verified through 10.2.0) has three
             #    independent problems blocking mbedtls on the unix-port,
             #    plus zero downstream test-recovery payoff anyway —
-            #    see ``plans/learnings.md`` §"CP unix-port hashlib +
-            #    ssl gated on ``MICROPY_PY_SSL`` build flag" for the
-            #    full triage.  We live with axtls and the resulting
+            #    `git log -- scripts/prepare_circuitpython.py` carries
+            #    the full triage in commits `f701580` + `8ed0ef2` +
+            #    `3b481e5`.  We live with axtls and the resulting
             #    ``ssl``-module gap on the CP unix-port.
             RuntimePrepStep(
                 [

@@ -119,7 +119,7 @@ sock.setblocking(False)
 client = MQTTClient(sock, client_id="my-thing")
 ```
 
-A few platform realities (`plans/learnings.md`):
+A few platform realities:
 
 * On MP rp2 (Pi Pico W), `chumicro-sockets` automatically converts PEM to DER for `load_verify_locations` — the rp2 firmware ships without `MBEDTLS_PEM_PARSE_C`.
 * The TLS handshake is synchronous inside `wrap_socket(...)` — budget for ~100–500 ms of listener stall during connection setup.
@@ -161,7 +161,7 @@ client = MQTTClient(
 )
 ```
 
-The `recv_budget_per_tick` knob exists because of a real production bug: a naive "drain until EAGAIN" loop on a fat kernel buffer can iterate 60–128 times before draining, blowing tick latency past 25 ms on a Pi Pico W RP2.  See `plans/learnings.md` §"A naive `recv_into` loop can starve cooperative tasks" for the full incident.
+The `recv_budget_per_tick` knob exists because of a real production bug: a naive "drain until EAGAIN" loop on a fat kernel buffer can iterate 60–128 times before draining, blowing tick latency past 25 ms on a Pi Pico W RP2.
 
 ## Oversized-message policy
 

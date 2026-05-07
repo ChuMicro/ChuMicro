@@ -156,7 +156,7 @@ push lazy-loading into the per-function selectors.  The Tier B
 classification still applies, but the *implementation shape* is
 the function-scoped form, not the module `__getattr__` form.
 
-Lifted to `plans/learnings.md` so the next library author doesn't
+Captured in this research doc so the next library author doesn't
 re-discover this mid-bring-up.
 
 ## Specific opportunities for current libraries

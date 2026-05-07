@@ -158,7 +158,7 @@ from `chumicro_requests._wire.ResponseParser._consume` so the per-line
 churn small-tier blocks.  The cursor amortizes the bytearray
 reallocation to one per ~half buffer of consumption, and is
 cross-runtime safe (CP rejects `del bytearray[:n]`, MP lacks
-`bytearray.clear()` — see learnings.md).
+`bytearray.clear()`).
 
 ## `_buf` + cached `_buf_view` for accumulating data
 
@@ -678,10 +678,9 @@ lazy imports instead — see "Per-function lazy adapter selection"
 below, which works everywhere.
 
 History: surfaced 2026-04-25 during chumicro-wifi Slice 0
-hardware bring-up; lifted to `plans/learnings.md` and the
-lazy-loading research doc.  The earlier "cross-runtime by design"
-framing was correct at the firmware level but missed the harness
-wrapper.
+hardware bring-up; the lazy-loading research doc carries the
+detail.  The earlier "cross-runtime by design" framing was
+correct at the firmware level but missed the harness wrapper.
 
 When a package has multiple submodules where users typically reach
 for a subset, defer submodule imports until first attribute access:

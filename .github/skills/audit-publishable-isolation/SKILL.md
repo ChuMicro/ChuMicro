@@ -74,7 +74,7 @@ grep -rn -E "\bDecision\s*0?[0-9]{3,4}\b" libraries/*/README.md workbench/*/READ
 
 ### P3. `plans/...` references in shipped source
 
-Same shape as P2 but pointing at `plans/learnings.md`, `plans/patterns.md`, `plans/next-up.md`, `plans/workstreams/*.md`.
+Same shape as P2 but pointing at `plans/patterns.md`, `plans/next-up.md`, `plans/workstreams/*.md`.
 
 **Search recipes:**
 ```
