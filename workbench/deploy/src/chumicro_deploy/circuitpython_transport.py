@@ -1271,6 +1271,26 @@ class CircuitpythonTransport:
             max(_MIN_INLINE_SCRIPT_BUDGET_BYTES, free_memory_bytes // 2),
         )
 
+    def probe(self, script: str, *, timeout: float = 10.0) -> str:
+        """Run *script* via the persistent raw REPL with no staging.
+
+        Mirrors :meth:`probe_implementation`'s use of
+        :meth:`_send_repl_command` — bypasses the
+        ``stage()``-first precondition that :meth:`execute` enforces.
+        *script* must be self-contained (no imports of staged
+        modules).
+
+        Args:
+            script: Self-contained Python source to run.
+            timeout: Reserved for protocol parity; the underlying
+                ``_send_repl_command`` uses its own deadline strategy.
+
+        Returns:
+            Captured stdout from the device.
+        """
+        del timeout  # underlying helper has its own deadline policy
+        return self._send_repl_command(script)
+
     def soft_reset(self) -> None:
         """Soft-reset the interpreter and re-enter raw REPL.
 
