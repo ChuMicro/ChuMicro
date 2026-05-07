@@ -81,7 +81,7 @@ Status:
 
 ### Phase 3 — `python scripts/run.py deploy-example <lib> <name>` (mono-repo)
 
-A thin CLI that:
+User-facing surface:
 
 1. Locates `libraries/<lib>/examples/<name>.py`.
 2. Composes config from root `secrets.toml` + per-lib `libraries/<lib>/examples/config.toml` (if present).
@@ -89,11 +89,26 @@ A thin CLI that:
 4. Stages the example as `code.py` (CP) / `main.py` (MP) on the target device alongside the library deps.
 5. Optionally drops to REPL via `chumicro-repl` for live observation.
 
-Sister piece in `chumicro-deploy`: a "deploy-this-single-file-as-code.py" primitive that the `scripts/run.py` wrapper composes with.  Same primitive can power `chumicro-workspace` for user-authored libraries inside template-repo workspaces (later — not in scope today).
+**Implementation shape (investigated 2026-05-06; not yet started):**
 
-The pre-condition for this phase is the example-file shape being **self-executing** (top-level code that runs on import).  Most existing examples already are; any that aren't (e.g. `mqtt/examples/quickstart.py` exposes `def run_quickstart()`) get reshaped during Phase 2 anyway.
+The existing `chumicro_deploy.Deployer.deploy(source: FileSource)` plus `chumicro_workspace.WithRuntimeConfig` decorator handle most of the plumbing — `WithRuntimeConfig` already reads `secrets_toml` + `project_config`, validates against `library_roots` manifests, and merges the encoded msgpack into the inner source's file map at `/runtime_config.msgpack`.
 
-**Wifi pilot caveat surfaced 2026-05-06:**  the obvious starting point ("pilot Phase 3 on wifi first") needs a real-wifi example to be meaningful — and `libraries/wifi/examples/quickstart.py` uses `FakeWifi` from `chumicro_wifi.testing` deliberately so it runs anywhere.  Wifi has no real-wifi example today.  Two options when Phase 3 picks up:  (a) add a new `libraries/wifi/examples/circuitpython_connect.py` that uses `WifiConfig.from_config(config)` to bring up real wifi and print the IP — gives Phase 3 a concrete first consumer and exercises wifi's existing manifest end-to-end; (b) pilot Phase 3 on `mqtt/examples/circuitpython_telemetry.py` instead, since it already needs real wifi + a broker (also fixes the post-migration broken `config.get("telemetry")` shape during Phase 2 mqtt refactor).  Recommended: (b) — bigger payoff per touch.
+What doesn't exist yet: a `FileSource` implementation that maps a **single example file** to the on-device entrypoint (renaming `circuitpython_telemetry.py` → `/code.py` / `/main.py`) plus walks the example's import graph to bring along the right library `src/` trees under `/lib/`.  Existing `DirectorySource` treats a whole directory as one project — wrong shape for "this single file is the entrypoint, neighbouring example files in the same folder are unrelated."  Existing `project_import_graph_source` assumes a workspace-shaped project directory layout, also wrong.
+
+So Phase 3 is **new infrastructure**, roughly:
+
+* `chumicro_workspace.example_source(library_name, example_name, *, runtime, secrets_toml, ...)` returning a `FileSource` — the new piece.  Resolves the example file path under `libraries/<lib>/examples/<name>.py`, walks its imports against the workspace's library roots to determine which libs to ship, builds the path → bytes map with the example renamed to the runtime-appropriate entrypoint name, then wraps in `WithRuntimeConfig` for the config-merge + validation step.  Per-lib `examples/config.toml` (if present) feeds in as the `project_config` argument.
+* `python scripts/run.py deploy-example <lib> <name>` — thin CLI on top.  Reads `devices.yml` for the target, calls into the new function, drives `Deployer.deploy(source)`.  Optional `--tail` flag drops to `chumicro-repl tail` after deploy for live output.
+
+Estimated scope: ~150–200 LOC for the new `example_source` (most of which is the import-graph walk + entrypoint-path resolution; config merge + validation reuses `WithRuntimeConfig`) + ~50 LOC CLI wrapper + ~150 LOC tests covering the file map, entrypoint resolution per-runtime, manifest validation pass-through, and the missing-file error paths.
+
+**Recommended pairing with hardware validation:** Phase 3's first real consumer should be `mqtt/examples/circuitpython_telemetry.py` (refactored in Phase 2 mqtt this session — currently waiting on its own four-board hardware sweep).  Doing both together — implement Phase 3, then validate Phase 2 mqtt + Phase 3 in one hardware sweep against the four-board canonical matrix — closes both gaps with a single bench session.  Stub `examples/config.toml` for mqtt would carry `[telemetry]` topic / command_topic / sensor_id and possibly `[mqtt]` broker overrides for the user's local broker.
+
+The original "wifi pilot first" framing is now stale: wifi's only example (`quickstart.py`) uses `FakeWifi` deliberately so it runs anywhere, so it doesn't exercise the manifest/config-merge path Phase 3 is built around.  mqtt telemetry is the right pilot — Phase 2 mqtt landed precisely so this pairing would be coherent.
+
+The pre-condition for this phase is the example-file shape being **self-executing** (top-level code that runs on import).  Most existing examples already are; the refactored `mqtt/examples/circuitpython_telemetry.py` is.  Any others that aren't get reshaped during the corresponding library's Phase 2 anyway.
+
+**Sister piece (not in scope today):** the same `example_source` could power `chumicro-workspace` for user-authored libraries' examples inside template-repo workspaces — but the user has explicitly scoped Phase 3 to mono-repo only ("for now it would be easier if they just ran the examples from the chumicro repo itself in a fork or clone").  Promote later if a template-repo user actually asks.
 
 ## Constraints
 
