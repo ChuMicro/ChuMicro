@@ -1,6 +1,6 @@
 # Guide
 
-`chumicro-workspace` is the host-side CLI for a ChuMicro project workspace — a `projects/` + `devices.yml` repo cloned from [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) (or a fork; see [Decision 0038](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0038-workspace-bootstrap-via-clone.md)).  It composes [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) and [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets one board host multiple projects.
+`chumicro-workspace` is the host-side CLI for a ChuMicro project workspace — a `projects/` + `devices.yml` repo cloned from [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) (or a fork).  It composes [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) and [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets one board host multiple projects.
 
 This guide walks through the typical workflows end-to-end.  See the [README](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/workspace/README.md) for the at-a-glance command list and [API reference](api.md) for the auto-generated module docs.
 
@@ -208,7 +208,7 @@ Routes through [`project_import_graph_source`](api.md): AST-parses the entrypoin
 python run.py deploy back-porch --boot-shim
 ```
 
-Stages the [Decision 0029 §3](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0029-project-workspace.md) on-device shape:
+Stages the on-device project layout:
 
 ```
 /code.py                                  # import workspace_runtime; workspace_runtime.boot()
@@ -255,7 +255,7 @@ Categories: `shim` (workspace-runtime infrastructure), `namespace` (empty `__ini
 
 ### One project per `deploy` call
 
-Multi-project-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the matching `switch <name>` re-pointer were retired in Slice 7 of the nested-projects-and-examples workstream — multi-project-staging blew the flash budget on Decision 0015 minimum boards.  Pass one positional per `deploy` invocation; re-deploy when you want to change which project is active.  See [`plans/next-up.md`'s "Replace multi-project staging with scoped diff-deploy" entry](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md) for the workstream that replaces it.
+Multi-project-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the matching `switch <name>` re-pointer were retired — multi-project-staging blew the flash budget on the minimum supported board class (256 KB MCU RAM / 4 MB flash).  Pass one positional per `deploy` invocation; re-deploy when you want to change which project is active.  Scoped diff-deploy is the replacement (`deploy_diff` on the transport layer, `deploy --wipe` for a clean slate).
 
 ### Multi-board deploys — `--all-devices`
 
@@ -431,4 +431,4 @@ dump_devices(Path("devices.yml"), devices)
 
 ## Workbench-only
 
-This package runs on CPython only — never on a microcontroller.  Workbench tools and scripts (the workspace's `run.py` shim) consume it; the on-device side of the workspace contract is `chumicro-config` ([Decision 0036](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0036-chumicro-config-library.md)).
+This package runs on CPython only — never on a microcontroller.  Workbench tools and scripts (the workspace's `run.py` shim) consume it; the on-device side of the workspace contract is `chumicro-config`.

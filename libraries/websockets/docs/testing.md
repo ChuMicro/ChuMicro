@@ -99,7 +99,7 @@ Libraries that depend on `chumicro-websockets` can import the fakes directly:
 from chumicro_websockets.testing import FakeConnection, FakeListener, TickClock
 ```
 
-This follows the project convention from [Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md): libraries that expose injectable services ship their own test fakes.
+Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
 
 For end-to-end client ↔ server loopback, see `tests/test_integration.py` in this library — it pumps bytes between paired `FakeConnection` objects to drive both runners through their full lifecycle in-process.
 

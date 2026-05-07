@@ -1,6 +1,6 @@
 # Testing Helpers
 
-`chumicro_kvstore.testing` provides `FakeKVStore` — an in-memory `KVStore` with explicit corruption + capacity hooks for downstream tests.  It wraps the real `MemoryBackend`, so every assertion you write against the public `KVStore` API exercises the same code path the production runtime takes.  Downstream consumers import this rather than inventing ad-hoc mocks ([Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md)).
+`chumicro_kvstore.testing` provides `FakeKVStore` — an in-memory `KVStore` with explicit corruption + capacity hooks for downstream tests.  It wraps the real `MemoryBackend`, so every assertion you write against the public `KVStore` API exercises the same code path the production runtime takes.  Downstream consumers import this rather than inventing ad-hoc mocks.
 
 ## Usage
 
@@ -124,7 +124,7 @@ Libraries that depend on `chumicro-kvstore` can import the fake directly:
 from chumicro_kvstore.testing import FakeKVStore
 ```
 
-This follows the project convention from [Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md): libraries that expose injectable services ship their own test fakes.
+Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
 
 ## API Reference
 

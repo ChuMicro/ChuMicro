@@ -224,9 +224,8 @@ def test_many_headers_no_leak_no_fragmentation():
 
     Restored to 30 × 50 with delta-based assertions so the
     measurement is honest.  If this crashes in late-preflight, the
-    fix is subprocess-per-file isolation in the harness (see
-    ``plans/next-up.md`` §"Heap-fragmentation test methodology"),
-    not dialing the workload down.
+    fix is subprocess-per-file isolation in the harness, not
+    dialing the workload down.
     """
     response = _build_response(body_size=64, header_count=50)
 

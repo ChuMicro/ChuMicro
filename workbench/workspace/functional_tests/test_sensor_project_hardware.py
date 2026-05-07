@@ -28,8 +28,8 @@ Two layers, both ratchet up the strictness:
    reachable.
 
 Layer-3 (live broker round-trip — Mosquitto fixture + paho-mqtt
-subscriber on the host) tracked in
-`plans/workstreams/phase-7-integration.md`.
+subscriber on the host) is exercised end-to-end by the mqtt
+library's `functional_tests/test_real_broker.py` instead.
 """
 
 from __future__ import annotations

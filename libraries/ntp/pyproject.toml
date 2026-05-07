@@ -53,8 +53,7 @@ packages = ["src/chumicro_ntp"]
 # port + timeout via constructor args, with sensible defaults
 # (``pool.ntp.org``, port 123, 5 s timeout).  This block describes the
 # forward-looking config-aware surface that an ``NTPClient.from_config``
-# factory will consume.  See
-# plans/workstreams/library-config-aware-refactor.md.
+# factory will consume.
 
 [tool.chumicro.config]
 required_keys = []

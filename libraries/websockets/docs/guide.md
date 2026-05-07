@@ -10,9 +10,10 @@ exposes `check(now_ms)` / `handle(now_ms)` so an LED can keep blinking through
 the opening handshake, frame I/O, control-frame interleave, and the close
 handshake.
 
-Single library, two roles — see [Decision 0045](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0045-chumicro-websockets.md)
-for why ~80% of the wire code is shared and the split into separate
-publishable libraries was rejected.
+Single library, two roles — ~80% of the wire code (frame parser,
+state machine, masking, handshake) is shared between client and
+server, so a split into separate publishable libraries would
+duplicate more than it would clarify.
 
 ## Getting started — client
 
@@ -64,8 +65,8 @@ while True:
 ## Runner pattern
 
 Both `WebSocketClient` and `WebSocketServer` satisfy the
-[Decision 0014](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0014-tick-based-runner.md)
-runner contract — drop them into a `chumicro_runner.Runner` and they get
+chumicro tick-runner contract (`check(now_ms)` / `handle(now_ms)`) —
+drop them into a `chumicro_runner.Runner` and they get
 ticked alongside your other tasks:
 
 ```python
@@ -139,9 +140,8 @@ The library is sized for a Decision 0015 minimum board (256 KB MCU RAM,
 ## TLS (`wss://`)
 
 `wss://` client connections reuse `chumicro_sockets.tls_client_socket` +
-`chumicro_sockets.ssl_context_with_ca` per
-[Decision 0040 §"Live-board limitations"](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0040-chumicro-requests.md).
-The same constraints apply verbatim:
+`chumicro_sockets.ssl_context_with_ca`, with the same live-board
+constraints `chumicro-requests` documents for HTTPS:
 
 - **Device RTC must be set before `wss://`.**  mbedTLS rejects every
   cert as "validity starts in the future" if the RTC is at boot

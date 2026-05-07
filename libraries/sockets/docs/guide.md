@@ -49,7 +49,7 @@ context = ssl_context_with_ca(ca_pem)
 sock = tls_client_socket("api.example.com", 443, context=context, radio=None)
 ```
 
-`ssl_context_with_ca` works on every supported runtime — the boards in [Decision 0015](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0015-supported-boards.md)'s minimum class (Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather, plus any current-LTS MP/CPython host) all ship the on-board `ssl` module on current firmware, so the call shape is uniform.  Older legacy radios that lack the `ssl` module (AirLift, WIZNET5K-pre-mbedTLS) aren't in scope for this library; users on those boards should pin to the existing `adafruit_connection_manager` ecosystem instead.
+`ssl_context_with_ca` works on every supported runtime — chumicro's minimum supported board class (256 KB MCU RAM / 4 MB flash; Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather, plus any current-LTS MP/CPython host) all ships the on-board `ssl` module on current firmware, so the call shape is uniform.  Older legacy radios that lack the `ssl` module (AirLift, WIZNET5K-pre-mbedTLS) aren't in scope for this library; users on those boards should pin to the existing `adafruit_connection_manager` ecosystem instead.
 
 ### Non-blocking I/O
 
@@ -104,7 +104,7 @@ def read(sock):
 
 CircuitPython requires a `radio=` kwarg pointing at the board's wifi radio (typically `wifi.radio`).  MicroPython and CPython ignore the kwarg.
 
-The TLS surface is uniform across runtimes because the supported board class ([Decision 0015](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0015-supported-boards.md): 256 KB MCU RAM / 4 MB flash, current-LTS firmware) all ships the on-board `ssl` module — Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi.  Legacy radios without `ssl` (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.
+The TLS surface is uniform across runtimes because the supported board class (256 KB MCU RAM / 4 MB flash, current-LTS firmware) all ships the on-board `ssl` module — Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi.  Legacy radios without `ssl` (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.
 
 ### Substrate quirks observed on real hardware
 

@@ -4,7 +4,7 @@
 
 `chumicro-wifi` is a single, sole-supervisor wifi service that works the same way on CircuitPython, MicroPython-on-ESP32, MicroPython-on-Pi-Pico-W, and CPython.  Construct it once, hand it to the runner, and it brings the link up, watches for drops, and reconnects on its own.
 
-The library is the **sole** wifi supervisor on every runtime — no `CIRCUITPY_WIFI_*` keys, no firmware-level auto-reconnect, no `boot.py` that connects before user code runs.  This eliminates a class of "two systems both think they own the radio" bugs that the legacy CircuitPython auto-connect creates ([Decision 0033](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0033-wifi-sole-supervisor.md)).
+The library is the **sole** wifi supervisor on every runtime — no `CIRCUITPY_WIFI_*` keys, no firmware-level auto-reconnect, no `boot.py` that connects before user code runs.  This eliminates a class of "two systems both think they own the radio" bugs that the legacy CircuitPython auto-connect creates.
 
 Three classes form the public surface: `WifiConfig` (typed settings), `WifiService` (the supervisor), `WifiState` (the five-value state machine).  Plus `chumicro_wifi.testing.FakeWifi` for downstream library tests.
 
@@ -80,7 +80,7 @@ def log_transition(old_state, new_state):
 wifi.on_state_change(log_transition)
 ```
 
-A common pattern is to wire this into `chumicro-events`' bus so other services can react ([Decision 0042](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0042-library-dependency-policy.md)):
+A common pattern is to wire this into `chumicro-events`' bus so other services can react:
 
 ```python
 from chumicro_events import EventBus

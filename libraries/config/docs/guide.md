@@ -4,7 +4,7 @@
 
 `chumicro-config` is the canonical way ChuMicro libraries read their settings on a device.  Every consumer library (wifi, mqtt, ntp, kvstore, …) ships a typed `<Name>Config` class with a `from_dict` factory that delegates to `load_section`.  Apps read the deployed `runtime_config.msgpack` once with `load_runtime_config()`, then hand each section to the consuming library.
 
-The library is intentionally tiny: a single shared exception hierarchy, a single `load_section` factory, and a single `load_runtime_config` reader.  The convention it locks in (Decisions [0035](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0035-runtime-config-structure.md) / [0036](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0036-chumicro-config-library.md)) is what gives every chumicro library identical config semantics.
+The library is intentionally tiny: a single shared exception hierarchy, a single `load_section` factory, and a single `load_runtime_config` reader.  This locks in the section-namespaced runtime-config convention that gives every chumicro library identical config semantics.
 
 ## Getting started
 

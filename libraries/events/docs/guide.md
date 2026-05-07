@@ -10,9 +10,9 @@ everything in batches when the runner ticks `handle`.  The queue is
 bounded and drops the **oldest** record on overflow so recent
 activity always wins.
 
-By [Decision 0042](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0042-library-dependency-policy.md)'s
-"decoration / observability" rule, **no other chumicro library imports
-this one**.  Apps that want service state changes to land in a single
+Per the ChuMicro decoration / observability rule, **no other chumicro
+library imports this one**.  Apps that want service state changes to
+land in a single
 place wire the bus themselves — typically by binding each service's
 `on_state_change` callback to a `bus.publisher(topic)`.
 
@@ -96,9 +96,8 @@ first and their events make it into the queue before the bus drains.
 The internal queue is a `collections.deque(iterable, maxlen)` rather
 than a list.  `append` and `popleft` are O(1) and the deque's native
 `maxlen` enforcement gives drop-oldest behaviour without the O(n)
-shift cost that `list.pop(0)` carries on small VMs.  See
-[`plans/patterns.md`](https://github.com/ChuMicro/ChuMicro/blob/main/plans/patterns.md) §"FIFO queues use
-`deque`, not `list`" for the project-wide rule.
+shift cost that `list.pop(0)` carries on small VMs.  This is the
+project-wide convention for FIFO queues in chumicro libraries.
 
 Subscriber lists are still ordinary lists, since adding and removing
 subscribers happens rarely and the lists are short (typically one to

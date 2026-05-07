@@ -15,11 +15,11 @@ applies ``pytest.mark.skip`` with a clear message before deploy.
 Endpoint: ``example.com:443`` — IANA-reserved, ships a small
 known body, supports modern TLS.
 
-Known platform gap (open follow-up in plans/next-up.md): Pi Pico
-W CircuitPython hits a post-handshake EPIPE on the rp2-port
-mbedTLS build.  This test will fail on that combination; the
-failure documents the issue rather than hiding it.  All other
-combinations in the four-board canonical matrix pass.
+Known platform gap: Pi Pico W CircuitPython hits a
+post-handshake EPIPE on the rp2-port mbedTLS build.  This test
+will fail on that combination; the failure documents the issue
+rather than hiding it.  All other combinations in the four-board
+canonical matrix pass.
 """
 
 import time

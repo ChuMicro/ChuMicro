@@ -102,4 +102,4 @@ Normal host-side pytest discovery ignores `functional_tests/`. When you explicit
 
 If `devices.yml` does not exist yet, the run is skipped with a message telling you to run setup.
 
-See `docs/contributing/device-testing.md`, Decision 0027, and `plans/workstreams/device-validation.md` for the full workflow and current status.
+See `docs/contributing/device-testing.md` for the full workflow.
