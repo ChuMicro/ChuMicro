@@ -64,6 +64,7 @@ Look for cases where the code works but the call site, type, or name doesn't mat
 (Library code only — workbench / scripts have different rules per AGENTS.md.)
 
 * **Allocations in hot paths.**  String building inside `runner.tick()` loops, dict construction per iteration, object creation in tight loops.  Pre-allocate; cache attributes; use `memoryview` to avoid copies.
+* **Per-byte loops where per-chunk works.**  A specific shape of the above: `for byte in chunk: state.feed(byte)` calls a method (and allocates a frame) per byte.  When the state machine can consume `min(remaining, needed)` bytes per state via slice / extend / XOR-loop on a slice, restructure to per-chunk.  Each call frame on MicroPython has measurable cost; on a 1024-byte recv buffer, per-byte = 1024 frames per tick.
 * **Redundant filesystem / network calls.**  Multiple `stat()` calls on the same path; multiple opens of the same file.  Cache or refactor to one read.
 * **Unused imports + unused parameters.**  Cheap to spot, cheap to remove.
 * **Eager work in `__init__` that the caller may never need.**  Defer to first use when reasonable.
@@ -75,7 +76,7 @@ The user's framing: "following the file should allow me to understand the logic 
 * **Convention per file.**  Either public-functions-first or helpers-first; pick one and stick to it within the file.
 * **Adjacent related concepts.**  Helper functions for the same feature should sit together, not be scattered.
 * **Early-exit guards first.**  `if not condition: raise / return` should land at the top of the function, not be buried.
-* **Docstrings explain *why*, not just *what*.**  The signature already says what.  The body already says how.  The docstring should say why this exists or what subtle invariant it maintains.
+* **Docstrings explain *why*, not just *what*.**  The signature already says what.  The body already says how.  The docstring should say why this exists or what subtle invariant it maintains.  Drop docstrings that only re-state the signature in prose.
 
 ### 7. chumicro project-policy compliance
 
@@ -97,6 +98,20 @@ These are non-negotiables from `AGENTS.md` and the relevant Decisions.  Most sho
 * **VERSION + check-version + check-api gates** — if behaviour changed, was `VERSION` bumped per SemVer?  `python scripts/run.py check-version` enforces this against the last release tag; `check-api` catches accidental public API breaks.
 * **Coverage gate** (Decision [0025](../../../plans/decisions/0025-dual-coverage-thresholds.md)) — agents pass `--coverage-threshold 94` on every test invocation.  If the library is below 94%, what's covered with `# pragma: no cover` and is each one justified (runtime-only branches, hardware fallbacks)?
 * **Speculative public API** — every export in the package's `__init__.py` `__all__`, grep across the mono-repo + `~/circuitpython/ChuMicro-Workspace-Template/`.  Zero callers → delete candidate.  Per the user-memory note `feedback_no_speculative_public_api.md`: until something ships to real users, "public API" means "us using it."
+
+### 8. Library leanness
+
+Libraries ship to constrained devices — less source = less flash, less parse-time RAM, less `.mpy` bytecode.  Run this dimension when a library feels too big or after major feature work has accreted complexity that should drop out.  The peer-LOC trigger is what makes this an audit, not a vibe.
+
+* **Peer-LOC comparison as audit trigger.**  Tabulate `wc -l libraries/*/src/chumicro_*/*.py` deployed source.  A library ≥1.5× the cluster median for its peer cohort (networking libs vs each other, persistence libs vs each other) is a leanness candidate.  Not a target — some libraries are genuinely bigger because they cover more wire surface (full-duplex framing, multi-method HTTP).  But a 4× peer outlier with siblings that handle similar wire complexity deserves a focused pass.  The numerical comparison turns "feels too big" into a specific question.
+
+* **Cargo-cult class methods.**  Classes inlined or copied from sibling libraries often ship more methods than the receiving library's own code calls.  AST-walk class bodies; grep for callers within this library's `src/`; flag methods with zero in-library callers.  Be careful with protocol methods (`__iter__`, `__len__`, `__eq__`, `__repr__`, `__contains__`) — they may need to stay if external code uses the class dict-like / list-like / set-like; verify before deleting.  Worked example: commit [`4115e2d`](https://github.com/ChuMicro/ChuMicro/commit/4115e2d) (chumicro-websockets dropped four `CaseInsensitiveDict` methods that no chumicro-websockets caller actually used; tests for those methods got deleted in the same diff).
+
+* **Spec-trivia in `__all__`.**  Constants whose meaning is internal-only — protocol reserved codes that MUST NOT cross the wire, parse-state enums consumed only by this library, internal phase markers — shouldn't be public.  Slimmer-scoped than the general "speculative public API" check in §4: those exports were *intentional* but for the wrong audience.  Test: any callers outside the library importing the symbol?  If no, drop from `__all__` (move to module-private if the library still uses it internally; tests can reach into `chumicro_<name>._wire` or similar for internals, same way `chumicro_requests._wire` access works in its own tests).  Worked example: commit [`0acee5c`](https://github.com/ChuMicro/ChuMicro/commit/0acee5c) (chumicro-websockets cut from ~50 to 28 exports; reserved close codes, parse-state types, and handshake-phase markers all dropped from public surface).
+
+* **Sibling-file structural duplication.**  Pairs of files in the same library that share scaffolding while differing only in role-specific details: parallel state machines, parallel field-by-field property accessors, parallel error paths, parallel constructor wiring.  Diff the sibling files visually first to confirm the parallel — line-count alone is misleading.  Refactor via a shared base parameterized by the role-specific differences (a factory callback, a flag, a `_role_label` string for error message clarity).  Highest test churn of any leanness work — do this slice last, after the smaller cleanups have settled, so the diff is purely about the dedup.  Worked examples: commit [`209b330`](https://github.com/ChuMicro/ChuMicro/commit/209b330) (handshake-parser request/response shared a `_HandshakeLineParser` base, ~150 LOC cut) and commit [`2ff6311`](https://github.com/ChuMicro/ChuMicro/commit/2ff6311) (chumicro-websockets client + server collapsed into a `_BaseSession` base, ~600 LOC cut, parameterized by mask-required + mask-factory + role-label).
+
+* **Final state matters less than the audit quality.**  The chumicro-websockets pass cut 712 LOC (~20%) but missed its 2,500 LOC target by ~400 LOC — base-class plus role-specific subclass deltas plus handshake-direction split cost more overhead than estimated.  That's fine.  The audit's goal is "find the unnecessary mass," not "hit a number."  Numbers are useful for triggering and bounding the work, not for grading it.
 
 ### Recent cleanup patterns this repo has hit
 
@@ -128,6 +143,7 @@ Reference these when calibrating the "honesty" lens — they're concrete example
 * **Don't auto-fix taste-call findings.**  Method-shape and naming-style decisions are owned by the human reviewer.
 * **Don't break public API in an audit pass.**  Library symbols imported by sibling libraries / workbench / examples are out-of-scope for renames; flag separately.
 * **Don't move trivial helpers into a `utils.py`.**  Utility-bucket modules are death by a thousand cuts.
+* **Don't diverge a sibling pattern unilaterally.**  When a stylistic refactor would only touch this library while sibling libraries keep the old pattern (e.g. namespace-classes-of-string-constants exist in chumicro-mqtt, chumicro-requests, *and* chumicro-websockets — switching one to module-level constants while the other two keep classes diverges the family), the right move is "all libs or none."  Defer the finding to a workspace-level decision instead of executing it in the library pass.  Escalate to `/audit-workspace` for cross-lib coordination.  Worked example: commit [`73dc3a8`](https://github.com/ChuMicro/ChuMicro/commit/73dc3a8) explicitly *deferred* the chumicro-websockets namespace-classes → constants slice for exactly this reason — savings were modest, sibling libraries used the same pattern, and the public-API ergonomics (`if state == WebSocketState.OPEN`) read better than the bare-constant alternative.
 
 ## After the audit
 
@@ -153,6 +169,7 @@ HIGH-CONFIDENCE (safe to fix):
   honesty    src/<name>/<file>.py:NN — <one-line description>
   duplicate  src/<name>/<file>.py:NN — <one-line description>
   dead-code  src/<name>/<file>.py:NN — <one-line description>
+  lean       src/<name>/<file>.py:NN — <cargo-cult method / spec-trivia export>
   policy     src/<name>/<file>.py:NN — <Decision NNNN violation>
   ...
 
@@ -160,6 +177,7 @@ MEDIUM-CONFIDENCE (sign-off needed):
 
   shape      src/<name>/<file>.py:NN — <one-line description>
   perf       src/<name>/<file>.py:NN — <one-line description>
+  lean       src/<name>/<file>.py:NN — <sibling-file dedup proposal>
   ...
 
 TASTE-CALL (your call):
@@ -169,8 +187,10 @@ TASTE-CALL (your call):
 
 ESCALATE:
 
-  cross-lib  src/<name>/<file>.py:NN — interaction with chumicro_<other>
-             (route to /audit-integration <name>,<other>)
+  cross-lib         src/<name>/<file>.py:NN — interaction with chumicro_<other>
+                    (route to /audit-integration <name>,<other>)
+  sibling-cohesion  src/<name>/<file>.py:NN — pattern shared with N peer libraries
+                    (route to /audit-workspace for cross-lib decision)
 ```
 
 Tag taxonomy:
@@ -182,7 +202,9 @@ Tag taxonomy:
 * `wiring` — over-wiring or speculative public API.
 * `perf` — hot-path allocations, redundant I/O.
 * `flow` — top-to-bottom readability.
+* `lean` — peer-LOC outlier, cargo-cult class methods, spec-trivia in `__all__`, sibling-file structural duplication (§8).
 * `policy` — chumicro project-policy compliance (Decisions [0010](../../../plans/decisions/0010-library-testability.md), [0014](../../../plans/decisions/0014-runner-pattern.md), [0021](../../../plans/decisions/0021-docstring-type-policy.md), [0022](../../../plans/decisions/0022-naming-conventions.md), [0025](../../../plans/decisions/0025-dual-coverage-thresholds.md), [0037](../../../plans/decisions/0037-runtime-file-marking.md), [0044](../../../plans/decisions/0044-deploy-time-runtime-filtering.md), [0051](../../../plans/decisions/0051-runner-shaped-as-project-policy.md)).
 * `cross-lib` — finding spans this library + at least one other; escalate to `/audit-integration`.
+* `sibling-cohesion` — finding affects multiple libraries with the same pattern; escalate to `/audit-workspace` rather than diverging this one.
 
 The goal: fewer surprising lines, tests still pass, project-policy invariants are enforced, call sites read more honestly than before.
