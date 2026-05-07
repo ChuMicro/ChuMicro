@@ -47,3 +47,20 @@ exclude = [".gitignore"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/chumicro_ntp"]
 
+# ---------------------------------------------------------------------
+# Runtime-config manifest — declares the flat dotted keys this library
+# knows about.  All keys are optional today: NTPClient takes server +
+# port + timeout via constructor args, with sensible defaults
+# (``pool.ntp.org``, port 123, 5 s timeout).  This block describes the
+# forward-looking config-aware surface that an ``NTPClient.from_config``
+# factory will consume.  See
+# plans/workstreams/library-config-aware-refactor.md.
+
+[tool.chumicro.config]
+required_keys = []
+optional_keys = [
+    "ntp.server",
+    "ntp.port",
+    "ntp.timeout_ms",
+]
+

@@ -56,3 +56,22 @@ packages = ["src/chumicro_websockets"]
 # is set.
 requires_flash = true
 
+# ---------------------------------------------------------------------
+# Runtime-config manifest — declares the flat dotted keys this library
+# knows about.  All keys are optional today: WebSocketClient and
+# WebSocketServer take their tunables + connection target via
+# constructor args.  This block describes the forward-looking
+# config-aware surface that ``.from_config`` factories will consume —
+# client connect target + server bind target + per-side message-size
+# caps.  See plans/workstreams/library-config-aware-refactor.md.
+
+[tool.chumicro.config]
+required_keys = []
+optional_keys = [
+    "websockets.client.connect_url",
+    "websockets.client.max_message_bytes",
+    "websockets.server.host",
+    "websockets.server.port",
+    "websockets.server.max_message_bytes",
+]
+
