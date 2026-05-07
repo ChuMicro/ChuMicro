@@ -24,6 +24,7 @@ together cover the failure modes that matter.
 import sys
 
 from chumicro_kvstore import KVStore
+from chumicro_test_harness import skip
 
 _IS_CIRCUITPYTHON = sys.implementation.name == "circuitpython"
 _IS_MICROPYTHON = sys.implementation.name == "micropython"
@@ -127,7 +128,7 @@ def test_explicit_littlefs_works_on_micropython_regardless_of_nvs() -> None:
     auto-detect is a default, not a constraint.
     """
     if not _IS_MICROPYTHON:
-        return
+        skip("explicit littlefs backend is MicroPython-only")
     _wipe_substrates()
     store = KVStore(backend="littlefs")
     store["pick_me"] = "via littlefs"
@@ -139,7 +140,7 @@ def test_explicit_littlefs_works_on_micropython_regardless_of_nvs() -> None:
 def test_explicit_nvs_works_on_micropython_esp32() -> None:
     """`backend="nvs"` is the substrate-native pick on MP-ESP32."""
     if not (_IS_MICROPYTHON and _HAS_NVS):
-        return
+        skip("explicit nvs backend requires MicroPython on ESP32 family")
     _wipe_substrates()
     store = KVStore(backend="nvs")
     store["pick_me"] = "via nvs"

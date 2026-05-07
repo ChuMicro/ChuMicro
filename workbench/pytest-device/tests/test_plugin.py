@@ -1432,3 +1432,253 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         items = [non_device_item]
         pytest_device.pytest_collection_modifyitems(config, items)
         non_device_item.add_marker.assert_not_called()
+
+
+class TestPytestCollectionModifyItemsFeatures:
+    """Feature-marker filtering: items targeting devices that don't
+    expose the required features get deselected so the test never runs
+    on the wrong board.
+
+    The plugin lazy-probes each device once via ``transport.execute``
+    and caches the result on the session, so a session with N
+    feature-marked items + M devices pays at most M probes.
+    """
+
+    @staticmethod
+    def _write_feature_test_file(
+        tmp_path: Path, *, marker_tuple: str | None,
+    ) -> Path:
+        """Materialise a fake test file with the given features marker.
+
+        Args:
+            tmp_path: Pytest fixture-supplied temp dir.
+            marker_tuple: Source representation of the tuple, or
+                ``None`` to omit the marker entirely.
+        """
+        target = tmp_path / "test_feature_aware.py"
+        body = ""
+        if marker_tuple is not None:
+            body += f"__chumicro_features__ = {marker_tuple}\n"
+        body += "def test_anything() -> None:\n    pass\n"
+        target.write_text(body)
+        return target
+
+    @staticmethod
+    def _stub_session(
+        transport_features: dict[str, str | Exception],
+    ) -> object:
+        """Return a session stub with a transport cache that returns
+        ``transport_features`` from ``execute()``.
+
+        Each entry maps device identifier → either the probe-output
+        string the transport's ``execute`` should produce, or an
+        Exception instance to raise (simulating an offline device).
+        """
+        from unittest.mock import MagicMock  # noqa: PLC0415
+
+        class _StubTransport:
+            def __init__(self, response: str | Exception) -> None:
+                self._response = response
+
+            def execute(self, _script: str) -> str:
+                if isinstance(self._response, Exception):
+                    raise self._response
+                return self._response
+
+        class _StubTransportCache:
+            def __init__(self, features_by_device: dict[str, str | Exception]) -> None:
+                self._features = features_by_device
+
+            def get_transport(
+                self, device_entry: object, _deploy_mode: object,
+            ) -> object:
+                return _StubTransport(self._features[device_entry.identifier])
+
+        session = MagicMock(spec=pytest.Session)
+        session.config = MagicMock()
+        # The default getoption ('--chumicro-deploy-mode') returns ``None``.
+        session.config.getoption = lambda *_args, **_kwargs: None
+        session._device_transport_cache = _StubTransportCache(transport_features)
+        # Drop the auto-spec attribute pre-set by MagicMock so the
+        # plugin's own assignment to session._device_features_cache
+        # works through the descriptor.
+        del session._device_features_cache  # type: ignore[attr-defined]
+        return session
+
+    @staticmethod
+    def _make_device_entry(identifier: str, runtime: str = "micropython") -> DeviceEntry:
+        return DeviceEntry(
+            identifier=identifier, runtime=runtime, address="/dev/null",
+        )
+
+    @staticmethod
+    def _make_feature_item(
+        session: object,
+        device: DeviceEntry,
+        test_file: Path,
+        nodeid: str = "libraries/x/functional_tests/test_y.py::test_anything",
+    ) -> object:
+        """Return a Mock satisfying ``isinstance(item, DeviceRuntimeItem)``
+        with ``target_device`` and ``test_file`` populated."""
+        from unittest.mock import Mock  # noqa: PLC0415
+
+        item = Mock(spec=pytest_device.DeviceRuntimeItem)
+        item.nodeid = nodeid
+        item.target_device = device
+        item.test_file = test_file
+        item.session = session
+        return item
+
+    def _stub_config(self) -> object:
+        from chumicro_pytest_device.runtime_config import set_runtime_config  # noqa: PLC0415
+
+        class _Stub:
+            def __init__(self) -> None:
+                self.stash: dict = {}
+                self.deselected: list[object] = []
+                self.hook = SimpleNamespace(
+                    pytest_deselected=lambda items: self.deselected.extend(items),
+                )
+
+        config = _Stub()
+        # No required_keys — keep the unrelated check inert in these tests.
+        set_runtime_config(config, payload=None, required_keys=())
+        return config
+
+    def test_item_kept_when_no_features_marker(self, tmp_path: Path) -> None:
+        """Files without the marker pass through unchanged."""
+        test_file = self._write_feature_test_file(tmp_path, marker_tuple=None)
+        config = self._stub_config()
+        session = self._stub_session(transport_features={"esp32-board": "ignored"})
+        device = self._make_device_entry("esp32-board")
+        item = self._make_feature_item(session, device, test_file)
+
+        items = [item]
+        pytest_device.pytest_collection_modifyitems(config, items)
+
+        assert items == [item]
+        assert config.deselected == []
+
+    def test_item_kept_when_device_has_required_feature(self, tmp_path: Path) -> None:
+        """Probe reports the required feature → item runs on that device."""
+        test_file = self._write_feature_test_file(
+            tmp_path, marker_tuple='("esp32",)',
+        )
+        config = self._stub_config()
+        session = self._stub_session(transport_features={
+            "esp32-board": (
+                "boot noise\n"
+                "CHUMICRO_FEATURES_BEGIN\n"
+                "esp32\n"
+                "CHUMICRO_FEATURES_END\n"
+            ),
+        })
+        device = self._make_device_entry("esp32-board")
+        item = self._make_feature_item(session, device, test_file)
+
+        items = [item]
+        pytest_device.pytest_collection_modifyitems(config, items)
+
+        assert items == [item]
+        assert config.deselected == []
+
+    def test_item_deselected_when_device_lacks_required_feature(
+        self, tmp_path: Path,
+    ) -> None:
+        """Probe reports an empty feature set → ESP32-required item drops."""
+        test_file = self._write_feature_test_file(
+            tmp_path, marker_tuple='("esp32",)',
+        )
+        config = self._stub_config()
+        session = self._stub_session(transport_features={
+            "rp2-board": (
+                "CHUMICRO_FEATURES_BEGIN\n"
+                "CHUMICRO_FEATURES_END\n"
+            ),
+        })
+        device = self._make_device_entry("rp2-board")
+        item = self._make_feature_item(session, device, test_file)
+
+        items = [item]
+        pytest_device.pytest_collection_modifyitems(config, items)
+
+        assert items == []
+        assert config.deselected == [item]
+
+    def test_probe_failure_emits_warning_and_deselects(
+        self, tmp_path: Path, recwarn: pytest.WarningsRecorder,
+    ) -> None:
+        """An unreachable device → warning + deselect, never crash."""
+        test_file = self._write_feature_test_file(
+            tmp_path, marker_tuple='("esp32",)',
+        )
+        config = self._stub_config()
+        session = self._stub_session(transport_features={
+            "offline-board": ConnectionError("device went away"),
+        })
+        device = self._make_device_entry("offline-board")
+        item = self._make_feature_item(session, device, test_file)
+
+        items = [item]
+        pytest_device.pytest_collection_modifyitems(config, items)
+
+        assert items == []
+        assert config.deselected == [item]
+        warning_messages = [str(warning.message) for warning in recwarn.list]
+        assert any(
+            "offline-board" in message and "device went away" in message
+            for message in warning_messages
+        )
+
+    def test_probe_runs_once_per_device_across_many_items(
+        self, tmp_path: Path,
+    ) -> None:
+        """Two items on the same device share a single probe."""
+        test_file = self._write_feature_test_file(
+            tmp_path, marker_tuple='("esp32",)',
+        )
+        config = self._stub_config()
+
+        probe_calls: list[str] = []
+
+        class _CountingTransport:
+            def __init__(self, output: str, identifier: str) -> None:
+                self._output = output
+                self._identifier = identifier
+
+            def execute(self, _script: str) -> str:
+                probe_calls.append(self._identifier)
+                return self._output
+
+        class _CountingTransportCache:
+            def get_transport(
+                self, device_entry: DeviceEntry, _deploy_mode: object,
+            ) -> object:
+                return _CountingTransport(
+                    "CHUMICRO_FEATURES_BEGIN\nesp32\nCHUMICRO_FEATURES_END\n",
+                    device_entry.identifier,
+                )
+
+        from unittest.mock import MagicMock  # noqa: PLC0415
+
+        session = MagicMock(spec=pytest.Session)
+        session.config = MagicMock()
+        session.config.getoption = lambda *_args, **_kwargs: None
+        session._device_transport_cache = _CountingTransportCache()
+        del session._device_features_cache  # type: ignore[attr-defined]
+
+        device = self._make_device_entry("esp32-board")
+        item_a = self._make_feature_item(
+            session, device, test_file, nodeid="x::test_a",
+        )
+        item_b = self._make_feature_item(
+            session, device, test_file, nodeid="x::test_b",
+        )
+
+        items = [item_a, item_b]
+        pytest_device.pytest_collection_modifyitems(config, items)
+
+        assert items == [item_a, item_b]
+        assert probe_calls == ["esp32-board"], (
+            f"expected one probe per device, got {probe_calls}"
+        )
