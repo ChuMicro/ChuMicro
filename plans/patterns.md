@@ -6,7 +6,7 @@ Reusable implementation patterns specific to this codebase.  Follow these
 when writing new libraries or modifying existing ones — they were established
 because incorrect implementations caused real bugs.
 
-For *why* these patterns exist, see the linked decisions and `history.md`.
+For *why* these patterns exist, see the linked decisions.
 For *rules* agents must follow, see `AGENTS.md`.  This file is the *how*.
 
 ---

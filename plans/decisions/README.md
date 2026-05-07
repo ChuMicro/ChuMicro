@@ -32,7 +32,7 @@ What this means in practice:
 
 - **No dated revision banners.**  No `Revised: YYYY-MM-DD — vocabulary update from foo to bar`.  Edit the prose to use `bar` and let `git log` carry the history.
 - **No "Amended by Decision NNNN" blockquotes** at the head of a section.  If Decision NNNN superseded part of this one, edit the affected paragraph to describe the current rule and cross-link NNNN inline ("see Decision NNNN").  Do not preserve the original text "for the record" alongside a note pointing at the new state — the reader has to read both to figure out what's true.
-- **No `## Amendments` / `## Update (YYYY-MM-DD)` / `## Progress notes` sections.**  Commit messages + `plans/history.md` already carry the "what changed when" story.
+- **No `## Amendments` / `## Update (YYYY-MM-DD)` / `## Progress notes` sections.**  Commit messages already carry the "what changed when" story; `git log <ADR-path>` shows every edit to the ADR itself.
 - **No "this decision has been revised twice" preambles.**  If you find yourself writing one, stop and edit the body instead.
 - **The `Date:` field is the original decision date.**  Do not parenthesize it (`Date: 2026-04-21 (revised 2026-05-02)`).  Edits don't bump the date.
 - **If the change is large enough that an in-place edit would distort the original reasoning, write a new ADR that supersedes the old one** (set the old one's `Status:` to `superseded`, add `Superseded by: [Decision NNNN](…)`, and let the old body remain frozen as the historical record).  Targeted partial-supersession is also acceptable — Decision 0046 superseding §1+§7 of Decision 0029 is the worked example — but the affected sections of the older ADR still get edited in place to describe the current rule with an inline cross-link.
@@ -43,8 +43,8 @@ The four-status enum exists precisely so editors don't reach for `revised` as a 
 
 ADRs capture *decision and reasoning*.  They are not living status dashboards.  When you're tempted to append any of the following to an existing ADR, route the content here instead:
 
-- **Implementation progress / status updates** → `plans/history.md` (dated timeline entries) or the relevant `plans/workstreams/<name>.md` file.
-- **Hardware validation logs, test reports, "N boards passed"** → `plans/history.md` under the date the validation ran.
+- **Implementation progress / status updates** → the relevant `plans/workstreams/<name>.md` file (or `plans/next-up.md` `## Done (recent)` for one-line pointers).
+- **Hardware validation logs, test reports, "N boards passed"** → commit messages on the validating commit; the ADR can name a commit hash if it needs to point at validation evidence.
 - **Per-phase rollout dashboards** → `plans/workstreams/<name>.md`.
 - **Future-work checklists or implementation TODO lists** → `plans/next-up.md` or `plans/open-questions.md` with a one-line pointer back from the ADR if needed.
 - **Worked examples, how-to walkthroughs, contributor expectations** → `docs/contributing/<name>.md`.

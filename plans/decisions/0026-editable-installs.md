@@ -9,8 +9,8 @@ Related: none
 The workspace originally used IDE source-root configs (PyCharm content
 roots, VS Code `extraPaths`) as the sole mechanism for import resolution.
 Editable pip installs were explicitly rejected early on — the maintainer
-described them as "opening windows for uncertainty" (see Rejected approach
-#1 in `plans/history.md`).
+described them as "opening windows for uncertainty."  This ADR reverses
+that initial rejection.
 
 This caused recurring problems:
 

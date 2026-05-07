@@ -4,9 +4,8 @@ Non-obvious facts about the world this project lives in — discovered the hard 
 
 This file is the **compression tier** for "we tripped on X, here's what we know about X." Distinct from sibling files:
 
-- **`decisions/`** = *why* we chose X over Y. Tradeoffs we made.
+- **`decisions/`** = *why* we chose X over Y. Tradeoffs we made; superseded designs noted inline when an ADR is replaced.
 - **`patterns.md`** = *how* to implement X correctly. Code shape.
-- **`history.md` §Rejected approaches** = approaches we *tried as a project decision* and rejected. Path-not-taken.
 - **`learnings.md` (this file)** = facts about hardware, tools, runtimes, and OS behavior. Not policies — *physics*.
 
 If a learning grows enough scope that the right response is "we should change how we build", promote it to a Decision and link back here. If it grows enough code surface to reuse, promote to a Pattern. Otherwise it lives here, terse.
@@ -107,7 +106,7 @@ Implication: silent on-device CPU-bound stretches set the floor for `N`, not scr
 
 Implication for tests / measurement: when profiling MicroPython mount-mode, the first run of any test that exercises new imports is dominated by RPC round-trips, not by the test body. The CircuitPython numbers don't show this because CP runs the source from RAM after staging.
 
-Fix knobs that *don't* work: eager-importing at package top level was tried (commit `9eb5980`) and reverted (commit `8b44325`) — see Rejected approaches §18 in `history.md`. The only durable fix is to amortize: batch-execute test functions, hold one `SerialTransport` per session (see `patterns.md` §mpremote internals §4), and stage all files in one rsync pass. Commit `9eb5980` (root cause analysis), `8b44325` (revert).
+Fix knobs that *don't* work: eager-importing at package top level was tried (commit `9eb5980`) and reverted (commit `8b44325`) — eager imports compounded across the package and shifted the cost to `import chumicro_runner` instead of removing it. The only durable fix is to amortize: batch-execute test functions, hold one `SerialTransport` per session (see `patterns.md` §mpremote internals §4), and stage all files in one rsync pass. Commit `9eb5980` (root cause analysis), `8b44325` (revert).
 
 ### MicroPython RAM-mode functional tests run noticeably slower than CP RAM-mode
 
