@@ -295,8 +295,8 @@ class FakeTransport:
         self.calls.append(("execute", (bootstrap_script,)))
         return self.execute_output
 
-    def probe(self, script: str, *, timeout: float = 10.0) -> str:
-        """Record a probe call and return canned output.
+    def run_script(self, script: str, *, timeout: float = 10.0) -> str:
+        """Record a run_script call and return canned output.
 
         Args:
             script: Self-contained Python source to run with no
@@ -305,11 +305,12 @@ class FakeTransport:
                 fake transport's "device" responds instantly.
 
         Returns:
-            The configured ``execute_output`` (probe shares the
-            same canned-response slot — tests that need separate
-            probe / execute outputs can override after construction).
+            The configured ``execute_output`` (``run_script`` shares
+            the same canned-response slot — tests that need separate
+            run_script / execute outputs can override after
+            construction).
         """
-        self.calls.append(("probe", (script, timeout)))
+        self.calls.append(("run_script", (script, timeout)))
         return self.execute_output
 
     def execute_scripts(self, bootstrap_scripts: list[str]) -> str:

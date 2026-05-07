@@ -1271,7 +1271,7 @@ class CircuitpythonTransport:
             max(_MIN_INLINE_SCRIPT_BUDGET_BYTES, free_memory_bytes // 2),
         )
 
-    def probe(self, script: str, *, timeout: float = 10.0) -> str:
+    def run_script(self, script: str, *, timeout: float = 10.0) -> str:
         """Run *script* via the persistent raw REPL with no staging.
 
         Mirrors :meth:`probe_implementation`'s use of
