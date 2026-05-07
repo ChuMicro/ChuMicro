@@ -25,9 +25,8 @@ the conftest's ``set_runtime_config(..., required_keys=...)`` declares
 up the server without it), the test body calls
 ``chumicro_test_harness.skip`` so the run reports a visible SKIP.
 
-**Deploy mode:** Pi Pico W requires ``--deploy-mode flash`` per the
-multi-stack-too-heavy rule from ``plans/learnings.md`` — same
-constraint as ``test_real_loopback.py``.
+**Deploy mode:** Pi Pico W requires ``--deploy-mode flash`` —
+same multi-stack-too-heavy constraint as ``test_real_loopback.py``.
 """
 
 import time

@@ -448,8 +448,9 @@ class TestPlantMacosSentinelsInStaging:
     The new shape (post-wedge cleanup): sentinels go into a local
     staging tree so rsync ships them in the same pass as the deploy
     payload — no host-side write to the live CIRCUITPY drive before
-    rsync starts.  See `plans/learnings.md` "rsync to CIRCUITPY can
-    hang in uninterruptible kernel I/O".
+    rsync starts.  Direct writes to a live CIRCUITPY drive while a
+    parallel rsync is mid-flight could leave rsync hung in
+    uninterruptible kernel I/O on macOS FSKit.
     """
 
     def test_no_op_off_darwin(

@@ -129,7 +129,7 @@ def open_listener():
 server = HttpServer(listener_factory=open_listener)
 ```
 
-Per-board status from live verification (`plans/learnings.md`):
+Per-board status from live verification:
 
 | Runtime + board | TLS server | Notes |
 |---|---|---|

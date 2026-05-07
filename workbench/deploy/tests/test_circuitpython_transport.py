@@ -962,11 +962,12 @@ class TestFlashMode:
 
         Pre-wedge-cleanup, ``_resolve_circuitpy_drive`` wrote a
         ``.chu-probe`` marker to detect stale/unwritable mounts up
-        front.  That extra on-drive write was a wedge-risk vector and
-        was dropped (`plans/learnings.md` "rsync to CIRCUITPY can
-        hang ..."); rsync's own write failure is now the writability
-        signal — its stderr surfaces the OS error and
-        ``flash_drive.rsync`` wraps it as :class:`FlashDriveError`.
+        front.  That extra on-drive write was a wedge-risk vector
+        on macOS FSKit (parallel direct writes during a live rsync
+        could hang in uninterruptible kernel I/O) and was dropped;
+        rsync's own write failure is now the writability signal —
+        its stderr surfaces the OS error and ``flash_drive.rsync``
+        wraps it as :class:`FlashDriveError`.
 
         Simulated by mocking ``subprocess.run`` to raise
         ``CalledProcessError`` with a permission-denied stderr (the
@@ -1150,7 +1151,8 @@ class TestFlashMode:
         watcher fires a soft-reboot on the first file change.  Each
         soft-reboot re-enumerates USB-CDC.  Multiple re-enumerations
         in rapid succession can put the kernel-side write into D-state
-        — the wedged-rsync failure documented in plans/learnings.md.
+        — the wedged-rsync failure mode (rsync subprocess in D-state,
+        ``kill -9`` ineffective, only a board reboot clears it).
 
         Post-cleanup: there is now only ONE host-side drive write —
         the rsync itself.  Drive prep (sentinel plants) goes into

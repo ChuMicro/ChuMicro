@@ -27,8 +27,7 @@ same per-board limits.  Cover ``wss://`` server in a follow-up
 slice once the four-board matrix has been re-verified for TLS-server
 on this stack.
 
-**Deploy mode:** Pi Pico W requires ``--deploy-mode flash`` (the
-multi-stack-needs-flash rule from ``plans/learnings.md``).  RAM-mode
+**Deploy mode:** Pi Pico W requires ``--deploy-mode flash``.  RAM-mode
 keeps the full library bootstrap on the heap — wifi + sockets +
 websockets server + websockets client together exceed the ~150 KB
 free heap on a Pi Pico W and the bootstrap fails with
@@ -90,9 +89,10 @@ def _is_pi_pico_w_rp2() -> bool:
       This is independent of chumicro-websockets; chumicro-http-server's
       single-device loopback hits the same limit.
     * **CircuitPython:** the device tends to wedge USB-side under
-      load (related cluster of CP-rp2 issues — see
-      ``plans/learnings.md`` for the TLS-server-side variant), which
-      knocks the test runner's serial port offline mid-run.
+      load (related cluster of CP-rp2 issues — the same one
+      `chumicro_sockets.tls_listening_socket` refuses up-front
+      with `UnsupportedSSLConfigError`), which knocks the test
+      runner's serial port offline mid-run.
 
     The library itself works on Pi Pico W — the wire layer + frame
     parser + state machines pass cross-runtime unit tests on both

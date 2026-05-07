@@ -37,7 +37,7 @@ Ask: **did this session produce something that future sessions need to know with
 |------|--------------------------------|----------------|
 | `plans/decisions/NNNN-*.md` | A tradeoff or structural choice future contributors will need to know *why* about | New ADR via the `new-decision` skill |
 | `plans/patterns.md` | Reusable code shape, subprocess invocation, IDE wiring, transport contract — *how* to implement correctly | Append a section under the right heading |
-| `plans/learnings.md` | A non-obvious constraint discovered the hard way: hardware quirk, third-party-tool gotcha, classifier ordering, runtime-specific behavior. Not a rule, not a pattern — a *fact about the world* | Append under the right category |
+| Inline code comment | A non-obvious constraint discovered the hard way (hardware quirk, third-party-tool gotcha, runtime-specific behavior) — anywhere a reader of the code might trip on the same surface | One-line `# `-comment next to the workaround; keep the prose in the commit message |
 | `AGENTS.md` non-negotiables | An agent-facing rule whose violation already cost time | Append to the rules list |
 | Commit message body | Narrative context, what was tried and rejected, the rationale a future reader will want when running `git log <range>` | The commit you're about to write |
 

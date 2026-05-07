@@ -17,9 +17,9 @@ Endpoint: ``https://example.com/`` — IANA-reserved, ships a small
 known body, real CA-signed cert.
 
 Why pin a CA instead of using the runtime's default trust store?
-Embedded CP / MP don't ship a real trust store — see
-``plans/learnings.md`` "Embedded ssl.create_default_context() is
-not the CPython equivalent".  The canonical embedded pattern is
+Embedded CP / MP don't ship a real trust store — `ssl.create_default_context()`
+on those runtimes returns an empty / placeholder context, not the
+CPython equivalent.  The canonical embedded pattern is
 ``chumicro_sockets.ssl_context_with_ca(pem)`` with the issuing
 ROOT CA pinned.
 
