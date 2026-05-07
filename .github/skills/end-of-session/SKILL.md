@@ -56,7 +56,6 @@ For each significant change, verify:
 | File | What to verify |
 |---|---|
 | `plans/next-up.md` | Checked-off items moved to Done; new work added |
-| `plans/roadmap.md` | Milestone status reflects actual state |
 | `plans/decisions/` | New decisions recorded if tradeoffs were made |
 
 If you added a new task, command, library, or changed existing behavior, ask: *"If someone reads the docs tomorrow, will they find correct information about this?"* Update whatever your changes make wrong — READMEs, contributing guides, style guide, cheat sheet, CI workflows, scaffold templates, IDE configs, planning docs.
