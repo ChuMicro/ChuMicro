@@ -2,10 +2,11 @@
 
 Runs on every MicroPython board with a wifi chip — covers both
 ESP-IDF stacks (Lolin S2, ESP32 family) and CYW43 stacks (Pi Pico W).
-The module-level ``__chumicro_runtimes__`` marker keeps CP boards
-out at collection time; within MP, the ``_HAS_NETWORK`` guard
-short-circuits each test on MP boards without a ``network`` module
-(currently none of our targets, but kept as belt-and-suspenders).
+The module-level ``__chumicro_runtimes__ = ("micropython",)`` marker
+keeps CP boards out at collection time.  Every supported MP target
+ships ``network``, so the module imports it directly; if a future
+target lacks it we'll add ``__chumicro_features__ = ("mp_network",)``
+and probe for it.
 
 Stack-specific assertions (PM constant value, supervisor-disable
 knob) are guarded by the detected stack so they only run on the
@@ -23,14 +24,10 @@ starts fresh.
 
 __chumicro_runtimes__ = ("micropython",)
 
+import network
 from chumicro_wifi import WifiConfig
 from chumicro_wifi._adapters.mp import CYW43_PM_DISABLE, MpWifiAdapter
 
-try:
-    import network
-    _HAS_NETWORK = True
-except ImportError:
-    _HAS_NETWORK = False
 try:
     import esp32  # noqa: F401
     _DETECTED_STACK = "espidf"
@@ -40,8 +37,6 @@ except ImportError:
 
 def _disconnect_quietly():
     """Drop any active station association without complaining."""
-    if not _HAS_NETWORK:
-        return
     try:
         wlan = network.WLAN(network.STA_IF)
         wlan.disconnect()
@@ -55,8 +50,6 @@ def test_adapter_constructs_against_real_wlan() -> None:
     Auto-detects the stack and surfaces the corresponding ``name``
     string — ``"mp_esp32"`` on ESP-IDF, ``"mp_rp2"`` on CYW43.
     """
-    if not _HAS_NETWORK:
-        return
     adapter = MpWifiAdapter()
     expected_name = "mp_esp32" if _DETECTED_STACK == "espidf" else "mp_rp2"
     assert adapter.name == expected_name
@@ -70,8 +63,6 @@ def test_configure_activates_radio_on_real_hardware() -> None:
     branch is a no-op.  Either way the substrate accepts the
     config calls without raising.
     """
-    if not _HAS_NETWORK:
-        return
     _disconnect_quietly()
     adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y", hostname="chu-test"))
@@ -80,8 +71,6 @@ def test_configure_activates_radio_on_real_hardware() -> None:
 
 def test_is_linked_reflects_substrate_state_when_disconnected() -> None:
     """No association → adapter reports False."""
-    if not _HAS_NETWORK:
-        return
     _disconnect_quietly()
     adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))
@@ -90,8 +79,6 @@ def test_is_linked_reflects_substrate_state_when_disconnected() -> None:
 
 def test_ip_returns_none_when_not_linked() -> None:
     """No IP without an active link, even if the radio is active."""
-    if not _HAS_NETWORK:
-        return
     _disconnect_quietly()
     adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))
@@ -107,8 +94,6 @@ def test_connect_to_nonexistent_ssid_returns_false_without_link() -> None:
     flips, so the adapter reports ``False`` correctly on either
     stack.
     """
-    if not _HAS_NETWORK:
-        return
     _disconnect_quietly()
     adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))
@@ -124,8 +109,6 @@ def test_connect_to_nonexistent_ssid_returns_false_without_link() -> None:
 
 def test_disconnect_after_configure_is_safe() -> None:
     """Disconnect must succeed even when no association is live."""
-    if not _HAS_NETWORK:
-        return
     _disconnect_quietly()
     adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))

@@ -1,25 +1,25 @@
 """On-device tests for ``MpNvsBackend`` against real ``esp32.NVS``.
 
-These tests run only on MicroPython ESP32 boards.  The module-level
-``__chumicro_runtimes__`` marker keeps CP boards out at collection
-time; within MP, Pi Pico W has no ``esp32`` module, so every test
-early-returns there — the file collects cleanly on any MP device,
-but the body only fires on ESP32-class boards.
+These tests run only on MicroPython ESP32 boards.  Two file-level
+markers gate collection:
+
+* ``__chumicro_runtimes__ = ("micropython",)`` — the deploy pipeline
+  keeps CP boards out (no ``esp32`` module ever).
+* ``__chumicro_features__ = ("esp32",)`` — the pytest-device plugin
+  probes each MP target at session start; boards without the
+  ``esp32`` module (Pi Pico W on MP) get every item in this file
+  deselected before any test runs.
 
 Each test starts by erasing the ``payload`` key in the ``chu_kv``
 namespace so prior session state does not leak between tests.
 """
 
 __chumicro_runtimes__ = ("micropython",)
+__chumicro_features__ = ("esp32",)
 
+import esp32
 from chumicro_kvstore import KVStore
 from chumicro_kvstore._backends.mp_nvs import MpNvsBackend
-
-try:
-    import esp32
-    _HAS_ESP32 = True
-except ImportError:
-    _HAS_ESP32 = False
 
 
 def _wipe_nvs() -> None:
@@ -35,8 +35,6 @@ def _wipe_nvs() -> None:
 
 def test_blank_nvs_loads_as_empty() -> None:
     """A namespace with no payload key reports empty without raising."""
-    if not _HAS_ESP32:
-        return
     _wipe_nvs()
     backend = MpNvsBackend()
     assert backend.load() == b""
@@ -44,8 +42,6 @@ def test_blank_nvs_loads_as_empty() -> None:
 
 def test_save_then_load_round_trips_on_real_nvs() -> None:
     """Bytes survive a write + read cycle through the real NVS partition."""
-    if not _HAS_ESP32:
-        return
     _wipe_nvs()
     backend = MpNvsBackend()
     payload = b"hello from real nvs"
@@ -55,8 +51,6 @@ def test_save_then_load_round_trips_on_real_nvs() -> None:
 
 def test_kvstore_round_trips_through_real_nvs() -> None:
     """Full KVStore lifecycle: commit on board, read back from NVS."""
-    if not _HAS_ESP32:
-        return
     _wipe_nvs()
     store = KVStore(backend=MpNvsBackend())
     store["boot_count"] = 1
@@ -72,8 +66,6 @@ def test_kvstore_round_trips_through_real_nvs() -> None:
 
 def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
     """Canonical use case: counter persists across re-construction."""
-    if not _HAS_ESP32:
-        return
     _wipe_nvs()
     for expected in (1, 2, 3, 4):
         store = KVStore(backend=MpNvsBackend())
@@ -84,8 +76,6 @@ def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
 
 def test_commit_if_changed_skips_unchanged_writes() -> None:
     """Wear defense at the substrate level — no NVS commit on no-op."""
-    if not _HAS_ESP32:
-        return
     _wipe_nvs()
     store = KVStore(backend=MpNvsBackend())
     store["alpha"] = 1
@@ -95,8 +85,6 @@ def test_commit_if_changed_skips_unchanged_writes() -> None:
 
 def test_commit_overwrites_previous_payload() -> None:
     """Each commit replaces the prior payload cleanly."""
-    if not _HAS_ESP32:
-        return
     _wipe_nvs()
     store = KVStore(backend=MpNvsBackend())
     store["alpha"] = 1

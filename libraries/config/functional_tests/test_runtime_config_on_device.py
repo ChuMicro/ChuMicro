@@ -6,14 +6,17 @@ device behavior is "open() works against the canonical
 real msgpack file at the canonical location, reads it back via the
 library's reader, asserts the round-trip, and cleans up.
 
-Skipped on devices where the filesystem is read-only at runtime
-(CircuitPython with USB MSC active mounts ``/`` read-only by
-default — the on-device write would fail with ``OSError`` before
-the assertion fires).  On MicroPython boards the root filesystem
-is writable so the test runs end-to-end.
+Runs on MicroPython only.  CircuitPython with USB MSC active mounts
+``/`` read-only by default — the on-device write would fail with
+``OSError`` before the assertion fires.  The
+``__chumicro_runtimes__ = ("micropython",)`` marker keeps CP targets
+out at collection time so the wrong-runtime parametrization never
+deploys this file.
 """
 
-import sys
+__chumicro_runtimes__ = ("micropython",)
+
+import os
 
 from chumicro_config import (
     DEFAULT_RUNTIME_CONFIG_PATH,
@@ -22,11 +25,6 @@ from chumicro_config import (
 )
 from chumicro_msgpack import packb
 from chumicro_test_harness.assertions import raises
-
-_IS_MICROPYTHON = sys.implementation.name == "micropython"
-
-if _IS_MICROPYTHON:
-    import os
 
 
 def _wipe_runtime_config() -> None:
@@ -39,8 +37,6 @@ def _wipe_runtime_config() -> None:
 
 def test_round_trip_via_default_path() -> None:
     """Write a real msgpack file at the canonical path, read it back."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_runtime_config()
     payload = {
         "wifi": {"ssid": "TestNet", "password": "fake"},
@@ -57,8 +53,6 @@ def test_round_trip_via_default_path() -> None:
 
 def test_missing_file_raises_oserror_on_device() -> None:
     """A missing ``/runtime_config.msgpack`` raises ``OSError`` on real flash."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_runtime_config()
     with raises(OSError):
         load_runtime_config()
@@ -66,8 +60,6 @@ def test_missing_file_raises_oserror_on_device() -> None:
 
 def test_non_dict_payload_raises_invalid_type_on_device() -> None:
     """A non-dict payload (e.g. corrupted file) raises ``InvalidConfigType``."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_runtime_config()
     try:
         with open(DEFAULT_RUNTIME_CONFIG_PATH, "wb") as handle:

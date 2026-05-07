@@ -64,6 +64,11 @@ from ._test_runner import (
     resolve_effective_deploy_mode,
     resolve_library_source_dirs,
 )
+from .features import (
+    FEATURE_PROBE_SCRIPT,
+    parse_feature_probe_output,
+    read_features_marker,
+)
 from .pr_summary import (
     DeviceRunResult,
     FileRunResult,
@@ -1342,7 +1347,7 @@ def pytest_collect_file(
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item],
 ) -> None:
-    """Two passes:
+    """Three passes:
 
     1. Belt-and-suspenders: deselect any non-device items under
        functional tests.  The :func:`pytest_pycollect_makemodule` hook
@@ -1352,7 +1357,15 @@ def pytest_collection_modifyitems(
        as a safety net in case another plugin re-introduces a
        non-:class:`DeviceRuntimeItem` for one of these paths — the
        device transport remains the sole execution surface.
-    2. Apply a session-wide skip marker to every
+    2. Deselect every :class:`DeviceRuntimeItem` whose test file
+       declares :data:`__chumicro_features__` requirements that the
+       target device doesn't satisfy.  Lazy-probes each device only
+       when at least one feature-marked item targets it; warns rather
+       than failing if the probe can't reach the device, so an offline
+       board doesn't poison the whole session.  Items are
+       *deselected*, not skipped — feature mismatches mean the test
+       genuinely shouldn't run on that device, not that it's pending.
+    3. Apply a session-wide skip marker to every
        :class:`DeviceRuntimeItem` when the conftest declared required
        runtime-config keys via :func:`set_runtime_config(...,
        required_keys=...)` and one or more are absent from the staged
@@ -1375,6 +1388,12 @@ def pytest_collection_modifyitems(
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
 
+    feature_deselected = _deselect_items_missing_required_features(items)
+    if feature_deselected:
+        config.hook.pytest_deselected(items=feature_deselected)
+        feature_dropped = set(map(id, feature_deselected))
+        items[:] = [item for item in items if id(item) not in feature_dropped]
+
     missing = missing_required_keys(config)
     if missing:
         skip_reason = (
@@ -1387,6 +1406,90 @@ def pytest_collection_modifyitems(
         for item in items:
             if isinstance(item, DeviceRuntimeItem):
                 item.add_marker(skip_marker)
+
+
+def _deselect_items_missing_required_features(
+    items: list[pytest.Item],
+) -> list[pytest.Item]:
+    """Return items whose target device lacks a feature their file declares.
+
+    Reads :data:`__chumicro_features__` from each ``DeviceRuntimeItem``'s
+    test file via AST.  When at least one item declares features, lazy-
+    probes each unique target device once via the existing transport
+    cache, parses :data:`FEATURE_PROBE_SCRIPT` output, and caches the
+    result on the session's ``_device_features_cache``.
+
+    A probe failure (offline device, transport error) is *not* a hard
+    failure — a warning is emitted and the device's feature set is
+    treated as empty for this session.  Tests requiring the missing
+    feature get deselected for that device, the rest still run.
+
+    Args:
+        items: The current item list.  Items reach back to their
+            session via ``item.session`` — we use that to share the
+            transport cache and stash the feature cache.
+    """
+    feature_targets: list[tuple[pytest.Item, DeviceEntry, frozenset[str]]] = []
+    session: pytest.Session | None = None
+    for item in items:
+        if not isinstance(item, DeviceRuntimeItem):
+            continue
+        # Defensive ``getattr`` for both fields — test stubs that mock
+        # ``DeviceRuntimeItem`` via ``spec=`` won't expose attributes
+        # set in ``__init__``.  Skip gracefully so the feature pass
+        # never breaks an unrelated test.
+        device = getattr(item, "target_device", None)
+        test_file = getattr(item, "test_file", None)
+        if device is None or test_file is None:
+            continue
+        marker = read_features_marker(test_file)
+        if not marker:
+            continue
+        feature_targets.append((item, device, marker))
+        if session is None:
+            session = getattr(item, "session", None)
+
+    if not feature_targets or session is None:
+        return []
+
+    cache: dict[str, frozenset[str]] = getattr(
+        session, "_device_features_cache", None,
+    ) or {}
+    session._device_features_cache = cache  # type: ignore[attr-defined]
+
+    devices_to_probe: dict[str, DeviceEntry] = {
+        device.identifier: device
+        for _, device, _ in feature_targets
+        if device.identifier not in cache
+    }
+    if devices_to_probe:
+        transport_cache = _session_cache(session)
+        deploy_mode = _session_deploy_mode_override(session)
+        for device_id, device_entry in devices_to_probe.items():
+            try:
+                transport = transport_cache.get_transport(
+                    device_entry, deploy_mode,
+                )
+                output = transport.execute(FEATURE_PROBE_SCRIPT)
+            except Exception as error:  # noqa: BLE001 — graceful per-device fallback
+                import warnings  # noqa: PLC0415 — only used on the failure path
+
+                warnings.warn(
+                    f"Feature probe failed for device {device_id!r}: "
+                    f"{error}.  Tests declaring "
+                    f"`__chumicro_features__` will be deselected for "
+                    f"this device.",
+                    stacklevel=3,
+                )
+                cache[device_id] = frozenset()
+            else:
+                cache[device_id] = parse_feature_probe_output(output)
+
+    return [
+        item
+        for item, device, required in feature_targets
+        if not required.issubset(cache[device.identifier])
+    ]
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
