@@ -7,7 +7,7 @@ import sys
 from types import SimpleNamespace
 
 import chumicro_test_harness.runner as runner_module
-from chumicro_test_harness import run_module
+from chumicro_test_harness import run_module, skip
 
 
 def test_run_module_executes_all_test_functions(capsys) -> None:
@@ -334,3 +334,84 @@ def test_run_module_ignores_non_class_attrs_named_test(capsys) -> None:
 
     assert result == 0
     assert "NO TESTS FOUND" in output
+
+
+def test_run_module_emits_skip_line_for_skip_call(capsys) -> None:
+    """A test that calls ``skip(reason)`` is reported as SKIP, not PASS or FAIL."""
+    def test_skipped() -> None:
+        skip("missing prerequisite")
+
+    module = SimpleNamespace(test_skipped=test_skipped)
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "SKIP test_skipped (missing prerequisite)" in output
+    assert "PASS test_skipped" not in output
+    assert "FAIL test_skipped" not in output
+    # Skipped tests count toward total but not toward failed.
+    assert "SUMMARY total=1 failed=0" in output
+
+
+def test_run_module_skip_does_not_block_other_tests(capsys) -> None:
+    """Subsequent tests still run after a skip."""
+    state = {"ran_after": False}
+
+    def test_first() -> None:
+        skip("not applicable here")
+
+    def test_second() -> None:
+        state["ran_after"] = True
+
+    module = SimpleNamespace(test_first=test_first, test_second=test_second)
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert state["ran_after"] is True
+    assert "SKIP test_first (not applicable here)" in output
+    assert "PASS test_second" in output
+    assert "SUMMARY total=2 failed=0" in output
+
+
+def test_run_module_skip_format_matches_result_parser_pattern(capsys) -> None:
+    """The emitted SKIP line must match the host-side pattern in
+    ``chumicro_pytest_device.result_parser._SKIP_PATTERN`` so pytest sees
+    the test as skipped, not silently passed."""
+    def test_skipped() -> None:
+        skip("reason text")
+
+    module = SimpleNamespace(test_skipped=test_skipped)
+    run_module(module)
+    output = capsys.readouterr().out
+
+    skip_line = next(
+        line for line in output.splitlines() if line.startswith("SKIP ")
+    )
+    # Pattern from result_parser.py: ``^SKIP\s+(\S+)(?:\s+\((.+)\))?``
+    skip_pattern = re.compile(r"^SKIP\s+(\S+)(?:\s+\((.+)\))?")
+    match = skip_pattern.match(skip_line)
+    assert match is not None
+    assert match.group(1) == "test_skipped"
+    assert match.group(2) == "reason text"
+
+
+def test_run_module_skip_does_not_count_as_failure(capsys) -> None:
+    """A skip alongside a real failure: exit code reflects only the failure."""
+    def test_one() -> None:
+        skip("not applicable")
+
+    def test_two() -> None:
+        raise RuntimeError("real failure")
+
+    module = SimpleNamespace(test_one=test_one, test_two=test_two)
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 1
+    assert "SKIP test_one (not applicable)" in output
+    assert "FAIL test_two" in output
+    assert "SUMMARY total=2 failed=1" in output

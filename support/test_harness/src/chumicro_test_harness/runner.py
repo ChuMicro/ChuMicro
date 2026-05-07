@@ -8,6 +8,8 @@ CPython, MicroPython, and CircuitPython — including on real boards.
 import sys
 import time
 
+from chumicro_test_harness.skip import _SkipException
+
 try:
 	import traceback
 except ImportError:  # pragma: no cover - MicroPython and CircuitPython may omit traceback.
@@ -174,6 +176,13 @@ def run_module(module, name_filter=None):
 		test_start = _now_seconds()
 		try:
 			function()
+		except _SkipException as skip_error:
+			# Drain heap tracking so the next test's baseline is fresh,
+			# but don't print a heap suffix — a skipped test didn't run
+			# any allocations worth reporting.
+			if gc_tracking:
+				_gc.collect()
+			print(f"SKIP {name} ({skip_error})")
 		except Exception as error:  # pragma: no cover - exercised indirectly by tests.
 			test_end = _now_seconds()
 			heap_suffix = ""
