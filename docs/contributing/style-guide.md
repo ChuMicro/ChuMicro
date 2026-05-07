@@ -309,9 +309,12 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 
 - `Decision NNNN` — ADR pointers; ADRs live in `plans/decisions/` and aren't shipped.
 - `plans/...md` paths — the mono-repo planning tree.
-- `scripts/run.py` — the mono-repo's developer command runner (a workspace's own `run.py` shim is fine).
+- `scripts/run.py` — the mono-repo's developer command runner.
+- Bare `run.py` (without the `scripts/` prefix) — the workspace-template's command-runner shim.  Only `chumicro_workspace` legitimately knows about it (the package generates the shim); everywhere else, name the installable CLI (`chumicro-deploy`, `chumicro-workspace`, etc.) instead.
 - `chumicro mono-repo` / `chumicro monorepo` framing.
 
 Inline the prose instead of cross-linking.  Suppress with `# noqa: CHU006` (or `<!-- noqa: CHU006 -->` in Markdown) only when the reference is genuinely load-bearing.
+
+**`scripts/check_workbench_no_lib_imports.py` — `CHU007`** enforces Decision 0052: workbench packages do not import library packages.  Walks `workbench/*/src/` and flags any `import chumicro_<libname>` or `from chumicro_<libname>` where `<libname>` matches a `libraries/` package.  Workbench is host-only and ships to laptops; libraries target devices and their CPython compatibility exists for testing/dev, not as a production runtime.  Use third-party PyPI equivalents (`pyserial`, `msgpack`, `ruamel.yaml`, etc.).  Templates / on-device payloads embedded as bytes are not scanned — those run on the device and legitimately import library packages.  Suppress with `# noqa: CHU007` only on legitimate payload-style imports (rare).
 
 If lint passes, your style is correct. You don't need to memorize any of this — the error messages tell you exactly what to fix and why.
