@@ -83,7 +83,12 @@ def test_connects_to_real_ap() -> None:
     """End-to-end: associate with the configured AP, observe linked state."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
     service = _make_service(wifi_cfg)
     assert service.state == WifiState.DISCONNECTED
 
@@ -105,7 +110,12 @@ def test_reconnect_after_deliberate_disconnect() -> None:
     """Drop the link via ``adapter.disconnect``, watch the reconnect cycle."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
     service = _make_service(wifi_cfg)
     ok = _drive_until(
         service,
@@ -142,7 +152,12 @@ def test_state_callback_observes_transitions() -> None:
     """Registered ``on_state_change`` listener sees the full transition sequence."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
     transitions = []
     service = _make_service(wifi_cfg)
     service.on_state_change(lambda old, new: transitions.append((old, new)))

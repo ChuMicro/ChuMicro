@@ -4,9 +4,13 @@ End-to-end transport verification: bring wifi up, open a UDP socket,
 exchange one datagram with the host-side echo server materialised by
 ``conftest.py``, and assert the echoed payload matches what we sent.
 
-Skips silently when no credentials are configured or the host
-echo-server fixture didn't come up (e.g. running outside the LAN
-fixture machine).  Credentials + the dynamic echo host/port ship
+Skipped at collection time when no credentials are configured —
+the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+``wifi.ssid`` / ``wifi.password`` as required.  When the host echo-
+server fixture didn't come up (running outside the LAN fixture
+machine), the test body itself calls ``chumicro_test_harness.skip``
+so the run reports a visible SKIP instead of a fake PASS.
+Credentials + the dynamic echo host/port ship
 from the host conftest as ``/runtime_config.msgpack`` and are read
 here via the lazy-loaded ``chumicro_config.config`` attribute.
 
@@ -22,6 +26,7 @@ import time
 
 from chumicro_config import config
 from chumicro_sockets import udp_socket
+from chumicro_test_harness import skip
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
@@ -58,15 +63,19 @@ def test_real_udp_echo_round_trip() -> None:
     """Send one datagram to the host echo server, read it back."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
     echo_host = config["sockets.echo.host"]
     echo_port = config["sockets.echo.port"]
     if echo_host is None or echo_port is None:
-        # Fixture didn't bring up an echo server (host wasn't on a
-        # LAN, or detection failed).  Skip silently — TCP test still
-        # validates wifi + sockets.
-        print("UDP_SKIP no host echo fixture available")
-        return
+        # Conftest registers `None` for sockets.echo.host/port when the
+        # host isn't on a LAN or echo-server bind failed.  `required_keys`
+        # treats `None` as present, so we surface the skip here instead.
+        skip("host UDP echo fixture not available (LAN detection or bind failed)")
 
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")

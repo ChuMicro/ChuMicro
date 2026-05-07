@@ -7,7 +7,11 @@ adapter (CP `socketpool`, MP `socket`, CPython stdlib) actually
 ships a connection on the device, not just that the protocol
 factory imports.
 
-Skips silently when no credentials are configured.  Credentials
+Skipped at collection time when no credentials are configured —
+the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
+applies ``pytest.mark.skip`` with a clear message before deploy.
+Credentials
 ship from the host conftest as ``/runtime_config.msgpack`` and are
 read here via ``chumicro_config.load_runtime_config()`` — the same
 API user code uses.
@@ -66,7 +70,12 @@ def test_real_tcp_connect_and_recv() -> None:
     """Open a TCP connection, send HTTP/1.0, read the response."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
 
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")

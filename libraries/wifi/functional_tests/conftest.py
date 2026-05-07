@@ -11,9 +11,11 @@ the same API user code uses.
 
 When the merged config has no usable wifi credentials (fresh-clone
 state, placeholder SSID still in the starter), nothing is
-registered — staging is suppressed and the on-device test's
-import block falls through to the silent-skip path
-(``OSError`` from ``open()``).
+registered.  Combined with the ``required_keys=("wifi.ssid",
+"wifi.password")`` declaration below, the plugin's
+``pytest_collection_modifyitems`` hook applies ``pytest.mark.skip``
+to every device test in the session before deploy — a visible skip
+with a clear message, not a silent fake-pass.
 """
 
 from __future__ import annotations

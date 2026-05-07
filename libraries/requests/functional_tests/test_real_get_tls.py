@@ -8,7 +8,10 @@ request-pipeline level (where the existing
 ``libraries/sockets/functional_tests/test_real_tls.py`` only
 exercises the raw socket).
 
-Skips silently when no credentials are configured.
+Skipped at collection time when no credentials are configured —
+the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
+applies ``pytest.mark.skip`` with a clear message before deploy.
 
 Endpoint: ``https://example.com/`` — IANA-reserved, ships a small
 known body, real CA-signed cert.
@@ -156,7 +159,12 @@ def test_real_https_get_completes_runner_shaped() -> None:
     """Live HTTPS GET drives to completion via pinned-CA TLS context."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
 
     _seed_rtc(config["requests.now_utc_tuple"])
 
