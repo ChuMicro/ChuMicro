@@ -124,19 +124,18 @@ class DeviceImplementation:
 #: immediately after ``connect()``.
 PROBE_IMPLEMENTATION_SCRIPT = (
     "import sys\n"
-    "_probe_version = sys.implementation.version\n"
-    # Stringify the leading run of int components.  ``sys.implementation.version``
-    # shape varies across runtimes / builds: CPython releases ship a 5-tuple
-    # ``(major, minor, micro, releaselevel, serial)``; CircuitPython release
-    # candidates ship a 4-tuple ``(major, minor, micro, '')`` where the empty
-    # string would join to a trailing dot; MicroPython final ships
-    # ``(major, minor, micro)``.  Stop at the first non-int element so the
-    # wire string is always clean dotted-ints.
-    "_probe_version_parts = []\n"
-    "for _probe_part in _probe_version:\n"
-    "    if not isinstance(_probe_part, int): break\n"
-    "    _probe_version_parts.append(str(_probe_part))\n"
-    "_probe_version_str = '.'.join(_probe_version_parts)\n"
+    # CircuitPython and MicroPython both ship a 4-tuple
+    # ``(major, minor, micro, marker)`` from ``sys.implementation.version``
+    # — ``marker`` is ``''`` on a tagged build and ``'preview'`` on a
+    # pre-release / dev build (controlled by ``MICROPY_VERSION_PRERELEASE``
+    # at compile time; see ``py/modsys.c`` in either upstream).  Slot 3 is
+    # a string in every shipped build, so a ``[:3]`` slice keeps just the
+    # dotted ints and drops the marker.  Host CPython's 5-tuple
+    # ``(major, minor, micro, releaselevel, serial)`` also has ints in its
+    # first three slots, so the same slice works when the unit tests exec
+    # the probe under a faked ``sys.implementation``.
+    "_probe_version_str = '.'.join("
+    "str(_part) for _part in sys.implementation.version[:3])\n"
     "_probe_machine = getattr(sys.implementation, '_machine', '')\n"
     "_probe_uid = ''\n"
     "try:\n"

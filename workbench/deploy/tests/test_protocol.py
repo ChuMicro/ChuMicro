@@ -213,17 +213,19 @@ class TestProbeImplementationScript:
 
 
 class TestProbeVersionStringification:
-    """Verify the probe's leading-int-run version stringification.
+    """Verify the probe stringifies major.minor.micro cleanly.
 
-    F3 of the 2026-05-06 verification pass — the original probe
-    joined every element of ``sys.implementation.version`` with
-    dots, producing ``"10.2.0."`` (trailing dot) on CircuitPython
-    RC builds where ``version`` is ``(10, 2, 0, '')``.
+    CircuitPython and MicroPython both ship a 4-tuple from
+    ``sys.implementation.version`` — ``(major, minor, micro, marker)``
+    where ``marker`` is ``''`` on a tagged build and ``'preview'`` on a
+    pre-release / dev build (see ``py/modsys.c`` in either upstream).
+    Naïvely joining every element produced ``"10.2.0."`` (trailing dot)
+    or ``"10.2.0.preview"`` (marker leaks onto the wire).  The probe
+    slices ``[:3]`` to keep only the dotted ints.
 
-    These tests exec the probe script under simulated
+    These tests exec the probe under simulated
     ``sys.implementation.version`` shapes and assert the joined
-    string is clean dotted-ints with no trailing dot or non-int
-    components.
+    version string contains only the dotted ints.
     """
 
     def _run_probe_with_version(
@@ -271,35 +273,33 @@ class TestProbeVersionStringification:
             f"probe did not emit __CHU_IMPL__ marker (output: {captured!r})",
         )
 
-    def test_cp_rc_four_tuple_with_empty_string_strips_trailing_dot(
-        self,
-    ) -> None:
-        """``(10, 2, 0, '')`` (CP 10.2.0-rc.0 shape) → ``"10.2.0"``."""
+    def test_cp_final_strips_empty_marker(self) -> None:
+        """``(10, 2, 0, '')`` (CP final shape) → ``"10.2.0"``."""
         assert self._run_probe_with_version((10, 2, 0, "")) == "10.2.0"
 
-    def test_cp_final_three_tuple(self) -> None:
-        """``(10, 1, 4)`` (CP 10.1.4 final shape) → ``"10.1.4"``."""
-        assert self._run_probe_with_version((10, 1, 4)) == "10.1.4"
-
-    def test_mp_three_tuple(self) -> None:
-        """``(1, 28, 0)`` (MicroPython 1.28.0 shape) → ``"1.28.0"``."""
+    def test_mp_final_strips_empty_marker(self) -> None:
+        """``(1, 28, 0, '')`` (MP final shape) → ``"1.28.0"``."""
         assert self._run_probe_with_version(
-            (1, 28, 0), name="micropython",
+            (1, 28, 0, ""), name="micropython",
         ) == "1.28.0"
 
-    def test_cpython_five_tuple_stops_at_releaselevel(self) -> None:
-        """``(3, 12, 0, 'final', 0)`` (CPython shape) → ``"3.12.0"``.
+    def test_prerelease_strips_preview_marker(self) -> None:
+        """``(1, 28, 0, 'preview')`` (CP / MP pre-release) → ``"1.28.0"``.
 
-        Stops at the first non-int component — does NOT continue
-        through to the trailing serial int.
+        Both runtimes use the literal ``'preview'`` for builds with
+        ``MICROPY_VERSION_PRERELEASE`` enabled; covers either runtime.
+        """
+        assert self._run_probe_with_version(
+            (1, 28, 0, "preview"), name="micropython",
+        ) == "1.28.0"
+
+    def test_cpython_five_tuple_takes_first_three_slots(self) -> None:
+        """``(3, 12, 0, 'final', 0)`` (CPython) → ``"3.12.0"``.
+
+        The probe is exec'd on host CPython by these tests; the
+        ``[:3]`` slice keeps only the dotted ints and drops both
+        ``releaselevel`` and ``serial``.
         """
         assert self._run_probe_with_version(
             (3, 12, 0, "final", 0),
         ) == "3.12.0"
-
-    def test_first_element_non_int_yields_empty(self) -> None:
-        """Defensive: a runtime that returns a string-first version
-        produces an empty version string (caller treats as
-        ``UNPARSEABLE``).
-        """
-        assert self._run_probe_with_version(("v", 1, 0)) == ""
