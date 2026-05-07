@@ -7,7 +7,10 @@ minimal request round-trips.  Catches handshake regressions
 silent EAGAIN-on-recv conflations) at the transport layer where
 the diagnostic message is unambiguous.
 
-Skips silently when no credentials are configured.
+Skipped at collection time when no credentials are configured —
+the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
+applies ``pytest.mark.skip`` with a clear message before deploy.
 
 Endpoint: ``example.com:443`` — IANA-reserved, ships a small
 known body, supports modern TLS.
@@ -60,7 +63,12 @@ def test_real_tls_handshake_and_recv() -> None:
     """Open TLS, send HTTPS GET, read response."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
 
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")

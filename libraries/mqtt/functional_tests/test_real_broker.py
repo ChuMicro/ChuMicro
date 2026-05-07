@@ -4,7 +4,11 @@ End-to-end: bring wifi up on the device, connect to a public MQTT
 broker, publish + subscribe to a unique topic, verify the inbound
 PUBLISH round-trips back via QoS 1.
 
-Skips silently when no credentials are configured.  Credentials +
+Skipped at collection time when no credentials are configured —
+the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+``wifi.ssid`` / ``wifi.password`` / ``mqtt.broker.host`` /
+``mqtt.broker.port`` as required, so the host plugin applies
+``pytest.mark.skip`` with a clear message before deploy.  Credentials +
 the dynamic broker host/port ship from the host conftest as
 ``/runtime_config.msgpack`` and are read here via
 ``chumicro_config.load_runtime_config()``.
@@ -89,7 +93,12 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
     """Connect to a real broker, publish QoS 1, confirm receipt."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
     broker_host = config["mqtt.broker.host"]
     broker_port = config["mqtt.broker.port"]
 

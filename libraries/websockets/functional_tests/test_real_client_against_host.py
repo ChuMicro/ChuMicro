@@ -18,9 +18,12 @@ LAN + come back from a battle-tested third-party server (the
 * UTF-8 text frames + binary frames both round-trip.
 * The close handshake completes gracefully on the wire.
 
-Skips silently when no wifi credentials are configured OR the
-``websockets`` PyPI package isn't installed in the host venv (the
-conftest can't spin up the server without it).
+Skipped at collection time when no wifi credentials are configured —
+the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+``wifi.ssid`` / ``wifi.password`` as required.  When the host
+``websockets`` PyPI package isn't installed (the conftest can't spin
+up the server without it), the test body calls
+``chumicro_test_harness.skip`` so the run reports a visible SKIP.
 
 **Deploy mode:** Pi Pico W requires ``--deploy-mode flash`` per the
 multi-stack-too-heavy rule from ``plans/learnings.md`` — same
@@ -30,6 +33,7 @@ constraint as ``test_real_loopback.py``.
 import time
 
 from chumicro_config import config
+from chumicro_test_harness import skip
 from chumicro_websockets import WebSocketClient, WebSocketState
 from chumicro_websockets.sockets_factory import chumicro_sockets_factory
 from chumicro_wifi import WifiConfig, WifiService, WifiState
@@ -73,15 +77,23 @@ def test_real_client_round_trip_against_host_echo_server() -> None:
     """Device client connects to host echo server, round-trips 3 messages."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
     server_host = config["websockets.server.host"]
     server_port = config["websockets.server.port"]
     if server_host is None or server_port is None:
-        # Host fixture didn't bring up the echo server (websockets PyPI
-        # missing, LAN detection failed, etc.).  Skip silently — the
-        # in-memory integration suite still validates the wire.
-        print("WS_HOST_SKIP no host echo-server fixture available")
-        return
+        # Conftest registers `None` for websockets.server.host/port when
+        # the `websockets` PyPI package isn't installed in the host venv
+        # or LAN detection failed.  `required_keys` treats `None` as
+        # present, so we surface the skip here instead.
+        skip(
+            "host websockets echo-server fixture not available "
+            "(install `websockets` in the host venv, or check LAN detection)",
+        )
 
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")

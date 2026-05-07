@@ -5,9 +5,15 @@ on a real :func:`chumicro_sockets.tcp_listening_socket`, connect a
 :class:`WebSocketClient` to it via the device's own LAN IP, drive
 both runners through bidirectional traffic and the close handshake.
 
-Skips silently when no credentials are configured.  Credentials
-ship from the host conftest as ``/runtime_config.msgpack`` and are
-read here via ``chumicro_config.load_runtime_config()``.
+Skipped at collection time when no credentials are configured —
+the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
+applies ``pytest.mark.skip`` with a clear message before deploy.
+On Pi Pico W (rp2 stack) the test body additionally calls
+``chumicro_test_harness.skip`` because lwIP doesn't implement
+self-loopback there.  Credentials ship from the host conftest as
+``/runtime_config.msgpack`` and are read here via
+``chumicro_config.load_runtime_config()``.
 
 Verifies the canonical promise (Decision 0045): an LED-style counter
 keeps incrementing on the same loop while the handshake, the frame
@@ -35,6 +41,7 @@ import time
 
 from chumicro_config import config
 from chumicro_sockets import tcp_client_socket, tcp_listening_socket
+from chumicro_test_harness import skip
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_websockets import WebSocketClient, WebSocketServer, WebSocketState
 from chumicro_wifi import WifiConfig, WifiService, WifiState
@@ -100,14 +107,18 @@ def test_real_websocket_loopback_round_trip() -> None:
     """Server + client on the same device exchange messages over real wifi."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
-    if _is_pi_pico_w_rp2():
-        print(
-            "SKIP_PI_PICO_W_RP2: single-device loopback unsupported on rp2 "
-            "(lwIP self-loopback + CP USB wedge cluster); use a two-device "
-            "setup or run on the ESP32 family instead.",
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
         )
-        return
+    if _is_pi_pico_w_rp2():
+        skip(
+            "single-device loopback unsupported on rp2 "
+            "(lwIP self-loopback + CP USB wedge cluster); use a two-device "
+            "setup or run on the ESP32 family instead",
+        )
 
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")

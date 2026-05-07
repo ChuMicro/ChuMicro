@@ -6,7 +6,11 @@ the host's clock.  Exercises chumicro-ntp's SNTP wire format,
 chumicro-sockets' UDP path, and the ``sockets_factory`` Decision-
 0042 deploy-rule submodule end-to-end on real hardware.
 
-Skips silently when no credentials are configured.  Credentials
+Skipped at collection time when no credentials are configured —
+the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
+applies ``pytest.mark.skip`` with a clear message before deploy.
+Credentials
 ship from the host conftest as ``/runtime_config.msgpack`` and are
 read here via ``chumicro_config.load_runtime_config()`` — the same
 API user code uses.
@@ -62,7 +66,12 @@ def test_real_ntp_query_returns_plausible_timestamp() -> None:
     """SNTP exchange against pool.ntp.org returns a recent timestamp."""
     wifi_cfg = WifiConfig.try_from_config(config)
     if wifi_cfg is None:
-        return
+        raise AssertionError(
+            "wifi runtime config missing — the conftest's "
+            "`set_runtime_config(..., required_keys=...)` should have "
+            "skipped this test at collection time.  Reaching this body "
+            "means the conftest's required_keys list is incomplete.",
+        )
 
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
