@@ -17,7 +17,7 @@ from chumicro_kvstore import (
 )
 from chumicro_kvstore._backends.memory import MemoryBackend
 from chumicro_kvstore.testing import FakeKVStore
-from chumicro_test_harness import raises
+from chumicro_test_harness import raises, skip
 
 # ---------------------------------------------------------------------------
 # Construction + auto-detect
@@ -33,7 +33,7 @@ def test_default_backend_is_memory_on_cpython() -> None:
     suites — assert the CPython case here only.
     """
     if sys.implementation.name != "cpython":
-        return
+        skip("auto-detect on MP/CP unix-port is covered by the functional suites")
     store = KVStore(backend="auto")
     assert store.backend_name == "memory"
 

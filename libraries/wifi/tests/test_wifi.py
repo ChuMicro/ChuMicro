@@ -19,7 +19,7 @@ Three test surfaces:
 import sys
 
 from chumicro_config import MissingConfigKey, RuntimeConfig
-from chumicro_test_harness import raises
+from chumicro_test_harness import raises, skip
 from chumicro_timing.testing import FakeTicks
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 from chumicro_wifi.testing import FakeWifi, FakeWifiAdapter
@@ -424,12 +424,12 @@ def test_adapter_name_reflects_injected_adapter() -> None:
 def test_default_adapter_on_cpython_is_fake() -> None:
     """``_select_adapter`` returns ``FakeWifiAdapter`` on CPython.
 
-    Per-runtime branches (CP / MP-ESP32 / MP-RP2) live in pragma:no
-    cover blocks; their selection logic is exercised when the
-    real adapters land in slices 1–3.
+    The CP and MP adapters are now real and exercised by the
+    functional suites; this host-side test stays scoped to the
+    CPython fake-adapter path.
     """
     if not _IS_CPYTHON:
-        return
+        skip("CP/MP adapter selection is covered by the functional suites")
     config = WifiConfig(ssid="x", password="y")
     service = WifiService(config)
     assert service.adapter_name == "fake"

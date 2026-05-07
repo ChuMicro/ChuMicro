@@ -436,6 +436,7 @@ def lint() -> int:
     """Run Ruff plus the chumicro-specific CHU lint checks."""
     from check_names import main as check_names_main
     from check_no_repo_refs import main as check_no_repo_refs_main
+    from check_no_silent_test_skip import main as check_no_silent_test_skip_main
     from check_whitespace import main as check_whitespace_main
     from check_workbench_no_lib_imports import main as check_workbench_no_lib_imports_main
     ruff_result = run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
@@ -450,7 +451,10 @@ def lint() -> int:
     repo_refs_result = check_no_repo_refs_main()
     if repo_refs_result != 0:
         return repo_refs_result
-    return check_workbench_no_lib_imports_main()
+    workbench_no_lib_imports_result = check_workbench_no_lib_imports_main()
+    if workbench_no_lib_imports_result != 0:
+        return workbench_no_lib_imports_result
+    return check_no_silent_test_skip_main()
 
 
 def _parse_library_filters(
