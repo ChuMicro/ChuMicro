@@ -1,6 +1,6 @@
 # Workstream: library `from_config` factories — config-aware constructors across the six networking libs
 
-Status: **open — Phase 0 (manifests) shipped; Phase 1 (validation hook) and per-library refactor still to do.**
+Status: **open — Phases 0 (manifests) + 1 (pytest-device validation hook) shipped 2026-05-06; Phase 2 (per-library `from_config` factories with hardware validation) and Phase 3 (`deploy-example` CLI) still to do.**
 
 The libraries `mqtt`, `requests`, `http_server`, `ntp`, `websockets`, and `wifi` were written before the runtime-config strategy ([Decision 0035](../decisions/0035-runtime-config-structure.md), [Decision 0057](../decisions/0057-two-file-config.md), [`config-shape-beginner-ergonomics`](archive/config-shape-beginner-ergonomics.md)).  Today only `chumicro_wifi.WifiConfig.from_config` exists — `WifiService(WifiConfig.from_config(config))` reads `wifi.ssid` / `wifi.password` straight off the deployed `runtime_config.msgpack`.
 
@@ -41,17 +41,27 @@ Five libraries (`mqtt`, `requests`, `http_server`, `ntp`, `websockets`) gained `
 
 `wifi` already had its manifest from before; left untouched.
 
-### Phase 1 — `chumicro-pytest-device` validation hook
+### Phase 1 — `chumicro-pytest-device` validation hook (shipped 2026-05-06)
 
-Today `chumicro_pytest_device.runtime_config.set_runtime_config(config, payload)` stages bytes blindly.  Add a validation step that runs before `transport.stage`:
+`chumicro_pytest_device.runtime_config.set_runtime_config` gained an optional `required_keys` kwarg; the plugin's `pytest_collection_modifyitems` hook checks the staged payload against the registered required keys and applies a session-wide skip marker to every `DeviceRuntimeItem` when one or more are absent.  Skip message names every missing key in declaration order so the user knows exactly what to populate in `secrets.toml` or per-project config.
 
-1. The conftest passes `set_runtime_config(config, payload, required_keys=("mqtt.broker.host", "mqtt.broker.port"))`.
-2. The plugin checks every required key is present in the payload.
-3. On miss: `pytest.skip(f"functional test requires runtime-config keys: {missing}")` — clear precheck error, no on-device crash.
+Per-conftest required-keys (not lib-manifest-driven) is the right shape: **the library doesn't require any of these keys** (its `src/` reads nothing), but the *test* against a real broker does require `mqtt.broker.host`.  That's a test-infrastructure concern, not a library-config concern.  The manifest stays library-shaped; the test declares its own contract via `set_runtime_config(..., required_keys=...)`.
 
-Why per-conftest required-keys instead of leaning on the library manifest: **the library doesn't require any of these keys** (its `src/` reads nothing), but the *test* against a real broker does require `mqtt.broker.host`.  That's a test-infrastructure concern, not a library-config concern.  The manifest stays library-shaped; the test declares its own contract.
+All seven networking-library conftests updated to declare their required keys:
 
-`chumicro-pytest-device` minor VERSION bump.  Public-API surface change to the `set_runtime_config` signature (additive — new optional kwarg, existing zero-validation callers keep working).
+| Library conftest | Required keys |
+|---|---|
+| `wifi` | `wifi.ssid`, `wifi.password` |
+| `mqtt` | `wifi.ssid`, `wifi.password`, `mqtt.broker.host`, `mqtt.broker.port` |
+| `sockets` | `wifi.ssid`, `wifi.password`, `sockets.echo.host`, `sockets.echo.port` |
+| `requests` | `wifi.ssid`, `wifi.password` (TLS test handles its `requests.now_utc_tuple` need inline) |
+| `http_server` | `wifi.ssid`, `wifi.password` |
+| `ntp` | `wifi.ssid`, `wifi.password` |
+| `websockets` | `wifi.ssid`, `wifi.password`, `websockets.server.host`, `websockets.server.port` |
+
+`chumicro-pytest-device` 0.4.0 → 0.5.0.  Additive API change — existing zero-validation callers keep working with the empty-tuple default.
+
+Hardware validation **not** required for Phase 1 — host-side test plumbing only; CPython unit tests cover the new behavior.  When a contributor next runs `python scripts/run.py test-libraries-functional` against unconfigured creds, they'll get a clear precheck skip instead of an on-device boot crash.
 
 ### Phase 2 — per-library `from_config` factories + library refactor
 
@@ -79,6 +89,8 @@ A thin CLI that:
 Sister piece in `chumicro-deploy`: a "deploy-this-single-file-as-code.py" primitive that the `scripts/run.py` wrapper composes with.  Same primitive can power `chumicro-workspace` for user-authored libraries inside template-repo workspaces (later — not in scope today).
 
 The pre-condition for this phase is the example-file shape being **self-executing** (top-level code that runs on import).  Most existing examples already are; any that aren't (e.g. `mqtt/examples/quickstart.py` exposes `def run_quickstart()`) get reshaped during Phase 2 anyway.
+
+**Wifi pilot caveat surfaced 2026-05-06:**  the obvious starting point ("pilot Phase 3 on wifi first") needs a real-wifi example to be meaningful — and `libraries/wifi/examples/quickstart.py` uses `FakeWifi` from `chumicro_wifi.testing` deliberately so it runs anywhere.  Wifi has no real-wifi example today.  Two options when Phase 3 picks up:  (a) add a new `libraries/wifi/examples/circuitpython_connect.py` that uses `WifiConfig.from_config(config)` to bring up real wifi and print the IP — gives Phase 3 a concrete first consumer and exercises wifi's existing manifest end-to-end; (b) pilot Phase 3 on `mqtt/examples/circuitpython_telemetry.py` instead, since it already needs real wifi + a broker (also fixes the post-migration broken `config.get("telemetry")` shape during Phase 2 mqtt refactor).  Recommended: (b) — bigger payoff per touch.
 
 ## Constraints
 

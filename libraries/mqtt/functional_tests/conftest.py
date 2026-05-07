@@ -165,7 +165,16 @@ def pytest_configure(config: pytest.Config) -> None:
             else:
                 shutil.rmtree(workdir, ignore_errors=True)
 
-    set_runtime_config(config, merged)
+    set_runtime_config(
+        config,
+        merged,
+        required_keys=(
+            "wifi.ssid",
+            "wifi.password",
+            "mqtt.broker.host",
+            "mqtt.broker.port",
+        ),
+    )
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001 — pytest hook
