@@ -437,6 +437,7 @@ def lint() -> int:
     from check_names import main as check_names_main
     from check_no_repo_refs import main as check_no_repo_refs_main
     from check_no_silent_test_skip import main as check_no_silent_test_skip_main
+    from check_plans_brevity import main as check_plans_brevity_main
     from check_whitespace import main as check_whitespace_main
     from check_workbench_no_lib_imports import main as check_workbench_no_lib_imports_main
     ruff_result = run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
@@ -454,7 +455,10 @@ def lint() -> int:
     workbench_no_lib_imports_result = check_workbench_no_lib_imports_main()
     if workbench_no_lib_imports_result != 0:
         return workbench_no_lib_imports_result
-    return check_no_silent_test_skip_main()
+    silent_skip_result = check_no_silent_test_skip_main()
+    if silent_skip_result != 0:
+        return silent_skip_result
+    return check_plans_brevity_main()
 
 
 def _parse_library_filters(
