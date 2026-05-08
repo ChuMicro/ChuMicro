@@ -1592,6 +1592,322 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# deploy-example — front-door command for running a library example on a board
+# ---------------------------------------------------------------------------
+
+
+#: Distinct exit codes for `chumicro-workspace deploy-example` so agents
+#: and CI runners can branch on the code without parsing stderr.  The
+#: codes are stable contract — adding a new one is safe, renumbering an
+#: existing one is a breaking change.
+DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED = 2
+DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED = 3
+DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED = 4
+DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED = 5
+DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME = 6
+
+
+def _list_examples(libraries_root: Path, library_name: str | None) -> int:
+    """Print every available example under ``libraries/[<lib>/]examples/``.
+
+    With *library_name* set, prints only that library's examples.
+    Without, prints every library's set.  Examples list as
+    ``<lib>/<example_stem>`` so the user can pass either form to
+    ``deploy-example`` later.
+    """
+    if not libraries_root.is_dir():
+        print(
+            f"deploy-example --list: {libraries_root} not found.  "
+            "deploy-example expects a libraries/ directory under the "
+            "workspace root.",
+            file=sys.stderr,
+        )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+    targets = (
+        [libraries_root / library_name]
+        if library_name
+        else sorted(
+            path for path in libraries_root.iterdir() if path.is_dir()
+        )
+    )
+    found = 0
+    for library_dir in targets:
+        examples_dir = library_dir / "examples"
+        if not examples_dir.is_dir():
+            continue
+        for example in sorted(examples_dir.glob("*.py")):
+            print(f"{library_dir.name}/{example.stem}")
+            found += 1
+    if found == 0:
+        if library_name:
+            print(
+                f"deploy-example --list: no examples under "
+                f"{libraries_root / library_name}/examples/",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"deploy-example --list: no examples found under "
+                f"{libraries_root}/*/examples/",
+                file=sys.stderr,
+            )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+    return 0
+
+
+def _resolve_deploy_example_modes(args: argparse.Namespace) -> tuple[bool, bool]:
+    """Resolve the ``(non_interactive, tail)`` mode pair for deploy-example.
+
+    Per ADR 0059 §4: TTY auto-detection sets the default; explicit
+    ``--non-interactive`` / ``--no-tail`` flags override.
+
+    Returns:
+        ``(non_interactive, should_tail)``.  ``should_tail`` is
+        always ``False`` when ``non_interactive`` is ``True`` —
+        long-running tail processes are inherently interactive.
+    """
+    if args.non_interactive:
+        non_interactive = True
+    else:
+        non_interactive = not sys.stdin.isatty()
+    if non_interactive:
+        return True, False
+    # Interactive default: tail unless --no-tail.
+    should_tail = args.tail
+    return False, should_tail
+
+
+def _print_no_device_hint(runtime_required: str | None) -> None:
+    """Print the structured stderr hint for the no-device-registered case.
+
+    Per ADR 0059 §3 state (1) non-interactive branch.  An agent / CI
+    runner reads exit code 3 and follows the hint to register a
+    device explicitly.
+    """
+    runtime = runtime_required or "circuitpython"
+    print(
+        f"deploy-example: no {runtime} device registered.\n"
+        f"  to register:    chumicro-workspace add-device "
+        f"<id> --address <port> --runtime {runtime}\n"
+        f"  to list ports:  chumicro-workspace discover\n"
+        f"  rerun without --non-interactive for the registration wizard.",
+        file=sys.stderr,
+    )
+
+
+def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state machine
+    args: argparse.Namespace,
+) -> int:
+    """Deploy a library example to a registered device.
+
+    Front-door command for running ``libraries/<lib>/examples/<name>.py``
+    on a board.  Handles four first-touch board states (no device
+    registered, happy path, no Python runtime / Arduino, port
+    unreachable) and supports both interactive (TTY-detected, falls
+    into the bootstrap wizard on missing device) and
+    ``--non-interactive`` (CI / agent-friendly, fails fast with
+    structured stderr hints) modes.
+
+    Exit codes (distinct so agents and CI runners can branch on the
+    code without parsing stderr):
+
+    * 0 — Deploy succeeded.
+    * 2 — Precheck failed (file missing, runtime mismatch, missing
+      config key).
+    * 3 — No device registered for runtime, ``--no-auto-register`` in
+      effect (or non-interactive default).
+    * 4 — Deploy failed (transport error; recovery hints on stderr).
+    * 5 — Bootstrap wizard cancelled by user (interactive mode only).
+    * 6 — ``NO_PYTHON_RUNTIME``: board has Arduino or unknown firmware.
+    """
+    workspace = _resolve_workspace(args)
+    libraries_root = workspace.root / "libraries"
+
+    # --list short-circuits everything else.
+    if args.list:
+        return _list_examples(libraries_root, args.library)
+
+    # Library + example file existence (precheck — fast).
+    if not args.library:
+        print(
+            "deploy-example: library positional required "
+            "(use --list to discover available libraries).",
+            file=sys.stderr,
+        )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+    if not args.example_name:
+        print(
+            "deploy-example: example positional required "
+            "(use --list <lib> to see available examples).",
+            file=sys.stderr,
+        )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+    library_root = libraries_root / args.library
+    if not library_root.is_dir():
+        print(
+            f"deploy-example: library {args.library!r} not found "
+            f"under {libraries_root}.",
+            file=sys.stderr,
+        )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+    stem = (
+        args.example_name[:-3]
+        if args.example_name.endswith(".py")
+        else args.example_name
+    )
+    example_path = library_root / "examples" / f"{stem}.py"
+    if not example_path.is_file():
+        print(
+            f"deploy-example: example file {example_path} not found.",
+            file=sys.stderr,
+        )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+
+    # Required runtime per the example's __chumicro_runtimes__ marker.
+    # None = universal; we'll fall back to whatever the device runs.
+    from chumicro_deploy.runtime_marker import read_runtime_marker  # noqa: PLC0415
+    marker = read_runtime_marker(example_path)
+    runtime_required: str | None = None
+    if marker is not None and len(marker) == 1:
+        (runtime_required,) = marker
+    elif marker is not None and len(marker) > 1:
+        # Multi-runtime example — pick from --runtime if supplied,
+        # else error and ask the user to disambiguate.
+        if args.runtime and args.runtime in marker:
+            runtime_required = args.runtime
+        else:
+            print(
+                f"deploy-example: example targets multiple runtimes "
+                f"({sorted(marker)}); pass --runtime to disambiguate.",
+                file=sys.stderr,
+            )
+            return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+
+    non_interactive, should_tail = _resolve_deploy_example_modes(args)
+
+    # Resolve a device — state (1) detection.  When the user passed
+    # --device <id> explicitly, honour it and let the runtime check
+    # below catch any mismatch with the example's marker.  Otherwise
+    # the example's runtime (or --runtime) drives default-device
+    # selection.
+    if args.device_id is not None:
+        runtime_filter: str | None = None
+    else:
+        runtime_filter = runtime_required or args.runtime
+    device_args = argparse.Namespace(
+        workspace_dir=args.workspace_dir,
+        device_id=args.device_id,
+        runtime=runtime_filter,
+    )
+    device = None
+    try:
+        device = _resolve_device(workspace, device_args)
+    except SystemExit:
+        device = None
+    except Exception:  # noqa: BLE001 — every load-failure routes to state (1)
+        device = None
+
+    if device is None:
+        if non_interactive or not args.auto_register:
+            _print_no_device_hint(runtime_required)
+            return DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
+        # Interactive: fall into the bootstrap wizard.
+        bootstrap_args = argparse.Namespace(
+            workspace_dir=args.workspace_dir,
+            port=None,
+            device_id=None,
+            with_demo=False,  # don't double up; we deploy the example next
+        )
+        wizard_exit = _cmd_bootstrap(bootstrap_args)
+        if wizard_exit != 0:
+            return DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED
+        try:
+            device = _resolve_device(workspace, device_args)
+        except SystemExit:
+            return DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
+
+    # Validate device runtime matches the example's marker (if any).
+    if runtime_required and str(device.transport) != runtime_required:
+        print(
+            f"deploy-example: example requires {runtime_required} but "
+            f"selected device runs {device.transport}.  Pass --device "
+            f"<id> or --runtime {runtime_required} to pick a matching "
+            f"board.",
+            file=sys.stderr,
+        )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+
+    target_runtime = runtime_required or str(device.transport)
+
+    # Build the FileSource — every other lib in libraries/ contributes
+    # its src/ to the import-graph search paths so cross-library imports
+    # resolve.
+    library_roots = sorted(
+        path for path in libraries_root.iterdir() if path.is_dir()
+    )
+    from chumicro_workspace.example_source import example_source  # noqa: PLC0415
+    try:
+        source = example_source(
+            library_root,
+            stem,
+            library_roots=library_roots,
+            runtime=target_runtime,
+            secrets_toml=workspace.secrets_toml,
+        )
+    except (FileNotFoundError, ValueError) as build_error:
+        print(
+            f"deploy-example: precheck failed: {build_error}",
+            file=sys.stderr,
+        )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+
+    print(
+        f"deploy-example: deploying {args.library}/{stem} → "
+        f"{device.transport} @ {device.address} ...",
+    )
+
+    # Wrap in the recovery-coaching deployer.  NonInteractiveDeployer
+    # re-raises after printing; InteractiveDeployer prompts to retry.
+    runner = _make_deploy_runner(device, non_interactive=non_interactive)
+    from chumicro_deploy.recovery import (  # noqa: PLC0415
+        DeployFailureKind,
+        classify_deploy_failure,
+    )
+    try:
+        result = runner.deploy(source)
+    except Exception as deploy_error:  # noqa: BLE001 — classify + route
+        kind = classify_deploy_failure(deploy_error)
+        if kind is DeployFailureKind.NO_PYTHON_RUNTIME:
+            return DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME
+        return DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
+
+    if result.execute_output:
+        print(result.execute_output, end="")
+    if not result.success:
+        _emit_failure_hints(result)
+        return DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
+
+    if should_tail:
+        # Optional REPL drop — interactive mode only.  Opens an
+        # interactive serial REPL against the device so the user can
+        # follow the example's output and press Ctrl-D to exit.
+        print("deploy-example: dropping into chumicro-repl ...")
+        try:
+            from chumicro_repl.cli import main as repl_main  # noqa: PLC0415
+            return repl_main([
+                "--transport", str(device.transport),
+                "--address", str(device.address),
+            ])
+        except ImportError:
+            print(
+                "deploy-example: chumicro-repl not installed; skipping "
+                "tail.  Install with `pip install chumicro-repl`.",
+                file=sys.stderr,
+            )
+    return 0
+
+
 def _stdin_prompt(prompt_text: str) -> str:
     """Real-stdin prompt — tests inject a deterministic substitute.
 
@@ -3080,6 +3396,86 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     demo_parser.set_defaults(func=_cmd_demo)
+
+    # ----- deploy-example ------------------------------------------------
+    deploy_example_parser = subparsers.add_parser(
+        "deploy-example",
+        help=(
+            "Deploy a library example (libraries/<lib>/examples/<name>.py) "
+            "to a registered device.  Front-door command for running "
+            "the first hello-world on a board."
+        ),
+    )
+    _add_workspace_arg(deploy_example_parser)
+    deploy_example_parser.add_argument(
+        "library",
+        nargs="?",
+        default=None,
+        help=(
+            "Library name under libraries/ (e.g. 'timing').  Required "
+            "unless --list is passed without an argument."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "example_name",
+        nargs="?",
+        default=None,
+        metavar="example",
+        help=(
+            "Example file stem under libraries/<lib>/examples/ "
+            "(e.g. 'circuitpython_blink' or 'circuitpython_blink.py' — "
+            "trailing .py is optional)."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "--list",
+        action="store_true",
+        help=(
+            "List every available example under libraries/<lib>/examples/ "
+            "and exit.  Pass a library positional to scope to one library."
+        ),
+    )
+    _add_device_selector(deploy_example_parser)
+    deploy_example_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "Disable every prompt + long-running tail (sets implicit "
+            "--no-auto-register + --no-tail).  Auto-detected from "
+            "stdin TTY status; pass explicitly for CI / scripted runs."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "--no-auto-register",
+        dest="auto_register",
+        action="store_false",
+        default=True,
+        help=(
+            "Refuse to fall into the bootstrap wizard when no device is "
+            "registered for the example's runtime — exit 3 with a "
+            "structured stderr hint instead.  Default behaviour is to "
+            "fall through into the wizard in interactive mode."
+        ),
+    )
+    tail_group = deploy_example_parser.add_mutually_exclusive_group()
+    tail_group.add_argument(
+        "--tail",
+        dest="tail",
+        action="store_true",
+        default=True,
+        help=(
+            "After deploy, drop into `chumicro-repl tail` to follow the "
+            "example's output.  Interactive default; suppressed by "
+            "--non-interactive."
+        ),
+    )
+    tail_group.add_argument(
+        "--no-tail",
+        dest="tail",
+        action="store_false",
+        help="Exit cleanly after deploy instead of tailing the REPL.",
+    )
+    deploy_example_parser.set_defaults(func=_cmd_deploy_example)
 
     # ----- bootstrap -----------------------------------------------------
     bootstrap_parser = subparsers.add_parser(

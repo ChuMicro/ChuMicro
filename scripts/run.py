@@ -2367,14 +2367,15 @@ def _resolve_optional_scope(args) -> list[Path] | None:
 
 def main(argv: list[str]) -> int:
     """Dispatch a named repository-level task."""
-    # ``add-device`` is a pass-through shim around ``chumicro-workspace
-    # add-device``.  Peeled off before argparse so the workspace
-    # package's flag set (which evolves independently of run.py) flows
-    # through verbatim — see Phase 1 of
-    # ``plans/workstreams/scripts-workbench-config-unification.md``.
-    if len(argv) >= 2 and argv[1] == "add-device":
+    # ``add-device`` and ``deploy-example`` are pass-through shims
+    # around their workspace counterparts.  Peeled off before argparse
+    # so the workspace package's flag sets (which evolve independently
+    # of run.py) flow through verbatim — see Phase 1 of
+    # ``plans/workstreams/scripts-workbench-config-unification.md`` for
+    # add-device, and Decision 0059 for deploy-example.
+    if len(argv) >= 2 and argv[1] in ("add-device", "deploy-example"):
         return subprocess.run(
-            [PYTHON, "-m", "chumicro_workspace", "add-device", *argv[2:]],
+            [PYTHON, "-m", "chumicro_workspace", argv[1], *argv[2:]],
             check=False,
         ).returncode
 
