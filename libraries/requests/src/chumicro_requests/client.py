@@ -351,7 +351,92 @@ class HttpClient:
 
         from chumicro_requests import HttpClient, chumicro_sockets_factory
         client = HttpClient(connection_factory=chumicro_sockets_factory())
+
+    For config-driven construction, see :meth:`from_config` —
+    one-line factory that reads the per-call defaults
+    (``requests.default_timeout_ms``, ``requests.user_agent``,
+    etc.) from ``runtime_config.msgpack``.
     """
+
+    @classmethod
+    def from_config(
+        cls,
+        config,
+        *,
+        radio=None,
+        ssl_context=None,
+        connection_factory=None,
+    ):
+        """Build an :class:`HttpClient` from runtime config.
+
+        Reads the ``[tool.chumicro.config]`` keys declared in
+        ``libraries/requests/pyproject.toml`` — **all optional** with
+        sensible defaults:
+
+        * ``requests.default_timeout_ms`` →
+          :data:`DEFAULT_TIMEOUT_MS` (10 000 ms).
+        * ``requests.default_max_redirects`` →
+          :data:`DEFAULT_MAX_REDIRECTS` (5).
+        * ``requests.user_agent`` → ``None`` (the library's
+          built-in ``"chumicro-requests/0.1"`` is used).
+        * ``requests.max_body_bytes`` →
+          :data:`DEFAULT_MAX_BODY_BYTES`.
+
+        Like :meth:`chumicro_ntp.NTPClient.from_config` (and unlike
+        :meth:`chumicro_mqtt.MQTTClient.from_config`), no key is
+        required and the auto-built ``connection_factory`` reads
+        zero config keys (host/port live on each request URL, not
+        on the client).  Empty ``config`` is valid input.
+
+        When *connection_factory* is supplied, the caller owns the
+        connection-opening behaviour.  When it's not, an auto-built
+        factory wires through :func:`chumicro_sockets_factory` using
+        the *radio* and *ssl_context* kwargs.
+
+        ``requests.now_utc_tuple`` (used by ``functional_tests``
+        ``conftest.py`` to seed the RTC for TLS cert validation) is
+        deliberately **not** part of the manifest — the library
+        doesn't seed RTCs.  Application code that needs RTC seeding
+        does it explicitly before constructing the client; the
+        functional-test conftest reads the key on its own via
+        ``set_runtime_config(..., required_keys=...)``.
+
+        Args:
+            config: A :class:`chumicro_config.RuntimeConfig`
+                (typically ``chumicro_config.config``) or plain
+                flat dict.  Keys read are flat dotted strings
+                (``"requests.default_timeout_ms"``).
+            radio: WiFi radio for the auto-built connection factory —
+                CircuitPython needs this; MicroPython auto-detects.
+                Ignored when *connection_factory* is passed.
+            ssl_context: ``SSLContext`` for the auto-built factory's
+                TLS branch.  ``None`` uses the runtime default.
+                Ignored when *connection_factory* is passed.
+            connection_factory: Custom ``(host, port, use_tls) ->
+                TCPClientSocket`` callable.  When supplied, the
+                auto-built factory is skipped — caller owns the
+                connection-opening behaviour.
+
+        Returns:
+            A configured ``HttpClient`` ready for ``get()`` / ``post()``.
+        """
+        if connection_factory is None:
+            connection_factory = chumicro_sockets_factory(
+                radio=radio, ssl_context=ssl_context,
+            )
+        return cls(
+            connection_factory=connection_factory,
+            default_timeout_ms=config.get(
+                "requests.default_timeout_ms", DEFAULT_TIMEOUT_MS,
+            ),
+            default_max_redirects=config.get(
+                "requests.default_max_redirects", DEFAULT_MAX_REDIRECTS,
+            ),
+            user_agent=config.get("requests.user_agent"),
+            max_body_bytes=config.get(
+                "requests.max_body_bytes", DEFAULT_MAX_BODY_BYTES,
+            ),
+        )
 
     def __init__(
         self,

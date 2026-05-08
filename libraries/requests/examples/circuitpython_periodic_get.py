@@ -6,31 +6,37 @@ runner-shaped client driving real network I/O while a simple
 LED-style counter keeps incrementing — proof that the in-flight
 request never block-calls the loop.
 
-WiFi config comes from the standard chumicro pipeline:
-:func:`chumicro_config.load_runtime_config` reads
-``/runtime_config.msgpack`` (baked from workspace.yml at deploy
-time by ``chumicro-workspace``).  The ``[wifi]`` section feeds
-:class:`chumicro_wifi.WifiConfig`.  Falls back to the
-``WIFI_SSID`` / ``WIFI_PASSWORD`` constants below for raw
-single-file deploys without a workspace.
+Configuration
+=============
 
-Target URL similarly: reads ``[periodic_get].url`` from
-``runtime_config.msgpack`` if present, else uses the ``TARGET_URL``
-constant below.
+Reads the deployed ``runtime_config.msgpack`` (baked from
+``secrets.toml`` + per-example ``examples/config.toml`` by the
+deploy pipeline) via the flat-key API:
+
+* WiFi: ``WifiConfig.try_from_config(config)`` reads ``wifi.ssid`` /
+  ``wifi.password`` plus optional tunables.
+* HTTP: ``HttpClient.from_config(config, radio=…)`` reads
+  ``requests.default_timeout_ms`` / ``requests.default_max_redirects``
+  / ``requests.user_agent`` / ``requests.max_body_bytes`` — all
+  optional with library defaults.
+* App-level (this example's own concerns, not the library's):
+  ``periodic_get.url``.
+
+When ``runtime_config.msgpack`` isn't present (raw single-file
+deploys), wifi creds and the target URL fall back to the
+placeholder constants below — edit them first.
 
 Deploying
 =========
 
-Recommended (workspace-managed)::
+Deploy from a chumicro fork or clone::
 
-    chumicro-workspace deploy periodic_get
+    python scripts/run.py deploy-example requests circuitpython_periodic_get --device <id>
 
-Raw (single-file copy)::
-
-    1. Edit WIFI_SSID, WIFI_PASSWORD, TARGET_URL below.
-    2. Copy this file as ``/code.py`` (CP) or ``/main.py`` (MP).
-    3. Ensure chumicro-{wifi,sockets,requests,config,timing,runner,
-       msgpack} are present under ``/lib/``.
+Or from a workspace template repo (for user-authored projects
+that follow the same example shape).  Either path composes
+``secrets.toml`` + ``examples/config.toml`` into the staged
+``runtime_config.msgpack`` before deploying.
 
 Example output::
 
@@ -44,47 +50,38 @@ Example output::
 import sys
 import time
 
-from chumicro_requests import HttpClient, chumicro_sockets_factory
+from chumicro_requests import HttpClient
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-# Fallback constants — used only when runtime_config.msgpack absent.
+# Fallback constants — used only when runtime_config.msgpack is absent.
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
 TARGET_URL = "http://example.com/"
 POLL_INTERVAL_S = 30
-REQUEST_TIMEOUT_MS = 8_000
 
 
-def _load_runtime_settings():
-    """Return ``(wifi_config, target_url)`` from runtime_config or fallbacks."""
-    wifi_config = None
-    target_url = TARGET_URL
+def _load_runtime_config():
+    """Return the deployed RuntimeConfig, or ``None`` when absent."""
     try:
         from chumicro_config import load_runtime_config
-
-        config = load_runtime_config()
-        if config:
-            wifi_section = config.get("wifi")
-            if wifi_section:
-                wifi_config = WifiConfig.from_dict(wifi_section)
-            poll_section = config.get("periodic_get", {})
-            target_url = poll_section.get("url", target_url)
+        return load_runtime_config()
     except (ImportError, OSError):
-        pass
-    if wifi_config is None:
-        wifi_config = WifiConfig(
-            ssid=WIFI_SSID,
-            password=WIFI_PASSWORD,
-            connect_timeout_ms=15_000,
-        )
-    return wifi_config, target_url
+        return None
 
 
 # ---------------------------------------------------------------------------
 # Wifi up.
 # ---------------------------------------------------------------------------
 
-wifi_config, target_url = _load_runtime_settings()
+config = _load_runtime_config()
+wifi_config = WifiConfig.try_from_config(config) if config is not None else None
+if wifi_config is None:
+    wifi_config = WifiConfig(
+        ssid=WIFI_SSID,
+        password=WIFI_PASSWORD,
+        connect_timeout_ms=15_000,
+    )
+
 service = WifiService(wifi_config)
 
 
@@ -121,9 +118,16 @@ if sys.implementation.name == "circuitpython":
 # HTTP client + poll loop.
 # ---------------------------------------------------------------------------
 
-client = HttpClient(
-    connection_factory=chumicro_sockets_factory(radio=wifi_radio),
-    default_timeout_ms=REQUEST_TIMEOUT_MS,
+# App-level setting (not in requests' library manifest).
+target_url = (
+    config.get("periodic_get.url", TARGET_URL)
+    if config is not None
+    else TARGET_URL
+)
+
+client = HttpClient.from_config(
+    config if config is not None else {},
+    radio=wifi_radio,
 )
 
 print(f"Polling {target_url} every {POLL_INTERVAL_S} s")
