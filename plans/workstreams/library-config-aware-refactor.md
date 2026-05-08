@@ -159,10 +159,93 @@ Once all three phases ship:
 
 ## Follow-ups from the bench session (2026-05-08)
 
-CP-side bench validation ran clean on `timing/circuitpython_blink` + `ntp/circuitpython_ntp_query` + `requests/circuitpython_periodic_get` across both Pi Pico W CP and Lolin S2 CP.  Two real issues surfaced — both orthogonal to the workstream's host-side scope (they don't undo the `from_config` factory acceptance), but worth capturing as separate next-up items.
+CP-side bench validation ran clean on `timing/circuitpython_blink` + `ntp/circuitpython_ntp_query` + `requests/circuitpython_periodic_get` across both Pi Pico W CP and Lolin S2 CP.  Three issues surfaced — all orthogonal to the workstream's host-side scope (they don't undo the `from_config` factory acceptance), but worth detailed handoff notes so a future session can pick them up cold.
 
-1. **mqtt example's PEP 448 `**unpack` fails on CircuitPython 10.2.0-rc.0.**  The pattern `RuntimeConfig({**mqtt_config.to_dict(), "mqtt.broker.host": ...})` (lines 161–165 of `mqtt/examples/circuitpython_telemetry.py`) raises `SyntaxError: invalid syntax` on the device parser, even though host CPython parses it fine.  The `from_config` factory itself works — the bug is the example's runtime-config-overlay shape.  Fix: rewrite the overlay using a sequence of `dict.update()` calls or a small helper that builds the merged dict in one shot.  Cheap to land; pairs with a re-deploy on the bench.
+The handoff sections below follow a fixed shape: **what we know** (load-bearing facts, with file:line refs from the bench session); **what we don't know** (the next-step questions before the fix lands); **proposed fix** (shape only, not committed); **estimated effort + dependencies**.  Read the bench session entries in `plans/next-up.md` "Done (recent)" for the symptom narrative.
 
-2. **MP `deploy-example` of infinite-loop examples times out via mpremote raw-exec.**  `timing/micropython_blink.py` is `while True:` so mpremote's "stage-then-exec-and-wait-for-EOF" pattern times out (recovery layer correctly classifies as `bootstrap_exec_failed`, exit 4).  CP works because flash mode is "copy-and-reboot" without an exec wait.  MP needs an equivalent path: either (a) `deploy-example` for MP devices defaults to a "soft-reset-after-copy" deploy mode, or (b) examples deployed to MP via `deploy-example` get wrapped in a runner-tick-with-iteration-cap by the staging layer.  Probably (a) — matches CP's current behaviour and doesn't transform user code.
+### Follow-up 1 — mqtt example's PEP 448 `**unpack` fails on CP parser
 
-3. **devices.yml CIRCUITPY drive UID stale-warning is loud but auto-corrects.**  Every CP deploy this session printed `WARNING: configured CIRCUITPY drive ... UID=... does not match the connected board (UID=...) — auto-correcting to /Volumes/CIRCUITPY 1`.  The auto-correction works, but the warning's wording reads scarier than the situation warrants when both boards are plugged in (each one steals the other's `circuitpy_drive_path` configured value at probe time).  Either silence the warning when auto-correction succeeds, or make `add-device` discover the per-UID drive path differently so re-probes don't trip the warning.
+**What we know.**  Deploying `mqtt/circuitpython_telemetry` to Pi Pico W CP via `python scripts/run.py deploy-example mqtt circuitpython_telemetry --device pi-pico-w-circuitpython-board --non-interactive` raised `SyntaxError: invalid syntax` at line 162 of the staged `code.py`, exit 4 (recovery layer classified correctly).  Lines 161–165 of `libraries/mqtt/examples/circuitpython_telemetry.py` are:
+
+```
+mqtt_config = RuntimeConfig({
+    **mqtt_config.to_dict(),     # ← line 162
+    "mqtt.broker.host": BROKER_HOST,
+    "mqtt.broker.port": BROKER_PORT,
+})
+```
+
+The `MQTTClient.from_config` factory itself is unrelated and works (see Phase 2 mqtt's commit `0217926`).  The host CPython 3.14 parses this fine; preflight is green; ruff is happy.  Only the on-device CircuitPython parser rejects it.
+
+**What we don't know.**
+
+* Is it actually `**`-unpacking inside a dict literal that the CP parser rejects, or something subtler — e.g. the trailing comma, the multi-line continuation, or the way the deploy pipeline rewrites/encodes the file?  CircuitPython 10.2.0-rc.0 *should* support PEP 448 (MicroPython has had it since 1.18; CircuitPython rebases on MicroPython quarterly).
+* Whether `RuntimeConfig.to_dict()` (defined at `libraries/config/src/chumicro_config/section.py:135`) ships to the device — if a slimmer device-side variant exists, the AttributeError would surface differently, but here it's a `SyntaxError` so this is parse-time, not runtime.
+* Whether the example file lands on the board verbatim or with a preamble (file path, encoding marker, etc.) that would shift line numbers.
+
+**Proposed fix.**  Two-step:
+
+1. Reproduce on the device with a minimal repro (`mpremote exec "$(echo 'd = {**{}, \"k\": 1}')"`) to nail down whether it's PEP 448 or something narrower.  If PEP 448 *works* on the device, the bug is in the example file's specific shape (most likely the multi-line dict-literal `\` continuation interacting with msgpack-injection-time line shifts).
+2. Either way, rewrite the overlay conservatively — build the merged dict in temporary variables before passing to `RuntimeConfig`:
+
+   ```python
+   merged = dict(mqtt_config.to_dict())
+   merged["mqtt.broker.host"] = BROKER_HOST
+   merged["mqtt.broker.port"] = BROKER_PORT
+   mqtt_config = RuntimeConfig(merged)
+   ```
+
+   This avoids the multi-line `**`-unpack-and-add idiom entirely.  Lower-tier-Python-friendly, easier to read, no behavioural change.
+
+**Effort + deps.**  ~30 min — 10 min for the device-side repro, 10 min for the rewrite + a host-side coverage check, 10 min for a re-deploy on the bench to confirm the fix.  No coupling to follow-ups 2 or 3.
+
+### Follow-up 2 — MP `deploy-example` of infinite-loop examples times out (transport-level)
+
+**What we know.**  `python scripts/run.py deploy-example timing micropython_blink --device pi-pico-w-micropython-board --non-interactive` exits 4 with `Device deploy-execute failed: timeout waiting for first EOF reception` (classified `bootstrap_exec_failed`).  `timing/examples/micropython_blink.py` is `while True: heartbeat.poll(...) ...` — never exits.  The CP equivalent works because CP's flash mode is "copy file + reboot" without an exec wait.
+
+**Critical finding from this handoff investigation:** MP's `deploy_files` (`workbench/deploy/src/chumicro_deploy/micropython_transport.py:636-734`) **always** ends with `self._serial.exec_raw(script, timeout=_EXECUTE_IDLE_TIMEOUT)` (line 725) where `script = "import sys\nsys.path.insert(...) ...\nexec(open(entrypoint).read())"` — both `mode="copy"` (flash equivalent) and `mode="mount"` (RAM equivalent) execute the entrypoint synchronously and wait for raw-REPL EOF.  There is **no** "copy + soft-reset + don't wait" path in the MP transport today.
+
+This means: any MP `deploy-example` of an infinite-loop body will time out, **regardless of deploy_mode**.  The bench session's framing ("MP needs an equivalent of CP's flash mode") was correct in shape but understated — there is no such path to wire `deploy-example` to.  This is a transport-level addition, not a `deploy-example` rewiring.
+
+**What we don't know.**
+
+* Whether `chumicro-workspace deploy` of an MP project with `while True: ...` in its `code.py`/`main.py` has the same problem.  If yes (highly likely, given the shared `deploy_files` path), this is a known-but-uncaptured limitation that affects every MP project deploy, not just `deploy-example`.  If no, there's some path we haven't traced yet.
+* What the user expectation is for "deploy a long-running MP program."  The CP shape works because CP's autoreload polls `code.py` after every reboot, so flashing-then-resetting is the natural pattern.  MP doesn't have autoreload — `code.py` / `main.py` runs at boot and that's it.  So "deploy + soft-reset + don't wait" makes sense for MP too, but the user has to be aware that they won't get exec output back from the deploy command (they'd need to follow with `chumicro-repl`).
+* Whether mpremote itself supports a "copy + reset, no follow" mode out of the box.  `mpremote cp ... ; mpremote reset` is the building block; the question is whether `MicropythonTransport.deploy_files` should grow a third mode (`mode="copy-no-exec"`) or whether `deploy-example` for MP should *bypass* `deploy_files` entirely and call `mpremote cp` + `mpremote reset` itself.
+
+**Proposed fix shape (uncertain).**
+
+* Add `mode="copy-no-exec"` to `MicropythonTransport`.  Behaviour: `mpremote fs cp -r staging/. :` (existing copy path) + `mpremote reset` — no `exec_raw`, no EOF wait.  Returns immediately with empty `execute_output`.
+* `deploy-example` for MP devices passes `mode="copy-no-exec"` automatically when the example file is detected as `__main__`-style infinite-loop.  Or — simpler — `deploy-example` always uses `copy-no-exec` for MP and the user follows with `chumicro-repl` for output (matches CP's `--tail` flow).
+* Document the "no exec output" tradeoff in `deploy-example`'s help text + the workstream doc.
+
+**Effort + deps.**  Genuinely uncertain — probably 2-3 hours if `chumicro-workspace deploy` of MP projects has the same gap (then this is a transport-level addition + selective wire-through).  Could balloon if mpremote's `cp` + `reset` semantics on a board running user code don't compose cleanly (the `reset` may need to follow a `Ctrl-C` if the previous `code.py` is still in `while True`).  **Strongly recommend**: first session devoted to just answering "does `chumicro-workspace deploy` of MP `while True` work today?"  If yes, the gap is `deploy-example`-only and small.  If no, this is a workspace-wide issue worth its own workstream.
+
+### Follow-up 3 — CIRCUITPY drive UID stale-warning over-states the situation
+
+**What we know.**  Every CP deploy in the bench session printed:
+
+```
+WARNING: configured CIRCUITPY drive /Volumes/CIRCUITPY UID='84722E7490C3' does not match the connected board (UID='E6614103E7174624') — auto-correcting to /Volumes/CIRCUITPY 1.  Remove circuitpy_drive_path from devices.yml to rely on UID-based auto-detection.
+```
+
+Emit site located: `workbench/deploy/src/chumicro_deploy/circuitpython_transport.py:799-800`.  The auto-correction is doing the right thing; the warning text just reads scarier than it should — both CP boards plugged in have different UIDs, macOS auto-renames the second `/Volumes/CIRCUITPY` to `/Volumes/CIRCUITPY 1`, and devices.yml's stored `circuitpy_drive_path` is stable per-entry but doesn't match the live mount when both boards are present.
+
+**What we don't know.**
+
+* Whether the warning is informational-only or whether it's surfacing a real edge case where auto-correction *can* fail (e.g. three CP boards plugged in simultaneously).  The fix is "silence on success" only if the auto-correction is robust against more-than-two-boards setups.
+* Whether the warning's "Remove `circuitpy_drive_path` from devices.yml to rely on UID-based auto-detection" advice is genuinely actionable.  If it is, the right fix is upgrading `add-device` to *not* persist `circuitpy_drive_path` by default, since UID-based auto-detection at deploy time is more reliable than a path stored at probe time.
+
+**Proposed fix.**  Two options, decide which after a quick read of the surrounding context (`circuitpython_transport.py` around line 799 + the auto-correction code that follows it):
+
+* **(A) Silence on success.**  Suppress the warning when auto-correction finds a valid drive.  Print only when auto-correction fails (a true error).  Smallest change; keeps the existing devices.yml schema.
+* **(B) Drop `circuitpy_drive_path` from devices.yml's user-owned zone.**  Have `_resolve_circuitpy_drive` always do UID-based discovery at deploy time; treat `circuitpy_drive_path` as deprecated (still honored if present, but never written by `add-device` in new entries).  Bigger change but reduces a class of misconfiguration.
+
+**Effort + deps.**  (A) is ~15 min; (B) is ~1 hour if it touches `add-device` write paths + the three-zone manifest.  No coupling to 1 or 2.  **Recommend starting with (A)** — small, immediate UX win — and queueing (B) as a separate item if user-template-repo onboarding feedback suggests the drive-path drift is a real source of confusion.
+
+### Cross-follow-up notes
+
+- **None of the three are required** to call the workstream's host-side scope closed.  The Phase 2 + Phase 3 acceptance criteria are met (six clean CP deploys, factory + manifest validation + recovery coaching all working).
+- **Pickup order if doing them sequentially:** 3-A (smallest, immediate), then 1 (medium, low-risk), then 2 (the genuinely uncertain one — best done after a half-hour of focused investigation).
+- **Pickup order if doing one:** 3-A.  Highest UX-noise-per-fix-line ratio.  Will be visible to anyone who runs the canonical first hello-world.
+- **Bench rerun cost:** all three are testable on the same Pi Pico W CP / Lolin S2 CP setup the original session used.  No new hardware.
