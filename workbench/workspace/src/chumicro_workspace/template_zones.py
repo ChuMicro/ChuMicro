@@ -3,17 +3,15 @@
 Every file under the workspace tree falls into one of three zones:
 
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
-  `pyproject.toml`, `projects/_template/`, `_workspace_template/`
-  (template-source files used to materialize user-edited config
-  like `workspace.yml`), `examples/` (reading-material demos shipped
-  from the canonical template), and the agent-skill documents under
-  `.github/skills/`.  `init` writes them; `update` rewrites them so
-  newer template releases flow in.
+  `pyproject.toml`, `projects/_template/`, `examples/`
+  (reading-material demos shipped from the canonical template), and
+  the agent-skill documents under `.github/skills/`.  `init` writes
+  them; `update` rewrites them so newer template releases flow in.
 
 * **User-owned** — `projects/<each-real-project>/`, `devices.yml`,
-  `shared/`, `packages/`, `workspace.yml` (gitignored — carries the
-  user's credentials).  `init` writes the starter version (only if
-  absent); `update` never touches them.
+  `shared/`, `packages/`, `workspace.yml` and `secrets.toml`
+  (gitignored — carry the user's credentials).  `init` writes the
+  starter version (only if absent); `update` never touches them.
 
 * **Init-only** — `.gitignore`, `README.md`.  `init` writes if
   absent; `update` skips so user edits survive.
@@ -50,7 +48,6 @@ TOOL_OWNED_PATHS: frozenset[str] = frozenset({
 #: a listed prefix is rewritten on ``update``.
 TOOL_OWNED_PREFIXES: tuple[str, ...] = (
     "projects/_template/",
-    "_workspace_template/",
     ".github/skills/",
     "examples/",
 )
@@ -58,6 +55,7 @@ TOOL_OWNED_PREFIXES: tuple[str, ...] = (
 #: Files / paths that are user-owned.  ``update`` never touches them.
 USER_OWNED_PATHS: frozenset[str] = frozenset({
     "workspace.yml",
+    "secrets.toml",
     "devices.yml",
 })
 
@@ -82,11 +80,11 @@ def classify(target_path: str) -> Zone:
     *target_path* is the path relative to the workspace root.
     Forward slashes only.
 
-    Lookup order: exact-match user-owned (so the starter
+    Lookup order: exact-match user-owned (so a materialized
     ``workspace.yml`` is never clobbered by ``update``), user-owned
     prefixes (``shared/`` / ``packages/``), exact-match init-only,
-    exact-match tool-owned, tool-owned prefixes (``projects/_template/``
-    / ``_workspace_template/``).  Anything that falls through —
+    exact-match tool-owned, tool-owned prefixes
+    (``projects/_template/``).  Anything that falls through —
     typically ``projects/<a-real-project>/...`` files the user
     created post-init — counts as user-owned.
     """

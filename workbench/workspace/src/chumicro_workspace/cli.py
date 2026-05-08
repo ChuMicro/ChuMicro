@@ -243,11 +243,13 @@ def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
 
 
 def _cmd_setup(args: argparse.Namespace) -> int:
-    """Install workspace dependencies and materialize template files.
+    """Install workspace dependencies and materialize starter files.
 
     Runs ``pip install -e .`` in the workspace root when a
-    ``pyproject.toml`` is present, then walks ``_workspace_template/``
-    and creates any missing files at the workspace root.  Idempotent —
+    ``pyproject.toml`` is present, then materialises any missing
+    workbench-owned starters (``devices.yml``, ``workspace.yml``,
+    ``secrets.toml``) from the canonical content in
+    :mod:`chumicro_workspace`'s ``_payloads/``.  Idempotent —
     re-running is safe.
 
     Setup is the one command that *materialises* ``workspace.yml`` —
@@ -278,28 +280,12 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         )
     from chumicro_workspace.template_apply import (  # noqa: PLC0415
         ApplyAction,
-        materialize_templates,
         materialize_workbench_starters,
     )
 
-    # `_workspace_template/` first — repo-specific starter files
-    # (project templates, examples, README placeholders, custom
-    # devices.yml or workspace.yml shapes for forks of the
-    # canonical template).  When a fork ships its own
-    # `_workspace_template/devices.yml`, the customised version wins.
-    report = materialize_templates(workspace.root)
-    new_files = report.count(ApplyAction.MATERIALIZED)
-    if new_files:
-        print(f"setup: materialized {new_files} file(s) from _workspace_template/")
-        for path, action in report:
-            if action == ApplyAction.MATERIALIZED:
-                print(f"  {path}")
-
-    # Workbench-owned starters as the fallback — fills in
-    # `devices.yml` / `workspace.yml` only when the
-    # `_workspace_template/` walker didn't.  Canonical content lives
-    # in the workbench package's `_payloads/` so the same bytes ship
-    # to every workspace-template-derived workspace.
+    # Workbench-owned starters — canonical content lives in the
+    # workbench package's `_payloads/` so the same bytes ship to
+    # every workspace.
     workbench_report = materialize_workbench_starters(workspace.root)
     workbench_new = workbench_report.count(ApplyAction.MATERIALIZED)
     if workbench_new:

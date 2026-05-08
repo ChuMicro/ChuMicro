@@ -10,43 +10,60 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+import pytest
 from chumicro_workspace import additive_reapply
 
 
-def _write_starter_override(workspace_root: Path, filename: str, body: str) -> None:
-    override_dir = workspace_root / "_workspace_template"
-    override_dir.mkdir(parents=True, exist_ok=True)
-    (override_dir / filename).write_text(body, encoding="utf-8")
+def _patch_workspace_yml_starter(
+    monkeypatch: pytest.MonkeyPatch, content: str,
+) -> None:
+    """Make the canonical workspace.yml starter return *content* for the test."""
+    monkeypatch.setattr(
+        "chumicro_workspace.starter_drift.read_workspace_yml_starter",
+        lambda: content,
+    )
+
+
+def _patch_secrets_toml_starter(
+    monkeypatch: pytest.MonkeyPatch, content: str,
+) -> None:
+    """Make the canonical secrets.toml starter return *content* for the test."""
+    monkeypatch.setattr(
+        "chumicro_workspace.starter_drift.read_secrets_toml_starter",
+        lambda: content,
+    )
 
 
 class TestAdditiveReapplyToml:
     """secrets.toml — the primary user-facing target."""
 
-    def test_no_op_when_user_file_absent(self, tmp_path: Path) -> None:
+    def test_no_op_when_user_file_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         # Pre-materialisation: nothing to drift against.
-        _write_starter_override(
-            tmp_path, "secrets.toml", '[wifi]\nssid = "x"\n',
-        )
+        _patch_secrets_toml_starter(monkeypatch, '[wifi]\nssid = "x"\n')
         result = additive_reapply(tmp_path)
         assert "secrets.toml" not in result
 
     def test_no_op_when_user_already_has_everything(
-        self, tmp_path: Path,
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         starter = '[wifi]\nssid = "x"\n'
-        _write_starter_override(tmp_path, "secrets.toml", starter)
+        _patch_secrets_toml_starter(monkeypatch, starter)
         (tmp_path / "secrets.toml").write_text(starter)
         result = additive_reapply(tmp_path)
         assert "secrets.toml" not in result
 
-    def test_appends_missing_top_level_table(self, tmp_path: Path) -> None:
+    def test_appends_missing_top_level_table(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         # Starter has [wifi] + [mqtt.broker]; user only had [wifi].
         starter = (
             '[wifi]\nssid = "starter-default"\n'
             '\n[mqtt.broker]\nhost = "test.mosquitto.org"\nport = 1883\n'
         )
         user = '[wifi]\nssid = "my-network"\n'
-        _write_starter_override(tmp_path, "secrets.toml", starter)
+        _patch_secrets_toml_starter(monkeypatch, starter)
         (tmp_path / "secrets.toml").write_text(user)
 
         result = additive_reapply(tmp_path)
@@ -60,11 +77,13 @@ class TestAdditiveReapplyToml:
         assert parsed["mqtt"]["broker"]["host"] == "test.mosquitto.org"
         assert parsed["mqtt"]["broker"]["port"] == 1883
 
-    def test_appends_missing_nested_key(self, tmp_path: Path) -> None:
+    def test_appends_missing_nested_key(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         # Both have [wifi]; starter adds wifi.hostname.
         starter = '[wifi]\nssid = "x"\nhostname = "default-host"\n'
         user = '[wifi]\nssid = "my-network"\n'
-        _write_starter_override(tmp_path, "secrets.toml", starter)
+        _patch_secrets_toml_starter(monkeypatch, starter)
         (tmp_path / "secrets.toml").write_text(user)
 
         result = additive_reapply(tmp_path)
@@ -76,7 +95,9 @@ class TestAdditiveReapplyToml:
         # Starter's hostname appended.
         assert parsed["wifi"]["hostname"] == "default-host"
 
-    def test_preserves_user_comments(self, tmp_path: Path) -> None:
+    def test_preserves_user_comments(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         starter = (
             '[wifi]\nssid = "x"\n'
             '\n[mqtt.broker]\nhost = "test.mosquitto.org"\n'
@@ -87,7 +108,7 @@ class TestAdditiveReapplyToml:
             "# Real SSID for the office network.\n"
             'ssid = "OfficeNet"\n'
         )
-        _write_starter_override(tmp_path, "secrets.toml", starter)
+        _patch_secrets_toml_starter(monkeypatch, starter)
         (tmp_path / "secrets.toml").write_text(user)
 
         additive_reapply(tmp_path)
@@ -99,12 +120,14 @@ class TestAdditiveReapplyToml:
         # User's value survived.
         assert "OfficeNet" in new_text
 
-    def test_does_not_overwrite_user_value(self, tmp_path: Path) -> None:
+    def test_does_not_overwrite_user_value(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         # Starter and user both have wifi.ssid with different values —
         # additive re-apply must leave the user's value alone.
         starter = '[wifi]\nssid = "starter-default"\n'
         user = '[wifi]\nssid = "user-set-this"\n'
-        _write_starter_override(tmp_path, "secrets.toml", starter)
+        _patch_secrets_toml_starter(monkeypatch, starter)
         (tmp_path / "secrets.toml").write_text(user)
 
         additive_reapply(tmp_path)
@@ -116,7 +139,9 @@ class TestAdditiveReapplyToml:
 class TestAdditiveReapplyYaml:
     """workspace.yml — the host-only machinery file."""
 
-    def test_appends_missing_top_level_block(self, tmp_path: Path) -> None:
+    def test_appends_missing_top_level_block(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         # Starter has library_sources + deploy_targets; user has only
         # library_sources.
         starter = (
@@ -124,7 +149,7 @@ class TestAdditiveReapplyYaml:
             "deploy_targets:\n  my-project: my-board\n"
         )
         user = "library_sources:\n  some-lib: ./path\n"
-        _write_starter_override(tmp_path, "workspace.yml", starter)
+        _patch_workspace_yml_starter(monkeypatch, starter)
         (tmp_path / "workspace.yml").write_text(user)
 
         result = additive_reapply(tmp_path)
@@ -137,7 +162,9 @@ class TestAdditiveReapplyYaml:
         assert "deploy_targets:" in new_text
         assert "my-project: my-board" in new_text
 
-    def test_preserves_user_comments_in_yaml(self, tmp_path: Path) -> None:
+    def test_preserves_user_comments_in_yaml(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         starter = (
             "library_sources:\n  some-lib: ./path\n"
             "deploy_targets:\n  my-project: my-board\n"
@@ -148,7 +175,7 @@ class TestAdditiveReapplyYaml:
             "  # Pinned to my work-in-progress branch.\n"
             "  some-lib: /Users/me/checkout/src\n"
         )
-        _write_starter_override(tmp_path, "workspace.yml", starter)
+        _patch_workspace_yml_starter(monkeypatch, starter)
         (tmp_path / "workspace.yml").write_text(user)
 
         additive_reapply(tmp_path)
@@ -221,14 +248,14 @@ class TestPrivateHelpers:
 class TestAdditiveReapplyMixed:
     """Both files together — the realistic ``setup`` flow."""
 
-    def test_walks_both_targets(self, tmp_path: Path) -> None:
-        _write_starter_override(
-            tmp_path, "workspace.yml",
-            "deploy_targets:\n  proj: board\n",
+    def test_walks_both_targets(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _patch_workspace_yml_starter(
+            monkeypatch, "deploy_targets:\n  proj: board\n",
         )
-        _write_starter_override(
-            tmp_path, "secrets.toml",
-            '[wifi]\nssid = "x"\n',
+        _patch_secrets_toml_starter(
+            monkeypatch, '[wifi]\nssid = "x"\n',
         )
         (tmp_path / "workspace.yml").write_text("# empty\n")
         (tmp_path / "secrets.toml").write_text("# empty\n")
@@ -237,13 +264,11 @@ class TestAdditiveReapplyMixed:
         assert "workspace.yml" in result
         assert "secrets.toml" in result
 
-    def test_skips_files_with_no_drift(self, tmp_path: Path) -> None:
-        _write_starter_override(
-            tmp_path, "workspace.yml", "deploy_targets:\n  p: b\n",
-        )
-        _write_starter_override(
-            tmp_path, "secrets.toml", '[wifi]\nssid = "x"\n',
-        )
+    def test_skips_files_with_no_drift(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _patch_workspace_yml_starter(monkeypatch, "deploy_targets:\n  p: b\n")
+        _patch_secrets_toml_starter(monkeypatch, '[wifi]\nssid = "x"\n')
         # User's workspace.yml is missing the starter block; secrets
         # already has it.
         (tmp_path / "workspace.yml").write_text("# empty\n")

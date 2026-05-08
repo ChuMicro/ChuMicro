@@ -8,13 +8,10 @@ string, identical bytes every call, sourced from the wheel-bundled
 Two consumers in the ChuMicro ecosystem ride on this:
 
 * The mono-repo's ``scripts/generate_config_files.py`` materialises
-  ``<repo>/devices.yml`` from this content during
-  ``python scripts/run.py setup``.
+  ``<repo>/devices.yml`` from this content during workspace setup.
 * The workspace-template repo's first-clone setup (``chumicro-workspace
-  setup`` materialising ``<workspace>/devices.yml``).  The template
-  repo currently carries its own static ``_workspace_template/
-  devices.yml`` — a planned follow-up replaces that with a call to
-  this reader so both repos share one source of truth.
+  setup`` materialising ``<workspace>/devices.yml`` from the same
+  source).
 
 Tests cover:
 

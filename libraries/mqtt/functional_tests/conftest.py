@@ -148,12 +148,12 @@ _BROKER_PROCESS: subprocess.Popen[bytes] | None = None
 _BROKER_WORKDIR: Path | None = None
 
 
-#: Placeholder broker hostname shipped in the workspace template's
-#: ``secrets.toml`` (``_workspace_template/secrets.toml`` and the
-#: published ``chumicro-workspace`` payload).  Treated as "broker
-#: unset" — the pytest-device plugin then skips at collection time
-#: with a clear missing-keys message instead of letting the test
-#: run against a hostname that won't resolve.
+#: Placeholder broker hostname shipped in the canonical
+#: ``secrets.toml`` starter (``chumicro_workspace`` payload).
+#: Treated as "broker unset" — the pytest-device plugin then
+#: skips at collection time with a clear missing-keys message
+#: instead of letting the test run against a hostname that
+#: won't resolve.
 _BROKER_PLACEHOLDER = "replace-with-your-broker-host"
 
 
