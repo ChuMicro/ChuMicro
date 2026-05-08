@@ -127,6 +127,10 @@ Supported fields today:
 
 Use `ram` for day-to-day functional-test iteration. Use `flash` when a board cannot hold the RAM-mode payload comfortably or when you need persistence semantics.
 
+#### When `flash` is required, not optional
+
+`ram` is fine for single-library unit-style functional tests (no chumicro deps beyond the library under test, no runtime-config file). `flash` is **required** when a test exercises a multi-stack chain — runtime-config-driven setup, `kvstore` persistence semantics across resets, full `deploy → wifi → mqtt` chains, or any test that needs `extra_files` staging on CircuitPython (CP RAM-mode deploy doesn't support `extra_files`, see [Decision 0056](../../plans/decisions/0056-transport-extra-files-staging.md)). If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `flash` rather than chasing fallback paths like staging files via `/remote/` — they don't exist on CP RAM mode for a reason.
+
 ## 3. Configure `secrets.toml`
 
 Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the canonical template (`chumicro_workspace.read_secrets_toml_template`), carrying placeholders for `wifi.ssid` and `mqtt.broker.host`.

@@ -540,24 +540,6 @@ Patterns that are *not* candidates:
 Related: workstream 2026-04-27 micro-benchmark, the deque support
 verification in `plans/workstreams/library-pipeline.md`.
 
-## Per-library test isolation
-
-Each library's tests run in a separate pytest subprocess.  Coverage is
-measured per-library with a coverage gate (Decision 0009, threshold in `pyproject.toml`).
-
-```bash
-# Run one library
-python scripts/run.py test --libraries timing
-
-# Quick iteration — no coverage, stop on first failure
-python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov
-```
-
-Never run bare `pytest` from the repo root.  The test runner sets
-PYTHONPATH and coverage configuration automatically.
-
-Related: Decision 0009, `debug-test-failure` skill.
-
 ## mpremote internals we depend on
 
 `MicropythonTransport` is a thin layer over the vendored
@@ -622,41 +604,9 @@ Related: Decision 0027 (device testing infrastructure), Decision 0028
 
 ## Subprocess binary resolution (host tools)
 
-When a host-side tool shells out to an installable CLI binary
-(`mpremote`, `esptool`, `rshell`, future `ampy`), resolve the binary
-by the running interpreter's sibling `bin/` first, not by a bare
-name on `PATH`:
-
-```python
-import shutil
-import sys
-from pathlib import Path
-
-def _resolve_binary(name: str) -> str:
-    candidate = Path(sys.executable).parent / name
-    if candidate.is_file():
-        return str(candidate)
-    located = shutil.which(name)
-    if located:
-        return located
-    return name  # last-resort — let the subprocess error surface
-```
-
-**Why:** PyCharm and VS Code launch test runs via the interpreter
-path without activating a shell, so `.venv/bin` is not on `PATH`
-even on a freshly prepared workspace.  A bare `"mpremote"` in an
-argv list fails with
-`[Errno 2] No such file or directory: 'mpremote'` on that code
-path while the same command works fine from an activated terminal.
-Resolving next to `sys.executable` makes `.venv/bin/mpremote` the
-primary candidate, `shutil.which` handles system-wide installs and
-Windows `Scripts/mpremote.exe`, and the bare-name fallback preserves
-the subprocess-level error message when nothing resolves.
-
-Only the first element of the argv list changes — the rest of the
-command stays identical.  `MicropythonTransport._run_mpremote`
-implements this pattern; apply it to any future shell-out.  Commit
-`e4f669e`.
+Rule + code shape live in [Style Guide § Subprocess binary resolution](../docs/contributing/style-guide.md#subprocess-binary-resolution-host-tools).
+Canonical implementation: `MicropythonTransport._run_mpremote` (commit `e4f669e`).
+Apply the pattern to any new host-side shell-out to `mpremote` / `esptool` / `rshell` / `ampy`.
 
 ## Lazy module-level imports via PEP 562 `__getattr__` (workbench)
 
