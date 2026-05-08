@@ -26,7 +26,7 @@ The replacement varies by need:
 | WebSocket client | `websockets` (PyPI) | `chumicro_websockets` |
 | Tick-shaped scheduler | normal sync code | `chumicro_runner` |
 
-**Templates and on-device payloads embedded as strings or bytes are fine.**  A workbench tool that ships a starter `code.py` to a device, or embeds a `_workspace_template/` tree of starter files, is shipping payload — that's data the tool writes onto a device, not code the tool itself imports.
+**Templates and on-device payloads embedded as strings or bytes are fine.**  A workbench tool that ships a starter `code.py` to a device, or embeds a `_payloads/library_template/` tree of starter files, is shipping payload — that's data the tool writes onto disk or a device, not code the tool itself imports.
 
 ## Rejected
 

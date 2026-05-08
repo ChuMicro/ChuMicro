@@ -19,7 +19,7 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 - `workspace.yml` — host-side machinery (library_sources, deploy_targets, quality knobs); not a credentials file
 - `secrets.toml` — workspace-wide credentials + device-bound defaults (wifi SSID/password, broker host/port/auth) that flow into `runtime_config.msgpack` at deploy time.  Per-library `functional_tests/config.toml` overrides land on top via deep-merge.
 
-The three-file split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md) (extended by the config-shape-beginner-ergonomics workstream): `workspace.yml` is host-only, `secrets.toml` is device-bound.  Setup materialises starters from the mono-repo's `_workspace_template/`; fill in your wifi password / broker auth in `secrets.toml`, then leave it gitignored.  Do not commit any of the three.
+The three-file split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md) (extended by the config-shape-beginner-ergonomics workstream): `workspace.yml` is host-only, `secrets.toml` is device-bound.  Setup materialises starters from the canonical workbench-shipped templates; fill in your wifi password / broker auth in `secrets.toml`, then leave it gitignored.  Do not commit any of the three.
 
 ## 1. Generate the starter files
 
@@ -29,7 +29,7 @@ python scripts/run.py setup
 
 If the files already exist, setup leaves them alone.
 
-The starter `devices.yml` ships with an empty `devices: []` registry — same shape as the workspace-template repo's `_workspace_template/devices.yml`.  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
+The starter `devices.yml` ships with an empty `devices: []` registry — the same canonical shape both the mono-repo and the workspace-template repo materialise from `chumicro_workspace.read_devices_yml_starter`.  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
 
 ## 2. Register your boards via `add-device`
 
@@ -129,7 +129,7 @@ Use `ram` for day-to-day functional-test iteration. Use `flash` when a board can
 
 ## 3. Configure `secrets.toml`
 
-Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the mono-repo's `_workspace_template/secrets.toml` (carrying placeholders for `wifi.ssid` and `mqtt.broker.host`); the workbench package `chumicro-workspace` owns the fallback canonical starter for repos that don't ship their own `_workspace_template/` override.
+Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the canonical workbench-shipped starter (`chumicro_workspace.read_secrets_toml_starter`), carrying placeholders for `wifi.ssid` and `mqtt.broker.host`.
 
 Edit `secrets.toml` once per clone — fill in your wifi credentials + your broker host (the mqtt library refuses to silently dial a third-party broker, so this is required for mqtt-touching tests):
 
