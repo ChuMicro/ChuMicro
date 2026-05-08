@@ -1,11 +1,22 @@
-"""Lint shipped src/ for chumicro-internal references that don't belong on PyPI.
+"""Lint published library + workbench trees for mono-repo-internal references.
 
-Walks every text file under ``libraries/*/src/``, ``workbench/*/src/``,
-and ``support/test_harness/src/`` and flags strings, docstrings, or
-comments that name concepts only existing inside the chumicro mono-repo
-or the chumicro-workspace-template starter.  Those references are
-meaningless to a PyPI / CircuitPython-bundle consumer who reads the
-shipped source.
+Walks every text file under each ``libraries/<pkg>/`` and
+``workbench/<pkg>/`` package directory plus
+``support/test_harness/`` and flags strings, docstrings, or
+comments that name concepts only existing inside the chumicro
+mono-repo or the chumicro-workspace-template starter.  Those
+references are meaningless to a PyPI / CircuitPython-bundle
+consumer who reads the shipped source, README, docs site, or
+tests.
+
+The walker covers ``src/``, ``docs/``, ``tests/``,
+``functional_tests/``, ``examples/``, ``README.md``, and
+``pyproject.toml`` — wherever a published package surfaces text
+to consumers or contributors who installed without the mono-repo
+checked out.  Build / cache artifacts (``__pycache__``, ``site``,
+``build``, ``dist``, ``*.egg-info``, ``.pytest_cache``,
+``.mypy_cache``, ``.ruff_cache``, ``.tox``, ``.venv``,
+``node_modules``) are skipped.
 
 Flagged patterns:
 
@@ -52,23 +63,35 @@ def _everywhere(_filepath: Path) -> bool:
     return True
 
 
-def _outside_chumicro_workspace(filepath: Path) -> bool:
-    """Pattern fires everywhere except inside ``workbench/workspace/src/``.
+def _src_only(filepath: Path) -> bool:
+    """Pattern fires only inside ``src/`` trees.
+
+    The full package walk (``src/`` + ``docs/`` + tests +
+    ``pyproject.toml`` + README) catches the plans/-path leak shape,
+    but the ``Decision NNNN`` / ``scripts/run.py`` / bare ``run.py``
+    / ``chumicro mono-repo`` patterns currently only fire in
+    ``src/``.  Widening those to the whole tree is tracked in
+    ``next-up.md`` as a separate cleanup pass.
+    """
+    return "/src/" in filepath.as_posix()
+
+
+def _src_only_outside_chumicro_workspace(filepath: Path) -> bool:
+    """``_src_only`` plus the ``chumicro_workspace`` package exemption.
 
     The ``chumicro_workspace`` package owns the workspace-template's
     ``run.py`` shim — generating it, parsing it, and teaching users
-    about it is its job.  Bare ``run.py`` mentions there are correct.
-    Anywhere else, ``run.py`` is the workspace shim's command name
-    leaking into a package that shouldn't know about it.
+    about it is its job.  Bare ``run.py`` mentions throughout that
+    package's tree are correct.
     """
-    return "workbench/workspace/src" not in filepath.as_posix()
+    return _src_only(filepath) and "workbench/workspace/" not in filepath.as_posix()
 
 
 _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
     (
         re.compile(r"\bDecision\s*0\d{3}\b"),
         "Decision NNNN ref — ADRs live in plans/decisions/, not shipped to consumers",
-        _everywhere,
+        _src_only,
     ),
     (
         re.compile(r"\bplans/[A-Za-z0-9_./-]*\.md\b"),
@@ -83,31 +106,47 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
     (
         re.compile(r"\bscripts/run\.py\b"),
         "scripts/run.py ref — mono-repo command runner, not on consumer machines",
-        _everywhere,
+        _src_only,
     ),
     (
         re.compile(r"(?<!scripts/)\brun\.py\b"),
         "bare run.py ref — name the installable CLI (chumicro-deploy, etc.) "
         "instead of the workspace shim",
-        _outside_chumicro_workspace,
+        _src_only_outside_chumicro_workspace,
     ),
     (
         re.compile(r"\bchumicro\s+mono[\s-]?repo\b", re.IGNORECASE),
         "'chumicro mono-repo' framing — consumer reads this without that context",
-        _everywhere,
+        _src_only,
     ),
 )
 
-#: File suffixes scanned.  ``.py`` covers source; ``.toml`` covers config
-#: templates that ship in payloads; ``.template`` / ``.md.template`` cover
-#: workbench payloads materialized into user workspaces; ``.md`` catches
-#: README-shaped docs that ship inside ``src/`` payload trees.
+#: File suffixes scanned.  ``.py`` covers source + tests; ``.toml``
+#: covers ``pyproject.toml`` + config templates that ship in payloads;
+#: ``.template`` covers workbench payloads materialized into user
+#: workspaces; ``.md`` catches README + ``docs/`` + per-test docstring
+#: pointer files.
 _SCANNED_SUFFIXES = (".py", ".toml", ".md", ".template", ".txt", ".cfg", ".ini")
 
 _NOQA_PATTERNS = (
     re.compile(r"#\s*noqa(?::\s*([A-Z0-9, ]+))?"),
     re.compile(r"<!--\s*noqa(?::\s*([A-Z0-9, ]+))?\s*-->"),
 )
+
+#: Directory names skipped during the recursive walk — build artifacts,
+#: cache directories, vendored deps, and IDE / CI scratch.
+_EXCLUDED_DIRECTORY_NAMES = frozenset({
+    "__pycache__",
+    "dist",
+    "build",
+    "site",            # mkdocs build output
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "node_modules",
+})
 
 #: Roots whose contents are temporarily skipped while a parallel
 #: refactor catches up.  Drop entries here once the refactor lands and
@@ -116,10 +155,15 @@ _SKIPPED_ROOTS: tuple[Path, ...] = ()
 
 
 def _scan_roots() -> list[Path]:
-    """Return the directory roots to scan.
+    """Return the package roots to scan recursively.
 
-    Includes every package's ``src/`` under ``libraries/``,
-    ``workbench/``, and ``support/test_harness/``.
+    Includes every package directory under ``libraries/`` and
+    ``workbench/`` plus ``support/test_harness/``.  The recursive walk
+    in :func:`_iter_files` covers each package's ``src/``, ``docs/``,
+    ``tests/``, ``functional_tests/``, ``examples/``, ``README.md``,
+    and ``pyproject.toml`` — wherever a published package surfaces
+    text to consumers or contributors who installed without the
+    mono-repo checked out.
     """
     roots: list[Path] = []
     for parent in ("libraries", "workbench"):
@@ -127,10 +171,9 @@ def _scan_roots() -> list[Path]:
         if not parent_dir.is_dir():
             continue
         for package_dir in sorted(parent_dir.iterdir()):
-            src_dir = package_dir / "src"
-            if src_dir.is_dir():
-                roots.append(src_dir)
-    test_harness_root = ROOT / "support" / "test_harness" / "src"
+            if package_dir.is_dir():
+                roots.append(package_dir)
+    test_harness_root = ROOT / "support" / "test_harness"
     if test_harness_root.is_dir():
         roots.append(test_harness_root)
     return roots
@@ -198,7 +241,7 @@ def _iter_files(path: Path) -> list[Path]:
         if not (candidate.is_file() and candidate.suffix in _SCANNED_SUFFIXES):
             continue
         parts = candidate.parts
-        if any(part in ("__pycache__", ".egg-info") for part in parts):
+        if any(part in _EXCLUDED_DIRECTORY_NAMES for part in parts):
             continue
         if any(part.endswith(".egg-info") for part in parts):
             continue
@@ -218,10 +261,14 @@ def check_paths(paths: list[str]) -> int:
     if all_errors:
         for error in all_errors:
             print(error)
-        print(f"\nFound {len(all_errors)} mono-repo reference(s) in shipped src/.")
         print(
-            "These ship to PyPI / CircuitPython-bundle consumers — "
-            "they shouldn't reference internal-only concepts.",
+            f"\nFound {len(all_errors)} mono-repo reference(s) in published "
+            f"library / workbench trees.",
+        )
+        print(
+            "These ship to PyPI / CircuitPython-bundle consumers — they "
+            "shouldn't reference internal-only concepts (Decision NNNN, "
+            "plans/...md, scripts/run.py, bare run.py, 'chumicro mono-repo').",
         )
         print(f"Fix: rephrase or add '# noqa: {_RULE_CODE}' to suppress.")
         return 1
