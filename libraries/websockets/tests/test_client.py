@@ -998,3 +998,99 @@ class TestRequestShape:
         decoded = binascii.a2b_base64(parser.client_key.encode("ascii"))
         assert len(decoded) == 16
         assert WS_MAGIC_GUID == "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+
+# ---------------------------------------------------------------------------
+# from_config — config-aware construction
+# ---------------------------------------------------------------------------
+
+
+class TestClientFromConfig:
+    """``WebSocketClient.from_config`` reads the client-side keys from
+    the ``[tool.chumicro.config]`` manifest with sensible defaults.
+    Like ntp's from_config, no key is required — host/port/use_tls
+    live on each ``connect()`` URL, not on the client.
+
+    ``websockets.client.connect_url`` is in the manifest because users
+    set it per-project, but ``from_config`` doesn't read it (URL is a
+    per-connection argument the user passes to ``connect()``)."""
+
+    def test_reads_max_message_bytes_from_config(self) -> None:
+        sock = FakeSocket()
+        factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
+        client = WebSocketClient.from_config(
+            {"websockets.client.max_message_bytes": 4096},
+            connection_factory=factory,
+        )
+        assert client._max_message_bytes == 4096  # noqa: SLF001
+
+    def test_defaults_apply_when_keys_absent(self) -> None:
+        """Empty config → max_message_bytes falls back to library default.
+
+        Documents the asymmetry vs ``MQTTClient.from_config``: empty
+        config is valid input — no MissingConfigKey is ever raised
+        because host/port live on the per-call URL, not on the client.
+        """
+        from chumicro_websockets._wire import DEFAULT_MAX_MESSAGE_BYTES
+        sock = FakeSocket()
+        factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
+        client = WebSocketClient.from_config({}, connection_factory=factory)
+        assert client._max_message_bytes == DEFAULT_MAX_MESSAGE_BYTES  # noqa: SLF001
+
+    def test_runtime_config_wrapper_works_too(self) -> None:
+        """Real ``RuntimeConfig`` instance — same flat-key reads as a dict."""
+        from chumicro_config import RuntimeConfig
+        sock = FakeSocket()
+        factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
+        config = RuntimeConfig(
+            {"websockets.client.max_message_bytes": 8192},
+        )
+        client = WebSocketClient.from_config(config, connection_factory=factory)
+        assert client._max_message_bytes == 8192  # noqa: SLF001
+
+    def test_connect_url_not_consumed_by_from_config(self) -> None:
+        """``websockets.client.connect_url`` is in the manifest but the
+        factory does not read it — URL is a per-connection arg."""
+        sock = FakeSocket()
+        factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
+        # Build with a connect_url present in config; from_config must
+        # not call connect or otherwise act on it.
+        client = WebSocketClient.from_config(
+            {"websockets.client.connect_url": "ws://ignored.test/"},
+            connection_factory=factory,
+        )
+        assert client.url == ""
+        assert not client._connect_called  # noqa: SLF001
+
+    def test_explicit_connection_factory_bypasses_auto_factory(self) -> None:
+        """Passing connection_factory= skips the chumicro_sockets wiring."""
+        sock = FakeSocket()
+        factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
+        client = WebSocketClient.from_config({}, connection_factory=factory)
+        assert client._connection_factory is factory  # noqa: SLF001
+
+    def test_default_factory_threads_radio_and_ssl_context(self) -> None:
+        """When no connection_factory is passed, ``from_config`` builds
+        one via ``chumicro_websockets.sockets_factory.chumicro_sockets_factory``
+        with the radio + ssl_context kwargs threaded through."""
+        import chumicro_websockets.sockets_factory as sf
+
+        captured: dict = {}
+        sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
+
+        def fake_chumicro_sockets_factory(*, radio=None, ssl_context=None):
+            captured["radio"] = radio
+            captured["ssl_context"] = ssl_context
+            return sentinel_factory
+
+        original = sf.chumicro_sockets_factory
+        sf.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        try:
+            client = WebSocketClient.from_config(
+                {}, radio="fake-radio", ssl_context="fake-ctx",
+            )
+        finally:
+            sf.chumicro_sockets_factory = original
+
+        assert captured == {"radio": "fake-radio", "ssl_context": "fake-ctx"}
+        assert client._connection_factory is sentinel_factory  # noqa: SLF001

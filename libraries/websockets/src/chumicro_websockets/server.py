@@ -346,6 +346,12 @@ class WebSocketServer:
     :data:`CLOSE_INTERNAL_ERROR`.  Standalone-port shape only in v1;
     ``accept_path`` filters by URI path with 404 on mismatch.
 
+    For config-driven construction, see :meth:`from_config` —
+    one-line factory that builds the listener from
+    ``websockets.server.host`` / ``port`` and reads
+    ``websockets.server.max_message_bytes`` from
+    ``runtime_config.msgpack``.
+
     Knobs: ``max_connections`` (default 2; inbound accepts past the
     cap close immediately to bound heap + per-tick work);
     ``max_message_bytes`` / ``recv_budget_per_tick`` /
@@ -356,6 +362,78 @@ class WebSocketServer:
     ``ticks_ms_func`` / ``ticks_add_func`` / ``ticks_diff_func`` —
     inject fakes for testing.
     """
+
+    @classmethod
+    def from_config(
+        cls,
+        config: object,
+        on_connection: object,
+        *,
+        radio: object | None = None,
+        listener: object | None = None,
+        accept_path: str | None = None,
+        max_connections: int = 2,
+    ) -> "WebSocketServer":
+        """Build a :class:`WebSocketServer` from runtime config.
+
+        Reads the server-side keys declared in
+        ``[tool.chumicro.config]`` of ``libraries/websockets/pyproject.toml``:
+
+        * ``websockets.server.host`` → ``"0.0.0.0"`` (listen on all
+          interfaces).
+        * ``websockets.server.port`` → 8765 (the port used by this
+          library's example servers — no IANA-assigned standard
+          for chumicro WebSocket demos).
+        * ``websockets.server.max_message_bytes`` →
+          :data:`DEFAULT_MAX_MESSAGE_BYTES`.
+
+        All keys are optional with sensible defaults — empty
+        ``config`` produces a server bound to ``0.0.0.0:8765``.
+        Override individual keys in ``runtime_config.msgpack`` /
+        ``secrets.toml`` per project.
+
+        When *listener* is supplied, the caller owns the listening
+        socket.  When it's not, an auto-built listener wires through
+        :func:`chumicro_sockets.tcp_listening_socket` using *radio*
+        and the config-supplied host/port.
+
+        Args:
+            config: A :class:`chumicro_config.RuntimeConfig` or
+                plain flat dict.  Keys read are flat dotted strings.
+            on_connection: Required positional —
+                ``callable(connection)`` invoked once per inbound
+                connection.  Wires per-connection callbacks before
+                frames arrive; cannot be read from config.
+            radio: WiFi radio for the auto-built listener — CircuitPython
+                needs this; MicroPython auto-detects.  Ignored when
+                *listener* is passed.
+            listener: Pre-built listening socket.  When supplied, the
+                auto-built listener is skipped — caller owns the
+                bind / listen behaviour.
+            accept_path: Optional URI-path filter; pass through to
+                the constructor.  Not in the config manifest because
+                it's per-deploy app routing, not library-shape.
+            max_connections: Per-server cap (default 2).
+
+        Returns:
+            A configured ``WebSocketServer`` ready for ``check()`` /
+            ``handle()``.
+        """
+        if listener is None:
+            from chumicro_sockets import tcp_listening_socket  # noqa: PLC0415
+            host = config.get("websockets.server.host", "0.0.0.0")
+            port = config.get("websockets.server.port", 8765)
+            listener = tcp_listening_socket(host, port, radio=radio)
+        return cls(
+            listener=listener,
+            on_connection=on_connection,
+            max_connections=max_connections,
+            accept_path=accept_path,
+            max_message_bytes=config.get(
+                "websockets.server.max_message_bytes",
+                DEFAULT_MAX_MESSAGE_BYTES,
+            ),
+        )
 
     def __init__(
         self,
