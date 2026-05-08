@@ -360,6 +360,155 @@ def test_cancel_in_flight_marks_failed() -> None:
     assert "cancelled" in str(request.error)
 
 
+# ---------------------------------------------------------------------------
+# from_config — config-aware construction
+# ---------------------------------------------------------------------------
+
+
+class TestFromConfig:
+    """``NTPClient.from_config`` reads the manifest's optional keys with
+    sensible fall-back defaults.  Unlike ``MQTTClient.from_config``, no
+    key is ever required — the public NTP pool is the documented
+    fallback for ``ntp.server`` and the auto-built socket factory reads
+    zero config keys."""
+
+    @staticmethod
+    def _injected_factory(sock: FakeUDPSocket):
+        """Return a socket_factory that hands back *sock*."""
+        return lambda: sock
+
+    def test_reads_all_keys_from_config(self) -> None:
+        """A complete config dict populates every documented manifest key."""
+        sock = FakeUDPSocket()
+        config = {
+            "ntp.server": "time.example.com",
+            "ntp.port": 4242,
+            "ntp.timeout_ms": 1234,
+        }
+        client = NTPClient.from_config(
+            config, socket_factory=self._injected_factory(sock),
+        )
+        assert client.server == "time.example.com"
+        assert client.port == 4242
+        assert client.timeout_ms == 1234
+        assert client.socket is sock
+
+    def test_defaults_apply_when_keys_absent(self) -> None:
+        """Empty config dict → every manifest key falls back to its default.
+
+        This is the asymmetry vs ``MQTTClient.from_config``: ntp's
+        public-pool fallback means an empty config is valid input.
+        """
+        sock = FakeUDPSocket()
+        client = NTPClient.from_config(
+            {}, socket_factory=self._injected_factory(sock),
+        )
+        assert client.server == "pool.ntp.org"
+        assert client.port == 123
+        assert client.timeout_ms == 5_000
+
+    def test_partial_config_mixes_overrides_with_defaults(self) -> None:
+        """Caller-set keys win; absent keys take defaults."""
+        sock = FakeUDPSocket()
+        client = NTPClient.from_config(
+            {"ntp.timeout_ms": 250},
+            socket_factory=self._injected_factory(sock),
+        )
+        assert client.server == "pool.ntp.org"  # default
+        assert client.port == 123                # default
+        assert client.timeout_ms == 250          # override
+
+    def test_explicit_socket_bypasses_factory(self) -> None:
+        """Passing a pre-built socket skips the auto-built factory entirely
+        — caller owns the connection."""
+        sock = FakeUDPSocket()
+        client = NTPClient.from_config({}, socket=sock)
+        assert client.socket is sock
+
+    def test_explicit_socket_factory_is_called_once(self) -> None:
+        """Passing a custom socket_factory delegates socket creation.
+        Factory is invoked exactly once during from_config — eager
+        construction since NTPClient takes its socket positionally."""
+        call_count = [0]
+        sock = FakeUDPSocket()
+
+        def factory():
+            call_count[0] += 1
+            return sock
+
+        client = NTPClient.from_config({}, socket_factory=factory)
+        assert call_count[0] == 1
+        assert client.socket is sock
+
+    def test_runtime_config_wrapper_works_too(self) -> None:
+        """Real ``RuntimeConfig`` instance — same flat-key reads as a
+        plain dict.  Confirms compatibility with ``chumicro_config.config``
+        on a real device."""
+        from chumicro_config import RuntimeConfig  # noqa: PLC0415
+
+        sock = FakeUDPSocket()
+        config = RuntimeConfig({
+            "ntp.server": "time.rc.test",
+            "ntp.timeout_ms": 999,
+        })
+        client = NTPClient.from_config(
+            config, socket_factory=self._injected_factory(sock),
+        )
+        assert client.server == "time.rc.test"
+        assert client.timeout_ms == 999
+        assert client.port == 123  # default
+
+    def test_default_factory_invokes_chumicro_sockets_factory(self) -> None:
+        """When neither *socket* nor *socket_factory* is passed,
+        ``from_config`` builds a factory that calls
+        ``chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=...)``
+        and sets the resulting socket non-blocking."""
+        captured: dict = {}
+        sock = FakeUDPSocket()
+
+        def fake_chumicro_sockets_factory(*, radio=None, broadcast=False):
+            captured["radio"] = radio
+            captured["broadcast"] = broadcast
+            return sock
+
+        import chumicro_ntp.sockets_factory as sf  # noqa: PLC0415
+
+        original = sf.chumicro_sockets_factory
+        sf.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        try:
+            client = NTPClient.from_config({}, radio="fake-radio")
+        finally:
+            sf.chumicro_sockets_factory = original
+
+        assert captured == {"radio": "fake-radio", "broadcast": False}
+        assert client.socket is sock
+        # Non-blocking was applied — FakeUDPSocket records setblocking calls.
+        assert sock._blocking is False  # noqa: SLF001
+
+    def test_default_factory_does_not_raise_on_empty_config(self) -> None:
+        """Documents the asymmetry vs MQTTClient.from_config: the
+        ntp default factory reads zero config keys (server/port live
+        on the NTPClient itself, not on the socket), so an empty
+        config dict is valid input even without socket=/socket_factory=.
+        Unlike mqtt, no MissingConfigKey is ever raised."""
+        sock = FakeUDPSocket()
+
+        def fake_chumicro_sockets_factory(*, radio=None, broadcast=False):
+            return sock
+
+        import chumicro_ntp.sockets_factory as sf  # noqa: PLC0415
+
+        original = sf.chumicro_sockets_factory
+        sf.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        try:
+            # No raise: empty config + no socket override is fine.
+            client = NTPClient.from_config({})
+        finally:
+            sf.chumicro_sockets_factory = original
+
+        assert client.server == "pool.ntp.org"
+
+
 # sockets_factory submodule lives in test_ntp_pytest.py — those tests
 # poke CPython-internal stdlib socket state and the CP unix-port factory
 # can't construct without a hardware ``radio=``.  The cross-runtime

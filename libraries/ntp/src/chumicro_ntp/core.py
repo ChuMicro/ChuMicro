@@ -163,6 +163,27 @@ class NTPResult:
         self._done = True
 
 
+def _build_default_socket_factory(*, radio=None):
+    """Return a socket factory that opens a non-blocking UDP socket via
+    ``chumicro_ntp.sockets_factory.chumicro_sockets_factory``.
+
+    Used by :meth:`NTPClient.from_config` when the caller doesn't pass
+    a pre-built socket or a custom factory.  Reads no config keys —
+    the SNTP server hostname/port live on the ``NTPClient`` itself,
+    not on the socket — so the factory never raises ``MissingConfigKey``.
+    """
+    def factory():
+        from chumicro_ntp.sockets_factory import chumicro_sockets_factory  # noqa: PLC0415
+        sock = chumicro_sockets_factory(radio=radio)
+        # Runner-shaped clients require non-blocking recv.  Guarded so
+        # test fakes without setblocking() still work.
+        if hasattr(sock, "setblocking"):
+            sock.setblocking(False)
+        return sock
+
+    return factory
+
+
 class NTPClient:
     """Runner-shaped SNTP client over an injected UDP socket.
 
@@ -175,6 +196,10 @@ class NTPClient:
     and is responsible for closing it.  The ``sockets_factory``
     submodule provides a one-line default wiring against
     ``chumicro-sockets``.
+
+    For config-driven construction, see :meth:`from_config` —
+    one-line factory that reads server / port / timeout from
+    ``runtime_config.msgpack`` with sensible fall-back defaults.
 
     Args:
         socket: Any UDP socket satisfying ``UDPSocket``.  In tests
@@ -191,6 +216,71 @@ class NTPClient:
     Raises:
         ValueError: ``timeout_ms`` is non-positive.
     """
+
+    @classmethod
+    def from_config(
+        cls,
+        config,
+        *,
+        radio=None,
+        socket=None,
+        socket_factory=None,
+    ):
+        """Build an :class:`NTPClient` from runtime config.
+
+        Reads the ``[tool.chumicro.config]`` keys declared in
+        ``libraries/ntp/pyproject.toml`` — **all optional** with
+        sensible defaults:
+
+        * ``ntp.server`` → ``"pool.ntp.org"`` (the public NTP pool
+          maintained for unkeyed client use).
+        * ``ntp.port`` → 123 (NTP standard).
+        * ``ntp.timeout_ms`` → 5000.
+
+        Unlike :meth:`chumicro_mqtt.MQTTClient.from_config`, which
+        refuses to silently dial a third-party broker, this factory
+        *does* fall back to the public NTP pool.  The pool is
+        purpose-built for unkeyed clients with sensible-default
+        behaviour; an MQTT broker is typically private infrastructure,
+        so the asymmetry is deliberate.  No key in the ntp manifest
+        is required, and the auto-built socket factory reads zero
+        config keys, so an empty ``config`` dict is valid input.
+
+        When *socket* or *socket_factory* is supplied, the caller
+        owns the connection.  When neither is supplied, an auto-built
+        factory creates a UDP socket via
+        ``chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=radio)``
+        and sets it non-blocking before passing it to the client.
+
+        Args:
+            config: A :class:`chumicro_config.RuntimeConfig` (typically
+                ``chumicro_config.config``) or plain flat dict.  Keys
+                read are flat dotted strings (``"ntp.server"``).
+            radio: WiFi radio for the auto-built socket factory —
+                CircuitPython needs this; MicroPython auto-detects.
+                Ignored when *socket* or *socket_factory* is passed
+                directly.
+            socket: Pre-built UDP socket.  When supplied, the
+                auto-built factory is skipped — caller owns the
+                connection.
+            socket_factory: Custom ``callable() -> UDPSocket``.  When
+                supplied, called once during ``from_config`` to
+                produce the socket.  Useful for custom socket options
+                or non-default radio wiring.
+
+        Returns:
+            A configured ``NTPClient`` ready for ``query()``.
+        """
+        if socket is None and socket_factory is None:
+            socket_factory = _build_default_socket_factory(radio=radio)
+        if socket is None:
+            socket = socket_factory()
+        return cls(
+            socket=socket,
+            server=config.get("ntp.server", "pool.ntp.org"),
+            port=config.get("ntp.port", 123),
+            timeout_ms=config.get("ntp.timeout_ms", 5_000),
+        )
 
     def __init__(
         self,
