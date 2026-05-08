@@ -243,13 +243,14 @@ def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
 
 
 def _cmd_setup(args: argparse.Namespace) -> int:
-    """Install workspace dependencies and materialize starter files.
+    """Install workspace dependencies and materialise workspace templates.
 
     Runs ``pip install -e .`` in the workspace root when a
     ``pyproject.toml`` is present, then materialises any missing
-    workbench-owned starters (``devices.yml``, ``workspace.yml``,
-    ``secrets.toml``) from the canonical content in
-    :mod:`chumicro_workspace`'s ``_payloads/``.  Idempotent —
+    workspace templates (``devices.yml``, ``workspace.yml``,
+    ``secrets.toml``) from the canonical content shipped in
+    :mod:`chumicro_workspace.templates` (``devices.yml`` ships from
+    ``chumicro_deploy`` since it owns the schema).  Idempotent —
     re-running is safe.
 
     Setup is the one command that *materialises* ``workspace.yml`` —
@@ -280,17 +281,17 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         )
     from chumicro_workspace.template_apply import (  # noqa: PLC0415
         ApplyAction,
-        materialize_workbench_starters,
+        materialize_workspace_templates,
     )
 
-    # Workbench-owned starters — canonical content lives in the
-    # workbench package's `_payloads/` so the same bytes ship to
-    # every workspace.
-    workbench_report = materialize_workbench_starters(workspace.root)
-    workbench_new = workbench_report.count(ApplyAction.MATERIALIZED)
-    if workbench_new:
-        print(f"setup: materialized {workbench_new} workbench-owned starter(s)")
-        for path, action in workbench_report:
+    # Workspace templates — canonical content ships from the workbench
+    # wheel (workspace.yml + secrets.toml) and chumicro_deploy
+    # (devices.yml, schema-co-located).
+    template_report = materialize_workspace_templates(workspace.root)
+    materialized_count = template_report.count(ApplyAction.MATERIALIZED)
+    if materialized_count:
+        print(f"setup: materialized {materialized_count} workspace template(s)")
+        for path, action in template_report:
             if action == ApplyAction.MATERIALIZED:
                 print(f"  {path}")
 
@@ -339,7 +340,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
                         f"{chumicro_path}",
                     )
 
-    # Additive re-apply: append upstream-starter keys missing from the
+    # Additive re-apply: append upstream-template keys missing from the
     # user's workspace.yml / secrets.toml, in place, comments preserved.
     # Existing edits are NEVER touched; only the missing keys land.
     from chumicro_workspace.additive_apply import additive_reapply  # noqa: PLC0415
@@ -351,20 +352,8 @@ def _cmd_setup(args: argparse.Namespace) -> int:
             joined = ", ".join(paths)
             print(
                 f"setup: appended {len(paths)} {plural} to {filename} "
-                f"from the upstream starter: {joined}",
+                f"from the upstream template: {joined}",
             )
-
-    # Schema-drift report — informational pass after the additive
-    # apply.  Should be a no-op now (additive_reapply just landed
-    # everything safely-appendable), but the report still fires for
-    # paths additive_reapply chose to skip — e.g. a starter key whose
-    # parent table the user actively deleted (leave it deleted, don't
-    # resurrect).
-    from chumicro_workspace.starter_drift import (  # noqa: PLC0415
-        print_starter_drift_report,
-    )
-
-    print_starter_drift_report(workspace.root)
     return 0
 
 

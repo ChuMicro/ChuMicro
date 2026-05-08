@@ -143,10 +143,10 @@ class WorkspaceLayout:
     def secrets_toml(self) -> Path:
         """Path to ``<root>/secrets.toml`` — gitignored device-bound config.
 
-        Materialised on first ``setup`` from the workbench-owned
-        starter (:func:`read_secrets_toml_starter`).  Carries wifi
-        credentials, MQTT broker auth, and any other workspace-wide
-        default that flows onto a board through ``runtime_config.msgpack``.
+        Materialised on first ``setup`` from the canonical template
+        (:func:`read_secrets_toml_template`).  Carries wifi credentials,
+        MQTT broker auth, and any other workspace-wide default that
+        flows onto a board through ``runtime_config.msgpack``.
         May not exist on a fresh workspace before ``setup`` runs.
         """
         return self.root / "secrets.toml"

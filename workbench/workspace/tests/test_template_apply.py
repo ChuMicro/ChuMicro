@@ -11,7 +11,7 @@ from chumicro_workspace.template_apply import (
     DEFAULT_TEMPLATE_URL,
     ApplyAction,
     init,
-    materialize_workbench_starters,
+    materialize_workspace_templates,
     update,
 )
 
@@ -26,7 +26,7 @@ def fake_template_repo(tmp_path: Path) -> Path:
     Layout mirrors the ChuMicro-Workspace-Template repo: tool-owned
     files at the root, init-only `README.md`.  `workspace.yml` /
     `secrets.toml` / `devices.yml` are gitignored — setup
-    materializes them from the workbench-owned canonical starters.
+    materializes them from the canonical workspace templates.
 
     Returns the absolute path to the repo (suitable as a
     ``template_url=str(path)`` argument).
@@ -79,7 +79,7 @@ class TestInit:
         assert (target / "run.py").is_file()
         # workspace.yml / secrets.toml / devices.yml at root are
         # gitignored — init clones what's tracked; setup materializes
-        # the rest from workbench-owned starters.
+        # the rest from the canonical workspace templates.
         assert not (target / "workspace.yml").is_file()
         assert not (target / "secrets.toml").is_file()
         assert not (target / "devices.yml").is_file()
@@ -210,35 +210,36 @@ class TestUpdate:
             update(target)
 
 
-class TestMaterializeWorkbenchStarters:
-    """Workbench-owned starters land at the workspace root from the package's payloads."""
+class TestMaterializeWorkspaceTemplates:
+    """Canonical workspace templates land at the workspace root from the
+    owning package's payloads."""
 
-    def test_writes_devices_yml_from_workbench_payload(
+    def test_writes_devices_yml_from_payload(
         self, tmp_path: Path,
     ) -> None:
         workspace = tmp_path / "ws"
         workspace.mkdir()
-        report = materialize_workbench_starters(workspace)
+        report = materialize_workspace_templates(workspace)
         actions = _files(report)
         assert actions["devices.yml"] == ApplyAction.MATERIALIZED
         # Content matches the canonical reader.
-        from chumicro_workspace import read_devices_yml_starter  # noqa: PLC0415
+        from chumicro_workspace import read_devices_yml_template  # noqa: PLC0415
 
-        assert (workspace / "devices.yml").read_text() == read_devices_yml_starter()
+        assert (workspace / "devices.yml").read_text() == read_devices_yml_template()
 
-    def test_writes_workspace_yml_from_workbench_payload(
+    def test_writes_workspace_yml_from_payload(
         self, tmp_path: Path,
     ) -> None:
         workspace = tmp_path / "ws"
         workspace.mkdir()
-        report = materialize_workbench_starters(workspace)
+        report = materialize_workspace_templates(workspace)
         actions = _files(report)
         assert actions["workspace.yml"] == ApplyAction.MATERIALIZED
-        from chumicro_workspace import read_workspace_yml_starter  # noqa: PLC0415
+        from chumicro_workspace import read_workspace_yml_template  # noqa: PLC0415
 
         assert (
             (workspace / "workspace.yml").read_text()
-            == read_workspace_yml_starter()
+            == read_workspace_yml_template()
         )
 
     def test_skips_existing_files(self, tmp_path: Path) -> None:
@@ -247,7 +248,7 @@ class TestMaterializeWorkbenchStarters:
         (workspace / "devices.yml").write_text("user-edited devices\n")
         (workspace / "workspace.yml").write_text("user-edited overlay\n")
 
-        report = materialize_workbench_starters(workspace)
+        report = materialize_workspace_templates(workspace)
         actions = _files(report)
         assert actions["devices.yml"] == ApplyAction.UNCHANGED
         assert actions["workspace.yml"] == ApplyAction.UNCHANGED
@@ -261,12 +262,12 @@ class TestMaterializeWorkbenchStarters:
         workspace = tmp_path / "ws"
         workspace.mkdir()
 
-        first = materialize_workbench_starters(workspace)
+        first = materialize_workspace_templates(workspace)
         actions_first = _files(first)
         assert actions_first["devices.yml"] == ApplyAction.MATERIALIZED
         assert actions_first["workspace.yml"] == ApplyAction.MATERIALIZED
 
-        second = materialize_workbench_starters(workspace)
+        second = materialize_workspace_templates(workspace)
         actions_second = _files(second)
         assert actions_second["devices.yml"] == ApplyAction.UNCHANGED
         assert actions_second["workspace.yml"] == ApplyAction.UNCHANGED

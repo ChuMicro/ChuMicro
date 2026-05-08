@@ -132,7 +132,7 @@ from chumicro_workspace import (
     build_runtime_config, compose_runtime_config, merge_configs,
     read_workspace_yaml, read_project_config,
     write_runtime_config, WorkspaceConfigError,
-    read_workspace_yml_starter,
+    read_workspace_yml_template,
 
     # Deploy sources
     WithRuntimeConfig, project_directory_source,

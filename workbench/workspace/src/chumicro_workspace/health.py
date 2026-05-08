@@ -164,7 +164,10 @@ def check_devices_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             label="DEVICES.YML",
             level=HealthLevel.ERROR,
             message=f"malformed: {exception}",
-            hint="check the YAML structure against the canonical starter (chumicro_workspace.read_devices_yml_starter()).",
+            hint=(
+                "check the YAML structure against the canonical template "
+                "(chumicro_deploy.read_devices_yml_template())."
+            ),
         )
     devices = data.get("devices", []) or []
     count = len(devices)

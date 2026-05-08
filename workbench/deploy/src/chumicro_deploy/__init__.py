@@ -38,6 +38,7 @@ from .config.default import (
     load_devices,
     resolve_ide_devices,
 )
+from .config.devices_yaml import read_devices_yml_template
 from .deployer import Deployer
 from .device import DEFAULT_DEPLOY_MODE, Device
 from .firmware import (
@@ -138,6 +139,7 @@ __all__ = [
     "load_device_registry",
     "load_devices",
     "probe_device",
+    "read_devices_yml_template",
     "read_runtime_marker",
     "recovery_plan_for",
     "resolve_firmware_url",

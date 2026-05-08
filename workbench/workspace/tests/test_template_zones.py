@@ -69,7 +69,7 @@ class TestClassify:
 
     def test_workspace_yml_user_owned_not_init_only(self) -> None:
         """Gitignored ``workspace.yml`` is the materialized output of
-        the workbench-owned starter; ``update`` must never touch it.
+        the canonical template; ``update`` must never touch it.
         Same for ``secrets.toml``."""
         assert classify("workspace.yml") is Zone.USER_OWNED
         assert classify("secrets.toml") is Zone.USER_OWNED
