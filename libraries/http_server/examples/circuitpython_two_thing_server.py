@@ -1,124 +1,102 @@
 """Two-thing demo — display server side.
 
 Pairs with ``circuitpython_two_thing_sensor.py`` running on a
-separate board.  This side opens an HTTP server on port 8080 with
-three routes:
+separate board.  This side opens an HTTP server with three routes:
 
 * ``GET /`` — HTML status page showing the latest reading.
 * ``GET /api/latest`` — JSON ``{"value": <last>, "received_at": <ms>}``.
 * ``POST /api/sensor`` — accepts JSON ``{"sensor_id": str, "value": Number}``,
   stores the latest value, returns 201.
 
-Architecture (Decision 0014 + Decision 0041):
+Architecture: single-process, runner-shaped (LED keeps blinking
+through accept / dispatch / response thanks to the per-tick
+``server.handle()`` cooperative dispatch).  In-memory state — no
+persistence.
 
-* Single-process, runner-shaped: the LED keeps blinking while the
-  server is mid-handshake / mid-response thanks to the per-tick
-  ``server.handle()`` cooperative dispatch.
-* In-memory state: latest reading lives in a ``_State`` dataclass.
-  No persistence — power cycle clears.
+Configuration
+=============
 
-WiFi config
-===========
+Reads the deployed ``runtime_config.msgpack`` (baked from
+``secrets.toml`` + per-example ``examples/config.toml`` by the
+deploy pipeline) via the flat-key API:
 
-Reads wifi credentials via the standard chumicro pipeline:
-:func:`chumicro_config.load_runtime_config` reads
-``/runtime_config.msgpack`` (baked from workspace.yml at deploy
-time by ``chumicro-workspace``).  The ``[wifi]`` section is fed to
-:meth:`chumicro_wifi.WifiConfig.from_dict`.
+* WiFi: ``WifiConfig.try_from_config(config)`` reads ``wifi.ssid`` /
+  ``wifi.password``.
+* HTTP server: ``HttpServer.from_config(config, radio=…)`` reads
+  ``http_server.bind_host`` / ``bind_port`` / ``max_connections`` /
+  ``request_timeout_ms`` / ``max_request_body_bytes`` plus the
+  optional TLS pair ``http_server.tls.cert_path`` /
+  ``http_server.tls.key_path``.  All optional with library defaults
+  (``0.0.0.0:8080``, plain TCP listener).
 
-If ``runtime_config.msgpack`` isn't present (raw deploy without
-``chumicro-workspace``), the example falls back to the
-``WIFI_SSID`` / ``WIFI_PASSWORD`` constants below — edit them in
-place before deploying.
+When ``runtime_config.msgpack`` isn't present (raw single-file
+deploys), wifi creds fall back to the placeholder constants below
+— edit them first.  Server bind defaults to ``0.0.0.0:8080``.
 
 Deploying
 =========
 
-Recommended (workspace-managed)::
+Deploy from a chumicro fork or clone::
 
-    chumicro-workspace deploy two_thing_server
+    python scripts/run.py deploy-example http_server circuitpython_two_thing_server --device <id>
 
-Raw (single-file copy)::
-
-    1. Edit WIFI_SSID + WIFI_PASSWORD below.
-    2. Copy this file to ``/code.py`` (CP) or ``/main.py`` (MP).
-    3. Ensure ``chumicro-{wifi,sockets,http_server,config,timing,
-       runner,msgpack}`` are present under ``/lib/``.
+Or from a workspace template repo (for user-authored projects
+that follow the same example shape).
 
 Example output (server side stdout)::
 
     ADAPTER: cp
     WIFI_OK ip=10.0.0.42
-    Server listening on port 8080.  Hit http://10.0.0.42:8080/
+    Server listening on 0.0.0.0:8080.  Hit http://10.0.0.42:8080/
     [+] sensor=temp value=72.5
-    [+] sensor=temp value=72.7
 """
 
 import sys
 import time
 
 from chumicro_http_server import HttpServer, build_response
-from chumicro_sockets import tcp_listening_socket
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-# Fallback constants used only when runtime_config.msgpack is absent.
-# Edit before raw single-file deployments; harmless when chumicro-
-# workspace bakes runtime_config.msgpack from workspace.yml.
+# Fallback constants — used only when runtime_config.msgpack is absent.
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
-LISTEN_PORT = 8080
 
 
-def _load_wifi_config() -> WifiConfig:
-    """Standard pattern: runtime_config first, fallback to constants."""
+def _load_runtime_config():
+    """Return the deployed RuntimeConfig, or ``None`` when absent."""
     try:
         from chumicro_config import load_runtime_config
-
-        config = load_runtime_config()
-        if config and "wifi" in config:
-            return WifiConfig.from_dict(config["wifi"])
+        return load_runtime_config()
     except (ImportError, OSError):
-        # ImportError: chumicro-config missing on the board.
-        # OSError: runtime_config.msgpack not at the expected path.
-        pass
-    return WifiConfig(
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Wifi up.
+# ---------------------------------------------------------------------------
+
+config = _load_runtime_config()
+wifi_config = WifiConfig.try_from_config(config) if config is not None else None
+if wifi_config is None:
+    wifi_config = WifiConfig(
         ssid=WIFI_SSID,
         password=WIFI_PASSWORD,
         connect_timeout_ms=15_000,
     )
 
-
-class _State:
-    """Latest sensor reading."""
-
-    __slots__ = ("received_at_ms", "sensor_id", "value")
-
-    def __init__(self):
-        self.sensor_id = None
-        self.value = None
-        self.received_at_ms = None
-
-
-state = _State()
+service = WifiService(wifi_config)
 
 
 def _now_ms():
-    """Return wall-clock-ish ms via ``time.monotonic`` (cross-runtime)."""
+    """Wall-clock-ish ms via ``time.monotonic`` (cross-runtime)."""
     try:
         return int(time.monotonic_ns() // 1_000_000)
     except AttributeError:
         return int(time.monotonic() * 1000)
 
 
-# ---------------------------------------------------------------------------
-# Wifi up.  See chumicro-wifi docs for production-grade reconnect.
-# ---------------------------------------------------------------------------
-
-service = WifiService(_load_wifi_config())
-
-
 def _drive_until(predicate, deadline_ms):
-    start = service._ticks_ms()  # noqa: SLF001 — example uses internal clock
+    start = service._ticks_ms()  # noqa: SLF001
     while not predicate():
         now = service._ticks_ms()  # noqa: SLF001
         if service._ticks_diff(now, start) >= deadline_ms:  # noqa: SLF001
@@ -150,11 +128,23 @@ if sys.implementation.name == "circuitpython":
 # Server.
 # ---------------------------------------------------------------------------
 
-server = HttpServer(
-    listener_factory=lambda: tcp_listening_socket(
-        "0.0.0.0", LISTEN_PORT, radio=wifi_radio,
-    ),
-    max_connections=2,
+
+class _State:
+    """Latest sensor reading."""
+
+    __slots__ = ("received_at_ms", "sensor_id", "value")
+
+    def __init__(self):
+        self.sensor_id = None
+        self.value = None
+        self.received_at_ms = None
+
+
+state = _State()
+
+server = HttpServer.from_config(
+    config if config is not None else {},
+    radio=wifi_radio,
 )
 
 
@@ -199,7 +189,18 @@ def sensor(request):
     return build_response(201, json={"ok": True})
 
 
-print(f"Server listening on port {LISTEN_PORT}.  Hit http://{service.ip}:{LISTEN_PORT}/")
+# Resolve bound host/port for the status print (the listener owns
+# them; we re-read the resolved config for display).
+if config is not None:
+    bound_host = config.get("http_server.bind_host", "0.0.0.0")
+    bound_port = config.get("http_server.bind_port", 8080)
+else:
+    bound_host = "0.0.0.0"
+    bound_port = 8080
+print(
+    f"Server listening on {bound_host}:{bound_port}.  "
+    f"Hit http://{service.ip}:{bound_port}/",
+)
 
 while True:
     now = service._ticks_ms()  # noqa: SLF001
