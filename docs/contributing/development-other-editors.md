@@ -53,7 +53,7 @@ python scripts/run.py setup
 python scripts/run.py test-libraries-functional
 ```
 
-`setup` materialises local `devices.yml` and `workspace.yml` starter files if they do not exist yet (from the mono-repo's `_workspace_template/` override + the workbench package's canonical starters).  Register a board with `python scripts/run.py add-device <id> --address <port>`, fill in `workspace.yml` with your wifi credentials under `defaults.wifi.{ssid,password}` (the file is gitignored — Decision 0057), then use:
+`setup` materialises local `devices.yml`, `workspace.yml`, and `secrets.toml` starter files if they do not exist yet (from the canonical workbench-shipped starters in `chumicro_workspace`).  Register a board with `python scripts/run.py add-device <id> --address <port>`, fill in `secrets.toml` with your wifi credentials under `[wifi]` (the file is gitignored — Decision 0057), then use:
 
 ```bash
 python scripts/run.py test-libraries-functional --library timing
