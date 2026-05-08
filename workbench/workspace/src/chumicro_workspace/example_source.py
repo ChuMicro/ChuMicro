@@ -1,14 +1,14 @@
 """Build a deploy-ready FileSource for a single library example.
 
-The ``deploy-example`` front-door command (Decision 0059) ships
+The ``deploy-example`` front-door command ships
 ``libraries/<lib>/examples/<name>.py`` to a board as ``code.py``
 (CircuitPython) or ``main.py`` (MicroPython), bringing along every
 ``chumicro_*`` module the example imports under ``/lib/`` and a
 merged ``runtime_config.msgpack`` baked from ``secrets.toml`` plus
 an optional per-example ``examples/config.toml``.
 
-This module owns the shape of that source.  The CLI (Phase 3c) just
-asks for one and hands it to ``Deployer.deploy()`` like any other
+This module owns the shape of that source.  The CLI just asks for
+one and hands it to ``Deployer.deploy()`` like any other
 ``FileSource``.
 
 The shape composes existing pieces:
@@ -32,9 +32,11 @@ What this module adds:
   so the artifact lands in the gitignored ``.scratch/`` tree, never
   inside the tracked ``libraries/<lib>/examples/`` folder.
 
-Mono-repo only for now per Decision 0059 §C.3 — the workspace
-template repo's user-authored libraries can promote the same shape
-later if a real user asks.
+Scoped to working trees that own a ``libraries/<lib>/`` directory
+layout (the upstream chumicro source tree).  Workspace template
+repos that grow user-authored library trees of the same shape can
+adopt the helper later — it's general over the directory layout,
+not the upstream consumer.
 """
 
 from __future__ import annotations

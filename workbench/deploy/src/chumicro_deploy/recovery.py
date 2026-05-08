@@ -475,12 +475,9 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "that suits your project: CircuitPython for the broadest "
             "Adafruit-board support, MicroPython for stronger "
             "hardware-acceleration on ESP32 / Pi Pico W.",
-            "From a chumicro fork or clone:  python scripts/run.py "
-            "install-firmware --board <model> --runtime "
-            "<circuitpython|micropython> --address <port>",
-            "From a workspace template repo:  chumicro-workspace "
-            "install-firmware --board <model> --runtime "
-            "<circuitpython|micropython> --address <port>",
+            "Run:  chumicro-workspace install-firmware --board "
+            "<model> --runtime <circuitpython|micropython> --address "
+            "<port>",
             "List supported boards with `--list-boards`.  Heads-up: "
             "this is destructive — flashing overwrites whatever the "
             "board is currently running (your Arduino sketch, custom "

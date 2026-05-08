@@ -1,6 +1,6 @@
 # Workstream: library `from_config` factories — config-aware constructors across the six networking libs
 
-Status: **open — Phases 0 (manifests) + 1 (pytest-device validation hook) + 2-mqtt + 2-ntp + 2-requests + 2-websockets shipped host-side; remaining Phase 2 lib (`http_server`) and Phase 3 (`deploy-example` CLI — policy locked in Decision [0059](../decisions/0059-deploy-example-front-door.md)) still to do.  mqtt + ntp + requests + websockets Phase 2 host-side tests pass at ≥94 % coverage; four-board hardware sweep confirming all four refactored examples (`circuitpython_telemetry`, `circuitpython_ntp_query`, `circuitpython_periodic_get`, `circuitpython_client` + `circuitpython_server`) is queued for a single bench session paired with Phase 3's first consumer (see "Recommended pairing with hardware validation" below).**
+Status: **open — Phases 0 (manifests) + 1 (pytest-device validation hook) + 2-mqtt + 2-ntp + 2-requests + 2-websockets + 3 (`deploy-example` CLI per Decision [0059](../decisions/0059-deploy-example-front-door.md)) shipped host-side; remaining Phase 2 lib (`http_server`) is the only piece left.  Four refactored Phase 2 examples (`circuitpython_telemetry`, `circuitpython_ntp_query`, `circuitpython_periodic_get`, `circuitpython_client` + `circuitpython_server`) plus the Phase 3 deploy-example pipeline await a single bench session against the four-board canonical matrix (see "Recommended pairing with hardware validation" below).**
 
 The libraries `mqtt`, `requests`, `http_server`, `ntp`, `websockets`, and `wifi` were written before the runtime-config strategy ([Decision 0035](../decisions/0035-runtime-config-structure.md), [Decision 0057](../decisions/0057-two-file-config.md), [`config-shape-beginner-ergonomics`](archive/config-shape-beginner-ergonomics.md)).  Today only `chumicro_wifi.WifiConfig.from_config` exists — `WifiService(WifiConfig.from_config(config))` reads `wifi.ssid` / `wifi.password` straight off the deployed `runtime_config.msgpack`.
 
@@ -88,6 +88,15 @@ Status:
 **Hardware validation is mandatory before each library's Phase 2 closes.**  Each refactor must pass the four-board canonical matrix (Pi Pico W CP/MP + Lolin S2 CP/MP).  CPython unit tests don't catch on-device config-load failure modes.  mqtt's host-side tests at 95 % coverage and the example imports clean — that's necessary but not sufficient.
 
 ### Phase 3 — `python scripts/run.py deploy-example <lib> <name>` (mono-repo)
+
+**Status: shipped 2026-05-07 (host-side; hardware queued).**  Three commits across `chumicro_deploy` + `chumicro_workspace` + `scripts/run.py`:
+
+* **3a** ([Decision 0053](../decisions/0053-recovery-layer-philosophy.md)'s `DeployFailureKind` enum gained `NO_PYTHON_RUNTIME`) — classifier patterns + recovery plan pointing at `install-firmware`; non-retryable per the destructive-action consent rule.  Lights up across every workbench tool that classifies deploy failures, not just `deploy-example`.
+* **3b** (`chumicro_workspace.example_source` FileSource) — composes `ImportGraphSource` + `WithRuntimeConfig` + `__chumicro_runtimes__` filtering; adds example-path resolution under `libraries/<lib>/examples/<name>.py`, runtime → entrypoint mapping (CP `code.py` / MP `main.py`), and a default output path under `<secrets>.parent/.scratch/` so generated msgpack artifacts never pollute the tracked tree.  17 tests at 100 % coverage.
+* **3c** (`chumicro-workspace deploy-example` subcommand + `python scripts/run.py deploy-example` shim) — full state-(1)–(4) handler covering precheck (file exists / runtime marker / multi-runtime disambiguation), no-device-registered (state 1) with TTY-detected interactive vs `--non-interactive` non-interactive bootstrap fall-through, runtime mismatch (state 2 precheck), `NO_PYTHON_RUNTIME` (state 3 → exit 6), and generic deploy failure (state 4 → exit 4).  Distinct exit codes 0/2/3/4/5/6 per ADR 0059 §5.  Optional `--tail` drops into `chumicro-repl` after deploy; `--non-interactive` forces no-tail.  `--list` discovers available examples.  24 cli tests + 4 shim tests pass; workspace package at 94 % coverage.
+
+**Below is the original investigation note kept for context.**
+
 
 User-facing surface:
 

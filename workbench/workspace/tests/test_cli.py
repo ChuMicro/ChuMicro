@@ -4971,3 +4971,572 @@ class TestResetBoard:
         # No-op: never reached connect/wipe.
         assert ("wipe_filesystem", ()) not in transport.calls
         assert "nothing in flash to wipe" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# deploy-example — front-door command (Decision 0059, Phase 3)
+# ---------------------------------------------------------------------------
+
+
+def _seed_example_library(
+    workspace_root: Path,
+    library_name: str,
+    *,
+    example_name: str = "circuitpython_blink.py",
+    example_body: str = "print('blink')\n",
+    runtimes_marker: str | None = "circuitpython",
+) -> Path:
+    """Stage ``<workspace>/libraries/<lib>/{src,examples}/`` so the
+    deploy-example handler can resolve the example + walk its imports.
+
+    Returns the library root path.
+    """
+    library_root = workspace_root / "libraries" / library_name
+    src_pkg = library_root / "src" / f"chumicro_{library_name}"
+    src_pkg.mkdir(parents=True)
+    (src_pkg / "__init__.py").write_text(f"VERSION = '{library_name}-1.0'\n")
+    (library_root / "pyproject.toml").write_text(
+        f'[project]\n'
+        f'name = "chumicro-{library_name}"\nversion = "0.1.0"\n'
+        f'\n[tool.chumicro.config]\nrequired_keys = []\noptional_keys = []\n',
+    )
+    examples = library_root / "examples"
+    examples.mkdir()
+    full_body = example_body
+    if runtimes_marker is not None:
+        full_body = f"__chumicro_runtimes__ = ({runtimes_marker!r},)\n" + body_to_pythony(full_body)
+    else:
+        full_body = body_to_pythony(full_body)
+    (examples / example_name).write_text(full_body)
+    return library_root
+
+
+def body_to_pythony(text: str) -> str:
+    """Identity passthrough — kept as a hook in case a test wants to
+    inject standard imports automatically (currently no-op)."""
+    return text
+
+
+def _seed_workspace_with_cp_device(tmp_path: Path) -> Path:
+    """Same as ``_seed_workspace`` but registers a CircuitPython device
+    by default (matches the deploy-example examples we seed below)."""
+    (tmp_path / "workspace.yml").write_text("# machinery only\n")
+    (tmp_path / "secrets.toml").write_text(
+        "[wifi]\nssid = 'home'\npassword = 'shh'\n",
+    )
+    (tmp_path / "devices.yml").write_text(
+        "defaults:\n"
+        "  circuitpython: pico-w-cp\n"
+        "devices:\n"
+        "  - id: pico-w-cp\n"
+        "    runtime: circuitpython\n"
+        "    address: /dev/cu.fake\n",
+    )
+    return tmp_path
+
+
+class TestDeployExampleListing:
+    """``--list`` enumerates examples without touching a device."""
+
+    def test_list_all_libraries(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        _seed_example_library(
+            root, "runner", example_name="circuitpython_blink.py",
+        )
+        exit_code = cli.main(
+            ["deploy-example", "--workspace-dir", str(root), "--list"],
+        )
+        assert exit_code == 0
+        out = capsys.readouterr().out.splitlines()
+        assert "timing/circuitpython_blink" in out
+        assert "runner/circuitpython_blink" in out
+
+    def test_list_scoped_to_one_library(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        _seed_example_library(root, "runner")
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root), "--list", "timing",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out.splitlines()
+        assert "timing/circuitpython_blink" in out
+        assert "runner/circuitpython_blink" not in out
+
+    def test_list_with_unknown_library_returns_precheck_error(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "--list", "ghost",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert "no examples under" in capsys.readouterr().err
+
+
+class TestDeployExamplePrechecks:
+    """Precheck failures all return exit 2 with structured stderr."""
+
+    def test_missing_library_returns_precheck_error(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace_with_cp_device(tmp_path)
+        (root / "libraries").mkdir()  # empty libraries/ tree
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "noexlib", "blink", "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert "noexlib" in capsys.readouterr().err
+
+    def test_missing_example_file_returns_precheck_error(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "ghost", "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert "ghost.py not found" in capsys.readouterr().err
+
+    def test_runtime_mismatch_returns_precheck_error(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """An example marked CP-only refuses to deploy to an MP device."""
+        # Workspace has only an MP device registered.
+        root = tmp_path
+        (root / "workspace.yml").write_text("")
+        (root / "secrets.toml").write_text("")
+        (root / "devices.yml").write_text(
+            "defaults:\n  micropython: lolin-s2\n"
+            "devices:\n  - id: lolin-s2\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake\n",
+        )
+        _seed_example_library(
+            root, "timing",
+            example_name="circuitpython_only.py",
+            runtimes_marker="circuitpython",
+        )
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_only", "--non-interactive",
+            "--device", "lolin-s2",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert "requires circuitpython" in capsys.readouterr().err
+
+
+class TestDeployExampleNoDevice:
+    """State (1) — no device registered for the example's runtime."""
+
+    def test_non_interactive_with_no_device_exits_three(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Empty devices.yml + --non-interactive → exit 3 with hint."""
+        root = tmp_path
+        (root / "workspace.yml").write_text("")
+        (root / "secrets.toml").write_text("")
+        (root / "devices.yml").write_text("devices: []\n")
+        _seed_example_library(root, "timing")
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink", "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
+        stderr = capsys.readouterr().err
+        assert "no circuitpython device registered" in stderr
+        assert "add-device" in stderr
+        assert "discover" in stderr
+
+    def test_no_auto_register_falls_through_to_exit_three(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """--no-auto-register skips the wizard fall-through even in TTY mode."""
+        root = tmp_path
+        (root / "workspace.yml").write_text("")
+        (root / "secrets.toml").write_text("")
+        (root / "devices.yml").write_text("devices: []\n")
+        _seed_example_library(root, "timing")
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink", "--no-auto-register",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
+
+
+class TestDeployExampleHappyPath:
+    """Full deploy through a FakeTransport."""
+
+    def test_ships_example_through_fake_transport(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(
+            root, "timing",
+            example_body="from chumicro_timing import VERSION\nprint(VERSION)\n",
+        )
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink", "--non-interactive",
+        ])
+        assert exit_code == 0
+
+        deploy_calls = [
+            call for call in transport.calls if call[0] == "deploy_files"
+        ]
+        assert len(deploy_calls) == 1
+        files, entrypoint = deploy_calls[0][1]
+        assert entrypoint == "/code.py"
+        # The walked library module rides under /lib/.
+        assert "/lib/chumicro_timing/__init__.py" in files
+        # And so does the merged runtime config msgpack.
+        assert "/runtime_config.msgpack" in files
+
+    def test_py_suffix_on_example_name_is_optional(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Both ``"blink"`` and ``"blink.py"`` resolve to the same example."""
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink.py", "--non-interactive",
+        ])
+        assert exit_code == 0
+
+
+class TestDeployExampleModes:
+    """``_resolve_deploy_example_modes`` honours TTY default + flags."""
+
+    def test_non_interactive_flag_forces_no_tail(self) -> None:
+        """``--non-interactive`` always disables tail, even with --tail."""
+        args = argparse.Namespace(non_interactive=True, tail=True)
+        non_interactive, should_tail = cli._resolve_deploy_example_modes(args)
+        assert non_interactive is True
+        assert should_tail is False
+
+    def test_tty_default_picks_interactive_tail(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """No --non-interactive + isatty=True → interactive + tail."""
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        args = argparse.Namespace(non_interactive=False, tail=True)
+        non_interactive, should_tail = cli._resolve_deploy_example_modes(args)
+        assert non_interactive is False
+        assert should_tail is True
+
+    def test_no_tty_picks_non_interactive(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """No TTY → non-interactive default; tail also off."""
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        args = argparse.Namespace(non_interactive=False, tail=True)
+        non_interactive, should_tail = cli._resolve_deploy_example_modes(args)
+        assert non_interactive is True
+        assert should_tail is False
+
+    def test_no_tail_flag_overrides_tty_default(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Interactive but ``--no-tail`` → exit cleanly after deploy."""
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        args = argparse.Namespace(non_interactive=False, tail=False)
+        non_interactive, should_tail = cli._resolve_deploy_example_modes(args)
+        assert non_interactive is False
+        assert should_tail is False
+
+
+class TestDeployExampleAdditionalBranches:
+    """Cover the remaining state-machine branches in the deploy-example
+    handler — bootstrap fall-through, multi-runtime disambiguation,
+    deploy-failure classification, missing positional rejection."""
+
+    def test_missing_library_positional_returns_precheck_error(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """No positionals + not --list → exit 2 with a clear message."""
+        root = _seed_workspace_with_cp_device(tmp_path)
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert "library positional required" in capsys.readouterr().err
+
+    def test_missing_example_positional_returns_precheck_error(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Library passed but no example → exit 2."""
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert "example positional required" in capsys.readouterr().err
+
+    def test_list_with_no_libraries_dir_returns_precheck_error(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """``--list`` without a libraries/ dir → exit 2."""
+        root = tmp_path
+        (root / "workspace.yml").write_text("")
+        (root / "secrets.toml").write_text("")
+        (root / "devices.yml").write_text("devices: []\n")
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root), "--list",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert "libraries" in capsys.readouterr().err.lower()
+
+    def test_multi_runtime_example_without_runtime_flag_exits_two(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """An example whose ``__chumicro_runtimes__`` lists more than
+        one runtime requires --runtime to disambiguate."""
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(
+            root, "timing",
+            example_name="universal.py",
+            runtimes_marker=None,  # we'll write the marker manually
+            example_body=(
+                "__chumicro_runtimes__ = ('circuitpython', 'micropython')\n"
+                "print('universal')\n"
+            ),
+        )
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "universal", "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert "multiple runtimes" in capsys.readouterr().err
+
+    def test_multi_runtime_example_with_runtime_flag_proceeds(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``--runtime`` selecting one of the example's runtimes proceeds
+        to deploy."""
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(
+            root, "timing",
+            example_name="universal.py",
+            runtimes_marker=None,
+            example_body=(
+                "__chumicro_runtimes__ = ('circuitpython', 'micropython')\n"
+                "print('universal')\n"
+            ),
+        )
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "universal",
+            "--runtime", "circuitpython", "--non-interactive",
+        ])
+        assert exit_code == 0
+
+    def test_bootstrap_fall_through_when_no_device_in_tty_mode(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """No device + interactive (TTY-detected) + --auto-register
+        (default) → bootstrap wizard runs → device resolves → deploy
+        proceeds.  Mocks _cmd_bootstrap to register a CP device."""
+        root = tmp_path
+        (root / "workspace.yml").write_text("")
+        (root / "secrets.toml").write_text("")
+        (root / "devices.yml").write_text("devices: []\n")
+        _seed_example_library(root, "timing")
+
+        # TTY mode (avoid the non-interactive default).
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+        bootstrap_calls: list[argparse.Namespace] = []
+
+        def fake_bootstrap(args: argparse.Namespace) -> int:
+            """Pretend the wizard ran and registered a CP device."""
+            bootstrap_calls.append(args)
+            (root / "devices.yml").write_text(
+                "defaults:\n  circuitpython: pico\n"
+                "devices:\n  - id: pico\n"
+                "    runtime: circuitpython\n"
+                "    address: /dev/cu.fake\n",
+            )
+            return 0
+
+        monkeypatch.setattr(cli, "_cmd_bootstrap", fake_bootstrap)
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        # In TTY mode the handler also tries to drop into chumicro-repl
+        # after a successful deploy — short-circuit it for the test.
+        import chumicro_repl.cli as repl_cli_mod
+        monkeypatch.setattr(repl_cli_mod, "main", lambda _argv: 0)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink",
+        ])
+        assert exit_code == 0
+        assert len(bootstrap_calls) == 1
+        # Wizard called with no demo (we're about to deploy the example).
+        assert bootstrap_calls[0].with_demo is False
+
+    def test_bootstrap_cancelled_exits_five(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """User cancels the wizard → exit 5 (distinct from precheck-2)."""
+        root = tmp_path
+        (root / "workspace.yml").write_text("")
+        (root / "secrets.toml").write_text("")
+        (root / "devices.yml").write_text("devices: []\n")
+        _seed_example_library(root, "timing")
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(cli, "_cmd_bootstrap", lambda _args: 1)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED
+
+    def test_no_python_runtime_classifies_to_exit_six(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A deployer exception classified as NO_PYTHON_RUNTIME exits 6
+        (the install-firmware coaching path).  Distinct from generic
+        deploy-failure exit 4."""
+        from chumicro_deploy.circuitpython_transport import (
+            CircuitpythonTransportError,
+        )
+
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+
+        # Replace _make_deploy_runner so .deploy() raises a classifiable
+        # NO_PYTHON_RUNTIME error.
+        class _NoPythonDeployer:
+            def deploy(self, _source: object) -> None:
+                raise CircuitpythonTransportError(
+                    "no python runtime detected on /dev/cu.fake",
+                )
+
+        monkeypatch.setattr(
+            cli, "_make_deploy_runner",
+            lambda _device, *, non_interactive: _NoPythonDeployer(),
+        )
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink", "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME
+
+    def test_generic_deploy_exception_exits_four(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Any other transport error → exit 4 (generic deploy failure)."""
+        from chumicro_deploy.circuitpython_transport import (
+            CircuitpythonTransportError,
+        )
+
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+
+        class _PortBusyDeployer:
+            def deploy(self, _source: object) -> None:
+                raise CircuitpythonTransportError(
+                    "Failed to open serial port: Resource busy",
+                )
+
+        monkeypatch.setattr(
+            cli, "_make_deploy_runner",
+            lambda _device, *, non_interactive: _PortBusyDeployer(),
+        )
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink", "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
+
+    def test_traceback_in_execute_output_exits_four(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A successful deploy that returns a traceback in execute_output
+        → exit 4 (the result.success heuristic flips on traceback)."""
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        transport = FakeTransport(
+            execute_output=(
+                "Traceback (most recent call last):\n"
+                "  File \"/code.py\", line 1\n"
+                "RuntimeError: boom\n"
+            ),
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink", "--non-interactive",
+        ])
+        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
+        assert "RuntimeError: boom" in capsys.readouterr().err

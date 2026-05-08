@@ -624,6 +624,50 @@ class TestMainDispatch:
         ]
 
 
+class TestPassThroughShims:
+    """``add-device`` and ``deploy-example`` peel off before argparse
+    and forward verbatim to ``python -m chumicro_workspace <cmd>``.
+    The shim's contract: any args after the subcommand name flow
+    through unchanged, and the workspace process's exit code is
+    returned to the caller."""
+
+    @pytest.mark.parametrize(
+        ("subcommand", "extra_args"),
+        [
+            ("add-device", ["my-pico", "--address", "/dev/cu.fake"]),
+            ("deploy-example", ["timing", "circuitpython_blink", "--non-interactive"]),
+            ("deploy-example", ["--list"]),
+            ("deploy-example", ["--list", "timing"]),
+        ],
+    )
+    def test_subcommand_forwards_to_workspace(
+        self, monkeypatch, subcommand: str, extra_args: list[str],
+    ) -> None:
+        """The shim spawns the workspace CLI with verbatim args
+        and returns its exit code."""
+        seen: list[list[str]] = []
+
+        class _FakeCompletedProcess:
+            def __init__(self, returncode: int) -> None:
+                self.returncode = returncode
+
+        def fake_subprocess_run(command, **_kwargs):
+            seen.append(list(command))
+            return _FakeCompletedProcess(returncode=42)
+
+        monkeypatch.setattr(run.subprocess, "run", fake_subprocess_run)
+
+        result = run.main(["run.py", subcommand, *extra_args])
+
+        assert result == 42
+        assert len(seen) == 1
+        forwarded = seen[0]
+        # Forwarded shape:  <python> -m chumicro_workspace <subcommand> <extra...>
+        assert forwarded[1:3] == ["-m", "chumicro_workspace"]
+        assert forwarded[3] == subcommand
+        assert forwarded[4:] == extra_args
+
+
 class TestTestWorkbenchFunctional:
     """Tests for run.test_workbench_functional — workbench functional-test orchestration."""
 
