@@ -10,7 +10,7 @@ _idle — pickup candidates live in `## Next`._
 
 Independent items.  Most have either shipped phases (status in the linked workstream) or are unscoped placeholders waiting on a forcing function.
 
-- [ ] **Library `from_config` factories — config-aware constructors across the six networking libs.**  Phases 0 + 1 + 2-mqtt + 2-ntp shipped host-side; remaining Phase 2 libs (`requests` → `websockets` → `http_server`) and Phase 3 (`deploy-example` CLI — ADR queued covering front-door UX, interactive vs non-interactive modes, four first-touch board states incl. `NO_PYTHON_RUNTIME`) still to do.  Hardware sweep for mqtt + ntp + Phase 3's first consumer queued for a single bench session.  Detail: [`workstreams/library-config-aware-refactor.md`](workstreams/library-config-aware-refactor.md).
+- [ ] **Library `from_config` factories — config-aware constructors across the six networking libs.**  Phases 0 + 1 + 2-mqtt + 2-ntp shipped host-side; remaining Phase 2 libs (`requests` → `websockets` → `http_server`) and Phase 3 (`deploy-example` CLI — policy locked in Decision [0059](decisions/0059-deploy-example-front-door.md)) still to do.  Hardware sweep for mqtt + ntp + Phase 3's first consumer queued for a single bench session.  Detail: [`workstreams/library-config-aware-refactor.md`](workstreams/library-config-aware-refactor.md).
 
 - [ ] **Two-board client/server example** — captured 2026-05-06 during F5 boot-shim simplification.  Replace deprecated `examples/two_projects/` with two physical-board demo (one HTTP server + one client, or MQTT pub + sub).  Single-project shape per board; lives at `examples/two_board_handshake/{server,client}/`.  Hardware-validates two-board acceptance scenarios chumicro doesn't otherwise exercise.
 
