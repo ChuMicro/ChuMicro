@@ -11,7 +11,6 @@ from chumicro_workspace.template_apply import (
     DEFAULT_TEMPLATE_URL,
     ApplyAction,
     init,
-    materialize_templates,
     materialize_workbench_starters,
     update,
 )
@@ -24,9 +23,10 @@ if TYPE_CHECKING:
 def fake_template_repo(tmp_path: Path) -> Path:
     """A local git repo populated like the canonical workspace template.
 
-    Layout mirrors the post-Decision-0038 ChuMicro-Workspace-Template
-    repo: tool-owned files at the root, a tool-owned `_workspace_template/`
-    directory, user-owned `workspace.yml`, init-only `README.md`.
+    Layout mirrors the ChuMicro-Workspace-Template repo: tool-owned
+    files at the root, init-only `README.md`.  `workspace.yml` /
+    `secrets.toml` / `devices.yml` are gitignored — setup
+    materializes them from the workbench-owned canonical starters.
 
     Returns the absolute path to the repo (suitable as a
     ``template_url=str(path)`` argument).
@@ -39,11 +39,9 @@ def fake_template_repo(tmp_path: Path) -> Path:
         '[project]\nname = "my-workspace"\n',
     )
     (repo / "README.md").write_text("# init-only readme\n")
-    # `workspace.yml` at root is gitignored under Decision 0057 — the
-    # template never tracks it.  Setup materializes it from
-    # `_workspace_template/workspace.yml` (this repo's override) or
-    # the workbench-owned starter.
-    (repo / ".gitignore").write_text(".venv/\n/workspace.yml\n")
+    (repo / ".gitignore").write_text(
+        ".venv/\n/workspace.yml\n/secrets.toml\n/devices.yml\n",
+    )
     (repo / "projects").mkdir()
     (repo / "projects" / "_template").mkdir()
     (repo / "projects" / "_template" / "app.py").write_text(
@@ -52,11 +50,6 @@ def fake_template_repo(tmp_path: Path) -> Path:
     (repo / "projects" / "_template" / "config.toml").write_text(
         '[project]\nname = "_template"\n',
     )
-    (repo / "_workspace_template").mkdir()
-    (repo / "_workspace_template" / "workspace.yml").write_text(
-        "# machinery only\n",
-    )
-    (repo / "_workspace_template" / "secrets.toml").write_text("")
     _git("init", "-b", "main", cwd=repo)
     _git("add", "-A", cwd=repo)
     _git("-c", "user.email=test@example.com", "-c", "user.name=Test",
@@ -84,14 +77,17 @@ class TestInit:
         target = tmp_path / "my-house"
         report = init(target, template_url=str(fake_template_repo))
         assert (target / "run.py").is_file()
-        # workspace.yml at root is gitignored (Decision 0057) — init
-        # clones what's tracked; setup materializes the rest.
+        # workspace.yml / secrets.toml / devices.yml at root are
+        # gitignored — init clones what's tracked; setup materializes
+        # the rest from workbench-owned starters.
         assert not (target / "workspace.yml").is_file()
-        assert (target / "_workspace_template" / "workspace.yml").is_file()
-        # All files reported as WRITTEN.
+        assert not (target / "secrets.toml").is_file()
+        assert not (target / "devices.yml").is_file()
+        # Tracked tool-owned + init-only files reported as WRITTEN.
         actions = _files(report)
         assert actions["run.py"] == ApplyAction.WRITTEN
-        assert actions["_workspace_template/workspace.yml"] == ApplyAction.WRITTEN
+        assert actions["AGENTS.md"] == ApplyAction.WRITTEN
+        assert actions["README.md"] == ApplyAction.WRITTEN
 
     def test_strips_dot_git_and_reinitializes(
         self, fake_template_repo: Path, tmp_path: Path,
@@ -203,21 +199,6 @@ class TestUpdate:
         assert actions["README.md"] == ApplyAction.SKIPPED
         assert (target / "README.md").read_text() == "# my custom readme\n"
 
-    def test_refreshes_workspace_template_directory(
-        self, fake_template_repo: Path, tmp_path: Path,
-    ) -> None:
-        """Decision 0038 §5: `_workspace_template/` is tool-owned and flows on
-        update so newer template skeletons reach existing workspaces."""
-        target = tmp_path / "my-house"
-        init(target, template_url=str(fake_template_repo))
-        # Mutate the _workspace_template source — update should restore it.
-        (target / "_workspace_template" / "workspace.yml").write_text(
-            "# stale local edit\n",
-        )
-        report = update(target, template_url=str(fake_template_repo))
-        actions = _files(report)
-        assert actions["_workspace_template/workspace.yml"] == ApplyAction.REFRESHED
-
     def test_missing_target_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
             update(tmp_path / "does-not-exist")
@@ -227,73 +208,6 @@ class TestUpdate:
         target.write_text("not a workspace\n")
         with pytest.raises(NotADirectoryError):
             update(target)
-
-
-class TestMaterializeTemplates:
-    def test_materializes_missing_files_from_workspace_template_dir(
-        self, tmp_path: Path,
-    ) -> None:
-        workspace = tmp_path / "ws"
-        workspace.mkdir()
-        templates = workspace / "_workspace_template"
-        templates.mkdir()
-        (templates / "workspace.yml").write_text('# machinery only\n')
-        (templates / "secrets.toml").write_text('')
-        report = materialize_templates(workspace)
-        actions = _files(report)
-        assert actions["workspace.yml"] == ApplyAction.MATERIALIZED
-        assert (workspace / "workspace.yml").read_text() == "# machinery only\n"
-
-    def test_skips_existing_files(self, tmp_path: Path) -> None:
-        workspace = tmp_path / "ws"
-        workspace.mkdir()
-        templates = workspace / "_workspace_template"
-        templates.mkdir()
-        (templates / "workspace.yml").write_text("from template\n")
-        (workspace / "workspace.yml").write_text("user-edited\n")
-        report = materialize_templates(workspace)
-        actions = _files(report)
-        assert actions["workspace.yml"] == ApplyAction.UNCHANGED
-        # User edits preserved.
-        assert (workspace / "workspace.yml").read_text() == "user-edited\n"
-
-    def test_no_workspace_template_dir_returns_empty_report(
-        self, tmp_path: Path,
-    ) -> None:
-        workspace = tmp_path / "ws"
-        workspace.mkdir()
-        report = materialize_templates(workspace)
-        assert list(report) == []
-
-    def test_handles_nested_template_files(self, tmp_path: Path) -> None:
-        workspace = tmp_path / "ws"
-        workspace.mkdir()
-        templates = workspace / "_workspace_template"
-        (templates / "config" / "deep").mkdir(parents=True)
-        (templates / "config" / "deep" / "settings.yml").write_text(
-            "key: value\n",
-        )
-        report = materialize_templates(workspace)
-        actions = _files(report)
-        assert actions["config/deep/settings.yml"] == ApplyAction.MATERIALIZED
-        assert (workspace / "config" / "deep" / "settings.yml").is_file()
-
-    def test_idempotent_across_multiple_invocations(
-        self, tmp_path: Path,
-    ) -> None:
-        workspace = tmp_path / "ws"
-        templates = workspace / "_workspace_template"
-        templates.mkdir(parents=True)
-        (templates / "workspace.yml").write_text("placeholder\n")
-
-        first = materialize_templates(workspace)
-        actions_first = _files(first)
-        assert actions_first["workspace.yml"] == ApplyAction.MATERIALIZED
-
-        # Second invocation — file already exists, should be unchanged.
-        second = materialize_templates(workspace)
-        actions_second = _files(second)
-        assert actions_second["workspace.yml"] == ApplyAction.UNCHANGED
 
 
 class TestMaterializeWorkbenchStarters:

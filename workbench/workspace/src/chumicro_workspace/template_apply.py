@@ -1,16 +1,13 @@
-"""Init / update / materialize-templates orchestration.
+"""Init / update / materialize-starters orchestration.
 
 `chumicro-workspace` `init` clones a workspace template repo into a
 target directory.  `update` fetches a fresh copy of the template
-upstream and re-flows tool-owned files (the three zones defined in
+upstream and re-flows tool-owned files (the zones defined in
 :mod:`chumicro_workspace.template_zones`) without touching
-user-owned ones.  `materialize_templates` walks a workspace's
-`_workspace_template/` directory and creates any missing files at
-the workspace root — invoked by ``setup`` so users edit the
-materialized files directly instead of doing manual ``cp`` from a
-``.example``.  ``materialize_workbench_starters`` then fills in any
-remaining workbench-owned starters (``devices.yml``, ``workspace.yml``)
-from the canonical content in this package's ``_payloads/``.
+user-owned ones.  `materialize_workbench_starters` fills in
+workbench-owned starters (``devices.yml``, ``workspace.yml``,
+``secrets.toml``) from the canonical content in this package's
+``_payloads/`` on first ``setup``.
 """
 
 from __future__ import annotations
@@ -44,7 +41,7 @@ class ApplyAction(str):
     """One of: ``"written"`` (file landed), ``"skipped"`` (zone-skipped
     or already existed), ``"refreshed"`` (tool-owned, rewritten on
     update), ``"unchanged"`` (write would have produced identical
-    bytes), ``"materialized"`` (created from ``_workspace_template/`` source).
+    bytes), ``"materialized"`` (workbench-owned starter freshly created).
     """
 
     WRITTEN = "written"
@@ -189,10 +186,6 @@ def materialize_workbench_starters(workspace_root: Path) -> ApplyReport:
     overwritten.  Always idempotent — re-running on a populated
     workspace produces a report of ``UNCHANGED`` entries.
 
-    Decoupled from :func:`materialize_templates` so the mono-repo's
-    setup flow (which has no ``_workspace_template/`` directory of
-    its own) can call this without paying the directory-walk cost.
-
     Returns a report whose entries are ``MATERIALIZED`` for each
     newly created file and ``UNCHANGED`` for each that already
     existed.
@@ -212,46 +205,6 @@ def materialize_workbench_starters(workspace_root: Path) -> ApplyReport:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(reader(), encoding="utf-8")
         report.add(relative_path, ApplyAction.MATERIALIZED)
-    return report
-
-
-def materialize_templates(workspace_root: Path) -> ApplyReport:
-    """Materialize ``_workspace_template/`` sources into the workspace root.
-
-    For each file under ``<workspace_root>/_workspace_template/<relative>``,
-    check if ``<workspace_root>/<relative>`` exists.  If not, copy
-    the bytes through.  Existing files are never overwritten — this
-    is a one-time-per-file generation step that runs idempotently
-    on every ``setup``.
-
-    Workbench-owned starters (``devices.yml``, ``workspace.yml``) are
-    materialised separately by :func:`materialize_workbench_starters`
-    so the workspace-template repo no longer ships static copies
-    under ``_workspace_template/``; the workbench package owns the
-    canonical content for those files.  A repo-specific
-    ``_workspace_template/workspace.yml`` (mono-repo's case — carrying
-    its own MQTT broker default + wifi.ssid placeholder) wins because
-    :func:`materialize_templates` runs before
-    :func:`materialize_workbench_starters` in the setup flow.
-
-    Returns a report whose entries are ``MATERIALIZED`` for each
-    newly created file and ``UNCHANGED`` for each that already
-    existed.  An empty or missing ``_workspace_template/`` directory
-    is a no-op.
-    """
-    report = ApplyReport()
-    templates_root = workspace_root / "_workspace_template"
-    if not templates_root.is_dir():
-        return report
-    for source_file in _walk_tracked_files(templates_root):
-        relative = source_file.relative_to(templates_root).as_posix()
-        target_path = workspace_root / relative
-        if target_path.exists():
-            report.add(relative, ApplyAction.UNCHANGED)
-            continue
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_bytes(source_file.read_bytes())
-        report.add(relative, ApplyAction.MATERIALIZED)
     return report
 
 

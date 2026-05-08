@@ -193,14 +193,11 @@ devices:
         assert devices[0].deploy_mode == "flash"
 
     def test_empty_registry_returns_empty_list_with_defaults(self, tmp_path) -> None:
-        # The workspace-template repo's _workspace_template/devices.yml ships
-        # ``devices: []`` and lets ``chumicro-workspace add-device`` populate
-        # it on first registration.  The mono-repo's setup flow does the same
-        # after the scripts/workbench/template-repo unification (workstream
-        # ``scripts-workbench-config-unification.md``).  An empty registry
-        # must therefore be a valid state — not an error — so that
-        # `python scripts/run.py preflight` can run on a fresh clone before
-        # any board is registered.
+        # A fresh-clone ``devices.yml`` ships ``devices: []`` and lets
+        # ``chumicro-workspace add-device`` populate it on first
+        # registration.  An empty registry must therefore be a valid
+        # state — not an error — so that workspace setup + preflight
+        # can run on a fresh clone before any board is registered.
         devices_file = _write_yaml(tmp_path / "devices.yml", """
 defaults:
   micropython: null

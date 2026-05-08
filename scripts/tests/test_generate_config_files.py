@@ -27,11 +27,10 @@ Phase 1 applied to ``devices.yml``: the workbench package owns the
 canonical ``workspace.yml`` starter (Decision 0057), shared with
 the workspace-template repo so both materialise from one source.
 
-The mono-repo's ``_workspace_template/workspace.yml`` carries this
-repo's specific opinions (placeholder ``wifi.ssid`` and
-``mqtt.broker.host``); ``generate_config_files`` runs
-``materialize_templates`` first so that override wins, then falls
-through to the workbench starter for any file the override skipped.
+``generate_config_files`` materialises any missing config files
+from the canonical workbench-shipped starters in
+``chumicro_workspace``'s ``_payloads/``.  Existing files are never
+overwritten.
 """
 
 from __future__ import annotations
@@ -109,8 +108,7 @@ def test_generate_config_files_idempotent(tmp_path: Path, monkeypatch) -> None:
 def test_workspace_yml_materialised_from_workbench_payload(
     tmp_path: Path, monkeypatch,
 ) -> None:
-    """``setup`` writes ``workspace.yml`` from the workbench starter
-    when the repo has no ``_workspace_template/workspace.yml`` override.
+    """``setup`` writes ``workspace.yml`` from the workbench starter.
 
     Belt-and-suspenders against an accidental shutil/copy layer
     creeping in between ``read_workspace_yml_starter`` and the file
@@ -123,35 +121,8 @@ def test_workspace_yml_materialised_from_workbench_payload(
 
     workspace_yml = tmp_path / "workspace.yml"
     assert workspace_yml.is_file()
-    # No _workspace_template/ override — the materialised file must
-    # come verbatim from the workbench starter.
+    # The materialised file comes verbatim from the workbench starter.
     assert workspace_yml.read_text() == read_workspace_yml_starter()
-
-
-def test_workspace_template_override_wins_over_workbench_starter(
-    tmp_path: Path, monkeypatch,
-) -> None:
-    """``_workspace_template/workspace.yml`` overrides the workbench starter.
-
-    The mono-repo carries its own opinions (placeholder
-    ``wifi.ssid`` and ``mqtt.broker.host``).  Setup runs
-    ``materialize_templates`` first so the repo's override lands at
-    the workspace root before the workbench-starter fallback gets a
-    chance to fire.
-    """
-    import generate_config_files as module  # noqa: PLC0415
-
-    monkeypatch.setattr(module, "ROOT", tmp_path)
-    template_dir = tmp_path / "_workspace_template"
-    template_dir.mkdir()
-    (template_dir / "workspace.yml").write_text(
-        "# repo-specific override\ndefaults: {}\n",
-    )
-
-    assert module.generate_config_files() == 0
-
-    workspace_yml = tmp_path / "workspace.yml"
-    assert workspace_yml.read_text() == "# repo-specific override\ndefaults: {}\n"
 
 
 def test_devices_yml_starter_invalid_runtime_caught_by_schema(

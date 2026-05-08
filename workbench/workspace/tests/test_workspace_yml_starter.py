@@ -9,9 +9,7 @@ call, sourced from the wheel-bundled
 Two consumers ride on this:
 
 * The mono-repo's ``scripts/generate_config_files.py`` materialises
-  ``<repo>/workspace.yml`` from this content during
-  ``python scripts/run.py setup`` (when the repo's
-  ``_workspace_template/workspace.yml`` doesn't override it).
+  ``<repo>/workspace.yml`` from this content during workspace setup.
 * The workspace-template repo's first-clone setup materialises
   ``<workspace>/workspace.yml`` from the same source via
   ``chumicro-workspace setup``.

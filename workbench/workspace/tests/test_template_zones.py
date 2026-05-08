@@ -16,8 +16,6 @@ class TestClassify:
             "pyproject.toml",
             "projects/_template/config.toml",
             "projects/_template/app.py",
-            "_workspace_template/workspace.yml",
-            "_workspace_template/nested/file.txt",
             ".github/skills/deploy-and-debug/SKILL.md",
             ".github/skills/add-new-project/SKILL.md",
             ".github/skills/register-board/SKILL.md",
@@ -70,10 +68,8 @@ class TestClassify:
         assert classify("projects/back-porch/app.py") is Zone.USER_OWNED
 
     def test_workspace_yml_user_owned_not_init_only(self) -> None:
-        """Decision 0038 §5 + Decision 0057: gitignored ``workspace.yml``
-        is the materialized output of the workbench-owned starter;
-        ``update`` must never touch it.  Forks may still ship an override
-        under ``_workspace_template/workspace.yml``; that template-source
-        copy is tool-owned (re-flowed by ``update``)."""
+        """Gitignored ``workspace.yml`` is the materialized output of
+        the workbench-owned starter; ``update`` must never touch it.
+        Same for ``secrets.toml``."""
         assert classify("workspace.yml") is Zone.USER_OWNED
-        assert classify("_workspace_template/workspace.yml") is Zone.TOOL_OWNED
+        assert classify("secrets.toml") is Zone.USER_OWNED

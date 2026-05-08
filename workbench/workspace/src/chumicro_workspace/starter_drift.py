@@ -8,8 +8,8 @@ surfaced (they are guidance, not schema obligations).
 
 Two files are drift-checked: ``workspace.yml`` (workspace machinery)
 and ``secrets.toml`` (device-bound credentials + defaults).  Both
-follow the same pattern — repo-specific ``_workspace_template/<name>``
-override beats the workbench-owned starter when present.
+diff against the workbench-owned canonical starter from
+:mod:`chumicro_workspace`.
 """
 
 from __future__ import annotations
@@ -28,10 +28,9 @@ from chumicro_workspace.workspace_yml_starter import (
     read_workspace_yml_starter,
 )
 
-#: Drift-check entries: each tuple is the user-facing filename, the
-#: parser function, and the canonical-starter reader function name on
-#: ``chumicro_workspace``.  ``_workspace_template/<filename>`` always
-#: wins over the workbench-owned default when present.
+#: Drift-check entries: each tuple is the user-facing filename and
+#: the canonical-starter reader function name on
+#: :mod:`chumicro_workspace`.
 _DRIFT_CHECKS: tuple[tuple[str, str], ...] = (
     ("workspace.yml", "read_workspace_yml_starter"),
     ("secrets.toml", "read_secrets_toml_starter"),
@@ -117,15 +116,18 @@ def print_starter_drift_report(
 
 
 def _resolve_starter_text(workspace_root: Path, filename: str) -> str:
-    """Return the text of the starter that would materialise *filename*.
+    """Return the text of the canonical starter for *filename*.
 
     Looks up the workbench reader by name on the module so tests can
     monkey-patch ``read_workspace_yml_starter`` / ``read_secrets_toml_starter``
     without per-test re-imports.
+
+    Args:
+        workspace_root: Workspace root (unused; retained for symmetry
+            with future per-workspace customisations).
+        filename: Either ``"workspace.yml"`` or ``"secrets.toml"``.
     """
-    repo_override = workspace_root / "_workspace_template" / filename
-    if repo_override.is_file():
-        return repo_override.read_text(encoding="utf-8")
+    del workspace_root  # currently unused; signature stays stable
     if filename == "secrets.toml":
         return read_secrets_toml_starter()
     return read_workspace_yml_starter()
@@ -133,9 +135,7 @@ def _resolve_starter_text(workspace_root: Path, filename: str) -> str:
 
 def _starter_source_label(workspace_root: Path, filename: str) -> str:
     """Return a human-readable path the user can copy from."""
-    repo_override = workspace_root / "_workspace_template" / filename
-    if repo_override.is_file():
-        return f"_workspace_template/{filename}"
+    del workspace_root  # currently unused; signature stays stable
     if filename == "workspace.yml":
         return (
             "the workbench-owned starter "
