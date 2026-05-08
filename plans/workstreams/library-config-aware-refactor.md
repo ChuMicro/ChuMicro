@@ -209,7 +209,7 @@ Same final dict; no behavioural change.  Bench-validated: `python scripts/run.py
 
 5. **Doc the "deploy returns partial output after `self.timeout`" UX** in `deploy-example` help text and `chumicro-workspace deploy --help`.  Help text should suggest `chumicro-repl` for follow-on observation.
 
-**Likely needs an ADR** for the new public-API surface (`follow` kwarg / `MicropythonTransport.deploy_files` contract).  Frame as "MP transport adopts CP's flash-mode soft-reboot pattern for app-code deploys; raw-REPL `exec_raw` retained for return-bounded test-harness deploys."
+**ADR home identified.**  The finding lives at [Decision 0028 §MicroPython flash transport](../decisions/0028-deploy-modes.md#micropython-flash-transport) — added as a parallel section to the existing CP flash transport spec, marked in-flight, with a forward-pointer back here.  When the implementation lands, that paragraph gets rewritten in place to describe the shipped converged shape.  No new ADR needed.
 
 **Effort estimate (refined).**  3–4 hours of focused implementation:
 
