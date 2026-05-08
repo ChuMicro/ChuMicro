@@ -57,6 +57,7 @@ class DeployFailureKind(Enum):
 
     PORT_UNAVAILABLE = "port_unavailable"
     RAW_REPL_UNRESPONSIVE = "raw_repl_unresponsive"
+    NO_PYTHON_RUNTIME = "no_python_runtime"
     CIRCUITPY_DRIVE_MISSING = "circuitpy_drive_missing"
     MACOS_FSKIT_WEDGED = "macos_fskit_wedged"
     FLASH_COPY_FAILED = "flash_copy_failed"
@@ -100,6 +101,22 @@ _RAW_REPL_PATTERNS = (
     "did not receive raw repl prompt",
     "raw repl did not acknowledge",
     "malformed raw repl response",
+)
+
+#: Probe / handshake found a port that responds, but with no Python
+#: runtime — the board is running Arduino, raw bootloader output, or
+#: some other non-Python firmware.  Distinct from
+#: :data:`_RAW_REPL_PATTERNS` (Python interpreter present but hung) and
+#: :data:`_PORT_UNAVAILABLE_PATTERNS` (port not reachable at all).  The
+#: recovery plan points at ``install-firmware``; the user must
+#: explicitly consent before flashing because the operation is
+#: destructive (overwrites whatever the board is currently running).
+_NO_PYTHON_RUNTIME_PATTERNS = (
+    "no python runtime detected",
+    "no python runtime on",
+    "board does not respond to python",
+    "non-python firmware detected",
+    "unknown firmware on",
 )
 
 #: Insufficient RAM for inline (RAM-mode) payload.  Catches both
@@ -243,6 +260,14 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     for pattern in _CIRCUITPY_DRIVE_PATTERNS:
         if pattern in message:
             return DeployFailureKind.CIRCUITPY_DRIVE_MISSING
+    # NO_PYTHON_RUNTIME is checked before PORT_UNAVAILABLE + RAW_REPL:
+    # the patterns explicitly assert "no python here" — that's strictly
+    # more specific than "port not reachable" or "REPL didn't answer"
+    # and points at a different recovery (install-firmware vs. plug-in
+    # / RESET).
+    for pattern in _NO_PYTHON_RUNTIME_PATTERNS:
+        if pattern in message:
+            return DeployFailureKind.NO_PYTHON_RUNTIME
     for pattern in _PORT_UNAVAILABLE_PATTERNS:
         if pattern in message:
             return DeployFailureKind.PORT_UNAVAILABLE
@@ -437,6 +462,33 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "the USB cable.",
         ),
         retryable=True,
+    ),
+    DeployFailureKind.NO_PYTHON_RUNTIME: RecoveryPlan(
+        headline=(
+            "The board responds, but it's not running CircuitPython "
+            "or MicroPython — looks like Arduino, a raw bootloader, "
+            "or unknown firmware."
+        ),
+        fix_steps=(
+            "Install firmware before deploying — chumicro libraries "
+            "need a Python runtime on the board.  Pick the runtime "
+            "that suits your project: CircuitPython for the broadest "
+            "Adafruit-board support, MicroPython for stronger "
+            "hardware-acceleration on ESP32 / Pi Pico W.",
+            "From a chumicro fork or clone:  python scripts/run.py "
+            "install-firmware --board <model> --runtime "
+            "<circuitpython|micropython> --address <port>",
+            "From a workspace template repo:  chumicro-workspace "
+            "install-firmware --board <model> --runtime "
+            "<circuitpython|micropython> --address <port>",
+            "List supported boards with `--list-boards`.  Heads-up: "
+            "this is destructive — flashing overwrites whatever the "
+            "board is currently running (your Arduino sketch, custom "
+            "firmware, etc.).  Back up first if it matters.",
+            "After flashing, the board re-enumerates with the new "
+            "runtime; re-run the original command.",
+        ),
+        retryable=False,
     ),
     DeployFailureKind.CIRCUITPY_DRIVE_MISSING: RecoveryPlan(
         headline="The CIRCUITPY drive is not mounted.",

@@ -146,6 +146,33 @@ from chumicro_deploy.result import DeployResult
             "deploy_mode='ram'",
             DeployFailureKind.CONFIGURATION_ERROR,
         ),
+        # No Python runtime — board responds but isn't running CP/MP.
+        # Distinct from RAW_REPL_UNRESPONSIVE (Python interpreter
+        # present but hung) and PORT_UNAVAILABLE (port not reachable).
+        # Drives the install-firmware coaching path.
+        (
+            "no python runtime detected on /dev/cu.usbmodem101 "
+            "(received Arduino-style banner)",
+            DeployFailureKind.NO_PYTHON_RUNTIME,
+        ),
+        (
+            "no python runtime on /dev/ttyACM0",
+            DeployFailureKind.NO_PYTHON_RUNTIME,
+        ),
+        (
+            "board does not respond to python — REPL banner did not "
+            "match circuitpython or micropython",
+            DeployFailureKind.NO_PYTHON_RUNTIME,
+        ),
+        (
+            "non-Python firmware detected (USB descriptor: "
+            "Raspberry Pi RP2040, no CP/MP banner)",
+            DeployFailureKind.NO_PYTHON_RUNTIME,
+        ),
+        (
+            "Unknown firmware on /dev/cu.usbmodem211101",
+            DeployFailureKind.NO_PYTHON_RUNTIME,
+        ),
         # Unknown bucket — any message with no hits.
         (
             "An entirely novel failure message",
@@ -325,6 +352,40 @@ def test_configuration_error_is_not_retryable() -> None:
 def test_traceback_is_not_retryable() -> None:
     plan = recovery_plan_for(DeployFailureKind.TRACEBACK_RETURNED)
     assert plan.retryable is False
+
+
+def test_no_python_runtime_is_not_retryable() -> None:
+    """Retrying a board with no Python runtime changes nothing — the
+    user must explicitly run install-firmware first.  Non-retryable
+    is the right contract because flashing is destructive (overwrites
+    whatever firmware is on the board) and must require explicit
+    consent, never an auto-loop retry."""
+    plan = recovery_plan_for(DeployFailureKind.NO_PYTHON_RUNTIME)
+    assert plan.retryable is False
+
+
+def test_no_python_runtime_plan_points_at_install_firmware() -> None:
+    """The recovery hint must name install-firmware so the user
+    (or an agent reading stderr) can take action."""
+    plan = recovery_plan_for(DeployFailureKind.NO_PYTHON_RUNTIME)
+    flat = " ".join(plan.fix_steps).lower()
+    assert "install-firmware" in flat
+
+
+def test_classify_no_python_wins_over_raw_repl_unresponsive() -> None:
+    """A message that explicitly asserts "no python here" must NOT
+    classify as RAW_REPL_UNRESPONSIVE — they're different recoveries
+    (install-firmware vs. tap RESET) and the more specific kind wins.
+    Guards against future pattern reordering that might silently
+    re-route the no-Python case to the generic REPL bucket."""
+    error = CircuitpythonTransportError(
+        "no python runtime detected on /dev/cu.usbmodem101 — "
+        "did not receive raw REPL prompt either",
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.NO_PYTHON_RUNTIME
+    )
 
 
 @pytest.mark.parametrize(
