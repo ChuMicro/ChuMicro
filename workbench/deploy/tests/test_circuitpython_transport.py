@@ -2228,11 +2228,17 @@ class TestDriveVerification:
         )
         assert transport._verify_drive_for_board(drive) == drive
 
-    def test_auto_corrects_to_sibling_mount_on_mismatch(
+    def test_auto_corrects_silently_to_sibling_mount_on_mismatch(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Wrong drive + a sibling mount that matches -> corrected path + warning."""
+        """Wrong drive + a sibling mount that matches -> silent correction.
+
+        Auto-correction on success is silent (the warning was noise
+        for the common two-board bench setup where macOS renames the
+        second CIRCUITPY mount); only the no-sibling-match path
+        raises.
+        """
         wrong_drive = tmp_path / "CIRCUITPY"
         wrong_drive.mkdir()
         (wrong_drive / "boot_out.txt").write_text(
@@ -2260,8 +2266,9 @@ class TestDriveVerification:
         corrected = transport._verify_drive_for_board(wrong_drive)
         assert corrected == right_drive
         captured = capsys.readouterr()
-        assert "auto-correcting" in captured.out
-        assert "S2Mini" in captured.out
+        assert captured.out == "", (
+            f"auto-correction must be silent on success; got: {captured.out!r}"
+        )
 
     def test_raises_when_no_matching_mount_exists(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -2373,7 +2380,6 @@ class TestDriveVerification:
 
     def test_uid_match_preferred_over_machine_when_both_available(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Two identical-machine boards → UID disambiguates; machine alone can't.
 
@@ -2383,6 +2389,12 @@ class TestDriveVerification:
         over REPL) is unique.  The verifier must pick the UID-matching
         mount, even though the configured drive's machine-string
         already matches the probe.
+
+        Implicit branch check: if the machine-fallback fired instead
+        of the UID branch, ``drive_identity == probe_identity`` would
+        short-circuit at the equal-strings guard and return the
+        configured (wrong) drive.  Asserting ``corrected == sibling``
+        therefore proves the UID branch ran.
         """
         configured = tmp_path / "CIRCUITPY"
         configured.mkdir()
@@ -2412,8 +2424,6 @@ class TestDriveVerification:
         )
         corrected = transport._verify_drive_for_board(configured)
         assert corrected == sibling
-        captured = capsys.readouterr()
-        assert "UID" in captured.out
 
     def test_machine_fallback_when_probe_has_no_uid(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

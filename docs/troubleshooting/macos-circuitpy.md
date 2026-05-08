@@ -86,7 +86,7 @@ macOS assigns `/Volumes/CIRCUITPY` in mount order — the first CircuitPython dr
 
 **Recovery**
 
-`chumicro-deploy` already detects this: `CircuitpythonTransport._verify_drive_for_board` probes the connected board's UID (`microcontroller.cpu.uid`) and compares it against the `UID:...` line in the drive's `boot_out.txt`.  On mismatch it scans every mounted `CIRCUITPY*` volume for the matching UID and auto-corrects, printing a `WARNING` that names both paths.  When the auto-correction succeeds the deploy continues; when no match is found it raises with a clear `"no other mounted CIRCUITPY* volume matches"` message.
+`chumicro-deploy` already detects this: `CircuitpythonTransport._verify_drive_for_board` probes the connected board's UID (`microcontroller.cpu.uid`) and compares it against the `UID:...` line in the drive's `boot_out.txt`.  On mismatch it scans every mounted `CIRCUITPY*` volume for the matching UID and silently auto-corrects when one is found, so a stale `circuitpy_drive_path` in `devices.yml` resolves to the right drive without host-side noise.  When no match is found the transport raises with a clear `"no other mounted CIRCUITPY* volume matches"` message that names both paths and points back at this fix.
 
 The clean long-term fix: **remove `circuitpy_drive_path` from `devices.yml`** and let auto-detection work.  UID-based matching is more reliable than mount-order-dependent paths.
 
