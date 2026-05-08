@@ -1841,3 +1841,160 @@ class TestFakeHttpClient:
         handle = fake.get("http://example.test/")
         fake.handle(now_ms=0)
         assert handle.result.oversized_dropped is True
+
+
+# ---------------------------------------------------------------------------
+# from_config — config-aware construction
+# ---------------------------------------------------------------------------
+
+
+class TestFromConfig:
+    """``HttpClient.from_config`` reads the manifest's optional keys with
+    sensible fall-back defaults.  Like ntp's from_config (and unlike
+    mqtt's), no key is ever required — host/port live on each request
+    URL, so the auto-built connection_factory reads zero config keys."""
+
+    @staticmethod
+    def _injected_factory():
+        """Return a connection_factory that hands back a FakeSocket
+        per call — host/port/use_tls captured for assertions."""
+        captured: list = []
+
+        def factory(host, port, use_tls):
+            captured.append((host, port, use_tls))
+            return FakeSocket()
+
+        return factory, captured
+
+    def test_reads_all_keys_from_config(self):
+        """A complete config dict populates every documented manifest key."""
+        from chumicro_requests import HttpClient
+
+        factory, _ = self._injected_factory()
+        config = {
+            "requests.default_timeout_ms": 1234,
+            "requests.default_max_redirects": 9,
+            "requests.user_agent": "test-agent/1.0",
+            "requests.max_body_bytes": 4096,
+        }
+        client = HttpClient.from_config(config, connection_factory=factory)
+        assert client._default_timeout_ms == 1234  # noqa: SLF001
+        assert client._default_max_redirects == 9  # noqa: SLF001
+        assert client._user_agent == "test-agent/1.0"  # noqa: SLF001
+        assert client._max_body_bytes == 4096  # noqa: SLF001
+
+    def test_defaults_apply_when_keys_absent(self):
+        """Empty config dict → every manifest key falls back to its default.
+
+        Documents the asymmetry vs ``MQTTClient.from_config``: the
+        auto-built connection_factory reads zero config keys (host/port
+        live on each request URL), so an empty config is valid input
+        and no ``MissingConfigKey`` is ever raised.
+        """
+        from chumicro_requests import HttpClient
+        from chumicro_requests._wire import (
+            DEFAULT_MAX_BODY_BYTES,
+            DEFAULT_MAX_REDIRECTS,
+            DEFAULT_TIMEOUT_MS,
+        )
+
+        factory, _ = self._injected_factory()
+        client = HttpClient.from_config({}, connection_factory=factory)
+        assert client._default_timeout_ms == DEFAULT_TIMEOUT_MS  # noqa: SLF001
+        assert client._default_max_redirects == DEFAULT_MAX_REDIRECTS  # noqa: SLF001
+        # user_agent=None falls through to the library default string.
+        assert client._user_agent == "chumicro-requests/0.1"  # noqa: SLF001
+        assert client._max_body_bytes == DEFAULT_MAX_BODY_BYTES  # noqa: SLF001
+
+    def test_partial_config_mixes_overrides_with_defaults(self):
+        """Caller-set keys win; absent keys take defaults."""
+        from chumicro_requests import HttpClient
+        from chumicro_requests._wire import (
+            DEFAULT_MAX_REDIRECTS,
+            DEFAULT_TIMEOUT_MS,
+        )
+
+        factory, _ = self._injected_factory()
+        client = HttpClient.from_config(
+            {"requests.user_agent": "halfway/0.1"},
+            connection_factory=factory,
+        )
+        assert client._user_agent == "halfway/0.1"  # noqa: SLF001
+        assert client._default_timeout_ms == DEFAULT_TIMEOUT_MS  # noqa: SLF001 — default
+        assert client._default_max_redirects == DEFAULT_MAX_REDIRECTS  # noqa: SLF001 — default
+
+    def test_explicit_connection_factory_bypasses_auto_factory(self):
+        """Passing a connection_factory skips the auto-built one entirely
+        — caller owns the connection-opening behaviour."""
+        from chumicro_requests import HttpClient
+
+        factory, _ = self._injected_factory()
+        client = HttpClient.from_config({}, connection_factory=factory)
+        assert client._connection_factory is factory  # noqa: SLF001
+
+    def test_runtime_config_wrapper_works_too(self):
+        """Real ``RuntimeConfig`` instance — same flat-key reads as a
+        plain dict.  Confirms compatibility with ``chumicro_config.config``
+        on a real device."""
+        from chumicro_config import RuntimeConfig  # noqa: PLC0415
+        from chumicro_requests import HttpClient
+
+        factory, _ = self._injected_factory()
+        config = RuntimeConfig({
+            "requests.default_timeout_ms": 7777,
+            "requests.user_agent": "rc-test/2",
+        })
+        client = HttpClient.from_config(config, connection_factory=factory)
+        assert client._default_timeout_ms == 7777  # noqa: SLF001
+        assert client._user_agent == "rc-test/2"  # noqa: SLF001
+
+    def test_default_factory_threads_radio_and_ssl_context(self):
+        """When neither *connection_factory* is passed, ``from_config``
+        builds one via ``chumicro_sockets_factory(radio=…, ssl_context=…)``.
+        Validates the wiring without needing a real socket by replacing
+        the module-level ``chumicro_sockets_factory`` symbol."""
+        import chumicro_requests.client as client_mod  # noqa: PLC0415
+        from chumicro_requests import HttpClient
+
+        captured: dict = {}
+        sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
+
+        def fake_chumicro_sockets_factory(*, radio=None, ssl_context=None):
+            captured["radio"] = radio
+            captured["ssl_context"] = ssl_context
+            return sentinel_factory
+
+        original = client_mod.chumicro_sockets_factory
+        client_mod.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        try:
+            client = HttpClient.from_config(
+                {}, radio="fake-radio", ssl_context="fake-ctx",
+            )
+        finally:
+            client_mod.chumicro_sockets_factory = original
+
+        assert captured == {"radio": "fake-radio", "ssl_context": "fake-ctx"}
+        assert client._connection_factory is sentinel_factory  # noqa: SLF001
+
+    def test_default_factory_does_not_raise_on_empty_config(self):
+        """Documents the asymmetry vs MQTTClient.from_config: the
+        requests default factory reads zero config keys (per-request
+        URL carries host/port), so empty config + no override is fine.
+        Unlike mqtt, no MissingConfigKey is ever raised."""
+        import chumicro_requests.client as client_mod  # noqa: PLC0415
+        from chumicro_requests import HttpClient
+
+        sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
+
+        def fake_chumicro_sockets_factory(*, radio=None, ssl_context=None):
+            return sentinel_factory
+
+        original = client_mod.chumicro_sockets_factory
+        client_mod.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        try:
+            # No raise: empty config + no factory override is fine.
+            client = HttpClient.from_config({})
+        finally:
+            client_mod.chumicro_sockets_factory = original
+
+        assert client._connection_factory is sentinel_factory  # noqa: SLF001
