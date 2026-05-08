@@ -158,11 +158,10 @@ if "mqtt.broker.host" not in mqtt_config:
         print("ERROR: set mqtt.broker.host in runtime_config.msgpack "
               "or BROKER_HOST in this file before deploying.")
         raise SystemExit(1)
-    mqtt_config = RuntimeConfig({
-        **mqtt_config.to_dict(),
-        "mqtt.broker.host": BROKER_HOST,
-        "mqtt.broker.port": BROKER_PORT,
-    })
+    merged = dict(mqtt_config.to_dict())
+    merged["mqtt.broker.host"] = BROKER_HOST
+    merged["mqtt.broker.port"] = BROKER_PORT
+    mqtt_config = RuntimeConfig(merged)
 
 mqtt = MQTTClient.from_config(mqtt_config, radio=wifi_radio)
 

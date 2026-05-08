@@ -1,6 +1,6 @@
 # Workstream: library `from_config` factories — config-aware constructors across the six networking libs
 
-Status: **all phases shipped + bench-validated CP-side 2026-05-08 — Phases 0 + 1 + 2 (mqtt / ntp / requests / websockets / http_server) + 3 (`deploy-example` CLI per Decision [0059](../decisions/0059-deploy-example-front-door.md)).  CP-side bench session ran `timing/circuitpython_blink` + `ntp/circuitpython_ntp_query` + `requests/circuitpython_periodic_get` against both Pi Pico W CP and Lolin S2 CP; all six deploys succeeded end-to-end with WIFI_OK, NTP_OK (matching real wall-clock), and HTTP 200 responses observed via the deploy command's serial capture.  Three follow-ups uncovered (recorded under "Follow-ups from the bench session" below): (1) mqtt example's PEP 448 `**unpack` rejected by CircuitPython parser; (2) MP `deploy-example` of infinite-loop examples times out via mpremote raw-exec (transport-level gap); (3) CIRCUITPY UID stale-warning over-states the situation — **shipped 2026-05-08 (Variant A: silence on success).**  Items 1 + 2 remain; none block the workstream's `from_config` factory acceptance.**
+Status: **all phases shipped + bench-validated CP-side 2026-05-08 — Phases 0 + 1 + 2 (mqtt / ntp / requests / websockets / http_server) + 3 (`deploy-example` CLI per Decision [0059](../decisions/0059-deploy-example-front-door.md)).  CP-side bench session ran `timing/circuitpython_blink` + `ntp/circuitpython_ntp_query` + `requests/circuitpython_periodic_get` against both Pi Pico W CP and Lolin S2 CP; all six deploys succeeded end-to-end with WIFI_OK, NTP_OK (matching real wall-clock), and HTTP 200 responses observed via the deploy command's serial capture.  Three follow-ups uncovered (recorded under "Follow-ups from the bench session" below): (1) mqtt example's PEP 448 `**unpack` rejected by CircuitPython parser — **shipped 2026-05-08** (rewritten to temp-variable merge, bench-validated on Pi Pico W CP); (2) MP `deploy-example` of infinite-loop examples times out via mpremote raw-exec (transport-level gap — needs investigation before scoping); (3) CIRCUITPY UID stale-warning over-states the situation — **shipped 2026-05-08** (Variant A: silence on success).  Only item 2 remains; none block the workstream's `from_config` factory acceptance.**
 
 The libraries `mqtt`, `requests`, `http_server`, `ntp`, `websockets`, and `wifi` were written before the runtime-config strategy ([Decision 0035](../decisions/0035-runtime-config-structure.md), [Decision 0057](../decisions/0057-two-file-config.md), [`config-shape-beginner-ergonomics`](archive/config-shape-beginner-ergonomics.md)).  Today only `chumicro_wifi.WifiConfig.from_config` exists — `WifiService(WifiConfig.from_config(config))` reads `wifi.ssid` / `wifi.password` straight off the deployed `runtime_config.msgpack`.
 
@@ -163,41 +163,20 @@ CP-side bench validation ran clean on `timing/circuitpython_blink` + `ntp/circui
 
 The handoff sections below follow a fixed shape: **what we know** (load-bearing facts, with file:line refs from the bench session); **what we don't know** (the next-step questions before the fix lands); **proposed fix** (shape only, not committed); **estimated effort + dependencies**.  Read the bench session entries in `plans/next-up.md` "Done (recent)" for the symptom narrative.
 
-### Follow-up 1 — mqtt example's PEP 448 `**unpack` fails on CP parser
+### Follow-up 1 — mqtt example's PEP 448 `**unpack` rewritten (shipped)
 
-**What we know.**  Deploying `mqtt/circuitpython_telemetry` to Pi Pico W CP via `python scripts/run.py deploy-example mqtt circuitpython_telemetry --device pi-pico-w-circuitpython-board --non-interactive` raised `SyntaxError: invalid syntax` at line 162 of the staged `code.py`, exit 4 (recovery layer classified correctly).  Lines 161–165 of `libraries/mqtt/examples/circuitpython_telemetry.py` are:
+**Status:** shipped 2026-05-08.  `libraries/mqtt/examples/circuitpython_telemetry.py:161-165` rewritten from the multi-line dict-literal `**unpack` to a temp-variable merge:
 
+```python
+merged = dict(mqtt_config.to_dict())
+merged["mqtt.broker.host"] = BROKER_HOST
+merged["mqtt.broker.port"] = BROKER_PORT
+mqtt_config = RuntimeConfig(merged)
 ```
-mqtt_config = RuntimeConfig({
-    **mqtt_config.to_dict(),     # ← line 162
-    "mqtt.broker.host": BROKER_HOST,
-    "mqtt.broker.port": BROKER_PORT,
-})
-```
 
-The `MQTTClient.from_config` factory itself is unrelated and works (see Phase 2 mqtt's commit `0217926`).  The host CPython 3.14 parses this fine; preflight is green; ruff is happy.  Only the on-device CircuitPython parser rejects it.
+Same final dict; no behavioural change.  Bench-validated: `python scripts/run.py deploy-example mqtt circuitpython_telemetry --device pi-pico-w-circuitpython-board --non-interactive` deployed without `SyntaxError`, executed past line 162 (the original failure point), and reached `WIFI_OK ip=172.16.1.21` — proof the CP parser accepts the new shape.  Pre-fix grep confirmed this was the only `**`-unpack idiom in `libraries/*/examples/`, so no audit overhang.
 
-**What we don't know.**
-
-* Is it actually `**`-unpacking inside a dict literal that the CP parser rejects, or something subtler — e.g. the trailing comma, the multi-line continuation, or the way the deploy pipeline rewrites/encodes the file?  CircuitPython 10.2.0-rc.0 *should* support PEP 448 (MicroPython has had it since 1.18; CircuitPython rebases on MicroPython quarterly).
-* Whether `RuntimeConfig.to_dict()` (defined at `libraries/config/src/chumicro_config/section.py:135`) ships to the device — if a slimmer device-side variant exists, the AttributeError would surface differently, but here it's a `SyntaxError` so this is parse-time, not runtime.
-* Whether the example file lands on the board verbatim or with a preamble (file path, encoding marker, etc.) that would shift line numbers.
-
-**Proposed fix.**  Two-step:
-
-1. Reproduce on the device with a minimal repro (`mpremote exec "$(echo 'd = {**{}, \"k\": 1}')"`) to nail down whether it's PEP 448 or something narrower.  If PEP 448 *works* on the device, the bug is in the example file's specific shape (most likely the multi-line dict-literal `\` continuation interacting with msgpack-injection-time line shifts).
-2. Either way, rewrite the overlay conservatively — build the merged dict in temporary variables before passing to `RuntimeConfig`:
-
-   ```python
-   merged = dict(mqtt_config.to_dict())
-   merged["mqtt.broker.host"] = BROKER_HOST
-   merged["mqtt.broker.port"] = BROKER_PORT
-   mqtt_config = RuntimeConfig(merged)
-   ```
-
-   This avoids the multi-line `**`-unpack-and-add idiom entirely.  Lower-tier-Python-friendly, easier to read, no behavioural change.
-
-**Effort + deps.**  ~30 min — 10 min for the device-side repro, 10 min for the rewrite + a host-side coverage check, 10 min for a re-deploy on the bench to confirm the fix.  No coupling to follow-ups 2 or 3.
+**Not done (deliberately).**  We did *not* run the minimal CP-REPL probe of `d = {**{}, "k": 1}` to determine whether CircuitPython 10.2.0-rc.0 rejects the entire PEP 448 dict-`**unpack` idiom or just the multi-line continuation.  The fix is robust either way — the question only matters for filing an upstream CircuitPython issue.  Defer until the same idiom resurfaces somewhere else; if it does, run the probe then.
 
 ### Follow-up 2 — MP `deploy-example` of infinite-loop examples times out (transport-level)
 
@@ -230,6 +209,5 @@ Variant B (drop `circuitpy_drive_path` from `devices.yml`'s user-owned zone — 
 ### Cross-follow-up notes
 
 - **None of the three are required** to call the workstream's host-side scope closed.  The Phase 2 + Phase 3 acceptance criteria are met (six clean CP deploys, factory + manifest validation + recovery coaching all working).
-- **Status:** 3 shipped (Variant A, 2026-05-08); 1 + 2 remain.
-- **Pickup order for the remaining two:** 1 first (medium, low-risk, low-uncertainty rewrite of one example file), then 2 (genuinely uncertain — best done after a half-hour of focused investigation into whether `chumicro-workspace deploy` of MP `while True` projects has the same gap).
-- **Bench rerun cost:** both remaining items are testable on the same Pi Pico W CP / Lolin S2 CP / Pi Pico W MP / Lolin S2 MP setup the original session used.  No new hardware.
+- **Status:** 1 + 3 shipped 2026-05-08; only 2 remains.
+- **Pickup recommendation for follow-up 2:** start with a half-hour investigation answering "does `chumicro-workspace deploy` of an MP project with `while True` in `code.py`/`main.py` time out the same way `deploy-example` does?"  The answer changes the scope by an order of magnitude — yes (likely, since both share `MicropythonTransport.deploy_files`) makes this a transport-level addition (`mode="copy-no-exec"` or equivalent), no makes it a `deploy-example`-only fix.  Sub-question worth answering early: does `mpremote reset` cleanly interrupt a board running `while True`, or does it need a `Ctrl-C` first?
