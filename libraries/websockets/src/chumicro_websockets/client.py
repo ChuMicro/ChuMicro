@@ -101,6 +101,10 @@ class WebSocketClient(_BaseSession):
     from a runner tick or hand-rolled loop.  Callbacks fire from
     :meth:`handle` — never from a thread or interrupt.
 
+    For config-driven construction, see :meth:`from_config` —
+    one-line factory that reads ``websockets.client.max_message_bytes``
+    from ``runtime_config.msgpack``.
+
     Knobs (all default to the matching ``DEFAULT_*`` constant, mirroring
     chumicro-mqtt + chumicro-requests):
 
@@ -121,6 +125,77 @@ class WebSocketClient(_BaseSession):
 
     _role_label = "server"  # error messages describe what the *peer* sent
     _inbound_mask_required = False  # servers MUST NOT mask outbound
+
+    @classmethod
+    def from_config(
+        cls,
+        config: object,
+        *,
+        radio: object | None = None,
+        ssl_context: object | None = None,
+        connection_factory: object | None = None,
+    ) -> "WebSocketClient":
+        """Build a :class:`WebSocketClient` from runtime config.
+
+        Reads the client-side keys declared in
+        ``[tool.chumicro.config]`` of ``libraries/websockets/pyproject.toml``:
+
+        * ``websockets.client.max_message_bytes`` →
+          :data:`DEFAULT_MAX_MESSAGE_BYTES`.
+
+        Like :meth:`chumicro_ntp.NTPClient.from_config` (and unlike
+        :meth:`chumicro_mqtt.MQTTClient.from_config`), no key is
+        required and the auto-built ``connection_factory`` reads
+        zero config keys (host/port/use_tls live on each
+        :meth:`connect` URL, not on the client).  Empty ``config``
+        is valid input.
+
+        ``websockets.client.connect_url`` is declared in the manifest
+        but is **not** consumed by ``from_config`` — the URL is a
+        per-connection argument the user passes to :meth:`connect`
+        after construction.  Read it in your app::
+
+            client = WebSocketClient.from_config(config, radio=...)
+            client.connect(config["websockets.client.connect_url"])
+
+        When *connection_factory* is supplied, the caller owns the
+        connection-opening behaviour.  When it's not, an auto-built
+        factory wires through
+        :func:`chumicro_websockets.sockets_factory.chumicro_sockets_factory`
+        using *radio* and *ssl_context*.
+
+        Args:
+            config: A :class:`chumicro_config.RuntimeConfig`
+                (typically ``chumicro_config.config``) or plain flat
+                dict.  Keys read are flat dotted strings.
+            radio: WiFi radio for the auto-built connection factory —
+                CircuitPython needs this; MicroPython auto-detects.
+                Ignored when *connection_factory* is passed.
+            ssl_context: ``SSLContext`` for ``wss://`` connections;
+                ``None`` uses the runtime default.  Ignored when
+                *connection_factory* is passed.
+            connection_factory: Custom ``(host, port, use_tls) ->
+                TCPClientSocket`` callable.  When supplied, the
+                auto-built factory is skipped — caller owns the
+                connection-opening behaviour.
+
+        Returns:
+            A configured ``WebSocketClient`` ready for ``connect()``.
+        """
+        if connection_factory is None:
+            from chumicro_websockets.sockets_factory import (  # noqa: PLC0415
+                chumicro_sockets_factory,
+            )
+            connection_factory = chumicro_sockets_factory(
+                radio=radio, ssl_context=ssl_context,
+            )
+        return cls(
+            connection_factory=connection_factory,
+            max_message_bytes=config.get(
+                "websockets.client.max_message_bytes",
+                DEFAULT_MAX_MESSAGE_BYTES,
+            ),
+        )
 
     def __init__(
         self,
