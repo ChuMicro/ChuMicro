@@ -64,6 +64,14 @@ Flash mode in `disconnect()`:
   drove the raw REPL session itself; `code.py`-style reload-on-edit
   isn't relevant during or after the session).
 
+### MicroPython flash transport
+
+`MicropythonTransport.deploy_files` writes via `mpremote fs cp -r` then runs the entrypoint synchronously through raw REPL: `self._serial.exec_raw(script, timeout=_EXECUTE_IDLE_TIMEOUT)` where `_EXECUTE_IDLE_TIMEOUT` is the inter-byte idle timeout passed to mpremote's `follow()` → `read_until`.  The pattern works for return-bounded scripts (test-harness `test_*.py` files): the script runs, prints, returns, and raw REPL emits the EOF (`\x04`) marker that ends `exec_raw` cleanly.
+
+For app-code with `while True: ...` in the entrypoint, raw-REPL `exec_raw` is the wrong shape — the script never returns, EOF never fires, and the deploy command times out (or hangs indefinitely if the loop prints periodically and resets the inter-byte clock).  The CircuitPython flash transport already solves this: it sends Ctrl-B + Ctrl-D from the persistent serial connection, then `_read_code_py_output` reads up to `self.timeout` seconds, syncs on `soft reboot` start + `Code done running.` end markers, and returns partial output on read-timeout.  MicroPython has the same primitives — `MPY: soft reboot` analog of `soft reboot`, friendly-REPL `>>>` prompt analog of `Code done running.`, Ctrl-D from friendly REPL auto-runs `main.py` after a soft-reboot — so the transports converge on the same shape with different markers.
+
+Status: the harmonization is in flight under [`plans/workstreams/library-config-aware-refactor.md`](../workstreams/library-config-aware-refactor.md) "Follow-up 2".  Implementation adds a `follow: Literal["exec", "soft_reboot"]` kwarg to `MicropythonTransport.deploy_files` (default `"exec"` preserves the test-harness path); `chumicro-workspace deploy` and `deploy-example` for MP devices opt into `follow="soft_reboot"`.  Constraint: soft-reboot mode requires entrypoint `/main.py` (MP's auto-run convention).  Once shipped, this paragraph gets rewritten to describe the converged shape as the canonical MP flash transport.
+
 ### CircuitPython drive path configuration
 
 A new optional `circuitpy_drive_path` field in `devices.yml` specifies where the CIRCUITPY USB drive is mounted on the host (e.g. `/Volumes/CIRCUITPY`).  When omitted, `find_circuitpy_drive()` auto-detects the drive by checking common mount points on macOS (`/Volumes/CIRCUITPY`) and Linux (`/media/<user>/CIRCUITPY`, `/run/media/<user>/CIRCUITPY`).  Explicit paths take precedence and are recommended when multiple boards are connected.
@@ -80,4 +88,5 @@ The transport layer is shaped for eventual extraction into a standalone pip-inst
 - Flash mode for CircuitPython uses `circuitpy_drive_path` from device config, falling back to auto-detection via `find_circuitpy_drive()`.
 - Oversized CircuitPython RAM-mode submissions are chunked using a live free-heap probe instead of static board-family metadata. If even the chunked path cannot fit, the run fails early and directs the user to flash mode.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
+- MicroPython flash transport currently diverges from CircuitPython's by using raw-REPL `exec_raw` for entrypoint execution, which breaks for `while True` app code; the harmonization to CP's soft-reboot-and-read pattern is tracked in the library-config-aware-refactor workstream and lands as a `follow` kwarg on `MicropythonTransport.deploy_files`.
 - The `chumicro-deploy` package split is handled by Decision 0032; a serial-only CircuitPython flash workflow that would remove the CIRCUITPY drive dependency remains tracked under the "drive mode toggle" entry in `plans/open-questions.md`.
