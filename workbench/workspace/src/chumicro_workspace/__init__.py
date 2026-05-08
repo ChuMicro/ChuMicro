@@ -95,6 +95,7 @@ from chumicro_workspace.deploy_source import (
     project_directory_source,
 )
 from chumicro_workspace.deploy_targets import read_deploy_targets
+from chumicro_workspace.example_source import example_source
 from chumicro_workspace.flatten import flatten_config
 from chumicro_workspace.import_graph import (
     build_search_paths,
@@ -154,6 +155,7 @@ __all__ = [
     "derive_firmware_url",
     "detect_board_state",
     "dump_devices",
+    "example_source",
     "find_device",
     "find_library_roots",
     "find_project_config",
