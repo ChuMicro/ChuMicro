@@ -826,7 +826,7 @@ class TestCompositeTestCommands:
         """
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases, **_kwargs: 0,
+            lambda phases, **_kwargs: (0, None),
         )
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_args, **_kwargs: True)
 
@@ -1113,11 +1113,12 @@ class TestRunParallelPhases:
             log.append("two")
             return 0
 
-        result = run._run_parallel_phases(
+        exit_code, failing_label = run._run_parallel_phases(
             (("first", phase_one), ("second", phase_two)),
             dispatcher=run._QuietDispatcher(),
         )
-        assert result == 0
+        assert exit_code == 0
+        assert failing_label is None
         assert sorted(log) == ["one", "two"]
 
     def test_quiet_dispatcher_replays_in_submission_order(self, capsys):
@@ -1145,36 +1146,39 @@ class TestRunParallelPhases:
 
     def test_first_failure_short_circuits_return_value(self):
         """A failing phase's exit code becomes the run's return value."""
-        result = run._run_parallel_phases(
+        exit_code, failing_label = run._run_parallel_phases(
             (
                 ("succeeded", lambda sink: 0),
                 ("failed", lambda sink: 7),
             ),
             dispatcher=run._QuietDispatcher(),
         )
-        assert result == 7
+        assert exit_code == 7
+        assert failing_label == "failed"
 
     def test_first_failure_in_submission_order(self):
         """When two phases fail, the first one in submission order wins."""
-        result = run._run_parallel_phases(
+        exit_code, failing_label = run._run_parallel_phases(
             (
                 ("a", lambda sink: 11),
                 ("b", lambda sink: 13),
             ),
             dispatcher=run._QuietDispatcher(),
         )
-        assert result == 11
+        assert exit_code == 11
+        assert failing_label == "a"
 
     def test_phase_crash_treated_as_failure(self):
         """An exception in a phase is captured and treated as exit code 1."""
         def phase_crashes(sink) -> int:
             raise RuntimeError("oh no")
 
-        result = run._run_parallel_phases(
+        exit_code, failing_label = run._run_parallel_phases(
             (("crashy", phase_crashes),),
             dispatcher=run._QuietDispatcher(),
         )
-        assert result == 1
+        assert exit_code == 1
+        assert failing_label == "crashy"
 
 
 class TestPickDispatcher:
@@ -1336,7 +1340,7 @@ class TestPreflightParallelDispatch:
 
         def fake_run(phases, **_kwargs):
             captured_phases.extend([label for label, _ in phases])
-            return 0
+            return 0, None
 
         monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
 
@@ -1365,7 +1369,7 @@ class TestPreflightParallelDispatch:
 
         def fake_run(phases, **_kwargs):
             captured_labels.extend([label for label, _ in phases])
-            return 0
+            return 0, None
 
         monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
 
@@ -1397,7 +1401,7 @@ class TestPreflightParallelDispatch:
         )
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases, **_kwargs: 0,
+            lambda phases, **_kwargs: (0, None),
         )
 
         run.preflight(coverage_threshold=94)
@@ -1424,7 +1428,7 @@ class TestPreflightParallelDispatch:
         )
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases, **_kwargs: 0,
+            lambda phases, **_kwargs: (0, None),
         )
 
         run.preflight(
@@ -1444,11 +1448,13 @@ class TestPreflightParallelDispatch:
         assert "/tmp/cpy" in cpy_invocation
 
     def test_parallel_block_failure_returns_exit_code(self, monkeypatch, capsys):
-        """A failing parallel block short-circuits before the functional tail."""
+        """A failing parallel block short-circuits before the functional tail
+        and surfaces the failing phase label in the tail message — survives
+        interleaved-output schedulers where the [FAIL] line scrolls past."""
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases, **_kwargs: 13,
+            lambda phases, **_kwargs: (13, "test-micropython"),
         )
 
         functional_calls: list[str] = []
@@ -1463,4 +1469,5 @@ class TestPreflightParallelDispatch:
         assert result == 13
         # The functional tail must NOT run when the parallel block failed.
         assert functional_calls == []
-        assert "Preflight failed" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "Preflight failed at: test-micropython" in out

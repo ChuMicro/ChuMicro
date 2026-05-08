@@ -802,7 +802,7 @@ def test_cpython(
                 (label, _make_pytest_phase(command, run_environment)),
             )
 
-    overall_exit_code = _run_parallel_phases(
+    overall_exit_code, _failing_label = _run_parallel_phases(
         phases,
         dispatcher=_pick_dispatcher(quiet=quiet),
         max_workers=package_workers,
@@ -939,7 +939,7 @@ def build(
         return run
 
     phases = [(f"build {package}", build_one(package)) for package in packages]
-    result = _run_parallel_phases(
+    result, _failing_label = _run_parallel_phases(
         phases,
         dispatcher=_pick_dispatcher(quiet=quiet),
         max_workers=package_workers,
@@ -998,11 +998,12 @@ def docs(
         )
         for library_dir in doc_dirs
     ]
-    return _run_parallel_phases(
+    exit_code, _failing_label = _run_parallel_phases(
         phases,
         dispatcher=_pick_dispatcher(quiet=quiet),
         max_workers=package_workers,
     )
+    return exit_code
 
 
 def _build_one_library_docs_factory(
@@ -1276,16 +1277,21 @@ def preflight(
         print(f"== {label} ==")
         print(f"  SKIP: {base_reference} not reachable (fetch or set --base).")
 
-    parallel_result = _preflight_run_parallel_phases(
+    parallel_result, failing_label = _preflight_run_parallel_phases(
         parallel_phases,
         max_workers=phase_workers,
         dispatcher=_pick_dispatcher(quiet=quiet),
     )
     if parallel_result != 0:
         # The dispatcher already printed phase events and (in status /
-        # quiet mode) the failing phase's transcript; finish with the
-        # preflight-level banner.
-        print("Preflight failed.")
+        # quiet mode) the failing phase's transcript; finish with a
+        # labelled banner so the failing phase survives interleaved-
+        # output schedulers where its [FAIL] line scrolls past the
+        # visible tail.
+        if failing_label is not None:
+            print(f"Preflight failed at: {failing_label}")
+        else:
+            print("Preflight failed.")  # pragma: no cover - defensive
         return parallel_result
 
     # Functional tests on real hardware run **after** the parallel
@@ -1454,10 +1460,11 @@ def test_all_runtimes(
             ),
         ),
     )
-    return _run_parallel_phases(
+    exit_code, _failing_label = _run_parallel_phases(
         parallel_phases,
         dispatcher=_pick_dispatcher(quiet=False),
     )
+    return exit_code
 
 
 def _run_parallel_phases(
@@ -1465,7 +1472,7 @@ def _run_parallel_phases(
     *,
     dispatcher: _Dispatcher,
     max_workers: int | None = None,
-) -> int:
+) -> tuple[int, str | None]:
     """Run *phases* concurrently, routing output through *dispatcher*.
 
     Each phase callable receives a per-phase :class:`_Sink`; the sink
@@ -1488,13 +1495,17 @@ def _run_parallel_phases(
             integer to throttle for CPU / subprocess oversubscription.
 
     Returns:
-        First non-zero exit code in submission order, or 0 if every
-        phase succeeded.
+        ``(exit_code, failing_label)`` — first non-zero exit code in
+        submission order paired with its phase label, or ``(0, None)``
+        when every phase succeeded.  The label lets callers print
+        ``Preflight failed at: <label>``-style summaries that survive
+        interleaved-output schedulers where the failing phase's
+        ``[FAIL]`` line scrolls past the visible tail.
     """
     from concurrent.futures import ThreadPoolExecutor
 
     if not phases:
-        return 0
+        return 0, None
 
     labels = [label for label, _ in phases]
     dispatcher.start(labels)
@@ -1520,10 +1531,10 @@ def _run_parallel_phases(
 
     dispatcher.finish()
 
-    for _label, exit_code in results:
+    for label, exit_code in results:
         if exit_code != 0:
-            return exit_code
-    return 0
+            return exit_code, label
+    return 0, None
 
 
 def _subcommand_phase_factory(
@@ -1577,12 +1588,15 @@ def _preflight_run_parallel_phases(
     *,
     max_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
     dispatcher: _Dispatcher | None = None,
-) -> int:
+) -> tuple[int, str | None]:
     """Dispatch the parallel preflight phase block.
 
     Thin wrapper over :func:`_run_parallel_phases` that exists as a
     named seam so tests can monkeypatch the parallel block without
     forking the subprocess invocations on every preflight test.
+
+    Returns ``(exit_code, failing_label)`` straight through from the
+    underlying runner.
     """
     return _run_parallel_phases(
         phases,
