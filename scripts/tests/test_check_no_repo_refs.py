@@ -222,7 +222,9 @@ class TestCheckFile:
 
     def test_clean_file(self, tmp_path: Path) -> None:
         """A file with no flagged refs returns no errors."""
-        target = _make_src_file(tmp_path, "src.py", "def add(left, right):\n    return left + right\n")
+        target = _make_src_file(
+            tmp_path, "src.py", "def add(left, right):\n    return left + right\n",
+        )
         assert check_file(target) == []
 
     def test_decision_ref_in_docstring(self, tmp_path: Path) -> None:
