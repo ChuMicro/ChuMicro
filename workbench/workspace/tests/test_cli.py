@@ -151,12 +151,12 @@ class TestSetup:
         # Empty tmp_path — no workspace.yml, no devices.yml, no pyproject.
         exit_code = cli.main(["setup", "--workspace-dir", str(tmp_path)])
         assert exit_code == 0
-        # Workbench-owned starters must materialise even when no
+        # Workspace templates must materialise even when no
         # workspace.yml existed at start.
         assert (tmp_path / "workspace.yml").is_file()
         assert (tmp_path / "devices.yml").is_file()
         captured = capsys.readouterr().out
-        assert "materialized 3 workbench-owned starter(s)" in captured
+        assert "materialized 3 workspace template(s)" in captured
         assert (tmp_path / "secrets.toml").is_file()
 
 

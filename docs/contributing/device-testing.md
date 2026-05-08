@@ -29,7 +29,7 @@ python scripts/run.py setup
 
 If the files already exist, setup leaves them alone.
 
-The starter `devices.yml` ships with an empty `devices: []` registry — the same canonical shape both the mono-repo and the workspace-template repo materialise from `chumicro_workspace.read_devices_yml_starter`.  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
+The first-materialised `devices.yml` ships with an empty `devices: []` registry — the same canonical shape both the mono-repo and the workspace-template repo materialise from `chumicro_deploy.read_devices_yml_template` (schema and template co-located).  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
 
 ## 2. Register your boards via `add-device`
 
@@ -129,7 +129,7 @@ Use `ram` for day-to-day functional-test iteration. Use `flash` when a board can
 
 ## 3. Configure `secrets.toml`
 
-Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the canonical workbench-shipped starter (`chumicro_workspace.read_secrets_toml_starter`), carrying placeholders for `wifi.ssid` and `mqtt.broker.host`.
+Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the canonical template (`chumicro_workspace.read_secrets_toml_template`), carrying placeholders for `wifi.ssid` and `mqtt.broker.host`.
 
 Edit `secrets.toml` once per clone — fill in your wifi credentials + your broker host (the mqtt library refuses to silently dial a third-party broker, so this is required for mqtt-touching tests):
 

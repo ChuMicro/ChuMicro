@@ -24,9 +24,9 @@ defaults:
   # Which runtimes IDE play buttons target: "micropython", "circuitpython",
   # or "both".  Drives `chumicro-pytest-device`'s IDE-targeting collection
   # for `functional_tests/` — relevant in any workspace where library
-  # authors run their tests through an IDE play button (mono-repo
-  # contributors and workspace-template users who scaffold their own
-  # libraries via `python run.py new --library <name>`).
+  # authors run their tests through an IDE play button (e.g.
+  # workspace-template users who scaffold their own libraries via
+  # `chumicro-workspace new --library <name>`).
   ide_runtime: micropython
 
 devices: []

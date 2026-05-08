@@ -1,9 +1,9 @@
-"""Append upstream-starter keys to the user's ``workspace.yml`` /
+"""Append upstream-template keys to the user's ``workspace.yml`` /
 ``secrets.toml`` without clobbering edits or losing comments.
 
-Setup re-apply is **additive only**: when the upstream starter gains a
-new key that the user doesn't have, append it to the user file in place.
-Existing values + surrounding comments are never touched.
+Setup re-apply is **additive only**: when the upstream template gains
+a new key that the user doesn't have, append it to the user file in
+place.  Existing values + surrounding comments are never touched.
 
 Two writers:
 
@@ -12,11 +12,7 @@ Two writers:
 * YAML — ``ruamel.yaml`` (already a workbench dep) does the same for
   ``workspace.yml``.
 
-Driven by :func:`additive_reapply`.  ``setup`` calls this *before* the
-:func:`chumicro_workspace.starter_drift.print_starter_drift_report`
-informational pass, so the report only surfaces keys the additive path
-couldn't safely append (e.g. a key whose parent table the user has
-actively deleted — leave it deleted, don't resurrect).
+Driven by :func:`additive_reapply`.
 """
 
 from __future__ import annotations
@@ -27,19 +23,18 @@ from typing import Any
 import tomlkit
 from ruamel.yaml import YAML
 
-from chumicro_workspace.starter_drift import (
-    _resolve_starter_text,
-    collect_missing_starter_paths,
+from chumicro_workspace.template_drift import (
+    _resolve_template_text,
+    collect_missing_template_paths,
 )
 
 #: Files the additive re-apply walks.  Order matches the user-visible
-#: progression in ``setup`` output and the order in
-#: :data:`chumicro_workspace.starter_drift._DRIFT_CHECKS`.
+#: progression in ``setup`` output.
 _REAPPLY_TARGETS: tuple[str, ...] = ("workspace.yml", "secrets.toml")
 
 
 def additive_reapply(workspace_root: Path) -> dict[str, list[str]]:
-    """For each tracked file, append upstream-starter keys the user is missing.
+    """For each tracked file, append upstream-template keys the user is missing.
 
     Returns a dict mapping filename → list of appended dotted paths.
     Files with no drift (or no user file yet) are absent from the
@@ -61,17 +56,17 @@ def additive_reapply(workspace_root: Path) -> dict[str, list[str]]:
         user_path = workspace_root / filename
         if not user_path.is_file():
             continue
-        missing = collect_missing_starter_paths(
+        missing = collect_missing_template_paths(
             workspace_root=workspace_root, filename=filename,
         )
         if not missing:
             continue
-        starter_text = _resolve_starter_text(workspace_root, filename)
+        template_text = _resolve_template_text(filename)
         user_text = user_path.read_text(encoding="utf-8")
         if filename.endswith(".toml"):
-            new_text = _append_missing_toml(user_text, starter_text, missing)
+            new_text = _append_missing_toml(user_text, template_text, missing)
         else:
-            new_text = _append_missing_yaml(user_text, starter_text, missing)
+            new_text = _append_missing_yaml(user_text, template_text, missing)
         user_path.write_text(new_text, encoding="utf-8")
         appended[filename] = missing
     return appended
@@ -84,28 +79,27 @@ def additive_reapply(workspace_root: Path) -> dict[str, list[str]]:
 
 def _append_missing_toml(
     user_text: str,
-    starter_text: str,
+    template_text: str,
     missing_paths: list[str],
 ) -> str:
-    """Return *user_text* with each *missing* dotted path appended from *starter*.
+    """Return *user_text* with each *missing* dotted path appended from *template*.
 
-    Walks each dotted path in *starter* to extract the value (and any
+    Walks each dotted path in *template* to extract the value (and any
     nested tables), then creates the corresponding path in the user
     document.  Intermediate tables are created via ``tomlkit.table()``
-    when missing.  Comments on the appended value's source position
-    in the starter are not propagated — only the value lands in the
-    user file (this keeps the implementation simple and avoids
-    re-emitting the starter's didactic comments inside the user's
-    file).
+    when missing.  Comments on the appended value's source position in
+    the template are not propagated — only the value lands in the user
+    file (this keeps the implementation simple and avoids re-emitting
+    the template's didactic comments inside the user's file).
     """
     user_doc = tomlkit.parse(user_text)
-    starter_doc = tomlkit.parse(starter_text)
+    template_doc = tomlkit.parse(template_text)
     for dotted in missing_paths:
         segments = dotted.split(".")
-        starter_value = _walk_or_none(starter_doc, segments)
-        if starter_value is None:
+        template_value = _walk_or_none(template_doc, segments)
+        if template_value is None:
             continue
-        _set_nested(user_doc, segments, starter_value)
+        _set_nested(user_doc, segments, template_value)
     return tomlkit.dumps(user_doc)
 
 
@@ -139,7 +133,7 @@ def _set_nested(doc: Any, segments: list[str], value: Any) -> None:
 
 def _append_missing_yaml(
     user_text: str,
-    starter_text: str,
+    template_text: str,
     missing_paths: list[str],
 ) -> str:
     """YAML analogue of :func:`_append_missing_toml`.
@@ -151,13 +145,13 @@ def _append_missing_yaml(
     yaml = YAML(typ="rt")
     yaml.preserve_quotes = True
     user_data = yaml.load(user_text) or {}
-    starter_data = yaml.load(starter_text) or {}
+    template_data = yaml.load(template_text) or {}
     for dotted in missing_paths:
         segments = dotted.split(".")
-        starter_value = _walk_or_none(starter_data, segments)
-        if starter_value is None:
+        template_value = _walk_or_none(template_data, segments)
+        if template_value is None:
             continue
-        _set_nested_yaml(user_data, segments, starter_value)
+        _set_nested_yaml(user_data, segments, template_value)
     from io import StringIO  # noqa: PLC0415
     buffer = StringIO()
     yaml.dump(user_data, buffer)

@@ -35,7 +35,7 @@ Public API::
         RUNTIME_CONFIG_DEVICE_PATH,  # canonical on-device path
         GENERATED_DIRNAME,           # canonical host-side _generated/ dir name
         WorkspaceConfigError,        # YAML/TOML top-level shape malformed
-        read_workspace_yml_starter,  # canonical workspace.yml content
+        read_workspace_yml_template, # canonical workspace.yml content
     )
 
 Workbench-only — runs on CPython only; never lands on a
@@ -95,7 +95,6 @@ from chumicro_workspace.deploy_source import (
     project_directory_source,
 )
 from chumicro_workspace.deploy_targets import read_deploy_targets
-from chumicro_workspace.devices_yml_starter import read_devices_yml_starter
 from chumicro_workspace.flatten import flatten_config
 from chumicro_workspace.import_graph import (
     build_search_paths,
@@ -118,15 +117,13 @@ from chumicro_workspace.pipeline import (
     build_runtime_config,
     compose_runtime_config,
 )
-from chumicro_workspace.secrets_toml_starter import (
-    read_secrets_toml_starter,
+from chumicro_workspace.template_drift import (
+    collect_missing_template_paths,
 )
-from chumicro_workspace.starter_drift import (
-    collect_missing_starter_paths,
-    print_starter_drift_report,
-)
-from chumicro_workspace.workspace_yml_starter import (
-    read_workspace_yml_starter,
+from chumicro_workspace.templates import (
+    read_devices_yml_template,
+    read_secrets_toml_template,
+    read_workspace_yml_template,
 )
 from chumicro_workspace.writer import write_runtime_config
 
@@ -152,7 +149,7 @@ __all__ = [
     "boot_shim_files",
     "build_runtime_config",
     "build_search_paths",
-    "collect_missing_starter_paths",
+    "collect_missing_template_paths",
     "compose_runtime_config",
     "derive_firmware_url",
     "detect_board_state",
@@ -171,15 +168,14 @@ __all__ = [
     "load_devices",
     "merge_configs",
     "micropython_board_for_machine",
-    "print_starter_drift_report",
     "read_deploy_targets",
-    "read_devices_yml_starter",
+    "read_devices_yml_template",
     "read_library_sources",
     "read_manifest",
     "read_project_config",
     "read_secrets_toml",
-    "read_secrets_toml_starter",
-    "read_workspace_yml_starter",
+    "read_secrets_toml_template",
+    "read_workspace_yml_template",
     "rename_device",
     "set_runtime_default",
     "project_app_exports_run",

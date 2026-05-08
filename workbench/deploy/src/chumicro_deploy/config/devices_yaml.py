@@ -22,6 +22,11 @@ via :mod:`ruamel.yaml`.  PyYAML can't do this — it discards comments
 and sorts keys alphabetically by default — so the runtime cost of
 the extra dep buys the no-clobber-of-user-edits property the
 workspace template depends on.
+
+The canonical empty-registry text for a fresh workspace ships in
+``_payloads/devices.yml.template`` next to this module; consumers
+materialise it via :func:`read_devices_yml_template`.  Schema and
+default content live together so changes stay co-located.
 """
 
 from __future__ import annotations
@@ -34,6 +39,27 @@ from typing import Any
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
+
+#: Path to the canonical ``devices.yml`` template inside the
+#: ``chumicro_deploy`` package.  Resolved at import time so reads stay
+#: simple — the wheel ships the same path.
+_DEVICES_YML_TEMPLATE_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "_payloads"
+    / "devices.yml.template"
+)
+
+
+def read_devices_yml_template() -> str:
+    """Return the canonical empty-registry ``devices.yml`` text.
+
+    Three-zone-headed shape with ``defaults.{micropython,
+    circuitpython}: null`` (filled by ``add-device``), ``deploy_mode:
+    flash``, ``ide_runtime: micropython``, and ``devices: []``.  Single
+    source of truth for every consumer that needs to materialise the
+    file on first setup.
+    """
+    return _DEVICES_YML_TEMPLATE_PATH.read_text(encoding="utf-8")
 
 #: Field classification — see module docstring.  Top-level entry keys
 #: only; the nested ``hardware:`` block is classified separately by

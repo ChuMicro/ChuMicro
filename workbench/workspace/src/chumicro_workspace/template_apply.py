@@ -1,13 +1,13 @@
-"""Init / update / materialize-starters orchestration.
+"""Init / update / materialize-workspace-templates orchestration.
 
 `chumicro-workspace` `init` clones a workspace template repo into a
 target directory.  `update` fetches a fresh copy of the template
 upstream and re-flows tool-owned files (the zones defined in
 :mod:`chumicro_workspace.template_zones`) without touching
-user-owned ones.  `materialize_workbench_starters` fills in
-workbench-owned starters (``devices.yml``, ``workspace.yml``,
-``secrets.toml``) from the canonical content in this package's
-``_payloads/`` on first ``setup``.
+user-owned ones.  `materialize_workspace_templates` fills in the
+canonical first-write text for ``devices.yml`` / ``workspace.yml`` /
+``secrets.toml`` from the readers in
+:mod:`chumicro_workspace.templates` on first ``setup``.
 """
 
 from __future__ import annotations
@@ -166,42 +166,36 @@ def update(
     return report
 
 
-#: Workbench-owned starter files materialised on every workspace's
-#: first ``setup``.  Each entry maps a relative target path to the
-#: reader function in :mod:`chumicro_workspace` that returns the
-#: canonical content as a string.  Single source of truth shared
-#: by every consumer that needs to materialise the file.
-_WORKBENCH_STARTERS: tuple[tuple[str, str], ...] = (
-    ("devices.yml", "read_devices_yml_starter"),
-    ("workspace.yml", "read_workspace_yml_starter"),
-    ("secrets.toml", "read_secrets_toml_starter"),
-)
+def materialize_workspace_templates(workspace_root: Path) -> ApplyReport:
+    """Materialise the canonical first-write text for ``devices.yml`` /
+    ``workspace.yml`` / ``secrets.toml`` into *workspace_root*.
 
-
-def materialize_workbench_starters(workspace_root: Path) -> ApplyReport:
-    """Materialise workbench-owned starter files into the workspace root.
-
-    Walks :data:`_WORKBENCH_STARTERS` and writes each missing target
-    from its corresponding reader.  Existing files are never
-    overwritten.  Always idempotent — re-running on a populated
-    workspace produces a report of ``UNCHANGED`` entries.
+    Existing files are never overwritten.  Idempotent — re-running on
+    a populated workspace produces a report of ``UNCHANGED`` entries.
 
     Returns a report whose entries are ``MATERIALIZED`` for each
     newly created file and ``UNCHANGED`` for each that already
     existed.
     """
-    # Local import: keep the module-level import surface flat and
-    # avoid a circular dependency through ``chumicro_workspace``'s
-    # top-level re-exports.
-    import chumicro_workspace  # noqa: PLC0415
+    # Local import: ``templates`` pulls in ``chumicro_deploy`` for the
+    # devices.yml reader; deferring keeps module import cheap.
+    from chumicro_workspace.templates import (  # noqa: PLC0415
+        read_devices_yml_template,
+        read_secrets_toml_template,
+        read_workspace_yml_template,
+    )
 
+    targets = (
+        ("devices.yml", read_devices_yml_template),
+        ("workspace.yml", read_workspace_yml_template),
+        ("secrets.toml", read_secrets_toml_template),
+    )
     report = ApplyReport()
-    for relative_path, reader_name in _WORKBENCH_STARTERS:
+    for relative_path, reader in targets:
         target_path = workspace_root / relative_path
         if target_path.exists():
             report.add(relative_path, ApplyAction.UNCHANGED)
             continue
-        reader = getattr(chumicro_workspace, reader_name)
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(reader(), encoding="utf-8")
         report.add(relative_path, ApplyAction.MATERIALIZED)
