@@ -728,10 +728,12 @@ class CircuitpythonTransport:
            expose a UID.
 
         On a mismatch, every mounted ``CIRCUITPY*`` volume is scanned
-        for one whose identity matches; the match wins, with a
-        :func:`print` WARNING nudging the user to drop or fix the
-        devices.yml override.  When no match is found a
-        :class:`CircuitpythonTransportError` is raised.
+        for one whose identity matches; the match wins silently — a
+        stale ``circuitpy_drive_path`` in devices.yml resolves
+        correctly without any host-side noise.  When no match is
+        found a :class:`CircuitpythonTransportError` is raised whose
+        message nudges the user to drop or fix the devices.yml
+        override.
 
         Fails open — when either side of either comparison is
         unavailable (``boot_out.txt`` missing/malformed, probe
@@ -778,7 +780,9 @@ class CircuitpythonTransport:
         Extracted helper so the UID and machine-string branches of
         :meth:`_verify_drive_for_board` share their compare-and-fix
         logic.  ``identity_label`` is only used for the user-facing
-        WARNING / error messages.
+        error message when no sibling mount matches.  Auto-correction
+        on success is silent — the corrected path is returned and the
+        caller proceeds without host-side noise.
         """
         if drive_identity == probe_identity:
             return drive_path
@@ -792,13 +796,6 @@ class CircuitpythonTransport:
                 f"fix circuitpy_drive_path in devices.yml (auto-detection "
                 f"by UID works without it)."
             )
-        print(
-            f"WARNING: configured CIRCUITPY drive {drive_path} "
-            f"{identity_label}={drive_identity!r} does not match the "
-            f"connected board ({identity_label}={probe_identity!r}) — "
-            f"auto-correcting to {corrected}.  Remove circuitpy_drive_path "
-            f"from devices.yml to rely on UID-based auto-detection."
-        )
         return Path(corrected)
 
     def _resolve_circuitpy_drive(

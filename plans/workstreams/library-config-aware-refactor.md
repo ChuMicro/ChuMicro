@@ -1,6 +1,6 @@
 # Workstream: library `from_config` factories — config-aware constructors across the six networking libs
 
-Status: **all phases shipped + bench-validated CP-side 2026-05-08 — Phases 0 + 1 + 2 (mqtt / ntp / requests / websockets / http_server) + 3 (`deploy-example` CLI per Decision [0059](../decisions/0059-deploy-example-front-door.md)).  CP-side bench session ran `timing/circuitpython_blink` + `ntp/circuitpython_ntp_query` + `requests/circuitpython_periodic_get` against both Pi Pico W CP and Lolin S2 CP; all six deploys succeeded end-to-end with WIFI_OK, NTP_OK (matching real wall-clock), and HTTP 200 responses observed via the deploy command's serial capture.  Two orthogonal follow-ups uncovered (recorded under "Follow-ups from the bench session" below): mqtt example's PEP 448 `**unpack` rejected by CircuitPython parser, and MP `deploy-example` of infinite-loop examples times out via mpremote raw-exec.  Neither blocks the workstream's `from_config` factory acceptance.**
+Status: **all phases shipped + bench-validated CP-side 2026-05-08 — Phases 0 + 1 + 2 (mqtt / ntp / requests / websockets / http_server) + 3 (`deploy-example` CLI per Decision [0059](../decisions/0059-deploy-example-front-door.md)).  CP-side bench session ran `timing/circuitpython_blink` + `ntp/circuitpython_ntp_query` + `requests/circuitpython_periodic_get` against both Pi Pico W CP and Lolin S2 CP; all six deploys succeeded end-to-end with WIFI_OK, NTP_OK (matching real wall-clock), and HTTP 200 responses observed via the deploy command's serial capture.  Three follow-ups uncovered (recorded under "Follow-ups from the bench session" below): (1) mqtt example's PEP 448 `**unpack` rejected by CircuitPython parser; (2) MP `deploy-example` of infinite-loop examples times out via mpremote raw-exec (transport-level gap); (3) CIRCUITPY UID stale-warning over-states the situation — **shipped 2026-05-08 (Variant A: silence on success).**  Items 1 + 2 remain; none block the workstream's `from_config` factory acceptance.**
 
 The libraries `mqtt`, `requests`, `http_server`, `ntp`, `websockets`, and `wifi` were written before the runtime-config strategy ([Decision 0035](../decisions/0035-runtime-config-structure.md), [Decision 0057](../decisions/0057-two-file-config.md), [`config-shape-beginner-ergonomics`](archive/config-shape-beginner-ergonomics.md)).  Today only `chumicro_wifi.WifiConfig.from_config` exists — `WifiService(WifiConfig.from_config(config))` reads `wifi.ssid` / `wifi.password` straight off the deployed `runtime_config.msgpack`.
 
@@ -221,31 +221,15 @@ This means: any MP `deploy-example` of an infinite-loop body will time out, **re
 
 **Effort + deps.**  Genuinely uncertain — probably 2-3 hours if `chumicro-workspace deploy` of MP projects has the same gap (then this is a transport-level addition + selective wire-through).  Could balloon if mpremote's `cp` + `reset` semantics on a board running user code don't compose cleanly (the `reset` may need to follow a `Ctrl-C` if the previous `code.py` is still in `while True`).  **Strongly recommend**: first session devoted to just answering "does `chumicro-workspace deploy` of MP `while True` work today?"  If yes, the gap is `deploy-example`-only and small.  If no, this is a workspace-wide issue worth its own workstream.
 
-### Follow-up 3 — CIRCUITPY drive UID stale-warning over-states the situation
+### Follow-up 3 — CIRCUITPY drive UID stale-warning (shipped — Variant A)
 
-**What we know.**  Every CP deploy in the bench session printed:
+**Status:** Variant A landed 2026-05-08.  `_resolve_identity_match` (`workbench/deploy/src/chumicro_deploy/circuitpython_transport.py`) now silently returns the corrected path when a sibling `CIRCUITPY*` mount matches the probed UID; only the no-match-found case still raises (with the same nudge to drop or fix `devices.yml`'s `circuitpy_drive_path`).  The previous `WARNING:` print fired on every two-board bench deploy, where macOS auto-rename of the second `/Volumes/CIRCUITPY → CIRCUITPY 1` is normal and the auto-correction is reliable — the message read scarier than reality.  Two tests updated: `test_auto_corrects_silently_to_sibling_mount_on_mismatch` now guards against the print regressing (`captured.out == ""`), and `test_uid_match_preferred_over_machine_when_both_available` relies on the implicit branch-distinguishing return value.  Troubleshooting doc (`docs/troubleshooting/macos-circuitpy.md`) updated to match.
 
-```
-WARNING: configured CIRCUITPY drive /Volumes/CIRCUITPY UID='84722E7490C3' does not match the connected board (UID='E6614103E7174624') — auto-correcting to /Volumes/CIRCUITPY 1.  Remove circuitpy_drive_path from devices.yml to rely on UID-based auto-detection.
-```
-
-Emit site located: `workbench/deploy/src/chumicro_deploy/circuitpython_transport.py:799-800`.  The auto-correction is doing the right thing; the warning text just reads scarier than it should — both CP boards plugged in have different UIDs, macOS auto-renames the second `/Volumes/CIRCUITPY` to `/Volumes/CIRCUITPY 1`, and devices.yml's stored `circuitpy_drive_path` is stable per-entry but doesn't match the live mount when both boards are present.
-
-**What we don't know.**
-
-* Whether the warning is informational-only or whether it's surfacing a real edge case where auto-correction *can* fail (e.g. three CP boards plugged in simultaneously).  The fix is "silence on success" only if the auto-correction is robust against more-than-two-boards setups.
-* Whether the warning's "Remove `circuitpy_drive_path` from devices.yml to rely on UID-based auto-detection" advice is genuinely actionable.  If it is, the right fix is upgrading `add-device` to *not* persist `circuitpy_drive_path` by default, since UID-based auto-detection at deploy time is more reliable than a path stored at probe time.
-
-**Proposed fix.**  Two options, decide which after a quick read of the surrounding context (`circuitpython_transport.py` around line 799 + the auto-correction code that follows it):
-
-* **(A) Silence on success.**  Suppress the warning when auto-correction finds a valid drive.  Print only when auto-correction fails (a true error).  Smallest change; keeps the existing devices.yml schema.
-* **(B) Drop `circuitpy_drive_path` from devices.yml's user-owned zone.**  Have `_resolve_circuitpy_drive` always do UID-based discovery at deploy time; treat `circuitpy_drive_path` as deprecated (still honored if present, but never written by `add-device` in new entries).  Bigger change but reduces a class of misconfiguration.
-
-**Effort + deps.**  (A) is ~15 min; (B) is ~1 hour if it touches `add-device` write paths + the three-zone manifest.  No coupling to 1 or 2.  **Recommend starting with (A)** — small, immediate UX win — and queueing (B) as a separate item if user-template-repo onboarding feedback suggests the drive-path drift is a real source of confusion.
+Variant B (drop `circuitpy_drive_path` from `devices.yml`'s user-owned zone — bigger change touching `add-device` write paths) was *not* picked up — defer until template-repo onboarding feedback flags drive-path drift as a real source of confusion.
 
 ### Cross-follow-up notes
 
 - **None of the three are required** to call the workstream's host-side scope closed.  The Phase 2 + Phase 3 acceptance criteria are met (six clean CP deploys, factory + manifest validation + recovery coaching all working).
-- **Pickup order if doing them sequentially:** 3-A (smallest, immediate), then 1 (medium, low-risk), then 2 (the genuinely uncertain one — best done after a half-hour of focused investigation).
-- **Pickup order if doing one:** 3-A.  Highest UX-noise-per-fix-line ratio.  Will be visible to anyone who runs the canonical first hello-world.
-- **Bench rerun cost:** all three are testable on the same Pi Pico W CP / Lolin S2 CP setup the original session used.  No new hardware.
+- **Status:** 3 shipped (Variant A, 2026-05-08); 1 + 2 remain.
+- **Pickup order for the remaining two:** 1 first (medium, low-risk, low-uncertainty rewrite of one example file), then 2 (genuinely uncertain — best done after a half-hour of focused investigation into whether `chumicro-workspace deploy` of MP `while True` projects has the same gap).
+- **Bench rerun cost:** both remaining items are testable on the same Pi Pico W CP / Lolin S2 CP / Pi Pico W MP / Lolin S2 MP setup the original session used.  No new hardware.
