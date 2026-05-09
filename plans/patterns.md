@@ -831,5 +831,5 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
 Result: VS Code / PyCharm Testing panels paint the tree with gutter ▶ buttons on every functional test the user can see in `devices.yml`. Bare `pytest` from rootdir does host tests only. Click ▶ on one test → its path lands in argv → deselection skipped → run executes against the device. Commit `73e9270`.
 
-Related: Decision 0027, `scripts/pytest_device.py` plugin (which owns the actual device routing once a functional test is selected).
+Related: Decision 0027, the `chumicro-pytest-device` plugin (which owns the actual device routing once a functional test is selected).
 
