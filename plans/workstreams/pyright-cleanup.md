@@ -17,10 +17,14 @@ Pyright runs only on the developer's laptop / CI runner — never on the device.
 - Wrapping platform-only attribute accesses in helper functions that funnel through `getattr` — same overhead, plus an extra Python call frame per use.
 - Hoisting imports out of intentionally-lazy positions just to make pyright happy — re-evaluate the *why* first; some lazy imports exist to keep RAM unloaded until needed, and reordering them silently regresses startup behaviour.
 
-Acceptable mitigations in runtime code:
-- `# pyright: ignore[<ruleName>]` per-line — comment-only, zero runtime cost.
-- Stay on `object`-typed seams and accept the noise — that's also what Family D's "Accept the noise" answer codifies.
-- Real defect fixes that change behaviour for the better even without pyright (Family A entries qualify).
+Acceptable mitigations in runtime code, in order of preference:
+
+1. **Pyrightconfig-level scoping** — `ignore` patterns or per-path severity overrides in `pyrightconfig.json`.  Zero source change, zero runtime cost, zero flash cost.  Use when the same noise pattern hits many files in a tree (tests, functional_tests, examples).
+2. **File-level suppression** — `# pyright: <directive>` as a single line at the top of one specific file.  One comment that covers every diagnostic in the file.  Use when a single file is the noise epicentre and the file is small enough that the one comment line of flash is worth silencing many errors of IDE noise.
+3. **Per-line `# pyright: ignore[<ruleName>]`** — comment text that ships to devices in the `.py` file.  Comments are not free: a `.py` file deployed to flash carries every comment byte (only `.mpy` cross-compilation strips them, and devices typically run `.py` until release).  Use sparingly — only when the suppression is high-value (silences multiple downstream noise lines) and no upstream mitigation fits.
+4. **Accept the noise** — no source change, no config change.  The right default when the diagnostic is just pyright misunderstanding a cross-runtime pattern.  Real defect fixes still happen normally; the noise is signal that those patterns exist, and reviewers learn to skim past it.
+
+Real defect fixes that change behaviour for the better even without pyright (Family A entries qualify) are always fine.
 
 CPython-only trees (`workbench/`, `scripts/`, `tests/`, `functional_tests/` body code) do not have these constraints — restructuring there is fine.
 
@@ -30,7 +34,9 @@ This principle is load-bearing because it inverts the default reflex of "the typ
 
 `pyrightconfig.json` now sets `pythonVersion: "3.11"` (matches root `pyproject.toml` `target-version = "py311"`) and `reportMissingModuleSource: none`.  The latter silences the 43 "Import 'X' could not be resolved from source" warnings against CircuitPython / MicroPython platform modules (`microcontroller`, `esp32`, `wifi`, `socketpool`, `ssl`, `digitalio`, `bitbangio`, `analogio`, `board`, `micropython`, …) that ship as type stubs only — those are expected, not actionable.
 
-Net change: **44 → 1 warning, 1054 → 1053 errors**.  The warning channel is now signal-only; future "missing source" reports point at real misconfiguration.
+A second pass added an `ignore` glob list: `**/tests/**`, `**/functional_tests/**`, and `support/test_harness/src/chumicro_test_harness/runner.py`.  Tests use ad-hoc fakes pyright can't introspect; functional_tests import platform modules as bare `import wifi` etc.; the test_harness runner is the cross-runtime adapter seam whose entire purpose is to pretend it's MP/CP on the host.  All three trees are noise epicentres where pyright is least useful.  Pyrightconfig `ignore` is the right tool: the files are skipped from analysis but still importable from analysed files.  Zero source change, zero runtime cost, zero flash cost.
+
+Net change after both phase-0 passes: **44 → 0 warnings, 1054 → 266 errors** (758 silenced).  Examples are intentionally kept in scope — they are user-facing reference code where readability matters and the count tells us when the example is broken.
 
 ## Phase 1 — categorization (this doc)
 
@@ -159,9 +165,10 @@ Recommendation: **defer**.  Revisit when adding pyright to preflight.
 
 ## Phase tracker
 
-- [x] **Phase 0** — pyrightconfig tuning (shipped 2026-05-09).  Net change: 44 → 1 warning, 1054 → 1053 errors; warning channel is now signal-only.
+- [x] **Phase 0** — pyrightconfig tuning (two-pass; shipped 2026-05-09).  Pass 1: `pythonVersion: "3.11"` + `reportMissingModuleSource: none`.  Pass 2: `ignore` for tests / functional_tests / test_harness/runner.py.  Net: 44 → 0 warnings, 1054 → 266 errors (758 silenced, zero source / runtime / flash cost).
 - [x] **Phase 1** — this categorization (shipped 2026-05-09).
 - [x] **Family A** (real defects, ~14 errors) — shipped 2026-05-09.  Four shape-preserving fixes with no runtime cost: `protocol.py` `...` bodies on Protocol-stub methods (standard idiom; +1 LOAD_CONST per stub, never called), `health.py` import re-order out of a try block whose `except YAMLError` could never catch the import's `ImportError` anyway, `validate_mip_install.py` `result = None` initialization (CPython-only script), `config/__init__.py` `# pyright: ignore` directive on the PEP-562 lazy-attr `__all__` entry.  1053 → 1039 errors.
+- [x] **Examples — real-defect spot-fixes** (shipped 2026-05-09).  ~7 errors fixed across 5 example files where pyright was correctly catching broken references (mqtt `is_connected` → `state == ProtocolState.CONNECTED`, config `load_section(prefix=...)` missing kwarg, sockets `sender` possibly-unbound, http_server `WifiConfig.from_dict` → `try_from_config`, http_server `_State` widening annotations).  Pre-Phase-0-pass-2 baseline was 36 example errors; this pass took it to 29.  The remaining 29 are mostly Family-D-derived (downstream of `config.get(key, default) -> object` plus a handful of `board.LED` / `board.D5` board-specific stubs); they stay as honest signal that the example targets a specific board the type checker can't reason about.  No `# type: ignore` sprinkles in example bodies.
 - [ ] **Family B** (Optional narrowing, ~50) — held.  First attempt at the local-bind + assert pattern was reverted (runtime cost on embedded targets).  Open question: do we want per-line `# pyright: ignore[reportOptionalMemberAccess]` suppressions in the library hotspots, or accept the noise?  `workbench/workspace/cli.py` (15 cases, CPython-only) splits off into Phase 3 and gets normal narrowing rewrites.
 - [ ] **Family C** (hasattr-guarded MP attrs, ~22) — held.  First attempt with `getattr` helpers in `support/test_harness/runner.py` was reverted (real per-call overhead).  Same open question as Family B: per-line ignores or accept the noise?
 - [ ] **Phase 3** — workbench + scripts source fixes (~36 source errors).  Pure-CPython trees, no embedded constraints, normal narrowing rewrites are fine.  Independent of the Family B/C call.

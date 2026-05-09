@@ -131,6 +131,14 @@ class _State:
 
     __slots__ = ("received_at_ms", "sensor_id", "value")
 
+    # Annotations widen the inferred Optional types — `__init__` binds
+    # `None` initially, the `/api/sensor` handler later writes an `int` /
+    # `str` / `float`.  Annotations are stripped at compile time on
+    # CircuitPython and MicroPython, so this carries zero runtime cost.
+    received_at_ms: int | None
+    sensor_id: str | None
+    value: float | None
+
     def __init__(self):
         self.sensor_id = None
         self.value = None

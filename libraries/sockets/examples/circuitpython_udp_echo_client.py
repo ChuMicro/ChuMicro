@@ -53,6 +53,7 @@ while True:
     if (time.monotonic_ns() // 1_000_000) > deadline_ms:
         print("TIMEOUT")
         break
+    sender = None
     try:
         n_received, sender = sock.recvfrom_into(buffer)
     except OSError:

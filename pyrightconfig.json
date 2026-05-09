@@ -1,6 +1,11 @@
 {
   "pythonVersion": "3.11",
   "reportMissingModuleSource": "none",
+  "ignore": [
+    "**/tests/**",
+    "**/functional_tests/**",
+    "support/test_harness/src/chumicro_test_harness/runner.py"
+  ],
   "extraPaths": [
     "support/test_harness/src",
     "libraries/compat/src",
