@@ -57,7 +57,12 @@ def _extract_traceback(output: str) -> str | None:
     return matches[-1].rstrip() if matches else None
 
 
-def _deploy_files_kwargs(device: Device, entrypoint: str) -> dict[str, str]:
+def _deploy_files_kwargs(
+    device: Device,
+    entrypoint: str,
+    *,
+    tail_seconds: float | None = None,
+) -> dict[str, object]:
     """Compute transport-specific kwargs for :meth:`TransportProtocol.deploy_files`.
 
     MicroPython flash deploys with entrypoint ``/main.py`` opt into the
@@ -68,14 +73,22 @@ def _deploy_files_kwargs(device: Device, entrypoint: str) -> dict[str, str]:
     CP doesn't accept ``follow``, and MP RAM / test-harness deploys
     want ``follow="exec"`` because their entrypoints return cleanly
     and the EOF marker fires.
+
+    *tail_seconds* is CP-only — it tunes how long
+    :meth:`CircuitpythonTransport._read_code_py_output` waits for
+    boot-time prints before exiting.  MP transports ignore it
+    (mpremote follow mode owns its own timing).
     """
+    kwargs: dict[str, object] = {}
     if (
         device.transport == Runtime.MICROPYTHON
         and device.deploy_mode == DeployMode.FLASH
         and entrypoint.lstrip("/") == "main.py"
     ):
-        return {"follow": "soft_reboot"}
-    return {}
+        kwargs["follow"] = "soft_reboot"
+    if tail_seconds is not None and device.transport == Runtime.CIRCUITPYTHON:
+        kwargs["tail_seconds"] = tail_seconds
+    return kwargs
 
 
 class Deployer:
@@ -168,6 +181,7 @@ class Deployer:
         on_file_deleted: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         on_preflight_message: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> DeployResult:
         """Diff-deploy *source* — delete stale in-scope files, then deploy.
 
@@ -251,7 +265,9 @@ class Deployer:
                             on_file_deleted(path)
                     transport.delete_files(stale)
             _report(0.3, "staging")
-            kwargs = _deploy_files_kwargs(effective_device, entrypoint)
+            kwargs = _deploy_files_kwargs(
+                effective_device, entrypoint, tail_seconds=tail_seconds,
+            )
             output = transport.deploy_files(
                 files,
                 entrypoint,
@@ -281,6 +297,7 @@ class Deployer:
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         on_preflight_message: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> DeployResult:
         """Deploy *source* to the configured device and run its entrypoint.
 
@@ -334,7 +351,9 @@ class Deployer:
             files = source.files()
             entrypoint = source.entrypoint()
             _report(0.2, "staging")
-            kwargs = _deploy_files_kwargs(effective_device, entrypoint)
+            kwargs = _deploy_files_kwargs(
+                effective_device, entrypoint, tail_seconds=tail_seconds,
+            )
             output = transport.deploy_files(
                 files,
                 entrypoint,
