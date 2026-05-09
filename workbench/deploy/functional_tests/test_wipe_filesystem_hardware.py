@@ -213,7 +213,8 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
     )
     assert plant_result.success, plant_result.execute_output
     assert sentinel.is_file(), (
-        f"sentinel did not land via deploy: {sorted(p.name for p in drive_path.iterdir())}"
+        f"sentinel did not land via deploy: "
+        f"{sorted(child.name for child in drive_path.iterdir())}"
     )
 
     transport = CircuitpythonTransport(
