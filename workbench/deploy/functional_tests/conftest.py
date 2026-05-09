@@ -25,6 +25,31 @@ from chumicro_deploy import (
     DeviceEntry,
     load_device_registry,
 )
+from chumicro_deploy.macos_fskit import (
+    MACOS_FSKIT_RECOVERY_COMMAND,
+    detect_fskit_wedge,
+)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _check_fskit_wedge_at_session_start() -> None:
+    """Skip the whole suite if macOS FSKit is wedged before tests start.
+
+    A pre-existing wedge would otherwise turn the suite into a 10+
+    second-per-test failure cascade on every flash-mode test
+    (CIRCUITPY drives never appear; ``_resolve_circuitpy_drive`` waits
+    out its budget on every call).  Detecting once at session start
+    fails fast with the recovery command instead.
+
+    No-op on non-macOS — :func:`detect_fskit_wedge` returns False on
+    every other platform.
+    """
+    if detect_fskit_wedge():
+        pytest.skip(
+            "macOS FSKit is wedged before the functional suite starts.  "
+            "Clear it before retrying:\n"
+            f"    {MACOS_FSKIT_RECOVERY_COMMAND}",
+        )
 
 
 def _load_registry_or_skip() -> tuple[list[DeviceEntry], DeviceDefaults]:
