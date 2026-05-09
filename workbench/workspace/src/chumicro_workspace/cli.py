@@ -33,6 +33,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,6 +56,10 @@ from chumicro_deploy.config.devices_yaml import (
 from chumicro_deploy.firmware_url import (
     UnresolvedFirmwareError,
     derive_firmware_url,
+)
+from chumicro_deploy.macos_fskit import (
+    MACOS_FSKIT_RECOVERY_COMMAND,
+    detect_fskit_wedge,
 )
 
 from chumicro_workspace.boot_shim import (
@@ -1513,6 +1518,11 @@ def _cmd_status(args: argparse.Namespace) -> int:
 def _cmd_doctor(args: argparse.Namespace) -> int:
     """Strict sibling of ``status`` — adds AST + Python-version checks.
 
+    With ``--fix-fskit-wedge`` dispatches to the macOS FSKit recovery
+    wrapper instead of the static checks.  That path has no workspace
+    dependency — wedge detection + the killall recovery don't touch
+    workspace state.
+
     On top of ``status``'s four checks, ``doctor`` runs:
 
     * ``check_python_version`` — is the host Python on a supported
@@ -1531,8 +1541,108 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     address``) are deferred until we have a hardware-cheap probe
     primitive that can run without blocking the static checks.
     """
+    if getattr(args, "fix_fskit_wedge", False):
+        return _fix_fskit_wedge()
     workspace = _resolve_workspace(args)
     return _print_health_findings(workspace, collect_doctor_findings(workspace))
+
+
+#: Distinct exit codes for the ``--fix-fskit-wedge`` path so scripted
+#: callers can tell *why* the wrapper refused to run.  ``0`` is wedge
+#: cleared; ``1`` (default) is reserved for genuine command-failure
+#: paths the runner picks up.
+_FSKIT_FIX_EXIT_NOT_DARWIN = 2
+_FSKIT_FIX_EXIT_NOT_WEDGED = 3
+_FSKIT_FIX_EXIT_NO_TTY = 4
+_FSKIT_FIX_EXIT_NO_SUDO = 5
+_FSKIT_FIX_EXIT_PERSISTS = 6
+
+
+def _fix_fskit_wedge() -> int:
+    """Opt-in sudo wrapper around :data:`MACOS_FSKIT_RECOVERY_COMMAND`.
+
+    Refuses on non-macOS, when no wedge is detected (per the Item 4
+    caveat — running the killall on a healthy system damages mounted
+    volumes), when stdin/stderr are not a TTY (sudo can't prompt for
+    a password), or when ``sudo`` is not on PATH.  When all checks
+    pass, runs the killall, settles 2 s, re-runs detection, and
+    reports.  Distinct exit codes per refusal class so scripted
+    callers can branch.
+    """
+    if sys.platform != "darwin":
+        print(
+            "[chumicro-workspace] FSKit wedge recovery is macOS-only.",
+            file=sys.stderr,
+        )
+        return _FSKIT_FIX_EXIT_NOT_DARWIN
+
+    if not detect_fskit_wedge():
+        print(
+            "[chumicro-workspace] No FSKit wedge detected — refusing "
+            "to run the recovery command.\n"
+            "Running it on a healthy system kills daemons mid-"
+            "operation on mounted volumes and leaves them in an "
+            "I/O-error state that needs physical replug to recover.",
+            file=sys.stderr,
+        )
+        return _FSKIT_FIX_EXIT_NOT_WEDGED
+
+    # sudo prompts for the password on stderr by default.  If either
+    # stdin (where it reads the password) or stderr (where it writes
+    # the prompt) is not a TTY, the prompt either silently hangs or
+    # the user can't see it.  Refuse and surface the paste fallback.
+    if not sys.stdin.isatty() or not sys.stderr.isatty():
+        print(
+            "[chumicro-workspace] Cannot prompt for sudo on a non-"
+            "interactive shell.  Paste this into a Terminal tab "
+            f"manually:\n    {MACOS_FSKIT_RECOVERY_COMMAND}",
+            file=sys.stderr,
+        )
+        return _FSKIT_FIX_EXIT_NO_TTY
+
+    if shutil.which("sudo") is None:
+        print(
+            "[chumicro-workspace] `sudo` is not on PATH.  Paste this "
+            f"manually:\n    {MACOS_FSKIT_RECOVERY_COMMAND}",
+            file=sys.stderr,
+        )
+        return _FSKIT_FIX_EXIT_NO_SUDO
+
+    print(
+        "[chumicro-workspace] FSKit wedge detected.  Running recovery "
+        "(sudo will prompt for your password).",
+    )
+    # MACOS_FSKIT_RECOVERY_COMMAND is the literal "sudo killall -9
+    # <daemon> <daemon> ..." line; whitespace-split is safe — the
+    # constant has no quoting / shell metacharacters.
+    completed = subprocess.run(  # noqa: S603 — argv from a vetted constant
+        MACOS_FSKIT_RECOVERY_COMMAND.split(),
+        check=False,
+    )
+    if completed.returncode != 0:
+        print(
+            "[chumicro-workspace] Recovery command failed (exit "
+            f"{completed.returncode}).  Reboot is the always-safe "
+            "alternative.",
+            file=sys.stderr,
+        )
+        return completed.returncode
+
+    # Daemons respawn under launchd; give them a beat before
+    # re-checking so the detector doesn't catch the gap between the
+    # killall returning and the new ``diskarbitrationd`` registering
+    # its process state.
+    time.sleep(2.0)
+    if detect_fskit_wedge():
+        print(
+            "[chumicro-workspace] Wedge persists after killall.  "
+            "Reboot is the always-safe alternative.",
+            file=sys.stderr,
+        )
+        return _FSKIT_FIX_EXIT_PERSISTS
+
+    print("[chumicro-workspace] FSKit wedge cleared.")
+    return 0
 
 
 #: Built-in demo payload — Step 5 of the beginner-onramp workstream.
@@ -3375,6 +3485,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_workspace_arg(doctor_parser)
+    doctor_parser.add_argument(
+        "--fix-fskit-wedge",
+        action="store_true",
+        dest="fix_fskit_wedge",
+        help=(
+            "macOS only.  Detect the FSKit wedge and, if present, "
+            "run the sudo killall recovery command for you (sudo "
+            "prompts for your password inline).  Refuses to run "
+            "when no wedge is detected — running the recovery on a "
+            "healthy system damages mounted volumes."
+        ),
+    )
     doctor_parser.set_defaults(func=_cmd_doctor)
 
     # ----- demo ----------------------------------------------------------

@@ -52,9 +52,9 @@ Source-side wiring shipped in two places:
 - `_wait_for_circuitpy_remount`'s timeout error message in `circuitpython_transport.py` was rephrased to "CIRCUITPY drive not mounted at {path} within {N}s of storage.erase_filesystem(); last error: ..." so the substring matches `_CIRCUITPY_DRIVE_PATTERNS["circuitpy drive not mounted"]` in `recovery.py`.  The classifier now routes the timeout to `CIRCUITPY_DRIVE_MISSING`, which `_RecoveringDeployer._resolve_kind` promotes to `MACOS_FSKIT_WEDGED` when `detect_fskit_wedge()` reports True.  `test_wipe_filesystem_remount_timeout_promotes_to_fskit_wedged` proves the chain end-to-end through `InteractiveDeployer`.  The serial-reconnect timeout earlier in `wipe_filesystem` deliberately stays port-shaped — that's a USB-CDC issue, not the FAT-remount-stall signature of an FSKit wedge.
 - `workbench/deploy/functional_tests/conftest.py` got a session-scoped autouse fixture that calls `detect_fskit_wedge()` once at session start and `pytest.skip`s the entire suite with the killall recovery command if wedged.  No-op on non-macOS.  Without this, a pre-existing wedge turned the suite into a 10-second-per-test failure cascade.
 
-**Out of scope (deliberate):** `chumicro-workspace doctor --fix-fskit-wedge`.  The workstream listed it as a future option, but `macos_fskit.py:22-25` deliberately keeps auto-running sudo human-in-the-loop.  Adding an opt-in `--yes-please-sudo` flag is its own ADR-worthy decision.
+**`chumicro-workspace doctor --fix-fskit-wedge` shipped same-session.**  The opt-in sudo wrapper lives in `workbench/workspace/src/chumicro_workspace/cli.py` (`_fix_fskit_wedge`).  Detect → refuse-if-not-wedged (per Item 4 caveat) → refuse on non-darwin / non-TTY / no-sudo → run `subprocess.run(MACOS_FSKIT_RECOVERY_COMMAND.split())` so sudo prompts inline → settle 2 s → re-detect → report.  Distinct exit codes (2 non-darwin, 3 not-wedged, 4 no-tty, 5 no-sudo, 6 wedge persists) for scripted callers.  Seven unit tests in `TestDoctorFixFskitWedge` cover each branch with stubbed subprocess + detector.  Doc note added to `docs/troubleshooting/macos-circuitpy.md`.
 
-**Bench validation pending:** Item 5 — without a deliberate FSKit wedge on a fresh boot, the new wiring's success path is unit-tested but not hardware-validated.  See Item 5 below for the runbook.
+**Bench validation pending:** Item 5 — without a deliberate FSKit wedge on a fresh boot, the timeout-message wiring + the wrapper's killall round-trip are unit-tested but not hardware-validated.  See Item 5 below for the runbook.
 
 ## Item 3 — Suite-state wipe failure — **DONE 2026-05-09**
 
@@ -132,8 +132,11 @@ python -c "from chumicro_deploy.macos_fskit import detect_fskit_wedge; print(det
 ps -o state= -p $(pgrep diskarbitrationd)
 # expected: contains "U"
 
-# Run the recovery — paste in a real Terminal.app tab, NOT through the Claude Code `!` prefix
-# (the !-prefix shell has no TTY so sudo can't read a password through it):
+# Run the recovery.  Either paste the killall manually in a real Terminal.app tab,
+# or use the wrapper (also from a real Terminal — sudo needs a TTY for the password
+# prompt either way):
+chumicro-workspace doctor --fix-fskit-wedge
+# OR equivalently:
 sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd fskit_agent diskarbitrationd DiskArbitrationAgent
 
 # Wait 1-2 seconds for daemons to respawn, then unplug + replug both boards if drives haven't reappeared.

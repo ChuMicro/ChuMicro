@@ -1791,6 +1791,170 @@ class TestDoctor:
         assert "back-porch" in out
 
 
+class TestDoctorFixFskitWedge:
+    """`doctor --fix-fskit-wedge` is the opt-in sudo wrapper around
+    `MACOS_FSKIT_RECOVERY_COMMAND`.  Refuse rules cover non-darwin /
+    not-wedged / no-tty / no-sudo; happy path runs the killall and
+    re-checks; persisting wedge after killall surfaces a reboot hint.
+    """
+
+    def _patch_environment(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        platform: str = "darwin",
+        wedge_states: list[bool] | None = None,
+        sudo_on_path: bool = True,
+        stdin_tty: bool = True,
+        stderr_tty: bool = True,
+        run_returncode: int = 0,
+    ) -> tuple[list[list[str]], list[bool]]:
+        """Stub everything the wrapper touches.
+
+        Returns ``(recorded_argv, detect_calls)`` so tests can assert
+        the killall was invoked with the expected argv and the detector
+        was polled the expected number of times (refuse paths poll once;
+        the happy path polls twice — pre + post killall).
+        """
+        monkeypatch.setattr(cli.sys, "platform", platform)
+        states = list(wedge_states) if wedge_states is not None else [False]
+        detect_calls: list[bool] = []
+
+        def fake_detect() -> bool:
+            value = states.pop(0) if states else False
+            detect_calls.append(value)
+            return value
+
+        monkeypatch.setattr(cli, "detect_fskit_wedge", fake_detect)
+        monkeypatch.setattr(
+            cli.shutil, "which",
+            lambda name: "/usr/bin/sudo" if sudo_on_path else None,
+        )
+        # Patch isatty in place on whatever pytest has installed — it
+        # may be the real terminal, capsys's CaptureFixture wrapper, or
+        # a regular file.  Replacing the whole stream object breaks
+        # pytest's stderr capture and the wrapper's print-to-stderr
+        # error paths.
+        monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: stdin_tty)
+        monkeypatch.setattr(cli.sys.stderr, "isatty", lambda: stderr_tty)
+
+        recorded: list[list[str]] = []
+
+        def fake_run(args: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+            recorded.append(args)
+            return subprocess.CompletedProcess(args, run_returncode)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        # Skip the 2-second settle.
+        monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
+        return recorded, detect_calls
+
+    def test_refuses_on_non_darwin(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        recorded, detect_calls = self._patch_environment(
+            monkeypatch, platform="linux",
+        )
+        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        assert exit_code == 2
+        assert recorded == []  # no killall on non-mac
+        assert detect_calls == []  # detector never even queried
+        assert "macOS-only" in capsys.readouterr().err
+
+    def test_refuses_when_no_wedge_detected(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # Wedge detector returns False — running the recovery on a
+        # healthy system damages mounted volumes (Item 4 caveat).
+        recorded, detect_calls = self._patch_environment(
+            monkeypatch, wedge_states=[False],
+        )
+        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        assert exit_code == 3
+        assert recorded == []
+        assert detect_calls == [False]
+        stderr_text = capsys.readouterr().err
+        assert "No FSKit wedge detected" in stderr_text
+        assert "physical replug" in stderr_text
+
+    def test_refuses_when_stdin_not_tty(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        recorded, _ = self._patch_environment(
+            monkeypatch, wedge_states=[True], stdin_tty=False,
+        )
+        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        assert exit_code == 4
+        assert recorded == []
+        stderr_text = capsys.readouterr().err
+        assert "non-interactive" in stderr_text
+        # The paste fallback must surface the literal recovery
+        # constant so the user can copy it into a Terminal tab.
+        assert "sudo killall -9" in stderr_text
+
+    def test_refuses_when_sudo_not_on_path(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        recorded, _ = self._patch_environment(
+            monkeypatch, wedge_states=[True], sudo_on_path=False,
+        )
+        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        assert exit_code == 5
+        assert recorded == []
+        assert "`sudo` is not on PATH" in capsys.readouterr().err
+
+    def test_happy_path_runs_killall_and_clears(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # Wedge detected first call (gate), cleared on second (post-killall).
+        recorded, detect_calls = self._patch_environment(
+            monkeypatch, wedge_states=[True, False],
+        )
+        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        assert exit_code == 0
+        # killall invoked with the literal constant's argv form.
+        assert len(recorded) == 1
+        assert recorded[0][0] == "sudo"
+        assert recorded[0][1] == "killall"
+        assert "diskarbitrationd" in recorded[0]
+        assert "DiskArbitrationAgent" in recorded[0]
+        assert detect_calls == [True, False]
+        out = capsys.readouterr().out
+        assert "FSKit wedge detected" in out
+        assert "FSKit wedge cleared" in out
+
+    def test_persists_after_killall_surfaces_reboot_hint(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # Wedge stays True both before and after the killall.
+        recorded, detect_calls = self._patch_environment(
+            monkeypatch, wedge_states=[True, True],
+        )
+        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        assert exit_code == 6
+        assert len(recorded) == 1  # killall did run
+        assert detect_calls == [True, True]
+        stderr_text = capsys.readouterr().err
+        assert "persists" in stderr_text
+        assert "Reboot" in stderr_text
+
+    def test_killall_failure_propagates_exit_code(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # subprocess.run returns 130 (sudo password cancel) — propagate
+        # without claiming the wedge cleared.
+        recorded, detect_calls = self._patch_environment(
+            monkeypatch, wedge_states=[True], run_returncode=130,
+        )
+        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        assert exit_code == 130
+        assert len(recorded) == 1
+        # Detector polled once (the gate).  Failed killall short-
+        # circuits before the post-settle re-check.
+        assert detect_calls == [True]
+        assert "Recovery command failed" in capsys.readouterr().err
+
+
 class TestProjectsTreeView:
     """Slice 4 — `projects` defaults to a Unicode tree, `--flat` keeps the list."""
 
