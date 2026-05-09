@@ -1,8 +1,23 @@
 # Workstream: Multi-board CP deploy + FSKit recovery follow-ups
 
-Status: **partly shipped.**  Items 1 and 3 landed 2026-05-09 in this same investigation session — the deeper pass found both bugs reproducibly and fixed them.  Items 2, 4, and 5 remain open.  Each item below names the *evidence*, the *current thinking*, and (for the open ones) *what the next session should verify*.
+Status: **partly shipped.**  Items 1 and 3 landed 2026-05-09 in this same investigation session — the deeper pass found both bugs reproducibly and fixed them.  Items 2, 4, 5, and the newly-surfaced Item 6 remain open.  Each item below names the *evidence*, the *current thinking*, and (for the open ones) *what the next session should verify*.
 
-This workstream exists because the deploy-reliability session ran out of cycles to test the hypotheses cleanly, and several of them touch one another (e.g. wedge recovery wiring depends on what the wipe-test failure mode actually is, which depends on the suite-state hypothesis).  Tackle them in the order below — earlier items inform later ones.
+## For the new session — pickup checklist
+
+1. `git --no-pager log --oneline -10` — last five commits on `main` (`5246a1b` workstream park → `a2f60b1` framing fix) are the rollover from the 2026-05-09 investigation.  Read commit messages `8e39847` (Item 3 fix), `bbe45e7` (Item 1 fix), and `a2f60b1` (Item 3/Item 6 framing correction) — they cover the evidence + reasoning.
+2. Read this whole file.  Pay special attention to:
+   - **Item 2** — the wedge-detection wiring is now *purely defensive* against a real macOS FSKit wedge during a wipe.  It is NOT the cause of the Item 3 wipe failure (Item 3 disproved that — see Item 3's body).
+   - **Item 6** — the proof-of-life check that would have made Item 3 a loud error instead of a silent assertion failure.  User-preferred shape: stop swallowing `_send_repl_command` exceptions in `wipe_filesystem`, surface what the device actually returned.
+   - **Operational notes** at the bottom — load-bearing for any bench-touching work.
+3. Suggested order: **Item 6 first** (durable defense; Item 2 onwards becomes easier to reason about once a pre-empted wipe is a loud error), then Item 2, Item 4, Item 5.
+4. Bench artefacts from the 2026-05-09 investigation live under `.scratch/` (gitignored) — useful as a reference for what worked / failed:
+   - `repro_wipe_byte_trace.py` — first byte-traced repro showing `OK` + post-soft-reboot artifacts.
+   - `repro_suite_wipe_bytes.py` — instrumented `_send_repl_command` showing autoreload-off succeeds and the next `erase_filesystem` is still pre-empted.
+   - `repro_with_settle_delay.py` — proves a 2.0 s sleep between sentinel write and `connect()` lets the wipe succeed (the empirical test that anchored the soft-reboot-pre-empt finding).
+   - `repro_wipe_uuid_check.py` — diskutil-based volume-UUID before/after compare proving the FAT is genuinely never reformatted.
+   - `wipe_fix_full_suite.log` — full 16-test functional-suite green run after the Item 3 fix.
+
+This workstream exists because the deploy-reliability session ran out of cycles to test the hypotheses cleanly, and several of them touch one another (e.g. wedge recovery wiring depends on what the wipe-test failure mode actually is, which depends on the suite-state hypothesis).  Tackle them in the order suggested above — Item 6 unblocks loud diagnosis for the others.
 
 ## Item 1 — `list_files_in_scope` and `delete_files` skip the drive auto-correct — **DONE 2026-05-09**
 
@@ -31,6 +46,8 @@ Original observation kept below for context.
 
 ## Item 2 — `detect_fskit_wedge` is only wired into `InteractiveDeployer`
 
+> **Important reframing post-Item-3:** Item 3's investigation *disproved* the original hypothesis that the suite-mode wipe failure was an FSKit wedge.  The wipe-test was being pre-empted by a soft-reboot from the test's own host-side direct write; nothing to do with the macOS FSKit kernel-wait state.  Item 2's wedge wiring is therefore **purely defensive** — it catches a *real* macOS FSKit wedge that happens during a wipe (a separate failure class from Item 3), so users see "the FSKit recovery dance" instead of a generic-timeout error.  Lower-priority than Item 6.
+
 **Evidence:**
 - `grep -rn "detect_fskit_wedge" workbench/deploy/src/` shows two call sites:
   - `recovery.py:639` — `_RecoveringDeployer.__init__` accepts a `fskit_wedge_detector` callable, defaults to `detect_fskit_wedge`.
@@ -41,15 +58,16 @@ Original observation kept below for context.
   - `workbench/deploy/functional_tests/conftest.py` — tests connect to transports directly (bypassing `Deployer`), so they bypass the wedge promotion.
   - `chumicro-workspace doctor` — could detect proactively rather than waiting for a failure.
 
-**Current thinking (NOT verified):**
-- The wipe-test failure that hit during the 2026-05-09 sweep (`test_circuitpython_wipe_reformats_circuitpy_drive`) returned a generic "did not become usable within 10s" message after the fskit wedge had silently triggered.  If `wipe_filesystem`'s timeout path called `detect_fskit_wedge()` and raised a `MACOS_FSKIT_WEDGED`-classified error, the test could `pytest.skip(...)` with the actionable recovery command instead of failing.
-- For the functional test conftest: a session-scoped `autouse` fixture that calls `detect_fskit_wedge()` at session start and skips the whole flash-mode suite with the recovery command would prevent every flash test from failing individually with a generic error.
-- `chumicro-workspace doctor --fix-fskit-wedge` could shell out via `subprocess.run(..., check=False)` so the user gets a single password prompt instead of needing to paste.  Risk: auto-running sudo is a blast-radius decision; per `macos_fskit.py:24` the existing module deliberately doesn't auto-run.  An opt-in `--yes-please-sudo` flag (or just printing "this is what we'd run; type your password") might be the right shape.
+**Current thinking (revised post-Item-3):**
+- A *real* FSKit wedge during a wipe would show up as `_wait_for_circuitpy_remount`'s 10 s timeout: USB-CDC came back but the FAT volume never remounted because diskarbitrationd is stuck in `Us`.  The current code raises a generic message there.  If that timeout path called `detect_fskit_wedge()` and raised a `MACOS_FSKIT_WEDGED`-classified error, the user / test would see the actionable recovery command instead of a generic timeout.
+- For the functional test conftest: a session-scoped `autouse` fixture that calls `detect_fskit_wedge()` at session start and skips the whole flash-mode suite with the recovery command would catch a pre-existing wedge before the suite starts a long, noisy failure cascade.
+- `chumicro-workspace doctor --fix-fskit-wedge` could shell out via `subprocess.run(..., check=False)` so the user gets a single password prompt instead of needing to paste.  Risk: auto-running sudo is a blast-radius decision; per `macos_fskit.py:22-25` the existing module deliberately doesn't auto-run.  An opt-in `--yes-please-sudo` flag (or just printing "this is what we'd run; type your password") might be the right shape.
 
 **What to verify:**
 1. What's the correct exception-type promotion path for `wipe_filesystem` to surface `MACOS_FSKIT_WEDGED`?  The transport currently raises `CircuitpythonTransportError` and the classifier in `recovery.py` maps from message strings — adding the right marker substring may be enough without restructuring.
-2. Does the functional test conftest already have a wedge-detection hook somewhere that I missed?  Worth a `grep -rn "fskit\|wedge" workbench/deploy/functional_tests/`.
+2. Does the functional test conftest already have a wedge-detection hook somewhere that's just not running?  Worth a `grep -rn "fskit\|wedge" workbench/deploy/functional_tests/`.
 3. Is "auto-run sudo on user opt-in" actually wanted?  `macos_fskit.py:22-25` is opinionated against it; ADR-worthy to revisit if we're going to wire it in.
+4. Item 5's "trigger a wedge deliberately on a fresh boot" is the bench prerequisite — without a way to deliberately wedge the system, none of the wiring above can be end-to-end validated.
 
 ## Item 3 — Suite-state wipe failure — **DONE 2026-05-09**
 
@@ -124,18 +142,42 @@ When `storage.erase_filesystem()` runs to completion, the script executes `usb_d
 Two reasonable defenses:
 
 - Compare volume UUID before / after.  Definitive signal — UUID changes iff the FAT was reformatted.  macOS-aware (`diskutil info Volume\ UUID`); other OSes need an alternate path.
-- Stop swallowing `_send_repl_command` exceptions.  Surface the actual raw-REPL response when the wipe was pre-empted, so callers see *what* the device returned (the Done-title + fresh raw-REPL banner pattern that signals a soft-reboot fired before the reformat).  More general but noisier; needs care because the *successful* erase_filesystem path also raises (USB-CDC drops mid-call before the response arrives).  User's preferred direction during the Item 3 investigation.
+- Stop swallowing `_send_repl_command` exceptions.  Surface the actual raw-REPL response when the wipe was pre-empted, so callers see *what* the device returned (the Done-title + fresh raw-REPL banner pattern that signals a soft-reboot fired before the reformat).  More general but noisier; needs care because the *successful* erase_filesystem path also raises (USB-CDC drops mid-call before the response arrives).  **User's preferred direction** during the Item 3 investigation.
 
 Either fix converts a silent pre-empted-wipe into a loud error so future causes can't hide the same way.  Out of scope for the Item 3 fix that landed; tracked here for a follow-up.
+
+**Sketched shape (preferred, "stop swallowing"):**
+
+In `CircuitpythonTransport.wipe_filesystem()` (around line 1569-1574 today):
+
+```python
+# Today
+try:
+    self._send_repl_command("import storage\nstorage.erase_filesystem()\n")
+except Exception:  # noqa: BLE001 — reboot kills the REPL mid-call
+    pass
+```
+
+The fix needs to distinguish two outcomes:
+
+- **Successful erase** — the reformat triggered `mcu_reset()`, USB-CDC dropped mid-call, `_read_until` idle-timed-out with `b"OK"` (or partial bytes ending without `\x04>`), parse failed with "Malformed raw REPL response (missing \x04 markers)".  This case is fine — the reset is the proof-of-success.
+- **Pre-empted erase** — the script was interrupted by a soft-reboot before the `usb_disconnect` step.  USB-CDC stayed alive, the read returned post-soft-reboot artifacts (`OK\r\n\x1b]0;...| Done |...\x1b\\raw REPL; CTRL-B to exit\r\n>`), parse failed with the same "Malformed raw REPL response" message.  This case is the one we want to surface as `WipeFailedError("erase_filesystem was pre-empted by a soft-reboot before reformatting; raw response: ...")`.
+
+Both fail the parse the same way today; the byte sequences are different though.  The successful-erase response will end with the partial bytes the device emitted before its USB-CDC went away — typically `b"OK"` followed by silence.  The pre-empted-erase response will contain the full Done-title + raw-REPL-banner sequence.  Distinguishing rule:
+
+- Response contains `b"raw REPL; CTRL-B to exit"` → board re-entered raw REPL → soft-reboot fired → wipe was pre-empted → raise loudly with the raw response in the message.
+- Response is shorter or stops before any banner → consistent with USB-CDC drop → trust the existing reconnect path.
+
+A unit test can stub `_send_repl_command` to raise with the pre-empted-shape bytes and assert `wipe_filesystem` raises the new error class; another stub returns the partial-OK shape and asserts `wipe_filesystem` proceeds to the reconnect loop.  Functional bench validation: re-run the pre-2026-05-09 broken `test_circuitpython_wipe_reformats_circuitpy_drive` (host-side `sentinel.write_bytes`) on a temporary git stash and confirm `wipe_filesystem` now raises with the actionable message; then with the current deployer-shaped test, confirm the success path stays clean.
 
 ## Suggested order
 
 1. ~~**Item 1**~~ — done.
 2. ~~**Item 3**~~ — done.
-3. **Item 2** (wedge-detection wiring) — scope is now clearer: Item 3 disproved that the wipe-failure was wedge-related, so the wedge-detection wiring is purely defensive (catches a real macOS FSKit wedge that happens during a wipe, separate failure class).
+3. **Item 6** (proof-of-life in `wipe_filesystem`) — do this *first*.  The "stop swallowing" sketch above is roughly an afternoon's work + a unit test; it converts every future cause-of-pre-empted-wipe (and probably some unknown ones) into a loud actionable error.  Lands without a hardware bench session.
 4. **Item 4** (doc note) — cheap, lands once we're confident about Item 5.
-5. **Item 5** (end-to-end bench validation) — should happen alongside any of the above that need a wedge-induced repro.
-6. **Item 6** (proof-of-life in `wipe_filesystem`) — durable defense against future no-op-wipe causes.
+5. **Item 2** (wedge-detection wiring) — scope clearer post-Item-3: purely defensive against a real macOS FSKit wedge during a wipe, not the cause of any known failure.  Lower priority.
+6. **Item 5** (end-to-end bench validation of recovery command) — needs a deliberate FSKit wedge on a fresh boot, which is the gating bench prerequisite.  Pair with Item 2 work.
 
 ## Triggered by
 
