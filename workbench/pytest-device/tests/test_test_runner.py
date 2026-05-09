@@ -148,8 +148,8 @@ class TestCreateTransport:
     def test_default_deploy_mode_is_flash(self) -> None:
         """Default deploy mode (from device entry) should be flash → copy.
 
-        Decision 0047 — flash is the production-shaped default.  RAM mode
-        stays available as opt-in via per-device or CLI override.
+        Flash is the production-shaped default; RAM mode stays
+        available as opt-in via per-device or CLI override.
         """
         entry = self._make_device_entry(runtime="micropython")
         transport = device_testing.create_transport(entry)
@@ -492,7 +492,7 @@ class TestResolveEffectiveDeployMode:
 
     def test_defaults_to_flash_when_device_entry_field_empty(self) -> None:
         """Belt-and-braces: an empty ``deploy_mode`` falls back to flash
-        per Decision 0047 (flash is the production-shaped default).
+        (the production-shaped default).
         """
         device = DeviceEntry(
             identifier="d", runtime="micropython", address="/dev/a",

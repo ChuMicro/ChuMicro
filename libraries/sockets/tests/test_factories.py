@@ -12,8 +12,6 @@ tests stub the per-runtime adapter modules (or stdlib ``socket`` /
 CPython-only tests — real loopback sockets, real TLS handshakes,
 ``cryptography``-minted certs, real stdlib ``ssl`` / ``socket``
 patching — live in the sibling ``test_factories_pytest.py``.
-
-See Decision 0016 for the cross-runtime test policy.
 """
 
 import sys
@@ -382,8 +380,8 @@ class TestCPythonTLSDefaultContextRouting:
     """``tls_client_socket(context=None)`` on CPython routes through ``ssl.create_default_context``.
 
     The CPython adapter does ``import socket`` + ``import ssl`` lazily
-    (inside the function body, after Decision 0021's lazy-import
-    refactor).  We stub both via ``sys.modules`` so the test runs on
+    (inside the function body).  We stub both via ``sys.modules`` so
+    the test runs on
     every runtime — the CP unix-port doesn't ship working stdlib
     ``ssl`` (the build-flag enable only unlocks ``hashlib.sha1`` /
     ``hashlib.md5``, not the ``ssl`` shim, which still ImportErrors

@@ -15,8 +15,6 @@ on CPython.
 
 Live-board verified on Pi Pico W CP — see commit ``b7a98b8`` for the
 probe transcript.
-
-See Decision 0016 for the cross-runtime test policy.
 """
 
 from chumicro_websockets import _wire

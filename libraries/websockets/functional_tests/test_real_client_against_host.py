@@ -164,7 +164,7 @@ def test_real_client_round_trip_against_host_echo_server() -> None:
     assert close_observed, (
         f"on_close never fired; close_observed={close_observed!r}"
     )
-    # Decision 0045 LED-blink invariant.
+    # LED-blink invariant.
     assert led_counter > 5, (
         f"LED counter only ticked {led_counter} times — "
         f"somebody block-called against the host server"

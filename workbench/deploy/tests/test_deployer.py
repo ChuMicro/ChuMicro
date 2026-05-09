@@ -237,10 +237,12 @@ class TestFlashModeRsyncGuard:
 class TestDeployerFollowKwargRouting:
     """Deployer routes ``follow="soft_reboot"`` for MP+flash+main.py only.
 
-    See Decision 0028 §MicroPython flash transport for the rule.  Other
-    paths (CP, MP RAM, MP flash with non-main.py entrypoints) keep
-    transport defaults — CP doesn't accept ``follow`` at all, and MP
-    RAM/test-harness deploys want ``follow="exec"``.
+    The MicroPython flash transport adopts CP's soft-reboot pattern
+    only for that combination, where the entrypoint may be a
+    ``while True`` body that never returns.  Other paths (CP, MP RAM,
+    MP flash with non-main.py entrypoints) keep transport defaults —
+    CP doesn't accept ``follow`` at all, and MP RAM/test-harness
+    deploys want ``follow="exec"``.
     """
 
     def _make_deployer(
@@ -321,8 +323,8 @@ class TestDeployerFollowKwargRouting:
 
 
 class TestPreflightAutoSwitch:
-    """Decision 0047 — RAM-mode deploys auto-switch to flash when the deploy
-    graph contains a library declaring ``[tool.chumicro] requires_flash = true``.
+    """RAM-mode deploys auto-switch to flash when the deploy graph
+    contains a library declaring ``[tool.chumicro] requires_flash = true``.
     """
 
     def _stage_library(

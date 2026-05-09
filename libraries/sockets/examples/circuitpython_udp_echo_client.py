@@ -6,12 +6,9 @@ the echo back.  The same shape works for any UDP request/response
 protocol — NTP, mDNS, SSDP, SNMP, application-specific.
 
 Adjust ``ECHO_HOST`` / ``ECHO_PORT`` to point at your host echo
-server.  ``libraries/sockets/functional_tests/conftest.py`` ships a
-host-side echo fixture — run the functional tests for an automated
-end-to-end validation::
-
-    python scripts/run.py test-libraries-functional --library sockets \\
-        --file test_real_udp
+server.  The ``chumicro-sockets`` functional-test suite ships a host-side
+echo fixture (``test_real_udp``) for automated end-to-end
+validation against a real board.
 
 Runs on CircuitPython only.
 

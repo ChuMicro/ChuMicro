@@ -109,14 +109,13 @@ class TestThirdPartyPortability:
         in by the fixture's import chain.  Those would indicate a
         hidden coupling the public API should not require.
 
-        Per-package ``python scripts/run.py test`` runs each pytest
-        in isolation, so a global ``sys.modules`` scan would suffice
-        there — but root-level pytest (VS Code Testing panel, bare
-        ``pytest`` from rootdir) shares one session across libraries
-        and workbench, so prior library tests would leave their own
-        ``chumicro_timing`` import in ``sys.modules`` and the global
-        scan would false-positive.  The delta scan is correct in both
-        regimes.
+        Per-package pytest invocations run in isolation, so a global
+        ``sys.modules`` scan would suffice there — but root-level
+        pytest (VS Code Testing panel, bare ``pytest`` from rootdir)
+        shares one session across libraries and workbench, so prior
+        library tests would leave their own ``chumicro_timing``
+        import in ``sys.modules`` and the global scan would
+        false-positive.  The delta scan is correct in both regimes.
         """
         baseline_modules = set(sys.modules)
         from my_template import CustomLayoutFileSource  # noqa: F401

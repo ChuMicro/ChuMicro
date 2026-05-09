@@ -385,7 +385,7 @@ class TestProjectDirectorySource:
     def test_target_runtime_drops_wrong_runtime_files(
         self, tmp_path: Path,
     ) -> None:
-        """Decision 0044 — wrong-runtime ``.py`` files are filtered out."""
+        """Wrong-runtime ``.py`` files are filtered out."""
         project_dir, secrets_toml = _seed_project_dir(tmp_path)
         # Add a CP-only adapter beside the project's app code.
         (project_dir / "_cp_only.py").write_text(

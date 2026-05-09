@@ -13,9 +13,9 @@ Credentials
 ship from the host conftest as ``/runtime_config.msgpack`` and are
 read here via ``chumicro_config.load_runtime_config()``.
 
-Verifies the canonical promise (Decision 0041): an LED-style
-counter keeps incrementing on the same loop while the server is
-mid-handshake / mid-response.  Uses HTTP only — HTTPS server
+Verifies the canonical promise: an LED-style counter keeps
+incrementing on the same loop while the server is mid-handshake /
+mid-response.  Uses HTTP only — HTTPS server
 verification on Pi Pico W CP is the documented open follow-up.
 """
 

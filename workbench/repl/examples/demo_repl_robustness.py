@@ -456,7 +456,7 @@ def main() -> int:
     except (DeviceConfigError, FileNotFoundError, OSError) as load_error:
         _print_warn(f"Couldn't load devices.yml: {load_error}")
         _print_note(
-            "Run `python scripts/run.py setup` to scaffold one, then "
+            "Run `chumicro-workspace setup` to scaffold one, then "
             "fill in your boards."
         )
         return 1

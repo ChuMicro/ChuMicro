@@ -106,7 +106,7 @@ Startup prints a dim banner identifying the connection (`chumicro-repl · /dev/c
 
 All other keystrokes pass through unchanged.  The board does its own line editing — arrow keys, backspace, history all work, but they live on the device, not the host.  No `:` commands, no Tab completion against the host catalog, no persistent history file (the device's own history scrolls inside the runtime's `>>>` prompt).
 
-Choose passthrough when you need byte-exact behaviour or when you're piping input over stdin (line mode requires interactive input from a TTY); choose line mode for everyday inner-loop work.  `--mode auto` (the default for the standalone `chumicro-repl` CLI and for `python run.py repl` from a workspace) inspects `sys.stdin.isatty()` and picks the right one.
+Choose passthrough when you need byte-exact behaviour or when you're piping input over stdin (line mode requires interactive input from a TTY); choose line mode for everyday inner-loop work.  `--mode auto` (the default for the standalone `chumicro-repl` CLI and for `chumicro-workspace repl` from a workspace) inspects `sys.stdin.isatty()` and picks the right one.
 
 ## Tail mode for deploy follow-ups
 

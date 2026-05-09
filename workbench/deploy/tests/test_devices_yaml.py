@@ -334,7 +334,7 @@ class TestUpdateFirmwareVersion:
         assert find_device(data, "pico")["firmware_version"] == "1.27.0"
 
     def test_writes_when_missing(self, tmp_path: Path) -> None:
-        """A device added before Decision 0039 has no firmware_version yet."""
+        """A device added before the firmware-floor schema has no firmware_version yet."""
         data = load_devices(tmp_path / "x.yml")
         add_device(data, device_id="pico", runtime="micropython", address="/a")
         update_device_firmware_version(data, "pico", "1.27.0")

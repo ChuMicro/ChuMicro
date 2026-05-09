@@ -5,7 +5,7 @@ from chumicro_workspace import merge_configs
 
 
 class TestMergeConfigs:
-    """Cover the merge semantics from Decision 0035 §5."""
+    """Cover the deep-merge semantics for runtime-config sources."""
 
     def test_single_source_returns_copy(self) -> None:
         source = {"wifi": {"ssid": "x"}}

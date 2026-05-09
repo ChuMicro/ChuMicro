@@ -88,7 +88,7 @@ class TestMergePackages:
         assert not (staging / "pkg" / "__pycache__").exists()
 
     def test_target_runtime_filters_marked_files(self, tmp_path: Path) -> None:
-        """Decision 0044 — wrong-runtime ``.py`` files are dropped at merge."""
+        """Wrong-runtime ``.py`` files are dropped at merge."""
         source = tmp_path / "src"
         source.mkdir()
         package = source / "pkg"
@@ -570,8 +570,8 @@ class TestFlushVolume:
     ) -> None:
         """The settle delay is applied via the injected sleep callable.
 
-        Ensures Decision 0010 constructor injection holds so flash-mode
-        tests can skip the real 0.5 s settle delay.
+        Constructor-injected sleep lets flash-mode tests skip the
+        real 0.5 s settle delay.
         """
         monkeypatch.setattr(
             "chumicro_deploy.flash_drive._sys_module.platform",

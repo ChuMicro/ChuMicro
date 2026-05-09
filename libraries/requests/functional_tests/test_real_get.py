@@ -13,10 +13,10 @@ Credentials ship from the host conftest as
 ``chumicro_config.load_runtime_config()`` — the same API user code
 uses.
 
-Verifies the canonical promise (Decision 0040): an LED-style
-counter keeps incrementing on the same loop while the request is
-in flight.  No async, no threads — the per-tick ``check`` /
-``handle`` gate cooperates with everything else on the runtime.
+Verifies the canonical promise: an LED-style counter keeps
+incrementing on the same loop while the request is in flight.
+No async, no threads — the per-tick ``check`` / ``handle`` gate
+cooperates with everything else on the runtime.
 
 Endpoint: ``http://example.com/`` is the lowest-friction stable
 HTTP endpoint — no TLS, returns a known small body, IANA-reserved
@@ -83,7 +83,7 @@ def test_real_http_get_completes_runner_shaped() -> None:
     request = client.get(_TARGET_URL, timeout_ms=_REQUEST_TIMEOUT_MS)
 
     # Drive the request + an LED-blink counter together.  The counter
-    # is the canonical Decision 0014 invariant: it MUST keep ticking
+    # is the canonical runner-shape invariant: it MUST keep ticking
     # while the request is in flight.  If it stops, somebody
     # block-called.
     led_counter = 0

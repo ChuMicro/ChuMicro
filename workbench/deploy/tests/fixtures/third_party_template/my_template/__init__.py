@@ -3,8 +3,9 @@
 Ships a custom :class:`FileSource` that reads a nonstandard project
 layout (``project/source/*.py`` + ``project/helpers/*.py`` + a
 manifest at ``project/deploy.json``).  The only chumicro dependency
-is :mod:`chumicro_deploy` — nothing from the ChuMicro mono repo
-leaks into this template.
+is :mod:`chumicro_deploy` — no other chumicro packages or
+workspace-internal modules are imported, demonstrating that the
+public API is sufficient on its own.
 """
 
 from __future__ import annotations

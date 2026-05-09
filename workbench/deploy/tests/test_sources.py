@@ -353,7 +353,7 @@ class TestImportGraphSource:
 
 
 class TestDirectorySourceTargetRuntime:
-    """Decision 0044 — ``target_runtime`` filters wrong-runtime ``.py`` files."""
+    """``target_runtime`` filters wrong-runtime ``.py`` files."""
 
     def _build_pkg(self, root: Path) -> None:
         pkg = root / "chumicro_pkg"
@@ -433,7 +433,7 @@ class TestDirectorySourceTargetRuntime:
 
 
 class TestImportGraphSourceTargetRuntime:
-    """Decision 0044 — ``target_runtime`` drops wrong-runtime modules."""
+    """``target_runtime`` drops wrong-runtime modules."""
 
     def _build_workspace(self, tmp_path: Path) -> tuple[Path, Path]:
         libs = tmp_path / "libs"

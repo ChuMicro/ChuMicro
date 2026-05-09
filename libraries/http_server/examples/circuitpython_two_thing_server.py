@@ -36,12 +36,9 @@ deploys), wifi creds fall back to the placeholder constants below
 Deploying
 =========
 
-Deploy from a chumicro fork or clone::
+Deploy with ``chumicro-workspace``::
 
-    python scripts/run.py deploy-example http_server circuitpython_two_thing_server --device <id>
-
-Or from a workspace template repo (for user-authored projects
-that follow the same example shape).
+    chumicro-workspace deploy-example http_server circuitpython_two_thing_server --device <id>
 
 Example output (server side stdout)::
 

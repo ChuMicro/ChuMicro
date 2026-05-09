@@ -29,14 +29,12 @@ placeholder constants below — edit them first.
 Deploying
 =========
 
-Deploy from a chumicro fork or clone::
+Deploy with ``chumicro-workspace``::
 
-    python scripts/run.py deploy-example requests circuitpython_periodic_get --device <id>
+    chumicro-workspace deploy-example requests circuitpython_periodic_get --device <id>
 
-Or from a workspace template repo (for user-authored projects
-that follow the same example shape).  Either path composes
-``secrets.toml`` + ``examples/config.toml`` into the staged
-``runtime_config.msgpack`` before deploying.
+The deploy composes ``secrets.toml`` + ``examples/config.toml`` into
+the staged ``runtime_config.msgpack`` before deploying.
 
 Example output::
 

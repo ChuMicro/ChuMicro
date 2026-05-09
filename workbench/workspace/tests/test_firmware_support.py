@@ -1,4 +1,4 @@
-"""Tests for the firmware-version floor check (Decision 0039)."""
+"""Tests for the firmware-version floor check."""
 
 from __future__ import annotations
 

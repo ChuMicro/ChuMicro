@@ -1,9 +1,9 @@
-"""Tests for chumicro_websockets.sockets_factory — slice 5.
+"""Tests for chumicro_websockets.sockets_factory.
 
-Verifies the Decision 0042 sub-rule wiring: the helper lives in
-its own submodule, ``__init__.py`` doesn't re-export it, and the
-returned factory routes TLS / non-TLS to the right
-:mod:`chumicro_sockets` constructor with the right arguments.
+Verifies the helper wiring: the factory lives in its own submodule,
+``__init__.py`` doesn't re-export it, and the returned factory routes
+TLS / non-TLS to the right :mod:`chumicro_sockets` constructor with
+the right arguments.
 
 Cross-runtime: pure-Python.  The original suite used
 ``unittest.mock.patch`` (CPython-only) to swap module-level symbols;
@@ -106,7 +106,7 @@ class TestSocketsFactory:
         assert tls_calls == [("h", 443, None, None)]
 
     def test_helper_not_re_exported_from_init(self):
-        """Decision 0042 sub-rule: __init__.py must NOT re-export the helper.
+        """``__init__.py`` must NOT re-export the helper.
 
         The deploy-time AST walker only follows imports referenced by the
         user's app.  If __init__.py pulled in sockets_factory.py, every

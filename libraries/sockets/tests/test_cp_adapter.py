@@ -22,8 +22,6 @@ This is the host-side complement to:
 It catches regressions in the call shapes the CP adapter expects
 ``socketpool`` to expose, plus the protocol the wrapper classes
 present back to ``chumicro-sockets`` callers.
-
-See Decision 0016 for the cross-runtime test policy.
 """
 
 import sys

@@ -1,8 +1,8 @@
 """Tests for the device-registry schema in ``chumicro_deploy.config.default``.
 
-Migrated from ``scripts/tests/test_device_config.py`` when the schema
-moved out of the mono-repo's ``scripts/`` and into the publishable
-workbench package (Decision 0032 §Rule 8).
+The schema lives in the publishable ``chumicro-deploy`` package so
+host tools that touch ``devices.yml`` don't need a workspace
+checkout to use it.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ devices:
         assert devices[0].runtime == "micropython"
         assert devices[0].address == "/dev/ttyUSB0"
         assert devices[0].description == "Test board"
-        # Decision 0047 — flash is the default when no deploy_mode is set.
+        # Flash is the default when no deploy_mode is set.
         assert devices[0].deploy_mode == "flash"
 
     def test_loads_multiple_devices(self, tmp_path) -> None:
@@ -135,7 +135,7 @@ devices:
         device = load_devices(devices_file)[0]
         assert device.connection_type == "serial"
         assert device.serial_baudrate == 115200
-        # Decision 0047 — flash is the default when no deploy_mode is set.
+        # Flash is the default when no deploy_mode is set.
         assert device.deploy_mode == "flash"
         assert device.setup_command is None
         assert device.description == ""
@@ -185,7 +185,7 @@ devices:
     address: /dev/ttyUSB0
 """)
         devices, defaults = load_device_registry(devices_file)
-        # Decision 0047 — flash is the default fall-through.
+        # Flash is the default fall-through.
         assert defaults.deploy_mode == "flash"
         assert defaults.ide_runtime == "micropython"
         assert defaults.micropython is None
@@ -231,7 +231,7 @@ class TestParseDefaults:
 
     def test_empty_dict_returns_defaults(self) -> None:
         result = _parse_defaults({})
-        # Decision 0047 — flash is the default fall-through.
+        # Flash is the default fall-through.
         assert result.deploy_mode == "flash"
         assert result.ide_runtime == "micropython"
         assert result.micropython is None

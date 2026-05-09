@@ -3283,7 +3283,7 @@ def _fake_probe_info(
 
     Default version is at the supported floor for ``micropython`` so
     tests that don't care about firmware support don't trip the
-    Decision 0039 warning path.  Tests that exercise the floor pass
+    firmware-floor warning path.  Tests that exercise the floor pass
     a lower or runtime-specific *version*.
     """
     from chumicro_deploy import DeviceImplementation
@@ -3733,7 +3733,7 @@ class TestAddDeviceAutoDefaults:
 
 
 # ---------------------------------------------------------------------------
-# add-device — firmware-version floor (Decision 0039)
+# add-device — firmware-version floor
 # ---------------------------------------------------------------------------
 
 
@@ -3770,7 +3770,7 @@ class TestAddDeviceFirmwareFloor:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Below-floor firmware: warn-not-block per Decision 0039."""
+        """Below-floor firmware: warn, don't block registration."""
         self._seed(tmp_path)
         import chumicro_deploy
 
@@ -4974,7 +4974,7 @@ class TestResetBoard:
 
 
 # ---------------------------------------------------------------------------
-# deploy-example — front-door command (Decision 0059, Phase 3)
+# deploy-example — front-door command
 # ---------------------------------------------------------------------------
 
 

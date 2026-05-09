@@ -39,15 +39,13 @@ behalf.
 Deploying
 =========
 
-Deploy from a chumicro fork or clone::
+Deploy with ``chumicro-workspace``::
 
-    python scripts/run.py deploy-example mqtt circuitpython_telemetry --device <id>
+    chumicro-workspace deploy-example mqtt circuitpython_telemetry --device <id>
 
-Or from a workspace template repo (for user-authored projects
-that follow the same example shape).  Either path composes
-``secrets.toml`` + ``examples/config.toml`` into the staged
-``runtime_config.msgpack`` and validates against the manifest
-union before deploying.
+The deploy composes ``secrets.toml`` + ``examples/config.toml`` into
+the staged ``runtime_config.msgpack`` and validates against the
+manifest union before deploying.
 
 Example output::
 

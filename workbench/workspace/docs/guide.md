@@ -10,8 +10,8 @@ A workspace has this shape:
 
 ```
 my-workspace/
-├── workspace.yml          # gitignored — defaults + library_sources + your credentials (Decisions 0035 + 0057)
-├── devices.yml            # board registry — three-zone (Decision 0029 §9)
+├── workspace.yml          # gitignored — defaults + library_sources + your credentials
+├── devices.yml            # board registry — three-zone (defaults / devices / device-credentials)
 ├── run.py                 # tiny shim: from chumicro_workspace.cli import main
 ├── pyproject.toml
 ├── projects/
@@ -40,7 +40,7 @@ Both hold code your projects can `import`.  Pick by *weight*:
 | Want to ship… | Drop it under | Imports look like | Notes |
 |---|---|---|---|
 | A 50-line helper your projects share | `shared/foo.py` | `from shared.foo import bar` | No tests, no version, no scaffolding. |
-| A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — same shape the chumicro mono-repo uses. |
+| A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — the standard publishable-library layout. |
 | A third-party package | `packages/` (via `sync`) | `import <name>` | Gitignored mirror cache. |
 
 The import-graph search path resolves in this order: explicit `library_sources:` overrides → `shared/` → every `libraries/<name>/src/` (auto-discovered) → `packages/`. So a library scaffolded with `new --library buttons` is importable as `import buttons` from any project without further wiring.
@@ -127,7 +127,7 @@ python run.py new gpio --library
 
 ### How config flows from your edits to the device
 
-The runtime config a project receives at boot is the deep-merge of two gitignored host-side sources, both sharing the same section-namespaced shape (Decision 0057):
+The runtime config a project receives at boot is the deep-merge of two gitignored host-side sources, both sharing the same section-namespaced shape:
 
 ```
 workspace.yml ──────────────────► projects/<name>/config.toml
@@ -192,7 +192,7 @@ def run():
 python run.py deploy back-porch
 ```
 
-Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the canonical path Decision 0035 §8 reserves).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
+Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the canonical reserved path).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
 
 ### Single project, AST-walked
 

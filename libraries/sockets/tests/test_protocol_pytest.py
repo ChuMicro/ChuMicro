@@ -10,8 +10,6 @@ unix ports we target (the MP / CP fallback in
 The negative assertions (dict isn't a socket; partial impl isn't a
 socket) live in ``test_protocol.py`` — they're true under both the
 real Protocol and the stand-in.
-
-See Decision 0016 for the cross-runtime test policy.
 """
 
 from chumicro_sockets import TCPClientSocket

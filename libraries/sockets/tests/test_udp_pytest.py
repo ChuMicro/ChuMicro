@@ -17,8 +17,7 @@ CPython-runtime-detail concerns:
   doesn't exist on the CP / MP adapters.
 
 The cross-runtime layers (``FakeUDPSocket`` + factory routing) live
-in the sibling ``test_udp.py``.  See Decision 0016 for the
-cross-runtime test policy.
+in the sibling ``test_udp.py``.
 """
 
 import socket

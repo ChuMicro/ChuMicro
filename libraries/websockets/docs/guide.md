@@ -5,8 +5,8 @@
 `chumicro-websockets` is a non-blocking WebSocket (RFC 6455) client + server
 built on `chumicro-sockets` and `chumicro-timing`.  Two top-level classes —
 `WebSocketClient` for outbound `ws://` / `wss://` connections, and
-`WebSocketServer` for inbound — both runner-shaped per Decision 0014: each
-exposes `check(now_ms)` / `handle(now_ms)` so an LED can keep blinking through
+`WebSocketServer` for inbound — both runner-shaped: each exposes
+`check(now_ms)` / `handle(now_ms)` so an LED can keep blinking through
 the opening handshake, frame I/O, control-frame interleave, and the close
 handshake.
 
@@ -117,8 +117,8 @@ Same shape as the client's callbacks; semantically identical.
 
 ## Memory notes
 
-The library is sized for a Decision 0015 minimum board (256 KB MCU RAM,
-4 MB flash):
+The library is sized for the minimum supported board class (256 KB
+MCU RAM, 4 MB flash):
 
 - `max_message_bytes` defaults to `16384` (16 KB).  Inbound messages
   larger than this trigger `WhenOversized` policy.  Per-frame

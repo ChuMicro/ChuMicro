@@ -18,9 +18,9 @@ CP boards use ``socketpool`` instead) and MP unix-port has it but
 the cross-runtime contract is already covered by ``FakeUDPSocket``
 plus the on-device functional tests.
 
-Per Decision 0009 each library's tests run in a separate pytest
-subprocess; per Decision 0016 cross-runtime files (no ``_pytest``
-suffix) must not import pytest / unittest / etc.
+Cross-runtime files (no ``_pytest`` suffix) must not import pytest /
+unittest / etc., and run unmodified under CPython + MicroPython +
+CircuitPython unix-ports via the ``chumicro_test_harness`` runner.
 """
 
 import chumicro_sockets

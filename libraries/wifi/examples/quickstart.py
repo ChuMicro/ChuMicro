@@ -4,7 +4,7 @@ Demonstrates the canonical pattern: read the deployed runtime
 config, build a typed ``WifiConfig``, hand it to ``WifiService``,
 let the runner drive it.  The library is the sole wifi supervisor
 on every runtime — no ``CIRCUITPY_WIFI_*`` keys, no firmware-level
-auto-reconnect (Decision 0029 §wifi-ownership-stance).
+auto-reconnect.
 
 This example uses the in-memory ``FakeWifi`` from
 ``chumicro_wifi.testing`` so it runs anywhere — CPython, the

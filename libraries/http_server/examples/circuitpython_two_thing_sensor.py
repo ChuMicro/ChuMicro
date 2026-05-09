@@ -6,7 +6,7 @@ synthetic sine-wave since this example doesn't assume a real
 sensor on the board) and POSTs it to the server's
 ``/api/sensor`` endpoint every 5 seconds.
 
-Architecture (Decision 0014 + Decision 0040):
+Architecture:
 
 * Single-process, runner-shaped: ``HttpClient.check`` /
   ``HttpClient.handle`` advance the in-flight POST one tick at a

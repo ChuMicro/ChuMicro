@@ -203,8 +203,8 @@ class TestLoadRawEntries:
         """Permissive primitive: missing key = empty list, not an error.
 
         Strictness lives at the consumer (e.g. ``load_devices_yml`` raises
-        on no entries; the chumicro mono-repo's ``scripts/device_config``
-        also enforces non-empty)."""
+        on no entries; the workspace dispatcher likewise enforces a
+        non-empty registry before deploying)."""
         yaml_path = _write(tmp_path, "defaults:\n  micropython: nope\n")
         entries, defaults = load_raw_entries(yaml_path)
         assert entries == []

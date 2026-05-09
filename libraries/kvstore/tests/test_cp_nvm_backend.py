@@ -84,7 +84,7 @@ def test_save_then_load_round_trips() -> None:
 
 
 def test_save_writes_canonical_header_layout() -> None:
-    """Header bytes match the documented layout (Decision 0034 §5)."""
+    """Header bytes match the documented frame layout."""
     nvm = bytearray(b"\xff" * SAMD21_SIZE)
     backend = CpNvmBackend(nvm=nvm)
     payload = b"hello world"

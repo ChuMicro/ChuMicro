@@ -49,7 +49,7 @@ python run.py repl my_project --tail 30               # deploy + tail for 30 s
 
 ### How config flows from your edits to the device
 
-The runtime config a project receives at boot is the deep-merge of two gitignored host-side sources, both sharing the same section-namespaced shape (Decision 0057):
+The runtime config a project receives at boot is the deep-merge of two gitignored host-side sources, both sharing the same section-namespaced shape:
 
 ```
 workspace.yml ──────────────────► projects/<name>/config.toml

@@ -1,12 +1,11 @@
 """Hardware-gated tests for the example_sensor project in the canonical
 workspace template repo (`ChuMicro-Workspace-Template`).
 
-Phase 7 acceptance: the sensor project exercises the full ChuMicro
-runtime stack (wifi + sockets + mqtt + kvstore + workspace) on a
-real board.  This file does as much of that as can be checked from
-the chumicro mono-repo's CI / contributor flow without standing up
-extra fixtures (test wifi network, test broker, subscriber to
-verify message receipt).
+The sensor project exercises the full ChuMicro runtime stack
+(wifi + sockets + mqtt + kvstore + workspace) on a real board.  This
+file does as much of that as can be checked from the contributor CI
+flow without standing up extra fixtures (test wifi network, test
+broker, subscriber to verify message receipt).
 
 Two layers, both ratchet up the strictness:
 
@@ -521,7 +520,7 @@ def test_sensor_project_publishes_to_live_broker(
     environment = _layer3_required_environment()
 
     # Stage workspace BEFORE Mosquitto spawn: real wifi creds in the
-    # gitignored workspace.yml (Decision 0057), sensor pointing
+    # gitignored workspace.yml, sensor pointing
     # at a placeholder broker that we'll overwrite with the real port
     # after Mosquitto comes up.
     workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)

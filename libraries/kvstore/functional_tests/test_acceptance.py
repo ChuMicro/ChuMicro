@@ -11,9 +11,9 @@ that don't belong to any single backend's suite:
 * The boot-counter pattern works on the auto-selected backend
   without the test having to know which one was picked.
 
-The "across hard reset" guarantee mentioned in Decision 0034 is
-exercised implicitly via the fresh-``KVStore``-instance pattern —
-the same code path the boot path takes after a power cycle.  Real
+The "across hard reset" durability guarantee is exercised
+implicitly via the fresh-``KVStore``-instance pattern — the same
+code path the boot path takes after a power cycle.  Real
 power-cycle testing is out of scope for the pytest harness (the
 device connection dies on hard reset); the substrate-level
 atomicity guarantees (CP NVM CRC, NVS commit-atomic, LittleFS
@@ -82,10 +82,10 @@ def test_auto_detect_picks_runtime_appropriate_backend() -> None:
 def test_auto_backend_round_trips_all_msgpack_value_types() -> None:
     """Every value type chumicro-msgpack supports survives a commit + reload.
 
-    Decision 0034 §10 enumerates the supported types; this test runs
-    the full table through the auto-selected backend so the canonical
-    use case (the user picks ``"auto"`` and writes whatever they
-    want) actually works on every runtime.
+    The supported value types match what ``chumicro-msgpack`` can
+    encode; this test runs the full table through the auto-selected
+    backend so the canonical use case (the user picks ``"auto"`` and
+    writes whatever they want) actually works on every runtime.
     """
     _wipe_substrates()
     store = KVStore(backend="auto")

@@ -41,7 +41,7 @@ class TestReadRuntimeMarker:
         )
 
     def test_marker_does_not_execute_file(self, tmp_path: Path) -> None:
-        """Decision 0037: AST-only — adapter files import device-only modules."""
+        """AST-only — adapter files import device-only modules, so we don't execute them."""
         file = tmp_path / "cp.py"
         file.write_text(
             '__chumicro_runtimes__ = ("circuitpython",)\n'
@@ -82,7 +82,7 @@ class TestFileTargetsRuntime:
         assert not file_targets_runtime(file, target_runtime="cpython")
 
     def test_micropython_submarker_folds(self, tmp_path: Path) -> None:
-        """Decision 0037: ``micropython_esp32`` matches ``micropython``."""
+        """``micropython_esp32`` matches the bare ``micropython`` runtime."""
         file = tmp_path / "esp32.py"
         file.write_text('__chumicro_runtimes__ = ("micropython_esp32",)\n')
         assert file_targets_runtime(file, target_runtime="micropython")

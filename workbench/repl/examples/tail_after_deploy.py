@@ -10,9 +10,9 @@ Run with the board's serial path::
 
     python tail_after_deploy.py /dev/cu.usbmodem14101 circuitpython
 
-This example is import-checked by ``run.py verify-examples`` but not
-auto-executed (it requires a connected board), so it is a runnable
-illustration rather than a host-side test.
+This example is import-checked but not auto-executed by tests (it
+requires a connected board), so it is a runnable illustration
+rather than a host-side test.
 """
 
 from __future__ import annotations
