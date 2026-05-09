@@ -130,6 +130,24 @@ class TestPatterns:
         mono_repo_re = _PATTERNS[5][0]
         assert mono_repo_re.search(text) is not None
 
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "enforced by CHU009 / CHU010",
+            "see CHU001 for naming",
+            "the workspace's CHU011 lint",
+        ],
+    )
+    def test_chu_code_in_prose_pattern_hits(self, text: str) -> None:
+        """The CHU0NN-prose pattern catches workspace-internal lint codes in prose."""
+        chu_prose_re = _PATTERNS[6][0]
+        assert chu_prose_re.search(text) is not None
+
+    def test_chu_code_pattern_misses_partial_match(self) -> None:
+        """``CHU01`` (2 digits) is not matched — must be exactly three digits after CHU."""
+        chu_prose_re = _PATTERNS[6][0]
+        assert chu_prose_re.search("CHU01 mentioned") is None
+
 
 class TestEverywhereOutsideChumicroWorkspace:
     """The bare-run.py predicate: every file EXCEPT chumicro_workspace.
@@ -296,6 +314,52 @@ class TestCheckFile:
         target = workspace_dir / "cli.py"
         target.write_text("# this package owns the run.py shim and writes it\n")
         assert check_file(target) == []
+
+    def test_chu_code_in_prose_flagged(self, tmp_path: Path) -> None:
+        """A CHU0NN code mentioned in prose (not a noqa) is flagged."""
+        target = _make_src_file(
+            tmp_path, "src.py",
+            '"""Enforced by the workspace\'s CHU009 lint."""\n',
+        )
+        errors = check_file(target)
+        assert len(errors) == 1
+        assert "CHU0NN" in errors[0]
+
+    def test_chu_code_inside_noqa_directive_not_flagged(self, tmp_path: Path) -> None:
+        """``# noqa: CHU001`` text doesn't trigger the prose-CHU0NN rule.
+
+        The noqa directive's own rule code is not "prose"; the
+        scrubbing-then-pattern-match flow strips it before checking.
+        """
+        target = _make_src_file(
+            tmp_path, "src.py",
+            "def exec(self):  # noqa: CHU001 — match upstream API\n",
+        )
+        assert check_file(target) == []
+
+    def test_chu_code_in_html_noqa_directive_not_flagged(self, tmp_path: Path) -> None:
+        """``<!-- noqa: CHU011 -->`` text doesn't trigger the prose-CHU0NN rule."""
+        target = _make_src_file(
+            tmp_path, "src.md",
+            "# Heading\n\nLong prose <!-- noqa: CHU011 -->\n",
+        )
+        assert check_file(target) == []
+
+    def test_chu_code_outside_noqa_on_same_noqa_line_flagged(
+        self, tmp_path: Path,
+    ) -> None:
+        """A line with ``# noqa: CHU001`` and a separate prose CHU010 in trailing text fails.
+
+        The noqa directive is scrubbed; the trailing prose mention
+        of an unrelated rule code remains and triggers the rule.
+        """
+        target = _make_src_file(
+            tmp_path, "src.py",
+            "def exec(self):  # noqa: CHU001 — see CHU010 for related rule\n",
+        )
+        errors = check_file(target)
+        assert len(errors) == 1
+        assert "CHU0NN" in errors[0]
 
 
 class TestCheckPaths:

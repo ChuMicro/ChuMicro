@@ -105,6 +105,21 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 - **Clean up after yourself.** Make an import / variable / function / test unused → remove it. Affect docs → update them. But don't fix pre-existing issues unless asked.
 - **Quality bar.** Small focused diffs, preflight green, commit messages that name the rule / decision / pattern applied.
 
+## Writing tone
+
+Cut AI-tic phrases.  They sound non-human, drop information, and make prose harder to skim.  The fix is usually structural, not vocabulary — when you write *"the X promise"* or *"the X pattern"*, **name X concretely in the same sentence** so the reader doesn't have to infer it.
+
+Specific bans:
+
+- **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern.  Bad: *"Verifies the canonical promise: an LED keeps blinking…"*  Good: *"Verifies the LED-blink invariant: an LED keeps blinking…"*
+- **"the canonical X" generally** → check whether *"the X"* or *"the standard X"* is enough.  Keep `canonical encoding`, `canonical form`, `canonical path` — those are real technical terms with no fluff substitute.
+- **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright.  If a thing is comprehensive, list what it covers.  If a thing is robust, name what it survives.
+- **"It is worth noting that" / "It should be noted that" / "Note that"** (as a sentence opener) → just say the thing.
+- **"Let's dive into" / "Let's explore" / "In this section, we will"** → start with the content, not the meta-commentary.
+- **CHU lint codes in prose** (`CHU009`, `CHU010`, etc.) → name the rule's intent (*"silent test skips"*) instead of the code.  CHU codes are workspace-internal jargon a published-doc reader has no context for.  Enforced by `CHU006` — exempts `# noqa: CHUNNN` directives, flags everything else.
+
+When you catch yourself writing one, rewrite the sentence to *demonstrate* the property concretely instead of asserting it abstractly.
+
 ## Project overview
 
 Family of cross-runtime Python libraries for embedded boards.

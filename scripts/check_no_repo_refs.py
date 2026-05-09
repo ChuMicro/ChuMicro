@@ -106,6 +106,14 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
         "'chumicro mono-repo' framing — consumer reads this without that context",
         _everywhere,
     ),
+    (
+        re.compile(r"\bCHU\d{3}\b"),
+        "CHU lint code in prose — workspace-internal jargon; name the "
+        "rule's intent (e.g. 'silent test skips') rather than the code.  "
+        "Legitimate matches inside ``# noqa: CHU0NN`` directives are "
+        "already exempt",
+        _everywhere,
+    ),
 )
 
 #: File suffixes scanned.  ``.py`` covers source + tests; ``.toml``
@@ -119,6 +127,20 @@ _NOQA_PATTERNS = (
     re.compile(r"#\s*noqa(?::\s*([A-Z0-9, ]+))?"),
     re.compile(r"<!--\s*noqa(?::\s*([A-Z0-9, ]+))?\s*-->"),
 )
+
+
+def _strip_noqa(line: str) -> str:
+    """Return *line* with any ``noqa`` directive removed.
+
+    Pattern matching runs against the scrubbed line so the rule codes
+    embedded inside ``# noqa: CHUNNN`` markers don't false-positive
+    the prose-CHU rule.  The full (un-scrubbed) line is still used
+    for :func:`_is_suppressed` so per-rule suppression continues to
+    work exactly as before.
+    """
+    for noqa_re in _NOQA_PATTERNS:
+        line = noqa_re.sub("", line)
+    return line
 
 #: Directory names skipped during the recursive walk — build artifacts,
 #: cache directories, vendored deps, and IDE / CI scratch.
@@ -192,10 +214,11 @@ def check_file(filepath: Path) -> list[str]:
     for line_number, line in enumerate(text.splitlines(), start=1):
         if _is_suppressed(line):
             continue
+        scrubbed = _strip_noqa(line)
         for pattern, message, applies_to in _PATTERNS:
             if not applies_to(filepath):
                 continue
-            if pattern.search(line):
+            if pattern.search(scrubbed):
                 errors.append(f"{relative}:{line_number}: {_RULE_CODE} {message}")
                 break
     return errors
