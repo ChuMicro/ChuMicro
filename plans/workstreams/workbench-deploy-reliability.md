@@ -14,20 +14,29 @@ Pyright-cleanup wrap-up included on-board validation of three changed examples (
 
 ## What didn't (the research surface)
 
-### Finding 1 — CIRCUITPY auto-eject race during rsync
+### Finding 1 — CIRCUITPY drive went read-only mid-rsync; cause unknown (recovery hint blames autoreload, but deploy already disables it)
 
-**Observed:** `chumicro-deploy` rsync to LOLIN S2 CIRCUITPY drive failed mid-copy with `mkpathat: Read-only file system`.  Recovery hint suggested CP autoreload remounted the drive while a write was in flight.  Three retry attempts all hit the same RO state.  Drive stayed read-only for the rest of the session — would need a physical RESET to remount RW.  Verified via `mount`:
+**Observed:** `chumicro-deploy` rsync to LOLIN S2 CIRCUITPY drive failed mid-copy with `mkpathat: Read-only file system`.  Three retry attempts all hit the same RO state.  Drive stayed read-only for the rest of the session — needs a physical RESET to remount RW.  Verified via `mount`:
 
 ```
 /dev/disk14s1 on /Volumes/CIRCUITPY (msdos, local, nodev, nosuid, read-only, ...)
 /dev/disk15s1 on /Volumes/CIRCUITPY 1 (msdos, local, nodev, nosuid, ...)
 ```
 
-**Design questions:**
+**Initial hypothesis was wrong.**  The classifier surfaced `flash_copy_failed` with the recovery hint: *"CircuitPython's autoreload can remount while a write is in flight."*  That hint is **stale guidance** — `chumicro_deploy.circuitpython_transport._disable_autoreload_before_drive_writes` (`circuitpython_transport.py:605`) sends `import supervisor; supervisor.runtime.autoreload = False` over raw REPL **before** any host-side rsync starts.  Autoreload is off during the entire copy window.  The recovery message in `chumicro_deploy.recovery.py:537-539` still names autoreload as the cause and is misleading.
 
-- Can the deploy lock CP autoreload before starting rsync (e.g., write a sentinel that pauses autoreload, rsync, release the sentinel)?
-- Can the deploy detect the RO state pre-rsync and refuse with a clear "tap RESET" message instead of failing partway through?
-- The classifier-driven recovery hint is good but doesn't help when the RO state persists across retries.
+**More-likely causes worth investigating:**
+
+- **FAT32 corruption from concurrent host-write + device-USB-MSC interaction.**  FAT32 on USB-MSC has no journaling; a partially-written FAT chain can leave the volume in a state where the macOS `msdosfs` driver remounts it read-only as a self-defence measure.  The Pi Pico W's slower MSC controller (already noted in `circuitpython_transport.py:1442-1447` as a known stale-FAT-view source) makes this more likely on rp2 boards.
+- **macOS `msdosfs` driver downgrading to RO on detected inconsistency.**  `mount` shows the volume at `/Volumes/CIRCUITPY` mounted with `read-only`; the kernel does this autonomously when it sees write errors or inconsistent FAT entries.  A diskutil verify pass would confirm.
+- **CP's own filesystem-write protection.**  CP can mark the drive read-only from the device side (`storage.remount("/", readonly=True)`); something in our deploy / example chain might be triggering it indirectly.
+
+**Design questions for the research session:**
+
+- Update the recovery hint in `chumicro_deploy.recovery.py:534-546` to drop the autoreload framing and replace with the actual diagnosis once known.  Until known, prefer "drive went read-only mid-rsync — cause not yet diagnosed; tap RESET, replug, and re-deploy.  If it recurs, capture `dmesg`-equivalent (Console.app for macOS) so we can root-cause."
+- Pre-rsync drive-RO probe: `os.access(drive_path, os.W_OK)` or write-then-delete a sentinel file.  Refuse before partial-write damage.
+- After-rsync verify pass: re-read every file written and compare bytes; surface mismatches (catches FAT-corruption silent-data-loss).
+- Repro recipe: try to trigger the RO state deliberately via large rsync workloads on each board class (Pi Pico W vs LOLIN S2 vs others).
 
 ### Finding 2 — `--non-interactive` exits before code.py runs to completion
 
@@ -42,14 +51,16 @@ The http_server deploy got lucky — `WIFI_OK` and `Server listening` arrived du
 
 ### Finding 3 — serial reconnect race loses post-deploy output
 
-**Observed:** running `chumicro-repl --tail 25` immediately after `deploy-example --non-interactive` captured **zero lines** for 25s on a board where code.py was definitely running fresh.  Suspected window: deploy-exit → CP autoreload → CP serial briefly disconnects → tail reconnects but the boot prints have already passed.
+**Observed:** running `chumicro-repl --tail 25` immediately after `deploy-example --non-interactive` captured **zero lines** for 25s on a board where code.py was definitely running fresh.
 
-This is the same root cause as Finding 2 from the deploy side — the host's serial connection to the board is not continuous across the autoreload boundary.
+**The reset is explicit, not autoreload.**  `circuitpython_transport.py:1453-1456` writes `_CTRL_B` (exit raw REPL) then `_CTRL_D` (soft-reboot) at the end of every flash deploy, then calls `_read_code_py_output()` to capture what comes back.  So the device DOES reset, but it's the deploy's own driver that's doing it — autoreload has been off since the rsync started.
+
+The captured output sits on `_read_code_py_output()`'s side: the deploy reads serial during the soft-reboot's code.py run, then disconnects.  After disconnect, anything code.py prints later (the publish loop in mqtt, the wait-for-RECV in udp_echo) goes to the host's now-closed serial port and is lost.  When `chumicro-repl --tail` reconnects, it's attaching mid-stream to a process that may have already gone silent (if code.py finished and dropped to REPL) or may be in a long blocking call (if code.py is still running but not yet at its next print).
 
 **Design questions:**
 
-- Can the workbench keep the serial port open across the autoreload, so tail attaches before the board reset rather than after?
-- Even raw pyserial reads (bypassing chumicro-repl) caught nothing — see Finding 4.
+- Can `--no-tail` mode end with a "serial released, you can reconnect now" signal instead of an immediate exit?  Or hand the open file descriptor over to a successor process?
+- For `--non-interactive` CI use: a `--tail-seconds <N>` flag (Finding 2) sidesteps the reconnect race entirely by keeping the serial held through N seconds of post-reboot output before exiting.
 
 ### Finding 4 — soft-reboot puts board into "running but silent" state
 
@@ -90,9 +101,10 @@ The board is presumably running code.py but its serial CDC output is silent.  Re
 
 ## Suggested research-session shape
 
-1. Reproduce Finding 1 (CIRCUITPY RO race) deliberately — write a script that triggers autoreload + rsync simultaneously.  Measure how often it lands.
-2. Reproduce Finding 4 (silent-after-soft-reboot) — script N soft-resets in sequence, count how many it takes to silence the device.  Investigate whether it's the host-side serial driver or the device's CDC stack.
-3. Prototype the `--tail-seconds <N>` flag (Finding 2) — smallest change, biggest UX win.
-4. Decide between (a) keep-serial-open-across-autoreload and (b) attach-after-with-replay-buffer for Finding 3.
+1. **Cheap correctness win:** strip the autoreload framing from `chumicro_deploy.recovery.py:537-539` (Finding 1 hint is misleading — autoreload is off during rsync per `circuitpython_transport.py:605-633`).  Replace with "drive went read-only mid-rsync; try replug + RESET; capture Console.app output if it recurs."  10-line change, removes a wrong-direction debugging trail.
+2. Reproduce Finding 1 (CIRCUITPY RO mid-rsync) deliberately on each board class — large rsync workloads, watch for the `read-only` mount transition.  Likely FAT32 corruption or `msdosfs` self-defence; `diskutil verifyVolume` mid-issue would confirm.
+3. Reproduce Finding 4 (silent-after-soft-reboot) — script N programmatic soft-resets in sequence, count how many it takes to silence the device.  Decide whether the silencing is host-side (serial driver) or device-side (CDC stack).
+4. Prototype the `--tail-seconds <N>` flag (Finding 2) — smallest change, biggest UX win, sidesteps Finding 3's reconnect race for CI.
+5. Decide whether deploy's own end-of-pipeline soft-reboot (`circuitpython_transport.py:1453-1456`) should leave serial held longer for the `--non-interactive` case, or hand the file descriptor over to a successor tail process.
 
 Detail belongs in commit messages + this workstream — `plans/next-up.md` carries a one-line pointer.
