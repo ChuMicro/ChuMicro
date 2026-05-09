@@ -64,7 +64,7 @@ import sys
 import time
 
 from chumicro_config import RuntimeConfig
-from chumicro_mqtt import MQTTClient
+from chumicro_mqtt import MQTTClient, ProtocolState
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 # Fallback constants — used only when runtime_config.msgpack is absent.
@@ -186,7 +186,7 @@ def _drive_mqtt_until(predicate, deadline_ms):
     return True
 
 
-if not _drive_mqtt_until(mqtt.is_connected, 15_000):
+if not _drive_mqtt_until(lambda: mqtt.state == ProtocolState.CONNECTED, 15_000):
     print("STATUS: FAIL_MQTT_CONNECT")
     raise SystemExit(1)
 
