@@ -93,6 +93,7 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 ## Common pitfalls
 
 - Don't `pip install -e` manually to fix imports — run `python scripts/run.py setup`.
+- If bare `python` errors `command not found`, the agent shell didn't inherit a `python` alias (the Claude desktop app and some remote shells don't; the Claude Code CLI usually does). Run `source .venv/bin/activate` once at the start of the session, or invoke `.venv/bin/python scripts/run.py …` directly. This is a shell-environment detail, not a strict rule — use whichever form works in your shell.
 - Don't modify unrelated code when fixing a focused bug. Mention pre-existing issues separately.
 - Don't fabricate. Verify claims by reading code, running tests, or checking command output. If you can't verify, say so.
 - Don't add features, abstractions, or speculative error handling beyond what was asked. If 200 lines could be 50, rewrite.
