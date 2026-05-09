@@ -534,13 +534,14 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     DeployFailureKind.FLASH_COPY_FAILED: RecoveryPlan(
         headline="Copying files to the CIRCUITPY drive failed.",
         fix_steps=(
-            "The drive may have auto-ejected mid-copy — "
-            "CircuitPython's autoreload can remount while a write "
-            "is in flight.  Tap RESET and retry.",
+            "Tap RESET on the board, wait for CIRCUITPY to remount, "
+            "and retry.  The drive often goes read-only after a "
+            "USB-MSC hiccup or a partial-write race; only a board "
+            "reset clears the macOS msdosfs read-only flag.",
             "Check free space on the drive if the payload is larger "
             "than a few KiB.",
-            "If the drive became read-only, unplug + replug to "
-            "remount read-write.",
+            "If the volume stays read-only after RESET, unplug and "
+            "replug the board to force a fresh mount.",
         ),
         retryable=True,
     ),
