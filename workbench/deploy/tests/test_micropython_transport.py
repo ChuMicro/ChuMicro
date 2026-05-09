@@ -1285,8 +1285,15 @@ class TestDeployFilesSoftReboot:
                 follow="soft_reboot",
             )
 
-    def test_re_enters_raw_repl_after_read(self) -> None:
-        """Cleanup re-enters raw REPL so disconnect() finds a known state."""
+    def test_does_not_re_enter_raw_repl_after_read(self) -> None:
+        """Soft-reboot mode must not re-enter raw REPL — would Ctrl-C main.py.
+
+        Mirror of CP's flash-mode rule: leave the board in friendly
+        REPL with the entrypoint running.  mpremote's enter_raw_repl
+        sends Ctrl-C × 2 + Ctrl-A, which would kill any ``while True``
+        loop the entrypoint just started.  Subsequent transport ops
+        re-enter raw REPL on demand via _ensure_serial.
+        """
         captured = b"MPY: soft reboot\r\n>>> "
         transport, serial, _ = self._prepare(captured_serial=captured)
         try:
@@ -1298,12 +1305,22 @@ class TestDeployFilesSoftReboot:
         finally:
             transport.disconnect()
 
-        # enter_raw_repl was called twice: once by _ensure_serial after
-        # mpremote fs cp re-opened the port, then again by the post-read
-        # cleanup with soft_reset=False.
+        # The only enter_raw_repl call should be the one _ensure_serial
+        # made before deploy_files.  No post-read enter_raw_repl call
+        # is allowed — that would Ctrl-C the just-started main.py.
         enter_calls = [call for call in serial.calls if call[0] == "enter_raw_repl"]
-        assert len(enter_calls) >= 2
-        assert enter_calls[-1][1] == (False,)
+        post_read_enters = [
+            call for call in enter_calls
+            # Earlier, _ensure_serial ran; we just need to ensure no call
+            # appears AFTER the soft-reboot read_until.  Order check via
+            # index: any enter_raw_repl after the second read_until is wrong.
+            if serial.calls.index(call)
+            > max(
+                idx for idx, c in enumerate(serial.calls)
+                if c[0] == "read_until"
+            )
+        ]
+        assert post_read_enters == []
 
 
 class TestExtractMainPyOutput:
