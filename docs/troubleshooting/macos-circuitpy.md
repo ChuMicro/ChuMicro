@@ -20,6 +20,8 @@ Recent macOS releases replaced the in-kernel `msdosfs` driver with a user-space 
 
 **Recovery**
 
+Only run this command when the system is actually wedged — `chumicro_deploy.macos_fskit.detect_fskit_wedge()` returns True, or `ps -o state= -p $(pgrep diskarbitrationd)` shows `Us`.  Running it on a healthy system (including a second time after the first run already cleared the wedge) cuts off in-flight FAT operations on the just-remounted volumes, leaving them in an I/O-error state where `ls /Volumes/CIRCUITPY` fails with `Input/output error` while the drive is still mounted.  Recovering from that state needs a physical unplug + replug of the board — soft-reboot via raw REPL is not enough because the USB-MSC interface stays attached across it.
+
 Run this in another terminal.  It needs `sudo`:
 
 ```bash
