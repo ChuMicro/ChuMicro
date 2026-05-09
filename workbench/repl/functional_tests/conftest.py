@@ -3,10 +3,10 @@
 These tests drive real boards from the host through the public
 ``chumicro_repl`` API (``ReplSession`` / ``tail`` / ``run_loop``) —
 they are not routed through the on-device test harness.  The
-``scripts/pytest_device.py`` collector intentionally only intercepts
-``libraries/<name>/functional_tests/`` paths (Decision 0032 rule 7),
-so this directory runs as plain host-side pytest with a fixture-based
-gate on ``devices.yml``.
+``chumicro-pytest-device`` plugin intentionally only intercepts
+``libraries/<name>/functional_tests/`` paths, so this directory
+runs as plain host-side pytest with a fixture-based gate on
+``devices.yml``.
 
 Mirrors the structure of
 ``workbench/deploy/functional_tests/conftest.py`` so contributors

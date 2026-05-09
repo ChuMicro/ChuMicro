@@ -1,9 +1,9 @@
-"""Tests for chumicro_requests slice 3a — plain HTTP GET against FakeSocket.
+"""Tests for chumicro_requests — plain HTTP GET against FakeSocket.
 
-Decision 0040 §1: HttpClient is runner-shaped (check / handle), single
-in-flight, single socket per request.  These tests cover URL parse,
-header dict semantics, request encoding, the streaming response parser,
-the runner contract, timeouts, busy-state enforcement, oversize policy
+HttpClient is runner-shaped (check / handle), single in-flight,
+single socket per request.  These tests cover URL parse, header dict
+semantics, request encoding, the streaming response parser, the
+runner contract, timeouts, busy-state enforcement, oversize policy
 branches, and the chumicro_sockets_factory helper.
 
 The fake transport is :class:`chumicro_sockets.testing.FakeSocket` —
@@ -739,7 +739,7 @@ class TestHttpClientGet:
 
 
 class TestHttpClientRunnerContract:
-    """``check`` and ``handle`` satisfy Decision 0014."""
+    """``check`` and ``handle`` satisfy the runner contract."""
 
     def test_check_false_when_idle(self):
         client, ticks, _ = make_client()

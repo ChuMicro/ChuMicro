@@ -15,10 +15,10 @@ self-loopback there.  Credentials ship from the host conftest as
 ``/runtime_config.msgpack`` and are read here via
 ``chumicro_config.load_runtime_config()``.
 
-Verifies the canonical promise (Decision 0045): an LED-style counter
-keeps incrementing on the same loop while the handshake, the frame
-I/O, and the close handshake all run concurrently against each other
-on one device.
+Verifies the canonical promise: an LED-style counter keeps
+incrementing on the same loop while the handshake, the frame I/O,
+and the close handshake all run concurrently against each other on
+one device.
 
 HTTP only (``ws://``) — ``wss://`` server adds the
 :func:`chumicro_sockets.tls_listening_socket` constraints documented
@@ -228,8 +228,8 @@ def test_real_websocket_loopback_round_trip() -> None:
     assert client_observed_text == ["echo: hello 0", "echo: hello 1", "echo: hello 2"], (
         f"client expected 3 echoed responses, got {client_observed_text!r}"
     )
-    # Decision 0045 LED-blink invariant: the counter must have ticked
-    # several times during the bidirectional exchange.  A blocking call
+    # LED-blink invariant: the counter must have ticked several
+    # times during the bidirectional exchange.  A blocking call
     # would have left it near zero.  Threshold matches chumicro-requests
     # test_real_get's `> 5` — the loopback is fast on the ESP32 family
     # (~8 ticks end-to-end) and the assertion is detecting block-calling,

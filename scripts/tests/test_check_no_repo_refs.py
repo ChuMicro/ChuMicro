@@ -8,9 +8,8 @@ import pytest
 from check_no_repo_refs import (
     _PATTERNS,
     _RULE_CODE,
+    _everywhere_outside_chumicro_workspace,
     _is_suppressed,
-    _src_only,
-    _src_only_outside_chumicro_workspace,
     check_file,
     check_paths,
 )
@@ -132,83 +131,62 @@ class TestPatterns:
         assert mono_repo_re.search(text) is not None
 
 
-class TestSrcOnly:
-    """The ``_src_only`` predicate fires only inside ``src/`` trees."""
+class TestEverywhereOutsideChumicroWorkspace:
+    """The bare-run.py predicate: every file EXCEPT chumicro_workspace.
 
-    def test_library_src_is_in_scope(self) -> None:
-        """Files inside ``libraries/<pkg>/src/`` fire src/-only patterns."""
-        assert _src_only(Path("libraries/wifi/src/chumicro_wifi/__init__.py")) is True
-
-    def test_workbench_src_is_in_scope(self) -> None:
-        """Files inside ``workbench/<pkg>/src/`` fire src/-only patterns."""
-        assert _src_only(Path("workbench/deploy/src/chumicro_deploy/cli.py")) is True
-
-    def test_test_harness_src_is_in_scope(self) -> None:
-        """``support/test_harness/src/`` fires src/-only patterns."""
-        assert _src_only(Path("support/test_harness/src/chumicro_test_harness/__init__.py")) is True
-
-    def test_docs_is_out_of_scope(self) -> None:
-        """``docs/`` does NOT fire src/-only patterns."""
-        assert _src_only(Path("libraries/wifi/docs/guide.md")) is False
-
-    def test_tests_is_out_of_scope(self) -> None:
-        """``tests/`` does NOT fire src/-only patterns."""
-        assert _src_only(Path("libraries/wifi/tests/test_wifi.py")) is False
-
-    def test_functional_tests_is_out_of_scope(self) -> None:
-        """``functional_tests/`` does NOT fire src/-only patterns."""
-        assert _src_only(Path("libraries/wifi/functional_tests/test_acceptance.py")) is False
-
-    def test_readme_is_out_of_scope(self) -> None:
-        """A package's ``README.md`` does NOT fire src/-only patterns."""
-        assert _src_only(Path("libraries/wifi/README.md")) is False
-
-    def test_pyproject_is_out_of_scope(self) -> None:
-        """A package's ``pyproject.toml`` does NOT fire src/-only patterns."""
-        assert _src_only(Path("libraries/wifi/pyproject.toml")) is False
-
-
-class TestSrcOnlyOutsideChumicroWorkspace:
-    """The bare-run.py predicate: src/-only AND not chumicro_workspace."""
+    The ``chumicro_workspace`` package owns the workspace-template's
+    ``run.py`` shim and legitimately mentions it everywhere — src,
+    docs, tests, pyproject.  Every other package mentioning bare
+    ``run.py`` is flagged.
+    """
 
     def test_inside_workspace_src_is_exempt(self) -> None:
-        """Files inside ``workbench/workspace/src/`` are exempt from bare-run.py."""
+        """Files inside ``workbench/workspace/src/`` are exempt."""
         path = Path("workbench/workspace/src/chumicro_workspace/cli.py")
-        assert _src_only_outside_chumicro_workspace(path) is False
+        assert _everywhere_outside_chumicro_workspace(path) is False
 
     def test_workspace_docs_also_exempt(self) -> None:
-        """Workspace docs / README are exempt (they document the run.py shim).
-
-        Belt-and-suspenders: ``_src_only`` already excludes docs/, so
-        the chumicro_workspace exemption is technically redundant
-        here, but if the predicate ever widens, the exemption still
-        applies.
-        """
+        """Workspace docs / README are exempt (they document the run.py shim)."""
         path = Path("workbench/workspace/docs/guide.md")
-        assert _src_only_outside_chumicro_workspace(path) is False
+        assert _everywhere_outside_chumicro_workspace(path) is False
+
+    def test_workspace_tests_also_exempt(self) -> None:
+        """Workspace tests are exempt (test data may include the run.py shim)."""
+        path = Path("workbench/workspace/tests/test_cli.py")
+        assert _everywhere_outside_chumicro_workspace(path) is False
 
     def test_other_workbench_src_not_exempt(self) -> None:
-        """Other workbench packages' src/ still get the bare-run.py rule applied."""
+        """Other workbench packages still get the bare-run.py rule applied."""
         path = Path("workbench/deploy/src/chumicro_deploy/cli.py")
-        assert _src_only_outside_chumicro_workspace(path) is True
+        assert _everywhere_outside_chumicro_workspace(path) is True
+
+    def test_other_workbench_docs_not_exempt(self) -> None:
+        """Other workbench packages' docs still get the rule applied."""
+        path = Path("workbench/deploy/docs/guide.md")
+        assert _everywhere_outside_chumicro_workspace(path) is True
 
     def test_libraries_src_not_exempt(self) -> None:
         """Library packages' src/ still get the bare-run.py rule applied."""
         path = Path("libraries/wifi/src/chumicro_wifi/__init__.py")
-        assert _src_only_outside_chumicro_workspace(path) is True
+        assert _everywhere_outside_chumicro_workspace(path) is True
+
+    def test_libraries_docs_not_exempt(self) -> None:
+        """Library packages' docs/ still get the bare-run.py rule applied."""
+        path = Path("libraries/wifi/docs/guide.md")
+        assert _everywhere_outside_chumicro_workspace(path) is True
 
     def test_absolute_path_inside_workspace_is_exempt(self) -> None:
         """Absolute paths into workspace are also exempt."""
         path = Path("/Users/foo/chumicro/workbench/workspace/src/chumicro_workspace/cli.py")
-        assert _src_only_outside_chumicro_workspace(path) is False
+        assert _everywhere_outside_chumicro_workspace(path) is False
 
 
 def _make_src_file(tmp_path: Path, name: str, body: str) -> Path:
     """Create ``tmp_path/libraries/foo/src/foo/<name>`` with *body*.
 
-    Most CHU006 patterns now fire only inside ``src/`` trees, so test
-    fixtures that exercise those patterns need to live under a
-    ``libraries/<pkg>/src/`` shape rather than at ``tmp_path`` root.
+    The CHU006 patterns now fire across every scanned location, but
+    test fixtures still live under a ``libraries/<pkg>/src/`` shape
+    by convention so they exercise the path the lint actually walks.
     """
     src_dir = tmp_path / "libraries" / "foo" / "src" / "foo"
     src_dir.mkdir(parents=True, exist_ok=True)
@@ -235,18 +213,21 @@ class TestCheckFile:
         assert _RULE_CODE in errors[0]
         assert "Decision NNNN" in errors[0]
 
-    def test_decision_ref_outside_src_is_silent(self, tmp_path: Path) -> None:
-        """``Decision NNNN`` outside ``src/`` does NOT fire (src/-only scope).
+    def test_decision_ref_outside_src_also_fires(self, tmp_path: Path) -> None:
+        """``Decision NNNN`` fires EVERYWHERE — docs, tests, pyproject.
 
-        Future cleanup pass will widen the Decision NNNN pattern to
-        ``docs/`` + ``tests/`` + ``pyproject.toml`` etc.; tracked
-        separately so the lint extension can ratchet incrementally.
+        The cleanup pass that inlined every existing leak finished
+        before this test was written; the predicate widened from
+        ``_src_only`` to ``_everywhere`` so future leaks in published
+        docs / tests / examples are caught at lint time.
         """
         docs_dir = tmp_path / "libraries" / "foo" / "docs"
         docs_dir.mkdir(parents=True)
         target = docs_dir / "guide.md"
         target.write_text("Per Decision 0042, this ships.\n")
-        assert check_file(target) == []
+        errors = check_file(target)
+        assert len(errors) == 1
+        assert "Decision NNNN" in errors[0]
 
     def test_plans_md_in_comment(self, tmp_path: Path) -> None:
         """A comment pointing into ``plans/learnings.md`` is flagged."""

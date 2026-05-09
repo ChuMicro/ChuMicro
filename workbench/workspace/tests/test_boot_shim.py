@@ -252,7 +252,7 @@ class TestProjectBootSource:
     def test_target_runtime_drops_wrong_runtime_project_files(
         self, tmp_path: Path,
     ) -> None:
-        """Decision 0044 — boot-shim layout filters project-local ``.py`` markers."""
+        """Boot-shim layout filters project-local ``.py`` runtime markers."""
         workspace, project_dir = _seed_project_for_boot(tmp_path)
         (project_dir / "_cp_helper.py").write_text(
             '__chumicro_runtimes__ = ("circuitpython",)\n',
@@ -432,7 +432,7 @@ class TestProjectBootWithImportGraphSource:
             )
 
     def test_target_runtime_filters_both_layers(self, tmp_path: Path) -> None:
-        """Decision 0044 — runtime marker drops files on both inner sources."""
+        """Runtime markers drop files on both inner sources."""
         workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
         # Runtime-marked sibling under the project — boot-shim should drop it.
         (project_dir / "_mp_only.py").write_text(

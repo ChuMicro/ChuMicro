@@ -5,8 +5,8 @@
 `chumicro-requests` is a non-blocking HTTP/1.1 client built on
 `chumicro-sockets`. The canonical entry point is `HttpClient`, a runner-shaped
 object whose `check(now_ms)` / `handle(now_ms)` methods drive the request
-forward one tick at a time. The LED-blink invariant (Decision 0040): an LED
-keeps blinking on the same board while a request is in flight, in a TLS
+forward one tick at a time. The LED-blink invariant: an LED keeps
+blinking on the same board while a request is in flight, in a TLS
 handshake, or mid-timeout against a stalled peer. The library is single-in-flight
 in v1 — a second `client.get(...)` while another request is running raises
 `HttpBusyError`.
@@ -58,8 +58,8 @@ both raises `ValueError`.
 ## Redirects
 
 `HttpClient` follows `301` / `302` / `303` / `307` / `308` redirects
-automatically up to a budget. Default cap is 5 (Decision 0040). Override
-per-call or per-client:
+automatically up to a budget. Default cap is 5. Override per-call or
+per-client:
 
 ```python
 # Per-call: don't follow at all (return the 3xx response as-is)
@@ -130,7 +130,7 @@ The `connection_factory` argument is a callable
 ## Runner pattern
 
 `HttpClient.check(now_ms) -> bool` and `handle(now_ms) -> None` satisfy the
-Decision 0014 runner contract. Drop the client into a `Runner` alongside an
+runner contract. Drop the client into a `Runner` alongside an
 LED-heartbeat task:
 
 ```python
@@ -145,8 +145,8 @@ while True:
 
 ## Memory notes
 
-The default 64 KB `max_body_bytes` cap is sized for Decision 0015 minimum
-boards (256 KB MCU RAM). Bump it for larger boards if needed; the `Response.body`
+The default 64 KB `max_body_bytes` cap is sized for the minimum
+supported board class (256 KB MCU RAM). Bump it for larger boards if needed; the `Response.body`
 buffer grows up to that cap. The default 1024-byte `recv_budget_per_tick`
 matches `chumicro-mqtt`'s — bytes drained per tick are bounded so concurrent
 runner tasks (LED blink, control loop) keep getting CPU time even mid-large-body.
@@ -155,15 +155,13 @@ runner tasks (LED blink, control loop) keep getting CPU time even mid-large-body
 
 Pure Python, no third-party deps beyond `chumicro-sockets` and `chumicro-timing`.
 Works identically on CPython, MicroPython, and CircuitPython once the
-connection factory is wired up. HTTPS landed in slice 3c (Decision 0040)
-with the same `chumicro_sockets_factory(ssl_context=...)` pattern; v1
-remaining: POST + JSON helpers, redirects, chunked transfer-encoding
-(slices 3d–3f).
+connection factory is wired up. HTTPS uses the same
+`chumicro_sockets_factory(ssl_context=...)` pattern as plain HTTP.
 
 ### HTTPS on Pi Pico W class boards
 
-The wifi → sockets → TLS → requests stack only fits on the Decision 0015
-minimum board class (256 KB MCU RAM) in **flash deploy mode**. RAM-mode
+The wifi → sockets → TLS → requests stack only fits on the minimum
+supported board class (256 KB MCU RAM) in **flash deploy mode**. RAM-mode
 keeps the entire library bootstrap on the heap for the duration of the
 test, leaving < 50 KB for mbedTLS handshake — `ssl_context.wrap_socket(...)`
 then fails with `OSError(12)` (ENOMEM). Larger-heap boards (ESP32-S3 with

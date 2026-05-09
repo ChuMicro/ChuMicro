@@ -16,8 +16,6 @@ The cross-runtime contract — "factory returns a working UDP socket
 bound to an ephemeral port, with ``sendto`` / ``recvfrom_into`` /
 ``getsockname``" — is exercised on real hardware in
 ``functional_tests/test_real_ntp.py``.
-
-See Decision 0016 for the cross-runtime test policy.
 """
 
 import socket as stdlib_socket

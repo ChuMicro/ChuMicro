@@ -1,6 +1,6 @@
 """Wiring service callbacks into a single EventBus.
 
-Shows the canonical pattern from Decision 0042: services expose
+Shows the canonical wiring pattern: services expose
 ``on_state_change`` callbacks, the application binds each one to a
 publisher on a shared bus, and a single subscriber reacts to the
 resulting cross-service stream.

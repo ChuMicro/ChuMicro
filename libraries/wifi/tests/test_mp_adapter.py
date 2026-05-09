@@ -277,8 +277,8 @@ def test_connect_returns_false_when_not_yet_connected() -> None:
 def test_connect_disables_firmware_supervisor_on_first_success_on_espidf() -> None:
     """``wlan.config(reconnects=0)`` fires once, after the first link.
 
-    Decision 0029 §wifi-ownership-stance — library is the sole
-    supervisor on every runtime.
+    The library is the sole wifi supervisor on every runtime; the
+    runtime's own auto-reconnect must be disabled at first link.
     """
     wlan = _FakeWlan()
     wlan.set_outcome(ok=True)

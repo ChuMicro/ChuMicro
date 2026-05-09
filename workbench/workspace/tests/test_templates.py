@@ -42,8 +42,9 @@ class TestReadWorkspaceYmlTemplate:
             assert marker in content
 
     def test_points_credentials_at_secrets_toml(self) -> None:
-        # Per Decision 0057: machinery vs. credentials split.  The
-        # workspace.yml header tells the reader where credentials go.
+        # Two-file split: machinery in workspace.yml, credentials in
+        # secrets.toml.  The workspace.yml header tells the reader
+        # where credentials go.
         content = read_workspace_yml_template()
         assert "secrets.toml" in content
 
@@ -62,7 +63,7 @@ class TestReadSecretsTomlTemplate:
     def test_carries_real_placeholder_keys(self) -> None:
         # Real placeholders (not commented examples) so the additive
         # re-apply path can append new keys without round-trip data
-        # loss.  See Decision 0057 §additive-only setup.
+        # loss.
         content = read_secrets_toml_template()
         assert "[wifi]" in content
         assert "ssid" in content

@@ -2950,7 +2950,7 @@ def _build_dual_runtime_pkg(source_root: Path) -> Path:
 
 
 class TestRuntimeFilteringRamMode:
-    """Decision 0044 — RAM-mode staging drops non-CP marked files."""
+    """RAM-mode staging drops files marked for other runtimes."""
 
     def test_ram_stage_excludes_micropython_files(self, tmp_path: Path) -> None:
         source_root = tmp_path / "src"
@@ -2984,7 +2984,7 @@ class TestRuntimeFilteringRamMode:
 
 
 class TestRuntimeFilteringFlashStaging:
-    """Decision 0044 — flash-mode local staging drops non-CP marked files."""
+    """Flash-mode local staging drops files marked for other runtimes."""
 
     def test_build_local_staging_tree_excludes_mp(self, tmp_path: Path) -> None:
         source_root = tmp_path / "src"

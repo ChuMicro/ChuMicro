@@ -409,7 +409,7 @@ class TestCommandDeploy:
 
 
 class TestCommandDeployRuntimeFiltering:
-    """Decision 0044 — ``deploy`` filters per device runtime by default."""
+    """``deploy`` filters per device runtime by default."""
 
     def _build_dual_runtime_app(self, source_dir: Path) -> None:
         (source_dir / "main.py").write_text("import _adapters\n")

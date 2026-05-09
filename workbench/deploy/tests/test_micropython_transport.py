@@ -1073,11 +1073,10 @@ class TestDeployFiles:
 class TestDeployFilesSoftReboot:
     """``follow="soft_reboot"`` mode — analog of CP's flash-mode pattern.
 
-    Validates the fix shipped under workstream library-config-aware-
-    refactor "Follow-up 2": MP transport adopts CP's flash-mode soft-
-    reboot read for app-code deploys whose entrypoint may be a
-    ``while True`` body that never returns.  See Decision 0028
-    §MicroPython flash transport.
+    The MicroPython flash transport adopts CP's soft-reboot read for
+    app-code deploys whose entrypoint may be a ``while True`` body
+    that never returns — without that, the deploy would block waiting
+    for the entrypoint to exit before reading any output.
     """
 
     def _prepare(
@@ -1586,7 +1585,7 @@ class TestWipeFilesystem:
 
 
 class TestRuntimeFiltering:
-    """Decision 0044 — wrong-runtime files never land in MP staging."""
+    """Wrong-runtime files never land in MP staging."""
 
     def _build_dual_runtime_pkg(self, source_root: Path) -> None:
         pkg = source_root / "chumicro_pkg"

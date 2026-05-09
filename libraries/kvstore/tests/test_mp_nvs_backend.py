@@ -67,7 +67,7 @@ def test_runtime_acquisition_raises_on_cpython() -> None:
 
 
 def test_namespace_and_payload_key_constants_match_adr() -> None:
-    """Decision 0034 §6 fixes the namespace + key — guard against drift."""
+    """The NVS namespace + key are fixed values — guard against drift."""
     assert MpNvsBackend.NAMESPACE == "chu_kv"
     assert MpNvsBackend.PAYLOAD_KEY == "payload"
 

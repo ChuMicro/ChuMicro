@@ -1,9 +1,8 @@
 """Hardware-gated tests for the boot-shim flow on real boards.
 
 Single-project boot-shim acceptance (multi-project + switch tests
-were retired in Slice 7 of the nested-projects-and-examples
-workstream — multi-project-staging blew the flash budget on the
-Decision 0015 minimum boards):
+were retired when multi-project-staging blew the flash budget on
+the minimum supported board class — 256 KB MCU RAM, 4 MB flash):
 
     [x] Functional test: deploy a project via boot-shim layout, verify
         ``code.py`` -> ``workspace_runtime.boot()`` -> ``projects.<name>.app.run()``

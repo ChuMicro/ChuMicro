@@ -50,10 +50,11 @@ exclude = [".gitignore"]
 packages = ["src/chumicro_mqtt"]
 
 [tool.chumicro]
-# Decision 0047 — flag this library as flash-mode-only on smaller boards.
-# Multi-KB MQTT parser + state machine + recv buffers often OOM in RAM
-# mode on Pi Pico W class boards.  chumicro-deploy's pre-flight check
-# auto-switches RAM-mode deploys to flash when this flag is set.
+# Flag this library as flash-mode-only on smaller boards.  Multi-KB
+# MQTT parser + state machine + recv buffers often OOM in RAM mode on
+# Pi Pico W class boards (256 KB MCU class).  ``chumicro-deploy``'s
+# pre-flight check auto-switches RAM-mode deploys to flash when this
+# flag is set.
 requires_flash = true
 
 # ---------------------------------------------------------------------

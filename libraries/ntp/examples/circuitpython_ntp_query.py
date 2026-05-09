@@ -27,14 +27,12 @@ deploys), wifi creds fall back to the placeholder constants below
 Deploying
 =========
 
-Deploy from a chumicro fork or clone::
+Deploy with ``chumicro-workspace``::
 
-    python scripts/run.py deploy-example ntp circuitpython_ntp_query --device <id>
+    chumicro-workspace deploy-example ntp circuitpython_ntp_query --device <id>
 
-Or from a workspace template repo (for user-authored projects
-that follow the same example shape).  Either path composes
-``secrets.toml`` + ``examples/config.toml`` into the staged
-``runtime_config.msgpack`` before deploying.
+The deploy composes ``secrets.toml`` + ``examples/config.toml`` into
+the staged ``runtime_config.msgpack`` before deploying.
 
 Example output::
 

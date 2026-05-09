@@ -227,7 +227,7 @@ Five states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `DISCONNECTING`, `FAILED
 - **0.1.5**: Documentation buildout — guide rewrite, knob explainers.
 - **0.1.4**: Production-readiness sweep — `recv_budget_per_tick`, `max_tx_queue_size`, `MQTTBackpressureError`, `WhenOversized` policy enum.
 - **0.1.3**: Per-`packet_id` `InFlightTable` for QoS 1 retries; explicit `ProtocolState` ladder; 8→4 source-file consolidation.
-- **0.1.0**: Initial library — Decision 0029 Phase 6 scope.
+- **0.1.0**: Initial library — connect / publish / subscribe loop with QoS 0/1.
 
 ---
 

@@ -806,8 +806,8 @@ class _FakeConfig:
     def __init__(self, rootpath: Path) -> None:
         # ``pytest.Config.rootpath`` is what the plugin uses to derive
         # ``support/test_harness/src`` and ``libraries/`` paths.  Always
-        # required — pinning a default to the chumicro mono-repo root
-        # silently coupled tests to live workspace state.
+        # required — pinning a default to a hard-coded workspace root
+        # silently couples tests to live filesystem state.
         self.rootpath = rootpath
         # ``Config.stash`` is the canonical place for plugin data.
         # ``set_runtime_config`` writes to it; the plugin reads from it

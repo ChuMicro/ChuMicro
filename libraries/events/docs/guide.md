@@ -50,9 +50,9 @@ new record sits in the queue until the next drain.
 
 ## Wiring service callbacks
 
-The canonical pattern from Decision 0042: services expose
-`on_state_change` callbacks; the application binds each one to a bus
-publisher; subscribers react to the cross-service stream.
+The canonical wiring pattern: services expose `on_state_change`
+callbacks; the application binds each one to a bus publisher;
+subscribers react to the cross-service stream.
 
 ```python
 from chumicro_events import EventBus
@@ -75,7 +75,8 @@ bus.subscribe("mqtt.state", audit)
 callable accepts an optional payload positional argument; calling it
 with no argument publishes `None`.  This matches the shape of the
 existing service `on_state_change` callbacks across `chumicro-wifi`,
-`chumicro-mqtt`, and any future libraries that follow Decision 0042.
+`chumicro-mqtt`, and any future libraries that follow the same
+optional-callback dependency pattern.
 
 ## Runner pattern
 
@@ -118,7 +119,7 @@ library uses.
 | Example | What it shows |
 |---|---|
 | [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/events/examples/quickstart.py) | Minimal `EventBus` end-to-end: publish, check, handle, dispatch order. |
-| [`examples/wiring_services.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/events/examples/wiring_services.py) | The Decision 0042 wiring pattern — bind service callbacks to bus publishers. |
+| [`examples/wiring_services.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/events/examples/wiring_services.py) | The canonical wiring pattern — bind service callbacks to bus publishers. |
 
 Both examples run on every supported runtime; neither requires
 hardware.

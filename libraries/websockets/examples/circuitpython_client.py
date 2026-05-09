@@ -30,12 +30,9 @@ constants below — edit them first.
 Deploying
 =========
 
-Deploy from a chumicro fork or clone::
+Deploy with ``chumicro-workspace``::
 
-    python scripts/run.py deploy-example websockets circuitpython_client --device <id>
-
-Or from a workspace template repo (for user-authored projects
-that follow the same example shape).
+    chumicro-workspace deploy-example websockets circuitpython_client --device <id>
 """
 
 import sys

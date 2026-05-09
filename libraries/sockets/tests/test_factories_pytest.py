@@ -15,8 +15,6 @@ home for them.
 The cross-runtime routing tests — same dispatcher coverage, just
 exercised against fakes instead of real I/O — live in the sibling
 ``test_factories.py``.
-
-See Decision 0016 for the cross-runtime test policy.
 """
 
 from __future__ import annotations

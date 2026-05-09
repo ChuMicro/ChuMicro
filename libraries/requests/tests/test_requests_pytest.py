@@ -10,8 +10,6 @@ The factory's runtime-correctness contract — "produces a working
 socket on each board" — is exercised end-to-end on real hardware in
 ``functional_tests/test_real_get.py`` (HTTP) and
 ``functional_tests/test_real_get_tls.py`` (HTTPS).
-
-See Decision 0016 for the cross-runtime test policy.
 """
 
 from chumicro_requests import chumicro_sockets_factory

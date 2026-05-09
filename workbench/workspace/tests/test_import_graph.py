@@ -316,7 +316,7 @@ class TestProjectImportGraphSource:
     def test_target_runtime_drops_wrong_runtime_modules(
         self, tmp_path: Path,
     ) -> None:
-        """Decision 0044 — wrong-runtime adapters do not ride the import graph."""
+        """Wrong-runtime adapters do not ride the import graph."""
         (tmp_path / "workspace.yml").write_text('# machinery only\n')
         (tmp_path / "secrets.toml").write_text('')
         shared = tmp_path / "shared"

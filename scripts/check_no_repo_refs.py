@@ -63,35 +63,22 @@ def _everywhere(_filepath: Path) -> bool:
     return True
 
 
-def _src_only(filepath: Path) -> bool:
-    """Pattern fires only inside ``src/`` trees.
-
-    The full package walk (``src/`` + ``docs/`` + tests +
-    ``pyproject.toml`` + README) catches the plans/-path leak shape,
-    but the ``Decision NNNN`` / ``scripts/run.py`` / bare ``run.py``
-    / ``chumicro mono-repo`` patterns currently only fire in
-    ``src/``.  Widening those to the whole tree is tracked in
-    ``next-up.md`` as a separate cleanup pass.
-    """
-    return "/src/" in filepath.as_posix()
-
-
-def _src_only_outside_chumicro_workspace(filepath: Path) -> bool:
-    """``_src_only`` plus the ``chumicro_workspace`` package exemption.
+def _everywhere_outside_chumicro_workspace(filepath: Path) -> bool:
+    """``_everywhere`` minus the ``chumicro_workspace`` package exemption.
 
     The ``chumicro_workspace`` package owns the workspace-template's
     ``run.py`` shim — generating it, parsing it, and teaching users
     about it is its job.  Bare ``run.py`` mentions throughout that
     package's tree are correct.
     """
-    return _src_only(filepath) and "workbench/workspace/" not in filepath.as_posix()
+    return "workbench/workspace/" not in filepath.as_posix()
 
 
 _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
     (
         re.compile(r"\bDecision\s*0\d{3}\b"),
         "Decision NNNN ref — ADRs live in plans/decisions/, not shipped to consumers",
-        _src_only,
+        _everywhere,
     ),
     (
         re.compile(r"\bplans/[A-Za-z0-9_./-]*\.md\b"),
@@ -106,18 +93,18 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
     (
         re.compile(r"\bscripts/run\.py\b"),
         "scripts/run.py ref — mono-repo command runner, not on consumer machines",
-        _src_only,
+        _everywhere,
     ),
     (
         re.compile(r"(?<!scripts/)\brun\.py\b"),
         "bare run.py ref — name the installable CLI (chumicro-deploy, etc.) "
         "instead of the workspace shim",
-        _src_only_outside_chumicro_workspace,
+        _everywhere_outside_chumicro_workspace,
     ),
     (
         re.compile(r"\bchumicro\s+mono[\s-]?repo\b", re.IGNORECASE),
         "'chumicro mono-repo' framing — consumer reads this without that context",
-        _src_only,
+        _everywhere,
     ),
 )
 

@@ -1,8 +1,8 @@
-"""Tests for chumicro_http_server slice 7a — listener + parser + canned response.
+"""Tests for chumicro_http_server — listener + parser + canned response.
 
-Decision 0041: HttpServer is runner-shaped (check / handle), each
-connection is a state machine advanced one chunk per tick, single
-caller-provided handler in 7a (routing lands in 7b).
+HttpServer is runner-shaped (check / handle): each connection is a
+state machine advanced one chunk per tick, with a single
+caller-provided handler.
 
 These tests use a fake listener that hands out :class:`FakeSocket`
 pre-loaded with the request bytes — the server thinks it accepted a

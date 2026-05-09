@@ -13,9 +13,9 @@ the broker host/port ship from the host conftest as
 ``/runtime_config.msgpack`` and are read here via
 ``chumicro_config.load_runtime_config()``.
 
-Verifies the canonical promise (Decision 0014): an LED-style
-counter keeps incrementing on the same loop while the publish is
-in flight and waiting for PUBACK.
+Verifies the canonical runner-shape promise: an LED-style counter
+keeps incrementing on the same loop while the publish is in flight
+and waiting for PUBACK.
 
 Broker
 ======
@@ -58,8 +58,8 @@ def _sleep_ms(duration_ms: int) -> None:
 #: internally.  On CircuitPython, ``time.ticks_ms`` does not exist —
 #: a naive ``time.monotonic() * 1000`` shim returns an unwrapped
 #: float-derived ms count, while ``chumicro-timing`` resolves to
-#: ``supervisor.ticks_ms`` which is 29-bit-wrapped (Decision 0008's
-#: portable tick contract).  Mixing the two on CP makes
+#: ``supervisor.ticks_ms`` which is 29-bit-wrapped (the portable
+#: tick contract ``chumicro-timing`` exposes).  Mixing the two on CP makes
 #: ``ticks_diff(deadline, now_ms)`` go negative on the first tick
 #: and the client immediately reports "timed out awaiting connack".
 _ticks_ms = _chumicro_ticks_ms

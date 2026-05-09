@@ -6,8 +6,9 @@ reloading the adapter, and calling its functions against the stubs.
 That brings the device-only code paths into coverage without needing
 to actually spin up a MicroPython unix-port.
 
-Real cross-runtime coverage (against a live MP unix-port) happens via
-``run.py test-micropython``; these tests are the host-side
+Real cross-runtime coverage (against a live MP unix-port) happens
+via the ``chumicro_test_harness`` runner against a prepared
+MicroPython interpreter; these CPython-only tests are the host-side
 complement that catches regressions in the call shapes we expect MP
 to expose.
 """

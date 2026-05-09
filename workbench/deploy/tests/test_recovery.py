@@ -1186,7 +1186,7 @@ class TestDiagnosePortHolders:
             if args[0] == "lsof":
                 stdout = "p11421\ncPython\nf3\nn/dev/cu.usbmodem112401\n"
             else:  # ps -p <pid> -o command=
-                stdout = "/usr/bin/python /path/run.py deploy hello_world"
+                stdout = "/usr/bin/python /path/run.py deploy hello_world"  # noqa: CHU006 — workspace shim command name is data here, exercising the chumicro-detection heuristic
 
             class _Result:
                 returncode = 0
@@ -1200,7 +1200,7 @@ class TestDiagnosePortHolders:
         assert len(holders) == 1
         assert holders[0].pid == 11421
         # ps fallout — full command line preferred over lsof's short ``c``.
-        assert "run.py deploy" in holders[0].command
+        assert "run.py deploy" in holders[0].command  # noqa: CHU006 — assertion against the workspace shim command name as data
 
     def test_parses_multiple_holders(
         self, monkeypatch: pytest.MonkeyPatch,
@@ -1282,7 +1282,7 @@ class TestLooksLikeChumicro:
         from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
 
         assert _looks_like_chumicro(self._holder(
-            "/usr/bin/python /workspace/run.py deploy hello_world",
+            "/usr/bin/python /workspace/run.py deploy hello_world",  # noqa: CHU006 — workspace shim command name is data here
         ))
 
     def test_mpremote_subprocess_is_recognised(self) -> None:
@@ -1324,7 +1324,7 @@ class TestReportFailureWithPortHolders:
                     pid=11421,
                     command=(
                         "/usr/bin/python "
-                        "/workspace/run.py deploy wifi_only"
+                        "/workspace/run.py deploy wifi_only"  # noqa: CHU006 — workspace shim command name is data here
                     ),
                 ),
             ],
@@ -1351,7 +1351,7 @@ class TestReportFailureWithPortHolders:
         joined = "\n".join(lines)
         # The PID + command must appear so the user can kill it.
         assert "11421" in joined
-        assert "run.py deploy" in joined
+        assert "run.py deploy" in joined  # noqa: CHU006 — assertion against the workspace shim command name as data
         # The chumicro-stale heuristic must fire and surface the
         # actionable kill suggestion.
         assert "stale chumicro-deploy or mpremote" in joined
@@ -1583,7 +1583,7 @@ class TestNonInteractiveDeployer:
             lambda _port: [
                 recovery.PortHolder(
                     pid=4242,
-                    command="/usr/bin/python /path/run.py deploy hello_world",
+                    command="/usr/bin/python /path/run.py deploy hello_world",  # noqa: CHU006 — workspace shim command name is data here
                 ),
             ],
         )
@@ -1606,7 +1606,7 @@ class TestNonInteractiveDeployer:
 
         joined = "\n".join(lines)
         assert "4242" in joined
-        assert "run.py deploy" in joined
+        assert "run.py deploy" in joined  # noqa: CHU006 — assertion against the workspace shim command name as data
         assert "kill 4242" in joined  # chumicro-stale heuristic fires
 
     def test_traceback_result_is_reported(self) -> None:

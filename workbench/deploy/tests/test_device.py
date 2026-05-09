@@ -24,7 +24,7 @@ class TestConstruction:
     def test_defaults(self):
         device = Device(transport="micropython", address="/dev/ttyACM0")
         assert device.baudrate == 115200
-        # Decision 0047 — flash is the default; RAM is opt-in.
+        # Flash is the default; RAM is opt-in.
         assert device.deploy_mode == "flash"
         assert device.circuitpy_drive_path is None
         assert device.entrypoint_name is None
@@ -92,7 +92,7 @@ class TestFromDict:
         assert device.transport == "circuitpython"
         assert device.address == "/dev/cu.x"
         assert device.baudrate == 115200
-        # Decision 0047 — flash is the default; RAM is opt-in.
+        # Flash is the default; RAM is opt-in.
         assert device.deploy_mode == "flash"
         assert device.circuitpy_drive_path is None
 
