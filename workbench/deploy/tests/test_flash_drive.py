@@ -366,6 +366,116 @@ class TestRsync:
             assert extra in captured[0]
 
 
+class TestVerifyRsync:
+    """Tests for flash_drive.verify_rsync."""
+
+    def test_returns_empty_on_clean_match(self, tmp_path: Path) -> None:
+        """Identical source + destination → empty needs-update list."""
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "code.py").write_bytes(b"print('hi')\n")
+        destination = tmp_path / "destination"
+        destination.mkdir()
+        (destination / "code.py").write_bytes(b"print('hi')\n")
+
+        divergent = flash_drive.verify_rsync(source, destination)
+        assert divergent == []
+
+    def test_returns_paths_on_content_divergence(self, tmp_path: Path) -> None:
+        """Content mismatch → path appears in the needs-update list."""
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "code.py").write_bytes(b"print('hi')\n")
+        destination = tmp_path / "destination"
+        destination.mkdir()
+        (destination / "code.py").write_bytes(b"corrupted\n")
+
+        divergent = flash_drive.verify_rsync(source, destination)
+        assert "code.py" in divergent
+
+    def test_returns_paths_on_missing_destination_file(
+        self, tmp_path: Path,
+    ) -> None:
+        """File present in source, absent from destination → flagged."""
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "code.py").write_bytes(b"x")
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        divergent = flash_drive.verify_rsync(source, destination)
+        assert "code.py" in divergent
+
+    def test_ignores_cosmetic_time_differences(self, tmp_path: Path) -> None:
+        """Time-only diffs (rsync ``T`` flag) do NOT trigger a divergence.
+
+        FAT32 stores mtime at 2-second granularity, so post-rsync the
+        destination's mtime can differ from the source even when content
+        matches byte-for-byte.  The verification must filter on the
+        update-marker (position 1) rather than per-attribute flags so
+        the harmless time delta does not fail every deploy.
+        """
+        import os
+
+        source = tmp_path / "source"
+        source.mkdir()
+        source_file = source / "code.py"
+        source_file.write_bytes(b"identical\n")
+        destination = tmp_path / "destination"
+        destination.mkdir()
+        destination_file = destination / "code.py"
+        destination_file.write_bytes(b"identical\n")
+        os.utime(destination_file, (0, 0))
+
+        divergent = flash_drive.verify_rsync(source, destination)
+        assert divergent == []
+
+    def test_raises_when_rsync_missing(self, tmp_path: Path) -> None:
+        """FileNotFoundError surfaces as a clear FlashDriveError."""
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=FileNotFoundError("rsync"),
+        ):
+            with pytest.raises(FlashDriveError, match="required for verification"):
+                flash_drive.verify_rsync(source, destination)
+
+    def test_raises_on_subprocess_error(self, tmp_path: Path) -> None:
+        """A non-zero rsync exit surfaces as FlashDriveError with stderr."""
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                23, "rsync", stderr="permission denied",
+            ),
+        ):
+            with pytest.raises(FlashDriveError, match="verification failed"):
+                flash_drive.verify_rsync(source, destination)
+
+    def test_raises_with_recovery_hint_on_timeout(self, tmp_path: Path) -> None:
+        """A wedged verify rsync points at the RESET-and-replay recovery."""
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="rsync", timeout=30.0),
+        ):
+            with pytest.raises(FlashDriveError) as exc_info:
+                flash_drive.verify_rsync(source, destination)
+        assert "Tap RESET" in str(exc_info.value)
+
+
 class TestMacOSHelpers:
     """Tests for strip_extended_attributes / clean_dot_files / disable_spotlight_indexing."""
 

@@ -1038,6 +1038,30 @@ class CircuitpythonTransport:
         # Flush the volume so the device reads current content.
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 
+        # Re-read every file via rsync --checksum --dry-run.  Any path
+        # that comes back as "needs update" means the prior rsync's
+        # writes did not commit — fail loudly here, before Ctrl-D
+        # triggers a soft-reboot against an inconsistent FAT volume.
+        try:
+            divergent_paths = flash_drive.verify_rsync(
+                staging_path,
+                drive_path,
+                additional_excludes=rsync_additional_excludes,
+            )
+        except flash_drive.FlashDriveError as verify_error:
+            raise CircuitpythonTransportError(
+                str(verify_error),
+            ) from verify_error
+        if divergent_paths:
+            raise CircuitpythonTransportError(
+                "Post-rsync verification found "
+                f"{len(divergent_paths)} divergent file(s) on "
+                f"{drive_path}: {divergent_paths!r}.  The first rsync's "
+                "writes did not commit (FAT corruption, USB-MSC partial "
+                "write, or the volume went read-only mid-deploy).  Tap "
+                "RESET and re-deploy."
+            )
+
         return drive_path
 
     def _stage_to_flash(
