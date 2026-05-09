@@ -44,6 +44,8 @@ After the command:
 
 **`chumicro-deploy` does not auto-run this command.**  Auto-escalating to `sudo` is a blast-radius decision the tool should not take without an explicit opt-in — detection is automatic (via `detect_fskit_wedge()`), but the paste-this-command step is kept human-in-the-loop on purpose.
 
+If you'd rather not copy-paste, `chumicro-workspace doctor --fix-fskit-wedge` is the opt-in shortcut: detects the wedge, runs the killall via `subprocess.run` so sudo prompts you for the password inline, then re-checks and reports.  Refuses to run when no wedge is detected (running the recovery on a healthy system damages mounted volumes — see above), when stdin/stderr aren't a TTY, or when sudo isn't on PATH.  Distinct exit codes for each refuse case so scripted callers can branch.
+
 ### Finder sidebar regression (unrelated caveat)
 
 After the recovery command, your drives are fully functional — mounted at `/Volumes/`, readable, writable, and `chumicro-deploy` works against them.  But on recent macOS they may **not** appear in Finder's Locations sidebar.  That is a separate Apple FSKit-Finder bug, not something the recovery command should fix:
