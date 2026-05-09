@@ -435,6 +435,7 @@ def docs_deploy(channel: str, libraries: list[str] | None = None) -> int:
 
 def lint() -> int:
     """Run Ruff plus the chumicro-specific CHU lint checks."""
+    from check_dated_narration import main as check_dated_narration_main
     from check_names import main as check_names_main
     from check_no_repo_refs import main as check_no_repo_refs_main
     from check_no_silent_test_skip import main as check_no_silent_test_skip_main
@@ -459,6 +460,9 @@ def lint() -> int:
     silent_skip_result = check_no_silent_test_skip_main()
     if silent_skip_result != 0:
         return silent_skip_result
+    dated_narration_result = check_dated_narration_main()
+    if dated_narration_result != 0:
+        return dated_narration_result
     return check_plans_brevity_main()
 
 
