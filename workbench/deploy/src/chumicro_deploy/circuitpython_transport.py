@@ -80,26 +80,10 @@ _BOARD_FILE_VISIBLE_POLL_INTERVAL = 0.25
 
 #: Belt-and-suspenders settle after ``os.stat`` first reports the
 #: expected size.  ``os.stat`` proves CP has seen the directory entry,
-#: but there can still be in-flight block writes on the board side
-#: (flash program/erase, FAT bookkeeping) that our polling can't
-#: observe.  Sleeping a fraction of a second here gives those a
-#: chance to quiesce before Ctrl-D kicks the VM into soft-reboot —
-#: cheap insurance against hardware-level races the software layer
-#: has no signal for.
-#:
-#: Bumped from 0.5 s to 2.0 s on 2026-05-09 after on-board verification
-#: showed an S2 CIRCUITPY drive demoted to read-only mid-deploy
-#: (workbench-deploy-reliability workstream Finding 1 / 8).  The likely
-#: contributor: our explicit Ctrl-D fired before all in-flight FAT
-#: writes had committed, leaving the volume in a state the macOS
-#: `msdosfs` driver defends against by remounting RO.  Investigated
-#: whether CP's own autoreload watcher could provide a quiescence
-#: signal for "safe to reset now" — it cannot: `autoreload_trigger()`
-#: drops events when autoreload is disabled (and we must keep it
-#: disabled during rsync to avoid the uninterruptible-I/O wedge), and
-#: `autoreload_enable()` resets any pending trigger.  Until we add
-#: post-rsync verification (Step 2b: `rsync --checksum --dry-run`),
-#: this longer settle is the cheap structural mitigation.
+#: but in-flight block writes on the board side (flash program/erase,
+#: FAT bookkeeping) can still be pending; sending Ctrl-D inside that
+#: window risks a soft-reboot mid-write that macOS ``msdosfs`` defends
+#: against by remounting the volume read-only.
 _BOARD_FILE_VISIBLE_POST_SETTLE = 2.0
 
 #: Volume name CircuitPython uses by default.
@@ -1469,14 +1453,9 @@ class CircuitpythonTransport:
         self._port.write(_CTRL_D)  # trigger soft-reboot
         output = self._read_code_py_output()
 
-        # Leave the board in friendly REPL with code.py running.  Earlier
-        # versions sent Ctrl-C × 2 + Ctrl-A here ("re-enter raw REPL so
-        # disconnect's exit has a known state"), which interrupted any
-        # long-running entrypoint (mqtt's 15 s connect, sockets' blocking
-        # recv, every example with a `while True:` loop) the moment the
-        # 10 s capture window closed.  ``disconnect`` no longer requires
-        # raw REPL on entry — it sends a bare Ctrl-B that's safe in
-        # either state.
+        # Do NOT re-enter raw REPL here — that sends Ctrl-C and would
+        # interrupt the entrypoint we just rebooted into.  ``disconnect``
+        # tolerates either REPL state.
 
         if on_execute_line is not None:
             for output_line in output.splitlines():
@@ -1875,48 +1854,19 @@ class CircuitpythonTransport:
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.
 
-        Pure teardown.  Sends a bare Ctrl-B (exits raw REPL when the
-        board is in raw REPL; harmless one-byte input when in friendly
-        REPL or while ``code.py`` is running) so the next serial
-        consumer never finds the board parked in raw REPL.  Then
-        closes the port.
+        Pure teardown.  Sends a bare Ctrl-B (exits raw REPL when in
+        raw REPL; a no-op control byte otherwise) so the next serial
+        consumer never finds the board parked in raw REPL, then
+        closes the port.  No Ctrl-C — that would interrupt any
+        ``code.py`` left running by ``deploy_files``.  No
+        ``supervisor.runtime.autoreload = True`` — flipping autoreload
+        back on outside an active raw-REPL session can layer an
+        autoreload-driven soft-reboot on top of one already in flight,
+        which has historically wedged the ESP32-S2 USB-CDC firmware.
 
-        **No Ctrl-C.**  Earlier versions called :meth:`_enter_raw_repl`
-        first (Ctrl-C × 2 + Ctrl-A) "to give Ctrl-B a known starting
-        state."  That interrupted whatever ``code.py`` was doing — a
-        problem after every ``deploy_files`` call, since the deploy
-        leaves ``code.py`` running on purpose.  A bare Ctrl-B is safe
-        from either REPL state, so the round-trip through raw REPL is
-        unnecessary.
-
-        **No autoreload restore.**  The autoreload-off issued by
-        :meth:`_disable_autoreload_before_drive_writes` is restored
-        implicitly on the ``deploy_files`` path (its mid-method Ctrl-D
-        resets ``supervisor.runtime.autoreload`` to default-on as a
-        side effect of soft-reboot) and intentionally left off on the
-        ``_stage_to_flash`` path (functional tests drive the raw REPL
-        themselves and never need ``code.py``-style reload-on-edit;
-        the board's next reset / power cycle returns it to default).
-        See :meth:`_disable_autoreload_before_drive_writes` for the
-        full rationale.
-
-        **No explicit Ctrl-D.**  Earlier versions forced a soft-reboot
-        at this point so ``code.py`` would run after deploy.  That
-        layered a second soft-reboot on top of the one CP's autoreload
-        watcher fires the moment autoreload was flipped back on (files
-        changed during the off-window, watcher queues a reboot the
-        next time it re-activates).  Two USB-CDC re-enumerations in
-        ~500ms wedged the ESP32-S2 USB-CDC firmware roughly 1 in 4
-        sessions — surfaced 2026-05-03 in the Lolin S2 bake.  Now that
-        disconnect no longer flips autoreload at all, the watcher
-        reboot doesn't happen either, but adding an explicit Ctrl-D
-        here would still be redundant: ``deploy_files`` has already
-        rebooted to run ``code.py``, and ``_stage_to_flash`` doesn't
-        need a reboot (the harness drove the raw REPL session).
-
-        When :meth:`reset_into_bootloader` has already been called,
-        it closes the port itself and nulls :attr:`_port` — this
-        method then finds nothing to close and only clears
+        When :meth:`reset_into_bootloader` has already been called, it
+        closes the port itself and nulls :attr:`_port` — this method
+        then finds nothing to close and only clears
         :attr:`_staged_sources`.
         """
         if self._port is not None:
