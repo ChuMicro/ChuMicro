@@ -14,6 +14,7 @@
       "Bash(python3 scripts/run.py --help)",
       "Bash(xargs ls *)",
       "Bash(system_profiler SPUSBDataType)",
+      "Bash(curl *)",
       "Bash(brew list *)",
       "Bash(ioreg -p IOUSB -l -w 0)",
       "Bash(awk '/Product ID:/ {pid=$3} /Vendor ID:/ {print $3, \"/\", pid}')",
