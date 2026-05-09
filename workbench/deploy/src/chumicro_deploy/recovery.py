@@ -507,6 +507,12 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         fix_steps=(
             "Paste this into another terminal (it needs sudo):",
             f"    {MACOS_FSKIT_RECOVERY_COMMAND}",
+            "Run it ONLY ONCE per wedge.  A second run on the now-"
+            "healthy system kills the daemons mid-operation on the "
+            "just-remounted volumes and leaves them in an I/O-error "
+            "state that needs physical unplug + replug of the board "
+            "to recover (soft-reboot does not, because USB-MSC stays "
+            "attached across it).",
             "Each killed daemon respawns under launchd in a clean "
             "state; pending CIRCUITPY drives mount and become "
             "readable.  Press Enter here to retry the deploy.",
