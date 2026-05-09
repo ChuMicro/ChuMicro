@@ -149,11 +149,20 @@ Bench-validated on Lolin S2 CP (`/dev/cu.usbmodem84722E7490C31`) with a `while T
 
 Pi Pico W CP not validated this step — its `/Volumes/CIRCUITPY 1` mount went stale during the prior session and got force-unmounted; needs a replug for a full 4-board sweep (deferred to Step 6 after Steps 2 + 3 land).
 
-### Step 2 — Replace explicit Ctrl-D with autoreload-driven reset
+### Step 2 — Bump post-stat settle from 0.5 s to 2 s (correction; was "autoreload-driven reset")
 
-In `deploy_files` (`circuitpython_transport.py:1453-1461`): after the rsync + `flush_volume` + `_wait_for_board_to_see_entrypoint`, send `import supervisor; supervisor.runtime.autoreload = True` from raw REPL, then Ctrl-B to exit raw REPL.  CP's watcher fires its own reboot once FS is quiescent.  Capture serial output across that boundary on the same open port (no Ctrl-C interrupt).
+**Original Step 2 was wrong.**  The "let CP's autoreload watcher fire the reset" idea assumed CP would replay write events from the autoreload-off window.  Reading `.tools/circuitpython-10.2.0/supervisor/shared/reload.c`:
 
-This is the structural change — fixes both the S2 FAT race (no more force-reset before FS done) and the silent-deploy race in one move.  The "two re-enumerations wedged the S2" lesson from `disconnect` applies in the same direction here: pick autoreload OR our own Ctrl-D, not both.
+- `autoreload_trigger()` (line 67) checks `autoreload_enabled` *at the moment of the trigger*.  If autoreload is off (which it is during our rsync), the trigger is **dropped entirely** — there is no replay queue.
+- `autoreload_enable()` (line 45) actively *resets* `last_autoreload_trigger = 0`, so re-enabling autoreload clears any pending state too.
+
+So the "re-enable autoreload, let CP fire its own reset" plan would result in the board sitting at friendly REPL with autoreload on but no trigger pending — `code.py` never runs.  CP's `supervisor.reload()` exists but goes through the same `reload_initiate()` path as Ctrl-D — same race window with FS writes.  And we cannot leave autoreload ON during rsync: the `_disable_autoreload_before_drive_writes` docstring documents the "wedged rsync" failure mode (autoreload fires mid-rsync, USB-CDC re-enumerates, next host-side `write()` hangs in uninterruptible kernel I/O).
+
+The actual lever for the S2 FAT race is **timing**, not mechanism.  The current `_BOARD_FILE_VISIBLE_POST_SETTLE = 0.5` was empirical guesswork and is too short to guarantee in-flight FAT writes have committed before our Ctrl-D.  Bump to 2 s — cheap, reversible, addresses the user's "0.5 s is too short regardless" intuition as a belt-and-suspenders fix.
+
+### Step 2b — Post-rsync verification pass via `rsync --checksum --dry-run`
+
+After the main rsync, run a second rsync against the same staging tree with `--checksum --dry-run --itemize-changes`.  If any files come back as needing transfer, the first rsync's writes didn't commit fully (FAT corruption, partial write, USB-MSC race) — fail the deploy with a clear "write didn't commit" message *before* triggering Ctrl-D.  Uses rsync's own machinery rather than a separate read-back loop; FAT-cache concerns on Pi Pico W are the open question worth investigating.
 
 ### Step 3 — Configurable capture window
 
