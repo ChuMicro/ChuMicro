@@ -1,8 +1,7 @@
 """Workspace quality knobs — `lint`, `coverage`.
 
-Phase 5 of the workspace-ecosystem workstream.  Reads the
-``quality:`` block on ``workspace.yml`` carrying two pass-through
-knobs:
+Reads the ``quality:`` block on ``workspace.yml`` carrying two
+pass-through knobs:
 
 .. code-block:: yaml
 

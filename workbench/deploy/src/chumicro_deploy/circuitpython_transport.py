@@ -1747,10 +1747,6 @@ class CircuitpythonTransport:
         FAT cache.  ``_stage_to_flash`` cannot soft-reboot because
         the harness expects the raw-REPL session to stay alive across
         the call.
-
-        Surfaced 2026-05-03 during the post-wedge cleanup bake — the
-        old prep flow inadvertently invalidated the cache via
-        autoreload firing on pre-rsync sentinel writes.
         """
         # The walk script is small enough to inline.  ``S_IFDIR =
         # 0o40000 = 16384`` is stable across CP/MP and the stat[0]

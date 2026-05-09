@@ -304,7 +304,7 @@ def probe_with_runtime_inference(
     until one returns an implementation marker.  Returns the
     :class:`RuntimeInferenceResult` so the caller can register the
     probed runtime + version without having forced the user to type
-    ``--runtime`` (Step 3 of the beginner-onramp workstream).
+    ``--runtime``.
 
     Both runtimes speak the same probe script — it reads
     ``sys.implementation`` — so the implementation name in the

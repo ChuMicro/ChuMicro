@@ -17,8 +17,6 @@ Sibling to :mod:`chumicro_deploy.recovery` (which handles
 etc.).  Different layer: ``chumicro-deploy``'s recovery is about
 "why didn't the deploy land"; this module is about "the deploy
 landed but the project crashed."
-
-Phase 2d of the workspace-ecosystem workstream.
 """
 
 from __future__ import annotations
