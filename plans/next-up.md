@@ -10,6 +10,8 @@
 
 Independent items.  Most have either shipped phases (status in the linked workstream) or are unscoped placeholders waiting on a forcing function.
 
+- [ ] **Workbench deploy + tail reliability** — captured 2026-05-09 from on-board pyright-cleanup verification (1 success / 2 silent-deploys out of 3).  Six findings: CIRCUITPY auto-eject race during rsync, `--non-interactive` exits before code.py output, serial reconnect race after deploy-exit, soft-reboot silencing the device, `chumicro-workspace devices` missing drive paths, "deploy exit 0" not meaning "code is running."  Research-session shape proposed in the workstream.  Detail: [`workstreams/workbench-deploy-reliability.md`](workstreams/workbench-deploy-reliability.md).
+
 - [ ] **Two-board client/server example** — captured 2026-05-06 during F5 boot-shim simplification.  Replace deprecated `examples/two_projects/` with two physical-board demo (one HTTP server + one client, or MQTT pub + sub).  Single-project shape per board; lives at `examples/two_board_handshake/{server,client}/`.  Hardware-validates two-board acceptance scenarios chumicro doesn't otherwise exercise.
 
 - [ ] **Beginner-comfort onramp Phase 3+** — Phases 1 + 2 + audit-of-the-audit shipped 2026-05-02 (see `## Done`).  Phase 3+ unscoped; reopen when the next first-encounter friction surfaces from real users.  Detail: [`workstreams/beginner-onramp.md`](workstreams/beginner-onramp.md).
