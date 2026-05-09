@@ -37,14 +37,9 @@ class WifiConfig:
 
     @classmethod
     def from_dict(cls, data):
-        # `prefix=""` because we're passing a sub-dict — keys are bare
-        # `ssid` / `password` rather than the flat-dotted `wifi.ssid` /
-        # `wifi.password` shape `load_section` reads when given a full
-        # `RuntimeConfig`.
         return load_section(
             cls,
             data,
-            prefix="",
             required=("ssid", "password"),
             optional={"hostname": None, "connect_timeout_ms": 15_000},
         )
@@ -63,7 +58,6 @@ class MqttConfig:
         return load_section(
             cls,
             data,
-            prefix="",
             required=("broker",),
             optional={"port": 1883, "client_id": None},
         )

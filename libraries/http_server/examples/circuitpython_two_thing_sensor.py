@@ -69,16 +69,13 @@ def _load_runtime_settings():
 
         config = load_runtime_config()
         if config:
-            wifi_config = WifiConfig.try_from_config(config)
-            server_host = config.get(
-                "two_thing_sensor.server_host", server_host,
-            )
-            server_port = config.get(
-                "two_thing_sensor.server_port", server_port,
-            )
-            sensor_id = config.get(
-                "two_thing_sensor.sensor_id", sensor_id,
-            )
+            wifi_section = config.get("wifi")
+            if wifi_section:
+                wifi_config = WifiConfig.from_dict(wifi_section)
+            sensor_section = config.get("two_thing_sensor", {})
+            server_host = sensor_section.get("server_host", server_host)
+            server_port = sensor_section.get("server_port", server_port)
+            sensor_id = sensor_section.get("sensor_id", sensor_id)
     except (ImportError, OSError):
         pass
     if wifi_config is None:
