@@ -192,7 +192,7 @@ def run():
 python run.py deploy back-porch
 ```
 
-Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the canonical reserved path).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
+Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the path the on-device `chumicro_config.load_runtime_config()` reads).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
 
 ### Single project, AST-walked
 

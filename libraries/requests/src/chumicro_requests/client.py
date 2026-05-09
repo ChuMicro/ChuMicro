@@ -361,12 +361,12 @@ class HttpClient:
     @classmethod
     def from_config(
         cls,
-        config,
+        config: object,
         *,
-        radio=None,
-        ssl_context=None,
-        connection_factory=None,
-    ):
+        radio: object | None = None,
+        ssl_context: object | None = None,
+        connection_factory: object | None = None,
+    ) -> "HttpClient":
         """Build an :class:`HttpClient` from runtime config.
 
         Reads the ``[tool.chumicro.config]`` keys declared in

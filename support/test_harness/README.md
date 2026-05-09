@@ -48,6 +48,6 @@ Real-board execution does not go through this package — it goes through `chumi
 
 The test harness shapes the on-device test environment (the `chumicro_test_harness.skip()` primitive, `__chumicro_features__` markers, the `assertions.raises` helper) so the same test sources work both under unix-port harness runs and under `pytest-device` board runs.
 
-## Suppressions
+## Skipping tests loudly
 
-Test files use `chumicro_test_harness.skip(reason)` to skip loudly when a runtime feature isn't present (e.g. UDP on a runtime that lacks it).  Bare `if cond: return` is enforced as a failure by the workspace's `CHU009` / `CHU010` lints — silent skips read as PASS in CI, so the rule blocks them.
+Use `chumicro_test_harness.skip(reason)` when a runtime feature isn't present (e.g. UDP on a runtime that lacks it).  Bare `if cond: return` is a silent skip — it reads as PASS, hiding broken tests.  The harness's `skip()` raises a sentinel exception the runner classifies as SKIP with the given reason, so missing features stay visible.

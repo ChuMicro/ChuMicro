@@ -3,10 +3,9 @@
 Built on :mod:`chumicro_sockets` (TCP + TLS) and :mod:`chumicro_timing`
 (ticks).  No async, no threads — a tick-based runner contract:
 :meth:`HttpClient.check(now_ms) -> bool` reports whether work is
-pending; :meth:`handle(now_ms)` does one tick of progress.  The
-canonical promise: an LED can keep blinking on the same board while
-a request is in flight, in a TLS handshake, or mid-timeout against
-a stalled peer.
+pending; :meth:`handle(now_ms)` does one tick of progress, so an
+LED can keep blinking on the same board while a request is in
+flight, in a TLS handshake, or mid-timeout against a stalled peer.
 
 Public API::
 

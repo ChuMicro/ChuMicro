@@ -80,7 +80,7 @@ class _FakeFs:
 
 
 def test_default_path_and_capacity_match_adr() -> None:
-    """The canonical path + default capacity are fixed values."""
+    """The default path and capacity are fixed values."""
     backend = MpLittlefsBackend(filesystem=_FakeFs())
     assert backend._path == "/_chu_kv.msgpack"
     assert backend.capacity == MpLittlefsBackend.DEFAULT_CAPACITY == 16384

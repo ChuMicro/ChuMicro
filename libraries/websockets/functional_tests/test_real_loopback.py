@@ -15,10 +15,10 @@ self-loopback there.  Credentials ship from the host conftest as
 ``/runtime_config.msgpack`` and are read here via
 ``chumicro_config.load_runtime_config()``.
 
-Verifies the canonical promise: an LED-style counter keeps
-incrementing on the same loop while the handshake, the frame I/O,
-and the close handshake all run concurrently against each other on
-one device.
+Verifies the LED-blink invariant on a real board: an LED-style
+counter keeps incrementing on the same loop while the handshake,
+the frame I/O, and the close handshake all run concurrently
+against each other on one device.
 
 HTTP only (``ws://``) — ``wss://`` server adds the
 :func:`chumicro_sockets.tls_listening_socket` constraints documented

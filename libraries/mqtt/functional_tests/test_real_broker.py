@@ -13,9 +13,9 @@ the broker host/port ship from the host conftest as
 ``/runtime_config.msgpack`` and are read here via
 ``chumicro_config.load_runtime_config()``.
 
-Verifies the canonical runner-shape promise: an LED-style counter
-keeps incrementing on the same loop while the publish is in flight
-and waiting for PUBACK.
+Verifies the LED-blink invariant on a real board: an LED-style
+counter keeps incrementing on the same loop while the publish is
+in flight and waiting for PUBACK.
 
 Broker
 ======

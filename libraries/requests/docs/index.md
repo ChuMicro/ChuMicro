@@ -1,10 +1,9 @@
 # chumicro-requests
 
 Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.
-Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks); the
-canonical promise is that an LED keeps blinking on the same board while a
-request is in flight, in a TLS handshake, or mid-timeout against a stalled
-peer.
+Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks): an
+LED keeps blinking on the same board while a request is in flight, in a TLS
+handshake, or mid-timeout against a stalled peer.
 
 ## Quick example
 

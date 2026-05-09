@@ -3,9 +3,9 @@
 :class:`WebSocketClient` is the entry point.  Runner-shaped —
 :meth:`check(now_ms) -> bool` reports whether work is pending;
 :meth:`handle(now_ms)` performs one tick of progress.  No threads,
-no async — cooperative dispatch in the caller's tick loop.  The
-canonical promise: an LED can keep blinking on the same board
-through the opening handshake, frame I/O, and the close handshake.
+no async — cooperative dispatch in the caller's tick loop, so an
+LED can keep blinking on the same board through the opening
+handshake, frame I/O, and the close handshake.
 
 Single-connection per client: two parallel websocket sessions need
 two :class:`WebSocketClient` instances.  Mirrors

@@ -52,6 +52,9 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[project.scripts]
+chumicro-workspace = "chumicro_workspace.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace"

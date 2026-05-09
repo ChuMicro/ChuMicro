@@ -7,10 +7,9 @@ parsing) are inlined into :mod:`chumicro_http_server._wire` so a
 server-only board doesn't need to ship the full client library.
 No async, no threads — a tick-based runner contract:
 :meth:`HttpServer.check(now_ms) -> bool` reports whether work is
-pending; :meth:`handle(now_ms)` does one tick of progress.  The
-canonical promise: an LED can keep blinking on the same board while
-requests are being served, even through a slow upload or a stalled
-client.
+pending; :meth:`handle(now_ms)` does one tick of progress, so an
+LED can keep blinking on the same board while requests are being
+served, even through a slow upload or a stalled client.
 
 Public API::
 
