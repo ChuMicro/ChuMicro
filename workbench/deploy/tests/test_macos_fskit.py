@@ -177,13 +177,38 @@ def test_detect_true_with_leading_whitespace_state() -> None:
 def test_recovery_command_mentions_expected_daemons() -> None:
     # Smoke check — the pasted command is the contract between this
     # module and the recovery coaching, so catch silent drift.
-    # DiskArbitrationAgent is bounced via launchctl kickstart -k
-    # (not killall) because its launchd plist has KeepAlive=false:
-    # a plain kill leaves the agent dead and Finder's Locations
-    # sidebar stays empty.
-    assert "sudo" in MACOS_FSKIT_RECOVERY_COMMAND
+    # DiskArbitrationAgent is killed directly via killall -9 — an
+    # earlier version used `launchctl kickstart -k gui/$(id -u)/...`
+    # which is SIP-blocked on modern macOS; killall works because the
+    # per-user launchd respawns the agent on the next XPC client load.
+    assert "sudo killall -9" in MACOS_FSKIT_RECOVERY_COMMAND
     assert "com.apple.fskit.msdos" in MACOS_FSKIT_RECOVERY_COMMAND
+    assert "fskit_helper" in MACOS_FSKIT_RECOVERY_COMMAND
+    assert "fskitd" in MACOS_FSKIT_RECOVERY_COMMAND
+    assert "fskit_agent" in MACOS_FSKIT_RECOVERY_COMMAND
     assert "diskarbitrationd" in MACOS_FSKIT_RECOVERY_COMMAND
     assert "DiskArbitrationAgent" in MACOS_FSKIT_RECOVERY_COMMAND
-    assert "fskitd" in MACOS_FSKIT_RECOVERY_COMMAND
-    assert "launchctl kickstart -k" in MACOS_FSKIT_RECOVERY_COMMAND
+    assert "launchctl kickstart" not in MACOS_FSKIT_RECOVERY_COMMAND
+
+
+def test_doc_recovery_block_matches_constant() -> None:
+    # docs/troubleshooting/macos-circuitpy.md hardcodes the recovery
+    # command in a `bash` code block.  The constant in this module is
+    # the single source of truth — assert the doc literally contains
+    # the string so the two cannot drift.
+    from pathlib import Path
+
+    doc_path = (
+        Path(__file__).resolve().parents[3]
+        / "docs"
+        / "troubleshooting"
+        / "macos-circuitpy.md"
+    )
+    if not doc_path.is_file():
+        # Doc tree may be absent in stripped-down install layouts; the
+        # constant assertion above is the load-bearing check.
+        return
+    assert MACOS_FSKIT_RECOVERY_COMMAND in doc_path.read_text(encoding="utf-8"), (
+        "docs/troubleshooting/macos-circuitpy.md does not contain the "
+        "current MACOS_FSKIT_RECOVERY_COMMAND verbatim — they have drifted."
+    )
