@@ -43,6 +43,8 @@ Independent items.  Most have either shipped phases (status in the linked workst
 
 - [ ] **Investigate slow MicroPython RAM-mode functional test runs** — observed during 2026-04-19 live PyCharm testing that MicroPython RAM-mode functional tests took noticeably longer than expected.  CircuitPython RAM-mode is fast in comparison.  Suspects: per-file `mpremote mount` cost, cold-start interpreter overhead, batch-vs-per-test trade-off.  Profile against the new batch-execute path.
 
+- [ ] **`chumicro-workspace` console-script entry point missing** — surfaced 2026-05-08 during the CHU006 cleanup pass.  The package is documented as a CLI (`chumicro-workspace deploy-example …` everywhere in examples/READMEs) and works via `python -m chumicro_workspace`, but `workbench/workspace/pyproject.toml` has no `[project.scripts]` block, so `chumicro-workspace` is not on PATH after `pip install`.  Trivial fix: add `chumicro-workspace = "chumicro_workspace.cli:main"`.  Re-test: `pip install -e workbench/workspace && which chumicro-workspace` should resolve.
+
 ## Done (recent)
 
 > **Where the detail lives.**  This section is a one-line pointer log capped at 25 entries — drop the oldest when adding a new one.  Verbose session detail lives in commit messages or [`plans/workstreams/<name>.md`](workstreams/) (per-phase acceptance).  Past entries link to those records — don't paste detail back into `next-up.md`.
