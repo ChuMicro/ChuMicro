@@ -30,11 +30,15 @@ workbench/*/docs/assets/
 .mypy_cache/
 .scratch/
 
-# Agent-tooling scratch dir (worktrees, per-user settings).  Track only the
-# `skills` symlink so Claude Code auto-discovers the canonical skills tree
-# at `.github/skills/` from the location it expects (`.claude/skills/`).
+# Agent-tooling scratch dir (worktrees, per-user settings).  Track only:
+# * the `skills` symlink so Claude Code auto-discovers the canonical skills
+#   tree at `.github/skills/` from the location it expects (`.claude/skills/`).
+# * `settings.json` — team-shared agent permissions for chumicro dev tooling
+#   (chumicro-workspace / chumicro-deploy / chumicro-repl).  `.local.json`
+#   stays ignored for per-user overrides.
 .claude/*
 !.claude/skills
+!.claude/settings.json
 
 devices.yml
 
