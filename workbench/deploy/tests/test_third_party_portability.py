@@ -95,7 +95,7 @@ class TestThirdPartyPortability:
         deploy_call = next(
             call for call in fake.calls if call[0] == "deploy_files"
         )
-        files_arg, entrypoint_arg = deploy_call[1]
+        files_arg, entrypoint_arg, _follow = deploy_call[1]
         assert entrypoint_arg == "/code.py"
         assert "/code.py" in files_arg
         assert "/lib/greeter.py" in files_arg

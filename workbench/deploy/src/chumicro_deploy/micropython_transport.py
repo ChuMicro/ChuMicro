@@ -24,7 +24,7 @@ import tempfile
 import time as _time_module
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
@@ -323,6 +323,7 @@ class MicropythonTransport:
         *,
         baudrate: int = 115200,
         mode: str = "mount",
+        timeout: float = 10.0,
         runner: Callable[..., subprocess.CompletedProcess] | None = None,
         transport_factory: Callable[[str, int], Any] | None = None,
         time: TimeSource | None = None,
@@ -330,6 +331,15 @@ class MicropythonTransport:
         self.address = address
         self.baudrate = baudrate
         self.mode = mode
+        #: Wall-clock budget for the soft-reboot read in
+        #: :meth:`deploy_files` ``follow="soft_reboot"``.  Mirrors
+        #: :class:`CircuitpythonTransport`'s ``timeout`` (10 s default)
+        #: so the partial-output window for ``while True`` app code
+        #: feels the same on both runtimes.  ``follow="exec"`` ignores
+        #: this — that path uses :data:`_EXECUTE_IDLE_TIMEOUT` (an
+        #: inter-byte idle timeout, not a wall-clock budget) for raw-
+        #: REPL EOF reception.
+        self.timeout = timeout
         self._runner = runner or subprocess.run
         self._transport_factory = transport_factory or _default_transport_factory
         self._time: TimeSource = time or cast("TimeSource", _time_module)
@@ -640,6 +650,7 @@ class MicropythonTransport:
         *,
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        follow: Literal["exec", "soft_reboot"] = "exec",
     ) -> str:
         """Write *files* onto the device and execute *entrypoint*.
 
@@ -647,7 +658,8 @@ class MicropythonTransport:
         mounts it through the persistent raw REPL, and execs the
         entrypoint from the mount point.  Copy mode writes to the
         host-side staging dir and uses ``mpremote fs cp -r`` to push
-        to the device's flash, then execs via the persistent raw REPL.
+        to the device's flash, then runs the entrypoint via one of two
+        follow modes selected by the *follow* parameter.
 
         Args:
             files: On-device-path -> bytes mapping.  Paths may start
@@ -658,13 +670,61 @@ class MicropythonTransport:
                 on-device path as each file is written to staging.
             on_execute_line: Callback invoked once per line of the
                 execute output (in order) after execution completes.
+            follow: Selects how the staged entrypoint is run + how
+                its output is captured.
+
+                ``"exec"`` (default) — raw-REPL synchronous execution.
+                The entrypoint is wrapped in an ``exec(open(...).read())``
+                bootstrap and run via ``self._serial.exec_raw`` with
+                ``timeout=_EXECUTE_IDLE_TIMEOUT`` (inter-byte idle).
+                Captures full stdout once the script returns and raw
+                REPL emits the EOF (``\\x04``) marker.  Right for
+                return-bounded scripts (test-harness ``test_*.py``
+                files); breaks for ``while True`` app code because
+                the EOF marker never fires.
+
+                ``"soft_reboot"`` — friendly-REPL soft-reboot pattern,
+                analog of :class:`CircuitpythonTransport`'s flash
+                mode.  Sends ``Ctrl-B + Ctrl-D`` from the persistent
+                serial connection, lets MicroPython auto-run
+                ``/main.py``, reads serial output up to
+                :attr:`timeout` seconds (returning partial output for
+                infinite-loop bodies).  Mount mode is rejected — the
+                soft-reboot pattern requires the entrypoint at
+                ``/main.py`` on flash, not via mount, because
+                MicroPython only auto-runs files at known boot paths
+                on flash, never from a host-mounted directory.
 
         Returns:
             Combined stdout captured from the entrypoint execution.
+            For ``follow="soft_reboot"`` and an infinite-loop entry
+            point, this is whatever accumulated up to *self.timeout*.
+
+        Raises:
+            MicropythonTransportError: ``follow="soft_reboot"`` was
+                requested with ``mode="mount"`` (unsupported) or with
+                an entrypoint other than ``/main.py``.
         """
         validate_entrypoint_in_files(
             files, entrypoint, error_cls=MicropythonTransportError,
         )
+
+        if follow == "soft_reboot":
+            if self.mode != "copy":
+                raise MicropythonTransportError(
+                    "follow='soft_reboot' requires mode='copy'; got "
+                    f"mode={self.mode!r}.  The soft-reboot pattern auto-runs "
+                    "/main.py from flash — mount mode (mpremote mount_local) "
+                    "lands files at /remote and the runtime won't auto-run "
+                    "them on soft-reboot."
+                )
+            if entrypoint.lstrip("/") != "main.py":
+                raise MicropythonTransportError(
+                    "follow='soft_reboot' requires entrypoint '/main.py'; "
+                    f"got {entrypoint!r}.  MicroPython auto-runs /main.py "
+                    "(after /boot.py) on soft-reboot — other entrypoint "
+                    "names won't run automatically."
+                )
 
         if self._staging_dir is not None:
             self._staging_dir.cleanup()
@@ -719,6 +779,28 @@ class MicropythonTransport:
                 "sys.path.insert(0, '/remote/lib')\n"
                 "sys.path.insert(0, '/remote')\n"
             )
+
+        if follow == "soft_reboot":
+            # Caller validated mode == "copy" + entrypoint == "/main.py"
+            # at the top.  Files are now on flash; the persistent
+            # serial connection is open in raw REPL.  Hand off to the
+            # CP-flash-style soft-reboot read.
+            try:
+                output = self._trigger_soft_reboot_and_read()
+            except Exception as error:
+                raise MicropythonTransportError(
+                    f"Device deploy soft-reboot read failed: {error}"
+                ) from error
+            # Re-enter raw REPL so subsequent transport ops (or the
+            # caller's disconnect path) start from a known state.
+            try:
+                self._serial.enter_raw_repl(soft_reset=False)
+            except Exception:  # pragma: no cover — best-effort cleanup
+                pass
+            if on_execute_line is not None:
+                for output_line in output.splitlines():
+                    on_execute_line(output_line)
+            return output
 
         script = f"{sys_path_prefix}exec(open({entrypoint_on_device!r}).read())"
         try:
@@ -873,6 +955,110 @@ class MicropythonTransport:
             return
         self._serial = self._transport_factory(self.address, self.baudrate)
         self._serial.enter_raw_repl(soft_reset=True)
+
+    def _trigger_soft_reboot_and_read(self) -> str:
+        """Exit raw REPL, soft-reboot, read main.py output, return user text.
+
+        Mirror of :meth:`CircuitpythonTransport._read_code_py_output`'s
+        flash-mode pattern.  Used by
+        ``deploy_files(follow="soft_reboot")`` for app-code deploys
+        whose entrypoint may be a ``while True`` body that never
+        returns.  The raw-REPL ``exec_raw`` path (``follow="exec"``)
+        works for return-bounded scripts because raw REPL emits the
+        EOF (``\\x04``) marker when the script returns; for an
+        infinite-loop body the EOF never fires and the deploy hangs.
+        Soft-reboot bypasses raw REPL and reads serial directly with
+        a wall-clock timeout, returning whatever accumulated.
+
+        Sequence:
+
+        1. Send ``\\r\\x02`` (Ctrl-B) — exit raw REPL into friendly REPL.
+        2. Send ``\\x04`` (Ctrl-D) — soft-reboot.  MicroPython prints
+           ``MPY: soft reboot``, runs ``boot.py`` (if present), then
+           auto-runs ``/main.py``.
+        3. Read serial bytes via ``mpremote.SerialTransport.read_until``
+           with ``ending=b"\\r\\n>>> "`` (friendly-REPL prompt — the
+           analog of CircuitPython's ``Code done running.`` end
+           marker).  ``timeout_overall=self.timeout`` bounds the wait
+           — for ``while True`` bodies the prompt never appears and
+           the read returns whatever accumulated.
+
+        Returns:
+            User stdout from ``main.py`` execution, with the
+            ``MPY: soft reboot`` start marker, friendly-REPL banner,
+            and ``>>>`` prompt stripped.  See
+            :meth:`_extract_main_py_output` for the trimming rules.
+        """
+        assert self._serial is not None
+        port = self._serial.serial
+        # Two-stage transition.  Sending Ctrl-B + Ctrl-D back-to-back
+        # was bench-tested as racing on Pi Pico W MP — the firmware
+        # didn't always see Ctrl-D as "soft-reboot from friendly REPL"
+        # because it was still finishing the raw-REPL exit.  Wait for
+        # the friendly-REPL prompt before issuing Ctrl-D so the
+        # transition is observable.
+        port.write(b"\r\x02")  # Ctrl-B: exit raw REPL into friendly REPL.
+        self._serial.read_until(
+            1, b">>> ", timeout=2.0, timeout_overall=2.0,
+        )
+        port.write(b"\x04")    # Ctrl-D: soft-reboot from friendly REPL.
+        # Long inter-byte timeout (we don't care about idle gaps within
+        # main.py output — only the overall budget); ``timeout_overall``
+        # caps the total wait.
+        raw = self._serial.read_until(
+            1, b"\r\n>>> ",
+            timeout=self.timeout,
+            timeout_overall=self.timeout,
+        )
+        return self._extract_main_py_output(raw)
+
+    @staticmethod
+    def _extract_main_py_output(raw_boot_output: bytes) -> str:
+        """Extract user output from a fresh-boot serial capture.
+
+        Sync to the ``MPY: soft reboot`` start marker so any pre-reboot
+        bytes still in the host's serial buffer are discarded.  Strip
+        the trailing friendly-REPL banner (``MicroPython v...; <board>``
+        line + ``Type "help()" for more information.`` line + ``>>> ``
+        prompt) when ``main.py`` returned cleanly.  When ``main.py`` is
+        a ``while True`` body the read times out without those markers
+        and the trim is a no-op — partial accumulated output is
+        returned verbatim.
+
+        Tracebacks are kept (they're diagnostic for the user); only
+        the post-traceback REPL banner is stripped.
+
+        Args:
+            raw_boot_output: Bytes captured from the soft-reboot read.
+        """
+        text = raw_boot_output.decode("utf-8", errors="replace")
+        marker_index = text.find("MPY: soft reboot")
+        if marker_index != -1:
+            trailing_newline = text.find("\n", marker_index)
+            if trailing_newline != -1:
+                text = text[trailing_newline + 1:]
+        # Trim trailing friendly-REPL output.  Two anchors, whichever
+        # appears first wins:
+        #   * ``\nMicroPython v`` — start of the friendly-REPL banner
+        #     line (``MicroPython v1.28.0 on ...; <board>``).  Cuts
+        #     before the banner so any preceding traceback is
+        #     preserved.  This is the normal case after a clean
+        #     return or an exception.
+        #   * ``\n>>> `` (or bare ``>>> `` at start) — friendly-REPL
+        #     prompt.  Backstop for cases where the banner wasn't
+        #     captured (e.g. a quick return whose banner straddled
+        #     the read window) — without this, the trailing prompt
+        #     leaks into the returned text.
+        candidates: list[int] = []
+        for anchor in ("\nMicroPython v", "\n>>> "):
+            position = text.find(anchor)
+            if position != -1:
+                candidates.append(position)
+        if text.startswith(">>> "):
+            candidates.append(0)
+        if candidates:
+            text = text[:min(candidates)]
+        return text.strip("\r\n") + "\n"
 
     def _close_serial(self) -> None:
         """Close the persistent serial transport if open."""
