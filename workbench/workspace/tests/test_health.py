@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from chumicro_workspace import health as health_module
 from chumicro_workspace.health import (
     HealthLevel,
     check_devices_yaml,
+    check_macos_fskit_wedge,
     check_project_run_functions,
     check_python_version,
     check_workspace_yaml,
@@ -285,13 +288,72 @@ class TestCheckProjectRunFunctions:
         assert "no app.py" in finding.message
 
 
+class TestCheckMacosFskitWedge:
+    def test_non_darwin_returns_not_applicable(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(health_module.sys, "platform", "linux")
+        # Detector should not even be polled on non-darwin — guard
+        # against accidental subprocess.run calls during the static
+        # check on Linux / Windows CI.
+        polled = []
+
+        def fake_detect() -> bool:
+            polled.append(True)
+            return False
+
+        monkeypatch.setattr(health_module, "detect_fskit_wedge", fake_detect)
+        finding = check_macos_fskit_wedge()
+        assert finding.level is HealthLevel.OK
+        assert finding.label == "MACOS FSKIT"
+        assert "not applicable" in finding.message
+        assert polled == []
+
+    def test_darwin_healthy_diskarbitrationd(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(health_module.sys, "platform", "darwin")
+        monkeypatch.setattr(
+            health_module, "detect_fskit_wedge", lambda: False,
+        )
+        finding = check_macos_fskit_wedge()
+        assert finding.level is HealthLevel.OK
+        assert finding.label == "MACOS FSKIT"
+        assert "healthy" in finding.message
+
+    def test_darwin_wedged_surfaces_remediation_hint(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(health_module.sys, "platform", "darwin")
+        monkeypatch.setattr(
+            health_module, "detect_fskit_wedge", lambda: True,
+        )
+        finding = check_macos_fskit_wedge()
+        assert finding.level is HealthLevel.ERROR
+        assert finding.label == "MACOS FSKIT"
+        assert "wedged" in finding.message
+        assert finding.hint is not None
+        # Hint must point at both the wrapper and the doc fallback.
+        assert "doctor --fix-fskit-wedge" in finding.hint
+        assert "docs/troubleshooting/macos-circuitpy.md" in finding.hint
+
+
 class TestCollectDoctorFindings:
-    def test_runs_all_checks_in_order(self, tmp_path: Path) -> None:
+    def test_runs_all_checks_in_order(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Stub the detector so the test is deterministic regardless of
+        # host state — without this, a wedge on the dev machine would
+        # turn the FSKit check into an ERROR and break tests that run
+        # the full doctor suite.
+        monkeypatch.setattr(
+            health_module, "detect_fskit_wedge", lambda: False,
+        )
         workspace = _layout(tmp_path)
         findings = collect_doctor_findings(workspace)
         labels = [finding.label for finding in findings]
         # status's checks are bracketed by python (front) +
-        # project-run (back).
+        # project-run + macOS FSKit (back).
         assert labels == [
             "PYTHON",
             "WORKSPACE.YML",
@@ -299,4 +361,5 @@ class TestCollectDoctorFindings:
             "DEVICES.YML",
             "PROJECTS",
             "PROJECT run() defs",
+            "MACOS FSKIT",
         ]
