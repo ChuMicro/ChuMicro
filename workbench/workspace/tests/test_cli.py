@@ -1903,7 +1903,7 @@ class TestDoctorFixFskitWedge:
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
     ) -> None:
         # Wedge detector returns False — running the recovery on a
-        # healthy system damages mounted volumes (Item 4 caveat).
+        # healthy system damages mounted volumes.
         recorded, detect_calls = self._patch_environment(
             monkeypatch, wedge_states=[False],
         )

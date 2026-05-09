@@ -1554,13 +1554,12 @@ _FSKIT_FIX_EXIT_PERSISTS = 6
 def _fix_fskit_wedge() -> int:
     """Opt-in sudo wrapper around :data:`MACOS_FSKIT_RECOVERY_COMMAND`.
 
-    Refuses on non-macOS, when no wedge is detected (per the Item 4
-    caveat — running the killall on a healthy system damages mounted
-    volumes), when stdin/stderr are not a TTY (sudo can't prompt for
-    a password), or when ``sudo`` is not on PATH.  When all checks
-    pass, runs the killall, settles 2 s, re-runs detection, and
-    reports.  Distinct exit codes per refusal class so scripted
-    callers can branch.
+    Refuses on non-macOS, when no wedge is detected (running the
+    killall on a healthy system damages mounted volumes), when
+    stdin/stderr are not a TTY (sudo can't prompt for a password),
+    or when ``sudo`` is not on PATH.  When all checks pass, runs the
+    killall, settles 2 s, re-runs detection, and reports.  Distinct
+    exit codes per refusal class so scripted callers can branch.
     """
     if sys.platform != "darwin":
         print(
