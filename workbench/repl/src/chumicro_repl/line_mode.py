@@ -11,8 +11,7 @@ the user and the device.  Per-line:
 
 1. ``prompt_toolkit`` reads a complete line with cursor edit,
    history navigation, and ``Ctrl-R`` reverse search.
-2. Lines starting with ``:`` route through the command parser
-   (Slice 1b — only ``:help`` / ``:quit`` registered for 1a).
+2. Lines starting with ``:`` route through the command parser.
 3. Other lines ship to the device; subsequent serial output
    prints back to the user.
 
@@ -175,9 +174,8 @@ class LineModeContext:
 
 #: Signature: ``(context, rest) -> True | False``.  *rest* is the
 #: substring after the command name.  Return False to ask the loop
-#: to exit.  Slice 1a shipped `:help` / `:quit` against an earlier
-#: signature; Slice 1b promotes to the context-bearing form so
-#: `:edit` can ship lines + `:save` can read history.
+#: to exit.  The context-bearing form lets `:edit` ship lines and
+#: `:save` read history.
 CommandHandler = Callable[["LineModeContext", str], bool]
 
 
@@ -482,8 +480,7 @@ def run_line_mode(
         history_root: Override the history root.  Defaults to
             :data:`DEFAULT_HISTORY_ROOT`; tests pass a tmp_path.
         commands: Override / extend the built-in `:command` table.
-            Defaults to :data:`BUILTIN_COMMANDS`.  Slice 1b will
-            ship a richer set via this parameter.
+            Defaults to :data:`BUILTIN_COMMANDS`.
         prompt: Text shown to the user before each input.
         welcome_banner: Local text written before the loop starts.
         theme: Color theme for serial-output highlighting.

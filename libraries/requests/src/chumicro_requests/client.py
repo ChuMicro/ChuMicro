@@ -18,9 +18,9 @@ user pattern::
 
     response = handle.result   # raises on failure
 
-Slice 3a (this file): plain HTTP GET, status line + headers + body
+This module ships plain HTTP GET, status line + headers + body
 bytes via ``Content-Length`` or read-until-close.  TLS, POST, JSON,
-redirects, and chunked encoding ship in subsequent slices.
+redirects, and chunked encoding are future work.
 """
 
 import json

@@ -917,7 +917,7 @@ class TestResetIntoBootloader:
 
 
 class TestDeployFiles:
-    """Tests for MicropythonTransport.deploy_files (Slice 1d)."""
+    """Tests for MicropythonTransport.deploy_files."""
 
     def _prepare_transport(
         self,

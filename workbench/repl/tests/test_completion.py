@@ -1,4 +1,4 @@
-"""Tests for tab completion (Phase 7 Slice 1c)."""
+"""Tests for tab completion."""
 
 from __future__ import annotations
 

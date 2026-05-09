@@ -20,8 +20,7 @@ the entrypoint to finish before returning, so by the time
 ``tail()`` opens the port the script is done — there is no
 deterministic on-device source of in-window output that doesn't
 require a separate "leave it running" path on the board.  When
-that path lands (Phase 7 sensor-project template), this file gains
-the assertion-on-output test.
+that path lands, this file gains the assertion-on-output test.
 """
 
 from __future__ import annotations

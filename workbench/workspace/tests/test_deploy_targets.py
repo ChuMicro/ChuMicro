@@ -1,4 +1,4 @@
-"""Tests for ``chumicro_workspace.deploy_targets`` (Phase 2f)."""
+"""Tests for ``chumicro_workspace.deploy_targets``."""
 
 from __future__ import annotations
 

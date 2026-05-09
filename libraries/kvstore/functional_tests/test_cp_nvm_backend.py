@@ -91,9 +91,9 @@ def test_kvstore_construction_handles_corruption_silently() -> None:
 def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
     """The canonical use case: counter survives a fresh KVStore.
 
-    Slice 5 will exercise this across an actual hard reset; this test
-    proves the substrate works across re-construction (the same code
-    path the boot path takes after a reboot).
+    A future hard-reset suite will exercise across an actual reboot;
+    this test proves the substrate works across re-construction (the
+    same code path the boot path takes after a reboot).
     """
     _wipe_nvm()
 

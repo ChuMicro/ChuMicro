@@ -237,9 +237,9 @@ class DeviceCompleter:
         return self._cache
 
     def candidates(self, prefix: str) -> Iterable[str]:
-        # Slice 1c v1: only the bare namespace ("") is queried.
-        # Attribute completion (`foo.bar<Tab>` → `dir(foo)`) lands
-        # in a follow-on alongside the wire-protocol implementation.
+        # Only the bare namespace ("") is queried today.  Attribute
+        # completion (`foo.bar<Tab>` → `dir(foo)`) is future work
+        # alongside the wire-protocol implementation.
         cached = self._cache.get("")
         if cached is None and self._fetcher is not None:
             fetched = self._fetcher("")

@@ -1,4 +1,4 @@
-"""Tests for the library scaffolder (Phase 4)."""
+"""Tests for the library scaffolder."""
 
 from __future__ import annotations
 

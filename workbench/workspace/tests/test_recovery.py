@@ -1,4 +1,4 @@
-"""Tests for app-level deploy-failure recovery hints (Phase 2d)."""
+"""Tests for app-level deploy-failure recovery hints."""
 
 from __future__ import annotations
 

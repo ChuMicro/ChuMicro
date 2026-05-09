@@ -260,11 +260,12 @@ class TestImportGraphSource:
     def test_from_import_resolves_named_submodule(self, tmp_path: Path):
         """``from foo._adapters import mp`` ships ``foo/_adapters/mp.py``.
 
-        Phase 7 Layer-3 caught this: the walker captured the package
-        (``foo._adapters``) but ignored the named alias (``mp``),
-        leaving the runtime-gated adapter off the device.  Probing
-        ``foo._adapters.mp`` as a candidate submodule plus skipping
-        unresolvable names quietly is the smallest fix.
+        Without explicit aliased-submodule probing, the walker
+        captures the package (``foo._adapters``) but ignores the
+        named alias (``mp``), leaving the runtime-gated adapter off
+        the device.  Probing ``foo._adapters.mp`` as a candidate
+        submodule plus skipping unresolvable names quietly is the
+        smallest fix.
         """
         libs = tmp_path / "libs"
         libs.mkdir()

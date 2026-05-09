@@ -1,7 +1,7 @@
-"""Phase 3b acceptance — auto-detect + multi-type persistence on real hardware.
+"""kvstore acceptance — auto-detect + multi-type persistence on real hardware.
 
-Closes the kvstore phase by verifying the cross-cutting behaviors
-that don't belong to any single backend's suite:
+Verifies the cross-cutting behaviors that don't belong to any
+single backend's suite:
 
 * ``KVStore(backend="auto")`` picks the substrate-appropriate backend
   for each runtime + board.

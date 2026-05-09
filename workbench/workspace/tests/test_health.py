@@ -1,4 +1,4 @@
-"""Tests for workspace health checks (Phase 2a — `status` command)."""
+"""Tests for workspace health checks (`status` command)."""
 
 from __future__ import annotations
 
@@ -208,7 +208,7 @@ class TestCollectHealthFindings:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2b doctor checks
+# Doctor checks
 # ---------------------------------------------------------------------------
 
 

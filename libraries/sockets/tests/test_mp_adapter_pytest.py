@@ -301,12 +301,12 @@ class TestSslContextWithCa:
         """``ssl_context_with_ca`` accepts a PEM and passes DER bytes
         to ``load_verify_locations``.
 
-        Empirical finding (Phase 7 TLS investigation, 2026-04-26):
-        the rp2 MP build ships mbedTLS *without* ``MBEDTLS_PEM_PARSE_C``,
-        so PEM input raises ``ValueError('invalid cert')`` on the
-        Pi Pico W.  Converting to DER before passing is the
-        lowest-common-denominator path that works on every MP port.
-        Test pins the wrapper to the conversion behavior.
+        The rp2 MP build ships mbedTLS *without*
+        ``MBEDTLS_PEM_PARSE_C``, so PEM input raises
+        ``ValueError('invalid cert')`` on the Pi Pico W.  Converting
+        to DER before passing is the lowest-common-denominator path
+        that works on every MP port.  Test pins the wrapper to the
+        conversion behavior.
         """
         # Real-shape PEM: header / body / footer with valid base64 body.
         # ``b"\xde\xad\xbe\xef"`` → ``b"3q2+7w=="`` after base64.

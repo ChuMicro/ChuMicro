@@ -2,7 +2,7 @@
 
 Drives the ``tests/fixtures/third_party_template/`` fixture through
 chumicro-deploy's public API only — no ``libraries/``, ``support/``,
-or ``scripts/`` imports.  Proves Slice 1a–1f ship a public surface
+or ``scripts/`` imports.  Proves the public surface is something
 third parties can actually build on.
 
 If chumicro ever grows a hidden coupling that leaks mono-repo

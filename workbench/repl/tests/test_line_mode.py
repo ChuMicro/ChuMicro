@@ -1,4 +1,4 @@
-"""Tests for line-mode REPL (Phase 7 Slice 1a)."""
+"""Tests for line-mode REPL."""
 
 from __future__ import annotations
 
@@ -372,7 +372,7 @@ class TestRunLineMode:
 
 
 class TestSaveLoadSnippets:
-    """Slice 1b — `:save` writes input history; `:load` replays it."""
+    """`:save` writes input history; `:load` replays it."""
 
     def test_save_and_load_round_trip(self, tmp_path: Path) -> None:
         snippets = tmp_path / "snippets"
@@ -499,7 +499,7 @@ class TestSaveLoadSnippets:
 
 
 class TestEditCommand:
-    """Slice 1b — `:edit` ships editor-saved buffer to the device."""
+    """`:edit` ships editor-saved buffer to the device."""
 
     def test_edit_ships_lines_via_stub_editor(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

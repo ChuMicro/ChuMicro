@@ -107,6 +107,36 @@ class TestPatternsHit:
     @pytest.mark.parametrize(
         "text",
         [
+            "Lands as the real adapter in Slice 1",
+            "Slice 2 of the nested-projects-and-examples plan",
+            "Slice 3a (this file): plain HTTP GET",
+            "(Slice 1d) — these exercise the real device",
+            "before Slice 3 added the flag",
+        ],
+    )
+    def test_slice_numbered(self, text: str) -> None:
+        """All numbered Slice references are caught."""
+        assert _any_pattern_matches(text)
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Phase 7 Layer-3 caught a Pi Pico W MP hang",
+            "(Phase 2a — `status` command)",
+            "(Phase 2d)",
+            "Phase 7 follow-up: a 100 KB inbound PUBLISH",
+            "in Phase 6",
+            "Phase 3b acceptance",
+            "Step 3 of beginner-onramp",
+        ],
+    )
+    def test_phase_step_without_colon(self, text: str) -> None:
+        """Phase/Step + N without a trailing colon is caught."""
+        assert _any_pattern_matches(text)
+
+    @pytest.mark.parametrize(
+        "text",
+        [
             "F4 of the 2026-05-06 verification pass",
             "F6 of the 2026-05-06 verification finding",
             "F4 of 2026-05-06 verification — ``add-device`` derives",
@@ -185,6 +215,10 @@ class TestPatternsMiss:
             "Adafruit CircuitPython 10.2.0 on 2026-01-02; Foo Board",  # fixture
             "the FAT was reformatted on 2021-01-01 by boot",  # technical fact
             "F4: chip variants with hyphens must be normalised",  # F-prefix without date
+            "# Step 1: put the board in bootloader mode.",
+            "# Step 2: locate the UF2 drive (explicit override or auto)",
+            "Step 1: plant the initial set",
+            "Phase 1: connect to the AP",  # procedural step in app code
         ],
     )
     def test_no_match(self, text: str) -> None:

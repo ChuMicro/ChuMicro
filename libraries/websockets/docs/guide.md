@@ -182,15 +182,16 @@ CircuitPython on the Pi Pico W (rp2 port).
 
 ## What's new
 
-*0.3.0 — Slice 4: public `chumicro_websockets.testing` (FakeConnection,
+*0.3.0 — public `chumicro_websockets.testing` (FakeConnection,
 FakeListener, TickClock) + end-to-end client↔server integration suite.*
 
-*0.2.0 — Slice 2 + 3: `WebSocketClient` and `WebSocketServer` +
-`Connection`.  Fragmentation reassembly, oversize policy, auto-pong,
-optional auto-ping, full close handshake.*
+*0.2.0 — `WebSocketClient` and `WebSocketServer` + `Connection`.
+Fragmentation reassembly, oversize policy, auto-pong, optional
+auto-ping, full close handshake.*
 
-*0.1.0 — Slice 1: wire-format primitives (`FrameParser`, `encode_frame`,
-handshake encoders + parsers, close-payload codec, exception hierarchy).*
+*0.1.0 — wire-format primitives (`FrameParser`, `encode_frame`,
+handshake encoders + parsers, close-payload codec, exception
+hierarchy).*
 
 ---
 
