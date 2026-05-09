@@ -1229,26 +1229,16 @@ class TestFlashMode:
     def test_flash_disconnect_does_not_touch_autoreload(
         self, tmp_path: Path,
     ) -> None:
-        """disconnect() must not send any autoreload command, even in flash mode.
+        """disconnect() in flash mode emits Ctrl-B only — no Ctrl-C, no autoreload flip.
 
-        Regression guard for the deploy-audit pass that made
-        ``disconnect()`` pure teardown.  The autoreload-off issued by
-        :meth:`_disable_autoreload_before_drive_writes` is restored
-        implicitly by ``deploy_files``'s mid-method soft-reboot, and
-        intentionally left off on the ``_stage_to_flash`` path; either
-        way, disconnect must not flip it.  An explicit autoreload-on
-        here would re-introduce the ESP32-S2 USB-CDC double-reboot
-        wedge documented in the disconnect docstring.
-
-        Also locks in the "no Ctrl-C at disconnect" rule
-        (workbench-deploy-reliability workstream Step 1, 2026-05-09):
-        every flash deploy leaves ``code.py`` running on purpose, so
-        sending Ctrl-C here would interrupt mqtt connects, blocking
-        socket recvs, and every ``while True:`` example.
+        Ctrl-C would interrupt the ``code.py`` that ``deploy_files``
+        leaves running.  An autoreload-on flip can layer a second
+        soft-reboot on top of one already in flight and wedge the
+        ESP32-S2 USB-CDC firmware.
         """
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT,   # connect
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1260,8 +1250,6 @@ class TestFlashMode:
 
         transport.disconnect()
 
-        # Bare Ctrl-B (exits raw REPL when in raw, harmless otherwise);
-        # no Ctrl-C interrupt of running user code; no autoreload flip.
         from chumicro_deploy.circuitpython_transport import _CTRL_B
         written_data = b"".join(port.writes)
         assert _CTRL_B in port.writes
@@ -1270,17 +1258,15 @@ class TestFlashMode:
         assert b"autoreload" not in written_data
 
     def test_ram_disconnect_does_not_send_autoreload(self) -> None:
-        """disconnect() in ram mode emits no autoreload command.
+        """disconnect() in ram mode emits Ctrl-B only — same shape as flash.
 
-        ram mode never disables autoreload in the first place, so there
-        is nothing to restore.  Same final post-condition as the flash
-        path (which also no longer touches autoreload at disconnect),
-        but covered separately so the ram-vs-flash asymmetry that used
-        to exist can't regress silently.
+        ram mode never disables autoreload, so there is nothing to
+        restore; the parity is asserted explicitly so the two paths
+        cannot drift.
         """
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT,   # connect
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1298,17 +1284,11 @@ class TestFlashMode:
 
         transport.disconnect()
 
-        written_data = b"".join(port.writes)
-        # No autoreload command in either direction.
-        assert b"autoreload" not in written_data
-        # Should send Ctrl-B (exit raw REPL → friendly REPL).  No
-        # explicit Ctrl-D either — disconnect is pure teardown; both
-        # the explicit soft-reboot and the autoreload-on were removed
-        # in the deploy-audit pass (see disconnect docstring).
         from chumicro_deploy.circuitpython_transport import _CTRL_B
+        written_data = b"".join(port.writes)
+        assert b"autoreload" not in written_data
         assert _CTRL_B in port.writes
         assert _CTRL_D not in port.writes
-        # Workstream Step 1: no Ctrl-C either — same rationale as flash.
         assert _CTRL_C not in port.writes
 
     def test_flash_stage_is_idempotent_across_calls(
