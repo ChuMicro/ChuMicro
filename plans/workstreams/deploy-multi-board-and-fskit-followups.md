@@ -43,30 +43,18 @@ Original observation kept below for context.
 2. Does verify need to be skipped when the transport's `mode` isn't `"flash"`?  `list_files_in_scope` already returns `[]` early on non-flash; double-check `delete_files`.
 3. Is there a hardware-light way to test this — i.e. mock the probe so the verify does the redirect — that doesn't require two boards plugged in?
 
-## Item 2 — `detect_fskit_wedge` is only wired into `InteractiveDeployer`
+## Item 2 — `detect_fskit_wedge` wiring beyond `InteractiveDeployer` — **source-side DONE 2026-05-09; bench validation gated on Item 5**
 
 > **Important reframing post-Item-3:** Item 3's investigation *disproved* the original hypothesis that the suite-mode wipe failure was an FSKit wedge.  The wipe-test was being pre-empted by a soft-reboot from the test's own host-side direct write; nothing to do with the macOS FSKit kernel-wait state.  Item 2's wedge wiring is therefore **purely defensive** — it catches a *real* macOS FSKit wedge that happens during a wipe (a separate failure class from Item 3), so users see "the FSKit recovery dance" instead of a generic-timeout error.
 
-**Evidence:**
-- `grep -rn "detect_fskit_wedge" workbench/deploy/src/` shows two call sites:
-  - `recovery.py:639` — `_RecoveringDeployer.__init__` accepts a `fskit_wedge_detector` callable, defaults to `detect_fskit_wedge`.
-  - `recovery.py:876` — `InteractiveDeployer` (subclass) wires it through.
-- Not wired into:
-  - `CircuitpythonTransport.wipe_filesystem()`'s reconnect-loop timeout (line ~1640-1652) — when the post-wipe drive doesn't remount within `_WIPE_FAT_REMOUNT_TIMEOUT_SECONDS`, the function raises a generic `CircuitpythonTransportError` with no wedge classification.
-  - `_resolve_circuitpy_drive()`'s "drive not found" exception path.
-  - `workbench/deploy/functional_tests/conftest.py` — tests connect to transports directly (bypassing `Deployer`), so they bypass the wedge promotion.
-  - `chumicro-workspace doctor` — could detect proactively rather than waiting for a failure.
+Source-side wiring shipped in two places:
 
-**Current thinking (revised post-Item-3):**
-- A *real* FSKit wedge during a wipe would show up as `_wait_for_circuitpy_remount`'s 10 s timeout: USB-CDC came back but the FAT volume never remounted because diskarbitrationd is stuck in `Us`.  The current code raises a generic message there.  If that timeout path called `detect_fskit_wedge()` and raised a `MACOS_FSKIT_WEDGED`-classified error, the user / test would see the actionable recovery command instead of a generic timeout.
-- For the functional test conftest: a session-scoped `autouse` fixture that calls `detect_fskit_wedge()` at session start and skips the whole flash-mode suite with the recovery command would catch a pre-existing wedge before the suite starts a long, noisy failure cascade.
-- `chumicro-workspace doctor --fix-fskit-wedge` could shell out via `subprocess.run(..., check=False)` so the user gets a single password prompt instead of needing to paste.  Risk: auto-running sudo is a blast-radius decision; per `macos_fskit.py:22-25` the existing module deliberately doesn't auto-run.  An opt-in `--yes-please-sudo` flag (or just printing "this is what we'd run; type your password") might be the right shape.
+- `_wait_for_circuitpy_remount`'s timeout error message in `circuitpython_transport.py` was rephrased to "CIRCUITPY drive not mounted at {path} within {N}s of storage.erase_filesystem(); last error: ..." so the substring matches `_CIRCUITPY_DRIVE_PATTERNS["circuitpy drive not mounted"]` in `recovery.py`.  The classifier now routes the timeout to `CIRCUITPY_DRIVE_MISSING`, which `_RecoveringDeployer._resolve_kind` promotes to `MACOS_FSKIT_WEDGED` when `detect_fskit_wedge()` reports True.  `test_wipe_filesystem_remount_timeout_promotes_to_fskit_wedged` proves the chain end-to-end through `InteractiveDeployer`.  The serial-reconnect timeout earlier in `wipe_filesystem` deliberately stays port-shaped — that's a USB-CDC issue, not the FAT-remount-stall signature of an FSKit wedge.
+- `workbench/deploy/functional_tests/conftest.py` got a session-scoped autouse fixture that calls `detect_fskit_wedge()` once at session start and `pytest.skip`s the entire suite with the killall recovery command if wedged.  No-op on non-macOS.  Without this, a pre-existing wedge turned the suite into a 10-second-per-test failure cascade.
 
-**What to verify:**
-1. What's the correct exception-type promotion path for `wipe_filesystem` to surface `MACOS_FSKIT_WEDGED`?  The transport currently raises `CircuitpythonTransportError` and the classifier in `recovery.py` maps from message strings — adding the right marker substring may be enough without restructuring.
-2. Does the functional test conftest already have a wedge-detection hook somewhere that's just not running?  Worth a `grep -rn "fskit\|wedge" workbench/deploy/functional_tests/`.
-3. Is "auto-run sudo on user opt-in" actually wanted?  `macos_fskit.py:22-25` is opinionated against it; ADR-worthy to revisit if we're going to wire it in.
-4. Item 5's "trigger a wedge deliberately on a fresh boot" is the bench prerequisite — without a way to deliberately wedge the system, none of the wiring above can be end-to-end validated.
+**Out of scope (deliberate):** `chumicro-workspace doctor --fix-fskit-wedge`.  The workstream listed it as a future option, but `macos_fskit.py:22-25` deliberately keeps auto-running sudo human-in-the-loop.  Adding an opt-in `--yes-please-sudo` flag is its own ADR-worthy decision.
+
+**Bench validation pending:** Item 5 — without a deliberate FSKit wedge on a fresh boot, the new wiring's success path is unit-tested but not hardware-validated.  See Item 5 below for the runbook.
 
 ## Item 3 — Suite-state wipe failure — **DONE 2026-05-09**
 
@@ -101,32 +89,74 @@ Fix: rewrite `test_circuitpython_wipe_reformats_circuitpy_drive` to plant the se
 3. Bisect Step 1 — temporarily revert the disconnect change in a `.scratch/` branch and re-run the full suite.  If it passes with the revert, the autoreload-watcher-live hypothesis is the cause and the fix is to add an explicit autoreload-OFF in the disconnect path.
 4. Check whether `_enter_raw_repl`'s prompt detection is robust against pre-buffered bytes.  `_read_until(_RAW_REPL_PROMPT)` may be eating leftover content from the prior session's print output and falsely returning success.
 
-## Item 4 — "Don't run the FSKit recovery command twice" — doc note
+## Item 4 — "Don't run the FSKit recovery command twice" — **DONE 2026-05-09**
 
-**Evidence:**
-- During the 2026-05-09 session, the user ran the (corrected) `MACOS_FSKIT_RECOVERY_COMMAND` twice: first time cleared the wedge cleanly + remounted both CIRCUITPY drives; second run cut off in-flight FAT operations on the just-remounted volumes, leaving them in I/O-error state (`ls: /Volumes/CIRCUITPY: Input/output error`) while still mounted.
-- Recovery from the I/O-error state required physical replug of both boards (not unmount/remount, not soft-reboot via raw REPL — the boards' USB-MSC interface stays attached across soft-reboot, so re-enumeration didn't re-present the volumes).
+The "only run when wedged" caveat now lives in two places that are part of the user-facing recovery surface: `docs/troubleshooting/macos-circuitpy.md` (paragraph above the bash code block — kept outside the block so the doc-recovery-block-matches-constant drift test stays passing) and the `MACOS_FSKIT_WEDGED` RecoveryPlan in `recovery.py` (new "Run it ONLY ONCE per wedge" fix_step in the InteractiveDeployer coaching output).  Both name the I/O-error state and that physical unplug + replug is the recovery — soft-reboot doesn't work because USB-MSC stays attached across it.  122/122 tests in `test_recovery.py` pass; the `test_macos_fskit_wedged_plan_contains_recovery_command` constant-drift guard stays green.
 
-**Current thinking (NOT verified):**
-- `docs/troubleshooting/macos-circuitpy.md` should add a one-liner above the recovery command saying "only run this when `detect_fskit_wedge()` returns True (or `ps -o state= -p $(pgrep diskarbitrationd)` shows `Us`).  Running it on a healthy system damages mounted volumes."
-- A future `chumicro-workspace doctor --fix-fskit-wedge` wrapper (Item 2) should call `detect_fskit_wedge()` first and refuse to run if not wedged.
-- The `RecoveryPlan` for `MACOS_FSKIT_WEDGED` could include the "only when wedged" caveat in its fix-steps too.
-
-**What to verify:**
-- Is there a less-destructive recovery if the second-run I/O-error state happens?  Soft-reboot via raw REPL didn't work; `microcontroller.reset()` (full hardware reset, USB re-enumerates) was not tried but might recover without physical replug.
+Open follow-up (not blocking): is there a less-destructive recovery for the post-second-run I/O-error state?  Soft-reboot via raw REPL didn't work in 2026-05-09; `microcontroller.reset()` (full hardware reset, USB re-enumerates) was not tried but might recover without physical replug.  Worth a single-board test on the next bench session — not a workstream-blocker.
 
 ## Item 5 — End-to-end bench validation of the corrected `MACOS_FSKIT_RECOVERY_COMMAND`
 
-**Evidence:**
-- The 2026-05-09 source change (commit `f9eca27`) replaced the SIP-blocked `launchctl kickstart` step with a direct `killall -9 DiskArbitrationAgent`.  Source-side validation: 843 unit tests pass + the new `test_doc_recovery_block_matches_constant` drift guard.
-- Bench validation of the full clear-wedge-then-recover-test cycle did not complete:
-  - The Claude Code `!` shell prefix runs commands without a TTY, so sudo can't read a password through it.
-  - The user ran the command outside of Terminal.app (in their main shell) once successfully and once accidentally a second time, leading to Item 4's I/O-error state.
-  - After physical replug, isolation-mode wipe test passed — but suite-mode wipe test failed (Item 3, not the recovery command's fault).
+**Evidence so far:**
+- The 2026-05-09 source change (commit `f9eca27`) replaced the SIP-blocked `launchctl kickstart` step with a direct `killall -9 DiskArbitrationAgent`.  Source-side validation: 846 unit tests pass + the `test_doc_recovery_block_matches_constant` drift guard.
+- Bench validation of the full clear-wedge-then-recover-test cycle did not complete in the 2026-05-09 session.  The user accidentally ran the command twice on a healthy system (now covered by Item 4's caveat); after physical replug the isolation-mode wipe test passed — but suite-mode failed for an unrelated reason (Item 3).
+- Items 2 + 4 added wiring + caveats *assuming* the recovery command works; Item 5 is the missing end-to-end evidence that proves it.
 
-**What to verify:**
-1. Trigger the wedge deliberately (small FAT12 volume + heavy concurrent probe?) on a fresh boot, confirm `detect_fskit_wedge()` reports True, run the corrected command, confirm `detect_fskit_wedge()` reports False, confirm CIRCUITPY drives remount RW.  This is the missing end-to-end evidence the source change claims but didn't bench-prove.
-2. The original wipe-test failure that triggered this whole investigation — re-run after Item 3's reproducer + fix lands, confirm it's stable across consecutive full-suite runs.
+**What's known about how the wedge gets triggered**
+
+Bench-observed in two prior sessions (commit `6fdc132` April 2026; the 2026-05-09 4-board sweep), both as a *side-effect* of normal multi-board CP work — never deliberately reproduced.  The user-space `com.apple.fskit.msdos.appex` extension wedges `diskarbitrationd` in uninterruptible kernel wait when its probe of a small FAT12 volume hits an internal error.  CIRCUITPY drives are tiny FAT12 volumes that fit the trigger profile.  No reduced repro exists.
+
+**Runbook for the next bench session**
+
+The goal is to trigger the wedge on demand, confirm `detect_fskit_wedge()` reports True, run the corrected `MACOS_FSKIT_RECOVERY_COMMAND`, confirm the detector goes back to False and the CIRCUITPY drives mount RW.  Try the approaches in this order; stop at the first one that wedges the system.
+
+1. **Approach A — natural trigger via real CP work (highest confidence).**  Both prior wedges happened during normal multi-board CP deploy sweeps.  On a fresh boot:
+   - Run `python scripts/run.py preflight --with-functional` against the 4-board canonical matrix (Lolin S2 CP+MP, Pi Pico W CP+MP).  Item 2's session-start fixture will skip if the system is already wedged at start, so you'll know if the wedge happened during the run.
+   - If preflight finishes clean, run a tight loop: `for i in 1 2 3 4 5; do python scripts/run.py deploy-example timing circuitpython_blink --device <id> --non-interactive; done` against both CP boards in alternation.  The 2026-05-09 wedge happened mid-sweep around the third or fourth board change.
+
+2. **Approach B — synthetic small FAT12 volume + repeated probe (untested speculation).**  If Approach A doesn't produce a wedge in ~30 minutes:
+   - `hdiutil create -fs MS-DOS -size 1m -volname FATTEST /tmp/fattest.dmg`
+   - In two terminals: tight `while true; do hdiutil attach /tmp/fattest.dmg; hdiutil detach $(diskutil list | grep FATTEST | awk '{print $NF}'); done` loops.
+   - Watch `ps -o state= -p $(pgrep diskarbitrationd)` in a third terminal — when state goes from `Ss` to `Us`, the wedge is in.
+   - Caveat: this is speculation, not a known-good repro.  If it doesn't trigger in ~10 minutes, fall back to Approach A and just keep deploying.
+
+3. **Approach C — wait for it (slowest, but most reliable historically).**  The wedge has been observed naturally during normal work twice in this codebase's history.  If A and B fail, the cycle of "do real CP work, hit it eventually" works.  Less satisfying as a deliberate trigger but it's what got us here.
+
+**Once the wedge is in, validate the recovery command**
+
+```bash
+# Confirm the wedge:
+python -c "from chumicro_deploy.macos_fskit import detect_fskit_wedge; print(detect_fskit_wedge())"
+# expected: True
+
+ps -o state= -p $(pgrep diskarbitrationd)
+# expected: contains "U"
+
+# Run the recovery — paste in a real Terminal.app tab, NOT through the Claude Code `!` prefix
+# (the !-prefix shell has no TTY so sudo can't read a password through it):
+sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd fskit_agent diskarbitrationd DiskArbitrationAgent
+
+# Wait 1-2 seconds for daemons to respawn, then unplug + replug both boards if drives haven't reappeared.
+
+# Confirm the wedge is cleared:
+python -c "from chumicro_deploy.macos_fskit import detect_fskit_wedge; print(detect_fskit_wedge())"
+# expected: False
+
+# Confirm CIRCUITPY drives are usable:
+ls /Volumes/ | grep CIRCUITPY
+echo test > /Volumes/CIRCUITPY/.probe && rm /Volumes/CIRCUITPY/.probe && echo "drive is RW"
+```
+
+**Then re-run the original failing test:**
+
+```bash
+.venv/bin/python -m pytest workbench/deploy/functional_tests/ --no-cov
+# expected: 16/16 pass (Item 3's fix landed, so suite-mode wipe is stable now too)
+```
+
+**Recording results.**  When the bench session lands the validation, edit this Item 5 section in place to mark it `**DONE YYYY-MM-DD**` with one line naming which approach triggered the wedge, that the killall command cleared it, and that CIRCUITPY drives remounted RW.  Drop the runbook content — keep the resolved-state note concise.
+
+**If none of these work:** the recovery command itself is source-validated (847 unit tests, drift guard).  The remaining unknown is whether `killall -9 DiskArbitrationAgent` actually unsticks the per-user agent — that one specific change (commit `f9eca27`) is what wasn't bench-proven.  A follow-up could fall back to recommending a reboot if the killall doesn't unstick within ~5 seconds.
 
 ## Operational notes (for the next session, not for code)
 
