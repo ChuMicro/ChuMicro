@@ -186,9 +186,9 @@ Bench-validated on Lolin S2 CP:
 - `--tail-seconds 0` → 3.6 s deploy (rsync + verification + Ctrl-D, no capture).  Empty stdout.
 - `--tail-seconds 20` → 23.6 s deploy, captured `LOOP_PROBE counter=1..40` (20 s × 2 prints/sec, matches the probe's `time.sleep(0.5)`).
 
-### Step 4 — Strip stale autoreload framing from recovery hint
+### Step 4 — Strip stale autoreload framing from recovery hint ✅
 
-`recovery.py:534-546` — drop "CircuitPython's autoreload can remount while a write is in flight" since the deploy disables autoreload before any rsync.  Replace with the diagnosed cause (force-reset-before-FS-done, fixed by step 2) plus the recovery path (tap RESET, replug).
+Shipped 2026-05-09.  `FLASH_COPY_FAILED` recovery-hint fix-steps in `recovery.py` no longer name autoreload as the cause (deploy disables autoreload before any rsync, so it cannot have been the cause).  New phrasing names the actual recovery sequence: tap RESET → wait for remount → retry, with the macOS `msdosfs` RO-flag clearing as the underlying mechanism.  No tests asserted on the old phrasing, so no test changes needed.
 
 After all four land: 4-board validation sweep on Lolin S2 CP+MP and Pi Pico W CP+MP, mqtt + udp + http_server.
 
