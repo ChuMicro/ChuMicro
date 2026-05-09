@@ -139,7 +139,7 @@ class RuntimeConfig:
 
 def load_section(
     target_class: type,
-    config,
+    config: object,
     *,
     prefix: str,
     required: tuple = (),
@@ -205,7 +205,7 @@ def load_section(
 
 def try_load_section(
     target_class: type,
-    config,
+    config: object,
     *,
     prefix: str,
     required: tuple = (),

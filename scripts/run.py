@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -1020,6 +1021,20 @@ def _build_one_library_docs_factory(
     def build_one(sink: _Sink) -> int:
         relative_path = library_dir.relative_to(ROOT)
         site_dir = library_dir / "site"
+        # mkdocstrings + griffe cache parsed-AST results in
+        # ``<library>/.cache/``.  When cached entries are reused, griffe
+        # does not re-emit warnings on stdout — and the warning-scan
+        # below would silently pass.  Always wipe the cache so each
+        # docs build re-parses every source file from scratch.
+        cache_dir = library_dir / ".cache"
+        if cache_dir.is_dir():
+            for cache_entry in cache_dir.iterdir():
+                if cache_entry.name == ".gitignore":
+                    continue
+                if cache_entry.is_dir():
+                    shutil.rmtree(cache_entry)
+                else:
+                    cache_entry.unlink()
         command = [
             PYTHON, "-m", "zensical", "build",
             "-f", str(library_dir / "mkdocs.yml"),

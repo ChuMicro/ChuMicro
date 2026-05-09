@@ -60,7 +60,7 @@ class WifiConfig:
         self.power_save = power_save
 
     @classmethod
-    def from_config(cls, config) -> "WifiConfig":
+    def from_config(cls, config: object) -> "WifiConfig":
         """Build a ``WifiConfig`` from the flat runtime config.
 
         Reads ``wifi.ssid`` / ``wifi.password`` (required) plus any
@@ -95,7 +95,7 @@ class WifiConfig:
         )
 
     @classmethod
-    def try_from_config(cls, config) -> "WifiConfig | None":
+    def try_from_config(cls, config: object) -> "WifiConfig | None":
         """Soft-load a ``WifiConfig`` — return ``None`` when not configured.
 
         Returns ``None`` whenever :meth:`from_config` would raise:

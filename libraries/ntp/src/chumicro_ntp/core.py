@@ -220,12 +220,12 @@ class NTPClient:
     @classmethod
     def from_config(
         cls,
-        config,
+        config: object,
         *,
-        radio=None,
-        socket=None,
-        socket_factory=None,
-    ):
+        radio: object | None = None,
+        socket: object | None = None,
+        socket_factory: object | None = None,
+    ) -> "NTPClient":
         """Build an :class:`NTPClient` from runtime config.
 
         Reads the ``[tool.chumicro.config]`` keys declared in

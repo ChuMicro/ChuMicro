@@ -175,16 +175,16 @@ _CONNECT_PROTOCOL_PREFIX = b"\x00\x04MQTT\x04"
 
 def encode_connect(
     *,
-    client_id,
-    keep_alive_seconds,
-    clean_session=True,
-    username=None,
-    password=None,
-    will_topic=None,
-    will_message=None,
-    will_qos=0,
-    will_retain=False,
-):
+    client_id: str,
+    keep_alive_seconds: int,
+    clean_session: bool = True,
+    username: str | None = None,
+    password: str | None = None,
+    will_topic: str | None = None,
+    will_message: bytes | None = None,
+    will_qos: int = 0,
+    will_retain: bool = False,
+) -> bytes:
     """Build a CONNECT packet ready to send.
 
     Args:
@@ -194,10 +194,13 @@ def encode_connect(
             client-side.
         clean_session: ``False`` resumes persistent broker state for
             QoS 1+ retransmission across reconnects.
-        username / password: Optional auth credentials.
-        will_topic / will_message: Last-will message broker publishes
-            on uncleanly-dropped connection.
-        will_qos / will_retain: QoS + retain flags for the will message.
+        username: Optional auth username (paired with *password*).
+        password: Optional auth password.
+        will_topic: Topic for the broker's last-will message — published
+            on uncleanly-dropped connection.  ``None`` disables the will.
+        will_message: Payload for the broker's last-will message.
+        will_qos: QoS for the will message (0 or 1).
+        will_retain: ``True`` retains the will message on the broker.
 
     Raises:
         UnsupportedQoSError: ``will_qos > 1``.
