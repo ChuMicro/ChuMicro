@@ -791,12 +791,9 @@ class MicropythonTransport:
                 raise MicropythonTransportError(
                     f"Device deploy soft-reboot read failed: {error}"
                 ) from error
-            # Re-enter raw REPL so subsequent transport ops (or the
-            # caller's disconnect path) start from a known state.
-            try:
-                self._serial.enter_raw_repl(soft_reset=False)
-            except Exception:  # pragma: no cover — best-effort cleanup
-                pass
+            # Leave the board in friendly REPL with main.py running.
+            # Subsequent transport ops re-enter raw REPL on demand via
+            # _ensure_serial; disconnect tolerates either REPL state.
             if on_execute_line is not None:
                 for output_line in output.splitlines():
                     on_execute_line(output_line)
