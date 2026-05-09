@@ -84,7 +84,7 @@ def test_auto_backend_round_trips_all_msgpack_value_types() -> None:
 
     The supported value types match what ``chumicro-msgpack`` can
     encode; this test runs the full table through the auto-selected
-    backend so the canonical use case (the user picks ``"auto"`` and
+    backend so the typical use case (the user picks ``"auto"`` and
     writes whatever they want) actually works on every runtime.
     """
     _wipe_substrates()

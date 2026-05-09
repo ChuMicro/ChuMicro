@@ -1,9 +1,9 @@
 """Wiring service callbacks into a single EventBus.
 
-Shows the canonical wiring pattern: services expose
-``on_state_change`` callbacks, the application binds each one to a
-publisher on a shared bus, and a single subscriber reacts to the
-resulting cross-service stream.
+Wires services into a shared event bus: each service exposes an
+``on_state_change`` callback, the application binds each callback
+to a publisher, and a single subscriber reacts to the resulting
+cross-service stream.
 
 The fake services here stand in for the real ``chumicro-wifi`` and
 ``chumicro-mqtt``; the wiring shape is identical.

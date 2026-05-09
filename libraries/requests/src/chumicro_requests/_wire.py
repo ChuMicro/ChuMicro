@@ -514,10 +514,10 @@ class ResponseParser:
     def __init__(
         self,
         *,
-        max_body_bytes=DEFAULT_MAX_BODY_BYTES,
-        body_buffer=None,
-        body_buffer_view=None,
-    ):
+        max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
+        body_buffer: bytearray | None = None,
+        body_buffer_view: memoryview | None = None,
+    ) -> None:
         """Construct a one-shot parser.
 
         Args:
