@@ -188,11 +188,10 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
     """In-memory cert + key isn't supported on CP — paths are required.
 
     CircuitPython's ``ssl.SSLContext.load_cert_chain`` only accepts
-    *filesystem paths*, not in-memory PEM bytes (verified live 2026-04-27
-    on Lolin S2 ESP32-S2 — passing bytes raises
-    ``OSError(2, <pem-bytes>)`` because mbedTLS treats the bytes as a
-    path it can't open).  Use :func:`ssl_context_with_cert_and_key_paths`
-    instead.
+    *filesystem paths*, not in-memory PEM bytes — passing bytes
+    raises ``OSError(2, <pem-bytes>)`` because mbedTLS treats the
+    bytes as a path it can't open.  Use
+    :func:`ssl_context_with_cert_and_key_paths` instead.
 
     On MicroPython + CPython, the bytes-shaped helper works directly —
     only CP forces the path-based API.

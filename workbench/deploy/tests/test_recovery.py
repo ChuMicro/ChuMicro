@@ -1132,7 +1132,7 @@ class TestFakeSerialPortScriptedDisconnects:
 
 
 # ---------------------------------------------------------------------------
-# F6 — port-holder diagnosis (2026-05-06 verification finding)
+# Port-holder diagnosis
 # ---------------------------------------------------------------------------
 
 

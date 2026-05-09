@@ -62,13 +62,11 @@ def test_ip_returns_none_when_not_connected() -> None:
 def test_connect_to_nonexistent_ssid_returns_false_within_timeout() -> None:
     """Substrate timeout/refusal maps to a clean ``False``.
 
-    Targets one of the open device-verification questions in the
-    workstream Phase 3a doc: "How long does CP's blocking connect
-    stall on a routable-but-unresponsive AP?"  Using a deliberate
-    non-existent SSID with a short timeout exercises the
-    substrate's failure path on real hardware without needing live
-    wifi.  Wraps the call in ``stop_station`` cleanup so the next
-    test starts fresh.
+    Exercises the substrate's failure path with a deliberate non-
+    existent SSID + short timeout — answers "how long does CP's
+    blocking connect stall on a routable-but-unresponsive AP?" on
+    real hardware without needing live wifi.  Wraps the call in
+    ``stop_station`` cleanup so the next test starts fresh.
     """
     _stop_station_quietly()
     adapter = CpWifiAdapter()

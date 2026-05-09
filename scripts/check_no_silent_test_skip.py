@@ -1,9 +1,7 @@
 """Lint for silent-pass / silent-skip patterns in test bodies.
 
-Closes the audit that produced Phase 1–6 of the silent-skip workstream
-by making the rules durable: any new test that re-introduces one of
-the offending shapes fails CI (or the local ``run.py lint`` check)
-before it can land.
+Any new test that introduces one of the offending shapes fails CI
+(or the local ``run.py lint`` check) before it can land.
 
 Two rules.
 

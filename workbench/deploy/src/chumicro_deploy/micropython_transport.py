@@ -166,8 +166,7 @@ _LIST_SCOPE_SCRIPT: str = (
 #: ~850 KB; lolin-s2-mp's ``vfs`` partition is 2 MB) can still hit
 #: ``ENOSPC`` mid-deploy after a "wipe."  ``VfsLfs2.mkfs`` reformats
 #: the partition, which is the only reliable way to recover the
-#: full block budget.  Verified on rp2 (pi-pico-w-mp) and esp32
-#: (lolin-s2-mp) hardware 2026-05-05.
+#: full block budget.
 #:
 #: Substrate-dispatched: each MicroPython port exposes its flash /
 #: data partition through a different module.  The dispatch covers
@@ -901,10 +900,6 @@ class MicropythonTransport:
         many test runs can still hit ``ENOSPC`` mid-deploy after a
         non-mkfs "wipe."  The mkfs path recovers the full block
         budget every time.
-
-        Verified on hardware 2026-05-05: pi-pico-w-mp (rp2),
-        lolin-s2-mp (esp32) — both come back with an empty ``/`` and
-        full free-block count.
 
         The script is dispatched as a one-shot ``mpremote exec``
         subprocess rather than via the persistent :class:`SerialTransport`:

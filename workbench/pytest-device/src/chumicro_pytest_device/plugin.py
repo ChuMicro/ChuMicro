@@ -749,9 +749,9 @@ class _TransportCache:
         ``disconnect()`` is pure teardown — exits raw REPL (Ctrl-B)
         and closes the serial port.  It deliberately does NOT touch
         ``supervisor.runtime.autoreload`` or fire an explicit Ctrl-D
-        soft-reboot; both were removed in the deploy-audit pass after
-        the ESP32-S2 USB-CDC double-reboot wedge (2026-05-03 Lolin S2
-        bake).
+        soft-reboot: those caused a double-reboot wedge on ESP32-S2
+        USB-CDC firmware where the post-Ctrl-D soft-reboot landed
+        before the host had finished closing the serial port.
 
         Net effect at session end: each board is left in friendly
         REPL with the serial port closed.  On the ``deploy_files``
