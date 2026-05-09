@@ -86,7 +86,21 @@ _BOARD_FILE_VISIBLE_POLL_INTERVAL = 0.25
 #: chance to quiesce before Ctrl-D kicks the VM into soft-reboot —
 #: cheap insurance against hardware-level races the software layer
 #: has no signal for.
-_BOARD_FILE_VISIBLE_POST_SETTLE = 0.5
+#:
+#: Bumped from 0.5 s to 2.0 s on 2026-05-09 after on-board verification
+#: showed an S2 CIRCUITPY drive demoted to read-only mid-deploy
+#: (workbench-deploy-reliability workstream Finding 1 / 8).  The likely
+#: contributor: our explicit Ctrl-D fired before all in-flight FAT
+#: writes had committed, leaving the volume in a state the macOS
+#: `msdosfs` driver defends against by remounting RO.  Investigated
+#: whether CP's own autoreload watcher could provide a quiescence
+#: signal for "safe to reset now" — it cannot: `autoreload_trigger()`
+#: drops events when autoreload is disabled (and we must keep it
+#: disabled during rsync to avoid the uninterruptible-I/O wedge), and
+#: `autoreload_enable()` resets any pending trigger.  Until we add
+#: post-rsync verification (Step 2b: `rsync --checksum --dry-run`),
+#: this longer settle is the cheap structural mitigation.
+_BOARD_FILE_VISIBLE_POST_SETTLE = 2.0
 
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
