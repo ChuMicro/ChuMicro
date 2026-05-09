@@ -928,6 +928,44 @@ def test_drive_missing_is_promoted_to_fskit_wedged_when_detector_trips() -> None
     assert "tap RESET once so CircuitPython re-exposes" not in joined
 
 
+def test_wipe_filesystem_remount_timeout_promotes_to_fskit_wedged() -> None:
+    # The FAT-remount timeout in CircuitpythonTransport.wipe_filesystem
+    # is the load-bearing surface for "FSKit wedged a CIRCUITPY drive
+    # mid-wipe": serial USB-CDC reconnects fine, but the FAT volume
+    # never remounts.  The transport's timeout message is phrased to
+    # contain "CIRCUITPY drive not mounted" so it classifies to
+    # CIRCUITPY_DRIVE_MISSING — which the recovery layer then promotes
+    # to MACOS_FSKIT_WEDGED when the detector reports True.  Without
+    # that wiring the user would see a generic "didn't become usable"
+    # timeout instead of the actionable killall recovery command.
+    from chumicro_deploy.macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND
+    fake = _FakeDeployer(
+        [
+            CircuitpythonTransportError(
+                "CIRCUITPY drive not mounted at "
+                "/Volumes/CIRCUITPY within 10s of "
+                "storage.erase_filesystem(); last error: "
+                "PermissionError: [Errno 13] Permission denied",
+            ),
+        ],
+    )
+    sink, lines = _capturing_output()
+    prompt = _ScriptedPrompt(["quit"])
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=prompt,
+        output=sink,
+        fskit_wedge_detector=lambda: True,
+    )
+
+    with pytest.raises(CircuitpythonTransportError):
+        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+    joined = "\n".join(lines)
+    assert "macos_fskit_wedged" in joined
+    assert MACOS_FSKIT_RECOVERY_COMMAND in joined
+
+
 def test_drive_missing_stays_generic_when_detector_says_healthy() -> None:
     # The detector returning False keeps the existing
     # CIRCUITPY_DRIVE_MISSING coaching — no false-positive promotion

@@ -3026,7 +3026,7 @@ class TestWipeFilesystem:
         transport.connect()
         with pytest.raises(
             CircuitpythonTransportError,
-            match="did not become usable",
+            match="CIRCUITPY drive not mounted",
         ):
             transport.wipe_filesystem()
 

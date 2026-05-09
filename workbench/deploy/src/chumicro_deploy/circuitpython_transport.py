@@ -1664,9 +1664,17 @@ class CircuitpythonTransport:
             except CircuitpythonTransportError as resolve_error:
                 last_error = resolve_error
                 self._time.sleep(_WIPE_RECONNECT_POLL_SECONDS)
+        # Phrasing matches `_CIRCUITPY_DRIVE_PATTERNS["circuitpy
+        # drive not mounted"]` in recovery.py so the recovery
+        # classifier routes this to CIRCUITPY_DRIVE_MISSING — which
+        # `_RecoveringDeployer._resolve_kind` then promotes to
+        # MACOS_FSKIT_WEDGED when `detect_fskit_wedge()` reports True.
+        # That promotion is the only host-visible signal that a
+        # FAT-remount stall is the macOS FSKit wedge rather than a
+        # generic timeout.
         raise CircuitpythonTransportError(
-            f"CIRCUITPY drive {self.circuitpy_drive_path} did not "
-            f"become usable within "
+            f"CIRCUITPY drive not mounted at "
+            f"{self.circuitpy_drive_path} within "
             f"{_WIPE_FAT_REMOUNT_TIMEOUT_SECONDS:.0f}s of "
             f"storage.erase_filesystem(); last error: {last_error}"
         )
