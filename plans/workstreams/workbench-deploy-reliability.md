@@ -160,9 +160,15 @@ So the "re-enable autoreload, let CP fire its own reset" plan would result in th
 
 The actual lever for the S2 FAT race is **timing**, not mechanism.  The current `_BOARD_FILE_VISIBLE_POST_SETTLE = 0.5` was empirical guesswork and is too short to guarantee in-flight FAT writes have committed before our Ctrl-D.  Bump to 2 s — cheap, reversible, addresses the user's "0.5 s is too short regardless" intuition as a belt-and-suspenders fix.
 
-### Step 2b — Post-rsync verification pass via `rsync --checksum --dry-run`
+### Step 2b — Post-rsync verification pass via `rsync --checksum --dry-run` ✅
 
-After the main rsync, run a second rsync against the same staging tree with `--checksum --dry-run --itemize-changes`.  If any files come back as needing transfer, the first rsync's writes didn't commit fully (FAT corruption, partial write, USB-MSC race) — fail the deploy with a clear "write didn't commit" message *before* triggering Ctrl-D.  Uses rsync's own machinery rather than a separate read-back loop; FAT-cache concerns on Pi Pico W are the open question worth investigating.
+Shipped 2026-05-09.  `flash_drive.verify_rsync()` runs `rsync --recursive --checksum --dry-run --itemize-changes` against the same staging tree the main rsync just wrote, parses `--itemize-changes` output, and returns the list of paths that would still need updating.  Filtering on the position-1 update marker (`<` / `>` / `c` / `h`) — not per-attribute flags — sidesteps cosmetic FAT-mtime deltas (`.f..T....`) firing false positives.
+
+`_push_staging_to_drive` calls `verify_rsync` after `flush_volume` and before returning.  Non-empty divergent-paths list raises `CircuitpythonTransportError` with the recovery procedure (RESET + replay) named in the message — the deploy fails before Ctrl-D triggers a soft-reboot against an inconsistent volume.
+
+Tests: 7 new `TestVerifyRsync` cases (clean match, content divergence, missing file, time-only diff filter, missing rsync, subprocess error, timeout recovery hint) + 1 transport-side `test_post_rsync_verification_failure_raises`.  840 deploy tests pass at 95% coverage.
+
+Bench-validated on Lolin S2 CP — clean deploy wall-time grew from ~13.6 s (Step 2 alone) to ~13.7 s; verification is essentially free at typical CIRCUITPY payload sizes.  Mount stays read-write across iterations.
 
 ### Step 3 — Configurable capture window
 

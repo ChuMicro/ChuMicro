@@ -1933,6 +1933,35 @@ class TestDeployFiles:
         with pytest.raises(CircuitpythonTransportError, match="CIRCUITPY drive not found"):
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
 
+    def test_post_rsync_verification_failure_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """deploy_files must raise before Ctrl-D when verify_rsync reports divergence.
+
+        Soft-rebooting against an inconsistent FAT volume risks the
+        macOS msdosfs driver demoting the volume to read-only —
+        unrecoverable without a physical RESET.  The error message
+        must name the recovery procedure (RESET + replay).
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.flash_drive.verify_rsync",
+            lambda *_args, **_kwargs: ["/code.py"],
+        )
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra,
+        )
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="verification found",
+        ):
+            transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+
     def test_inline_script_budget_raises_on_low_memory(self) -> None:
         """inline_script_budget_bytes() must refuse when probe reports too little RAM."""
         port = FakeSerialPort(

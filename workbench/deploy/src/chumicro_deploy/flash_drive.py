@@ -367,6 +367,97 @@ FUNCTIONAL_TEST_EXTRA_EXCLUDES: tuple[str, ...] = (
 )
 
 
+def verify_rsync(
+    source: Path,
+    destination: Path,
+    *,
+    additional_excludes: tuple[str, ...] | list[str] = (),
+    timeout: float = 30.0,
+) -> list[str]:
+    """Confirm *destination*'s contents match *source* via rsync dry-run.
+
+    Runs ``rsync --recursive --checksum --dry-run --itemize-changes``
+    (the same flags :func:`rsync` uses, plus dry-run + itemize) and
+    returns the list of paths rsync reports as needing update.  When
+    the previous real :func:`rsync` call committed every byte, the
+    list is empty.  Non-empty means content on the volume diverged
+    from the staging tree — the canonical signal for FAT corruption,
+    USB-MSC partial-write, or a drive that quietly went read-only
+    after the writes started.
+
+    Itemize-changes flag positions: position 1 is the update marker
+    (``<`` / ``>`` / ``c`` / ``h`` mean "would transfer"; ``.`` /
+    ``*`` mean "no update needed").  We filter on the first character
+    so cosmetic time / permission deltas (``.f..T....``) don't fire
+    a false positive — only real content / size diffs do.
+
+    Args:
+        source: Staging tree that was rsynced to *destination*.
+        destination: Mount point that should now mirror *source*.
+        additional_excludes: Extra basenames passed through to
+            ``--exclude`` so the dry-run scope matches the original
+            rsync's scope exactly.
+        timeout: Subprocess deadline (seconds).  Verification reads
+            every file from the FAT volume; 30 s is well above the
+            empirical worst-case for typical CIRCUITPY payloads.
+
+    Returns:
+        Sorted list of source-relative paths that the verification
+        rsync would update.  Empty on success.
+
+    Raises:
+        FlashDriveError: rsync is missing or the subprocess errored
+            for a reason other than "would-update detected" (which
+            shows up in stdout, not as a non-zero exit).
+    """
+    command = [
+        "rsync",
+        "--recursive",
+        "--checksum",
+        "--dry-run",
+        "--itemize-changes",
+    ]
+    for pattern in _BASE_RSYNC_EXCLUDES:
+        command.append(f"--exclude={pattern}")
+    for pattern in additional_excludes:
+        command.append(f"--exclude={pattern}")
+    command.append(str(source) + "/")
+    command.append(str(destination) + "/")
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=True,
+        )
+    except FileNotFoundError as not_found_error:
+        raise FlashDriveError(
+            "rsync is required for verification but was not found.  "
+            f"{install_hint_for_rsync()}"
+        ) from not_found_error
+    except subprocess.CalledProcessError as rsync_error:
+        raise FlashDriveError(
+            f"rsync verification failed: {rsync_error.stderr}"
+        ) from rsync_error
+    except subprocess.TimeoutExpired as timeout_error:
+        raise FlashDriveError(
+            f"rsync verification hung past {timeout:.0f}s — the FAT "
+            "volume may have wedged after the main rsync.  Tap RESET "
+            "and re-deploy."
+        ) from timeout_error
+    needs_update = []
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        marker = line[0]
+        if marker in ("<", ">", "c", "h"):
+            parts = line.split(None, 1)
+            if len(parts) == 2:
+                needs_update.append(parts[1])
+    return sorted(needs_update)
+
+
 def strip_extended_attributes(path: Path) -> None:
     """Remove macOS extended attributes from all files under *path*.
 
