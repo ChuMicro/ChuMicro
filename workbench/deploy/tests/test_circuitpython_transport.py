@@ -2742,6 +2742,135 @@ class TestListFilesInScopeAndDelete:
         )
         transport.delete_files([])  # no exception, no error
 
+    def test_list_files_in_scope_auto_corrects_stale_drive_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``circuitpy_drive_path`` pointing at the wrong board's drive
+        is silently auto-corrected — list returns the connected board's
+        files, not the unrelated mount's.
+
+        Multi-board macOS bench: a ``CIRCUITPY 1`` rename swap leaves
+        ``devices.yml`` ``circuitpy_drive_path`` stale, and without
+        verify the diff layer reports zero stale files because it's
+        looking at the other board.
+        """
+        wrong_drive = tmp_path / "CIRCUITPY"
+        wrong_drive.mkdir()
+        (wrong_drive / "boot_out.txt").write_text(
+            "Adafruit CircuitPython 10.2.0-rc.0 on 2026-04-16; "
+            "Raspberry Pi Pico W with rp2040\n"
+            "Board ID:raspberry_pi_pico_w\n"
+            "UID:E6614103E7174624\n",
+            encoding="utf-8",
+        )
+        (wrong_drive / "wrong_only.py").write_text("x = 1")
+
+        right_drive = tmp_path / "CIRCUITPY 1"
+        right_drive.mkdir()
+        (right_drive / "boot_out.txt").write_text(
+            "Adafruit CircuitPython 10.1.4 on 2026-03-09; "
+            "S2Mini with ESP32S2-S2FN4R2\n"
+            "Board ID:lolin_s2_mini\n"
+            "UID:84722E7490C3\n",
+            encoding="utf-8",
+        )
+        (right_drive / "code.py").write_text("# right code")
+        (right_drive / "lib").mkdir()
+        (right_drive / "lib" / "right_only.py").write_text("y = 2")
+
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [wrong_drive, right_drive],
+        )
+
+        # Probe response identifies the connected board as the Lolin S2,
+        # whose mount is actually at right_drive.
+        probe_marker = (
+            "OK"
+            "__CHU_IMPL__:circuitpython|10.1.4|S2Mini with ESP32S2-S2FN4R2\n"
+            "__CHU_UID__:84722E7490C3\n"
+            "\x04\x04>"
+        )
+        port = FakeSerialPort(read_responses=[
+            _RAW_REPL_PROMPT,
+            probe_marker.encode("utf-8"),
+        ])
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=str(wrong_drive),
+            serial_port_factory=lambda **kw: port,
+            time=FakeTime(),
+        )
+        transport.connect()
+        listed = sorted(transport.list_files_in_scope())
+        # Right-drive contents only; wrong-drive's `wrong_only.py` is absent.
+        assert listed == ["/code.py", "/lib/right_only.py"]
+
+    def test_delete_files_auto_corrects_stale_drive_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """delete_files unlinks from the connected board's mount, not
+        the stale ``circuitpy_drive_path``'s.  Same risk class as
+        list_files_in_scope, more dangerous because it's destructive."""
+        wrong_drive = tmp_path / "CIRCUITPY"
+        wrong_drive.mkdir()
+        (wrong_drive / "boot_out.txt").write_text(
+            "Adafruit CircuitPython 10.2.0-rc.0 on 2026-04-16; "
+            "Raspberry Pi Pico W with rp2040\n"
+            "Board ID:raspberry_pi_pico_w\n"
+            "UID:E6614103E7174624\n",
+            encoding="utf-8",
+        )
+        (wrong_drive / "lib").mkdir()
+        wrong_target = wrong_drive / "lib" / "stale.py"
+        wrong_target.write_text("# wrong board — must NOT be deleted")
+
+        right_drive = tmp_path / "CIRCUITPY 1"
+        right_drive.mkdir()
+        (right_drive / "boot_out.txt").write_text(
+            "Adafruit CircuitPython 10.1.4 on 2026-03-09; "
+            "S2Mini with ESP32S2-S2FN4R2\n"
+            "Board ID:lolin_s2_mini\n"
+            "UID:84722E7490C3\n",
+            encoding="utf-8",
+        )
+        (right_drive / "lib").mkdir()
+        right_target = right_drive / "lib" / "stale.py"
+        right_target.write_text("# right board — should be deleted")
+
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [wrong_drive, right_drive],
+        )
+        probe_marker = (
+            "OK"
+            "__CHU_IMPL__:circuitpython|10.1.4|S2Mini with ESP32S2-S2FN4R2\n"
+            "__CHU_UID__:84722E7490C3\n"
+            "\x04\x04>"
+        )
+        port = FakeSerialPort(read_responses=[
+            _RAW_REPL_PROMPT,
+            probe_marker.encode("utf-8"),
+        ])
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=str(wrong_drive),
+            serial_port_factory=lambda **kw: port,
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.delete_files(["/lib/stale.py"])
+        # The connected-board mount's file got deleted, the stale path's didn't.
+        assert not right_target.exists()
+        assert wrong_target.exists(), (
+            "delete_files unlinked from the wrong board's drive — "
+            "stale circuitpy_drive_path was not auto-corrected"
+        )
+
 
 class TestWipeFilesystem:
     """`wipe_filesystem()` drives `storage.erase_filesystem()` then re-connects."""

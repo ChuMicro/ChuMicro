@@ -1,10 +1,16 @@
 # Workstream: Multi-board CP deploy + FSKit recovery follow-ups
 
-Status: **research / observation pile.**  Captured 2026-05-09 at the end of the workbench-deploy-reliability session.  Five distinct items, three of them with concrete evidence and one-paragraph hypotheses; the rest are more open.  Each item names the *evidence*, the *current thinking* (treat as hypothesis, not conclusion), and *what the next session should verify* before changing code.
+Status: **partly shipped.**  Items 1 and 3 landed 2026-05-09 in this same investigation session — the deeper pass found both bugs reproducibly and fixed them.  Items 2, 4, and 5 remain open.  Each item below names the *evidence*, the *current thinking*, and (for the open ones) *what the next session should verify*.
 
 This workstream exists because the deploy-reliability session ran out of cycles to test the hypotheses cleanly, and several of them touch one another (e.g. wedge recovery wiring depends on what the wipe-test failure mode actually is, which depends on the suite-state hypothesis).  Tackle them in the order below — earlier items inform later ones.
 
-## Item 1 — `list_files_in_scope` and `delete_files` skip the drive auto-correct
+## Item 1 — `list_files_in_scope` and `delete_files` skip the drive auto-correct — **DONE 2026-05-09**
+
+`list_files_in_scope` (line 1512 → 1513) and `delete_files` (line 1539 → 1540) now both pair `_resolve_circuitpy_drive` with `_verify_drive_for_board`, matching `_push_staging_to_drive`'s pattern.  Two regression tests landed in `TestListFilesInScopeAndDelete` proving the bug existed (both failed before the fix) and the auto-correct now redirects to the connected board's mount.  Full deploy unit suite (845 tests) green.
+
+Original observation kept below for context.
+
+### Original observation
 
 **Evidence:**
 - `_resolve_circuitpy_drive()` is called at three sites in `workbench/deploy/src/chumicro_deploy/circuitpython_transport.py`:
@@ -45,7 +51,17 @@ This workstream exists because the deploy-reliability session ran out of cycles 
 2. Does the functional test conftest already have a wedge-detection hook somewhere that I missed?  Worth a `grep -rn "fskit\|wedge" workbench/deploy/functional_tests/`.
 3. Is "auto-run sudo on user opt-in" actually wanted?  `macos_fskit.py:22-25` is opinionated against it; ADR-worthy to revisit if we're going to wire it in.
 
-## Item 3 — Suite-state regression hypothesis from Step 1 changes
+## Item 3 — Suite-state wipe failure — **DONE 2026-05-09**
+
+Root cause was *not* the Step-1 disconnect change.  Bench-reproduced minimum repro (`test_circuitpython_diff_deploy_round_trip` then `test_circuitpython_wipe_reformats_circuitpy_drive`); volume-UUID before/after comparison proved the FAT was genuinely never reformatted (no host-view-stale issue).  User confirmed `import storage; storage.erase_filesystem()` works fine when run manually — the wipe code itself is healthy.
+
+The trigger is the test's host-side `sentinel.write_bytes(b"marker")` directly to `/Volumes/CIRCUITPY` — outside the rsync/autoreload-protected path the rest of the deploy machinery uses.  After that direct write, the next raw-REPL `storage.erase_filesystem()` silently no-ops on the device side; the host never sees USB-CDC drop, the drive stays mounted with its old contents, `wipe_filesystem` returns "successfully" because reconnect is instant and `_wait_for_circuitpy_remount` sees a writable directory immediately, and the test's `assert not sentinel.exists()` then fails.  A 2.0 s sleep between the host write and `transport.connect()` makes it succeed reliably; setting `supervisor.runtime.autoreload = False` inside the wipe path *does not* (the byte trace confirms autoreload-off succeeds and the next `erase_filesystem` still no-ops, so the underlying CP-internal mechanism — USB-MSC mount-lock state, autoreload-pending exception already queued, or something else — is not reached by the user-toggleable autoreload flag).
+
+Fix: rewrite `test_circuitpython_wipe_reformats_circuitpy_drive` to plant the sentinel via `Deployer.deploy(FileMapSource({"/code.py": noop, "/wipe_test_sentinel.txt": b"marker"}, ...))`.  The deploy mechanism's existing rsync + autoreload-disable + post-soft-reboot settle dance leaves the board in a quiet known state when the wipe runs.  Full 16-test functional suite green.
+
+A latent issue surfaced during the investigation that's filed as a follow-up: `wipe_filesystem` has no proof-of-life check for the wipe itself.  When the wipe is a no-op, USB-CDC and the drive both stay alive, so `_wait_for_circuitpy_remount` and the reconnect loop both fast-succeed on stale state.  Any future cause of erase_filesystem-no-op (different test sequence, different runtime version, future hardware) would silently slip through the same way.  The right defense — proof-of-life via volume-UUID comparison or by surfacing the actual raw-REPL response when the script didn't drop USB — is not in this fix.  See `## Item 6` below.
+
+### Original observation
 
 **Evidence:**
 - `test_circuitpython_wipe_reformats_circuitpy_drive` passes in isolation (`pytest workbench/deploy/functional_tests/test_wipe_filesystem_hardware.py::test_circuitpython_wipe_reformats_circuitpy_drive`) but fails when the full suite runs (`pytest workbench/deploy/functional_tests/`).
@@ -101,13 +117,25 @@ This workstream exists because the deploy-reliability session ran out of cycles 
 - **Verify state before committing fixes that depend on bench evidence.**  I committed the recovery-command source change (`f9eca27`) on user "done" without re-detecting the wedge state or re-running the failing test first.  Source change happened to be correct but the commit message claimed evidence I hadn't actually collected.  Re-detect → re-run → confirm green → commit is the right order.
 - **Multi-board CP setups: macOS swaps bare-name vs `CIRCUITPY 1` between unmount/remount cycles.**  `devices.yml` `circuitpy_drive_path` entries go stale frequently in this layout.  Item 1's fix removes the silent-wrong-drive class of bug, but the underlying instability suggests `circuitpy_drive_path` should auto-resolve via UID lookup at every connect (not just at deploy-files time) — possibly worth its own ADR.
 
+## Item 6 — `wipe_filesystem` has no proof-of-life for the wipe itself — **NEW, surfaced during Item 3**
+
+When `storage.erase_filesystem()` runs successfully, USB-CDC drops and the drive remounts with a new volume UUID.  When it's a no-op (the failure mode Item 3 hit), USB-CDC and the drive both stay alive with the *old* contents.  `wipe_filesystem`'s wait-for-reconnect (30 s budget) and `_wait_for_circuitpy_remount` (10 s budget for the configured drive path being a writable directory) both fast-succeed in the no-op case because their conditions are met instantly by the unchanged state.  Result: `wipe_filesystem` returns "successfully" while the FAT is intact.
+
+Two reasonable defenses:
+
+- Compare volume UUID before / after.  Definitive signal — UUID changes iff the FAT was reformatted.  macOS-aware (`diskutil info Volume\ UUID`); other OSes need an alternate path.
+- Stop swallowing `_send_repl_command` exceptions.  Surface the actual raw-REPL response when the wipe didn't run, so callers see *what* the device returned.  More general but noisier; needs care because the *successful* erase_filesystem path also raises (USB-CDC drops mid-call before the response arrives).  User's preferred direction during the Item 3 investigation.
+
+Either fix converts a silent no-op-wipe into a loud error so future causes can't hide the same way.  Out of scope for the Item 3 fix that landed; tracked here for a follow-up.
+
 ## Suggested order
 
-1. **Item 1** (one-line fix × 2 sites + tests) — small, real correctness fix, no investigation needed beyond reading the existing verify_drive code.
-2. **Item 3** (reproducer) — runs on bench; the answer determines whether Item 2's wipe-test wiring is the right scope or whether a deeper fix is needed.
-3. **Item 2** (wedge-detection wiring) — scope depends on Item 3's outcome.
+1. ~~**Item 1**~~ — done.
+2. ~~**Item 3**~~ — done.
+3. **Item 2** (wedge-detection wiring) — scope is now clearer: Item 3 disproved that the wipe-failure was wedge-related, so the wedge-detection wiring is purely defensive (catches a real macOS FSKit wedge that happens during a wipe, separate failure class).
 4. **Item 4** (doc note) — cheap, lands once we're confident about Item 5.
 5. **Item 5** (end-to-end bench validation) — should happen alongside any of the above that need a wedge-induced repro.
+6. **Item 6** (proof-of-life in `wipe_filesystem`) — durable defense against future no-op-wipe causes.
 
 ## Triggered by
 

@@ -1502,6 +1502,13 @@ class CircuitpythonTransport:
         ``pathlib`` — faster + simpler than a raw-REPL round-trip,
         and the drive's contents *are* the device's filesystem.
 
+        Pairs ``_resolve_circuitpy_drive`` with ``_verify_drive_for_board``
+        so a stale ``circuitpy_drive_path`` (the macOS multi-board
+        mount-order swap) is silently corrected to the connected
+        board's actual mount before the walk — without verify, the
+        diff layer reads the *other* board's files and reports zero
+        stale entries when there's a real diff to apply.
+
         RAM mode returns an empty list — RAM-mode deploys never
         touch flash, so there's nothing persistent to diff between
         deploys.
@@ -1510,6 +1517,7 @@ class CircuitpythonTransport:
             return []
         try:
             drive = self._resolve_circuitpy_drive()
+            drive = self._verify_drive_for_board(drive)
         except CircuitpythonTransportError:
             return []
         return _list_scope_on_drive(drive)
@@ -1524,6 +1532,12 @@ class CircuitpythonTransport:
         are tolerated silently so a transient I/O hiccup never blocks
         the deploy that follows.
 
+        Pairs ``_resolve_circuitpy_drive`` with ``_verify_drive_for_board``
+        for the same reason ``list_files_in_scope`` does — without
+        verify, a stale ``circuitpy_drive_path`` could unlink the
+        *other* board's files (this is the destructive sister of the
+        list-the-wrong-drive bug).
+
         Uses :meth:`pathlib.Path.unlink` rather than rsync ``--delete``
         on purpose: rsync's delete semantics are "remove anything in
         DEST not in SRC" — wrong shape for "delete these specific
@@ -1537,6 +1551,7 @@ class CircuitpythonTransport:
             return
         try:
             drive = self._resolve_circuitpy_drive()
+            drive = self._verify_drive_for_board(drive)
         except CircuitpythonTransportError:
             return
         for device_path in paths:
