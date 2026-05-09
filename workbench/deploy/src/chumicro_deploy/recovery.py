@@ -536,12 +536,16 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         fix_steps=(
             "Tap RESET on the board, wait for CIRCUITPY to remount, "
             "and retry.  The drive often goes read-only after a "
-            "USB-MSC hiccup or a partial-write race; only a board "
-            "reset clears the macOS msdosfs read-only flag.",
+            "USB-MSC hiccup or a partial-write race; a board reset "
+            "clears the macOS msdosfs read-only flag.",
             "Check free space on the drive if the payload is larger "
             "than a few KiB.",
-            "If the volume stays read-only after RESET, unplug and "
-            "replug the board to force a fresh mount.",
+            "If the volume stays read-only or empty after RESET, the "
+            "FAT is likely corrupted and a reset alone won't recover "
+            "it.  Run `chumicro-workspace reset-board --yes --device "
+            "<id>` (or invoke `storage.erase_filesystem()` directly "
+            "via the REPL) to reformat — destructive: every user "
+            "file on the board is wiped, including settings.toml.",
         ),
         retryable=True,
     ),
