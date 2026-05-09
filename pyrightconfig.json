@@ -1,7 +1,5 @@
 {
-  "//": "Matches ruff target-version in root pyproject.toml. Library code runs on CircuitPython + MicroPython too, but pyright only checks against CPython — pin to the lowest CPython we support so PEP 604/585 syntax stays valid and we don't pick up new-stdlib attributes that don't exist on the embedded runtimes.",
   "pythonVersion": "3.11",
-  "//reportMissingModuleSource": "Library code legitimately imports CircuitPython / MicroPython platform modules (microcontroller, esp32, wifi, socketpool, ssl, digitalio, bitbangio, analogio, board, micropython, neopixel, ...) that ship as type stubs only — there is no .py source in the venv to follow. Treat the 'no source' warning as informational so it doesn't drown real findings.",
   "reportMissingModuleSource": "none",
   "extraPaths": [
     "support/test_harness/src",

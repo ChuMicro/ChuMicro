@@ -224,7 +224,11 @@ def _validate_single(
         )
 
         # Retry loop to handle CDN propagation delay after bundle push.
+        # `result` is initialized to None so pyright can prove it's bound on
+        # every code path the post-loop branches read it on — _MAX_RETRIES
+        # being a positive constant is a runtime invariant pyright can't see.
         installed = False
+        result: subprocess.CompletedProcess | None = None
         for attempt in range(1, _MAX_RETRIES + 1):
             result = _run_micropython(binary, install_script)
             if result.returncode == 0:
@@ -242,6 +246,7 @@ def _validate_single(
                     print(f"    {last_line}")
                 time.sleep(_RETRY_DELAY)
 
+        assert result is not None  # _MAX_RETRIES >= 1 — loop always ran.
         if not installed:
             print(f"    FAIL: mip install failed after {_MAX_RETRIES} attempts")
             if result.stdout:
