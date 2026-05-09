@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git push)",
+      "Bash(git push origin main)",
+      "Bash(git --no-pager log --oneline -20)",
+      "Bash(git --no-pager log --oneline -15)",
+      "Bash(git --no-pager status)",
+      "Bash(git --no-pager log --oneline -30)",
+      "Read(//Volumes/**)",
+      "Bash(diskutil list *)",
+      "Bash(python scripts/run.py --help)",
+      "Bash(python3 scripts/run.py --help)",
+      "Bash(xargs ls *)",
+      "Bash(system_profiler SPUSBDataType)",
+      "Bash(brew list *)",
+      "Bash(ioreg -p IOUSB -l -w 0)",
+      "Bash(awk '/Product ID:/ {pid=$3} /Vendor ID:/ {print $3, \"/\", pid}')",
+      "Bash(.venv/bin/chumicro-workspace*)",
+      "Bash(.venv/bin/chumicro-deploy*)",
+      "Bash(.venv/bin/chumicro-repl*)"
+    ]
+  },
+  "enabledPlugins": {
+    "pyright-lsp@claude-plugins-official": false
+  }
+}
