@@ -108,6 +108,14 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "workstream-phase pointer — move to commit message or workstream file",
     ),
     (
+        # Item N — the numbered work-item shape used by multi-item
+        # workstreams (deploy-multi-board-and-fskit-followups Item 1,
+        # Item 4 caveat, etc.).  No procedural usage exists in this
+        # codebase, so match every numbered occurrence.
+        re.compile(r"\bItem\s+\d+[a-z]?\b"),
+        "workstream-phase pointer — move to commit message or workstream file",
+    ),
+    (
         # F-numbered workstream finding paired with an ISO date — covers
         # "F4 of the 2026-05-06 verification", "(F5, 2026-05-06)",
         # "F5 layout (2026-05-06)", "F6 — port-holder diagnosis

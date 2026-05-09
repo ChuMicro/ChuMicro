@@ -137,6 +137,18 @@ class TestPatternsHit:
     @pytest.mark.parametrize(
         "text",
         [
+            "per the Item 4 caveat — running the killall damages volumes",
+            "(Item 4 caveat).",
+            "Item 1 shipped first, Item 5 deferred",
+        ],
+    )
+    def test_item_numbered(self, text: str) -> None:
+        """Numbered workstream Item references are caught."""
+        assert _any_pattern_matches(text)
+
+    @pytest.mark.parametrize(
+        "text",
+        [
             "F4 of the 2026-05-06 verification pass",
             "F6 of the 2026-05-06 verification finding",
             "F4 of 2026-05-06 verification — ``add-device`` derives",
