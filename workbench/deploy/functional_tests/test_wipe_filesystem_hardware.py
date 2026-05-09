@@ -33,7 +33,10 @@ from pathlib import Path
 import pytest
 from chumicro_deploy import (
     CircuitpythonTransport,
+    Deployer,
+    Device,
     DeviceEntry,
+    FileMapSource,
     MicropythonTransport,
 )
 
@@ -168,19 +171,50 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
 ) -> None:
     """CP wipe via ``storage.erase_filesystem`` reformats the FAT volume.
 
-    Seeds a sentinel file on the CIRCUITPY drive, calls
-    ``wipe_filesystem``, then asserts the drive comes back without
-    that file.  The transport's internal reconnect loop owns the
-    settle / re-enumeration timing — the test only inspects the
-    resulting filesystem state.
+    Plants a sentinel file via ``Deployer.deploy`` (which routes
+    through rsync with autoreload disabled before the write and a
+    settled soft-reboot after), then calls ``wipe_filesystem`` and
+    asserts the sentinel is gone.
+
+    Plant-via-deploy is load-bearing: a host-side ``write_bytes``
+    directly to the CIRCUITPY mount point puts the board into a
+    transient state where the next raw-REPL
+    ``storage.erase_filesystem()`` call silently no-ops — the FAT is
+    not reformatted, the volume UUID is unchanged, ``wipe_filesystem``
+    returns "successfully" because USB-CDC and USB-MSC both stayed
+    alive, and this assertion sees the sentinel still on disk.  The
+    deploy mechanism dodges that by suspending autoreload before the
+    rsync, by going through a soft-reboot afterwards that returns the
+    board to a known-quiet state, and by leaving no host-side write
+    in flight when the wipe begins.
     """
     drive_path_value = circuitpython_flash_device.circuitpy_drive_path
     if not drive_path_value:
         pytest.skip("circuitpy_drive_path not set on selected device")
     drive_path = Path(drive_path_value)
     sentinel = drive_path / "wipe_test_sentinel.txt"
-    sentinel.write_bytes(b"marker")
-    assert sentinel.is_file()
+
+    plant_device = Device(
+        transport=circuitpython_flash_device.runtime,
+        address=circuitpython_flash_device.address,
+        baudrate=circuitpython_flash_device.serial_baudrate,
+        deploy_mode="flash",
+        circuitpy_drive_path=drive_path,
+    )
+    plant_result = Deployer(plant_device).deploy(
+        FileMapSource(
+            {
+                "/code.py": b"# wipe-test plant: code.py is a no-op so the\n"
+                            b"# board returns to friendly REPL quietly.\n",
+                "/wipe_test_sentinel.txt": b"marker",
+            },
+            entrypoint="/code.py",
+        ),
+    )
+    assert plant_result.success, plant_result.execute_output
+    assert sentinel.is_file(), (
+        f"sentinel did not land via deploy: {sorted(p.name for p in drive_path.iterdir())}"
+    )
 
     transport = CircuitpythonTransport(
         circuitpython_flash_device.address,
