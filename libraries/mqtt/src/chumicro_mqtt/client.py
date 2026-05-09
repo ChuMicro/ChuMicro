@@ -285,12 +285,12 @@ class MQTTClient:
     @classmethod
     def from_config(
         cls,
-        config,
+        config: object,
         *,
-        radio=None,
-        socket=None,
-        socket_factory=None,
-    ):
+        radio: object | None = None,
+        socket: object | None = None,
+        socket_factory: object | None = None,
+    ) -> "MQTTClient":
         """Build an :class:`MQTTClient` from runtime config.
 
         Reads the ``[tool.chumicro.config]`` keys declared in
@@ -351,29 +351,29 @@ class MQTTClient:
 
     def __init__(
         self,
-        socket=None,
+        socket: object | None = None,
         *,
-        socket_factory=None,
-        client_id,
-        keep_alive_seconds=60,
-        ack_timeout_seconds=5.0,
-        publish_retry_max=3,
-        username=None,
-        password=None,
-        clean_session=True,
-        will_topic=None,
-        will_message=None,
-        will_qos=0,
-        will_retain=False,
-        rx_buffer_size=None,
-        max_message_size=None,
-        when_oversized=WhenOversized.DROP_WITH_EVENT,
-        recv_budget_per_tick=1024,
-        max_tx_queue_size=100,
-        ticks_ms_func=ticks_ms,
-        ticks_add_func=ticks_add,
-        ticks_diff_func=ticks_diff,
-    ):
+        socket_factory: object | None = None,
+        client_id: str,
+        keep_alive_seconds: int = 60,
+        ack_timeout_seconds: float = 5.0,
+        publish_retry_max: int = 3,
+        username: str | None = None,
+        password: str | None = None,
+        clean_session: bool = True,
+        will_topic: str | None = None,
+        will_message: bytes | None = None,
+        will_qos: int = 0,
+        will_retain: bool = False,
+        rx_buffer_size: int | None = None,
+        max_message_size: int | None = None,
+        when_oversized: WhenOversized = WhenOversized.DROP_WITH_EVENT,
+        recv_budget_per_tick: int = 1024,
+        max_tx_queue_size: int = 100,
+        ticks_ms_func: object = ticks_ms,
+        ticks_add_func: object = ticks_add,
+        ticks_diff_func: object = ticks_diff,
+    ) -> None:
         """Wire up the client.
 
         Args:
@@ -400,11 +400,16 @@ class MQTTClient:
                 Triggers a retry (PUBLISH) or fault (everything else).
             publish_retry_max: Max QoS 1 PUBLISH retries before giving
                 up + transitioning to FAILED.
-            username / password: Optional auth.
+            username: Optional auth username (paired with *password*).
+            password: Optional auth password.
             clean_session: ``False`` resumes persistent broker session
                 state for QoS 1+ retransmit-across-reconnects.
-            will_topic / will_message / will_qos / will_retain: Last
-                will — broker publishes on uncleanly-dropped connection.
+            will_topic: Topic for the broker's last-will message —
+                published on uncleanly-dropped connection.  ``None``
+                disables the will.
+            will_message: Payload for the broker's last-will message.
+            will_qos: QoS for the will message (0 or 1).
+            will_retain: ``True`` retains the will on the broker.
             rx_buffer_size: Steady-state RX buffer size (default 256).
             max_message_size: Cap on a single inbound PUBLISH payload
                 (default 256 KB).
@@ -424,8 +429,12 @@ class MQTTClient:
                 to drain via :meth:`handle` and retry, rather than
                 silently growing memory.  Set higher for bursty
                 publishers; the limit is per-client.
-            ticks_ms_func / ticks_add_func / ticks_diff_func: Inject
-                fakes for testing.  Default to ``chumicro_timing``.
+            ticks_ms_func: ``ticks_ms()`` callable — inject a fake for
+                tests.  Defaults to ``chumicro_timing.ticks_ms``.
+            ticks_add_func: ``ticks_add()`` callable — inject a fake
+                for tests.  Defaults to ``chumicro_timing.ticks_add``.
+            ticks_diff_func: ``ticks_diff()`` callable — inject a fake
+                for tests.  Defaults to ``chumicro_timing.ticks_diff``.
         """
         if socket is None and socket_factory is None:
             raise ValueError(
@@ -575,7 +584,15 @@ class MQTTClient:
     # Public publish / subscribe / unsubscribe
     # ------------------------------------------------------------------
 
-    def publish(self, topic, payload, *, qos=0, retain=False, on_publish=None):
+    def publish(
+        self,
+        topic: str,
+        payload: bytes | str,
+        *,
+        qos: int = 0,
+        retain: bool = False,
+        on_publish: object | None = None,
+    ) -> None:
         """Queue a PUBLISH packet.
 
         QoS 0: queued and considered delivered once it reaches the wire
@@ -650,7 +667,13 @@ class MQTTClient:
             self._in_flight.discard(packet_id)
             raise
 
-    def subscribe(self, topic, qos=0, *, on_subscribe=None):
+    def subscribe(
+        self,
+        topic: str,
+        qos: int = 0,
+        *,
+        on_subscribe: object | None = None,
+    ) -> None:
         """Queue a SUBSCRIBE for *topic*.
 
         Args:

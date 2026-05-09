@@ -16,7 +16,7 @@ __chumicro_runtimes__ = ("cpython",)
 import struct
 
 
-def canned_connack_bytes(*, return_code=0, session_present=False):
+def canned_connack_bytes(*, return_code: int = 0, session_present: bool = False) -> bytes:
     """Return the four-byte CONNACK packet for *return_code*.
 
     Args:
