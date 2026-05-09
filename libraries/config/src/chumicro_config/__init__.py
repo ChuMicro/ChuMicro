@@ -61,7 +61,7 @@ __all__ = [
     "InvalidConfigType",
     "MissingConfigKey",
     "RuntimeConfig",
-    "config",
+    "config",  # pyright: ignore[reportUnsupportedDunderAll]  # PEP-562 lazy via __getattr__ below.
     "load_runtime_config",
     "load_section",
     "try_load_section",

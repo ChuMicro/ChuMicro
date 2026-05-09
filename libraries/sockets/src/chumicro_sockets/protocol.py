@@ -59,6 +59,7 @@ class UDPSocket(Protocol):
         dotted-quad strings or hostnames that resolve to one;
         adapters delegate name resolution to the runtime.
         """
+        ...
 
     def recvfrom_into(self, buffer: bytearray, nbytes: int = 0) -> tuple:
         """Receive one datagram into *buffer*.
@@ -72,18 +73,23 @@ class UDPSocket(Protocol):
         Raises ``OSError(EAGAIN=11)`` when no datagram is queued and
         the socket is non-blocking.
         """
+        ...
 
     def close(self) -> None:
         """Release the underlying socket handle.  Idempotent."""
+        ...
 
     def setblocking(self, flag: bool) -> None:
         """Toggle blocking / non-blocking I/O.  Same semantics as TCP."""
+        ...
 
     def settimeout(self, seconds) -> None:
         """Set a timeout for blocking calls.  Same semantics as TCP."""
+        ...
 
     def fileno(self) -> int:
         """Return the integer fd or ``-1`` if the adapter has no real fd."""
+        ...
 
     def getsockname(self) -> tuple:
         """Return the locally-bound ``(host, port)`` tuple.
@@ -91,6 +97,7 @@ class UDPSocket(Protocol):
         Useful when the socket was bound with ``port=0`` to obtain
         an ephemeral port the OS picked.
         """
+        ...
 
 
 @runtime_checkable
@@ -110,6 +117,7 @@ class TCPClientSocket(Protocol):
         with ``errno == 11`` (EAGAIN) means "would block, retry";
         any other ``OSError`` is a real error.
         """
+        ...
 
     def recv_into(self, buffer: bytearray, nbytes: int = 0) -> int:
         """Read up to *nbytes* bytes into *buffer*.
@@ -120,6 +128,7 @@ class TCPClientSocket(Protocol):
         downstream code that already follows it works unchanged.
         Raises ``OSError(EAGAIN=11)`` on would-block.
         """
+        ...
 
     def close(self) -> None:
         """Release the underlying socket handle.
@@ -127,6 +136,7 @@ class TCPClientSocket(Protocol):
         Idempotent — closing an already-closed socket is a no-op.
         After ``close`` the only safe operation is another ``close``.
         """
+        ...
 
     def setblocking(self, flag: bool) -> None:
         """Toggle blocking / non-blocking I/O.
@@ -136,6 +146,7 @@ class TCPClientSocket(Protocol):
         sleeping.  Equivalent to ``settimeout(None)`` for ``True``
         and ``settimeout(0.0)`` for ``False``.
         """
+        ...
 
     def settimeout(self, seconds) -> None:
         """Set a timeout for blocking calls.
@@ -146,6 +157,7 @@ class TCPClientSocket(Protocol):
         as long as the protocol's "raises OSError(EAGAIN) on
         would-block" contract holds.
         """
+        ...
 
     def fileno(self) -> int:
         """Return the integer file descriptor for ``select.poll()``.
@@ -154,3 +166,4 @@ class TCPClientSocket(Protocol):
         (CP radio fakes).  Callers that need ``poll()`` check for
         ``-1`` and degrade to ``settimeout``-based polling.
         """
+        ...

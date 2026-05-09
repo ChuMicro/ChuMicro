@@ -79,9 +79,13 @@ def check_workspace_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             message=f"missing at {workspace.workspace_yaml}",
             hint="run `chumicro-workspace init` to scaffold the workspace.",
         )
+    # Import outside the `try` so pyright can prove `YAMLError` is bound on
+    # the `except` arm — an import failure inside the try would short-circuit
+    # before the binding, which pyright correctly flags.  ruamel.yaml is a
+    # hard dependency; if the import fails, we want the ImportError to
+    # surface, not a misleading "malformed YAML" finding.
+    from ruamel.yaml import YAML, YAMLError  # noqa: PLC0415
     try:
-        from ruamel.yaml import YAML, YAMLError  # noqa: PLC0415
-
         with workspace.workspace_yaml.open("r", encoding="utf-8") as handle:
             loaded = YAML(typ="safe").load(handle)
     except YAMLError as exception:
