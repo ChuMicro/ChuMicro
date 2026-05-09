@@ -31,36 +31,38 @@ import subprocess
 import sys as _sys_module
 from collections.abc import Callable
 
-#: Commands to paste into a terminal to clear the wedge.  Two steps
-#: because the system daemons respawn via ``KeepAlive`` but the
-#: per-user ``DiskArbitrationAgent`` does not — killing it alone
-#: leaves it dead, and ``launchctl kickstart -k`` is the correct
-#: way to bounce it.
+#: Command to paste into a terminal to clear the wedge.  One
+#: ``killall -9`` of the wedged FSKit / DiskArbitration processes;
+#: launchd respawns each one in a clean state.
 #:
-#: Step 1 (sudo killall -9) targets:
+#: Targets:
 #:
 #: - ``com.apple.fskit.msdos`` — the user-space FAT filesystem
 #:   extension that wedged in the first place.
 #: - ``fskit_helper`` / ``fskitd`` / ``fskit_agent`` — FSKit support
 #:   daemons whose XPC connections to the extension are now stale.
-#: - ``diskarbitrationd`` — the system-level mount arbiter that has
-#:   been stuck in uninterruptible wait.
+#: - ``diskarbitrationd`` — the system-level mount arbiter stuck in
+#:   uninterruptible wait.
+#: - ``DiskArbitrationAgent`` — the per-user agent that registers
+#:   volumes with Finder's Locations sidebar.  An earlier version of
+#:   this command tried to bounce it via
+#:   ``launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent``;
+#:   that path is SIP-blocked on modern macOS.  Killing it directly
+#:   with ``killall -9`` works — the per-user launchd respawns it
+#:   despite ``KeepAlive=false`` because XPC clients re-trigger
+#:   on-demand load.
 #:
-#: Step 2 (launchctl kickstart -k) bounces the per-user
-#: ``DiskArbitrationAgent`` — the agent that registers volumes with
-#: Finder's Locations sidebar.  Even after ``diskarbitrationd``
-#: respawns cleanly this agent keeps its old XPC connection, so
-#: drives mount at ``/Volumes/`` but don't appear in Finder until
-#: the agent reconnects.  ``kickstart -k`` kills-and-restarts in one
-#: step; a plain ``killall`` leaves the agent dead because its
-#: launchd plist does not set ``KeepAlive=true``.
+#: ``-9`` is required because the wedged daemons are stuck in kernel
+#: wait and can't handle a normal signal.  A reboot is the
+#: always-safe alternative when the paste approach doesn't stick.
 #:
-#: A reboot is the always-safe alternative if the paste approach
-#: doesn't stick.
+#: This string is the single source of truth for the recovery
+#: command — the prose copy in ``docs/troubleshooting/macos-circuitpy.md``
+#: pulls from it.  Update one and the test in
+#: ``test_macos_fskit.py`` will catch drift in the other.
 MACOS_FSKIT_RECOVERY_COMMAND = (
     "sudo killall -9 com.apple.fskit.msdos fskit_helper "
-    "fskitd fskit_agent diskarbitrationd && "
-    "launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent"
+    "fskitd fskit_agent diskarbitrationd DiskArbitrationAgent"
 )
 
 

@@ -23,14 +23,15 @@ Recent macOS releases replaced the in-kernel `msdosfs` driver with a user-space 
 Run this in another terminal.  It needs `sudo`:
 
 ```bash
-sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd fskit_agent diskarbitrationd && \
-launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent
+sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd fskit_agent diskarbitrationd DiskArbitrationAgent
 ```
+
+This string is also exposed as `chumicro_deploy.macos_fskit.MACOS_FSKIT_RECOVERY_COMMAND` — the constant is the source of truth and a test asserts this doc page contains it verbatim, so they cannot drift.
 
 Why each piece:
 
-- **`killall -9` for the system daemons** — the `fskit_*` processes and `diskarbitrationd` all respawn via launchd's `KeepAlive=true` plists.  Kill them and they come back a moment later in a clean state.  `-9` is required because they're stuck in kernel wait and can't handle a normal signal.
-- **`launchctl kickstart -k` for the per-user `DiskArbitrationAgent`** — this one is different.  Its plist has `KeepAlive=false`, so a plain `killall` leaves it dead.  Without the per-user agent, CIRCUITPY drives *will* mount at `/Volumes/` after the system daemons recover, but macOS's Finder won't see them.  `launchctl kickstart -k` stops and restarts the service via launchd; the agent comes back and Finder picks up the drives.
+- **`killall -9` for the FSKit system daemons** — `com.apple.fskit.msdos`, `fskit_helper`, `fskitd`, `fskit_agent`, and `diskarbitrationd` all respawn via launchd's `KeepAlive=true` plists.  Kill them and they come back a moment later in a clean state.  `-9` is required because they're stuck in kernel wait and can't handle a normal signal.
+- **`killall -9` for the per-user `DiskArbitrationAgent`** — this is the agent that registers volumes with Finder's Locations sidebar.  An earlier version of this command tried to bounce it via `launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent`, but that path is SIP-blocked on modern macOS.  Killing it directly with `killall -9` works — even though its launchd plist has `KeepAlive=false`, the per-user launchd respawns it on demand the next time a client opens an XPC connection (which happens immediately when the system-side `diskarbitrationd` comes back up).
 
 After the command:
 

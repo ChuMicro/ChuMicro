@@ -507,11 +507,9 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         fix_steps=(
             "Paste this into another terminal (it needs sudo):",
             f"    {MACOS_FSKIT_RECOVERY_COMMAND}",
-            "The system daemons respawn via launchd; the "
-            "launchctl kickstart -k bounces the per-user agent "
-            "(which does not auto-respawn).  Pending CIRCUITPY "
-            "drives will mount + become readable.  Press Enter "
-            "here to retry the deploy.",
+            "Each killed daemon respawns under launchd in a clean "
+            "state; pending CIRCUITPY drives mount and become "
+            "readable.  Press Enter here to retry the deploy.",
             "Heads-up: after the paste your drives will be fully "
             "functional (mounted at /Volumes, readable, writable, "
             "and chumicro-deploy works against them), but on "
