@@ -1,10 +1,10 @@
 # Workstream: Workbench Deploy + Tail Reliability
 
-Status: **research / observations.**  Captured 2026-05-09 from a session where on-board verification of three example files yielded one clean success and two cases where the deploy succeeded mechanically but the runtime evidence couldn't be captured.  The pattern of "deploy returns exit 0 yet I can't prove the code is actually running" suggests workbench-package design gaps worth investigating before the next deploy-heavy workstream lands.
+Status: **active.**  Root cause for the silent-deploys on `while True:` examples found 2026-05-09: `deploy_files` actively interrupts the running `code.py` on its way out by sending Ctrl-C × 2 (via the trailing `_enter_raw_repl()` call).  Combined with the explicit Ctrl-D soft-reboot we trigger ourselves, this also makes the S2 FAT-RO race a likely outcome (force-reset before FS writes have committed).  Plan in §"4-step plan" below.
 
 ## Purpose
 
-Pyright-cleanup wrap-up included on-board validation of three changed examples (`http_server/circuitpython_two_thing_server`, `mqtt/circuitpython_telemetry`, `sockets/circuitpython_udp_echo_client`) on `lolin-s2-circuitpython-board` and `pi-pico-w-circuitpython-board`.  More errors than successes — only the http_server example produced captured runtime evidence; the other two deployed but went silent.  Findings below should drive the next workbench reliability session.
+Pyright-cleanup wrap-up included on-board validation of three changed examples (`http_server/circuitpython_two_thing_server`, `mqtt/circuitpython_telemetry`, `sockets/circuitpython_udp_echo_client`) on `lolin-s2-circuitpython-board` and `pi-pico-w-circuitpython-board`.  More errors than successes — only the http_server example produced captured runtime evidence; the other two deployed but went silent.  Findings below drive the deploy-package fix; **the examples stay as-is** — packages need to handle real-world `while True:` programs without killing them.
 
 ## What worked
 
@@ -94,17 +94,75 @@ The board is presumably running code.py but its serial CDC output is silent.  Re
 
 - Add an optional "deploy + boot confirmation" mode: deploy, watch serial, look for any output within N seconds, exit with a distinct failure if zero output (suggesting board is stuck).  Distinct exit code so CI can react.
 
+### Finding 7 — `deploy_files` actively kills `code.py` on its way out (root cause for Findings 2/3/6)
+
+**Observed by reading the code, not the bench session:** `circuitpython_transport.py:1453-1461` ends the flash-mode deploy with:
+
+```python
+self._port.write(_CTRL_B)            # exit raw REPL
+self._port.write(_CTRL_D)            # trigger soft-reboot
+output = self._read_code_py_output() # capture up to self.timeout (10s)
+self._enter_raw_repl()               # ← Ctrl-C × 2 + Ctrl-A — INTERRUPTS the running code.py
+```
+
+`_enter_raw_repl()` (`circuitpython_transport.py:582-603`) sends two Ctrl-Cs to interrupt any running program before switching to raw REPL.  So **every flash-mode deploy actively kills the freshly-booted `code.py` after a 10-second capture window**, and `disconnect()` then exits raw REPL leaving the board at friendly REPL with no program running.
+
+This explains Findings 2, 3, and 6 in one stroke:
+
+- **http_server got captured** because it printed `WIFI_OK` + `Server listening` inside the 10 s window — the bytes survived even though the server itself was about to be Ctrl-C'd.
+- **mqtt deploys silently** because its 15 s MQTT-connect window means the first `print` doesn't land before our Ctrl-C, and after we Ctrl-C the connect call, the program is dead.
+- **udp deploys silently** because its blocking `recv` waits on a packet that never comes within 10 s; we Ctrl-C the recv and exit.
+- **`chumicro-repl --tail` sees zero bytes after a deploy** because by the time tail reconnects the board really is silent — `code.py` was Ctrl-C'd and friendly REPL is sitting at `>>>`.
+
+This is not a "while-True examples need special package treatment" problem — it's that the deploy treats every example as a one-shot command that should be cleaned up after.  Real-world programs run forever; the deploy needs to deploy and *get out of the way*.
+
+### Finding 8 — explicit Ctrl-D soft-reboot likely contributes to the S2 FAT-RO race
+
+**The settle stack before our self-issued Ctrl-D:** `_wait_for_board_to_see_entrypoint` polls `os.stat` until the board sees the new file at the expected size, then sleeps `_BOARD_FILE_VISIBLE_POST_SETTLE = 0.5 s` (`circuitpython_transport.py:74-89`), then immediate Ctrl-D.
+
+`os.stat` proves CP saw the directory entry; it says nothing about whether the host's last block writes have committed to FLASH/FAT.  When we Ctrl-D inside that window the CP VM tears down (USB-CDC + USB-MSC drop together) with FAT mid-write — exactly the inconsistency the macOS `msdosfs` driver defends against by remounting read-only.  Once macOS has demoted the volume no host-side rsync can recover it; only physical RESET reboots CP and clears the kernel's RO flag.
+
+CP's autoreload watcher, in contrast, waits for FS quiescence (debounce window) before triggering its own reboot — that's exactly the signal we lack on the host side.
+
+The "two re-enumerations wedged the S2" pain documented in `circuitpython_transport.py:1881-1893` (the comment on `disconnect`) was about layering our Ctrl-D *on top of* an autoreload reboot inside `disconnect()`.  Fix there was to stop double-resetting in `disconnect`.  The same logic applies to `deploy_files()` — pick **one** mechanism.  Autoreload is the better one because it knows when the FS has settled.
+
 ## What's NOT being claimed
 
 - The example code changes (`is_connected` rename, `sender = None` init, `_State` annotations) are correct as written; AST + verify-examples + unit tests + preflight all pass, and the http_server case validated the runtime path of the same kind of change.
 - The workbench is not fundamentally broken — http_server's clean run shows the happy path works.  The findings above are about *off-happy-path resilience* and *observability*.
+- We are NOT changing the example programs.  The fix is in the deploy package; examples with `while True:` are exactly the shape real users will write.
 
-## Suggested research-session shape
+## 4-step plan
 
-1. **Cheap correctness win:** strip the autoreload framing from `chumicro_deploy.recovery.py:537-539` (Finding 1 hint is misleading — autoreload is off during rsync per `circuitpython_transport.py:605-633`).  Replace with "drive went read-only mid-rsync; try replug + RESET; capture Console.app output if it recurs."  10-line change, removes a wrong-direction debugging trail.
-2. Reproduce Finding 1 (CIRCUITPY RO mid-rsync) deliberately on each board class — large rsync workloads, watch for the `read-only` mount transition.  Likely FAT32 corruption or `msdosfs` self-defence; `diskutil verifyVolume` mid-issue would confirm.
-3. Reproduce Finding 4 (silent-after-soft-reboot) — script N programmatic soft-resets in sequence, count how many it takes to silence the device.  Decide whether the silencing is host-side (serial driver) or device-side (CDC stack).
-4. Prototype the `--tail-seconds <N>` flag (Finding 2) — smallest change, biggest UX win, sidesteps Finding 3's reconnect race for CI.
-5. Decide whether deploy's own end-of-pipeline soft-reboot (`circuitpython_transport.py:1453-1456`) should leave serial held longer for the `--non-interactive` case, or hand the file descriptor over to a successor tail process.
+Each step is independently shippable; ordering picks the smallest reversible change first.
+
+### Step 1 — Stop killing `code.py` at the end of `deploy_files` ✅
+
+Shipped 2026-05-09.  Two coordinated edits:
+
+- Dropped the trailing `self._enter_raw_repl()` from `deploy_files` (was line 1461) and replaced the comment with the rationale.
+- Simplified `disconnect()` to send a bare `Ctrl-B` (exits raw REPL when in raw, harmless one byte otherwise) and close the port — no leading `_enter_raw_repl` round-trip, no Ctrl-C interrupt.
+
+Both `test_flash_disconnect_does_not_touch_autoreload` and `test_ram_disconnect_does_not_send_autoreload` now lock in "no Ctrl-C at disconnect."  832 deploy tests + full preflight green at 96 % coverage.
+
+Bench-validated on Lolin S2 CP (`/dev/cu.usbmodem84722E7490C31`) with a `while True: print(counter); time.sleep(0.5)` probe via `chumicro-deploy deploy --transport circuitpython --address ... --drive /Volumes/CIRCUITPY --deploy-mode flash`.  Deploy captured counter=1..20 inside the 10 s window, returned cleanly.  `chumicro-repl --tail 5` immediately afterward saw counter=41..50 — `code.py` survived the deploy and kept printing on its own time.
+
+Pi Pico W CP not validated this step — its `/Volumes/CIRCUITPY 1` mount went stale during the prior session and got force-unmounted; needs a replug for a full 4-board sweep (deferred to Step 6 after Steps 2 + 3 land).
+
+### Step 2 — Replace explicit Ctrl-D with autoreload-driven reset
+
+In `deploy_files` (`circuitpython_transport.py:1453-1461`): after the rsync + `flush_volume` + `_wait_for_board_to_see_entrypoint`, send `import supervisor; supervisor.runtime.autoreload = True` from raw REPL, then Ctrl-B to exit raw REPL.  CP's watcher fires its own reboot once FS is quiescent.  Capture serial output across that boundary on the same open port (no Ctrl-C interrupt).
+
+This is the structural change — fixes both the S2 FAT race (no more force-reset before FS done) and the silent-deploy race in one move.  The "two re-enumerations wedged the S2" lesson from `disconnect` applies in the same direction here: pick autoreload OR our own Ctrl-D, not both.
+
+### Step 3 — Configurable capture window
+
+`_read_code_py_output` is currently fixed at `self.timeout` (10 s).  Add a parameter — `--tail-seconds N` at the CLI, plumbing through to `deploy_files(tail_seconds=N)`.  Default `0` for `--non-interactive` (return immediately, leave board running), prompt-driven for interactive.  This is Finding 2's `--tail-seconds` flag, but free since we're already restructuring the capture.
+
+### Step 4 — Strip stale autoreload framing from recovery hint
+
+`recovery.py:534-546` — drop "CircuitPython's autoreload can remount while a write is in flight" since the deploy disables autoreload before any rsync.  Replace with the diagnosed cause (force-reset-before-FS-done, fixed by step 2) plus the recovery path (tap RESET, replug).
+
+After all four land: 4-board validation sweep on Lolin S2 CP+MP and Pi Pico W CP+MP, mqtt + udp + http_server.
 
 Detail belongs in commit messages + this workstream — `plans/next-up.md` carries a one-line pointer.

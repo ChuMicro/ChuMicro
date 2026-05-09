@@ -1239,11 +1239,16 @@ class TestFlashMode:
         way, disconnect must not flip it.  An explicit autoreload-on
         here would re-introduce the ESP32-S2 USB-CDC double-reboot
         wedge documented in the disconnect docstring.
+
+        Also locks in the "no Ctrl-C at disconnect" rule
+        (workbench-deploy-reliability workstream Step 1, 2026-05-09):
+        every flash deploy leaves ``code.py`` running on purpose, so
+        sending Ctrl-C here would interrupt mqtt connects, blocking
+        socket recvs, and every ``while True:`` example.
         """
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,   # connect
-                _RAW_REPL_PROMPT,   # _enter_raw_repl in disconnect
             ],
         )
 
@@ -1255,11 +1260,13 @@ class TestFlashMode:
 
         transport.disconnect()
 
-        # Should re-enter raw REPL (Ctrl-C×2, Ctrl-A) + Ctrl-B exit,
-        # and emit no autoreload command at all.
+        # Bare Ctrl-B (exits raw REPL when in raw, harmless otherwise);
+        # no Ctrl-C interrupt of running user code; no autoreload flip.
+        from chumicro_deploy.circuitpython_transport import _CTRL_B
         written_data = b"".join(port.writes)
-        assert _CTRL_C in port.writes
-        assert _CTRL_A in port.writes
+        assert _CTRL_B in port.writes
+        assert _CTRL_C not in port.writes
+        assert _CTRL_A not in port.writes
         assert b"autoreload" not in written_data
 
     def test_ram_disconnect_does_not_send_autoreload(self) -> None:
@@ -1274,7 +1281,6 @@ class TestFlashMode:
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,   # connect
-                _RAW_REPL_PROMPT,   # _enter_raw_repl in disconnect
             ],
         )
 
@@ -1302,6 +1308,8 @@ class TestFlashMode:
         from chumicro_deploy.circuitpython_transport import _CTRL_B
         assert _CTRL_B in port.writes
         assert _CTRL_D not in port.writes
+        # Workstream Step 1: no Ctrl-C either — same rationale as flash.
+        assert _CTRL_C not in port.writes
 
     def test_flash_stage_is_idempotent_across_calls(
         self, tmp_path: Path,

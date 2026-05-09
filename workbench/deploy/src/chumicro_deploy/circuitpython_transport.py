@@ -1455,10 +1455,14 @@ class CircuitpythonTransport:
         self._port.write(_CTRL_D)  # trigger soft-reboot
         output = self._read_code_py_output()
 
-        # Re-enter raw REPL so disconnect()'s Ctrl-B exit has a known
-        # starting state (the soft-reboot above dropped the board back
-        # into friendly REPL).
-        self._enter_raw_repl()
+        # Leave the board in friendly REPL with code.py running.  Earlier
+        # versions sent Ctrl-C × 2 + Ctrl-A here ("re-enter raw REPL so
+        # disconnect's exit has a known state"), which interrupted any
+        # long-running entrypoint (mqtt's 15 s connect, sockets' blocking
+        # recv, every example with a `while True:` loop) the moment the
+        # 10 s capture window closed.  ``disconnect`` no longer requires
+        # raw REPL on entry — it sends a bare Ctrl-B that's safe in
+        # either state.
 
         if on_execute_line is not None:
             for output_line in output.splitlines():
@@ -1857,15 +1861,19 @@ class CircuitpythonTransport:
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.
 
-        Pure teardown — exits raw REPL and closes the port:
+        Pure teardown.  Sends a bare Ctrl-B (exits raw REPL when the
+        board is in raw REPL; harmless one-byte input when in friendly
+        REPL or while ``code.py`` is running) so the next serial
+        consumer never finds the board parked in raw REPL.  Then
+        closes the port.
 
-        1. Re-enters raw REPL (idempotent; covers the case where an
-           in-method soft-reboot put the board back in friendly REPL).
-        2. Sends Ctrl-B to exit raw REPL.  This is the only
-           post-condition that matters for "release the board cleanly":
-           a serial-port consumer that opens the port next must not
-           find it parked in raw REPL.
-        3. Closes the serial port.
+        **No Ctrl-C.**  Earlier versions called :meth:`_enter_raw_repl`
+        first (Ctrl-C × 2 + Ctrl-A) "to give Ctrl-B a known starting
+        state."  That interrupted whatever ``code.py`` was doing — a
+        problem after every ``deploy_files`` call, since the deploy
+        leaves ``code.py`` running on purpose.  A bare Ctrl-B is safe
+        from either REPL state, so the round-trip through raw REPL is
+        unnecessary.
 
         **No autoreload restore.**  The autoreload-off issued by
         :meth:`_disable_autoreload_before_drive_writes` is restored
@@ -1899,7 +1907,6 @@ class CircuitpythonTransport:
         """
         if self._port is not None:
             try:
-                self._enter_raw_repl()
                 self._port.write(_CTRL_B)
                 self._time.sleep(_ENTER_DELAY)
             except Exception as restore_error:
