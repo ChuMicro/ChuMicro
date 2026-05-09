@@ -1,15 +1,14 @@
 # Workstream: Multi-board CP deploy + FSKit recovery follow-ups
 
-Status: **partly shipped.**  Items 1 and 3 landed 2026-05-09 in this same investigation session — the deeper pass found both bugs reproducibly and fixed them.  Items 2, 4, 5, and the newly-surfaced Item 6 remain open.  Each item below names the *evidence*, the *current thinking*, and (for the open ones) *what the next session should verify*.
+Status: **partly shipped.**  Items 1 and 3 landed 2026-05-09 in the same investigation session.  Items 2, 4, and 5 remain open.  Each item below names the *evidence*, the *current thinking*, and (for the open ones) *what the next session should verify*.
 
 ## For the new session — pickup checklist
 
-1. `git --no-pager log --oneline -10` — last five commits on `main` (`5246a1b` workstream park → `a2f60b1` framing fix) are the rollover from the 2026-05-09 investigation.  Read commit messages `8e39847` (Item 3 fix), `bbe45e7` (Item 1 fix), and `a2f60b1` (Item 3/Item 6 framing correction) — they cover the evidence + reasoning.
+1. `git --no-pager log --oneline -10` — the rollover commits (`5246a1b` workstream park → `a2f60b1` framing fix) are from the 2026-05-09 investigation.  Read commit messages `8e39847` (Item 3 fix), `bbe45e7` (Item 1 fix), and `a2f60b1` (Item 3 framing correction) — they cover the evidence + reasoning.
 2. Read this whole file.  Pay special attention to:
-   - **Item 2** — the wedge-detection wiring is now *purely defensive* against a real macOS FSKit wedge during a wipe.  It is NOT the cause of the Item 3 wipe failure (Item 3 disproved that — see Item 3's body).
-   - **Item 6** — the proof-of-life check that would have made Item 3 a loud error instead of a silent assertion failure.  User-preferred shape: stop swallowing `_send_repl_command` exceptions in `wipe_filesystem`, surface what the device actually returned.
+   - **Item 2** — the wedge-detection wiring is *purely defensive* against a real macOS FSKit wedge during a wipe.  It is NOT the cause of the Item 3 wipe failure (Item 3 disproved that — see Item 3's body).
    - **Operational notes** at the bottom — load-bearing for any bench-touching work.
-3. Suggested order: **Item 6 first** (durable defense; Item 2 onwards becomes easier to reason about once a pre-empted wipe is a loud error), then Item 2, Item 4, Item 5.
+3. Suggested order: **Item 4 first** (cheap doc note, no bench), then **Item 2** (source-side wiring lands without bench, validation gated on Item 5), then **Item 5** (deliberate FSKit wedge on a fresh boot — bench prerequisite for ending the workstream).
 4. Bench artefacts from the 2026-05-09 investigation live under `.scratch/` (gitignored) — useful as a reference for what worked / failed:
    - `repro_wipe_byte_trace.py` — first byte-traced repro showing `OK` + post-soft-reboot artifacts.
    - `repro_suite_wipe_bytes.py` — instrumented `_send_repl_command` showing autoreload-off succeeds and the next `erase_filesystem` is still pre-empted.
@@ -17,7 +16,7 @@ Status: **partly shipped.**  Items 1 and 3 landed 2026-05-09 in this same invest
    - `repro_wipe_uuid_check.py` — diskutil-based volume-UUID before/after compare proving the FAT is genuinely never reformatted.
    - `wipe_fix_full_suite.log` — full 16-test functional-suite green run after the Item 3 fix.
 
-This workstream exists because the deploy-reliability session ran out of cycles to test the hypotheses cleanly, and several of them touch one another (e.g. wedge recovery wiring depends on what the wipe-test failure mode actually is, which depends on the suite-state hypothesis).  Tackle them in the order suggested above — Item 6 unblocks loud diagnosis for the others.
+This workstream exists because the deploy-reliability session ran out of cycles to test the hypotheses cleanly, and several of them touch one another (e.g. wedge recovery wiring depends on what the wipe-test failure mode actually is, which depended on the suite-state hypothesis).
 
 ## Item 1 — `list_files_in_scope` and `delete_files` skip the drive auto-correct — **DONE 2026-05-09**
 
@@ -46,7 +45,7 @@ Original observation kept below for context.
 
 ## Item 2 — `detect_fskit_wedge` is only wired into `InteractiveDeployer`
 
-> **Important reframing post-Item-3:** Item 3's investigation *disproved* the original hypothesis that the suite-mode wipe failure was an FSKit wedge.  The wipe-test was being pre-empted by a soft-reboot from the test's own host-side direct write; nothing to do with the macOS FSKit kernel-wait state.  Item 2's wedge wiring is therefore **purely defensive** — it catches a *real* macOS FSKit wedge that happens during a wipe (a separate failure class from Item 3), so users see "the FSKit recovery dance" instead of a generic-timeout error.  Lower-priority than Item 6.
+> **Important reframing post-Item-3:** Item 3's investigation *disproved* the original hypothesis that the suite-mode wipe failure was an FSKit wedge.  The wipe-test was being pre-empted by a soft-reboot from the test's own host-side direct write; nothing to do with the macOS FSKit kernel-wait state.  Item 2's wedge wiring is therefore **purely defensive** — it catches a *real* macOS FSKit wedge that happens during a wipe (a separate failure class from Item 3), so users see "the FSKit recovery dance" instead of a generic-timeout error.
 
 **Evidence:**
 - `grep -rn "detect_fskit_wedge" workbench/deploy/src/` shows two call sites:
@@ -77,7 +76,7 @@ The trigger is the test's host-side `sentinel.write_bytes(b"marker")` directly t
 
 Fix: rewrite `test_circuitpython_wipe_reformats_circuitpy_drive` to plant the sentinel via `Deployer.deploy(FileMapSource({"/code.py": noop, "/wipe_test_sentinel.txt": b"marker"}, ...))`.  The deploy mechanism's existing rsync + autoreload-disable + post-soft-reboot settle dance leaves the board in a quiet known state when the wipe runs.  Full 16-test functional suite green.
 
-A latent issue surfaced during the investigation that's filed as a follow-up: `wipe_filesystem` has no proof-of-life check for whether the script that was supposed to run actually ran.  When the script is pre-empted by a soft-reboot before the reformat step (the Item 3 failure mode), USB-CDC and the drive both stay alive, so `_wait_for_circuitpy_remount` and the reconnect loop both fast-succeed on the un-reformatted state.  Any future cause that pre-empts erase_filesystem before it reformats — a different host-write timing, a queued soft-reboot from a different source, a runtime-version difference — would slip through the same way.  The right defense — proof-of-life via volume-UUID comparison, or surfacing the actual raw-REPL response when the script didn't drop USB — is not in this fix.  See `## Item 6` below.
+**Considered and rejected: a proof-of-life defense in `wipe_filesystem`.**  The Item 3 trigger was a misbehaving test (host-side sentinel write queued an autoreload soft-reboot that landed during the wipe call).  The fix replaced the host-side write with `Deployer.deploy()`, which already disables autoreload + settles the board.  Real users running `chumicro-workspace deploy --wipe` go through the deploy machinery, so they don't set up Item 3's preconditions.  An earlier draft of this workstream proposed catching the soft-reboot signature in `_send_repl_command`'s response bytes and raising loudly; dropped because the only concrete cause was the now-fixed test, the speculative "future causes" list (different host-write timing, queued soft-reboot from a different source, runtime-version difference) had no grounded examples, and the current `try: ... except Exception: pass` is correct for the only real-world outcome (USB-CDC drops mid-call as the success signal).
 
 ### Original observation
 
@@ -135,49 +134,13 @@ A latent issue surfaced during the investigation that's filed as a follow-up: `w
 - **Verify state before committing fixes that depend on bench evidence.**  I committed the recovery-command source change (`f9eca27`) on user "done" without re-detecting the wedge state or re-running the failing test first.  Source change happened to be correct but the commit message claimed evidence I hadn't actually collected.  Re-detect → re-run → confirm green → commit is the right order.
 - **Multi-board CP setups: macOS swaps bare-name vs `CIRCUITPY 1` between unmount/remount cycles.**  `devices.yml` `circuitpy_drive_path` entries go stale frequently in this layout.  Item 1's fix removes the silent-wrong-drive class of bug, but the underlying instability suggests `circuitpy_drive_path` should auto-resolve via UID lookup at every connect (not just at deploy-files time) — possibly worth its own ADR.
 
-## Item 6 — `wipe_filesystem` has no proof-of-life for the wipe itself — **NEW, surfaced during Item 3**
-
-When `storage.erase_filesystem()` runs to completion, the script executes `usb_disconnect → 1000 ms delay → reformat → hard reset`; USB-CDC drops, USB-MSC drops, the drive remounts with a new volume UUID, and the host's reconnect picks up the fresh state.  When the script is pre-empted by a soft-reboot before the reformat step (the Item 3 failure mode), the board takes the soft-reboot path back through `boot.py` + `code.py` instead of the hard-reset path; USB-CDC stays alive across the soft-reboot, the FAT stays unchanged, and the volume UUID is identical to before.  `wipe_filesystem`'s wait-for-reconnect (30 s budget) and `_wait_for_circuitpy_remount` (10 s budget for the configured drive path being a writable directory) both fast-succeed in this case because their conditions are met instantly by the unchanged state.  Result: `wipe_filesystem` returns "successfully" while the FAT is intact.
-
-Two reasonable defenses:
-
-- Compare volume UUID before / after.  Definitive signal — UUID changes iff the FAT was reformatted.  macOS-aware (`diskutil info Volume\ UUID`); other OSes need an alternate path.
-- Stop swallowing `_send_repl_command` exceptions.  Surface the actual raw-REPL response when the wipe was pre-empted, so callers see *what* the device returned (the Done-title + fresh raw-REPL banner pattern that signals a soft-reboot fired before the reformat).  More general but noisier; needs care because the *successful* erase_filesystem path also raises (USB-CDC drops mid-call before the response arrives).  **User's preferred direction** during the Item 3 investigation.
-
-Either fix converts a silent pre-empted-wipe into a loud error so future causes can't hide the same way.  Out of scope for the Item 3 fix that landed; tracked here for a follow-up.
-
-**Sketched shape (preferred, "stop swallowing"):**
-
-In `CircuitpythonTransport.wipe_filesystem()` (around line 1569-1574 today):
-
-```python
-# Today
-try:
-    self._send_repl_command("import storage\nstorage.erase_filesystem()\n")
-except Exception:  # noqa: BLE001 — reboot kills the REPL mid-call
-    pass
-```
-
-The fix needs to distinguish two outcomes:
-
-- **Successful erase** — the reformat triggered `mcu_reset()`, USB-CDC dropped mid-call, `_read_until` idle-timed-out with `b"OK"` (or partial bytes ending without `\x04>`), parse failed with "Malformed raw REPL response (missing \x04 markers)".  This case is fine — the reset is the proof-of-success.
-- **Pre-empted erase** — the script was interrupted by a soft-reboot before the `usb_disconnect` step.  USB-CDC stayed alive, the read returned post-soft-reboot artifacts (`OK\r\n\x1b]0;...| Done |...\x1b\\raw REPL; CTRL-B to exit\r\n>`), parse failed with the same "Malformed raw REPL response" message.  This case is the one we want to surface as `WipeFailedError("erase_filesystem was pre-empted by a soft-reboot before reformatting; raw response: ...")`.
-
-Both fail the parse the same way today; the byte sequences are different though.  The successful-erase response will end with the partial bytes the device emitted before its USB-CDC went away — typically `b"OK"` followed by silence.  The pre-empted-erase response will contain the full Done-title + raw-REPL-banner sequence.  Distinguishing rule:
-
-- Response contains `b"raw REPL; CTRL-B to exit"` → board re-entered raw REPL → soft-reboot fired → wipe was pre-empted → raise loudly with the raw response in the message.
-- Response is shorter or stops before any banner → consistent with USB-CDC drop → trust the existing reconnect path.
-
-A unit test can stub `_send_repl_command` to raise with the pre-empted-shape bytes and assert `wipe_filesystem` raises the new error class; another stub returns the partial-OK shape and asserts `wipe_filesystem` proceeds to the reconnect loop.  Functional bench validation: re-run the pre-2026-05-09 broken `test_circuitpython_wipe_reformats_circuitpy_drive` (host-side `sentinel.write_bytes`) on a temporary git stash and confirm `wipe_filesystem` now raises with the actionable message; then with the current deployer-shaped test, confirm the success path stays clean.
-
 ## Suggested order
 
 1. ~~**Item 1**~~ — done.
 2. ~~**Item 3**~~ — done.
-3. **Item 6** (proof-of-life in `wipe_filesystem`) — do this *first*.  The "stop swallowing" sketch above is roughly an afternoon's work + a unit test; it converts every future cause-of-pre-empted-wipe (and probably some unknown ones) into a loud actionable error.  Lands without a hardware bench session.
-4. **Item 4** (doc note) — cheap, lands once we're confident about Item 5.
-5. **Item 2** (wedge-detection wiring) — scope clearer post-Item-3: purely defensive against a real macOS FSKit wedge during a wipe, not the cause of any known failure.  Lower priority.
-6. **Item 5** (end-to-end bench validation of recovery command) — needs a deliberate FSKit wedge on a fresh boot, which is the gating bench prerequisite.  Pair with Item 2 work.
+3. **Item 4** (doc + RecoveryPlan caveat) — cheap, no bench needed.
+4. **Item 2** (wedge-detection wiring) — source-side lands without bench; end-to-end validation pairs with Item 5.  Purely defensive against a real macOS FSKit wedge during a wipe, not the cause of any known failure.
+5. **Item 5** (end-to-end bench validation of recovery command) — needs a deliberate FSKit wedge on a fresh boot.  Bench prerequisite to closing the workstream.
 
 ## Triggered by
 
