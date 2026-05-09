@@ -52,13 +52,12 @@ class TestSocketBlockingMode:
     def test_init_forces_socket_non_blocking(self) -> None:
         """The MQTT client owns its socket's blocking mode.
 
-        Phase 7 Layer-3 caught a Pi Pico W MP hang where the MP socket
-        adapter constructed sockets in blocking mode (stdlib default)
-        and the MQTT client's first tick called recv on a blocking
-        socket — never returned, never saw CONNACK, ack-timeout fired
-        after 5s, infinite reconnect loop.  Make MQTTClient enforce
-        non-blocking on construction so the contract belongs to the
-        client, not every consumer.
+        On a Pi Pico W MP the socket adapter constructs sockets in
+        blocking mode (stdlib default); the client's first tick then
+        called recv on a blocking socket — never returned, never saw
+        CONNACK, ack-timeout fired after 5s, infinite reconnect loop.
+        ``MQTTClient`` enforces non-blocking on construction so the
+        contract belongs to the client, not every consumer.
         """
         sock = FakeSocket()
         sock.setblocking(True)  # default-blocking before MQTTClient sees it
@@ -610,7 +609,7 @@ class TestDecoderEdgeCases:
 
 
 class TestSocketFactorySelfHeal:
-    """The Phase 7 wifi-drop story.
+    """The wifi-drop survivability story.
 
     When ``MQTTClient`` is constructed with a ``socket_factory``, a tick
     in ``FAILED`` state rebuilds the socket via the factory and re-issues
@@ -792,9 +791,9 @@ class _CountingSocket(FakeSocket):
 class TestBoundedRecvPerTick:
     """``_read_inbound`` honors ``recv_budget_per_tick``.
 
-    Phase 7 follow-up: a 100 KB inbound PUBLISH would otherwise
-    monopolize the tick while the kernel TCP buffer drains, and
-    side tasks (LED blink, LCD update, control loop) would stutter.
+    A 100 KB inbound PUBLISH would otherwise monopolize the tick
+    while the kernel TCP buffer drains, and side tasks (LED blink,
+    LCD update, control loop) would stutter.
     """
 
     def _connected_client(self, sock: _CountingSocket, ticks: FakeTicks, **kwargs):

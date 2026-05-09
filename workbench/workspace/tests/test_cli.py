@@ -355,7 +355,7 @@ class TestNew:
 
 
 class TestNewNested:
-    """Slice 3 — `new` accepts nested paths and auto-creates namespaces."""
+    """`new` accepts nested paths and auto-creates namespaces."""
 
     def _seed_template(self, root: Path) -> Path:
         template = root / "projects" / "_template"
@@ -464,7 +464,7 @@ class TestNewNested:
 
 
 class TestNewLibrary:
-    """Phase 4 — `new --library <name>` scaffolds a chumicro-style library."""
+    """`new --library <name>` scaffolds a chumicro-style library."""
 
     def test_default_target_is_workspace_libraries_dir(
         self, tmp_path: Path,
@@ -525,7 +525,7 @@ class TestNewLibrary:
 
 
 class TestNewFromFlag:
-    """Slice 3 — `new --from <example-path>` copies an alternate source."""
+    """`new --from <example-path>` copies an alternate source."""
 
     def _seed_workspace_with_example(self, tmp_path: Path) -> Path:
         root = _seed_workspace(tmp_path)
@@ -846,7 +846,7 @@ class TestDeploy:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Slice 6: --import-graph routes through project_import_graph_source."""
+        """--import-graph routes through project_import_graph_source."""
         root = _seed_workspace(tmp_path)
         # Stage a shared/ module alongside the project's main.py.
         shared = root / "shared"
@@ -930,7 +930,7 @@ class TestProjects:
 
 
 class TestDeployAllDevices:
-    """Phase 2f — `deploy --all-devices` loops over devices.yml entries."""
+    """`deploy --all-devices` loops over devices.yml entries."""
 
     def _seed_two_device_workspace(self, tmp_path: Path) -> Path:
         """Seed a workspace with two registered devices."""
@@ -1042,7 +1042,7 @@ class TestDeployAllDevices:
 
 
 class TestDeployTargetsMapping:
-    """Phase 2f — `deploy_targets:` per-project → per-device mapping."""
+    """`deploy_targets:` per-project → per-device mapping."""
 
     def _seed_two_device_workspace(
         self, tmp_path: Path, deploy_targets_block: str = "",
@@ -1213,7 +1213,7 @@ class TestDeployTargetsMapping:
 
 
 class TestDeployAllProjects:
-    """Phase 2f — `deploy --all-projects` walks the deploy_targets mapping."""
+    """`deploy --all-projects` walks the deploy_targets mapping."""
 
     def _seed_three_project_workspace(self, tmp_path: Path) -> Path:
         """Two devices, three projects, full deploy_targets coverage."""
@@ -1382,7 +1382,7 @@ class TestDeployAllProjects:
 
 
 class TestDeployFailureHints:
-    """Phase 2d — failed deploys carry app-level recovery hints to stderr."""
+    """Failed deploys carry app-level recovery hints to stderr."""
 
     def test_missing_config_key_traceback_prints_hint(
         self,
@@ -1608,7 +1608,7 @@ class TestDeployWipeFlag:
 
 
 class TestDeployDryRun:
-    """Phase 2c — `deploy --dry-run` shows the file map without writing."""
+    """`deploy --dry-run` shows the file map without writing."""
 
     def test_does_not_call_transport(
         self,
@@ -1700,7 +1700,7 @@ class TestDeployDryRun:
 
 
 class TestStatus:
-    """Phase 2a — `status` workspace health snapshot."""
+    """`status` workspace health snapshot."""
 
     def test_prints_workspace_path_first(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
@@ -1756,7 +1756,7 @@ class TestStatus:
 
 
 class TestDoctor:
-    """Phase 2b — `doctor` runs status's checks plus AST + config-merge."""
+    """`doctor` runs status's checks plus AST + config-merge."""
 
     @pytest.fixture(autouse=True)
     def _stub_fskit_detector(
@@ -1994,7 +1994,7 @@ class TestDoctorFixFskitWedge:
 
 
 class TestProjectsTreeView:
-    """Slice 4 — `projects` defaults to a Unicode tree, `--flat` keeps the list."""
+    """`projects` defaults to a Unicode tree, `--flat` keeps the list."""
 
     def test_default_renders_tree_with_namespaces(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
@@ -2050,7 +2050,7 @@ class TestProjectsTreeView:
 
 
 # ---------------------------------------------------------------------------
-# demo  (Step 5 of beginner-onramp — built-in payload)
+# demo — built-in payload
 # ---------------------------------------------------------------------------
 
 
@@ -2143,7 +2143,7 @@ class TestDemo:
 
 
 # ---------------------------------------------------------------------------
-# bootstrap  (Step 4 of beginner-onramp — end-to-end wizard)
+# bootstrap — end-to-end wizard
 # ---------------------------------------------------------------------------
 
 
@@ -2745,7 +2745,7 @@ class TestProbe:
 
 
 class TestReplWithProject:
-    """Phase 2e — `repl <project>` deploys then tails in one command."""
+    """`repl <project>` deploys then tails in one command."""
 
     def test_deploys_then_tails(
         self,
@@ -3140,7 +3140,7 @@ class TestInstallFirmware:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Slice 5: --url optional, derived from hardware.firmware_source."""
+        """--url optional, derived from hardware.firmware_source."""
         (tmp_path / "workspace.yml").write_text('# machinery only\n')
         (tmp_path / "secrets.toml").write_text('')
         (tmp_path / "devices.yml").write_text(
@@ -3314,7 +3314,7 @@ class TestLintCommand:
 
 
 class TestQualityKnobsLint:
-    """Phase 5 — workspace.yml `quality.lint` flows through _cmd_lint."""
+    """workspace.yml `quality.lint` flows through _cmd_lint."""
 
     def test_disabled_skips_ruff(
         self,
@@ -3373,7 +3373,7 @@ class TestQualityKnobsLint:
 
 
 class TestQualityKnobsTest:
-    """Phase 5 — workspace.yml `quality.coverage_threshold` flows through _cmd_test."""
+    """workspace.yml `quality.coverage_threshold` flows through _cmd_test."""
 
     def test_threshold_prepended_to_pytest(
         self,
@@ -3468,7 +3468,7 @@ def test_stub_commands_exit_two_with_message(
 
 
 # ---------------------------------------------------------------------------
-# add-device  (Slice 3 — three-zone YAML writer wired in)
+# add-device — three-zone YAML writer wired in
 # ---------------------------------------------------------------------------
 
 
@@ -3635,7 +3635,7 @@ class TestAddDevice:
         assert exit_code == 1
         captured_stderr = capsys.readouterr().err
         assert "did not return implementation" in captured_stderr
-        # Slice 4 onboarding diagnosis follows on subsequent lines.
+        # Onboarding diagnosis follows on subsequent lines.
         assert "esptool" in captured_stderr.lower()
 
     def test_probe_raises_emits_onboarding_diagnosis(
@@ -4070,7 +4070,7 @@ class TestAddDeviceFirmwareFloor:
 
 
 # ---------------------------------------------------------------------------
-# add-device — runtime auto-inference (Step 3 of beginner-onramp)
+# add-device — runtime auto-inference
 # ---------------------------------------------------------------------------
 
 
@@ -4402,7 +4402,7 @@ class TestAddDeviceOmittedId:
 
 
 # ---------------------------------------------------------------------------
-# rename  (Slice 3 — wired to project dirs + devices.yml)
+# rename — wired to project dirs + devices.yml
 # ---------------------------------------------------------------------------
 
 
@@ -4461,7 +4461,7 @@ class TestRename:
 
 
 class TestRenameNested:
-    """Slice 4 — `rename --project` accepts slash / dotted paths on both sides."""
+    """`rename --project` accepts slash / dotted paths on both sides."""
 
     def test_moves_into_new_namespace(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],

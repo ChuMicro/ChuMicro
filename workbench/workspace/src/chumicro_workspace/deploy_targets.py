@@ -1,4 +1,4 @@
-"""Per-project → per-device deploy mapping (workspace-ecosystem Phase 2f).
+"""Per-project → per-device deploy mapping.
 
 Workspaces with multiple boards register where each project should
 land in ``workspace.yml``::

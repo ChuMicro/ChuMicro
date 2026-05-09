@@ -1,4 +1,4 @@
-"""Tests for workspace.yml quality knobs (Phase 5)."""
+"""Tests for workspace.yml quality knobs."""
 
 from __future__ import annotations
 

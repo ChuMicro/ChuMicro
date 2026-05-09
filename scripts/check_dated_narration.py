@@ -93,6 +93,21 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "workstream-phase pointer — move to commit message or workstream file",
     ),
     (
+        # Slice N — "Slice" is workstream-only jargon in this codebase
+        # (no procedural meaning), so match every numbered occurrence.
+        re.compile(r"\bSlice\s+\d+[a-z]?\b"),
+        "workstream-phase pointer — move to commit message or workstream file",
+    ),
+    (
+        # Phase|Step N when NOT followed by a colon — procedural numbered
+        # steps ("# Step 1: put the board in bootloader mode") use the
+        # colon and stay clean.  Workstream-pointer shapes ("Phase 7
+        # Layer-3 caught this", "(Phase 2a — status)", "Phase 4
+        # follow-up") don't, so they get flagged.
+        re.compile(r"\b(?:Phase|Step)\s+\d+[a-z]?\b(?!\s*:)"),
+        "workstream-phase pointer — move to commit message or workstream file",
+    ),
+    (
         # F-numbered workstream finding paired with an ISO date — covers
         # "F4 of the 2026-05-06 verification", "(F5, 2026-05-06)",
         # "F5 layout (2026-05-06)", "F6 — port-holder diagnosis

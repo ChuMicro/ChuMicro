@@ -27,7 +27,7 @@ from chumicro_config import (
 
 
 class WifiConfig:
-    """Stand-in for what `chumicro-wifi` will ship in Phase 3a."""
+    """Stand-in for what `chumicro-wifi` will ship."""
 
     def __init__(self, ssid, password, hostname=None, connect_timeout_ms=15_000):
         self.ssid = ssid
@@ -46,7 +46,7 @@ class WifiConfig:
 
 
 class MqttConfig:
-    """Stand-in for what `chumicro-mqtt` will ship in Phase 6."""
+    """Stand-in for what `chumicro-mqtt` will ship."""
 
     def __init__(self, broker, port=1883, client_id=None):
         self.broker = broker

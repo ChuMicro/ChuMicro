@@ -374,9 +374,9 @@ def interactive_line(
 ) -> int:
     """Open *device* and run the line-mode REPL.
 
-    Phase 7 sibling of :func:`interactive` — instead of forwarding
-    keystrokes byte-by-byte to the device, runs a host-side
-    `prompt_toolkit` line editor with persistent per-device history.
+    Sibling of :func:`interactive` — instead of forwarding keystrokes
+    byte-by-byte to the device, runs a host-side `prompt_toolkit`
+    line editor with persistent per-device history.
     Each completed line ships to the device; serial output streams
     back through the same pattern-detector + traceback highlighter
     the passthrough TUI uses.

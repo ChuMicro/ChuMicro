@@ -16,15 +16,14 @@ Per-connection state machine::
                            \\-> ERROR (any state)
 
 The handler is called once, after headers parse + before the body is
-buffered (slice 7b adds routing — slice 7a uses a single
-caller-provided handler callable).  For requests with a body, the
-handler can call ``request.body_bytes()`` to consume it (the runner
-re-enters the connection until the body has arrived, then returns
-to the handler's continuation — see slice 7c).
+buffered.  For requests with a body, the handler can call
+``request.body_bytes()`` to consume it (the runner re-enters the
+connection until the body has arrived, then returns to the handler's
+continuation).
 
-Slice 7a (this file): single connection at a time, single handler,
-canned 200 response.  Routing + multi-connection + per-tick budgets
-land in 7b / 7c.
+This module ships single-connection-at-a-time, single-handler,
+canned 200 responses.  Routing + multi-connection + per-tick
+budgets are future work.
 """
 
 import json
@@ -46,8 +45,7 @@ from chumicro_http_server._wire import (
     split_target,
 )
 
-#: Reason phrases for the status codes the slice-7a server emits.
-#: Slice 7b's ``respond()`` helper ships a fuller table.
+#: Reason phrases for the status codes this server emits.
 _REASONS = {
     200: "OK",
     201: "Created",

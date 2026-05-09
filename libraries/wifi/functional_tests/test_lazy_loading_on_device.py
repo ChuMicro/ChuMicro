@@ -8,8 +8,6 @@ bypassed by CircuitPython's RAM-mode class-as-module wrapper, so
 package-level lazy attrs can't actually fire on CP RAM deploys.
 The lazy benefit lives in :func:`_select_adapter` (named
 ``from X import Y`` inside a function — works everywhere).
-
-This is part of the Phase 3a Slice 0 hardware verification.
 """
 
 

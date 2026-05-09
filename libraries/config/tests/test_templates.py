@@ -53,8 +53,8 @@ if _IS_CPYTHON:
 
         Stages a fake package on the fly so the helper has something
         to read against.  This is the success path that
-        ``chumicro-wifi`` (Phase 3a Slice 0) will exercise once it
-        ships its real template.
+        ``chumicro-wifi`` will exercise once it ships its real
+        template.
         """
         fake_root = tmp_path / "fake_pkg_root"
         fake_pkg = fake_root / "chumicro_fakelib"

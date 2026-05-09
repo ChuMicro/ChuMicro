@@ -1,7 +1,6 @@
 """Hardware-gated tests for Deployer.deploy + transport.deploy_files.
 
-These are the Slice 1d acceptance tests — they exercise the real
-``MicropythonTransport.deploy_files`` and
+Exercises the real ``MicropythonTransport.deploy_files`` and
 ``CircuitpythonTransport.deploy_files`` paths against plugged-in
 boards.  Host-side fakes cover the logic; these confirm the
 integration with mpremote, pyserial, and the CIRCUITPY drive.

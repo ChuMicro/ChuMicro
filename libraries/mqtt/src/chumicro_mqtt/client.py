@@ -213,10 +213,10 @@ def _force_non_blocking(socket):
     The MQTT client's tick-based RX path expects ``recv_into`` to
     raise EAGAIN (or return 0) when no data is available, never to
     block.  MicroPython's stdlib socket starts in blocking mode and
-    chumicro_sockets' MP adapter doesn't override that — without this
-    enforcement, the device's first ``recv`` after sending CONNECT
-    blocks, the CONNACK never gets parsed, and the ack-timeout fires
-    after 5 s.  Phase 7 Layer-3 caught this on a Pi Pico W.
+    chumicro_sockets' MP adapter doesn't override that — without
+    this enforcement, the device's first ``recv`` after sending
+    CONNECT blocks on a Pi Pico W, the CONNACK never gets parsed,
+    and the ack-timeout fires after 5 s.
 
     Some adapters (MP TLS via SSLSocket) drop ``setblocking`` and
     fall back to a no-op stub; calling it there is harmless but
@@ -389,8 +389,7 @@ class MQTTClient:
                 set, the client self-heals after a wifi-drop /
                 socket-death: the next ``handle()`` after entering
                 ``FAILED`` rebuilds the socket and re-issues
-                ``connect()`` automatically (Phase 7 integration log
-                — wifi-drop survivability).  Without a factory the
+                ``connect()`` automatically.  Without a factory the
                 client stays ``FAILED`` until the caller manually
                 tears down + reconstructs.
             client_id: MQTT client identifier — must be unique per broker.

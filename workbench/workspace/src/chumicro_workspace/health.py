@@ -233,7 +233,7 @@ def collect_health_findings(
 
 
 # ---------------------------------------------------------------------------
-# Doctor checks (Phase 2b) — stricter than status, AST + config-merge
+# Doctor checks — stricter than status, AST + config-merge
 # ---------------------------------------------------------------------------
 
 

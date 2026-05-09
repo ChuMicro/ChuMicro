@@ -19,8 +19,8 @@ class TestClassify:
             ".github/skills/deploy-and-debug/SKILL.md",
             ".github/skills/add-new-project/SKILL.md",
             ".github/skills/register-board/SKILL.md",
-            # Slice 5 — `examples/` is reading material; `update`
-            # re-flows the canonical content from upstream.
+            # `examples/` is reading material; `update` re-flows
+            # the canonical content from upstream.
             "examples/README.md",
             "examples/hello_world/app.py",
             "examples/wifi_only/config.toml",

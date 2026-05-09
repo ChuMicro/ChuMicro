@@ -311,7 +311,7 @@ class TestOnboardingDiagnosis:
 
 
 # ---------------------------------------------------------------------------
-# probe_with_runtime_inference — Step 3 of beginner-onramp
+# probe_with_runtime_inference
 # ---------------------------------------------------------------------------
 
 

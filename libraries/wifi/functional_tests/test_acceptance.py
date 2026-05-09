@@ -1,4 +1,4 @@
-"""Phase 3a Slice 4 acceptance — connect to a real AP across all four boards.
+"""wifi acceptance — connect to a real AP across all four boards.
 
 Reads credentials from ``/runtime_config.msgpack`` on the device via
 ``WifiConfig.try_from_config(config)`` — same surface user app code

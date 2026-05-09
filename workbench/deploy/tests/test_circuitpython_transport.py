@@ -1705,7 +1705,7 @@ class TestResetIntoBootloader:
 
 
 class TestDeployFiles:
-    """Tests for CircuitpythonTransport.deploy_files (Slice 1d)."""
+    """Tests for CircuitpythonTransport.deploy_files."""
 
     def _connect(
         self,

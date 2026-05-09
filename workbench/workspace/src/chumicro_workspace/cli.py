@@ -217,8 +217,8 @@ def _resolve_device(workspace: WorkspaceLayout, args: argparse.Namespace) -> Dev
 def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
     """Return a :class:`Device` for every entry in devices.yml.
 
-    Used by ``deploy --all-devices`` (Phase 2f).  Loads each entry
-    via :func:`load_devices_yml` so the per-entry validation +
+    Used by ``deploy --all-devices``.  Loads each entry via
+    :func:`load_devices_yml` so the per-entry validation +
     runtime-default resolution stays consistent with single-device
     deploys.  Order matches the YAML file order so deploys reach
     boards in a predictable sequence.
@@ -514,11 +514,11 @@ def _resolve_new_source(
 ) -> Path:
     """Pick the directory ``new`` will copy into the target.
 
-    Without ``--from``, returns ``projects/_template/`` (same default as
-    before Slice 3 added the flag).  With ``--from <path>``, resolves
-    *path* relative to the workspace root and validates that the
-    resulting directory exists and looks like a project — i.e. has at
-    least one of :data:`~chumicro_workspace.workspace.ENTRY_POINT_FILENAMES`.
+    Without ``--from``, returns ``projects/_template/``.  With
+    ``--from <path>``, resolves *path* relative to the workspace
+    root and validates that the resulting directory exists and looks
+    like a project — i.e. has at least one of
+    :data:`~chumicro_workspace.workspace.ENTRY_POINT_FILENAMES`.
     An entry-point is the only way to confirm the source is a project
     (vs. a namespace dir or a docs folder).
     """
@@ -730,11 +730,12 @@ def _emit_failure_hints(deploy_result: Any) -> None:
     """Print the traceback + matching app-level recovery hints to stderr.
 
     The deploy result's ``traceback`` and ``execute_output`` are
-    both scanned for known patterns (Phase 2d's hint table); any
-    matching hints append below the traceback under a "--- hints ---"
-    section so users who hit a common failure (missing config key,
-    library not installed) get the workspace-shaped pointer instead
-    of just the raw stdlib error.
+    both scanned for known patterns from
+    :mod:`chumicro_workspace.recovery`; any matching hints append
+    below the traceback under a "--- hints ---" section so users who
+    hit a common failure (missing config key, library not installed)
+    get the workspace-shaped pointer instead of just the raw stdlib
+    error.
 
     Skip the hints section silently when no pattern matches —
     showing an empty block reads worse than showing nothing.
@@ -852,9 +853,6 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
     * **Dotted** (``"garage.sensors.door_open"``) — same as slash;
       normalised before return because ``/`` is the canonical form
       used by :meth:`WorkspaceLayout.list_projects`.
-
-    Slice 2 of the nested-projects-and-examples plan; replaces the
-    flat-only ``names = list(args.names)`` lookup that preceded it.
     """
     normalised = name.replace(".", "/")
     if "/" in normalised:
@@ -1427,11 +1425,11 @@ def _render_projects_tree(
 def _cmd_projects(args: argparse.Namespace) -> int:
     """List the projects defined in the workspace under ``projects/``.
 
-    Two views: the default :func:`_render_projects_tree` (Slice 4)
-    draws an indented Unicode tree so namespaced workspaces are
-    legible at a glance; ``--flat`` falls back to the legacy
-    one-project-per-line slash-form output (handy for shell pipelines
-    and ``grep``-style filtering).
+    Two views: the default :func:`_render_projects_tree` draws an
+    indented Unicode tree so namespaced workspaces are legible at
+    a glance; ``--flat`` falls back to the one-project-per-line
+    slash-form output (handy for shell pipelines and ``grep``-style
+    filtering).
 
     Local-only: walks ``projects/`` via
     :meth:`WorkspaceLayout.list_projects` and
@@ -2284,11 +2282,10 @@ def _cmd_test(args: argparse.Namespace) -> int:
     (``-k``, ``-x``, ``-v``, etc.) without re-implementing argument
     forwarding.  Extra args after ``--`` are passed through verbatim.
 
-    Phase 5 wiring: when ``workspace.yml``'s
-    ``quality.coverage_threshold`` is set, prepend
-    ``--cov-fail-under=<n>`` so the workspace-level gate kicks in.
-    User passthrough args (after ``--``) win over the workspace
-    default — pytest takes the last occurrence.
+    When ``workspace.yml``'s ``quality.coverage_threshold`` is set,
+    prepend ``--cov-fail-under=<n>`` so the workspace-level gate
+    kicks in.  User passthrough args (after ``--``) win over the
+    workspace default — pytest takes the last occurrence.
     """
     workspace = _resolve_workspace(args)
     quality = load_quality_config(workspace.workspace_yaml)
@@ -2481,11 +2478,11 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     keeps the command discoverable in workspaces that haven't
     pulled the ``[dev]`` extra yet.
 
-    Phase 5 wiring: ``workspace.yml``'s ``quality.lint.enabled``
-    and ``quality.lint.select`` knobs flow through.  ``enabled =
-    false`` skips the run entirely; ``select`` prepends a
-    ``--select <comma list>`` flag (so user passthrough still
-    overrides — ruff picks up the last ``--select``).
+    ``workspace.yml``'s ``quality.lint.enabled`` and
+    ``quality.lint.select`` knobs flow through.  ``enabled = false``
+    skips the run entirely; ``select`` prepends a ``--select <comma
+    list>`` flag (so user passthrough still overrides — ruff picks
+    up the last ``--select``).
     """
     workspace = _resolve_workspace(args)
     quality = load_quality_config(workspace.workspace_yaml)
@@ -3012,9 +3009,9 @@ def _cmd_rename(args: argparse.Namespace) -> int:
     """Rename a project directory or a device id.
 
     Two modes (mutually exclusive): ``--project OLD NEW`` moves the
-    project directory under ``projects/`` (Slice 4 — both names accept
-    bare / slash / dotted forms, intermediate namespace dirs are
-    auto-created when the new path is in a fresh namespace);
+    project directory under ``projects/`` (both names accept bare /
+    slash / dotted forms, intermediate namespace dirs are auto-
+    created when the new path is in a fresh namespace);
     ``--device OLD NEW`` rewrites the devices.yml entry id + every
     reference to it under ``defaults:``.
 
@@ -3075,12 +3072,12 @@ def _cmd_rename(args: argparse.Namespace) -> int:
 
 def _cmd_sim(_args: argparse.Namespace) -> int:
     """Run a project in CPython simulation."""
-    return _stub("Phase 4a (sim runner — slice TBD after Slices 3-7)")
+    return _stub("sim runner — not implemented yet")
 
 
 def _cmd_env(_args: argparse.Namespace) -> int:  # noqa: CHU001 — workstream-spec command name
     """List / show workspace environments."""
-    return _stub("Phase 4a (environments — slice TBD after Slices 3-7)")
+    return _stub("environments — not implemented yet")
 
 
 def _cmd_use(_args: argparse.Namespace) -> int:
@@ -3211,9 +3208,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Scaffold a chumicro-style library under "
-            "<workspace>/libraries/<name>/ (Phase 4).  Mutually "
-            "exclusive with --from / --workbench; uses the built-in "
-            "scaffolder."
+            "<workspace>/libraries/<name>/.  Mutually exclusive with "
+            "--from / --workbench; uses the built-in scaffolder."
         ),
     )
     new_parser.add_argument(
@@ -3271,7 +3267,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Runtime to probe — picks the right Device facade for "
             "probe_device.  Optional: when omitted, the runtime is "
             "auto-detected by trying both transports against the "
-            "given address (Step 3 of the beginner-onramp)."
+            "given address."
         ),
     )
     add_device_parser.add_argument(

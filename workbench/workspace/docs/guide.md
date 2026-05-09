@@ -333,7 +333,7 @@ python run.py repl
 # CI / scripted "watch the next 30 seconds" checks.
 python run.py repl --tail 30
 
-# Deploy then tail in one command (Phase 2e).  Replaces the
+# Deploy then tail in one command — replaces the
 # `deploy <project> && repl --tail` two-command idiom.  Default tail
 # window is 30s; --tail SECONDS overrides.
 python run.py repl garage/sensors/door_open

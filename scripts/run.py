@@ -1988,11 +1988,10 @@ def _build_parser() -> argparse.ArgumentParser:
     # ``add-device`` is a pass-through shim around ``chumicro-workspace
     # add-device`` — keeps the mono-repo's ``run.py`` as the single
     # entry-point contributors learn while reusing the workspace
-    # package's hardware-probe + three-zone-aware writer.  See
-    # ``plans/workstreams/scripts-workbench-config-unification.md``
-    # Phase 1.  ``parse_known_args`` semantics: every argv after
-    # ``add-device`` is forwarded verbatim to ``python -m
-    # chumicro_workspace add-device <argv>`` so flag drift is impossible.
+    # package's hardware-probe + three-zone-aware writer.
+    # ``parse_known_args`` semantics: every argv after ``add-device``
+    # is forwarded verbatim to ``python -m chumicro_workspace
+    # add-device <argv>`` so flag drift is impossible.
     subparsers.add_parser(
         "add-device",
         add_help=False,
@@ -2385,9 +2384,7 @@ def main(argv: list[str]) -> int:
     # ``add-device`` and ``deploy-example`` are pass-through shims
     # around their workspace counterparts.  Peeled off before argparse
     # so the workspace package's flag sets (which evolve independently
-    # of run.py) flow through verbatim — see Phase 1 of
-    # ``plans/workstreams/scripts-workbench-config-unification.md`` for
-    # add-device, and Decision 0059 for deploy-example.
+    # of run.py) flow through verbatim.
     if len(argv) >= 2 and argv[1] in ("add-device", "deploy-example"):
         return subprocess.run(
             [PYTHON, "-m", "chumicro_workspace", argv[1], *argv[2:]],
