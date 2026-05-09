@@ -1,6 +1,6 @@
 # Workstream: Pyright Cleanup
 
-Status: **active.**  Phase 0 (config tuning) shipped 2026-05-09; Phase 1 (this categorization) shipped 2026-05-09.  Phases 2–5 are scoped below; the load-bearing call is Phase 4 (the duck-typed-seam ADR), since it gates the largest single bucket of source-side errors.
+Status: **parked.**  Phase 0 (config-only scoping, two passes) + Phase 1 (categorization) + Family A (real-defect shape-preserving fixes) + example-side spot-fixes shipped 2026-05-09 (1054 → 259 errors / 44 → 0 warnings).  Families B + C and Phases 3 + 4 + 5 + 6 deferred — pyright caused more friction than it surfaced this session, and the remaining buckets all need either user-driven structural decisions (Phase 4 ADR), readability tradeoffs we don't want to make speculatively (Families B + C), or are happy to live as-is until a forcing function appears.  Reopen when there's a concrete reason to return to it (e.g., adding pyright to preflight, or a real bug pyright would have caught).  The `pyright-lsp` plugin is currently disabled in `.claude/settings.json` for the same reason — IDE-strict diagnostics didn't honour `pyrightconfig.json`'s `ignore` globs and were noisier than the CLI.
 
 ## Purpose
 

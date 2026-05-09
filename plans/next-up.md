@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Pyright cleanup** — Phase 0 (config-only scoping) + Family A (real-defect shape-preserving fixes) + example-side spot-fixes shipped 2026-05-09 (1054 → 259 errors, all source changes either real defect fixes or annotation widening with zero runtime cost).  Comments aren't free either — they ship in `.py` files to flash, so the policy is: prefer pyrightconfig-level scoping (zero source change), then file-level pyrightconfig `ignore` for noise epicentres, then accept the noise.  Per-line `# pyright: ignore` only when high-value AND no upstream mitigation fits.  Phase 3 (workbench/scripts, ~30 source) and Phase 4 (duck-typed-seam ADR, ~80 src + most of the example residue) remain.  Detail: [`workstreams/pyright-cleanup.md`](workstreams/pyright-cleanup.md).
+_idle — pickup candidates live in `## Next`._
 
 ## Next
 
