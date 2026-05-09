@@ -439,7 +439,7 @@ class TestDeployerIntegration:
         # the app code and the merged runtime-config msgpack.
         deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
         assert len(deploy_calls) == 1
-        files, entrypoint = deploy_calls[0][1]
+        files, entrypoint, _follow = deploy_calls[0][1]
         assert entrypoint == "/code.py"
         assert files["/code.py"] == b"print('hello')\n"
 

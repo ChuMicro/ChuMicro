@@ -374,16 +374,24 @@ class FakeTransport:
         *,
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        follow: str = "exec",
     ) -> str:
         """Record a deploy_files call and return the configured output.
 
         Emits ``on_file_staged`` per file (sorted to keep tests
         deterministic) and ``on_execute_line`` per line of
         ``execute_output`` before returning.  The ``calls`` entry uses
-        a dict-of-bytes + entrypoint tuple so tests can assert on both
-        the payload and the callback ordering.
+        a dict-of-bytes + entrypoint + follow tuple so tests can
+        assert on the payload, callback ordering, and the follow mode
+        the Deployer chose for this run.
+
+        The ``follow`` kwarg accepts the same values as
+        :class:`MicropythonTransport.deploy_files` (``"exec"`` or
+        ``"soft_reboot"``) so the Deployer can pass-through without
+        switching transports; the fake records it but doesn't
+        otherwise change behaviour.
         """
-        self.calls.append(("deploy_files", (dict(files), entrypoint)))
+        self.calls.append(("deploy_files", (dict(files), entrypoint, follow)))
         # Update simulated on-device state so a subsequent
         # `list_files_in_scope` reflects what was just shipped.
         for device_path, payload in files.items():

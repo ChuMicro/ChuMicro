@@ -93,7 +93,7 @@ class TestDeployerBasic:
         )
         deployer.deploy(source)
         deploy_call = [call for call in fake.calls if call[0] == "deploy_files"][0]
-        files_arg, entrypoint_arg = deploy_call[1]
+        files_arg, entrypoint_arg, _follow = deploy_call[1]
         assert entrypoint_arg == "/code.py"
         assert files_arg == {"/code.py": b"pass", "/lib/helper.py": b"X = 1"}
 
@@ -232,6 +232,92 @@ class TestFlashModeRsyncGuard:
         # mpremote handles flash on MP — no rsync needed, no gate.
         result = deployer.deploy(source)
         assert result.success is True
+
+
+class TestDeployerFollowKwargRouting:
+    """Deployer routes ``follow="soft_reboot"`` for MP+flash+main.py only.
+
+    See Decision 0028 §MicroPython flash transport for the rule.  Other
+    paths (CP, MP RAM, MP flash with non-main.py entrypoints) keep
+    transport defaults — CP doesn't accept ``follow`` at all, and MP
+    RAM/test-harness deploys want ``follow="exec"``.
+    """
+
+    def _make_deployer(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        runtime: str,
+        deploy_mode: str,
+    ) -> tuple[Deployer, FakeTransport]:
+        fake = FakeTransport(execute_output="ok\n", mode=deploy_mode)
+
+        class _Device(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = _Device(
+            transport=runtime,
+            address="/dev/fake",
+            deploy_mode=deploy_mode,
+        )
+        monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
+        return Deployer(device), fake
+
+    def test_micropython_flash_main_py_passes_soft_reboot(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        deployer, fake = self._make_deployer(
+            monkeypatch, runtime="micropython", deploy_mode="flash",
+        )
+        deployer.deploy(FileMapSource({"/main.py": "pass"}, entrypoint="/main.py"))
+        deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
+        _files, _entrypoint, follow = deploy_call[1]
+        assert follow == "soft_reboot"
+
+    def test_micropython_flash_non_main_py_keeps_exec_follow_mode(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        deployer, fake = self._make_deployer(
+            monkeypatch, runtime="micropython", deploy_mode="flash",
+        )
+        deployer.deploy(FileMapSource({"/code.py": "pass"}, entrypoint="/code.py"))
+        deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
+        _files, _entrypoint, follow = deploy_call[1]
+        assert follow == "exec"
+
+    def test_micropython_ram_keeps_exec_follow_mode(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        deployer, fake = self._make_deployer(
+            monkeypatch, runtime="micropython", deploy_mode="ram",
+        )
+        deployer.deploy(FileMapSource({"/main.py": "pass"}, entrypoint="/main.py"))
+        deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
+        _files, _entrypoint, follow = deploy_call[1]
+        assert follow == "exec"
+
+    def test_circuitpython_omits_follow_kwarg(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """CP transport doesn't accept ``follow`` — the Deployer must not pass it.
+
+        Uses RAM mode to sidestep the CP-flash rsync gate (orthogonal
+        to the kwarg-routing behaviour under test).  The branch the
+        Deployer takes here is the same for CP RAM and CP flash —
+        ``follow`` is suppressed for any non-MP transport.
+        """
+        deployer, fake = self._make_deployer(
+            monkeypatch, runtime="circuitpython", deploy_mode="ram",
+        )
+        deployer.deploy(FileMapSource({"/code.py": "pass"}, entrypoint="/code.py"))
+        deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
+        # FakeTransport's default ``follow="exec"`` is recorded — i.e.
+        # the kwarg was not passed by the Deployer.  The discriminator
+        # is the live MP transport, which would raise if a kwarg it
+        # doesn't accept were splatted in.
+        _files, _entrypoint, follow = deploy_call[1]
+        assert follow == "exec"
 
 
 class TestPreflightAutoSwitch:

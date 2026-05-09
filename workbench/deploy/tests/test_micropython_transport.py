@@ -39,6 +39,23 @@ class FakeRunner:
 
 
 @dataclass
+class FakeSerialPort:
+    """Records raw byte writes against the pyserial-port surface.
+
+    The MP transport's soft-reboot path uses
+    ``self._serial.serial.write(b"...")`` for direct Ctrl-B + Ctrl-D
+    writes that mpremote's higher-level helpers don't expose.  Tests
+    that exercise that path assert on :attr:`writes`.
+    """
+
+    writes: list[bytes] = field(default_factory=list)
+
+    def write(self, data: bytes) -> int:
+        self.writes.append(bytes(data))
+        return len(data)
+
+
+@dataclass
 class FakeSerialTransport:
     """In-memory stand-in for ``mpremote.transport_serial.SerialTransport``.
 
@@ -52,8 +69,13 @@ class FakeSerialTransport:
     # Tests may pass either a tuple or a bare bytes value for convenience;
     # bare bytes are wrapped into ``(bytes, b"")`` to mirror hardware.
     exec_outputs: list[tuple[bytes, bytes] | bytes] = field(default_factory=list)
+    # Successive ``read_until`` return values, in call order.  Bare bytes
+    # only — the real ``read_until`` returns bytes; tests pass the full
+    # captured-output payload for each soft-reboot read.
+    read_until_outputs: list[bytes] = field(default_factory=list)
     raise_on_execute: Exception | None = None
     calls: list[tuple[str, tuple]] = field(default_factory=list)
+    serial: FakeSerialPort = field(default_factory=FakeSerialPort)
 
     def enter_raw_repl(self, soft_reset: bool = True) -> None:
         self.calls.append(("enter_raw_repl", (soft_reset,)))
@@ -77,6 +99,18 @@ class FakeSerialTransport:
                 return value
             return (value, b"")
         return (b"", b"")
+
+    def read_until(
+        self,
+        min_num_bytes: int,
+        ending: bytes,
+        timeout: float = 10,
+        timeout_overall: float | None = None,
+    ) -> bytes:
+        self.calls.append(("read_until", (min_num_bytes, ending, timeout, timeout_overall)))
+        if self.read_until_outputs:
+            return self.read_until_outputs.pop(0)
+        return b""
 
     def close(self) -> None:
         self.calls.append(("close", ()))
@@ -1034,6 +1068,276 @@ class TestDeployFiles:
             assert first_staging != second_staging
         finally:
             transport.disconnect()
+
+
+class TestDeployFilesSoftReboot:
+    """``follow="soft_reboot"`` mode — analog of CP's flash-mode pattern.
+
+    Validates the fix shipped under workstream library-config-aware-
+    refactor "Follow-up 2": MP transport adopts CP's flash-mode soft-
+    reboot read for app-code deploys whose entrypoint may be a
+    ``while True`` body that never returns.  See Decision 0028
+    §MicroPython flash transport.
+    """
+
+    def _prepare(
+        self,
+        *,
+        captured_serial: bytes,
+        runner: FakeRunner | None = None,
+        timeout: float = 0.1,
+    ) -> tuple[MicropythonTransport, FakeSerialTransport, FakeRunner]:
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        # Two read_until calls: first waits for the friendly-REPL
+        # prompt (`>>> `) after Ctrl-B exits raw REPL — the prompt
+        # itself is enough to satisfy the read; second captures
+        # boot.py + main.py output after Ctrl-D soft-reboot.
+        serial.read_until_outputs = [b">>> ", captured_serial]
+        runner = runner or FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="copy",
+            timeout=timeout,
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        return transport, serial, runner
+
+    def test_writes_ctrl_b_then_ctrl_d_and_reads_until_prompt(self) -> None:
+        """Soft-reboot path sends Ctrl-B + Ctrl-D, reads until ``>>>``."""
+        captured = (
+            b"MPY: soft reboot\r\n"
+            b"WIFI_OK ip=10.0.0.5\r\n"
+            b"NTP_OK 1700000000\r\n"
+            b"MicroPython v1.28.0 on 2026-04-06; ...\r\n"
+            b'Type "help()" for more information.\r\n'
+            b">>> "
+        )
+        transport, serial, _ = self._prepare(captured_serial=captured)
+        try:
+            output = transport.deploy_files(
+                {"/main.py": b"print('hi')"},
+                "/main.py",
+                follow="soft_reboot",
+            )
+        finally:
+            transport.disconnect()
+
+        # Direct serial bytes — Ctrl-B (\r\x02), then (after waiting
+        # for the friendly-REPL prompt to appear) Ctrl-D (\x04).
+        assert serial.serial.writes == [b"\r\x02", b"\x04"]
+        # Two read_until calls: prompt-sync (after Ctrl-B), then
+        # soft-reboot capture (after Ctrl-D).
+        read_calls = [call for call in serial.calls if call[0] == "read_until"]
+        assert len(read_calls) == 2
+        _min, ending, _t, _to = read_calls[0][1]
+        assert ending == b">>> "
+        _min, ending, timeout, timeout_overall = read_calls[1][1]
+        assert ending == b"\r\n>>> "
+        assert timeout == 0.1
+        assert timeout_overall == 0.1
+        # Output trimmed to the user-visible portion.  Internal \r\n
+        # is preserved (matches CircuitpythonTransport._extract_code_output);
+        # `splitlines()` consumers handle both line endings.
+        assert output == "WIFI_OK ip=10.0.0.5\r\nNTP_OK 1700000000\n"
+
+    def test_no_exec_raw_in_soft_reboot_mode(self) -> None:
+        """Soft-reboot mode bypasses the raw-REPL exec entirely."""
+        transport, serial, _ = self._prepare(
+            captured_serial=b"MPY: soft reboot\r\nhi\r\n",
+        )
+        try:
+            transport.deploy_files(
+                {"/main.py": b"print('hi')"},
+                "/main.py",
+                follow="soft_reboot",
+            )
+        finally:
+            transport.disconnect()
+
+        assert not any(call[0] == "exec_raw" for call in serial.calls)
+
+    def test_partial_output_returned_when_prompt_never_appears(self) -> None:
+        """``while True`` body — no prompt, partial output returned verbatim."""
+        captured = b"MPY: soft reboot\r\ntick 1\r\ntick 2\r\ntick 3\r\n"
+        transport, _, _ = self._prepare(captured_serial=captured)
+        try:
+            output = transport.deploy_files(
+                {"/main.py": b"while True: pass"},
+                "/main.py",
+                follow="soft_reboot",
+            )
+        finally:
+            transport.disconnect()
+
+        # No friendly-REPL banner cut: read_until timed out, output
+        # stops at whatever accumulated.  Internal \r\n preserved.
+        assert output == "tick 1\r\ntick 2\r\ntick 3\n"
+
+    def test_traceback_preserved_in_output(self) -> None:
+        """Exceptions in main.py — traceback kept, post-traceback banner stripped."""
+        captured = (
+            b"MPY: soft reboot\r\n"
+            b"Traceback (most recent call last):\r\n"
+            b'  File "main.py", line 5, in <module>\r\n'
+            b"NameError: name 'undefined' is not defined\r\n"
+            b"MicroPython v1.28.0 on 2026-04-06; ...\r\n"
+            b'Type "help()" for more information.\r\n'
+            b">>> "
+        )
+        transport, _, _ = self._prepare(captured_serial=captured)
+        try:
+            output = transport.deploy_files(
+                {"/main.py": b"undefined"},
+                "/main.py",
+                follow="soft_reboot",
+            )
+        finally:
+            transport.disconnect()
+
+        assert "Traceback" in output
+        assert "NameError" in output
+        assert "MicroPython v" not in output  # banner stripped
+        assert ">>>" not in output             # prompt stripped
+
+    def test_pre_reboot_buffer_discarded(self) -> None:
+        """Stale bytes before ``MPY: soft reboot`` are dropped."""
+        captured = (
+            b"leftover from previous run\r\n"
+            b"MPY: soft reboot\r\n"
+            b"REAL_OUTPUT\r\n"
+            b"MicroPython v1.28.0 on 2026-04-06; ...\r\n"
+            b">>> "
+        )
+        transport, _, _ = self._prepare(captured_serial=captured)
+        try:
+            output = transport.deploy_files(
+                {"/main.py": b"print('REAL_OUTPUT')"},
+                "/main.py",
+                follow="soft_reboot",
+            )
+        finally:
+            transport.disconnect()
+
+        assert "leftover" not in output
+        assert output == "REAL_OUTPUT\n"
+
+    def test_on_execute_line_called_per_line(self) -> None:
+        """``on_execute_line`` callback fires for each captured line."""
+        captured = b"MPY: soft reboot\r\nA\r\nB\r\nC\r\n>>> "
+        transport, _, _ = self._prepare(captured_serial=captured)
+        try:
+            seen: list[str] = []
+            transport.deploy_files(
+                {"/main.py": b"pass"},
+                "/main.py",
+                follow="soft_reboot",
+                on_execute_line=seen.append,
+            )
+        finally:
+            transport.disconnect()
+
+        assert seen == ["A", "B", "C"]
+
+    def test_on_file_staged_still_fires(self) -> None:
+        """Staging-side callbacks unchanged in soft-reboot mode."""
+        captured = b"MPY: soft reboot\r\n>>> "
+        transport, _, _ = self._prepare(captured_serial=captured)
+        try:
+            staged: list[str] = []
+            transport.deploy_files(
+                {"/main.py": b"pass", "/lib/helper.py": b"X = 1"},
+                "/main.py",
+                follow="soft_reboot",
+                on_file_staged=staged.append,
+            )
+        finally:
+            transport.disconnect()
+
+        assert staged == ["/lib/helper.py", "/main.py"]
+
+    def test_mount_mode_rejected(self) -> None:
+        """``follow="soft_reboot"`` requires ``mode="copy"``."""
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            transport_factory=_factory_for(serial),
+        )
+        with pytest.raises(MicropythonTransportError, match="mode='copy'"):
+            transport.deploy_files(
+                {"/main.py": b"pass"},
+                "/main.py",
+                follow="soft_reboot",
+            )
+
+    def test_non_main_py_entrypoint_rejected(self) -> None:
+        """``follow="soft_reboot"`` requires entrypoint ``/main.py``."""
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        with pytest.raises(MicropythonTransportError, match="/main.py"):
+            transport.deploy_files(
+                {"/code.py": b"pass"},
+                "/code.py",
+                follow="soft_reboot",
+            )
+
+    def test_re_enters_raw_repl_after_read(self) -> None:
+        """Cleanup re-enters raw REPL so disconnect() finds a known state."""
+        captured = b"MPY: soft reboot\r\n>>> "
+        transport, serial, _ = self._prepare(captured_serial=captured)
+        try:
+            transport.deploy_files(
+                {"/main.py": b"pass"},
+                "/main.py",
+                follow="soft_reboot",
+            )
+        finally:
+            transport.disconnect()
+
+        # enter_raw_repl was called twice: once by _ensure_serial after
+        # mpremote fs cp re-opened the port, then again by the post-read
+        # cleanup with soft_reset=False.
+        enter_calls = [call for call in serial.calls if call[0] == "enter_raw_repl"]
+        assert len(enter_calls) >= 2
+        assert enter_calls[-1][1] == (False,)
+
+
+class TestExtractMainPyOutput:
+    """Direct unit coverage of the static trim helper."""
+
+    def test_returns_just_user_output_when_main_returned(self) -> None:
+        raw = (
+            b"MPY: soft reboot\r\n"
+            b"hello\r\n"
+            b"MicroPython v1.28.0 on ...\r\n"
+            b">>> "
+        )
+        assert MicropythonTransport._extract_main_py_output(raw) == "hello\n"
+
+    def test_returns_partial_output_when_no_banner(self) -> None:
+        raw = b"MPY: soft reboot\r\ntick 1\r\ntick 2\r\n"
+        assert (
+            MicropythonTransport._extract_main_py_output(raw)
+            == "tick 1\r\ntick 2\n"
+        )
+
+    def test_returns_empty_string_with_only_marker(self) -> None:
+        raw = b"MPY: soft reboot\r\n"
+        assert MicropythonTransport._extract_main_py_output(raw) == "\n"
+
+    def test_no_marker_returns_raw_text(self) -> None:
+        # Genuinely no soft-reboot ever observed (read pre-empted, etc.).
+        # We don't sync — return whatever we got, stripped.
+        raw = b"random bytes\r\nmore\r\n"
+        assert (
+            MicropythonTransport._extract_main_py_output(raw)
+            == "random bytes\r\nmore\n"
+        )
 
 
 class TestListFilesInScope:

@@ -57,6 +57,27 @@ def _extract_traceback(output: str) -> str | None:
     return matches[-1].rstrip() if matches else None
 
 
+def _deploy_files_kwargs(device: Device, entrypoint: str) -> dict[str, str]:
+    """Compute transport-specific kwargs for :meth:`TransportProtocol.deploy_files`.
+
+    MicroPython flash deploys with entrypoint ``/main.py`` opt into the
+    soft-reboot follow mode so ``while True`` app code captures partial
+    output instead of timing out waiting for the raw-REPL EOF marker
+    that an infinite loop never emits.  Other paths (CP, MP RAM, MP
+    flash with non-``/main.py`` entrypoints) keep transport defaults —
+    CP doesn't accept ``follow``, and MP RAM / test-harness deploys
+    want ``follow="exec"`` because their entrypoints return cleanly
+    and the EOF marker fires.
+    """
+    if (
+        device.transport == Runtime.MICROPYTHON
+        and device.deploy_mode == DeployMode.FLASH
+        and entrypoint.lstrip("/") == "main.py"
+    ):
+        return {"follow": "soft_reboot"}
+    return {}
+
+
 class Deployer:
     """End-to-end deploy orchestrator.
 
@@ -230,11 +251,13 @@ class Deployer:
                             on_file_deleted(path)
                     transport.delete_files(stale)
             _report(0.3, "staging")
+            kwargs = _deploy_files_kwargs(effective_device, entrypoint)
             output = transport.deploy_files(
                 files,
                 entrypoint,
                 on_file_staged=on_file_staged,
                 on_execute_line=on_execute_line,
+                **kwargs,
             )
             _report(0.9, "executing")
         finally:
@@ -311,11 +334,13 @@ class Deployer:
             files = source.files()
             entrypoint = source.entrypoint()
             _report(0.2, "staging")
+            kwargs = _deploy_files_kwargs(effective_device, entrypoint)
             output = transport.deploy_files(
                 files,
                 entrypoint,
                 on_file_staged=on_file_staged,
                 on_execute_line=on_execute_line,
+                **kwargs,
             )
             _report(0.9, "executing")
         finally:

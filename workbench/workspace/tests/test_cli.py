@@ -704,7 +704,7 @@ class TestDeploy:
 
         deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
         assert len(deploy_calls) == 1
-        files, entrypoint = deploy_calls[0][1]
+        files, entrypoint, _follow = deploy_calls[0][1]
         assert entrypoint == "/main.py"  # MP default per Device.effective_entrypoint
         decoded = unpackb(files["/runtime_config.msgpack"])
         assert decoded["wifi.password"] == "shh"
@@ -788,7 +788,7 @@ class TestDeploy:
         ])
         assert exit_code == 0
         deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
-        files, entrypoint = deploy_calls[0][1]
+        files, entrypoint, _follow = deploy_calls[0][1]
         # Boot-shim layout: synthesised entrypoint at root, project at root.
         assert entrypoint == "/main.py"  # MP runtime in seed
         assert "/main.py" in files
@@ -873,7 +873,7 @@ class TestDeploy:
         ])
         assert exit_code == 0
         deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
-        files, _entrypoint = deploy_calls[0][1]
+        files, _entrypoint, _follow = deploy_calls[0][1]
         # AST walker shipped main.py + the imported helper, NOT the
         # unimported one.
         assert "/lib/imported_module.py" in files
@@ -1872,7 +1872,7 @@ class TestDemo:
             call for call in transport.calls if call[0] == "deploy_files"
         ]
         assert len(deploy_calls) == 1
-        files, entrypoint = deploy_calls[0][1]
+        files, entrypoint, _follow = deploy_calls[0][1]
         # MP runtime in the seed → /main.py.
         assert entrypoint == "/main.py"
         assert "/main.py" in files
@@ -2578,7 +2578,7 @@ class TestReplWithProject:
             call for call in transport.calls if call[0] == "deploy_files"
         ]
         assert len(deploy_calls) == 1
-        files, _entrypoint = deploy_calls[0][1]
+        files, _entrypoint, _follow = deploy_calls[0][1]
         # Project's app.py at the device root (no /lib/projects/ prefix).
         assert "/app.py" in files
         # Synthesised shim at runtime-matching path (seed defaults to MP).
@@ -2640,7 +2640,7 @@ class TestReplWithProject:
         deploy_calls = [
             call for call in transport.calls if call[0] == "deploy_files"
         ]
-        files, _entrypoint = deploy_calls[0][1]
+        files, _entrypoint, _follow = deploy_calls[0][1]
         # Project files land at the device root regardless of host-side
         # nesting depth — F5 dropped the /lib/projects/<name>/ namespace.
         assert "/app.py" in files
@@ -5217,7 +5217,7 @@ class TestDeployExampleHappyPath:
             call for call in transport.calls if call[0] == "deploy_files"
         ]
         assert len(deploy_calls) == 1
-        files, entrypoint = deploy_calls[0][1]
+        files, entrypoint, _follow = deploy_calls[0][1]
         assert entrypoint == "/code.py"
         # The walked library module rides under /lib/.
         assert "/lib/chumicro_timing/__init__.py" in files
