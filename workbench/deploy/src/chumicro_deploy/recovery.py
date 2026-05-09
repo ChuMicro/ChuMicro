@@ -393,12 +393,11 @@ def diagnose_port_holders(port_path: str) -> list[PortHolder]:
     caller treats absence of holders as "we couldn't tell, fall
     through to the generic recovery hint" rather than an error.
 
-    F6 of the 2026-05-06 verification pass — beginners hit
-    "failed to access ... it may be in use by another program"
-    after a SIGINT'd deploy left an orphan chumicro-deploy /
-    mpremote subprocess holding the port.  Surfacing the PID in
-    the recovery message lets the user kill the right thing
-    without having to run ``lsof`` themselves.
+    Beginners hit "failed to access ... it may be in use by
+    another program" after a SIGINT'd deploy leaves an orphan
+    chumicro-deploy / mpremote subprocess holding the port.
+    Surfacing the PID in the recovery message lets the user kill
+    the right thing without having to run ``lsof`` themselves.
     """
     if sys.platform.startswith("win"):
         return []
@@ -697,8 +696,6 @@ class _RecoveringDeployer:
         the port can't be identified, lsof is unavailable, or the
         port has no current holders (the user-action recovery
         steps below will still surface the generic hint).
-
-        F6 of the 2026-05-06 verification pass.
         """
         port_path = _extract_port_path_from_error(error)
         if port_path is None:

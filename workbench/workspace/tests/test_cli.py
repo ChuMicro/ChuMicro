@@ -767,9 +767,9 @@ class TestDeploy:
     ) -> None:
         """``--boot-shim`` routes through project_boot_source.
 
-        Verifies the simplified layout (F5, 2026-05-06): synthesised
-        shim at the runtime-matching path, project files at the device
-        root, no ``active.py`` / ``workspace_runtime`` / ``lib/projects``.
+        Verifies the simplified layout: synthesised shim at the
+        runtime-matching path, project files at the device root,
+        no ``active.py`` / ``workspace_runtime`` / ``lib/projects``.
         """
         root = _seed_workspace(tmp_path)
         project_dir = root / "projects" / "back-porch"
@@ -1642,9 +1642,9 @@ class TestDeployDryRun:
     ) -> None:
         """Boot-shim dry-run shows shim + project files at the device root.
 
-        Verifies the simplified F5 layout (2026-05-06): synthesised shim
-        at the runtime-matching path, project files at root, no
-        ``/lib/projects/<name>/`` nesting.
+        Verifies the simplified layout: synthesised shim at the runtime-
+        matching path, project files at root, no ``/lib/projects/<name>/``
+        nesting.
         """
         root = _seed_workspace(tmp_path)
         project_dir = root / "projects" / "back-porch"
@@ -2170,10 +2170,9 @@ class TestBootstrapHelpers:
             name="micropython", version="1.27.0", machine="", uid="",
         ))
         # Blank machine → neutral "board" fallback (the user can
-        # rename via ``rename --device``).  F4 of 2026-05-06 changed
-        # this from "use runtime name" to "use 'board'" so the
-        # add-device suffix layer doesn't produce confusing results
-        # like "micropython-mp".
+        # rename via ``rename --device``).  Avoiding the runtime
+        # name keeps the add-device suffix layer from producing
+        # confusing results like "micropython-mp".
         assert result == "board"
 
     def test_suggest_device_id_strips_chip_with_hyphen(self) -> None:
@@ -2311,9 +2310,8 @@ class TestBootstrapHelpers:
 
 
 class TestSuggestAddDeviceId:
-    """F4 of 2026-05-06 verification — ``add-device`` derives a
-    sensible default device id from the probe when the user omits
-    the positional id.
+    """``add-device`` derives a sensible default device id from the
+    probe when the user omits the positional id.
     """
 
     def _impl(self, machine: str, runtime: str) -> "DeviceImplementation":  # noqa: F821 — quoted forward ref; impl imports inline below
@@ -4251,8 +4249,8 @@ class TestAddDeviceRuntimeInference:
 
 
 class TestAddDeviceOmittedId:
-    """F4 of 2026-05-06 verification — ``add-device`` accepts no
-    positional id and derives a default from the probe.
+    """``add-device`` accepts no positional id and derives a default
+    from the probe.
     """
 
     def _seed(self, tmp_path: Path) -> None:

@@ -192,9 +192,8 @@ def build_parser() -> argparse.ArgumentParser:
             "TUI) forwards every keystroke to the device; `line` "
             "interposes a host-side line editor with persistent "
             "per-device history, cursor edit, and Ctrl-R reverse "
-            "search.  Phase 7 of the workspace-ecosystem workstream — "
-            "the default flips to `line` once raw-REPL auto-detection "
-            "lands."
+            "search.  The default flips to `line` once raw-REPL "
+            "auto-detection lands."
         ),
     )
     return parser

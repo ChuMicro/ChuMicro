@@ -6,11 +6,6 @@ project's ``app.run`` and calls it.  Project files land at the
 device root.  No ``active.py``, no ``/lib/workspace_runtime/``,
 no ``/lib/projects/<name>/`` namespace — chumicro is one-project-per-
 board.
-
-History: an earlier multi-project layout used ``active.py`` as a
-project-name selector + a ``workspace_runtime.boot()`` dispatcher.
-F5 of the 2026-05-06 verification pass dropped that complexity in
-favour of one-project-per-board with a synthesised three-line shim.
 """
 
 from pathlib import Path

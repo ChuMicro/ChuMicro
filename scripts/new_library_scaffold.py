@@ -2,9 +2,8 @@
 
 `python scripts/run.py new-library <name>` calls
 :func:`new_library` here, which composes the workbench
-scaffolder (Phase 4 of the workspace-ecosystem workstream)
-with mono-repo-only follow-ups: editable-install of the new
-package + IDE config sync.
+scaffolder with mono-repo-only follow-ups: editable-install
+of the new package + IDE config sync.
 
 External users developing their own chumicro-style libraries
 get the same scaffolder via

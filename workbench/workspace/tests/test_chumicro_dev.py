@@ -250,11 +250,11 @@ class TestSyncLibrarySources:
     def test_preserves_all_comments_starter_header(
         self, tmp_path: Path,
     ) -> None:
-        """Regression for 2026-05-06: the all-comments starter has no
-        keys for ruamel-rt to anchor comments to, so the previous
-        round-trip implementation dropped the entire didactic header
-        on first sync.  The string-level rewrite preserves every byte
-        outside the managed block.
+        """An all-comments starter has no keys for ruamel-rt to anchor
+        comments to, which would drop the entire didactic header on
+        first sync if round-trip went via the YAML object model.  The
+        string-level rewrite preserves every byte outside the managed
+        block.
 
         This mirrors the actual ``_payloads/workspace.yml.template``
         shape — a long comment header + several fully-commented-out

@@ -43,10 +43,8 @@ class TestParseVersionTuple:
         """CircuitPython RC builds report ``sys.implementation.version``
         as a 4-tuple ``(10, 2, 0, '')`` where the empty string joins
         to a trailing dot.  The parser must take the leading run of
-        ints and ignore the empty trailer.
-
-        F3 of the 2026-05-06 verification pass — the previous parser
-        flagged 10.2.0-rc.0 boards as UNPARSEABLE on every probe.
+        ints and ignore the empty trailer; otherwise 10.2.0-rc.0
+        boards parse as UNPARSEABLE on every probe.
         """
         assert parse_version_tuple("10.2.0.") == (10, 2, 0)
 

@@ -14,10 +14,9 @@ falling back to the ``devices.yml`` defaults block when the project
 isn't mapped.  ``deploy --all-projects`` walks the mapping and
 deploys each project to every device it lists, in declaration order.
 
-Sister of ``deploy --all-devices`` — that flag was the
+Sister of ``deploy --all-devices`` — that flag is the
 "loop-deploy one project to every board" half; this is the converse
-"deploy each project to its declared target(s)" half (``--all-devices``
-shipped 2026-04-27 in commit ``139b0ee``).
+"deploy each project to its declared target(s)" half.
 
 Host-only — the on-device boot path knows nothing about which
 host-side device the bytes arrived from.

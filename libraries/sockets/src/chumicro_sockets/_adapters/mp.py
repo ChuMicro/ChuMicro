@@ -383,9 +383,8 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     ``mbedtls_x509_crt_parse`` walks a buffer of sequential DER
     certs natively.
 
-    Why the conversion: live-tested on MP 1.28.0 (2026-04-26) by
-    feeding ``load_verify_locations`` the same self-signed CA five
-    different ways:
+    Why the conversion: feeding ``load_verify_locations`` the same
+    self-signed CA in different shapes splits along build config:
 
     * Pi Pico W RP2 — every PEM variant raises ``ValueError('invalid
       cert')``; only DER (binary, no PEM markers) loads.

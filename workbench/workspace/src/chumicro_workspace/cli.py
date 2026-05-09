@@ -902,9 +902,9 @@ def _suggest_add_device_id(
     numeric suffix: ``"-2"``, ``"-3"``, etc.  The user can rename the
     entry afterwards with ``rename --device <old> <new>``.
 
-    F4 of the 2026-05-06 verification pass — beginners running
-    ``add-device`` without a positional id had to invent one cold,
-    even though the probe already knows what board this is.
+    Probe-suggested ids spare a beginner running ``add-device``
+    without a positional id from inventing one cold when the probe
+    already knows what board this is.
 
     Args:
         implementation: Probe's :class:`DeviceImplementation` (carries
@@ -960,7 +960,7 @@ def _resolve_deploy_layout(
     ``--import-graph`` flag, those wins are preserved verbatim.
     Otherwise the layout is auto-detected from the project's shape:
 
-    Decision matrix (verification finding #5, 2026-05-06):
+    Decision matrix:
 
         code.py     main.py     app.py:run()   target   →  result
         ----------  ----------  -------------  -------     ----------
@@ -1069,9 +1069,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     the "I only have one app" beginner case.  Zero projects or
     multiple projects both require an explicit positional.
 
-    Multi-project deploys (``deploy <a> <b> <c>``) are not supported —
-    Slice 7 of the nested-projects-and-examples workstream retired the
-    multi-project-staging path; pass one positional per ``deploy`` call.
+    Multi-project deploys (``deploy <a> <b> <c>``) are not supported;
+    pass one positional per ``deploy`` call.
     """
     workspace = _resolve_workspace(args)
 
@@ -1142,8 +1141,6 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             #   libraries from ``library_sources`` and ``shared/``).
             # * Runtime mismatch (e.g. ``code.py`` only, but target is MP)
             #   surfaces as a user error before any bytes leave the host.
-            #
-            # See finding #5 of the 2026-05-06 verification pass.
             layout_choice = _resolve_deploy_layout(
                 project_dir=project_dir,
                 target_entrypoint=device.effective_entrypoint,
@@ -1505,11 +1502,10 @@ def _print_health_findings(
 def _cmd_status(args: argparse.Namespace) -> int:
     """Print a one-line-per-check workspace health snapshot.
 
-    Phase 2a of the workspace-ecosystem workstream.  Runs the three
-    fast static checks (workspace.yml validity, devices.yml count,
-    projects tree summary).  ``doctor`` (Phase 2b) is the stricter
-    sibling that adds Python version checking and per-project AST
-    scans for ``run()``.
+    Runs the three fast static checks (workspace.yml validity,
+    devices.yml count, projects tree summary).  ``doctor`` is the
+    stricter sibling that adds Python version checking and per-project
+    AST scans for ``run()``.
     """
     workspace = _resolve_workspace(args)
     return _print_health_findings(workspace, collect_health_findings(workspace))
@@ -1536,9 +1532,8 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     project names in the hint so the user can navigate straight to
     the broken file.
 
-    Phase 2b of the workspace-ecosystem workstream.  Per-device
-    reachability probes (``check the board responds on its
-    address``) are deferred until we have a hardware-cheap probe
+    Per-device reachability probes (``check the board responds on
+    its address``) are deferred until we have a hardware-cheap probe
     primitive that can run without blocking the static checks.
     """
     if getattr(args, "fix_fskit_wedge", False):
@@ -1645,7 +1640,8 @@ def _fix_fskit_wedge() -> int:
     return 0
 
 
-#: Built-in demo payload — Step 5 of the beginner-onramp workstream.
+#: Built-in demo payload — runtime-agnostic so it deploys cleanly on
+#: any registered board.
 #:
 #: Cross-runtime safe (CircuitPython + MicroPython): only ``time.sleep``
 #: + ``print``.  No hardware access — every supported board reaches the
@@ -1667,11 +1663,10 @@ DEMO_PAYLOAD: str = (
 def _cmd_demo(args: argparse.Namespace) -> int:
     """Deploy a baked-in LED-blink-shaped "hello world" to the active device.
 
-    Step 5 of the beginner-onramp workstream — gives a user with a
-    freshly-registered board something to ship on day one without
-    having to write code, configure wifi, or pick a project.  Runs
-    synchronously: deploys the payload, captures execute output,
-    prints it.  Total wall-clock ~5 seconds.
+    Gives a user with a freshly-registered board something to ship
+    on day one without having to write code, configure wifi, or pick
+    a project.  Runs synchronously: deploys the payload, captures
+    execute output, prints it.  Total wall-clock ~5 seconds.
 
     The payload is a runtime-agnostic print loop (no ``board`` /
     ``machine`` imports) so the demo works on any supported runtime
@@ -2040,8 +2035,7 @@ def _suggest_device_id(implementation: DeviceImplementation) -> str:
     The strip pattern is ``" with <anything-to-end-of-string>"``
     rather than ``\\w+$`` — chip variants like ``ESP32S2-S2FN4R2``
     contain hyphens and would otherwise survive into the slug as
-    ``s2mini-with-esp32s2-s2fn4r2`` (F4 of the 2026-05-06
-    verification pass).
+    ``s2mini-with-esp32s2-s2fn4r2``.
 
     Falls back to ``"board"`` when ``machine`` is empty (older
     firmware) or sanitises to nothing — neutral default that the
@@ -2139,17 +2133,16 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
 ) -> int:
     """Onboard a board end-to-end: pick → probe → register → demo.
 
-    Step 4 of the beginner-onramp workstream — the integration
-    command that ties Steps 1-3 + 5 into a single user-visible
-    flow.  A user with a freshly-plugged board runs
-    ``chumicro-workspace bootstrap`` and walks through:
+    Single user-visible flow that ties port-pick + runtime-inference
+    probe + device-registration + optional demo deploy together.  A
+    user with a freshly-plugged board runs ``chumicro-workspace
+    bootstrap`` and walks through:
 
     1. Pick a port.  When exactly one is detected, it's used
        silently; otherwise the wizard prints a numbered list and
        prompts.  ``--port <path>`` skips the pick.
-    2. Probe with runtime auto-inference (Step 3 of the
-       workstream).  Failure prints the same diagnosis hints
-       ``add-device`` does and exits 1.
+    2. Probe with runtime auto-inference.  Failure prints the
+       same diagnosis hints ``add-device`` does and exits 1.
     3. Display detected runtime + version + machine.  The
        firmware-support floor is checked; OLD / UNKNOWN /
        UNPARSEABLE statuses print a warning but don't abort.
@@ -2158,9 +2151,8 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
        string (e.g. ``"raspberry-pi-pico-w"``).
     5. Register the device in ``devices.yml`` — same write as
        ``add-device`` but no second probe.
-    6. Optional ``--with-demo`` deploys the built-in demo
-       payload (Step 5 of the workstream) so the user sees their
-       board run code immediately.
+    6. Optional ``--with-demo`` deploys the built-in demo payload
+       so the user sees their board run code immediately.
     7. Print next-steps for the user (``new`` / ``deploy`` /
        ``repl``).
 
@@ -2962,9 +2954,9 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
         hardware["board_id"] = info.board_id
 
     # When the user didn't supply a positional id, derive one from the
-    # probe's machine + runtime (F4 of the 2026-05-06 verification).
-    # Suggested id collisions resolve via numeric suffix; the user can
-    # rename the entry afterwards via ``rename --device``.
+    # probe's machine + runtime.  Suggested-id collisions resolve via
+    # numeric suffix; the user can rename the entry afterwards via
+    # ``rename --device``.
     if args.id is None:
         existing_ids = set(list_device_ids(data))
         args.id = _suggest_add_device_id(
