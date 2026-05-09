@@ -1758,6 +1758,22 @@ class TestStatus:
 class TestDoctor:
     """Phase 2b — `doctor` runs status's checks plus AST + config-merge."""
 
+    @pytest.fixture(autouse=True)
+    def _stub_fskit_detector(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Default the FSKit detector to False for every test in this class.
+
+        Without this, a wedged dev machine running the suite would
+        surface as a doctor ERROR finding and flip exit codes for
+        tests that aren't trying to test FSKit at all.  Tests that do
+        care about the FSKit branch live in
+        :class:`TestDoctorFixFskitWedge` and stub the detector
+        explicitly.
+        """
+        from chumicro_workspace import health
+        monkeypatch.setattr(health, "detect_fskit_wedge", lambda: False)
+
     def test_includes_python_and_project_run_labels(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
@@ -1773,6 +1789,7 @@ class TestDoctor:
             "DEVICES.YML",
             "PROJECTS",
             "PROJECT run() defs",
+            "MACOS FSKIT",
         ):
             assert label in out
 
@@ -1789,6 +1806,27 @@ class TestDoctor:
         out = capsys.readouterr().out
         assert "✗" in out
         assert "back-porch" in out
+
+    def test_wedge_detected_flips_exit_to_one(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # Override the autouse stub: a wedge during plain `doctor` (no
+        # --fix flag) should surface as an ERROR finding, flip exit to
+        # 1, and tell the user about --fix-fskit-wedge.
+        from chumicro_workspace import health
+        monkeypatch.setattr(health, "detect_fskit_wedge", lambda: True)
+        root = _seed_workspace(tmp_path)
+        project_dir = _seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
+        exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
+        assert exit_code == 1
+        out = capsys.readouterr().out
+        assert "MACOS FSKIT" in out
+        assert "wedged" in out
+        assert "doctor --fix-fskit-wedge" in out
 
 
 class TestDoctorFixFskitWedge:

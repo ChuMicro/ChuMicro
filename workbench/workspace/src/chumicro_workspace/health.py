@@ -22,6 +22,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from chumicro_deploy.config.devices_yaml import load_devices
+from chumicro_deploy.macos_fskit import detect_fskit_wedge
 
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
@@ -341,12 +342,54 @@ def check_project_run_functions(workspace: WorkspaceLayout) -> HealthFinding:
     )
 
 
+def check_macos_fskit_wedge() -> HealthFinding:
+    """Flag the macOS FSKit wedge that turns CIRCUITPY mounts unreachable.
+
+    On non-macOS the wedge mode does not exist —
+    :func:`detect_fskit_wedge` returns ``False`` immediately, surfacing
+    here as a "not applicable" OK row that the doctor renderer keeps
+    out of the way.  On macOS the detector probes
+    ``ps -o state= -p $(pgrep diskarbitrationd)``; uninterruptible
+    kernel wait (``Us``) is the wedge signature.
+
+    Doctor-only — the subprocess probe is too heavy for every
+    ``status`` poll, but doctor is the diagnose-deeply surface where
+    catching a wedge before the user runs into a 30-second-per-deploy
+    failure cascade is the whole point.
+    """
+    if sys.platform != "darwin":
+        return HealthFinding(
+            label="MACOS FSKIT",
+            level=HealthLevel.OK,
+            message="not applicable (macOS-only check)",
+        )
+    if detect_fskit_wedge():
+        return HealthFinding(
+            label="MACOS FSKIT",
+            level=HealthLevel.ERROR,
+            message="diskarbitrationd is wedged in uninterruptible wait",
+            hint=(
+                "CIRCUITPY drives cannot mount until the stuck "
+                "daemons are killed.  Run `chumicro-workspace doctor "
+                "--fix-fskit-wedge` to clear it (sudo will prompt for "
+                "your password), or paste the recovery command from "
+                "docs/troubleshooting/macos-circuitpy.md manually."
+            ),
+        )
+    return HealthFinding(
+        label="MACOS FSKIT",
+        level=HealthLevel.OK,
+        message="diskarbitrationd healthy",
+    )
+
+
 def collect_doctor_findings(
     workspace: WorkspaceLayout,
 ) -> list[HealthFinding]:
-    """Run the strict (status + Python version + AST) check set."""
+    """Run the strict (status + Python version + AST + FSKit) check set."""
     return [
         check_python_version(),
         *collect_health_findings(workspace),
         check_project_run_functions(workspace),
+        check_macos_fskit_wedge(),
     ]

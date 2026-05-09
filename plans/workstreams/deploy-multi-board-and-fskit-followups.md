@@ -54,6 +54,8 @@ Source-side wiring shipped in two places:
 
 **`chumicro-workspace doctor --fix-fskit-wedge` shipped same-session.**  The opt-in sudo wrapper lives in `workbench/workspace/src/chumicro_workspace/cli.py` (`_fix_fskit_wedge`).  Detect → refuse-if-not-wedged (per Item 4 caveat) → refuse on non-darwin / non-TTY / no-sudo → run `subprocess.run(MACOS_FSKIT_RECOVERY_COMMAND.split())` so sudo prompts inline → settle 2 s → re-detect → report.  Distinct exit codes (2 non-darwin, 3 not-wedged, 4 no-tty, 5 no-sudo, 6 wedge persists) for scripted callers.  Seven unit tests in `TestDoctorFixFskitWedge` cover each branch with stubbed subprocess + detector.  Doc note added to `docs/troubleshooting/macos-circuitpy.md`.
 
+**Plain `chumicro-workspace doctor` now detects the wedge too (without fixing it).**  New `check_macos_fskit_wedge()` in `workbench/workspace/src/chumicro_workspace/health.py` is the sixth doctor check — calls `detect_fskit_wedge()` on darwin (no-op + OK row on Linux/CI), surfaces an ERROR `HealthFinding` pointing at `--fix-fskit-wedge` and the manual paste fallback when wedged.  Wired into `collect_doctor_findings`, NOT `collect_health_findings` — `status` polls quickly + frequently, the subprocess probe is doctor-tier weight.  Three new tests in `TestCheckMacosFskitWedge` (non-darwin, healthy, wedged) plus a flip-exit-to-one regression in `TestDoctor.test_wedge_detected_flips_exit_to_one`.  An autouse fixture in `TestDoctor` stubs the detector to False so the existing tests stay deterministic regardless of the dev machine's actual wedge state.
+
 **Bench validation pending:** Item 5 — without a deliberate FSKit wedge on a fresh boot, the timeout-message wiring + the wrapper's killall round-trip are unit-tested but not hardware-validated.  See Item 5 below for the runbook.
 
 ## Item 3 — Suite-state wipe failure — **DONE 2026-05-09**
@@ -125,7 +127,8 @@ The goal is to trigger the wedge on demand, confirm `detect_fskit_wedge()` repor
 **Once the wedge is in, validate the recovery command**
 
 ```bash
-# Confirm the wedge:
+# Confirm the wedge.  Either of these works:
+chumicro-workspace doctor                               # MACOS FSKIT row goes ERROR
 python -c "from chumicro_deploy.macos_fskit import detect_fskit_wedge; print(detect_fskit_wedge())"
 # expected: True
 
