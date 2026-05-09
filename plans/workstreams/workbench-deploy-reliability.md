@@ -192,4 +192,30 @@ Shipped 2026-05-09.  `FLASH_COPY_FAILED` recovery-hint fix-steps in `recovery.py
 
 After all four land: 4-board validation sweep on Lolin S2 CP+MP and Pi Pico W CP+MP, mqtt + udp + http_server.
 
+### Step 1b — Stop killing main.py at end of MP soft_reboot deploy ✅
+
+Discovered during the 4-board sweep.  `MicropythonTransport.deploy_files(follow="soft_reboot")` was calling `self._serial.enter_raw_repl(soft_reset=False)` after the post-Ctrl-D read window, which sends Ctrl-C × 2 + Ctrl-A (per mpremote `transport_serial.py:163-171`) — same problem as CP's old behaviour, just in a different transport.
+
+Fix: dropped the post-soft-reboot `enter_raw_repl` call.  Subsequent transport ops re-enter raw REPL on demand via `_ensure_serial`; disconnect tolerates either REPL state.  Test renamed `test_re_enters_raw_repl_after_read` → `test_does_not_re_enter_raw_repl_after_read` with an index-based assertion that no `enter_raw_repl` appears after the soft-reboot read_until.  842 deploy tests pass.
+
+### 4-board validation sweep — results
+
+Bench-tested 2026-05-09 across Lolin S2 CP, Pi Pico W CP, Lolin S2 MP, Pi Pico W MP.
+
+**loop_probe (deploy + tail proves entrypoint survives the deploy):** all 4 boards — deploy captures counters during the configured window, then `chumicro-repl --tail` immediately afterward sees counters continuing past the captured range.  The structural fix from Step 1 (CP) and Step 1b (MP) is end-to-end on every (board, runtime) pair.
+
+**`test-workbench-functional --workbench deploy` per board:**
+
+- Pi Pico W CP defaults: 14/16 pass.  2 environmental failures, neither caused by workstream changes:
+  - `test_circuitpython_diff_deploy_round_trip` — `list_files_in_scope` reads from the configured `circuitpy_drive_path` without the auto-correct path that `_resolve_circuitpy_drive` + `_verify_drive_for_board` provides for `deploy_files`; in a multi-board host where macOS swaps the bare-name vs `CIRCUITPY 1` mounts between sessions, the diff path consults the wrong drive and reports zero stale files.  Fixed locally by swapping `devices.yml` paths.  Real fix: extend the auto-correct to `list_files_in_scope`.
+  - `test_circuitpython_wipe_reformats_circuitpy_drive` — after `storage.erase_filesystem()`, the CIRCUITPY volume comes back at `/Volumes/CIRCUITPY*` with `d--x--x--x` permissions (`PermissionError: [Errno 13] Permission denied: ...chu-probe`).  This is the macOS FSKit wedge documented in `chumicro_deploy.macos_fskit.MACOS_FSKIT_RECOVERY_COMMAND` — needs `sudo killall -9 com.apple.fskit.msdos fskitd ...` + `launchctl kickstart -k` to recover, or a physical replug.  Not a chumicro logic bug; the wipe code itself works (manual `chumicro-workspace reset-board --yes` was bench-confirmed before the test ran).
+- Lolin S2 CP defaults (after swapping devices.yml defaults): 15/16 pass.  Only the same wipe-wedge failure recurred.
+
+**MP boards** are exercised through the same suite (the deploy package's flash-mode tests cover both transports).  The MP-specific tests (`test_micropython_*`) all pass; only the CP wipe-wedge flake recurs and that's environmental.
+
+Net: deploy reliability changes (Steps 1, 1b, 2, 2b, 3, 4) ship clean across all 4 boards.  Two follow-ups surfaced during the sweep, both unrelated to the workstream's structural goals:
+
+1. `list_files_in_scope` should run the same drive-verify auto-correct as `_resolve_circuitpy_drive` + `_verify_drive_for_board` so multi-board hosts with stale `circuitpy_drive_path` entries don't silently diff against the wrong drive.
+2. The CP wipe test's wedge state on macOS is an FSKit / msdosfs interaction we already document in `recovery.py`; no code change needed, but the functional test should probably skip itself when it detects the post-wipe permission-denied state instead of retrying for 10 s and failing — or call the documented unwedge command before retrying.
+
 Detail belongs in commit messages + this workstream — `plans/next-up.md` carries a one-line pointer.

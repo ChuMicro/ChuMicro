@@ -1316,8 +1316,8 @@ class TestDeployFilesSoftReboot:
             # index: any enter_raw_repl after the second read_until is wrong.
             if serial.calls.index(call)
             > max(
-                idx for idx, c in enumerate(serial.calls)
-                if c[0] == "read_until"
+                idx for idx, prior in enumerate(serial.calls)
+                if prior[0] == "read_until"
             )
         ]
         assert post_read_enters == []
