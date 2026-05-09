@@ -170,9 +170,21 @@ Tests: 7 new `TestVerifyRsync` cases (clean match, content divergence, missing f
 
 Bench-validated on Lolin S2 CP — clean deploy wall-time grew from ~13.6 s (Step 2 alone) to ~13.7 s; verification is essentially free at typical CIRCUITPY payload sizes.  Mount stays read-write across iterations.
 
-### Step 3 — Configurable capture window
+### Step 3 — Configurable capture window ✅
 
-`_read_code_py_output` is currently fixed at `self.timeout` (10 s).  Add a parameter — `--tail-seconds N` at the CLI, plumbing through to `deploy_files(tail_seconds=N)`.  Default `0` for `--non-interactive` (return immediately, leave board running), prompt-driven for interactive.  This is Finding 2's `--tail-seconds` flag, but free since we're already restructuring the capture.
+Shipped 2026-05-09.  `--tail-seconds N` plumbs end-to-end:
+
+- `CircuitpythonTransport.deploy_files(tail_seconds=N)` — overrides the default `self.timeout` for the post-Ctrl-D read window.  `0.0` short-circuits the read entirely (return immediately, leave board running).  `None` keeps the existing 10 s default for back-compat.
+- `Deployer.deploy()` / `.deploy_diff()` accept `tail_seconds=N` and route to CP transports through `_deploy_files_kwargs` (MP transports ignore it — `mpremote` follow mode owns its own timing).
+- `_RecoveringDeployer` + `InteractiveDeployer` forward `tail_seconds` through their wrappers.
+- `chumicro-deploy deploy --tail-seconds N` CLI flag exposes it.
+
+Default behaviour unchanged for back-compat.  842 deploy tests pass at 95% coverage (840 pre-Step-3 + 2 new: `test_tail_seconds_zero_returns_immediately_with_empty_output`, `test_tail_seconds_overrides_default_window`).  `chumicro-deploy 0.9.0 → 0.10.0` (additive API).
+
+Bench-validated on Lolin S2 CP:
+
+- `--tail-seconds 0` → 3.6 s deploy (rsync + verification + Ctrl-D, no capture).  Empty stdout.
+- `--tail-seconds 20` → 23.6 s deploy, captured `LOOP_PROBE counter=1..40` (20 s × 2 prints/sec, matches the probe's `time.sleep(0.5)`).
 
 ### Step 4 — Strip stale autoreload framing from recovery hint
 

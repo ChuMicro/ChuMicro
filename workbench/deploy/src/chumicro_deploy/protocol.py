@@ -390,6 +390,7 @@ class TransportProtocol(Protocol):
         *,
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        **transport_kwargs: object,
     ) -> str:
         """Write files onto the device and execute the entrypoint.
 

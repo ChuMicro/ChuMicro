@@ -430,6 +430,7 @@ class _FakeDeployer:
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> DeployResult:
         return self._consume()
 
@@ -442,6 +443,7 @@ class _FakeDeployer:
         on_file_staged: Callable[[str], None] | None = None,
         on_file_deleted: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> DeployResult:
         self.last_wipe = wipe
         return self._consume()

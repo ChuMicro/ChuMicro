@@ -1933,6 +1933,62 @@ class TestDeployFiles:
         with pytest.raises(CircuitpythonTransportError, match="CIRCUITPY drive not found"):
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
 
+    def test_tail_seconds_zero_returns_immediately_with_empty_output(
+        self, tmp_path: Path,
+    ) -> None:
+        """``tail_seconds=0`` must short-circuit the post-Ctrl-D capture.
+
+        Caller wants to leave the board running and not block — the
+        Ctrl-D goes out, the read loop is skipped entirely, output is
+        empty.  No serial-read response needs queuing in the fake.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._stat_response(len(b"pass")),
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra,
+        )
+        output = transport.deploy_files(
+            {"/code.py": b"pass"},
+            "/code.py",
+            tail_seconds=0.0,
+        )
+        assert output == ""
+
+    def test_tail_seconds_overrides_default_window(
+        self, tmp_path: Path,
+    ) -> None:
+        """An explicit ``tail_seconds`` value reaches _read_code_py_output."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._stat_response(len(b"pass")),
+            self._boot_output(b"hello"),
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra,
+        )
+        captured_window: list[float | None] = []
+        original_read = transport._read_code_py_output
+
+        def spy(*, tail_seconds: float | None = None) -> str:
+            captured_window.append(tail_seconds)
+            return original_read(tail_seconds=tail_seconds)
+
+        transport._read_code_py_output = spy  # type: ignore[method-assign]
+        transport.deploy_files(
+            {"/code.py": b"pass"},
+            "/code.py",
+            tail_seconds=42.0,
+        )
+        assert captured_window == [42.0]
+
     def test_post_rsync_verification_failure_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:

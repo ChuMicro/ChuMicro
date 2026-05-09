@@ -771,6 +771,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> DeployResult:
         """Deploy *source*; classify + report + re-raise on failure."""
         return self._run(
@@ -779,6 +780,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
                 on_progress=on_progress,
                 on_file_staged=on_file_staged,
                 on_execute_line=on_execute_line,
+                tail_seconds=tail_seconds,
             ),
         )
 
@@ -791,6 +793,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
         on_file_staged: Callable[[str], None] | None = None,
         on_file_deleted: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> DeployResult:
         """Diff-deploy *source*; classify + report + re-raise on failure."""
         return self._run(
@@ -801,6 +804,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
                 on_file_staged=on_file_staged,
                 on_file_deleted=on_file_deleted,
                 on_execute_line=on_execute_line,
+                tail_seconds=tail_seconds,
             ),
         )
 
@@ -887,6 +891,7 @@ class InteractiveDeployer(_RecoveringDeployer):
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> DeployResult:
         """Deploy *source*, prompting the user to recover on failure.
 
@@ -900,6 +905,7 @@ class InteractiveDeployer(_RecoveringDeployer):
                 on_progress=on_progress,
                 on_file_staged=on_file_staged,
                 on_execute_line=on_execute_line,
+                tail_seconds=tail_seconds,
             ),
         )
 
@@ -912,6 +918,7 @@ class InteractiveDeployer(_RecoveringDeployer):
         on_file_staged: Callable[[str], None] | None = None,
         on_file_deleted: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> DeployResult:
         """Diff-deploy *source*, prompting the user to recover on failure.
 
@@ -927,6 +934,7 @@ class InteractiveDeployer(_RecoveringDeployer):
                 on_progress=on_progress,
                 on_file_staged=on_file_staged,
                 on_file_deleted=on_file_deleted,
+                tail_seconds=tail_seconds,
                 on_execute_line=on_execute_line,
             ),
         )

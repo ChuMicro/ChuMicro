@@ -246,7 +246,11 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     runner: Deployer | InteractiveDeployer = (
         deployer if args.non_interactive else InteractiveDeployer(deployer)
     )
-    result = runner.deploy(source, on_progress=_stderr_progress)
+    result = runner.deploy(
+        source,
+        on_progress=_stderr_progress,
+        tail_seconds=args.tail_seconds,
+    )
     if result.execute_output:
         print(result.execute_output, end="")
     if not result.success:
@@ -407,6 +411,20 @@ def build_parser() -> argparse.ArgumentParser:
             "errors propagate uncaught.  Use in CI / scripted flows "
             "that don't have stdin to answer retry prompts.  "
             "Interactive coaching is on by default."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--tail-seconds",
+        type=float,
+        default=None,
+        help=(
+            "How long to capture serial output after the entrypoint's "
+            "soft-reboot (CircuitPython flash mode only).  Default uses "
+            "the transport's built-in timeout (10 s).  Set higher when "
+            "the entrypoint's first print lands beyond that window — "
+            "MQTT connect, blocking recv, etc.  Set to 0 to skip the "
+            "capture entirely and return as soon as the soft-reboot "
+            "has been triggered, leaving the board running."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)

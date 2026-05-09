@@ -1363,6 +1363,7 @@ class CircuitpythonTransport:
         *,
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
     ) -> str:
         """Deploy *files* and execute *entrypoint* in the configured mode.
 
@@ -1402,6 +1403,14 @@ class CircuitpythonTransport:
                 tests get a deterministic sequence).
             on_execute_line: Callback invoked once per line of captured
                 output (in order) after the entrypoint returns.
+            tail_seconds: Override for how long flash mode captures
+                serial output after the soft-reboot.  ``None`` (default)
+                uses :attr:`timeout`.  Set higher when the entrypoint's
+                first ``print`` lands beyond the default window (e.g.
+                MQTT connect, blocking ``recv``); set to ``0.0`` to
+                exit immediately after triggering Ctrl-D and leave the
+                board running without capturing any output.  RAM mode
+                ignores this — its execution path is synchronous.
 
         Returns:
             Combined stdout from the entrypoint execution.
@@ -1475,7 +1484,7 @@ class CircuitpythonTransport:
         self._port.write(_CTRL_B)  # exit raw REPL
         self._time.sleep(_ENTER_DELAY)
         self._port.write(_CTRL_D)  # trigger soft-reboot
-        output = self._read_code_py_output()
+        output = self._read_code_py_output(tail_seconds=tail_seconds)
 
         # Do NOT re-enter raw REPL here — that sends Ctrl-C and would
         # interrupt the entrypoint we just rebooted into.  ``disconnect``
@@ -1798,23 +1807,27 @@ class CircuitpythonTransport:
             f"{last_observed!r}) — USB-MSC write may not have committed."
         )
 
-    def _read_code_py_output(self) -> str:
+    def _read_code_py_output(
+        self, *, tail_seconds: float | None = None,
+    ) -> str:
         """Read serial output from a fresh boot until code.py completes.
 
         CircuitPython prints ``soft reboot`` when the interpreter
         restarts (in response to Ctrl-D from the friendly REPL) and
         ``Code done running.`` when code.py returns (or raises).  The
         read synchronises on ``soft reboot`` first so any pre-reboot
-        bytes still in the host's serial buffer (slow boards can hold
-        a complete previous-cycle ``code.py output: ... Code done
-        running.`` pair, especially when autoreload had been enabled
-        during the last session) are discarded rather than mistaken
-        for this cycle's output.
+        bytes still in the host's serial buffer are discarded rather
+        than mistaken for this cycle's output.
 
         For infinite-loop entrypoints the ``Code done running.`` marker
-        never appears and the read times out at :attr:`timeout`
-        seconds — callers receive the accumulated output up to that
-        point.
+        never appears and the read times out — callers receive the
+        accumulated output up to that point.
+
+        Args:
+            tail_seconds: Override the read window.  ``None`` uses
+                :attr:`timeout`.  ``0.0`` returns immediately without
+                reading any bytes (caller wants to leave the board
+                running and not block on capture).
 
         Returns:
             The portion of captured serial output between the
@@ -1825,9 +1838,12 @@ class CircuitpythonTransport:
             can still diagnose the failure.
         """
         assert self._port is not None
+        window = self.timeout if tail_seconds is None else tail_seconds
+        if window <= 0.0:
+            return ""
         done_marker = b"Code done running."
         accumulated = b""
-        deadline = self._time.monotonic() + self.timeout
+        deadline = self._time.monotonic() + window
         soft_reboot_seen = False
         while self._time.monotonic() < deadline:
             waiting = self._port.in_waiting
