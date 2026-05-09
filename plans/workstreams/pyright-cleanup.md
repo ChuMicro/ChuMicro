@@ -8,6 +8,24 @@ Pyright was set up via the `pyright-python` plugin some time back; nothing has b
 
 Goal: drive the count to a maintainable number where preflight could plausibly add a `pyright` phase and have it stay green.  We are not chasing zero on day one — the structural decisions (Phase 4) need user input.
 
+## Load-bearing principle: pyright is host-side
+
+Pyright runs only on the developer's laptop / CI runner — never on the device.  Library code under `libraries/` and `support/test_harness/` runs on a 256 KB MCU with a few MB of flash and a tick-loop budgeted in milliseconds.  **Never restructure runtime code to silence a host-side type-checker.**  Specifically off-limits in `libraries/` and `support/test_harness/`:
+
+- Adding `getattr(module, "name")()` instead of a direct `module.name()` call — the `getattr` lookup costs a dict probe + a function-call frame on every invocation.  On a hot path (NTP-server tick, frame parser, inbound recv) this is a real measurable hit.
+- Adding `assert <var> is not None` plus a `local = self._foo` rebind just because pyright can't see a state-machine invariant — every `assert` is a branch + a string-literal const + bytecode that ships in flash and runs every call.  Locals frame slots cost RAM.  *Pyright thinks the cost is free; on these targets it isn't.*
+- Wrapping platform-only attribute accesses in helper functions that funnel through `getattr` — same overhead, plus an extra Python call frame per use.
+- Hoisting imports out of intentionally-lazy positions just to make pyright happy — re-evaluate the *why* first; some lazy imports exist to keep RAM unloaded until needed, and reordering them silently regresses startup behaviour.
+
+Acceptable mitigations in runtime code:
+- `# pyright: ignore[<ruleName>]` per-line — comment-only, zero runtime cost.
+- Stay on `object`-typed seams and accept the noise — that's also what Family D's "Accept the noise" answer codifies.
+- Real defect fixes that change behaviour for the better even without pyright (Family A entries qualify).
+
+CPython-only trees (`workbench/`, `scripts/`, `tests/`, `functional_tests/` body code) do not have these constraints — restructuring there is fine.
+
+This principle is load-bearing because it inverts the default reflex of "the type checker found a problem, fix the code."  On these targets, the type checker is the wrong source of truth for what "the code" should look like.
+
 ## Phase 0 — pyrightconfig tuning (shipped)
 
 `pyrightconfig.json` now sets `pythonVersion: "3.11"` (matches root `pyproject.toml` `target-version = "py311"`) and `reportMissingModuleSource: none`.  The latter silences the 43 "Import 'X' could not be resolved from source" warnings against CircuitPython / MicroPython platform modules (`microcontroller`, `esp32`, `wifi`, `socketpool`, `ssl`, `digitalio`, `bitbangio`, `analogio`, `board`, `micropython`, …) that ship as type stubs only — those are expected, not actionable.
@@ -62,15 +80,16 @@ Estimated count: **~12 source-side**.  Low risk; do them library-by-library with
 
 The pattern is `self._x: object | None`, set to a real value in `__init__`, set to `None` in `close()`.  Methods that only run when `self._x is not None` (because some `is_done` flag flipped first) read `self._x.foo()` and pyright complains.
 
-| file | hot lines | fix shape |
-|---|---|---|
-| `libraries/http_server/src/chumicro_http_server/server.py` | `_drive_recv` L329, `_drive_send` L386 | Add `assert self._socket is not None` at the top of each method.  Asserts compile on MicroPython too — the runtime cost is one branch.  Or, narrow at the call site: `socket = self._socket; assert socket is not None; socket.recv_into(...)`. |
-| `libraries/websockets/src/chumicro_websockets/server.py` | L209–226 (`_session` access path) | Same pattern: hoist `session = self._session; assert session is not None`. |
-| `libraries/mqtt/src/chumicro_mqtt/client.py` | L346–349 | `socket = self._socket; assert socket is not None` before the `.get()` chain. |
-| `libraries/requests/src/chumicro_requests/client.py` | 8× `Optional[Response]` accesses on a redirect-following loop | Local-narrow once at the top of `_follow_redirect`; the variable is bound before each iteration's reads. |
-| `workbench/workspace/src/chumicro_workspace/cli.py` | L2098–2100 | `firmware_info = probe_result; assert firmware_info is not None`. |
+The first attempt at this family added the `local = self._x; assert local is not None` pattern across requests / websockets / ntp.  That approach was reverted on user feedback: every assert + locals-frame slot is real flash + RAM + per-tick branch overhead on a 256 KB MCU, and pyright is not aware of the platform constraints that make those costs material.  See "Load-bearing principle" above.
 
-Estimated count: **~70 source-side**.  Mechanical and runtime-safe.  Do as a single pass per library.
+The viable mitigations on runtime code:
+
+- **Per-line `# pyright: ignore[reportOptionalMemberAccess]`** at the access site, with a one-line comment naming the runtime invariant pyright can't see (`# state == RECEIVING implies _socket bound`).  Zero runtime cost.
+- **Accept the noise** for paths where the suppression noise is itself worse than the diagnostic noise.  Pyright count stays high, but no source change.
+
+`workbench/workspace/src/chumicro_workspace/cli.py` is CPython-only — its 15 cases are fair game for normal narrowing rewrites and roll into Phase 3.
+
+Estimated count if we apply per-line ignores in the library hotspots: **~50 source errors silenced, runtime byte-identical**.  Hold on whether the user wants the suppression noise — it could go either way.
 
 ### C. MicroPython-only attributes guarded by `hasattr`
 
@@ -78,12 +97,14 @@ Estimated count: **~70 source-side**.  Mechanical and runtime-safe.  Do as a sin
 
 Same shape: `gc.collect()` / `gc.mem_free()` (gated by `_gc is not None and hasattr(_gc, 'mem_free')` then assigned to a local that pyright loses), `sys.print_exception` (gated by `hasattr(sys, 'print_exception')`).
 
-| fix shape | when |
-|---|---|
-| `getattr(module, "name")()` form | One-shot calls.  Pyright treats the result as `Unknown` and skips the attribute check entirely. |
-| `# type: ignore[attr-defined]  # MicroPython-only` | Repeated calls in tight loops where `getattr` is overhead. |
+The first attempt at this family swapped every `_gc.collect()` / `gc.mem_free()` / `time.ticks_ms()` / `sys.print_exception(exc)` call for either `getattr(module, "name")()` or a `_gc_collect()` / `_gc_mem_free()` helper-function wrapper that called `getattr` internally.  That commit was reverted on user feedback: `getattr` is a runtime dict probe + function-frame on every call, helper functions add another Python call frame, and the only justification was silencing pyright on host-side scans of code that runs hot on every test on every device.  See "Load-bearing principle" above.
 
-Estimated count: **~22 source-side** (concentrated in `support/test_harness/runner.py`).  Mechanical; one-file PR.
+Viable mitigations on this file:
+
+- **Per-line `# pyright: ignore[reportAttributeAccessIssue]`** on each `time.ticks_ms()` / `gc.collect()` / `gc.mem_free()` / `sys.print_exception(exc)` call, with a one-line "MicroPython-only, gated by hasattr above" comment.  Comment-only, zero runtime cost.
+- **Accept the noise.**  This file is the runtime-adapter seam — its job is to pretend it's MP/CP on the host.  ~22 errors here are an honest signal that the file is doing what it's supposed to.
+
+Estimated count if we per-line-ignore: **~22 source errors silenced, runtime byte-identical**.  Hold on user preference — same call as Family B.
 
 ### D. Duck-typed polymorphic seams (the big bucket — needs ADR)
 
@@ -140,9 +161,11 @@ Recommendation: **defer**.  Revisit when adding pyright to preflight.
 
 - [x] **Phase 0** — pyrightconfig tuning (shipped 2026-05-09).  Net change: 44 → 1 warning, 1054 → 1053 errors; warning channel is now signal-only.
 - [x] **Phase 1** — this categorization (shipped 2026-05-09).
-- [ ] **Phase 2** — Family A (real defects, ~12) + Family B (Optional narrowing, ~70) + Family C (hasattr-guarded MP attrs, ~22) source fixes.  Library-by-library, runtime-validated via per-package tests.  Estimated ~104 source errors gone, no new ADRs needed.
-- [ ] **Phase 3** — workbench + scripts source fixes (24 + 12 = 36 source errors).  Pure-CPython trees, all errors should be fixable normally.
-- [ ] **Phase 4** — Family D (duck-typed seams, ~80).  Gates on a new ADR ratifying the TYPE_CHECKING-guarded Protocol pattern; then a single shared `chumicro_compat.protocols` module + per-library annotation pass.  Largest single bucket.
+- [x] **Family A** (real defects, ~14 errors) — shipped 2026-05-09.  Four shape-preserving fixes with no runtime cost: `protocol.py` `...` bodies on Protocol-stub methods (standard idiom; +1 LOAD_CONST per stub, never called), `health.py` import re-order out of a try block whose `except YAMLError` could never catch the import's `ImportError` anyway, `validate_mip_install.py` `result = None` initialization (CPython-only script), `config/__init__.py` `# pyright: ignore` directive on the PEP-562 lazy-attr `__all__` entry.  1053 → 1039 errors.
+- [ ] **Family B** (Optional narrowing, ~50) — held.  First attempt at the local-bind + assert pattern was reverted (runtime cost on embedded targets).  Open question: do we want per-line `# pyright: ignore[reportOptionalMemberAccess]` suppressions in the library hotspots, or accept the noise?  `workbench/workspace/cli.py` (15 cases, CPython-only) splits off into Phase 3 and gets normal narrowing rewrites.
+- [ ] **Family C** (hasattr-guarded MP attrs, ~22) — held.  First attempt with `getattr` helpers in `support/test_harness/runner.py` was reverted (real per-call overhead).  Same open question as Family B: per-line ignores or accept the noise?
+- [ ] **Phase 3** — workbench + scripts source fixes (~36 source errors).  Pure-CPython trees, no embedded constraints, normal narrowing rewrites are fine.  Independent of the Family B/C call.
+- [ ] **Phase 4** — Family D (duck-typed seams, ~80).  Gates on a new ADR ratifying the TYPE_CHECKING-guarded Protocol pattern; then a single shared `chumicro_compat.protocols` module + per-library annotation pass.  Largest single bucket.  Held until user decides on the ADR direction.
 - [ ] **Phase 5** — Family E (test-fixture noise, ~653).  Approach picked once Phase 4 lands.
 - [ ] **Phase 6** — add `pyright` as a preflight phase once errors are at a maintainable steady-state count.
 
