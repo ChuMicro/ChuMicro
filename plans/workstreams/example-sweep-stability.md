@@ -138,21 +138,33 @@ Recommend (b) immediately + (c) when scope allows.
 
 Recommend (a) — the path is already dead weight given UID auto-correct exists.  Workstream-template repo would need to drop the field too.
 
-### 11. `chumicro-sockets` doesn't declare `chumicro-timing` in `dependencies` despite using it
+### 11. Library pyproject.toml ↔ src/imports audit — SHIPPED (with surprise)
 
-**Symptom.** `libraries/sockets/pyproject.toml` has no `[project] dependencies = [...]` block at all, but the library's adapters use `chumicro_timing.ticks_ms` / `ticks_diff` etc. (per the workstream history of "lazy adapter selection pattern").  A user `pip install`-ing `chumicro-sockets` doesn't get `chumicro-timing` automatically.
+**Audit run.** AST-walked `libraries/*/src/` for actual cross-library imports (eager + lazy) and compared against each `pyproject.toml`'s `dependencies` block.  Result table:
 
-**Repro.**
-```bash
-grep -A 5 "^dependencies" libraries/sockets/pyproject.toml
-# (returns nothing)
-grep -rn "chumicro_timing" libraries/sockets/src/
-# (returns matches confirming runtime usage)
-```
+| Library     | Real imports                                          | Declared deps                                       | Status |
+|-------------|-------------------------------------------------------|-----------------------------------------------------|--------|
+| compat      | -                                                     | -                                                   | ✓ |
+| config      | chumicro_msgpack                                      | chumicro-msgpack                                    | ✓ |
+| events      | -                                                     | -                                                   | ✓ |
+| http_server | chumicro_config, chumicro_sockets, chumicro_timing    | chumicro-sockets, chumicro-timing                   | ✗ (missing chumicro-config) |
+| kvstore     | chumicro_msgpack                                      | chumicro-msgpack                                    | ✓ |
+| logging     | -                                                     | -                                                   | ✓ |
+| mqtt        | chumicro_config, chumicro_sockets, chumicro_timing    | chumicro-config, chumicro-sockets, chumicro-timing  | ✓ |
+| msgpack     | -                                                     | -                                                   | ✓ |
+| ntp         | chumicro_sockets                                      | chumicro-sockets                                    | ✓ |
+| requests    | chumicro_sockets, chumicro_timing                     | chumicro-sockets, chumicro-timing                   | ✓ |
+| runner      | chumicro_timing                                       | chumicro-timing                                     | ✓ |
+| sockets     | -                                                     | -                                                   | ✓ |
+| timing      | -                                                     | -                                                   | ✓ |
+| websockets  | chumicro_sockets, chumicro_timing                     | chumicro-sockets, chumicro-timing                   | ✓ |
+| wifi        | chumicro_config, chumicro_timing                      | chumicro-config, chumicro-timing                    | ✓ |
 
-**Fix shape.** Add `dependencies = ["chumicro-timing"]` to `libraries/sockets/pyproject.toml` `[project]` section.  Also audit other library pyprojects for similar gaps — could be a wider issue.  Example-sweep tangent; not a sweep-blocking finding.
+**The original claim (`chumicro-sockets` is missing `chumicro-timing`) was wrong.**  AST scan found zero cross-library imports in `libraries/sockets/src/` — the sockets library is genuinely standalone.  An older codebase shape may have used `chumicro_timing.ticks_ms` for socket-side timeouts, but it's been refactored out.
 
-**Effort.** Trivial for sockets (one line).  Audit pass across all libraries' pyproject.toml ↔ src/ imports could surface more — likely 1-2 hours total.
+**Real finding: `chumicro-http-server` is missing `chumicro-config`.**  `HttpServer.from_config()` raises `MissingConfigKey` (imported lazily from `chumicro_config`) when half-TLS configuration is detected (cert_path without key_path or vice versa).  Users without chumicro-config installed get an `ImportError` instead of the proper config-validation error.  Fixed in this commit: added `chumicro-config` to `libraries/http_server/pyproject.toml` `dependencies`; bumped `libraries/http_server/VERSION` 0.2.1 → 0.2.2.
+
+**Effort.** Audit was ~30 min including the AST script.  Fix was ~1 line + a VERSION bump.
 
 ### 12. MicroPython 1.28 lacks `TimeoutError` builtin (cross-runtime gotcha)
 
