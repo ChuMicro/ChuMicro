@@ -120,7 +120,15 @@ def _is_self_exempt(filepath: Path, repo_root: Path) -> bool:
 
 
 def _scan_roots(repo_root: Path) -> list[Path]:
-    """Return the directory roots to scan recursively under *repo_root*."""
+    """Return the directory roots to scan recursively under *repo_root*.
+
+    Covers both the chumicro mono-repo's per-package layout
+    (``libraries/<pkg>/`` + ``workbench/<pkg>/``) and the
+    workspace-template's top-level user-content trees
+    (``packages/``, ``projects/``, ``shared/``, ``examples/``,
+    root ``tests/``).  Trees that don't exist in the current repo
+    are silently skipped.
+    """
     roots: list[Path] = []
     for parent_name in ("libraries", "workbench"):
         parent_dir = repo_root / parent_name
@@ -129,7 +137,12 @@ def _scan_roots(repo_root: Path) -> list[Path]:
         for package_dir in sorted(parent_dir.iterdir()):
             if package_dir.is_dir():
                 roots.append(package_dir)
-    for top_level in ("support", "scripts"):
+    for top_level in (
+        # Mono-repo top-levels.
+        "support", "scripts",
+        # Template / workspace top-levels.
+        "packages", "projects", "shared", "examples", "tests",
+    ):
         top_dir = repo_root / top_level
         if top_dir.is_dir():
             roots.append(top_dir)

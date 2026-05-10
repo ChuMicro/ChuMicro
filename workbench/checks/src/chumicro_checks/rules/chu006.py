@@ -59,9 +59,59 @@ def _outside_chumicro_checks(filepath: Path) -> bool:
     return "workbench/checks/" not in filepath.as_posix()
 
 
+#: Top-level directories that signal a workspace cloned from the
+#: ChuMicro-Workspace-Template.  Files anywhere under these trees
+#: legitimately mention the workspace's own ``run.py`` shim — that
+#: IS the command runner in a user workspace, not the chumicro-style
+#: anti-pattern the bare-``run.py`` rule is meant to catch.
+_TEMPLATE_PATH_SEGMENTS: frozenset[str] = frozenset({
+    "packages", "projects", "shared", "examples", "tests",
+})
+
+
+def _outside_runpy_owners(filepath: Path) -> bool:
+    """Combined predicate: outside trees where the workspace shim is legitimate.
+
+    Used by the bare-shim-mention pattern.  Three trees legitimately
+    name the workspace's command-runner script:
+
+    * ``workbench/workspace/`` — the chumicro_workspace package
+      generates the shim (covered by :func:`_outside_chumicro_workspace`).
+    * ``workbench/checks/`` — this package's own source legitimately
+      describes the rule and the literal it flags
+      (covered by :func:`_outside_chumicro_checks`).
+    * Template / workspace user-content trees (``packages/``,
+      ``projects/``, ``shared/``, ``examples/``, ``tests/``) —
+      in a workspace cloned from the template, the shim IS the
+      command runner.
+
+    The rule fires only outside all three sets — on PyPI-publishable
+    library or workbench code that shouldn't reference a host-only
+    shim.
+    """
+    if not _outside_chumicro_workspace(filepath):
+        return False
+    if not _outside_chumicro_checks(filepath):
+        return False
+    return not any(part in _TEMPLATE_PATH_SEGMENTS for part in filepath.parts)
+
+
 def _publishable_package_dirs(repo_root: Path) -> list[Path]:
-    """Return every package directory under ``libraries/`` and
-    ``workbench/`` plus ``support/test_harness/``.
+    """Return every tree the rule walks for forbidden references.
+
+    Mono-repo shape: per-package directories under ``libraries/`` and
+    ``workbench/`` plus ``support/test_harness/`` — the trees that
+    ship to PyPI / CircuitPython-bundle / MicroPython-bundle
+    consumers.
+
+    Template / workspace shape: per-package directories under
+    ``packages/`` and ``projects/`` plus the flat user-content
+    trees ``shared/``, ``examples/``, and root ``tests/``.  In a
+    workspace cloned from the template, those trees ARE the
+    "publishable" surface — anything the user might commit and
+    share — so the same anti-leak rules apply.
+
+    Both shapes union; absent trees are silently skipped.
     """
     roots: list[Path] = []
     for parent in ("libraries", "workbench"):
@@ -74,6 +124,17 @@ def _publishable_package_dirs(repo_root: Path) -> list[Path]:
     test_harness_root = repo_root / "support" / "test_harness"
     if test_harness_root.is_dir():
         roots.append(test_harness_root)
+    for parent in ("packages", "projects"):
+        parent_dir = repo_root / parent
+        if not parent_dir.is_dir():
+            continue
+        for package_dir in sorted(parent_dir.iterdir()):
+            if package_dir.is_dir():
+                roots.append(package_dir)
+    for flat_dir in ("shared", "examples", "tests"):
+        candidate = repo_root / flat_dir
+        if candidate.is_dir():
+            roots.append(candidate)
     return roots
 
 
@@ -102,7 +163,7 @@ _PATTERNS: tuple[LeakPattern, ...] = (
         re.compile(r"(?<!scripts/)\brun\.py\b"),  # noqa: CHU006  rule-pattern data: the regex flags this exact literal
         "bare run.py ref — name the installable CLI (chumicro-deploy, etc.) "  # noqa: CHU006  same reason
         "instead of the workspace shim",
-        _outside_chumicro_workspace,
+        _outside_runpy_owners,
     ),
     (
         re.compile(r"\bchumicro\s+mono[\s-]?repo\b", re.IGNORECASE),
