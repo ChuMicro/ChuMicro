@@ -34,3 +34,8 @@
 #   # Workspace-level coverage gate (forwarded to pytest as
 #   # --cov-fail-under).
 #   # coverage_threshold: 85
+#
+#   # Lint phase tool selection.  Default runs both; drop one
+#   # to disable that tool without disabling the whole phase.
+#   # lint:
+#   #   tools: ["ruff", "chumicro-checks"]

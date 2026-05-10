@@ -200,6 +200,36 @@ class TestScopePredicates:
         assert _outside_chumicro_checks(Path("workbench/checks/src/x.py")) is False
         assert _outside_chumicro_checks(Path("workbench/deploy/src/x.py")) is True
 
+    def test_workspace_predicate_uses_segment_match_not_substring(self) -> None:
+        # A directory like ``my-workbench/workspace-staging/...`` must
+        # not satisfy the predicate — the segments aren't the literal
+        # ``workbench`` / ``workspace`` boundary.
+        assert _outside_chumicro_workspace(
+            Path("my-workbench/workspace-staging/src/x.py")
+        ) is True
+        # Single segment containing the substring ``workbench/workspace``
+        # similarly must not satisfy it.
+        assert _outside_chumicro_workspace(
+            Path("foo-workbench-workspace-bar/src/x.py")
+        ) is True
+
+    def test_checks_predicate_uses_segment_match_not_substring(self) -> None:
+        assert _outside_chumicro_checks(
+            Path("my-workbench/checks-staging/src/x.py")
+        ) is True
+        assert _outside_chumicro_checks(
+            Path("foo-workbench-checks-bar/src/x.py")
+        ) is True
+
+    def test_predicates_match_at_arbitrary_depth(self) -> None:
+        # Absolute path of a real mono-repo checkout: parts begin with
+        # the filesystem root, so the segment match has to walk the
+        # whole tuple — anchoring at parts[0] would miss this.
+        deep = Path("/Users/dev/code/chumicro/workbench/workspace/src/x.py")
+        assert _outside_chumicro_workspace(deep) is False
+        deep_checks = Path("/Users/dev/code/chumicro/workbench/checks/src/x.py")
+        assert _outside_chumicro_checks(deep_checks) is False
+
 
 class TestRuleMetadata:
     def test_code(self) -> None:

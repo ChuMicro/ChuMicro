@@ -78,6 +78,46 @@ class TestLint:
         with pytest.raises(WorkspaceConfigError, match="list of strings"):
             load_quality_config(path)
 
+    def test_tools_default_is_both(self, tmp_path: Path) -> None:
+        path = _write_workspace(
+            tmp_path,
+            "quality:\n  lint:\n    enabled: true\n",
+        )
+        config = load_quality_config(path)
+        assert config.lint.tools == ["ruff", "chumicro-checks"]
+
+    def test_tools_subset(self, tmp_path: Path) -> None:
+        path = _write_workspace(
+            tmp_path,
+            'quality:\n  lint:\n    tools: ["ruff"]\n',
+        )
+        config = load_quality_config(path)
+        assert config.lint.tools == ["ruff"]
+
+    def test_tools_empty_allowed(self, tmp_path: Path) -> None:
+        path = _write_workspace(
+            tmp_path,
+            "quality:\n  lint:\n    tools: []\n",
+        )
+        config = load_quality_config(path)
+        assert config.lint.tools == []
+
+    def test_tools_unknown_entry_rejected(self, tmp_path: Path) -> None:
+        path = _write_workspace(
+            tmp_path,
+            'quality:\n  lint:\n    tools: ["ruff", "mypy"]\n',
+        )
+        with pytest.raises(WorkspaceConfigError, match="unknown entries"):
+            load_quality_config(path)
+
+    def test_tools_not_list_of_strings_rejected(self, tmp_path: Path) -> None:
+        path = _write_workspace(
+            tmp_path,
+            "quality:\n  lint:\n    tools: [1, 2]\n",
+        )
+        with pytest.raises(WorkspaceConfigError, match="list of strings"):
+            load_quality_config(path)
+
 
 class TestCoverageThreshold:
     def test_int_value_accepted(self, tmp_path: Path) -> None:
