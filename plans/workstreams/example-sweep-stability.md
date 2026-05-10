@@ -37,16 +37,21 @@ Resolved in the helpers.py migration commit; bench-validated in the follow-on Gr
 
 Resolved via the inline-msgpack-decoder approach.  See "What landed" above.  Helpers are now self-contained — no `mip install` needed on Pi Pico W MP.
 
-### 3. `libraries/sockets/examples/tls_with_custom_ca.py` design call (medium effort)
+### 3. `libraries/sockets/examples/tls_with_custom_ca.py` — SHIPPED (option (b'))
 
-**Symptom.** Dropped from the sweep matrix because the example's stub `CA_PEM` (`b"-----BEGIN CERTIFICATE-----\n# Replace with your real CA bytes.\n-----END CERTIFICATE-----\n"`) can't validate any real endpoint — TLS handshake fails immediately regardless of host.  The example is a TEMPLATE, not a runnable demo.
+**Resolution.** Rewrote the example to embed **ISRG Root X1** (Let's Encrypt's self-signed root, valid through 2035-06-04, sha256 fingerprint `96:BC:EC:06:…:08:C6` matching CT logs) as the `CA_PEM` constant and target `letsencrypt.org:443` for the TLS handshake.  Picked option (b') over (b) (example.com) after the bench check showed `example.com` migrated from DigiCert to Cloudflare/SSL.com — its vendor isn't locked, so embedding "the example.com root" became a moving target.  `letsencrypt.org` is operated by ISRG (the same org that owns the root), so the cert chain is as stable as anything on the public internet gets.
 
-**Three options (each ~half-day):**
-- **(a) Delete.** Same shape as the deleted `udp_echo_loopback.py`; move the API illustration into `libraries/sockets/docs/guide.md` as a fenced code block.  Loses the deployable file but keeps the API documentation.
-- **(b) Embed ISRG Root X1 (~1.4 KB PEM)** and point at `letsencrypt.org:443`.  Becomes runnable as-is.  Trade-off: ~1.4 KB of PEM in the example, cert valid until 2030 (when ISRG retires it).  Lots of public services use Let's Encrypt, so the cert is broadly useful as a template starter.
-- **(c) Read CA from a deploy-time config key** (`tls.ca_pem_path` in `runtime_config.msgpack` pointing at a host-side bundle the workspace ships).  Cleanest separation but adds workspace-template machinery.
+Example shape mirrors `tcp_roundtrip.py`: top-level `wifi_up` via the canonical `helpers.py`, then `ssl_context_with_ca(CA_PEM)` → `tls_client_socket("letsencrypt.org", 443, context=context, radio=radio)` → `GET / HTTP/1.0` → 256-byte recv head.  Docstring rewrote to make the "REPLACE `CA_PEM` with your homelab CA bytes and the host string with your own server" lesson explicit, kept the prior MP mbedTLS substrate quirks (self-signed cert rejection, IP-only SAN issues), and added the chain-rotation recovery hint (`openssl s_client -connect letsencrypt.org:443 -showcerts`).
 
-**Repro.** Currently no bench repro since the file's commented out of the sweep harness Group 6 matrix.  To re-enable: uncomment `("sockets", "tls_with_custom_ca")` in `.scratch/sweep_examples.py`; deploy will fail with TLS validation error on every board.
+Marked CP-only via `__chumicro_runtimes__ = ("circuitpython",)` after bench discovery: MicroPython rp2 firmware boots with the system clock at 2021-01-01, and TLS validation fails with `ValueError: The certificate validity starts in the future` against any leaf cert whose `notBefore` is more recent (which `letsencrypt.org`'s leaf is, since LE rotates leaves every ~90 days).  CP doesn't hit this — its clock starts close enough to current via the cyw43 / firmware base.  The MP clock-quirk is now a documented substrate note in the docstring with a one-line workaround pointer (`ntptime.settime()` before TLS) for adapters who want to run it on MP.
+
+**Bench-validated 2026-05-10** on the canonical CP matrix:
+- **Pi Pico W CP** (`/dev/cu.usbmodem112301`): `WIFI_OK ip=172.16.1.21` → `sent: GET / HTTP/1.0` → `received 256 bytes (head): b'HTTP/1.0 200 OK\r\nAccept-Ranges: bytes\r\n...'` → `closed cleanly`.
+- **Lolin S2 CP** (`/dev/cu.usbmodem84722E7490C31`): `WIFI_OK ip=172.16.1.29` → identical HTTP/1.0 200 OK head → `closed cleanly`.
+
+Both boards completed full TLS handshake against `letsencrypt.org:443` using only the embedded ISRG Root X1 as trust anchor (system store NOT consulted), proving the helper does what it claims.
+
+**Side observation, not in scope.** Lolin S2 MP currently fails any wifi-up call with `RuntimeError: Wifi Unknown Error 0x0102` (reproduced with `tcp_roundtrip.py` too, which never touches TLS — same line in `helpers.py`).  Independent pre-existing wifi issue on that board, surfaced during this bench pass; needs a separate investigation.
 
 ### 4. `chumicro-config` README + docs/index.md + docs/guide.md still document the old `from_dict` pattern — SHIPPED
 
