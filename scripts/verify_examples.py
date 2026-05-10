@@ -2,8 +2,13 @@
 
 Verifies that examples have valid syntax and resolvable imports using
 static analysis — no execution required.  Hardware examples (files named
-``circuitpython_*.py`` or ``micropython_*.py``) only verify ``chumicro_*``
-imports; platform-specific imports are skipped.
+``circuitpython_*.py`` or ``micropython_*.py``, or any file declaring
+``__chumicro_runtimes__`` listing a non-CPython runtime) only verify
+``chumicro_*`` imports; platform-specific imports are skipped.
+
+Examples may also import sibling modules from their own ``examples/``
+directory (e.g. a per-library ``helpers.py``).  The verifier puts each
+example's parent directory on ``sys.path`` so those imports resolve.
 
 See ``plans/decisions/0013-docs-and-examples-standards.md``.
 """
@@ -22,6 +27,9 @@ from repo_layout import ROOT
 #: like ``board``, ``digitalio``, ``machine`` are skipped.
 _HARDWARE_PREFIXES = ("circuitpython_", "micropython_")
 
+#: Non-CPython runtime markers that flag a file as hardware-only.
+_HARDWARE_RUNTIME_MARKERS = frozenset({"circuitpython", "micropython"})
+
 
 def _is_chumicro_module(name: str) -> bool:
     """Return whether a module name belongs to this workspace.
@@ -30,6 +38,31 @@ def _is_chumicro_module(name: str) -> bool:
         name: Fully qualified module name.
     """
     return name.startswith("chumicro_")
+
+
+def _has_hardware_runtime_marker(tree: ast.Module) -> bool:
+    """Return ``True`` when the module declares a non-CPython runtime.
+
+    Looks for a top-level ``__chumicro_runtimes__ = (...)`` assignment
+    listing at least one non-CPython runtime (`circuitpython` or
+    `micropython`).  Files that mark themselves as such use platform
+    built-ins (`wifi`, `network`, `board`, `digitalio`, `machine`, …)
+    that won't resolve on the host running this verifier.
+    """
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "__chumicro_runtimes__":
+                value = node.value
+                if isinstance(value, (ast.Tuple, ast.List)):
+                    for elt in value.elts:
+                        if (
+                            isinstance(elt, ast.Constant)
+                            and elt.value in _HARDWARE_RUNTIME_MARKERS
+                        ):
+                            return True
+    return False
 
 
 def _check_imports(
@@ -126,7 +159,6 @@ def verify_examples(package_dirs: list[Path]) -> int:
         for relative_path, py_file in examples:
             print(f"  checking {relative_path}")
             source = py_file.read_text(encoding="utf-8")
-            hardware = py_file.name.startswith(_HARDWARE_PREFIXES)
 
             # 1. Syntax check.
             try:
@@ -136,14 +168,30 @@ def verify_examples(package_dirs: list[Path]) -> int:
                 failures += 1
                 continue
 
-            # 2. Verify imports.
-            if not _check_imports(tree, relative_path, hardware):
-                failures += 1
-            else:
-                label = f"  OK:   {relative_path}"
-                if hardware:
-                    label += "  (hardware)"
-                print(label)
+            hardware = (
+                py_file.name.startswith(_HARDWARE_PREFIXES)
+                or _has_hardware_runtime_marker(tree)
+            )
+
+            # Sibling imports (e.g. `from helpers import wifi_up`) resolve
+            # against the example's own directory.  Add it temporarily.
+            example_dir = str(py_file.parent)
+            inserted_example_dir = example_dir not in sys.path
+            if inserted_example_dir:
+                sys.path.insert(0, example_dir)
+
+            try:
+                # 2. Verify imports.
+                if not _check_imports(tree, relative_path, hardware):
+                    failures += 1
+                else:
+                    label = f"  OK:   {relative_path}"
+                    if hardware:
+                        label += "  (hardware)"
+                    print(label)
+            finally:
+                if inserted_example_dir:
+                    sys.path.remove(example_dir)
 
         if failures:
             print(f"\n{failures} example(s) failed.")

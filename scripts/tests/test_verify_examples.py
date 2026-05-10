@@ -4,7 +4,12 @@ import ast
 import textwrap
 from pathlib import Path
 
-from verify_examples import _check_imports, _is_chumicro_module, verify_examples
+from verify_examples import (
+    _check_imports,
+    _has_hardware_runtime_marker,
+    _is_chumicro_module,
+    verify_examples,
+)
 
 
 class TestIsChuMicroModule:
@@ -29,6 +34,37 @@ class TestIsChuMicroModule:
     def test_empty_string(self):
         """Empty string is not chumicro."""
         assert _is_chumicro_module("") is False
+
+
+class TestHasHardwareRuntimeMarker:
+    """Tests for _has_hardware_runtime_marker — AST marker detection."""
+
+    def _parse(self, source: str) -> ast.Module:
+        return ast.parse(textwrap.dedent(source))
+
+    def test_marker_with_circuitpython_returns_true(self):
+        tree = self._parse('__chumicro_runtimes__ = ("circuitpython",)\n')
+        assert _has_hardware_runtime_marker(tree) is True
+
+    def test_marker_with_micropython_returns_true(self):
+        tree = self._parse('__chumicro_runtimes__ = ("micropython",)\n')
+        assert _has_hardware_runtime_marker(tree) is True
+
+    def test_marker_with_both_returns_true(self):
+        tree = self._parse('__chumicro_runtimes__ = ("circuitpython", "micropython")\n')
+        assert _has_hardware_runtime_marker(tree) is True
+
+    def test_marker_with_only_cpython_returns_false(self):
+        tree = self._parse('__chumicro_runtimes__ = ("cpython",)\n')
+        assert _has_hardware_runtime_marker(tree) is False
+
+    def test_no_marker_returns_false(self):
+        tree = self._parse("x = 1\n")
+        assert _has_hardware_runtime_marker(tree) is False
+
+    def test_marker_as_list_works(self):
+        tree = self._parse('__chumicro_runtimes__ = ["circuitpython"]\n')
+        assert _has_hardware_runtime_marker(tree) is True
 
 
 class TestCheckImports:
