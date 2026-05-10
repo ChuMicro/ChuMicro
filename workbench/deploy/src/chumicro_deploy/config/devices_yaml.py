@@ -5,8 +5,8 @@ zones:
 
 * **user-owned** — workspace-identity stuff the user wrote by hand
   (``id``, ``description``, ``deploy_mode`` preference,
-  ``circuitpy_drive_path``, ``serial_baudrate``, ``setup_command``).
-  Never overwritten without ``--force``.
+  ``serial_baudrate``, ``setup_command``).  Never overwritten without
+  ``--force``.
 * **hardware-once** — written on first probe, then frozen in place
   to avoid clobbering on every routine probe (``hardware.uid``,
   ``hardware.machine``, ``hardware.board_id``,
@@ -68,7 +68,6 @@ USER_OWNED_FIELDS: frozenset[str] = frozenset({
     "id",
     "description",
     "deploy_mode",
-    "circuitpy_drive_path",
     "serial_baudrate",
     "setup_command",
 })
@@ -270,7 +269,6 @@ def add_device(
     hardware: Mapping[str, Any] | None = None,
     description: str | None = None,
     deploy_mode: str | None = None,
-    circuitpy_drive_path: str | None = None,
     serial_baudrate: int | None = None,
     firmware_version: str | None = None,
     set_default: bool = True,
@@ -295,7 +293,6 @@ def add_device(
             should not change unless the board is physically swapped.
         description: Free-form user note.
         deploy_mode: ``"ram"`` or ``"flash"`` preference.
-        circuitpy_drive_path: Explicit CIRCUITPY mount.
         serial_baudrate: CP-only baud override.
         firmware_version: Probed-always.  Dotted version string
             from ``sys.implementation.version``.  Captured at
@@ -326,8 +323,6 @@ def add_device(
         entry["deploy_mode"] = deploy_mode
     if serial_baudrate is not None:
         entry["serial_baudrate"] = serial_baudrate
-    if circuitpy_drive_path is not None:
-        entry["circuitpy_drive_path"] = circuitpy_drive_path
     entry["address"] = address
     if firmware_version is not None:
         entry["firmware_version"] = firmware_version

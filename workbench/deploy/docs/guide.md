@@ -86,7 +86,6 @@ device = Device(
     address="/dev/cu.usbmodem14101",  # serial port path
     baudrate=115200,                  # CircuitPython only (MP uses mpremote defaults)
     deploy_mode="ram",                # "ram" or "flash"
-    circuitpy_drive_path=None,        # Path to CIRCUITPY mount for flash mode; auto-detected if omitted
     entrypoint_name=None,             # runtime default: code.py on CP, main.py on MP
     resource_prefix="/lib",           # on-device dir for non-entrypoint files
 )

@@ -36,9 +36,6 @@ def _build_device(entry: DeviceEntry) -> Device:
         transport=entry.runtime,
         address=entry.address,
         baudrate=entry.serial_baudrate,
-        circuitpy_drive_path=(
-            Path(entry.circuitpy_drive_path) if entry.circuitpy_drive_path else None
-        ),
     )
 
 

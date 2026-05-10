@@ -195,13 +195,11 @@ class TestAddDevice:
             description="Garage sensor",
             deploy_mode="flash",
             serial_baudrate=115200,
-            circuitpy_drive_path="/Volumes/CIRCUITPY",
         )
         entry = find_device(data, "pico")
         assert entry["description"] == "Garage sensor"
         assert entry["deploy_mode"] == "flash"
         assert entry["serial_baudrate"] == 115200
-        assert entry["circuitpy_drive_path"] == "/Volumes/CIRCUITPY"
 
     def test_writes_hardware_block(self, tmp_path: Path) -> None:
         data = load_devices(tmp_path / "x.yml")

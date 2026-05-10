@@ -37,7 +37,7 @@ The per-device `deploy_mode` field in `devices.yml` sets the device-level defaul
 Flash mode in `stage()`:
 
 1. Send `import supervisor; supervisor.runtime.autoreload = False` via raw REPL.
-2. Copy staged files to the CIRCUITPY USB drive path (from `circuitpy_drive_path` config).
+2. Copy staged files to the CIRCUITPY USB drive — resolved at deploy time via `find_circuitpy_drive()` plus UID-based auto-correction against `boot_out.txt` (see "CircuitPython drive path resolution" below).
 3. Wait for filesystem sync.
 
 Flash mode in `execute()`:
@@ -74,9 +74,9 @@ Flash mode in `disconnect()`:
 
 `Deployer.deploy_diff` and `Deployer.deploy` opt into `follow="soft_reboot"` automatically when `(transport, deploy_mode, entrypoint) == (MICROPYTHON, FLASH, "/main.py")`.  Other paths (CP, MP RAM, MP flash with non-`/main.py` entrypoints) keep transport defaults — CP doesn't accept `follow` at all, and MP RAM / test-harness deploys want `follow="exec"` because their entrypoints return cleanly.  Constraint enforced inside `MicropythonTransport.deploy_files`: `follow="soft_reboot"` requires `mode="copy"` + entrypoint `/main.py` (MP's auto-run convention) and raises `MicropythonTransportError` early on either mismatch.
 
-### CircuitPython drive path configuration
+### CircuitPython drive path resolution
 
-A new optional `circuitpy_drive_path` field in `devices.yml` specifies where the CIRCUITPY USB drive is mounted on the host (e.g. `/Volumes/CIRCUITPY`).  When omitted, `find_circuitpy_drive()` auto-detects the drive by checking common mount points on macOS (`/Volumes/CIRCUITPY`) and Linux (`/media/<user>/CIRCUITPY`, `/run/media/<user>/CIRCUITPY`).  Explicit paths take precedence and are recommended when multiple boards are connected.
+The CIRCUITPY drive is resolved at deploy time — there is no `devices.yml` field for it.  `find_circuitpy_drive()` scans common mount points on macOS (`/Volumes/CIRCUITPY*`) and Linux (`/media/<user>/CIRCUITPY*`, `/run/media/<user>/CIRCUITPY*`) and picks whichever volume is present.  On multi-board hosts where macOS assigns `/Volumes/CIRCUITPY` versus `/Volumes/CIRCUITPY 1` in mount order, `CircuitpythonTransport._verify_drive_for_board` probes the connected board's `microcontroller.cpu.uid` and compares it against `boot_out.txt` UID lines on each mounted CIRCUITPY volume, then silently auto-corrects to the matching drive.  Pinning a path in `devices.yml` would only be a source of staleness — the auto-correct already handles every multi-board scenario it could solve.
 
 ### Future: `chumicro-deploy` pip package
 
@@ -84,10 +84,9 @@ The transport layer is shaped for eventual extraction into a standalone pip-inst
 
 ## Consequences
 
-- `CircuitpythonTransport` gains `mode` and `circuitpy_drive_path` parameters.
-- `DeviceEntry` gains a `circuitpy_drive_path` field.
+- `CircuitpythonTransport` gains a `mode` parameter.
 - `--deploy-mode` becomes the user-facing CLI override; `deploy_mode` in `devices.yml` is the per-device default, with `defaults.deploy_mode` as the workspace-wide fallback.
-- Flash mode for CircuitPython uses `circuitpy_drive_path` from device config, falling back to auto-detection via `find_circuitpy_drive()`.
+- Flash mode for CircuitPython resolves the CIRCUITPY mount at deploy time via `find_circuitpy_drive()` + UID-based auto-correction.
 - Oversized CircuitPython RAM-mode submissions are chunked using a live free-heap probe instead of static board-family metadata. If even the chunked path cannot fit, the run fails early and directs the user to flash mode.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
 - MicroPython flash transport supports two follow modes via the `follow` kwarg on `MicropythonTransport.deploy_files`: `"exec"` (raw-REPL `exec_raw`, for return-bounded test-harness scripts) and `"soft_reboot"` (Ctrl-B + Ctrl-D from the persistent serial connection, for `while True` app code that would never emit the raw-REPL EOF marker).  `Deployer.deploy_diff` / `Deployer.deploy` auto-route to `"soft_reboot"` for `(MP, FLASH, /main.py)` deploys; everything else stays on `"exec"`.

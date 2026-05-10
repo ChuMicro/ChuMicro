@@ -121,18 +121,11 @@ Recommend (a) for now; revisit if we add a 4th library helper pattern beyond wif
 - AppleScript / dbus auto-disconnect (`chumicro-workspace doctor --release-port <id>`).  OS-specific, bigger lift, doesn't generalize across the long tail of holder apps.  Skipped — the doctor diagnosis + manual close path is good enough.
 - Sweep-harness fast-fail.  Sweep harness lives in `.scratch/` (gitignored) — option moot for a shipped feature.  Doctor's `SERIAL PORTS` row covers the same need from a checked-in surface.
 
-### 10. `devices.yml` `circuitpy_drive_path` is fragile across boot orders
+### 10. `devices.yml` `circuitpy_drive_path` is fragile across boot orders — SHIPPED (option (a))
 
-**Symptom.** macOS assigns CIRCUITPY drive names by mount order: first board → `/Volumes/CIRCUITPY`, second → `/Volumes/CIRCUITPY 1`.  `devices.yml` hard-codes the path at registration time, but a power-cycle / replug can swap which board comes up first → the file is wrong on paper.  The deploy stack auto-corrects via `_verify_drive_for_board` (UID-based), but the fragility is real.
+**Symptom.** macOS assigned CIRCUITPY drive names by mount order: first board → `/Volumes/CIRCUITPY`, second → `/Volumes/CIRCUITPY 1`.  `devices.yml` hard-coded the path at registration time, so a power-cycle / replug that swapped enumeration order silently invalidated it.  `_verify_drive_for_board` already auto-corrected at deploy time, but the field's persisted value was dead weight that papered over an asymmetry between the diff-deploy and full-deploy paths.
 
-**Affected.** Multi-CIRCUITPY-board hosts (any host with 2+ CP boards plugged in simultaneously).
-
-**Fix shape.**  Three options:
-- (a) Drop `circuitpy_drive_path` from `devices.yml` entirely; always resolve via UID at deploy time.  Backward-incompat but cleaner.  Existing `_verify_drive_for_board` does the work already.
-- (b) Auto-update `devices.yml` whenever `_verify_drive_for_board` corrects a mismatch at deploy time.  Minimally disruptive but introduces side-effects on a config file.
-- (c) Just document the fragility in `docs/contributing/device-testing.md` and let users `chumicro-workspace add-device` again if they hit it.
-
-Recommend (a) — the path is already dead weight given UID auto-correct exists.  Workstream-template repo would need to drop the field too.
+**Resolution.** Removed the `circuitpy_drive_path` field everywhere: `Device` dataclass and `CircuitpythonTransport` constructor (chumicro-deploy 0.10.1 → 0.11.0, public API break — but pre-1.0, no compat shim per AGENTS.md), `DeviceEntry` dataclass + YAML loader + writer, CLI `--drive` flag, demo / example / functional-test plumbing.  `_resolve_circuitpy_drive` calls `find_circuitpy_drive()` directly with no fallback; `_verify_drive_for_board` runs on every CP-flash op and UID-matches the connected board against each mounted `CIRCUITPY*`'s `boot_out.txt`.  Legacy `devices.yml` files carrying the field still load — `Device.from_dict` ignores unknown keys.  ADRs 0027 + 0028 updated in place; troubleshooting + device-testing docs rewritten to match.  Workspace-template repo's `register-board/SKILL.md` updated too.
 
 ### 11. Library pyproject.toml ↔ src/imports audit — SHIPPED (with surprise)
 

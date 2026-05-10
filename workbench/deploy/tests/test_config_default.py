@@ -21,7 +21,6 @@ devices:
     runtime: circuitpython
     address: /dev/cu.usbmodem11401
     serial_baudrate: 115200
-    circuitpy_drive_path: /Volumes/CIRCUITPY
 """
 
 _MP_ONLY_YAML = """\
@@ -63,11 +62,6 @@ class TestLoadDevicesYml:
         assert device.address == "/dev/cu.usbmodem213101"
         assert device.baudrate == 115200
         assert device.deploy_mode == "ram"
-
-    def test_explicit_cp_with_drive(self, tmp_path: Path) -> None:
-        yaml_path = _write(tmp_path, _MINIMAL_YAML)
-        device = load_devices_yml(yaml_path, device_id="cp-board")
-        assert device.circuitpy_drive_path == Path("/Volumes/CIRCUITPY")
 
     def test_unique_default_picks_runtime(self, tmp_path: Path) -> None:
         """When only one runtime has a default, that one is used."""

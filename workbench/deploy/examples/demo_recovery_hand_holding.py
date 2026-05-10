@@ -29,7 +29,6 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 from chumicro_deploy import (
     CircuitpythonTransportError,
@@ -201,24 +200,10 @@ def _build_ram_device(entry: DeviceEntry) -> Device:
 
 
 def _build_flash_device(entry: DeviceEntry) -> Device | None:
-    # Flash mode only makes sense on CP with a mounted drive.  On MP
-    # this maps to mpremote copy-mode and does not need a drive, so
-    # build a flash device for MP too.
-    if entry.runtime == "circuitpython":
-        drive_path = entry.circuitpy_drive_path
-        # Explicit path is optional — CircuitpythonTransport auto-
-        # detects the drive by matching the connected board's UID
-        # against every mounted CIRCUITPY*/boot_out.txt.  Only skip
-        # when the user set an explicit path that no longer exists.
-        if drive_path and not Path(drive_path).is_dir():
-            return None
-        return Device(
-            transport=entry.runtime,
-            address=entry.address,
-            baudrate=entry.serial_baudrate,
-            deploy_mode="flash",
-            circuitpy_drive_path=Path(drive_path) if drive_path else None,
-        )
+    # CircuitpythonTransport resolves the CIRCUITPY drive at deploy
+    # time via find_circuitpy_drive() + UID-based auto-correct, so we
+    # don't pin it on Device.  On MP, flash maps to mpremote copy-mode
+    # and never touches the host filesystem at all.
     return Device(
         transport=entry.runtime,
         address=entry.address,
@@ -261,8 +246,8 @@ def scenario_happy_path_ram(context: BoardContext) -> bool:
     if device is None:
         _print_warn(
             "No usable deploy device — CircuitPython boards need a "
-            "mounted CIRCUITPY drive (flash mode) for Deployer.deploy; "
-            "update devices.yml to set circuitpy_drive_path."
+            "mounted CIRCUITPY drive on the host for flash-mode "
+            "Deployer.deploy.  Mount the board's USB drive and retry."
         )
         return False
     interactive = InteractiveDeployer(
@@ -451,8 +436,7 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
         device_flash = _build_flash_device(context.entry)
     if device_flash is None:
         _print_warn(
-            "No circuitpy_drive_path configured for this board in "
-            "devices.yml and the drive is not currently mounted — "
+            "Could not build a flash-mode Device for this board — "
             "can't run the flash-mode scenario."
         )
         return False
@@ -477,8 +461,7 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
         return True
     print(
         f"{_RED}EJECT{_RESET} the CIRCUITPY drive for "
-        f"{_board_tag(context)} "
-        f"({context.entry.circuitpy_drive_path!r}) now, then press "
+        f"{_board_tag(context)} now, then press "
         f"Enter to start the deploy.",
     )
     _pause()
@@ -574,8 +557,7 @@ def scenario_flash_copy_failed(context: BoardContext) -> bool:
         device_flash = _build_flash_device(context.entry)
     if device_flash is None:
         _print_warn(
-            "No circuitpy_drive_path configured for this board in "
-            "devices.yml and the drive is not currently mounted — "
+            "Could not build a flash-mode Device for this board — "
             "can't run the flash-mode scenario."
         )
         return False

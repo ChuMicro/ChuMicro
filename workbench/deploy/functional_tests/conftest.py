@@ -16,7 +16,6 @@ default collection — run this suite explicitly with
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
 
 import pytest
 from chumicro_deploy import (
@@ -25,6 +24,7 @@ from chumicro_deploy import (
     DeviceEntry,
     load_device_registry,
 )
+from chumicro_deploy.circuitpython_transport import find_circuitpy_drive
 from chumicro_deploy.macos_fskit import (
     MACOS_FSKIT_RECOVERY_COMMAND,
     detect_fskit_wedge,
@@ -73,7 +73,7 @@ def _pick_device(
     names a device ID for this runtime and it exists, use it;
     otherwise fall back to the first matching entry.  An optional
     *predicate* further filters (used by flash-mode tests to require
-    ``circuitpy_drive_path`` or a mounted drive).
+    a mounted CIRCUITPY drive).
     """
     preferred_id = (
         defaults.micropython if runtime == "micropython" else defaults.circuitpython
@@ -117,15 +117,12 @@ def circuitpython_device() -> DeviceEntry:
 def circuitpython_flash_device() -> DeviceEntry:
     """A CircuitPython DeviceEntry suitable for flash-mode deploy.
 
-    Skips when no CP device has a configured or mounted CIRCUITPY
-    drive — flash-mode deploy needs somewhere to write files.
+    Skips when no CIRCUITPY drive is currently mounted on the host —
+    flash-mode deploy needs somewhere to write files, and the
+    transport resolves the drive via :func:`find_circuitpy_drive` at
+    deploy time.
     """
     devices, defaults = _load_registry_or_skip()
-
-    def _has_drive(device: DeviceEntry) -> bool:
-        drive = device.circuitpy_drive_path
-        return bool(drive) and Path(drive).is_dir()
-
-    return _pick_device(
-        devices, defaults, "circuitpython", predicate=_has_drive,
-    )
+    if find_circuitpy_drive() is None:
+        pytest.skip("No CIRCUITPY drive mounted on the host")
+    return _pick_device(devices, defaults, "circuitpython")

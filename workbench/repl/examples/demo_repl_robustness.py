@@ -35,7 +35,6 @@ import io
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 from chumicro_deploy import (
     Device,
@@ -129,9 +128,6 @@ def _build_device(entry: DeviceEntry) -> Device:
         transport=entry.runtime,
         address=entry.address,
         baudrate=entry.serial_baudrate,
-        circuitpy_drive_path=(
-            Path(entry.circuitpy_drive_path) if entry.circuitpy_drive_path else None
-        ),
     )
 
 

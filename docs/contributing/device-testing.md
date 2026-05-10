@@ -94,7 +94,6 @@ devices:
     description: Desk board running CircuitPython
     serial_baudrate: 115200
     deploy_mode: ram
-    circuitpy_drive_path: /Volumes/CIRCUITPY
 
   - id: office-esp32-mp
     runtime: micropython
@@ -115,7 +114,6 @@ Supported fields today:
 | `connection_type` | no | Currently `serial` |
 | `serial_baudrate` | no | Serial baud rate; defaults to `115200` |
 | `deploy_mode` | no | Per-device override for `ram` or `flash` |
-| `circuitpy_drive_path` | no | CIRCUITPY mount path for CircuitPython flash mode |
 | `setup_command` | no | Reserved for future per-device setup hooks; currently parsed but not used by the transport layer |
 
 ### Deploy mode behavior
@@ -354,7 +352,7 @@ flash so there's nothing persistent to wipe.
 | `No devices.yml found` | You have not generated local config yet | Run `python scripts/run.py setup` |
 | `No devices configured in devices.yml` | The file exists but `devices:` is empty or defaults do not match real entries | Add at least one board entry and update `defaults:` |
 | CircuitPython RAM-mode run fails before tests start | Inline payload is too large for available heap | Re-run with `--deploy-mode flash` or set that board's `deploy_mode: flash` |
-| Flash mode cannot find CIRCUITPY | Host mount path not auto-detected | Set `circuitpy_drive_path` explicitly in `devices.yml` |
+| Flash mode cannot find CIRCUITPY | Host has no `CIRCUITPY*` mount visible | Replug the board's USB cable and confirm Finder / `mount` shows the drive; see [docs/troubleshooting/macos-circuitpy.md](../troubleshooting/macos-circuitpy.md) |
 | A normal `python scripts/run.py test` run ignores `functional_tests/` | Expected behavior | Use `test-libraries-functional` or explicitly target the `functional_tests/` path from your IDE |
 | `mpremote: cp: ...: No space left on device` mid-deploy | LittleFS partition full of stage residue from prior runs | `chumicro-workspace reset-board --device <id> --yes` — see "Wiping a board's filesystem" above |
 

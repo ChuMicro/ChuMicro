@@ -63,21 +63,14 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
         help="Deploy mode: ram (no-flash) or flash (persistent).",
     )
     parser.add_argument(
-        "--drive",
-        dest="circuitpy_drive_path",
-        type=Path,
-        default=None,
-        help="CIRCUITPY drive mount path (CP flash mode).",
-    )
-    parser.add_argument(
         "--devices-file",
         type=Path,
         default=None,
         help=(
             "Path to a device-config file.  When set, --transport / "
-            "--address / --baudrate / --deploy-mode / --drive are "
-            "filled from the entry selected by --device (or the "
-            "single runtime default if --device is omitted)."
+            "--address / --baudrate / --deploy-mode are filled from "
+            "the entry selected by --device (or the single runtime "
+            "default if --device is omitted)."
         ),
     )
     parser.add_argument(
@@ -133,7 +126,6 @@ def _device_from_args(args: argparse.Namespace) -> Device:
         address=args.address,
         baudrate=args.baudrate,
         deploy_mode=args.deploy_mode,
-        circuitpy_drive_path=args.circuitpy_drive_path,
     )
 
 

@@ -59,8 +59,8 @@ from chumicro_deploy.result import DeployResult
         ),
         # CIRCUITPY drive missing — distinct from port-level failure.
         (
-            "CIRCUITPY drive not found.  Either set circuitpy_drive_path "
-            "or connect the board's USB drive.",
+            "CIRCUITPY drive not found.  Connect the board's USB "
+            "drive (or check that the host has it mounted).",
             DeployFailureKind.CIRCUITPY_DRIVE_MISSING,
         ),
         (

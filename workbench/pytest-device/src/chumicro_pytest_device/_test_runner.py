@@ -212,7 +212,6 @@ def create_transport(
         address=device_entry.address,
         baudrate=device_entry.serial_baudrate,
         deploy_mode=effective_mode,
-        circuitpy_drive_path=device_entry.circuitpy_drive_path,
     )
     return device.create_transport()
 

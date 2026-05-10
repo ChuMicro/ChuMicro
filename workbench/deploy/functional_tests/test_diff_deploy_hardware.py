@@ -25,7 +25,6 @@ Skipped cleanly when ``devices.yml`` has no matching device.
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 from chumicro_deploy import (
     Deployer,
@@ -52,9 +51,6 @@ def _build_device(entry: DeviceEntry, deploy_mode: str) -> Device:
         address=entry.address,
         baudrate=entry.serial_baudrate,
         deploy_mode=deploy_mode,
-        circuitpy_drive_path=(
-            Path(entry.circuitpy_drive_path) if entry.circuitpy_drive_path else None
-        ),
     )
 
 
