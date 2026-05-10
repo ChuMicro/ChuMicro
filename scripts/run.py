@@ -434,14 +434,16 @@ def docs_deploy(channel: str, libraries: list[str] | None = None) -> int:
 
 
 def lint() -> int:
-    """Run Ruff plus the chumicro-specific CHU lint checks."""
-    from check_dated_narration import main as check_dated_narration_main
+    """Run Ruff plus the chumicro-specific CHU lint checks.
+
+    CHU rules ported to the `chumicro-checks` package run via the
+    package's CLI; rules still living under `scripts/check_*.py`
+    run via their direct callers until they migrate.  Drop legacy
+    callers as their corresponding rules land in the package.
+    """
     from check_names import main as check_names_main
-    from check_no_repo_refs import main as check_no_repo_refs_main
     from check_no_silent_test_skip import main as check_no_silent_test_skip_main
-    from check_plans_brevity import main as check_plans_brevity_main
     from check_whitespace import main as check_whitespace_main
-    from check_workbench_no_lib_imports import main as check_workbench_no_lib_imports_main
     ruff_result = run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
     if ruff_result != 0:
         return ruff_result
@@ -451,19 +453,10 @@ def lint() -> int:
     whitespace_result = check_whitespace_main()
     if whitespace_result != 0:
         return whitespace_result
-    repo_refs_result = check_no_repo_refs_main()
-    if repo_refs_result != 0:
-        return repo_refs_result
-    workbench_no_lib_imports_result = check_workbench_no_lib_imports_main()
-    if workbench_no_lib_imports_result != 0:
-        return workbench_no_lib_imports_result
     silent_skip_result = check_no_silent_test_skip_main()
     if silent_skip_result != 0:
         return silent_skip_result
-    dated_narration_result = check_dated_narration_main()
-    if dated_narration_result != 0:
-        return dated_narration_result
-    return check_plans_brevity_main()
+    return run_command([PYTHON, "-m", "chumicro_checks"])
 
 
 def _parse_library_filters(
