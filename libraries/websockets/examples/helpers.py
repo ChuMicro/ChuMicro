@@ -46,8 +46,9 @@ MicroPython::
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     # Pi Pico W only — disable CYW43 power-save so connects don't take
-    # 30+ seconds.  ESP32 chips raise ValueError / OSError on this kwarg
-    # and the helper silently skips it there.
+    # 30+ seconds.  Magic constant: see chumicro_wifi._adapters.mp
+    # (CYW43_PM_DISABLE) for the canonical home + provenance.  ESP32
+    # chips raise ValueError / OSError on this kwarg — silently skip there.
     try:
         wlan.config(pm=0xA11140)
     except (OSError, ValueError):
@@ -135,9 +136,12 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         import network  # noqa: PLC0415 — MP-only
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
-        # CYW43 (Pi Pico W) defaults to aggressive power-save which
-        # makes connects take 30+ seconds.  Disable it; ESP32 chips
-        # raise on this kwarg — silently skip there.
+        # CYW43 (Pi Pico W) defaults to aggressive power-save which makes
+        # connects take 30+ seconds.  Magic constant: see
+        # chumicro_wifi._adapters.mp.CYW43_PM_DISABLE for the canonical
+        # home + provenance; replicated here because example helpers
+        # can't import their non-deps.  ESP32 chips raise on this kwarg —
+        # silently skip there.
         try:
             wlan.config(pm=0xA11140)
         except (OSError, ValueError):

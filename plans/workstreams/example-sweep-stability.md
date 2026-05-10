@@ -52,20 +52,9 @@ Resolved via the inline-msgpack-decoder approach.  See "What landed" above.  Hel
 
 **Resolution.** All three hand-written doc files rewritten to teach the flat-key `from_config(config, *, prefix=...)` pattern that library code + every consumer (`WifiConfig`, `NTPClient`, `MqttConfig`, `HttpClient`, `WebSocketServer`, `HttpServer`) has been using since the migration in commit `30e2878`.  Key changes: opener tagline reframed from "section-namespaced dict, `<Name>Config.from_dict()`" to "flat-key dict (dotted prefixes like `wifi.ssid`), `<Name>Config.from_config()`"; quick-example one-liner became `WifiService(WifiConfig.from_config(config))` (no per-section dict slice); the library-author template grew the `prefix="wifi"` kwarg to `load_section`; the on-disk runtime-config shape rewritten as a flat dict with dotted keys (with a separate "source TOML stays nested for humans, deploy flattens it" subsection so users see the connection); added a `try_load_section` section covering the soft-load path no doc surface previously taught; `RuntimeConfig` (the dict-like view `load_runtime_config()` returns) named explicitly throughout.  `chumicro-config` 0.2.1 → 0.2.2 (patch — docs-only).  `python scripts/run.py docs` green; full lint + per-library tests green.
 
-### 5. CP-on-ESP32-S2 hard-fault on `tcp_client_socket` to unreachable host with stale wifi state (large effort, hardware-only repro)
+### 5. CP-on-ESP32-S2 hard-fault on `tcp_client_socket` to unreachable host with stale wifi state — MOVED OUT
 
-**Symptom.** On Lolin S2 CP after a prior websockets-server deploy ran, `tcp_client_socket("127.0.0.1", 8000, radio=…)` produced `Hard fault: memory access or instruction error` → safe mode.  Fresh-boot reproducer (no prior wifi-using deploy) raises a clean `OSError [Errno 104] ECONNRESET` against the same target.  Suggests stale-socketpool state in `chumicro_sockets._adapters.cp` after a prior `socketpool.SocketPool(radio)` left some residual handle.
-
-**Repro (requires bench, Lolin S2 CP):**
-1. Deploy `websockets/examples/circuitpython_server.py` to the board: `chumicro-workspace deploy-example websockets circuitpython_server --device lolin-s2-circuitpython-board --non-interactive --no-tail`.  Let it run a few seconds (binds to `0.0.0.0:8765`).
-2. Deploy `sockets/examples/tcp_roundtrip.py` (current shape, hits `example.com:80`) to the same board.  This SHOULD now work cleanly because `tcp_roundtrip` was rewritten — the stale-state path that triggered the hard fault was the old `127.0.0.1:8000` shape.
-3. To reproduce the original hard-fault path: deploy any code that calls `tcp_client_socket` with an unreachable target after a prior wifi-using deploy.  Hard-fault appears as "CircuitPython core code crashed hard" in the board's serial output.
-
-**Diagnostic note.**  The board recovers cleanly from safe mode after RESET — the FAT volume isn't damaged.  The crash happens inside CP core code (likely the socketpool C implementation), not chumicro_sockets Python code.  The chumicro side may just be triggering a CP-firmware bug.
-
-**Fix sketch.** Two angles:
-- (a) Add socket cleanup on close to chumicro_sockets._adapters.cp so a fresh `tcp_client_socket` starts with a clean pool.  Defensive; may not actually trigger the firmware bug.
-- (b) File a CircuitPython upstream issue with a minimal repro that bypasses chumicro_sockets entirely (`socketpool.SocketPool(wifi.radio)` → `pool.socket(pool.AF_INET, pool.SOCK_STREAM)` → `connect((unreachable, port))`).  Verify firmware-side responsibility before chumicro-side workaround.
+Moved to `plans/open-questions.md` ("Next CP hard fault on stale socketpool state — investigate") on 2026-05-10.  The sweep harness can't trigger it on demand — the original repro path (`tcp_roundtrip` against `127.0.0.1:8000` with stale wifi state) was structurally fixed when the example was rewritten to hit `example.com:80`.  Diagnostic + repro recipe + two fix angles preserved at the new location for the next natural occurrence.
 
 ### 6. MicroPython transport's `clean=` kwarg is a no-op — SHIPPED
 
@@ -84,17 +73,11 @@ Four new unit tests:
 
 **`chumicro-deploy` 0.12.0 → 0.13.0** — public API behavior change (the `clean` kwarg now does something on MP transport).  Pre-1.0 minor bump.
 
-### 7. CYW43 power-save quirk has to be replicated in every per-library `helpers.py`
+### 7. CYW43 power-save constant duplication across helpers.py — SHIPPED (option (a))
 
-**Symptom.** Each `examples/helpers.py` that brings wifi up on MP needs a `try: wlan.config(pm=0xa11140); except (OSError, ValueError): pass` block to disable CYW43 idle power-save (otherwise Pi Pico W connects in 30+ s instead of <2 s).  This is documented in `chumicro_wifi._adapters/mp.py` but examples that bypass chumicro-wifi (per the dep rule) have to know the magic constant themselves.
+**Resolution.** Accepted the duplication and tightened documentation per option (a).  Both CYW43 power-save comment blocks in the canonical `libraries/sockets/examples/helpers.py` (the docstring example + the actual code path) now name `chumicro_wifi._adapters.mp.CYW43_PM_DISABLE` as the canonical home + provenance, with a one-line note that example helpers can't import their non-deps which is why each helper carries its own copy.  Updated text propagated byte-identical across all 7 sibling files: `libraries/{sockets,ntp,requests,mqtt,websockets,http_server}/examples/helpers.py` plus the new-library scaffold template at `workbench/workspace/src/chumicro_workspace/_payloads/library_template/helpers.py.template` (md5 verified identical post-edit).
 
-**Affected files.**  Anywhere `helpers.py` lives — currently only `libraries/sockets/examples/helpers.py` (line ~80).  Will replicate to 6 more files when follow-up #1 lands.
-
-**Fix shape.**  Two options:
-- (a) Accept the duplication.  Document the magic constant clearly in each helper; mention chumicro_wifi as the canonical source.
-- (b) Promote a shared helper utility into a tree the deploy stack already knows about (e.g. `support/example_helpers/` host-and-device-shipped).  But that's a new top-level decision and would need ADR coverage.
-
-Recommend (a) for now; revisit if we add a 4th library helper pattern beyond wifi (e.g. RTC / time sync).
+Option (b) (shared `support/example_helpers/` package) considered and skipped — a future 4th wifi-adjacent helper need (RTC sync, mDNS, etc.) is the natural forcing function for revisiting.
 
 ### 8. Sweep harness misses output on slow-wifi boards in `--no-tail` mode
 
@@ -168,13 +151,11 @@ Strict-verify error path + boot_out-missing auto-correct path covered by unit te
 
 **Effort.** Audit was ~30 min including the AST script.  Fix was ~1 line + a VERSION bump.
 
-### 12. MicroPython 1.28 lacks `TimeoutError` builtin (cross-runtime gotcha)
+### 12. MicroPython 1.28 lacks `TimeoutError` builtin — SHIPPED (docs only)
 
-**Symptom.** `raise TimeoutError(...)` works on CPython + CircuitPython but on MicroPython 1.28 it raises `NameError: name 'TimeoutError' isn't defined`.  Cross-runtime helpers and library code must use `OSError` (or define a local exception class) instead.
+**Resolution.** Documented in `plans/patterns.md` under a new "Missing builtins on MicroPython 1.28" section, neighbouring the existing "Cross-runtime shim" pattern.  Entry covers the symptom (`NameError` on MP), the three established workarounds (library-specific subclass like `HttpTimeoutError` / `WebSocketTimeoutError` for new code, `OSError` directly for helper / glue code, local `class TimeoutError(OSError): ...` if the name is genuinely wanted), and explicitly tells future maintainers not to add a polyfill to `chumicro_compat` — a 2026-05-10 survey found zero callers wanting bare `TimeoutError`, so a compat polyfill would be public API surface with no consumers.
 
-**Already in effect.** `libraries/sockets/examples/helpers.py` uses `OSError` for the wifi-connect timeout (line ~63 + ~78) for this reason.  Documented inline.
-
-**Fix shape.** Document this in `plans/patterns.md` under cross-runtime gotchas, alongside existing patterns.  Optional: add a CHU rule that flags `raise TimeoutError(` in cross-runtime tree files (libraries/*/src/, support/test_harness/src/).  CHU-rule version is the rigorous fix; documentation alone is the lighter touch.
+CHU lint rule deferred — the codebase is currently clean and the pattern doc gives future agents the right shape.  Add a `chumicro-checks` rule the first time `raise TimeoutError(` reappears in a cross-runtime tree.
 
 ### 13. `ImportGraphSource` resolved class-import aliases as case-mismatched submodule paths — SHIPPED
 
