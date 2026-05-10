@@ -44,3 +44,16 @@ ban-relative-imports = "all"
 "**/tests/**" = ["TID252"]
 "**/functional_tests/**" = ["TID252"]
 "**/examples/**" = ["TID252"]
+
+
+# ---------------------------------------------------------------------------
+# CHU lint rules (chumicro-checks)
+# ---------------------------------------------------------------------------
+#
+# CHU008 is the workspace-template isolation rule — it gates on the
+# presence of a ``packages/`` directory at root, which the chumicro
+# mono-repo doesn't have.  It would self-no-op silently here either
+# way; listing it explicitly documents the intent.
+
+[tool.chumicro-checks]
+ignore = ["CHU008"]
