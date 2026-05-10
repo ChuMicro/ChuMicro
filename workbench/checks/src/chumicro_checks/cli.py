@@ -1,9 +1,21 @@
 """``chumicro-checks`` command-line interface.
 
 Discovers the repo root (the nearest ancestor with a ``pyproject.toml``
-or ``.git``), runs every registered rule whose code is not in the
-ignore set, and prints findings in the standard
+or ``.git``), loads ``[tool.chumicro-checks]`` config from that file,
+runs every registered rule whose code is not in the active ignore
+set, and prints findings in the standard
 ``<path>:<line>: <code> <message>`` shape.
+
+Resolution order (most specific wins):
+
+1. CLI ``--select`` — if given, only those codes run.
+2. CLI ``--ignore`` — codes to skip on top of (1) or the registry default.
+3. ``[tool.chumicro-checks].ignore`` — repo-level default ignore list.
+
+So ``--select CHU006`` runs CHU006 ignoring everything else and
+ignoring config; ``--ignore CHU012`` adds CHU012 to whatever the
+config already skips; running with no flags applies just the
+config's defaults.
 
 Exit codes::
 
@@ -20,6 +32,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from chumicro_checks import registered_rules
+from chumicro_checks._config import load_config
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -89,20 +102,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{code}  {rule.description}")
         return 0
 
-    select = _parse_codes(args.select)
-    ignore = _parse_codes(args.ignore)
+    cli_select = _parse_codes(args.select)
+    cli_ignore = _parse_codes(args.ignore)
 
-    unknown = (select | ignore) - set(rules)
-    if unknown:
+    unknown_cli = (cli_select | cli_ignore) - set(rules)
+    if unknown_cli:
         print(
-            f"chumicro-checks: unknown rule code(s): {', '.join(sorted(unknown))}",
+            f"chumicro-checks: unknown rule code(s): {', '.join(sorted(unknown_cli))}",
             file=sys.stderr,
         )
         return 2
 
     repo_root = (args.root or _find_repo_root(Path.cwd())).resolve()
+    config = load_config(repo_root)
 
-    active_codes = (select or set(rules)) - ignore
+    # CLI --select overrides config's ignore list entirely;
+    # otherwise CLI --ignore extends the config's ignore.
+    if cli_select:
+        active_codes = cli_select - cli_ignore
+    else:
+        active_codes = set(rules) - (config.ignore | cli_ignore)
+
     findings = []
     for code in sorted(active_codes):
         findings.extend(rules[code].check(repo_root))
