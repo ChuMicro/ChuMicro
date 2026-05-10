@@ -32,6 +32,8 @@ Independent items.  Most have either shipped phases (status in the linked workst
 
 - [ ] **Performance + resource benchmarking infrastructure** — measure heap + CPU per library operation with explicit GC control; per-benchmark thresholds that fail on regression; separate `bench` task or deeper test tier so slow benchmarks don't run on standard `test`; CI on a schedule.
 
+- [ ] **chumicro-checks polish** — captured 2026-05-09 after the chu-rules-home migration.  Two small follow-ups: (a) `quality.lint.tools = ["ruff", "chumicro-checks"]` knob in workspace.yml so a workspace can disable one tool without the other (today `quality.lint.enabled = false` skips the whole phase, no granular control); (b) converge the remaining substring-matching scope predicates (`_outside_chumicro_workspace`, `_outside_chumicro_checks` in `workbench/checks/src/chumicro_checks/rules/chu006.py`) to the `Path.parts`-based shape `_outside_runpy_owners` already uses — substring matching on `as_posix()` is theoretically vulnerable to a path that incidentally contains the substring (unlikely in practice but cosmetically inconsistent).
+
 ## Out of scope (until revisited)
 
 - CI-hosted device testing (`device-test.yml` / `workflow_dispatch`, CI-injected `devices.yml` / `workspace.yml` / `secrets.yml`). Parked over security concerns around shared-runner device access; bring back up before any design work resumes.

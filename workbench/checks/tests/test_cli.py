@@ -110,3 +110,17 @@ def test_finding_render_keeps_absolute_when_unrelated(tmp_path: Path) -> None:
 def test_finding_render_without_root_uses_path_as_is() -> None:
     finding = Finding(path=Path("relative/foo.py"), line=4, code="CHU999", message="m")
     assert finding.render() == "relative/foo.py:4: CHU999 m"
+
+
+def test_dunder_main_module_imports_cli_main() -> None:
+    """``python -m chumicro_checks`` entry point wires to cli.main.
+
+    Importing the ``__main__`` module exercises its three import lines
+    (the ``if __name__ == "__main__"`` block itself stays under
+    ``# pragma: no cover``).  Asserts the wiring is unchanged so a
+    rename of ``cli.main`` would surface here at test time.
+    """
+    import chumicro_checks.__main__ as dunder_main
+    from chumicro_checks.cli import main as cli_main
+
+    assert dunder_main.main is cli_main

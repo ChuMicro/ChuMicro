@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import ast
 import textwrap
 from pathlib import Path
 
-from chumicro_checks.rules.chu009_chu010 import CHU009, CHU010
+from chumicro_checks.rules.chu009_chu010 import (
+    CHU009,
+    CHU010,
+    _callable_tail_name,
+    _function_has_assertion,
+    _is_in_scope,
+    _iter_test_functions,
+)
 
 
 def _stage_test(repo_root: Path, library: str, scope: str, body: str) -> Path:
@@ -203,3 +211,110 @@ class TestRuleMetadata:
 
     def test_descriptions_distinct(self) -> None:
         assert CHU009.description != CHU010.description
+
+
+class TestIsInScopeHelper:
+    """Direct tests for the scope-detection edge cases."""
+
+    def test_non_py_file_rejected(self, tmp_path: Path) -> None:
+        target = tmp_path / "libraries" / "wifi" / "tests" / "test_x.txt"
+        assert _is_in_scope(target, tmp_path) is False
+
+    def test_path_outside_repo_root_rejected(self, tmp_path: Path) -> None:
+        # ``Path.relative_to`` raises ValueError when the file isn't
+        # under repo_root; the helper should return False rather than
+        # propagating the exception.
+        outside = Path("/elsewhere/libraries/wifi/tests/test_x.py")
+        assert _is_in_scope(outside, tmp_path) is False
+
+    def test_too_few_path_parts_rejected(self, tmp_path: Path) -> None:
+        # ``libraries/wifi/test_x.py`` has only 3 parts — the rule
+        # needs ``libraries/<pkg>/<scope_dir>/test_*.py`` (4+ parts).
+        target = tmp_path / "libraries" / "wifi" / "test_x.py"
+        assert _is_in_scope(target, tmp_path) is False
+
+    def test_non_libraries_root_rejected(self, tmp_path: Path) -> None:
+        target = tmp_path / "workbench" / "deploy" / "tests" / "test_x.py"
+        assert _is_in_scope(target, tmp_path) is False
+
+
+class TestIterTestFunctionsHelper:
+    """Direct tests for ``_iter_test_functions`` edge cases."""
+
+    def test_test_class_with_non_test_methods(self) -> None:
+        # ``Test*`` class with a mix of test_ and helper methods —
+        # only the test_ methods come back.
+        tree = ast.parse(textwrap.dedent("""
+            class TestStuff:
+                def helper(self):
+                    pass
+                def test_one(self):
+                    assert True
+                attr = 1
+        """).strip())
+        names = [func.name for func in _iter_test_functions(tree)]
+        assert names == ["test_one"]
+
+    def test_module_level_non_test_def_ignored(self) -> None:
+        tree = ast.parse(textwrap.dedent("""
+            def helper():
+                pass
+            def test_real():
+                assert True
+        """).strip())
+        names = [func.name for func in _iter_test_functions(tree)]
+        assert names == ["test_real"]
+
+
+class TestCallableTailName:
+    """Direct tests for the AST-shape parser."""
+
+    def test_name_callable(self) -> None:
+        call = ast.parse("foo()").body[0].value
+        assert _callable_tail_name(call.func) == "foo"
+
+    def test_attribute_callable(self) -> None:
+        call = ast.parse("module.foo()").body[0].value
+        assert _callable_tail_name(call.func) == "foo"
+
+    def test_subscript_callable_returns_none(self) -> None:
+        # ``handlers[0]()`` — subscript callable.  The helper returns
+        # None so the call is treated as not-an-assertion (conservative).
+        call = ast.parse("handlers[0]()").body[0].value
+        assert _callable_tail_name(call.func) is None
+
+
+class TestFunctionHasAssertionEarlyExits:
+    """Verify each early-success path triggers."""
+
+    def test_assert_satisfies(self) -> None:
+        func = ast.parse("def f():\n    assert True\n").body[0]
+        assert _function_has_assertion(func) is True
+
+    def test_raise_satisfies(self) -> None:
+        func = ast.parse("def f():\n    raise ValueError\n").body[0]
+        assert _function_has_assertion(func) is True
+
+    def test_assertion_call_satisfies(self) -> None:
+        func = ast.parse("def f():\n    skip('x')\n").body[0]
+        assert _function_has_assertion(func) is True
+
+    def test_no_assertion_returns_false(self) -> None:
+        func = ast.parse("def f():\n    x = 1\n    y = x + 1\n").body[0]
+        assert _function_has_assertion(func) is False
+
+
+class TestSilentReturnEdgeCases:
+    """The ``if`` body must be exactly one ``return``/``pass`` to fire."""
+
+    def test_multi_statement_if_body_not_flagged(self, tmp_path: Path) -> None:
+        # ``if cond:\n    log(); return`` — body has 2 statements,
+        # so the rule doesn't fire (the test isn't a pure silent skip).
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                if True:
+                    print("logged")
+                    return
+                assert False
+        """)
+        assert CHU009.check(tmp_path) == []
