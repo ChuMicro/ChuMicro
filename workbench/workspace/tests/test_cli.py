@@ -5589,6 +5589,52 @@ class TestDeployExampleHappyPath:
         ])
         assert exit_code == 0
 
+    def test_tail_seconds_flag_flows_to_transport(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``--tail-seconds 30`` reaches the CP transport's deploy_files.
+
+        Slow-wifi boards (Pi Pico W cyw43) need a longer post-soft-reboot
+        capture window so the example's first prints land inside it.
+        Sweep harness uses this flag for known-slow (network) examples.
+        """
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink", "--non-interactive",
+            "--tail-seconds", "30",
+        ])
+        assert exit_code == 0
+        assert transport.last_tail_seconds == 30.0
+
+    def test_tail_seconds_default_is_none(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without ``--tail-seconds``, the transport sees ``None``.
+
+        ``None`` lets the CP transport fall back to its built-in
+        timeout (10 s) — the prior default before this flag existed.
+        """
+        root = _seed_workspace_with_cp_device(tmp_path)
+        _seed_example_library(root, "timing")
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy-example", "--workspace-dir", str(root),
+            "timing", "circuitpython_blink", "--non-interactive",
+        ])
+        assert exit_code == 0
+        assert transport.last_tail_seconds is None
+
 
 class TestDeployExampleModes:
     """``_resolve_deploy_example_modes`` honours TTY default + flags."""
@@ -5817,7 +5863,7 @@ class TestDeployExampleAdditionalBranches:
         # Replace _make_deploy_runner so .deploy() raises a classifiable
         # NO_PYTHON_RUNTIME error.
         class _NoPythonDeployer:
-            def deploy(self, _source: object, *, clean: bool = False) -> None:
+            def deploy(self, _source: object, **_kwargs: object) -> None:
                 raise CircuitpythonTransportError(
                     "no python runtime detected on /dev/cu.fake",
                 )
@@ -5847,7 +5893,7 @@ class TestDeployExampleAdditionalBranches:
         _seed_example_library(root, "timing")
 
         class _PortBusyDeployer:
-            def deploy(self, _source: object) -> None:
+            def deploy(self, _source: object, **_kwargs: object) -> None:
                 raise CircuitpythonTransportError(
                     "Failed to open serial port: Resource busy",
                 )
