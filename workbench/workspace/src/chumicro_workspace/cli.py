@@ -1977,7 +1977,7 @@ def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state ma
         classify_deploy_failure,
     )
     try:
-        result = runner.deploy(source)
+        result = runner.deploy(source, clean=args.clean)
     except Exception as deploy_error:  # noqa: BLE001 — classify + route
         kind = classify_deploy_failure(deploy_error)
         if kind is DeployFailureKind.NO_PYTHON_RUNTIME:
@@ -2465,7 +2465,7 @@ def _cmd_config_validate(args: argparse.Namespace) -> int:
 
 
 def _cmd_lint(args: argparse.Namespace) -> int:
-    """Run ``ruff check`` across the workspace.
+    """Run ``ruff check`` plus ``chumicro-checks`` across the workspace.
 
     Picks up the workspace's ``[tool.ruff]`` config from
     ``pyproject.toml`` automatically — the canonical workspace
@@ -2473,15 +2473,23 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     Extra args after ``--`` forward to ruff (e.g. ``--fix``,
     ``--select`` overrides).
 
-    No-op (exit 0 with a hint) when ``ruff`` isn't installed —
-    keeps the command discoverable in workspaces that haven't
-    pulled the ``[dev]`` extra yet.
+    After ruff, runs ``chumicro-checks`` for the workspace-internal
+    rules ruff can't express.  Each rule self-scopes — silent
+    no-op in repos where its target paths don't exist — so most
+    don't fire in a user workspace; the upstream-derivative-leak
+    detector is the one that does.  ``chumicro-checks`` reads its
+    own ``[tool.chumicro-checks]`` config from ``pyproject.toml``.
+
+    No-op (exit 0 with a hint) when either ``ruff`` or
+    ``chumicro-checks`` isn't installed — keeps the command
+    discoverable in workspaces that haven't pulled the ``[dev]``
+    extra yet.
 
     ``workspace.yml``'s ``quality.lint.enabled`` and
     ``quality.lint.select`` knobs flow through.  ``enabled = false``
-    skips the run entirely; ``select`` prepends a ``--select <comma
-    list>`` flag (so user passthrough still overrides — ruff picks
-    up the last ``--select``).
+    skips the entire phase; ``select`` prepends a ``--select <comma
+    list>`` flag for ruff (chumicro-checks ignores it — its rule
+    selection is via its own config and CLI flags).
     """
     workspace = _resolve_workspace(args)
     quality = load_quality_config(workspace.workspace_yaml)
@@ -2503,7 +2511,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     quality_flags: list[str] = []
     if quality.lint.select:
         quality_flags.extend(["--select", ",".join(quality.lint.select)])
-    completed = subprocess.run(  # noqa: S603 — args fully controlled
+    ruff_completed = subprocess.run(  # noqa: S603 — args fully controlled
         [
             sys.executable, "-m", "ruff", "check",
             *quality_flags, *args.ruff_args, ".",
@@ -2511,7 +2519,24 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         cwd=workspace.root,
         check=False,
     )
-    return completed.returncode
+    if ruff_completed.returncode != 0:
+        return ruff_completed.returncode
+    try:
+        import chumicro_checks  # noqa: F401, PLC0415  — availability probe
+    except ImportError:
+        print(
+            "chumicro-checks is not installed in this venv.  Install "
+            "it (or the dev extras) to run the CHU0NN rules:\n"
+            "    .venv/bin/pip install chumicro-checks\n"
+            "or add it to your workspace's pyproject.toml dev deps.",
+        )
+        return 0
+    checks_completed = subprocess.run(  # noqa: S603 — args fully controlled
+        [sys.executable, "-m", "chumicro_checks", "--root", str(workspace.root)],
+        cwd=workspace.root,
+        check=False,
+    )
+    return checks_completed.returncode
 
 
 #: Default tail-window duration (seconds) when ``repl <project>`` is
@@ -3583,6 +3608,19 @@ def build_parser() -> argparse.ArgumentParser:
         dest="tail",
         action="store_false",
         help="Exit cleanly after deploy instead of tailing the REPL.",
+    )
+    deploy_example_parser.add_argument(
+        "--no-clean",
+        dest="clean",
+        action="store_false",
+        default=True,
+        help=(
+            "Preserve files already on the device that aren't part of "
+            "this example's payload.  Default is to wipe stale `lib/` "
+            "packages and other deploy-managed files so each example "
+            "lands fresh; pass --no-clean if you've hand-installed "
+            "extra modules on the board you want to keep."
+        ),
     )
     deploy_example_parser.set_defaults(func=_cmd_deploy_example)
 
