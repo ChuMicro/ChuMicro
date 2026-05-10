@@ -181,6 +181,26 @@ class DirectorySource:
         return self._entrypoint
 
 
+def _exists_case_strict(path: Path) -> bool:
+    """Return True iff *path* exists with its exact filename casing.
+
+    Necessary on case-insensitive host filesystems (default macOS
+    APFS, NTFS) where :meth:`Path.is_file` returns True for case-
+    mismatched lookups — a ``Heartbeat.py`` probe matches an on-disk
+    ``heartbeat.py``.  Without this strictness :class:`ImportGraphSource`
+    can't tell ``from chumicro_timing import Heartbeat`` (a *class*
+    import — Heartbeat lives inside ``heartbeat.py``) apart from
+    ``from chumicro_timing import heartbeat`` (a *submodule* import
+    — pulls in the file).  The class case isn't a module the walker
+    should follow; treating it as one stages a ``Heartbeat.py`` path
+    that breaks on the device's case-sensitive filesystem (LittleFS).
+    """
+    try:
+        return path.name in (entry.name for entry in path.parent.iterdir())
+    except OSError:
+        return False
+
+
 class ImportGraphSource:
     """A source that walks Python imports starting from an entrypoint.
 
@@ -312,10 +332,10 @@ class ImportGraphSource:
         dotted_parts = module_name.split(".")
         for search_path in self._search_paths:
             module_file = search_path.joinpath(*dotted_parts).with_suffix(".py")
-            if module_file.is_file():
+            if module_file.is_file() and _exists_case_strict(module_file):
                 return module_file
             package_init = search_path.joinpath(*dotted_parts) / "__init__.py"
-            if package_init.is_file():
+            if package_init.is_file() and _exists_case_strict(package_init):
                 return package_init
         return None
 
@@ -324,7 +344,18 @@ class ImportGraphSource:
         if resolved_path.name == "__init__.py":
             relative_device = "/".join([*dotted_parts, "__init__.py"])
         else:
-            relative_device = "/".join([*dotted_parts[:-1], dotted_parts[-1] + ".py"])
+            # Use the on-disk filename, not ``dotted_parts[-1]`` — the
+            # import statement's case may differ from the file's actual
+            # case on the host (e.g. ``from chumicro_timing import
+            # Heartbeat`` resolves to ``heartbeat.py`` on case-
+            # insensitive APFS), and the device's filesystem (LittleFS
+            # on MP, FAT32 on CP CIRCUITPY) needs the real name to
+            # import correctly.  The companion check in
+            # :func:`_exists_case_strict` rejects case-mismatched
+            # lookups upstream so this branch only fires for true
+            # submodule imports, but keep the on-disk name here as
+            # defense in depth.
+            relative_device = "/".join([*dotted_parts[:-1], resolved_path.name])
         prefix = self._resource_prefix.rstrip("/")
         return f"{prefix}/{relative_device}" if prefix else f"/{relative_device}"
 

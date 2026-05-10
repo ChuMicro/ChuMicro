@@ -176,35 +176,19 @@ Strict-verify error path + boot_out-missing auto-correct path covered by unit te
 
 **Fix shape.** Document this in `plans/patterns.md` under cross-runtime gotchas, alongside existing patterns.  Optional: add a CHU rule that flags `raise TimeoutError(` in cross-runtime tree files (libraries/*/src/, support/test_harness/src/).  CHU-rule version is the rigorous fix; documentation alone is the lighter touch.
 
-### 13. `ImportGraphSource._device_path_for` emits import-statement case, not on-disk case (medium effort)
+### 13. `ImportGraphSource` resolved class-import aliases as case-mismatched submodule paths — SHIPPED
 
-**Symptom.** `from chumicro_timing import Heartbeat` (where `Heartbeat` is a *class* in `heartbeat.py`) deploys to the device as `/lib/chumicro_timing/Heartbeat.py` instead of `/lib/chumicro_timing/heartbeat.py`.  CP+FAT32 is case-insensitive so the bug doesn't bite (the import resolves either way); MP+LittleFS is case-sensitive so the device-side import fails: `ImportError: no module named 'chumicro_timing.heartbeat'`.
+**Resolution.** Two-part fix in `workbench/deploy/src/chumicro_deploy/sources.py`:
 
-**Surfaced.** 2026-05-10 during bench validation of follow-up #6 (clean= no-op fix).  Deploying `timing/micropython_blink` to Pi Pico W MP failed at import even though `clean=True` correctly reduced `/lib` from 11 packages to 1.  Manual `mpremote fs cp libraries/timing/src/chumicro_timing/heartbeat.py :/lib/chumicro_timing/` lands the file as `heartbeat.py` (lowercase) — mpremote preserves on-disk case.  The case-folding is in chumicro's pipeline, not mpremote's.
+- **`_resolve_module` is now case-strict.**  New `_exists_case_strict(path)` helper lists the parent directory and verifies that the lookup name appears with its exact casing in `iterdir()`.  Necessary on case-insensitive host filesystems (default macOS APFS, NTFS) where `Path.is_file()` returns True for case-mismatched lookups — a `Heartbeat.py` probe succeeds against a real `heartbeat.py`, so the walker couldn't tell `from chumicro_timing import Heartbeat` (a *class* import) apart from `from chumicro_timing import heartbeat` (a *submodule* import).  Without this strictness the class case was treated as a submodule and staged as `Heartbeat.py` on the device, which CP+FAT32 forgave (case-insensitive lookup) but MP+LittleFS rejected (`ImportError: no module named 'chumicro_timing.heartbeat'`).
 
-**Affected file.** `workbench/deploy/src/chumicro_deploy/sources.py` `ImportGraphSource._device_path_for` around line 322:
+- **`_device_path_for` uses the on-disk filename, not the import-statement case.**  Defense in depth — for true submodule imports the walker now passes a resolved path whose case matches disk, but writing `resolved_path.name` instead of `dotted_parts[-1] + ".py"` removes a class of bugs where the resolved-path object retains the lookup's case rather than the on-disk one.
 
-```python
-def _device_path_for(self, module_name: str, resolved_path: Path) -> str:
-    dotted_parts = module_name.split(".")
-    if resolved_path.name == "__init__.py":
-        relative_device = "/".join([*dotted_parts, "__init__.py"])
-    else:
-        relative_device = "/".join([*dotted_parts[:-1], dotted_parts[-1] + ".py"])
-```
+**Regression test.** `TestImportGraphSource.test_class_import_does_not_pull_in_case_mismatched_module` builds the exact "class lives in a lowercase module" shape (`timing.heartbeat.Heartbeat`) and asserts: the real submodule lands at `/lib/timing/heartbeat.py`, the class-import alias does NOT produce a `/lib/timing/Heartbeat.py` wrong-case path.  On case-sensitive Linux the test confirms baseline (the bad path never gets created); on case-insensitive macOS APFS the test exercises the fix directly.
 
-The `else` branch builds the filename from `dotted_parts[-1]` (the case the *import statement* used) instead of `resolved_path.name` (the on-disk case).  On macOS APFS (default user environment), `Path("Heartbeat.py").is_file()` is True because APFS is case-insensitive — but the resolved-path object holds whatever case was passed in, not the real on-disk case.
+**Bench-validated 2026-05-10** on Pi Pico W MP: `chumicro-workspace deploy-example timing micropython_blink --device pi-pico-w-micropython-board --non-interactive` now succeeds where the previous deploy (pre-fix) failed at import.  `/lib/chumicro_timing/heartbeat.py` lands with lowercase filename and the blink entrypoint runs (verified the device-side ImportError is gone; the example silently toggles an LED so no stdout to capture).
 
-**Fix shape.** Use `resolved_path.name` for the filename portion:
-
-```python
-else:
-    relative_device = "/".join([*dotted_parts[:-1], resolved_path.name])
-```
-
-Add a regression test that crafts an import statement with mismatched case (`from chumicro_timing import Heartbeat`) and asserts the device path uses the on-disk filename (`heartbeat.py`).
-
-**Effort.** Small (~1 hour incl. test).  Bench-revalidate the MP `clean=True` fix from follow-up #6 once this lands.
+**`chumicro-deploy` 0.13.0 → 0.13.1** — patch (bugfix, no API change).
 
 ## Reference
 

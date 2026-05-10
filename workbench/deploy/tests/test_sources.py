@@ -240,6 +240,53 @@ class TestImportGraphSource:
         with pytest.raises(NotADirectoryError):
             ImportGraphSource(entrypoint, search_paths=[tmp_path / "missing"])
 
+    def test_class_import_does_not_pull_in_case_mismatched_module(
+        self, tmp_path: Path,
+    ):
+        """``from pkg import Heartbeat`` (a *class* in ``heartbeat.py``)
+        must not be treated as a submodule import.
+
+        On case-insensitive host filesystems (default macOS APFS, NTFS),
+        ``Path('pkg/Heartbeat.py').is_file()`` returns True when only
+        ``pkg/heartbeat.py`` exists on disk.  Without case-strict
+        existence checking, :class:`ImportGraphSource` would resolve
+        the class import as if it pointed at a ``Heartbeat.py`` module
+        and stage a wrong-case path that fails on the device's case-
+        sensitive filesystem (LittleFS on MicroPython).
+
+        Test scaffolds the exact "class lives in a lowercase module"
+        shape (``chumicro_timing.heartbeat.Heartbeat``) and asserts:
+
+        - The submodule ``heartbeat.py`` lands at the on-disk casing.
+        - No ``Heartbeat.py`` device path is created from the class
+          import alias.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        pkg = libs / "timing"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text(
+            "from timing.heartbeat import Heartbeat\n",
+        )
+        (pkg / "heartbeat.py").write_text(
+            "class Heartbeat:\n    pass\n",
+        )
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "from timing import Heartbeat\n"
+            "print(Heartbeat)\n"
+        )
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        files = source.files()
+        # Real submodule lands with on-disk casing.
+        assert "/lib/timing/heartbeat.py" in files
+        assert "/lib/timing/__init__.py" in files
+        # Class-import alias does NOT produce a wrong-case device path.
+        # The check has to be case-strict — on macOS APFS the lookup
+        # ``Heartbeat.py`` succeeds against the real ``heartbeat.py``;
+        # the regression bug staged that path.
+        assert "/lib/timing/Heartbeat.py" not in files
+
     def test_syntax_error_in_reachable_module_is_skipped(self, tmp_path: Path):
         libs = tmp_path / "libs"
         libs.mkdir()
