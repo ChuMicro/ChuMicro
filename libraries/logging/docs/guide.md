@@ -116,7 +116,7 @@ custom test doubles) are also fine.
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/logging/examples/quickstart.py) | `Logger` + `StreamHandler` at INFO threshold, level switching at runtime. |
+| [`examples/stream_handler.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/logging/examples/stream_handler.py) | `Logger` + `StreamHandler` at INFO threshold, level switching at runtime. |
 | [`examples/buffered_runner.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/logging/examples/buffered_runner.py) | `BufferedHandler` decoupling a hot loop from I/O via the runner-shaped `check` / `handle` contract. |
 
 Both examples run on every supported runtime; neither requires

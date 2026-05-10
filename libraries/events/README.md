@@ -70,7 +70,7 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No ch
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](examples/quickstart.py) | `EventBus` minimal end-to-end: publish, check, handle. |
+| [`examples/pub_sub_drain.py`](examples/pub_sub_drain.py) | `EventBus` minimal end-to-end: publish, check, handle. |
 | [`examples/wiring_services.py`](examples/wiring_services.py) | Wiring pattern — bind service `on_state_change` callbacks to `bus.publisher(topic)`. |
 
 ## Developing this library

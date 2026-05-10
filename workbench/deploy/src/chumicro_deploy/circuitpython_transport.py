@@ -1364,6 +1364,7 @@ class CircuitpythonTransport:
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
+        clean: bool = False,
     ) -> str:
         """Deploy *files* and execute *entrypoint* in the configured mode.
 
@@ -1446,14 +1447,21 @@ class CircuitpythonTransport:
                     staging_destination.write_bytes(files[device_path])
                     if on_file_staged is not None:
                         on_file_staged(device_path)
+                # ``clean=True`` (e.g. ``deploy-example``) tells rsync
+                # to delete drive files not in the staging tree so each
+                # demo lands clean.  ``settings.toml`` / ``boot.py`` are
+                # excluded from the wipe so user runtime config + custom
+                # boot logic survive.  ``clean=False`` (the default; the
+                # ``chumicro-workspace deploy`` shape) preserves every
+                # drive file outside the new payload — appropriate when
+                # users hand-install lib/ deps via circup and only the
+                # current import graph rotates per deploy.
                 self._push_staging_to_drive(
                     staging_path,
-                    # Production deploys preserve user-data files on the
-                    # drive that aren't part of the deploy's file map
-                    # (``settings.toml``, custom modules);
-                    # ``chumicro-workspace deploy --wipe`` is the
-                    # destructive escape hatch.
-                    rsync_delete=False,
+                    rsync_delete=clean,
+                    rsync_additional_excludes=(
+                        ("settings.toml", "boot.py") if clean else ()
+                    ),
                     strip_xattrs=True,
                 )
         except OSError as error:

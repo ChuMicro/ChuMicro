@@ -375,6 +375,7 @@ class FakeTransport:
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         follow: str = "exec",
+        clean: bool = False,
     ) -> str:
         """Record a deploy_files call and return the configured output.
 
@@ -392,6 +393,9 @@ class FakeTransport:
         otherwise change behaviour.
         """
         self.calls.append(("deploy_files", (dict(files), entrypoint, follow)))
+        # `clean` rides on the kwarg surface; tests asserting on it
+        # check the rsync call directly or stub the transport.
+        self.last_clean = clean  # type: ignore[attr-defined]
         # Update simulated on-device state so a subsequent
         # `list_files_in_scope` reflects what was just shipped.
         for device_path, payload in files.items():

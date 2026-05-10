@@ -118,7 +118,7 @@ library uses.
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/events/examples/quickstart.py) | Minimal `EventBus` end-to-end: publish, check, handle, dispatch order. |
+| [`examples/pub_sub_drain.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/events/examples/pub_sub_drain.py) | Minimal `EventBus` end-to-end: publish, check, handle, dispatch order. |
 | [`examples/wiring_services.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/events/examples/wiring_services.py) | Bind service callbacks to bus publishers — the recommended way to wire a multi-service runner. |
 
 Both examples run on every supported runtime; neither requires

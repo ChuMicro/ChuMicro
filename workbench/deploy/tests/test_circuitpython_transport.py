@@ -1995,9 +1995,10 @@ class TestDeployFiles:
         """deploy_files must raise before Ctrl-D when verify_rsync reports divergence.
 
         Soft-rebooting against an inconsistent FAT volume risks the
-        macOS msdosfs driver demoting the volume to read-only —
-        unrecoverable without a physical RESET.  The error message
-        must name the recovery procedure (RESET + replay).
+        volume going read-only — typically recoverable only by
+        reformatting (`chumicro-workspace reset-board --yes`),
+        since RESET alone often does not clear it.  The error
+        message must name the recovery path.
         """
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()

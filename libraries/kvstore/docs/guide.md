@@ -145,7 +145,7 @@ store.commit_if_changed()
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/kvstore/examples/quickstart.py) | Boot-counter pattern: `commit_if_changed`, `bytes_used`, `backend_name`.  Runs on every runtime; on CPython the count resets each invocation, on a real device it survives reboot. |
+| [`examples/boot_counter.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/kvstore/examples/boot_counter.py) | Boot-counter pattern: `commit_if_changed`, `bytes_used`, `backend_name`.  Runs on every runtime; on CPython the count resets each invocation, on a real device it survives reboot. |
 
 ## What's new
 

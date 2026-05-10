@@ -58,7 +58,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`quickstart.py`](examples/quickstart.py) | Boot counter persisted across reboots; auto-detect picks the right backend per runtime |
+| [`boot_counter.py`](examples/boot_counter.py) | Boot counter persisted across reboots; auto-detect picks the right backend per runtime |
 
 ## Developing this library
 

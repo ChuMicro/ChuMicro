@@ -537,18 +537,18 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     DeployFailureKind.FLASH_COPY_FAILED: RecoveryPlan(
         headline="Copying files to the CIRCUITPY drive failed.",
         fix_steps=(
-            "Tap RESET on the board, wait for CIRCUITPY to remount, "
-            "and retry.  The drive often goes read-only after a "
-            "USB-MSC hiccup or a partial-write race; a board reset "
-            "clears the macOS msdosfs read-only flag.",
+            "Reformat the CIRCUITPY drive — the read-only state is "
+            "typically a corrupted FAT that persists across RESETs.  "
+            "Run `chumicro-workspace reset-board --yes --device "
+            "<id>` (or `import storage; storage.erase_filesystem()` "
+            "directly via the REPL).  Destructive: every user file "
+            "on the board is wiped, including settings.toml.",
             "Check free space on the drive if the payload is larger "
             "than a few KiB.",
-            "If the volume stays read-only or empty after RESET, the "
-            "FAT is likely corrupted and a reset alone won't recover "
-            "it.  Run `chumicro-workspace reset-board --yes --device "
-            "<id>` (or invoke `storage.erase_filesystem()` directly "
-            "via the REPL) to reformat — destructive: every user "
-            "file on the board is wiped, including settings.toml.",
+            "Optional pre-step before reformatting: tap RESET and "
+            "retry once.  Treat this as a longshot — RESET only "
+            "clears transient cases, not the typical FAT corruption "
+            "that needs the reformat above.",
         ),
         retryable=True,
     ),
@@ -778,6 +778,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
+        clean: bool = False,
     ) -> DeployResult:
         """Deploy *source*; classify + report + re-raise on failure."""
         return self._run(
@@ -787,6 +788,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
                 on_file_staged=on_file_staged,
                 on_execute_line=on_execute_line,
                 tail_seconds=tail_seconds,
+                clean=clean,
             ),
         )
 
@@ -898,6 +900,7 @@ class InteractiveDeployer(_RecoveringDeployer):
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
+        clean: bool = False,
     ) -> DeployResult:
         """Deploy *source*, prompting the user to recover on failure.
 
@@ -912,6 +915,7 @@ class InteractiveDeployer(_RecoveringDeployer):
                 on_file_staged=on_file_staged,
                 on_execute_line=on_execute_line,
                 tail_seconds=tail_seconds,
+                clean=clean,
             ),
         )
 

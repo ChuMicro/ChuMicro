@@ -125,7 +125,9 @@ Run `.scratch/run_sockets_acceptance.py --tls` to verify TLS end-to-end on your 
 
 | Example | What it shows |
 |---|---|
-| [`quickstart.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/quickstart.py) | FakeSocket round-trip — runs identically on every runtime, no network needed. |
+| [`tcp_roundtrip.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close, runs identically on every runtime. |
+| [`tls_with_custom_ca.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`. |
+| [`circuitpython_udp_echo_client.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/circuitpython_udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram, read echo back. |
 
 ## What's new
 

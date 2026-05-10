@@ -298,6 +298,7 @@ class Deployer:
         on_execute_line: Callable[[str], None] | None = None,
         on_preflight_message: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
+        clean: bool = False,
     ) -> DeployResult:
         """Deploy *source* to the configured device and run its entrypoint.
 
@@ -359,6 +360,7 @@ class Deployer:
                 entrypoint,
                 on_file_staged=on_file_staged,
                 on_execute_line=on_execute_line,
+                clean=clean,
                 **kwargs,
             )
             _report(0.9, "executing")

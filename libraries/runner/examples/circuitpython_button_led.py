@@ -25,9 +25,25 @@ from chumicro_runner import Runner
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
-# Set up a button with an internal pull-up resistor.
-# Pressing the button connects D5 to GND → value goes False.
-button = digitalio.DigitalInOut(board.D5)
+# Set BUTTON_PIN to your pin name (e.g. "D5", "GP14") to skip autodetect.
+BUTTON_PIN = ""
+
+if BUTTON_PIN:
+    button_pin = getattr(board, BUTTON_PIN)
+else:
+    for name in ("D5", "GP14", "IO5", "BUTTON"):
+        button_pin = getattr(board, name, None)
+        if button_pin is not None:
+            print(f"button on board.{name}")
+            break
+    else:
+        raise RuntimeError(
+            "No input pin matched — set BUTTON_PIN at the top of "
+            "this file to a name from `dir(board)`.",
+        )
+
+# Pressing the button connects the chosen pin to GND → value goes False.
+button = digitalio.DigitalInOut(button_pin)
 button.direction = digitalio.Direction.INPUT
 button.pull = digitalio.Pull.UP
 

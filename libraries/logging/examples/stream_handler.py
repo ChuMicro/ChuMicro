@@ -1,4 +1,4 @@
-"""Logging quickstart — Logger + StreamHandler.
+"""Logger + StreamHandler — minimal end-to-end logging.
 
 The simplest end-to-end shape: a logger writing to stdout via a
 ``StreamHandler``.  Records below the logger's level are dropped silently.

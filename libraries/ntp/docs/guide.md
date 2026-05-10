@@ -148,7 +148,6 @@ returned timestamp falls inside the 2024-2030 plausibility window.
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/quickstart.py) | Synthetic SNTP exchange against `FakeUDPSocket` — host-runnable, no network. |
 | [`examples/circuitpython_ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/circuitpython_ntp_query.py) | Real query against `pool.ntp.org` from a CircuitPython board. |
 
 ## What's new

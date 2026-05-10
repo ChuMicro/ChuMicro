@@ -24,7 +24,7 @@ The output layout::
     ├── docs/
     │   ├── index.md, guide.md, api.md, testing.md
     └── examples/
-        └── quickstart.py
+        └── basic_usage.py
 
 The CLI exposes this as ``python run.py new --library <name>``
 (see :func:`chumicro_workspace.cli._cmd_new`).  Callers that need
@@ -187,9 +187,9 @@ def scaffold_library(
         ),
     )
 
-    # examples/quickstart.py.
-    (library_dir / "examples" / "quickstart.py").write_text(
-        _load_template("quickstart.py.template").format(
+    # examples/basic_usage.py.
+    (library_dir / "examples" / "basic_usage.py").write_text(
+        _load_template("basic_usage.py.template").format(
             name=name,
             display_name=display_name,
             import_name=import_name,

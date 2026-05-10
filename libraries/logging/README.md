@@ -78,7 +78,7 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No ch
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](examples/quickstart.py) | Logger + StreamHandler at INFO threshold. |
+| [`examples/stream_handler.py`](examples/stream_handler.py) | Logger + StreamHandler at INFO threshold. |
 | [`examples/buffered_runner.py`](examples/buffered_runner.py) | BufferedHandler decoupling a hot loop from I/O via runner-shaped check / handle. |
 
 ## Developing this library

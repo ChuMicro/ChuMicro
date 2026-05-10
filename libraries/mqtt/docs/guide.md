@@ -219,7 +219,6 @@ Five states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `DISCONNECTING`, `FAILED
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/quickstart.py) | `FakeSocket`-driven CONNECT → SUBSCRIBE → PUBLISH → inbound-message round trip.  Identical on every runtime; no network needed. |
 | [`examples/circuitpython_telemetry.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/circuitpython_telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK. |
 
 ## What's new

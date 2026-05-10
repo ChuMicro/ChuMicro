@@ -164,7 +164,7 @@ For downstream libraries' tests, [`chumicro_wifi.testing.FakeWifi`](testing.md) 
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi/examples/quickstart.py) | Minimal end-to-end wiring against `FakeWifi` — runs on every runtime; no AP needed. |
+| [`examples/connect_to_ap.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi/examples/connect_to_ap.py) | Connect to a real AP, print state transitions, observe IP — reads `wifi.ssid` / `wifi.password` from `runtime_config.msgpack`. |
 
 ## What's new
 

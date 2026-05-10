@@ -101,6 +101,20 @@ class TestDeployerBasic:
         deployer, _ = _make_deployer_with_fake()
         assert isinstance(deployer.device, Device)
 
+    def test_clean_kwarg_propagates_to_transport(self):
+        """``Deployer.deploy(clean=True)`` reaches the transport so
+        ``deploy-example``'s ``--no-clean`` opt-out lines up with the
+        rsync ``--delete`` flag in the CP flash path.  Default is
+        ``False`` to preserve the user-data-survives shape that
+        ``chumicro-workspace deploy`` relies on.
+        """
+        deployer, fake = _make_deployer_with_fake()
+        source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
+        deployer.deploy(source)
+        assert fake.last_clean is False
+        deployer.deploy(source, clean=True)
+        assert fake.last_clean is True
+
 
 class TestDeployerCallbacks:
     def test_on_progress_invoked_with_known_milestones(self):
