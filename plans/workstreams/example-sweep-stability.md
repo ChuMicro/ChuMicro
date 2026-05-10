@@ -134,6 +134,14 @@ Recommend (a) for now; revisit if we add a 4th library helper pattern beyond wif
 
 Legacy `devices.yml` files carrying the field still load — `Device.from_dict` ignores unknown keys.  ADRs 0027 + 0028 updated in place; troubleshooting + device-testing docs rewritten to match.  Workspace-template repo's `register-board/SKILL.md` updated too.
 
+**Bench-validated 2026-05-10** on a multi-CP-board host (Lolin S2 CP + Pi Pico W CP both plugged, both CIRCUITPY drives mounted, mount order swapped from the initial-deploy session by an intervening Lolin S2 replug).  Three paths exercised end-to-end:
+
+- **Cheap-path** — Pi Pico W deploy when `candidates[0]` already IS its mount: verify reads `boot_out.txt`, matches probe, returns immediately.  `/Volumes/CIRCUITPY/code.py` updated; sibling untouched.
+- **UID auto-correct** — Lolin S2 deploy when `candidates[0]` is Pi Pico W's mount: verify reads boot_out, sees Pi Pico W UID, probes Lolin S2 via serial (UID `84722E7490C3`), detects mismatch, scans siblings, swaps to `/Volumes/CIRCUITPY 1`.  `/Volumes/CIRCUITPY 1/code.py` updated; Pi Pico W mount untouched.
+- **`boot_out.txt` preservation across clean deploys** — both drives still carry valid `boot_out.txt` after the deploys, so the next sequence can re-verify without needing a hard-reset.
+
+Strict-verify error path + boot_out-missing auto-correct path covered by unit tests rather than bench (`TestDriveVerification.test_raises_when_boot_out_missing_and_probe_unavailable` + `test_auto_corrects_when_boot_out_missing_but_sibling_matches`).
+
 ### 11. Library pyproject.toml ↔ src/imports audit — SHIPPED (with surprise)
 
 **Audit run.** AST-walked `libraries/*/src/` for actual cross-library imports (eager + lazy) and compared against each `pyproject.toml`'s `dependencies` block.  Result table:
