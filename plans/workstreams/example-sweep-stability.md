@@ -67,15 +67,22 @@ Resolved via the inline-msgpack-decoder approach.  See "What landed" above.  Hel
 - (a) Add socket cleanup on close to chumicro_sockets._adapters.cp so a fresh `tcp_client_socket` starts with a clean pool.  Defensive; may not actually trigger the firmware bug.
 - (b) File a CircuitPython upstream issue with a minimal repro that bypasses chumicro_sockets entirely (`socketpool.SocketPool(wifi.radio)` → `pool.socket(pool.AF_INET, pool.SOCK_STREAM)` → `connect((unreachable, port))`).  Verify firmware-side responsibility before chumicro-side workaround.
 
-### 6. MicroPython transport's `clean=` kwarg is a no-op (medium effort)
+### 6. MicroPython transport's `clean=` kwarg is a no-op — SHIPPED
 
-**Symptom.** `MicropythonTransport.deploy_files(clean=True, …)` accepts the kwarg for API symmetry with `CircuitpythonTransport` but doesn't actually clean anything.  Same lib/-accumulation pattern that bit Pi Pico W CP would eventually bite Pi Pico W MP after enough deploys.  Pi Pico W MP's flash is 860 KB usable so the failure threshold is higher than Pi Pico W CP's 491 KB, but the same accumulation happens.
+**Resolution.** `MicropythonTransport.deploy_files(clean=True)` now wipes `:/lib` on the device before the `mpremote fs cp -r` push when `mode="copy"`, mirroring the CP transport's `rsync --delete` semantics for the actual accumulation site.  Top-level user-managed files (`boot.py`, `main.py`, `settings.toml`, `runtime_config.msgpack`) live outside `/lib` and survive unchanged.  Mount mode treats `clean` as a no-op (mount staging is transient by design — nothing on device flash to clean).  New `_clean_device_lib` helper tolerates a missing `/lib` (first deploy on a clean device) by swallowing mpremote's non-zero exit when `rm -r` against a non-existent path fails — "the dir we wanted gone is gone" is the desired post-condition either way.  Removed the `# noqa: ARG002` on the `clean` parameter.
 
-**Affected file.** `workbench/deploy/src/chumicro_deploy/micropython_transport.py:645-654` (`deploy_files` signature) and the body that follows.  The `clean: bool = False` parameter is annotated `# noqa: ARG002 — symmetry with CP transport; not yet plumbed for MP copy mode`.
+Four new unit tests:
 
-**Fix shape.**  In `MicropythonTransport.deploy_files`, when `clean=True` and `mode="copy"`, run `mpremote fs rm -r :/lib` (or the per-file equivalent matching the CP rsync excludes — preserve `boot.py` / `main.py` / `settings.toml`-equivalents) before the `mpremote fs cp -r .` push.  Mount mode (`mode="mount"`) doesn't need it — that's transient by design.  Add a unit test mirroring `test_clean_kwarg_propagates_to_transport`.
+- `test_copy_mode_default_clean_false_does_not_wipe_lib` — additive-by-default contract preserved.
+- `test_copy_mode_clean_true_wipes_lib_before_push` — `fs rm` precedes `fs cp` (ordering matters: wiping after the push would clobber the just-deployed payload).
+- `test_copy_mode_clean_true_tolerates_missing_lib_dir` — first-deploy case where `/lib` doesn't exist yet still completes the push.
+- `test_mount_mode_clean_kwarg_is_no_op` — mount mode never issues `fs rm`.
 
-**Repro.** Deploy several different examples to Pi Pico W MP in sequence; `mpremote fs ls /lib` will show every chumicro_* package from any prior deploy still present.
+**Bench-validated 2026-05-10** on Pi Pico W MP: before deploy, `/lib` carried 11 packages from prior sweeps; after `chumicro-workspace deploy-example timing micropython_blink --device pi-pico-w-micropython-board --non-interactive` (deploy-example passes `clean=True` by default), `/lib` had just `chumicro_timing/` — exactly the import-graph's scope.
+
+**Side finding.** Bench validation surfaced a separate pre-existing bug in `ImportGraphSource._device_path_for` that emits filenames with the import-statement case (`Heartbeat.py`) instead of the on-disk case (`heartbeat.py`); CP+FAT32 masks it via case-insensitive lookup, MP+LittleFS doesn't.  Tracked as follow-up #13.
+
+**`chumicro-deploy` 0.12.0 → 0.13.0** — public API behavior change (the `clean` kwarg now does something on MP transport).  Pre-1.0 minor bump.
 
 ### 7. CYW43 power-save quirk has to be replicated in every per-library `helpers.py`
 
@@ -168,6 +175,36 @@ Strict-verify error path + boot_out-missing auto-correct path covered by unit te
 **Already in effect.** `libraries/sockets/examples/helpers.py` uses `OSError` for the wifi-connect timeout (line ~63 + ~78) for this reason.  Documented inline.
 
 **Fix shape.** Document this in `plans/patterns.md` under cross-runtime gotchas, alongside existing patterns.  Optional: add a CHU rule that flags `raise TimeoutError(` in cross-runtime tree files (libraries/*/src/, support/test_harness/src/).  CHU-rule version is the rigorous fix; documentation alone is the lighter touch.
+
+### 13. `ImportGraphSource._device_path_for` emits import-statement case, not on-disk case (medium effort)
+
+**Symptom.** `from chumicro_timing import Heartbeat` (where `Heartbeat` is a *class* in `heartbeat.py`) deploys to the device as `/lib/chumicro_timing/Heartbeat.py` instead of `/lib/chumicro_timing/heartbeat.py`.  CP+FAT32 is case-insensitive so the bug doesn't bite (the import resolves either way); MP+LittleFS is case-sensitive so the device-side import fails: `ImportError: no module named 'chumicro_timing.heartbeat'`.
+
+**Surfaced.** 2026-05-10 during bench validation of follow-up #6 (clean= no-op fix).  Deploying `timing/micropython_blink` to Pi Pico W MP failed at import even though `clean=True` correctly reduced `/lib` from 11 packages to 1.  Manual `mpremote fs cp libraries/timing/src/chumicro_timing/heartbeat.py :/lib/chumicro_timing/` lands the file as `heartbeat.py` (lowercase) — mpremote preserves on-disk case.  The case-folding is in chumicro's pipeline, not mpremote's.
+
+**Affected file.** `workbench/deploy/src/chumicro_deploy/sources.py` `ImportGraphSource._device_path_for` around line 322:
+
+```python
+def _device_path_for(self, module_name: str, resolved_path: Path) -> str:
+    dotted_parts = module_name.split(".")
+    if resolved_path.name == "__init__.py":
+        relative_device = "/".join([*dotted_parts, "__init__.py"])
+    else:
+        relative_device = "/".join([*dotted_parts[:-1], dotted_parts[-1] + ".py"])
+```
+
+The `else` branch builds the filename from `dotted_parts[-1]` (the case the *import statement* used) instead of `resolved_path.name` (the on-disk case).  On macOS APFS (default user environment), `Path("Heartbeat.py").is_file()` is True because APFS is case-insensitive — but the resolved-path object holds whatever case was passed in, not the real on-disk case.
+
+**Fix shape.** Use `resolved_path.name` for the filename portion:
+
+```python
+else:
+    relative_device = "/".join([*dotted_parts[:-1], resolved_path.name])
+```
+
+Add a regression test that crafts an import statement with mismatched case (`from chumicro_timing import Heartbeat`) and asserts the device path uses the on-disk filename (`heartbeat.py`).
+
+**Effort.** Small (~1 hour incl. test).  Bench-revalidate the MP `clean=True` fix from follow-up #6 once this lands.
 
 ## Reference
 
