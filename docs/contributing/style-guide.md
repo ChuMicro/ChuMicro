@@ -298,14 +298,14 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 | `B` — bugbear | Common pitfalls like mutable default arguments, bare `except:`, unused loop variables |
 | `UP` — pyupgrade | Modernization — replaces old syntax with newer Python equivalents |
 
-**`scripts/check_names.py` — `CHU001`** catches:
+**`CHU001`** (in the [`chumicro-checks`](../../workbench/checks/) package) catches:
 
 - Single-letter variable names in assignments, parameters, and function names (`x` → use a descriptive name, `e` → `error`)
 - For-loop targets are exempt — `for i in range(10)` is fine
 - Abbreviated names we prefer spelled out (`env` → `environment`, `buf` → `buffer`)
 - Those same abbreviations as suffixes (`base_ref` → `base_reference`, `build_env` → `build_environment`)
 
-**`scripts/check_whitespace.py` — `CHU002`–`CHU005`** catches whitespace bugs that diff noisily and are easy to miss in review:
+**`CHU002`–`CHU005`** (same package) catch whitespace bugs that diff noisily and are easy to miss in review:
 
 | Rule | What it catches |
 |---|---|
@@ -314,7 +314,7 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 | `CHU004` | Trailing whitespace on any line |
 | `CHU005` | Blank line immediately after a block opener (`def`, `class`, `if:`, `for:`, etc.) |
 
-**`scripts/check_no_repo_refs.py` — `CHU006`** catches mono-repo references that have leaked into publishable `src/` trees (`libraries/*/src/`, `workbench/*/src/`, `support/*/src/`).  Those trees ship to PyPI / CircuitPython-bundle consumers who have no `plans/` directory and no `scripts/run.py`.  Flagged shapes:
+**`CHU006`** (same package) catches mono-repo references that have leaked into publishable `src/` trees (`libraries/*/src/`, `workbench/*/src/`, `support/*/src/`).  Those trees ship to PyPI / CircuitPython-bundle consumers who have no `plans/` directory and no `scripts/run.py`.  Flagged shapes:
 
 - `Decision NNNN` — ADR pointers; ADRs live in `plans/decisions/` and aren't shipped.
 - `plans/...md` paths — the mono-repo planning tree.
@@ -324,6 +324,6 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 
 Inline the prose instead of cross-linking.  Suppress with `# noqa: CHU006` (or `<!-- noqa: CHU006 -->` in Markdown) only when the reference is genuinely load-bearing.
 
-**`scripts/check_workbench_no_lib_imports.py` — `CHU007`** enforces Decision 0052: workbench packages do not import library packages.  Walks `workbench/*/src/` and flags any `import chumicro_<libname>` or `from chumicro_<libname>` where `<libname>` matches a `libraries/` package.  Workbench is host-only and ships to laptops; libraries target devices and their CPython compatibility exists for testing/dev, not as a production runtime.  Use third-party PyPI equivalents (`pyserial`, `msgpack`, `ruamel.yaml`, etc.).  Templates / on-device payloads embedded as bytes are not scanned — those run on the device and legitimately import library packages.  Suppress with `# noqa: CHU007` only on legitimate payload-style imports (rare).
+**`CHU007`** (same package) enforces Decision 0052: workbench packages do not import library packages.  Walks `workbench/*/src/` and flags any `import chumicro_<libname>` or `from chumicro_<libname>` where `<libname>` matches a `libraries/` package.  Workbench is host-only and ships to laptops; libraries target devices and their CPython compatibility exists for testing/dev, not as a production runtime.  Use third-party PyPI equivalents (`pyserial`, `msgpack`, `ruamel.yaml`, etc.).  Templates / on-device payloads embedded as bytes are not scanned — those run on the device and legitimately import library packages.  Suppress with `# noqa: CHU007` only on legitimate payload-style imports (rare).
 
 If lint passes, your style is correct. You don't need to memorize any of this — the error messages tell you exactly what to fix and why.

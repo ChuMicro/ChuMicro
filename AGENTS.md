@@ -59,7 +59,7 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 
 - Use `python scripts/run.py test` for commit-gating runs — it's the only path that enforces per-library coverage thresholds (per-package subprocess + per-library `pyproject.toml` `addopts`). Bare `pytest` from the repo root is supported for ad-hoc / IDE Testing-panel runs — root [`pyproject.toml`](pyproject.toml) + [`conftest.py`](conftest.py) handle imports, importlib mode for test-name collisions, and `functional_tests/` deselection — but it does not gate coverage. See [Decision 0009](plans/decisions/0009-per-library-test-runs.md).
 - Maintain coverage gates — every `test` and `preflight` invocation must pass `--coverage-threshold 94`. The `pyproject.toml` baseline is 85 % for human contributors; agent-generated code must use the higher gate per [Decision 0025](plans/decisions/0025-dual-coverage-thresholds.md). Use `# pragma: no cover` only where code genuinely cannot be exercised in CPython tests; see also the [coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions) section.
-- Test skips must be loud — bare `if <cond>: return` in a test body is reported as PASS by the runner. Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`. Enforced by `CHU009` + `CHU010` in [`scripts/check_no_silent_test_skip.py`](scripts/check_no_silent_test_skip.py); see [Decision 0058](plans/decisions/0058-test-skips-must-be-loud.md).
+- Test skips must be loud — bare `if <cond>: return` in a test body is reported as PASS by the runner. Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`. Enforced by `CHU009` + `CHU010` in the [`chumicro-checks`](workbench/checks/) package; see [Decision 0058](plans/decisions/0058-test-skips-must-be-loud.md).
 - Cross-runtime test files must not `import pytest`. A pytest import auto-scopes the file to CPython only — files without pytest imports are expected to run unmodified on MicroPython and CircuitPython unix-ports under `test-all-runtimes` / `test-micropython` / `test-circuitpython`. Use plain `assert` and constructor-injected fakes from each library's `testing.py`. See [Decision 0003](plans/decisions/0003-test-runtime-boundaries.md) + [Decision 0016](plans/decisions/0016-cross-runtime-unit-tests.md).
 
 **Code shape (libraries — runs on a microcontroller)**
@@ -75,7 +75,7 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 
 **Code shape (workbench — runs on a laptop)**
 
-- Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`, etc.). Templates / on-device payloads embedded as bytes are fine — that's payload, not import. Enforced by `CHU007` in [`scripts/check_workbench_no_lib_imports.py`](scripts/check_workbench_no_lib_imports.py); see [Decision 0052](plans/decisions/0052-workbench-no-library-imports.md).
+- Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`, etc.). Templates / on-device payloads embedded as bytes are fine — that's payload, not import. Enforced by `CHU007` in the [`chumicro-checks`](workbench/checks/) package; see [Decision 0052](plans/decisions/0052-workbench-no-library-imports.md).
 - Workbench tools that touch hardware classify failures. Every host-side tool exposes a closed-set failure-kind enum + classifier + recovery plans in `<package>.recovery`, and CLIs wrap entry points in coaching loops. Generic `raise Exception` in workbench code is a UX defect. See [Decision 0053](plans/decisions/0053-recovery-layer-philosophy.md).
 
 **Code comments**
@@ -84,11 +84,11 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 
 **Cross-repo isolation**
 
-- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI, CircuitPython-bundle (`circup`), and MicroPython-bundle (`mip`) consumers without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006` in [`scripts/check_no_repo_refs.py`](scripts/check_no_repo_refs.py). Suppress with `# noqa: CHU006` (Markdown: `<!-- noqa: CHU006 -->`) only when the reference is genuinely the only useful pointer.
+- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI, CircuitPython-bundle (`circup`), and MicroPython-bundle (`mip`) consumers without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006` in the [`chumicro-checks`](workbench/checks/) package. Suppress with `# noqa: CHU006` (Markdown: `<!-- noqa: CHU006 -->`) only when the reference is genuinely the only useful pointer.
 
 **Plans-doc brevity**
 
-- [`plans/next-up.md`](plans/next-up.md) is the agent-managed work queue and the single source of truth for what's in flight. Each top-level bullet is capped at 5 sub-bullets (CHU011); anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. `## Done (recent)` is capped at 25 entries. Enforced by `CHU011` in [`scripts/check_plans_brevity.py`](scripts/check_plans_brevity.py). Suppress with `<!-- noqa: CHU011 -->` sparingly.
+- [`plans/next-up.md`](plans/next-up.md) is the agent-managed work queue and the single source of truth for what's in flight. Each top-level bullet is capped at 5 sub-bullets (CHU011); anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. `## Done (recent)` is capped at 25 entries. Enforced by `CHU011` in the [`chumicro-checks`](workbench/checks/) package. Suppress with `<!-- noqa: CHU011 -->` sparingly.
 
 ## Common pitfalls
 

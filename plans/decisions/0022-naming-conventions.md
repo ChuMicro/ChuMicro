@@ -26,7 +26,7 @@ A useful side effect: longer names push lines past the 100-character limit, whic
 
 ## Decision
 
-**No single-letter variable names and no banned abbreviations**, enforced by a custom linter (`scripts/check_names.py`, rule `CHU001`).
+**No single-letter variable names and no banned abbreviations**, enforced by a custom linter (`CHU001` in the [`chumicro-checks`](../../workbench/checks/) package).
 
 - `_` is the only allowed single-letter name in general code (throwaway / unused binding).
 - **For-loop targets are exempt** — `for i in range(10)` and `for k, v in items()` are fine.  The exemption applies only to the loop variable itself; single-letter names in the loop body are still flagged.
@@ -43,7 +43,7 @@ Short-but-complete words (`ok`, `tag`, `key`, `raw`, `pin`, `led`, `end`) and wi
 
 ## Consequences
 
-- `scripts/check_names.py` added, integrated into `lint()` in `run.py`.
+- `CHU001` lives in the [`chumicro-checks`](../../workbench/checks/) workbench package; `scripts/run.py:lint()` shells out to `python -m chumicro_checks` after ruff finishes.
 - `CHU001` runs on the same paths ruff scans.
 - All existing single-letter violations fixed or suppressed.
 - AGENTS.md hard rules and common pitfalls updated.
