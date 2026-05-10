@@ -48,18 +48,9 @@ Resolved via the inline-msgpack-decoder approach.  See "What landed" above.  Hel
 
 **Repro.** Currently no bench repro since the file's commented out of the sweep harness Group 6 matrix.  To re-enable: uncomment `("sockets", "tls_with_custom_ca")` in `.scratch/sweep_examples.py`; deploy will fail with TLS validation error on every board.
 
-### 4. `chumicro-config` README + docs/index.md + docs/guide.md still document the old `from_dict` pattern (medium effort)
+### 4. `chumicro-config` README + docs/index.md + docs/guide.md still document the old `from_dict` pattern — SHIPPED
 
-**Symptom.** All three doc files document `WifiConfig.from_dict(config["wifi"])` (nested-section-dict pattern) instead of the current `WifiConfig.from_config(config, *, prefix="wifi")` (flat-key pattern).  Library code + every consumer (`WifiConfig.from_config`, `NTPClient.from_config`, `MqttConfig.from_config`, `HttpClient.from_config`, `WebSocketServer.from_config`, `HttpServer.from_config`) + the auto-generated API ref already use flat-key.  The `end_to_end.py` example fix in `4c97ffb7` touched only the example.
-
-**Affected files:**
-- `libraries/config/README.md` — has `from_dict` callouts at lines 6, 36, 39, 48, 61.
-- `libraries/config/docs/index.md` — line 12.
-- `libraries/config/docs/guide.md` — extensive `from_dict` walkthrough, multiple sections.
-
-**Reference.** The auto-generated `libraries/config/site/search.json` (built by `mkdocstrings`) already shows the correct flat-key `load_section(target_class, config, *, prefix, …)` shape — that's the canonical signature.  The hand-written docs need to match.
-
-**Fix shape.** Rewrite the three doc files to mirror the current library shape.  Match the example pattern from `libraries/config/examples/end_to_end.py` (which IS correct).  No code changes needed; docs-only.  Run `python scripts/run.py docs` after to verify the docs build.
+**Resolution.** All three hand-written doc files rewritten to teach the flat-key `from_config(config, *, prefix=...)` pattern that library code + every consumer (`WifiConfig`, `NTPClient`, `MqttConfig`, `HttpClient`, `WebSocketServer`, `HttpServer`) has been using since the migration in commit `30e2878`.  Key changes: opener tagline reframed from "section-namespaced dict, `<Name>Config.from_dict()`" to "flat-key dict (dotted prefixes like `wifi.ssid`), `<Name>Config.from_config()`"; quick-example one-liner became `WifiService(WifiConfig.from_config(config))` (no per-section dict slice); the library-author template grew the `prefix="wifi"` kwarg to `load_section`; the on-disk runtime-config shape rewritten as a flat dict with dotted keys (with a separate "source TOML stays nested for humans, deploy flattens it" subsection so users see the connection); added a `try_load_section` section covering the soft-load path no doc surface previously taught; `RuntimeConfig` (the dict-like view `load_runtime_config()` returns) named explicitly throughout.  `chumicro-config` 0.2.1 → 0.2.2 (patch — docs-only).  `python scripts/run.py docs` green; full lint + per-library tests green.
 
 ### 5. CP-on-ESP32-S2 hard-fault on `tcp_client_socket` to unreachable host with stale wifi state (large effort, hardware-only repro)
 
