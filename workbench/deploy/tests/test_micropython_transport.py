@@ -985,6 +985,128 @@ class TestDeployFiles:
         finally:
             transport.disconnect()
 
+    def test_copy_mode_default_clean_false_does_not_wipe_lib(self) -> None:
+        """``clean=False`` (the default) leaves ``:/lib`` untouched.
+
+        Mirrors the CP transport's additive-by-default contract that
+        ``chumicro-workspace deploy`` relies on — users who hand-install
+        deps via ``mpremote mip install`` keep them across deploys.
+        """
+        transport, _, runner = self._prepare_transport(mode="copy")
+        try:
+            transport.deploy_files(
+                {"/code.py": b"print('hi')", "/lib/helper.py": b"X = 1"},
+                "/code.py",
+            )
+            rm_calls = [
+                call for call in runner.calls
+                if "rm" in call[0] and ":/lib" in call[0]
+            ]
+            assert rm_calls == []
+        finally:
+            transport.disconnect()
+
+    def test_copy_mode_clean_true_wipes_lib_before_push(self) -> None:
+        """``clean=True`` issues ``mpremote fs rm -r :/lib`` before the push.
+
+        Mirrors the CP transport's ``rsync --delete`` semantics for
+        the most common accumulation site (chumicro_* and other
+        library packages under ``/lib``).  The ordering matters —
+        wiping AFTER the push would clobber the just-deployed payload.
+        """
+        transport, _, runner = self._prepare_transport(mode="copy")
+        try:
+            transport.deploy_files(
+                {"/code.py": b"print('hi')", "/lib/helper.py": b"X = 1"},
+                "/code.py",
+                clean=True,
+            )
+            rm_index = next(
+                (
+                    index for index, call in enumerate(runner.calls)
+                    if "rm" in call[0] and ":/lib" in call[0]
+                ),
+                None,
+            )
+            cp_index = next(
+                (
+                    index for index, call in enumerate(runner.calls)
+                    if "cp" in call[0] and "-r" in call[0]
+                ),
+                None,
+            )
+            assert rm_index is not None, (
+                f"expected fs rm -r :/lib call; got {runner.calls!r}"
+            )
+            assert cp_index is not None, (
+                f"expected fs cp -r call; got {runner.calls!r}"
+            )
+            assert rm_index < cp_index, (
+                "lib wipe must precede the staging push so the push "
+                "isn't clobbered"
+            )
+        finally:
+            transport.disconnect()
+
+    def test_copy_mode_clean_true_tolerates_missing_lib_dir(self) -> None:
+        """First-deploy case: ``:/lib`` doesn't exist yet — rm fails;
+        deploy still proceeds and pushes the staging tree.
+
+        mpremote exits non-zero on ``rm -r`` against a missing path.
+        Without the swallow, every first-clean-deploy on a freshly
+        formatted board would raise ``MicropythonTransportError``
+        before any payload reached flash.
+        """
+        rm_failure = FakeSubprocessResult(
+            returncode=1, stderr="rm: cannot stat ':/lib': No such file",
+        )
+        success = FakeSubprocessResult()
+        # ``deploy_files`` copy-mode mpremote sequence: fs rm -r :/lib
+        # (failure) → fs cp -r staging :/. (success).  No other
+        # mpremote calls fire on this path.
+        runner = FakeRunner(results=[rm_failure, success])
+        transport, _, _ = self._prepare_transport(mode="copy", runner=runner)
+        try:
+            # Should NOT raise even though rm failed.
+            transport.deploy_files(
+                {"/code.py": b"print('hi')"},
+                "/code.py",
+                clean=True,
+            )
+            cp_calls = [
+                call for call in runner.calls
+                if "cp" in call[0] and "-r" in call[0]
+            ]
+            assert cp_calls, (
+                "fs cp -r push must still fire when fs rm fails — "
+                f"got {runner.calls!r}"
+            )
+        finally:
+            transport.disconnect()
+
+    def test_mount_mode_clean_kwarg_is_no_op(self) -> None:
+        """Mount mode never writes to device flash, so ``clean`` is a no-op.
+
+        ``mpremote mount_local`` is transient — the staging tree is
+        host-side and unmounts cleanly on disconnect.  There's no
+        accumulation to wipe and no ``mpremote fs rm`` call should
+        fire.
+        """
+        transport, _, runner = self._prepare_transport(mode="mount")
+        try:
+            transport.deploy_files(
+                {"/code.py": b"print('hi')"},
+                "/code.py",
+                clean=True,
+            )
+            rm_calls = [
+                call for call in runner.calls
+                if "rm" in call[0] and ":/lib" in call[0]
+            ]
+            assert rm_calls == []
+        finally:
+            transport.disconnect()
+
     def test_on_file_staged_called_per_file_in_sorted_order(self) -> None:
         transport, _, _ = self._prepare_transport()
         try:

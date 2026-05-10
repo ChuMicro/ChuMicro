@@ -650,7 +650,7 @@ class MicropythonTransport:
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         follow: Literal["exec", "soft_reboot"] = "exec",
-        clean: bool = False,  # noqa: ARG002 — symmetry with CP transport; not yet plumbed for MP copy mode
+        clean: bool = False,
     ) -> str:
         """Write *files* onto the device and execute *entrypoint*.
 
@@ -694,6 +694,18 @@ class MicropythonTransport:
                 ``/main.py`` on flash, not via mount, because
                 MicroPython only auto-runs files at known boot paths
                 on flash, never from a host-mounted directory.
+            clean: When ``True`` and ``mode="copy"``, wipe the
+                device's ``/lib`` tree before pushing the new staging
+                contents — mirrors the CP transport's ``rsync --delete``
+                semantics for the most common accumulation site.
+                Top-level user-managed files (``boot.py``, ``main.py``,
+                ``settings.toml``, etc.) live outside ``/lib`` and
+                survive unchanged.  No-op for ``mode="mount"`` (mount
+                mode is transient by design — nothing on the device's
+                flash to clean).  Default ``False`` preserves the
+                additive-by-default contract that ``chumicro-workspace
+                deploy`` relies on; ``chumicro-workspace deploy-example``
+                passes ``True`` so each demo lands fresh.
 
         Returns:
             Combined stdout captured from the entrypoint execution.
@@ -755,6 +767,18 @@ class MicropythonTransport:
             # callers' ``from helper import x`` resolves without
             # boilerplate.
             self._close_serial()
+            if clean:
+                # Mirror CP's ``rsync --delete`` clean-deploy semantics
+                # for the actual accumulation site: chumicro_* and
+                # other library packages under ``/lib``.  Without this,
+                # each deploy stacks new packages onto the previous
+                # deploy's tree and a Pi Pico W MP fills its 860 KB
+                # flash after enough rotation between examples.
+                # ``boot.py`` / ``main.py`` / ``settings.toml`` /
+                # ``runtime_config.msgpack`` and other top-level
+                # user-managed files live outside ``/lib`` and survive
+                # unchanged.
+                self._clean_device_lib()
             self._run_mpremote([
                 "fs", "cp", "-r",
                 str(staging_path) + "/.",
@@ -1071,6 +1095,29 @@ class MicropythonTransport:
             self._serial.close()
         finally:
             self._serial = None
+
+    def _clean_device_lib(self) -> None:
+        """Remove ``:/lib`` from the device, tolerating a missing tree.
+
+        Called from :meth:`deploy_files` when ``clean=True`` in copy
+        mode.  The CP transport runs ``rsync --delete`` with
+        ``settings.toml`` / ``boot.py`` / ``boot_out.txt`` excluded;
+        on MP the analog is "wipe the most common accumulation site
+        and let the rsync-equivalent ``mpremote fs cp -r`` repopulate
+        it."  Top-level user-managed files (``boot.py``, ``main.py``,
+        ``settings.toml``, ``runtime_config.msgpack``) live outside
+        ``/lib`` and are untouched.
+
+        Tolerates a missing ``/lib`` — first deploy on a clean device,
+        or repeat deploys after a previous wipe.  mpremote exits
+        non-zero in that case; we swallow it because "the dir we
+        wanted gone is gone" is the desired post-condition either way.
+        """
+        try:
+            self._run_mpremote(["fs", "rm", "-r", ":/lib"])
+        except MicropythonTransportError:
+            # /lib doesn't exist on the device — nothing to clean.
+            pass
 
     def _run_mpremote(self, arguments: list[str]) -> subprocess.CompletedProcess:
         """Run an mpremote command and return the result.
