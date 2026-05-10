@@ -1,18 +1,22 @@
-"""Wifi-up helper for `chumicro-websockets` examples.
+"""Standalone wifi-up helper for chumicro library examples.
 
-Hides the runtime-specific wifi setup so each example stays focused
-on the websockets API.  Uses raw runtime primitives (CP `wifi.radio`,
-MP `network.WLAN`) so the helper doesn't pull in any library that
-`chumicro-websockets` doesn't already depend on.
+Self-contained — relies only on runtime built-ins (CP `wifi`, MP
+`network`, `struct`).  Each network-using library copies this file
+into its `examples/` directory; the canonical source lives in the
+new-library scaffold so a fresh library starts with a working copy.
 
-Optionally reads `wifi.ssid` / `wifi.password` from the deployed
-`/runtime_config.msgpack` via the on-device `msgpack` module — built
-into CircuitPython core; ESP32 MicroPython firmware ships it; Pi
-Pico W MicroPython doesn't (run `mpremote mip install msgpack`
-once, or edit the example's WIFI_SSID / WIFI_PASSWORD constants
-directly).  When neither path resolves, the placeholder check below
-raises a clear "edit the constants" error instead of timing out
-silently.
+What it does:
+
+* `runtime_config()` reads `/runtime_config.msgpack` (baked from
+  `secrets.toml` + per-example `examples/config.toml` by the
+  `chumicro-workspace` deploy pipeline) and returns it as a dict.
+  Uses the inline decoder below — works on every runtime including
+  Pi Pico W MicroPython, whose firmware doesn't ship `msgpack`.
+* `wifi_up()` brings the link up via the runtime's built-in wifi
+  primitives and returns ``(radio, ip)``.
+
+When the library this `helpers.py` ships with doesn't need wifi
+(non-network library), delete the file.
 """
 
 #: Helper imports CP `wifi` and MP `network` — runtime built-ins, not
@@ -20,30 +24,29 @@ silently.
 #: skip platform-import checks here.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
+import struct
 import sys
 import time
 
-_PLACEHOLDER_SSIDS = {"", "your-wifi-ssid", "your-ssid"}
 _RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
 
 
 def runtime_config():
-    """Return `/runtime_config.msgpack` decoded as a dict, or `{}`.
+    """Return ``/runtime_config.msgpack`` decoded as a dict, or ``{}``.
 
-    Reads the deployed runtime-config file via the on-device `msgpack`
-    module (built into CircuitPython core; ESP32 MicroPython firmware
-    ships it; Pi Pico W MicroPython doesn't — run `mpremote mip install
-    msgpack` once, or fall through to in-file constants).
+    Uses the inline msgpack decoder below — no on-device `msgpack`
+    module needed.  Returns ``{}`` if the file is absent (raw single-
+    file deploys without the chumicro-workspace pipeline).
     """
     try:
-        import msgpack  # noqa: PLC0415 — built-in on CP, optional on MP
-    except ImportError:
-        return {}
-    try:
         with open(_RUNTIME_CONFIG_PATH, "rb") as handle:
-            return msgpack.unpack(handle) or {}
+            data = handle.read()
     except OSError:
         return {}
+    if not data:
+        return {}
+    value, _ = _msgpack_unpack(memoryview(data), 0)
+    return value if isinstance(value, dict) else {}
 
 
 def wifi_up(default_ssid, default_password, *, timeout_s=15):
@@ -54,23 +57,23 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
     the link is connected or *timeout_s* elapses.
 
     On CircuitPython the returned radio is `wifi.radio`; on
-    MicroPython it's `None` (the `chumicro_sockets` MP adapter uses
+    MicroPython it's ``None`` (the `chumicro_sockets` MP adapter uses
     the global `socket` module and ignores the kwarg).
 
     Raises:
-        RuntimeError: the resolved ssid is still a placeholder.
+        RuntimeError: the resolved ssid is empty or still the
+            shipped placeholder.
         OSError: wifi did not connect within *timeout_s* seconds.
     """
     config = runtime_config()
     ssid = config.get("wifi.ssid", default_ssid)
     password = config.get("wifi.password", default_password)
 
-    if ssid in _PLACEHOLDER_SSIDS:
+    if not ssid or ssid == "your-wifi-ssid":
         raise RuntimeError(
             "set WIFI_SSID + WIFI_PASSWORD at the top of the example "
-            "to your real wifi credentials before deploying (or set "
-            "wifi.ssid / wifi.password in your secrets.toml and "
-            "deploy via chumicro-workspace).",
+            "before deploying (or set wifi.ssid / wifi.password in "
+            "your secrets.toml and deploy via chumicro-workspace)",
         )
 
     name = sys.implementation.name
@@ -106,3 +109,101 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
     raise RuntimeError(
         f"wifi_up only supports CircuitPython / MicroPython, got {name!r}",
     )
+
+
+# ---------------------------------------------------------------------------
+# Tiny msgpack decoder — handles every type used by runtime_config.msgpack:
+# nil / bool / int (every width) / float 32+64 / str / bin / array / map.
+# No ext / timestamp.  Spec: github.com/msgpack/msgpack/blob/master/spec.md
+# ---------------------------------------------------------------------------
+
+
+def _msgpack_unpack(data, pos):
+    """Decode one msgpack value starting at *pos*; return ``(value, new_pos)``."""
+    tag = data[pos]
+    pos += 1
+    if tag < 0x80:                      # positive fixint
+        return tag, pos
+    if tag >= 0xe0:                     # negative fixint
+        return tag - 0x100, pos
+    if 0xa0 <= tag <= 0xbf:             # fixstr
+        length = tag & 0x1f
+        return bytes(data[pos:pos + length]).decode(), pos + length
+    if 0x80 <= tag <= 0x8f:             # fixmap
+        return _unpack_map(data, pos, tag & 0x0f)
+    if 0x90 <= tag <= 0x9f:             # fixarray
+        return _unpack_array(data, pos, tag & 0x0f)
+    if tag == 0xc0:                     # nil
+        return None, pos
+    if tag == 0xc2:                     # false
+        return False, pos
+    if tag == 0xc3:                     # true
+        return True, pos
+    if tag == 0xca:                     # float 32
+        return struct.unpack_from(">f", data, pos)[0], pos + 4
+    if tag == 0xcb:                     # float 64
+        return struct.unpack_from(">d", data, pos)[0], pos + 8
+    if tag == 0xcc:                     # uint 8
+        return data[pos], pos + 1
+    if tag == 0xcd:                     # uint 16
+        return struct.unpack_from(">H", data, pos)[0], pos + 2
+    if tag == 0xce:                     # uint 32
+        return struct.unpack_from(">I", data, pos)[0], pos + 4
+    if tag == 0xcf:                     # uint 64
+        return struct.unpack_from(">Q", data, pos)[0], pos + 8
+    if tag == 0xd0:                     # int 8
+        return struct.unpack_from(">b", data, pos)[0], pos + 1
+    if tag == 0xd1:                     # int 16
+        return struct.unpack_from(">h", data, pos)[0], pos + 2
+    if tag == 0xd2:                     # int 32
+        return struct.unpack_from(">i", data, pos)[0], pos + 4
+    if tag == 0xd3:                     # int 64
+        return struct.unpack_from(">q", data, pos)[0], pos + 8
+    if tag == 0xd9:                     # str 8
+        length = data[pos]
+        return bytes(data[pos + 1:pos + 1 + length]).decode(), pos + 1 + length
+    if tag == 0xda:                     # str 16
+        length = struct.unpack_from(">H", data, pos)[0]
+        return bytes(data[pos + 2:pos + 2 + length]).decode(), pos + 2 + length
+    if tag == 0xdb:                     # str 32
+        length = struct.unpack_from(">I", data, pos)[0]
+        return bytes(data[pos + 4:pos + 4 + length]).decode(), pos + 4 + length
+    if tag == 0xc4:                     # bin 8
+        length = data[pos]
+        return bytes(data[pos + 1:pos + 1 + length]), pos + 1 + length
+    if tag == 0xc5:                     # bin 16
+        length = struct.unpack_from(">H", data, pos)[0]
+        return bytes(data[pos + 2:pos + 2 + length]), pos + 2 + length
+    if tag == 0xc6:                     # bin 32
+        length = struct.unpack_from(">I", data, pos)[0]
+        return bytes(data[pos + 4:pos + 4 + length]), pos + 4 + length
+    if tag == 0xdc:                     # array 16
+        length = struct.unpack_from(">H", data, pos)[0]
+        return _unpack_array(data, pos + 2, length)
+    if tag == 0xdd:                     # array 32
+        length = struct.unpack_from(">I", data, pos)[0]
+        return _unpack_array(data, pos + 4, length)
+    if tag == 0xde:                     # map 16
+        length = struct.unpack_from(">H", data, pos)[0]
+        return _unpack_map(data, pos + 2, length)
+    if tag == 0xdf:                     # map 32
+        length = struct.unpack_from(">I", data, pos)[0]
+        return _unpack_map(data, pos + 4, length)
+    raise ValueError(f"unsupported msgpack type byte: 0x{tag:02x}")
+
+
+def _unpack_map(data, pos, length):
+    result = {}
+    for _ in range(length):
+        key, pos = _msgpack_unpack(data, pos)
+        value, pos = _msgpack_unpack(data, pos)
+        result[key] = value
+    return result, pos
+
+
+def _unpack_array(data, pos, length):
+    result = []
+    for _ in range(length):
+        value, pos = _msgpack_unpack(data, pos)
+        result.append(value)
+    return result, pos

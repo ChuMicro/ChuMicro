@@ -59,6 +59,10 @@ class TestScaffoldLibrary:
             assert (created / "docs" / doc_filename).is_file()
         # examples/.
         assert (created / "examples" / "basic_usage.py").is_file()
+        helpers_text = (created / "examples" / "helpers.py").read_text()
+        assert "def wifi_up" in helpers_text
+        assert "def runtime_config" in helpers_text
+        assert "def _msgpack_unpack" in helpers_text
 
     def test_init_py_imports_starter_class(self, tmp_path: Path) -> None:
         """The package's __init__.py wires `from <pkg>.core import <Class>`."""

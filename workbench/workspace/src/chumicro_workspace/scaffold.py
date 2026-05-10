@@ -197,6 +197,13 @@ def scaffold_library(
         ),
     )
 
+    # examples/helpers.py — standalone wifi-up + msgpack-decoder helper
+    # for libraries whose examples bring wifi up.  No template variables;
+    # delete the file when the library doesn't need it.
+    (library_dir / "examples" / "helpers.py").write_text(
+        _load_template("helpers.py.template"),
+    )
+
     # src/<package>/__init__.py — absolute imports per
     # AGENTS.md non-negotiables (CircuitPython RAM-mode `exec()`s
     # library modules without a `__package__` so leading-dot

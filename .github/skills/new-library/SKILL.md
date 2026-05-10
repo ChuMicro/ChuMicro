@@ -90,6 +90,12 @@ Put examples in `libraries/<name>/examples/`. At least one per major feature.
 - Module docstring with `Example output::` block.
 - Self-contained: copy-paste and run.
 
+The scaffold ships `examples/helpers.py` — a standalone wifi-up + tiny
+inline msgpack decoder for examples that bring wifi up.  Network-using
+libraries import `from helpers import wifi_up, runtime_config` (sibling
+import; `verify-examples.py` resolves the parent dir).  Delete the file
+when the library doesn't need wifi (timing / runner / kvstore-style).
+
 Verify examples pass:
 
 ```bash
