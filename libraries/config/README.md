@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Standardized runtime-config helpers for ChuMicro libraries.  One file per thing, section-namespaced dict, typed `<Name>Config.from_dict()` per consumer.
+Standardized runtime-config helpers for ChuMicro libraries.  One flat-key dict (dotted prefixes like `wifi.ssid`), typed `<Name>Config.from_config()` per consumer.
 
 <br clear="left">
 
@@ -26,17 +26,17 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ## Quick example
 
-User-app pattern (the canonical 2-line bring-up):
+User-app pattern (the 2-line bring-up):
 
 ```python
 from chumicro_config import load_runtime_config
 from chumicro_wifi import WifiConfig, WifiService
 
-config = load_runtime_config()                                # reads /runtime_config.msgpack
-wifi = WifiService(WifiConfig.from_dict(config["wifi"]))      # types + validates the wifi section
+config = load_runtime_config()                          # reads /runtime_config.msgpack
+wifi = WifiService(WifiConfig.from_config(config))      # reads + types the wifi.* keys
 ```
 
-Library-side pattern (inside every consumer library's `<Name>Config.from_dict`):
+Library-side pattern (inside every consumer library's `<Name>Config.from_config`):
 
 ```python
 from chumicro_config import load_section
@@ -45,9 +45,10 @@ class WifiConfig:
     def __init__(self, ssid, password, hostname=None, connect_timeout_ms=15_000): ...
 
     @classmethod
-    def from_dict(cls, data):
+    def from_config(cls, config):
         return load_section(
-            cls, data,
+            cls, config,
+            prefix="wifi",
             required=("ssid", "password"),
             optional={"hostname": None, "connect_timeout_ms": 15_000},
         )
@@ -57,8 +58,8 @@ class WifiConfig:
 
 | Symbol | What it does |
 |---|---|
-| `load_runtime_config(path=…)` | Read + decode `/runtime_config.msgpack` into the section-namespaced dict |
-| `load_section(cls, data, required=…, optional=…)` | Standardized `from_dict` core every library calls |
+| `load_runtime_config(path=…)` | Read + decode `/runtime_config.msgpack` into a flat-key `RuntimeConfig` (dict-shaped) |
+| `load_section(cls, config, *, prefix, required=…, optional=…)` | Standardized `from_config` core every library calls |
 | `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions (also subclass `KeyError` / `TypeError`) |
 | `DEFAULT_RUNTIME_CONFIG_PATH` | The canonical on-device path (`/runtime_config.msgpack`) |
 

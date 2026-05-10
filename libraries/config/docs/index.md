@@ -9,7 +9,7 @@ from chumicro_config import load_runtime_config
 from chumicro_wifi import WifiConfig, WifiService
 
 config = load_runtime_config()
-wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
+wifi = WifiService(WifiConfig.from_config(config))
 ```
 
 ## Documentation
