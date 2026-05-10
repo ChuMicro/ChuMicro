@@ -1,4 +1,4 @@
-"""Standalone wifi-up helper for chumicro library examples.
+"""Standalone wifi-up helper for library examples that bring wifi up.
 
 Self-contained — relies only on runtime built-ins (CP `wifi`, MP
 `network`, `struct`).  Each network-using library copies this file
@@ -7,11 +7,11 @@ new-library scaffold so a fresh library starts with a working copy.
 
 What it does:
 
-* `runtime_config()` reads `/runtime_config.msgpack` (baked from
-  `secrets.toml` + per-example `examples/config.toml` by the
-  `chumicro-workspace` deploy pipeline) and returns it as a dict.
-  Uses the inline decoder below — works on every runtime including
-  Pi Pico W MicroPython, whose firmware doesn't ship `msgpack`.
+* `runtime_config()` reads `/runtime_config.msgpack` (a flat-key
+  config dict baked onto the device by whichever deploy pipeline
+  put it there) and returns it as a Python dict.  Uses the inline
+  decoder below — works on every runtime including Pi Pico W
+  MicroPython, whose firmware doesn't ship `msgpack`.
 * `wifi_up()` brings the link up via the runtime's built-in wifi
   primitives and returns ``(radio, ip)``.
 
@@ -34,9 +34,9 @@ CircuitPython::
     while not wifi.radio.connected:
         time.sleep(0.1)
     ip = str(wifi.radio.ipv4_address)
-    # `wifi.radio` is the singleton you'd pass into chumicro-sockets
-    # factories as radio=, though they auto-detect it from `import wifi`
-    # when you pass nothing.
+    # `wifi.radio` is the per-board radio singleton.  Anything that
+    # opens sockets does so via `socketpool.SocketPool(wifi.radio)`,
+    # so the radio object itself is what gets threaded through.
 
 MicroPython::
 
@@ -56,8 +56,9 @@ MicroPython::
     while not wlan.isconnected():
         time.sleep(0.1)
     ip = wlan.ifconfig()[0]
-    # MP has no equivalent of `wifi.radio` — sockets just pull from the
-    # global module, so chumicro-sockets factories ignore `radio=` on MP.
+    # MP has no per-radio socket pool — `import socket` operates
+    # against the global active interface, so there's nothing equivalent
+    # to thread around.  `wifi_up` returns `None` for the radio slot.
 """
 
 #: Helper imports CP `wifi` and MP `network` — runtime built-ins, not
@@ -76,8 +77,8 @@ def runtime_config():
     """Return ``/runtime_config.msgpack`` decoded as a dict, or ``{}``.
 
     Uses the inline msgpack decoder below — no on-device `msgpack`
-    module needed.  Returns ``{}`` if the file is absent (raw single-
-    file deploys without the chumicro-workspace pipeline).
+    module needed.  Returns ``{}`` if the file is absent (raw
+    single-file deploys, or any deploy that didn't bake one).
     """
     try:
         with open(_RUNTIME_CONFIG_PATH, "rb") as handle:
@@ -97,9 +98,11 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
     when present; otherwise uses the supplied defaults.  Blocks until
     the link is connected or *timeout_s* elapses.
 
-    On CircuitPython the returned radio is `wifi.radio`; on
-    MicroPython it's ``None`` (the `chumicro_sockets` MP adapter uses
-    the global `socket` module and ignores the kwarg).
+    On CircuitPython the returned radio is `wifi.radio` — pass it
+    through wherever a socket pool is built (``socketpool.SocketPool(radio)``).
+    On MicroPython the returned radio is ``None``: there's no per-radio
+    socket pool to thread, the global `socket` module reads from
+    whichever interface is active.
 
     Raises:
         RuntimeError: the resolved ssid is empty or still the
@@ -113,8 +116,8 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
     if not ssid or ssid == "your-wifi-ssid":
         raise RuntimeError(
             "set WIFI_SSID + WIFI_PASSWORD at the top of the example "
-            "before deploying (or set wifi.ssid / wifi.password in "
-            "your secrets.toml and deploy via chumicro-workspace)",
+            "before deploying (or populate wifi.ssid / wifi.password "
+            "in the deployed /runtime_config.msgpack)",
         )
 
     name = sys.implementation.name
