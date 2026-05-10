@@ -1,4 +1,4 @@
-"""EventBus quickstart — publish, subscribe, drain.
+"""EventBus publish-subscribe-drain demo.
 
 Demonstrates the runner-shaped contract: ``publish`` enqueues,
 ``check`` reports pending records, ``handle`` dispatches them in

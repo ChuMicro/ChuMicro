@@ -67,7 +67,7 @@ Works on CPython, MicroPython, and CircuitPython.  Ships three adapters: Circuit
 
 | Example | What it shows |
 |---|---|
-| [`quickstart.py`](examples/quickstart.py) | Build a `WifiService`, register a state-change callback, drive one tick, observe the state transitions. Uses `FakeWifi` so it runs anywhere. |
+| [`connect_to_ap.py`](examples/connect_to_ap.py) | Connect to a real AP, print state transitions, observe IP — reads `wifi.ssid` / `wifi.password` from `runtime_config.msgpack`. |
 
 ## Configuring wifi for examples and functional tests
 

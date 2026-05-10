@@ -79,7 +79,6 @@ on `chumicro-sockets` (TCP/TLS transport) and `chumicro-timing` (ticks).
 
 | Example | What it shows |
 |---|---|
-| `quickstart.py` | Plain HTTP GET against an in-memory `FakeSocket` — runs on any host without a network. |
 | `circuitpython_periodic_get.py` | Periodic GET on a real CP/MP board.  Brings wifi up, hits a configured URL every N seconds, prints status + body length, drives an LED-blink counter to verify the request never blocks the loop.  Reads wifi + target URL from `runtime_config.msgpack` (chumicro-workspace) with a constants fallback. |
 
 ## Configuring wifi for examples and functional tests

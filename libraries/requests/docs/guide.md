@@ -201,7 +201,7 @@ then it's the caller's responsibility.
 
 | Example | What it shows |
 |---|---|
-| `quickstart.py` | Plain HTTP GET against an in-memory `FakeSocket` — runs on any host without a network. |
+| `circuitpython_periodic_get.py` | Periodic GET on a real CP/MP board — wifi up, hits a configured URL every N seconds, drives an LED-blink counter to verify the request never blocks the loop. |
 
 ## What's new
 

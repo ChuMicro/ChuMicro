@@ -61,7 +61,6 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  Hard 
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](examples/quickstart.py) | Synthetic SNTP exchange against `FakeUDPSocket` — runs anywhere, no network. |
 | [`examples/circuitpython_ntp_query.py`](examples/circuitpython_ntp_query.py) | Real query against `pool.ntp.org` — wifi up, UDP socket via factory, runner-shaped poll loop. |
 
 ## Developing this library

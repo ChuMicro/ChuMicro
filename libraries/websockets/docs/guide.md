@@ -176,7 +176,6 @@ CircuitPython on the Pi Pico W (rp2 port).
 
 | Example | What it shows |
 |---|---|
-| [`quickstart.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/quickstart.py) | In-memory client + server loopback (CPython, MicroPython, CircuitPython). |
 | [`circuitpython_client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/circuitpython_client.py) | CircuitPython board connecting to a remote `ws://` echo server. |
 | [`circuitpython_server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/circuitpython_server.py) | CircuitPython board accepting inbound websocket connections. |
 

@@ -151,7 +151,6 @@ Works identically on CPython, MicroPython, and CircuitPython.  The `chumicro-soc
 
 | Example | What it shows |
 |---|---|
-| [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/quickstart.py) | One-shot HTTP request/response over an in-memory `FakeSocket` — runs on any host without a network. |
 | [`examples/circuitpython_two_thing_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/circuitpython_two_thing_server.py) | Display half of a two-thing demo: `GET /`, `GET /api/latest`, `POST /api/sensor` routes; in-memory latest-reading state.  Hardware-only (filename prefix). |
 | [`examples/circuitpython_two_thing_sensor.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/circuitpython_two_thing_sensor.py) | Sensor half: posts a synthetic reading to the server every 5 s using `chumicro-requests`. |
 

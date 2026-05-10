@@ -58,7 +58,7 @@ class TestScaffoldLibrary:
         for doc_filename in ("index.md", "guide.md", "api.md", "testing.md"):
             assert (created / "docs" / doc_filename).is_file()
         # examples/.
-        assert (created / "examples" / "quickstart.py").is_file()
+        assert (created / "examples" / "basic_usage.py").is_file()
 
     def test_init_py_imports_starter_class(self, tmp_path: Path) -> None:
         """The package's __init__.py wires `from <pkg>.core import <Class>`."""

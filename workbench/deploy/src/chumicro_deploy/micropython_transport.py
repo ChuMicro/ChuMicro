@@ -650,6 +650,7 @@ class MicropythonTransport:
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         follow: Literal["exec", "soft_reboot"] = "exec",
+        clean: bool = False,  # noqa: ARG002 — symmetry with CP transport; not yet plumbed for MP copy mode
     ) -> str:
         """Write *files* onto the device and execute *entrypoint*.
 

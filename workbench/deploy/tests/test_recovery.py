@@ -431,6 +431,7 @@ class _FakeDeployer:
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
+        clean: bool = False,
     ) -> DeployResult:
         return self._consume()
 
