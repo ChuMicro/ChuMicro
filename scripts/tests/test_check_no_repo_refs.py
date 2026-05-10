@@ -10,6 +10,7 @@ from check_no_repo_refs import (
     _RULE_CODE,
     _everywhere_outside_chumicro_workspace,
     _is_suppressed,
+    _outside_chumicro_checks,
     check_file,
     check_paths,
 )
@@ -197,6 +198,40 @@ class TestEverywhereOutsideChumicroWorkspace:
         """Absolute paths into workspace are also exempt."""
         path = Path("/Users/foo/chumicro/workbench/workspace/src/chumicro_workspace/cli.py")
         assert _everywhere_outside_chumicro_workspace(path) is False
+
+
+class TestOutsideChumicroChecksPredicate:
+    """Verify the ``chumicro_checks`` package exemption.
+
+    The ``chumicro_checks`` package legitimately documents CHU code
+    identifiers, the mono-repo's ``plans/`` tree, and ``scripts/run.py``
+    in its README, source docstrings, and tests — that's its purpose.
+    Every other tree is still subject to those patterns.
+    """
+
+    def test_inside_checks_src_is_exempt(self) -> None:
+        path = Path("workbench/checks/src/chumicro_checks/cli.py")
+        assert _outside_chumicro_checks(path) is False
+
+    def test_checks_readme_is_exempt(self) -> None:
+        path = Path("workbench/checks/README.md")
+        assert _outside_chumicro_checks(path) is False
+
+    def test_checks_tests_are_exempt(self) -> None:
+        path = Path("workbench/checks/tests/test_cli.py")
+        assert _outside_chumicro_checks(path) is False
+
+    def test_other_workbench_src_not_exempt(self) -> None:
+        path = Path("workbench/deploy/src/chumicro_deploy/cli.py")
+        assert _outside_chumicro_checks(path) is True
+
+    def test_libraries_src_not_exempt(self) -> None:
+        path = Path("libraries/wifi/src/chumicro_wifi/__init__.py")
+        assert _outside_chumicro_checks(path) is True
+
+    def test_absolute_path_inside_checks_is_exempt(self) -> None:
+        path = Path("/Users/foo/chumicro/workbench/checks/src/chumicro_checks/cli.py")
+        assert _outside_chumicro_checks(path) is False
 
 
 def _make_src_file(tmp_path: Path, name: str, body: str) -> Path:
