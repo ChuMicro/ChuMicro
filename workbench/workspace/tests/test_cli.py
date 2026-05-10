@@ -3239,17 +3239,16 @@ class TestTestCommand:
 
 
 class TestLintCommand:
-    def test_shells_out_to_ruff(
+    def test_shells_out_to_ruff_then_chumicro_checks(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        recorded: dict[str, Any] = {}
+        calls: list[dict[str, Any]] = []
 
         def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            recorded["args"] = args
-            recorded["cwd"] = kwargs.get("cwd")
+            calls.append({"args": args, "cwd": kwargs.get("cwd")})
             return subprocess.CompletedProcess(args, 0)
 
         monkeypatch.setattr(cli.subprocess, "run", fake_run)
@@ -3257,10 +3256,16 @@ class TestLintCommand:
             "lint", "--workspace-dir", str(root),
         ])
         assert exit_code == 0
-        assert recorded["args"] == [
+        # First call: ruff.
+        assert calls[0]["args"] == [
             sys.executable, "-m", "ruff", "check", ".",
         ]
-        assert recorded["cwd"] == root
+        assert calls[0]["cwd"] == root
+        # Second call: chumicro-checks.
+        assert calls[1]["args"] == [
+            sys.executable, "-m", "chumicro_checks", "--root", str(root),
+        ]
+        assert calls[1]["cwd"] == root
 
     def test_forwards_extra_args_to_ruff(
         self,
@@ -3268,10 +3273,10 @@ class TestLintCommand:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        recorded: dict[str, Any] = {}
+        calls: list[list[str]] = []
 
         def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            recorded["args"] = args
+            calls.append(args)
             return subprocess.CompletedProcess(args, 0)
 
         monkeypatch.setattr(cli.subprocess, "run", fake_run)
@@ -3279,10 +3284,63 @@ class TestLintCommand:
             "lint", "--workspace-dir", str(root), "--", "--fix",
         ])
         assert exit_code == 0
-        assert "--fix" in recorded["args"]
+        ruff_args = calls[0]
+        assert "--fix" in ruff_args
         # The trailing "." anchors ruff to the workspace root regardless
         # of any extra args the user passed.
-        assert recorded["args"][-1] == "."
+        assert ruff_args[-1] == "."
+
+    def test_ruff_failure_short_circuits_chumicro_checks(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            calls.append(args)
+            # Ruff fails — chumicro-checks should not be invoked.
+            return subprocess.CompletedProcess(args, 1)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        assert exit_code == 1
+        # Only ruff ran; chumicro-checks didn't get a turn.
+        assert len(calls) == 1
+        assert calls[0][2] == "ruff"
+
+    def test_skips_chumicro_checks_with_hint_when_missing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """When chumicro-checks isn't installed, ruff still runs; user gets a hint."""
+        root = _seed_workspace(tmp_path)
+        calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+        import builtins
+        original_import = builtins.__import__
+
+        def fake_import(name: str, *args: Any, **kwargs: Any):
+            if name == "chumicro_checks":
+                raise ImportError("chumicro-checks not installed")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        # Ruff ran; chumicro-checks didn't.
+        assert len(calls) == 1
+        out = capsys.readouterr().out
+        assert "chumicro-checks is not installed" in out
 
     def test_skips_with_hint_when_ruff_missing(
         self,
@@ -3352,10 +3410,10 @@ class TestQualityKnobsLint:
             + 'quality:\n  lint:\n    select: ["E", "F", "I"]\n',
         )
 
-        recorded: dict[str, Any] = {}
+        calls: list[list[str]] = []
 
         def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            recorded["args"] = args
+            calls.append(args)
             return subprocess.CompletedProcess(args, 0)
 
         monkeypatch.setattr(cli.subprocess, "run", fake_run)
@@ -3364,12 +3422,12 @@ class TestQualityKnobsLint:
         ])
         assert exit_code == 0
         # Workspace --select goes BEFORE user passthrough so the user's
-        # later --select (if any) wins.
-        recorded_args = recorded["args"]
-        select_index = recorded_args.index("--select")
-        fix_index = recorded_args.index("--fix")
+        # later --select (if any) wins.  Inspect the ruff call (first).
+        ruff_args = calls[0]
+        select_index = ruff_args.index("--select")
+        fix_index = ruff_args.index("--fix")
         assert select_index < fix_index
-        assert recorded_args[select_index + 1] == "E,F,I"
+        assert ruff_args[select_index + 1] == "E,F,I"
 
 
 class TestQualityKnobsTest:
@@ -5669,7 +5727,7 @@ class TestDeployExampleAdditionalBranches:
         # Replace _make_deploy_runner so .deploy() raises a classifiable
         # NO_PYTHON_RUNTIME error.
         class _NoPythonDeployer:
-            def deploy(self, _source: object) -> None:
+            def deploy(self, _source: object, *, clean: bool = False) -> None:
                 raise CircuitpythonTransportError(
                     "no python runtime detected on /dev/cu.fake",
                 )
