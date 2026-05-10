@@ -22,23 +22,10 @@ from chumicro_timing import ticks_diff, ticks_ms
 DEBOUNCE_MS = 20
 
 # --- Button setup (active-low with internal pull-up) ---
-# Set BUTTON_PIN to your pin name (e.g. "D5", "GP14") to skip autodetect.
-BUTTON_PIN = ""
-
-if BUTTON_PIN:
-    button_pin = getattr(board, BUTTON_PIN)
-else:
-    for name in ("D5", "GP14", "IO5", "BUTTON"):
-        button_pin = getattr(board, name, None)
-        if button_pin is not None:
-            print(f"button on board.{name}")
-            break
-    else:
-        raise RuntimeError(
-            "No input pin matched — set BUTTON_PIN at the top of "
-            "this file to a name from `dir(board)`.",
-        )
-button = digitalio.DigitalInOut(button_pin)
+# Edit this line to match your board (e.g. board.GP14 on Pi Pico W,
+# board.BUTTON on Feather / QT Py).  `import board; print(dir(board))`
+# in the REPL lists the pin names your board exposes.
+button = digitalio.DigitalInOut(board.D5)
 button.direction = digitalio.Direction.INPUT
 button.pull = digitalio.Pull.UP
 
