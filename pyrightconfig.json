@@ -23,6 +23,7 @@
     "libraries/timing/src",
     "libraries/websockets/src",
     "libraries/wifi/src",
+    "workbench/checks/src",
     "workbench/deploy/src",
     "workbench/pytest-device/src",
     "workbench/repl/src",
