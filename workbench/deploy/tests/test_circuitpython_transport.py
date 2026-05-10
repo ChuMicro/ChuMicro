@@ -6,6 +6,7 @@ import errno
 from pathlib import Path
 
 import pytest
+from chumicro_deploy import DeviceImplementation
 from chumicro_deploy.circuitpython_transport import (
     _CTRL_A,
     _CTRL_C,
@@ -14,8 +15,8 @@ from chumicro_deploy.circuitpython_transport import (
     _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS,
     CircuitpythonTransport,
     CircuitpythonTransportError,
+    _circuitpy_volume_candidates,
     _format_probe_error,
-    find_circuitpy_drive,
 )
 from chumicro_deploy.testing import (
     FakeSerialPort,
@@ -25,10 +26,54 @@ from chumicro_deploy.testing import (
 #: Shorthand for the standard autoreload REPL acknowledgement.
 _OK_RESPONSE = b"OK\x04\x04>"
 
+#: Test-only board identity used by :func:`_plant_verifiable_circuitpy` —
+#: keeps the boot_out.txt content and the probe-response bytes in sync.
+_TEST_BOOT_MACHINE = "TestBoard with rp2040"
+_TEST_BOOT_UID = "DEADBEEF"
+
 
 def _repl_response(stdout: bytes = b"", stderr: bytes = b"") -> bytes:
     """Build a raw-REPL response with *stdout* / *stderr* payloads."""
     return b"OK" + stdout + b"\x04" + stderr + b"\x04>"
+
+
+def _plant_verifiable_circuitpy(
+    drive: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Set up *drive* so ``_verify_drive_for_board`` cheap-paths.
+
+    Plants a ``boot_out.txt`` on *drive* with the standard
+    ``_TEST_BOOT_UID`` / ``_TEST_BOOT_MACHINE`` identity, and patches
+    ``CircuitpythonTransport.probe_implementation`` to return a
+    matching :class:`DeviceImplementation` without touching the fake
+    serial port.  Tests that aren't exercising verify itself get
+    cheap-path-passes without having to queue probe response bytes
+    in their fake-port read sequence.
+
+    Verify-specific tests (``TestDriveVerification``,
+    ``TestListFilesInScopeAndDelete``'s auto-correct cases) bypass
+    this helper — they need the real probe roundtrip + their own
+    boot_out.txt content to exercise the mismatch / auto-correct
+    code paths.
+    """
+    drive.mkdir(exist_ok=True)
+    (drive / "boot_out.txt").write_text(
+        f"Adafruit CircuitPython 10.2.0 on 2026-01-01; {_TEST_BOOT_MACHINE}\n"
+        f"Board ID:test_board\n"
+        f"UID:{_TEST_BOOT_UID}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        CircuitpythonTransport,
+        "probe_implementation",
+        lambda self: DeviceImplementation(
+            name="circuitpython",
+            version="10.2.0",
+            machine=_TEST_BOOT_MACHINE,
+            uid=_TEST_BOOT_UID,
+        ),
+    )
 
 
 class TestConnect:
@@ -854,17 +899,23 @@ class TestFlashMode:
         """Create a flash-mode transport with a fake serial port.
 
         ``circuitpy_drive_path`` is plumbed into the transport via a
-        monkey-patch on :func:`find_circuitpy_drive` since the
+        monkey-patch on :func:`_circuitpy_volume_candidates` since the
         transport no longer accepts a pinned drive path — drive
-        resolution always goes through find + verify.
+        resolution always goes through candidates + verify.  Also
+        plants a ``boot_out.txt`` and patches ``probe_implementation``
+        so ``_verify_drive_for_board``'s cheap path fires without
+        consuming a probe response from the fake serial port.
         """
         def factory(**kwargs):
             return port
 
+        pinned = Path(circuitpy_drive_path)
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: circuitpy_drive_path,
+            "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+            lambda: [pinned],
         )
+        if pinned.is_dir():
+            _plant_verifiable_circuitpy(pinned, monkeypatch)
         return CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
@@ -889,8 +940,8 @@ class TestFlashMode:
         # Ensure auto-detection finds nothing.
         monkeypatch.setattr(
             "chumicro_deploy.circuitpython_transport"
-            ".find_circuitpy_drive",
-            lambda: None,
+            "._circuitpy_volume_candidates",
+            lambda: [],
         )
         # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
         # stage's autoreload-off (OK).  Stage raises before any further
@@ -959,7 +1010,7 @@ class TestFlashMode:
 
         with pytest.raises(
             CircuitpythonTransportError,
-            match="CIRCUITPY drive not found",
+            match="CIRCUITPY drive not mounted",
         ):
             transport.stage([source_dir], [], harness_dir)
 
@@ -1483,98 +1534,120 @@ class TestSendReplCommand:
             transport._send_repl_command("print('hello')")
 
 
-class TestFindCircuitpyDrive:
-    """Tests for find_circuitpy_drive auto-detection."""
+class TestCircuitpyVolumeCandidates:
+    """Tests for _circuitpy_volume_candidates auto-detection.
 
-    def test_returns_none_when_no_drive_found(
+    The candidates helper is what `_resolve_circuitpy_drive` walks at
+    deploy time — it globs every mounted ``CIRCUITPY*`` directory on
+    each base path so the verify layer can pick the UID-matching one
+    on multi-board hosts.  These tests cover the base-path logic
+    (macOS ``/Volumes`` and Linux ``/media/<user>`` / ``/run/media/<user>``)
+    independent of the per-board UID match.
+    """
+
+    def test_returns_empty_when_no_drive_found(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Should return None when no known mount point exists."""
-        original_is_dir = Path.is_dir
-
-        def patched_is_dir(self_path: Path) -> bool:
-            if "CIRCUITPY" in str(self_path):
-                return False
-            return original_is_dir(self_path)
-
-        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
-        assert find_circuitpy_drive() is None
+        """No mounted CIRCUITPY drive -> empty list."""
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport._circuitpy_base_paths",
+            lambda: [],
+        )
+        assert _circuitpy_volume_candidates() == []
 
     def test_finds_macos_mount(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Should find a CIRCUITPY volume at /Volumes/ style path."""
+        """A CIRCUITPY volume under a base path is returned."""
         fake_volumes = tmp_path / "Volumes"
         fake_drive = fake_volumes / "CIRCUITPY"
         fake_drive.mkdir(parents=True)
-
-        # Patch Path.is_dir to recognize our fake path.
-        original_is_dir = Path.is_dir
-
-        def patched_is_dir(self_path: Path) -> bool:
-            if str(self_path) == "/Volumes/CIRCUITPY":
-                return True
-            return original_is_dir(self_path)
-
-        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
-        result = find_circuitpy_drive()
-        assert result == "/Volumes/CIRCUITPY"
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport._circuitpy_base_paths",
+            lambda: [fake_volumes],
+        )
+        assert _circuitpy_volume_candidates() == [fake_drive]
 
     def test_finds_linux_media_mount(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Should find a CIRCUITPY volume at /media/<user>/ style path."""
-        monkeypatch.setenv("USER", "testuser")
+        """A CIRCUITPY volume under /media/<user> style base is returned."""
+        media_user = tmp_path / "media" / "testuser"
+        fake_drive = media_user / "CIRCUITPY"
+        fake_drive.mkdir(parents=True)
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport._circuitpy_base_paths",
+            lambda: [media_user],
+        )
+        assert _circuitpy_volume_candidates() == [fake_drive]
 
-        original_is_dir = Path.is_dir
+    def test_globs_all_circuitpy_siblings(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Every ``CIRCUITPY*`` directory in a base path is returned, sorted."""
+        volumes = tmp_path / "Volumes"
+        first = volumes / "CIRCUITPY"
+        second = volumes / "CIRCUITPY 1"
+        third = volumes / "CIRCUITPY 2"
+        for drive in (first, second, third):
+            drive.mkdir(parents=True)
+        # Out-of-scope siblings must be ignored.
+        (volumes / "OTHER").mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport._circuitpy_base_paths",
+            lambda: [volumes],
+        )
+        assert _circuitpy_volume_candidates() == [first, second, third]
 
-        def patched_is_dir(self_path: Path) -> bool:
-            path_str = str(self_path)
-            if path_str == "/Volumes/CIRCUITPY":
-                return False  # Block macOS path.
-            if path_str == "/media/testuser/CIRCUITPY":
-                return True
-            return original_is_dir(self_path)
+    def test_skips_missing_base_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Base paths that don't exist on disk are silently skipped."""
+        present = tmp_path / "present"
+        present.mkdir()
+        (present / "CIRCUITPY").mkdir()
+        missing = tmp_path / "missing"
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport._circuitpy_base_paths",
+            lambda: [missing, present],
+        )
+        assert _circuitpy_volume_candidates() == [present / "CIRCUITPY"]
 
-        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
-        result = find_circuitpy_drive()
-        assert result == "/media/testuser/CIRCUITPY"
+
+class TestCircuitpyBasePaths:
+    """Tests for _circuitpy_base_paths username-resolution behavior.
+
+    Linux ``/media/<user>`` and ``/run/media/<user>`` mount bases need
+    a real username — slim containers without ``$USER`` exported still
+    have to fall back through ``getpass.getuser`` to the OS password
+    database, and degrade gracefully to ``/Volumes``-only when even
+    that's unavailable rather than producing malformed ``/media//`` paths.
+    """
 
     def test_falls_back_to_getpass_when_user_env_unset(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """USER env unset should still produce a populated /media path
-        via getpass.getuser, not /media//CIRCUITPY."""
+        from chumicro_deploy.circuitpython_transport import (
+            _circuitpy_base_paths,
+        )
+
         monkeypatch.delenv("USER", raising=False)
         monkeypatch.setattr(
             "chumicro_deploy.circuitpython_transport.getpass.getuser",
             lambda: "fallback_user",
         )
-
-        original_is_dir = Path.is_dir
-        observed_candidates: list[str] = []
-
-        def patched_is_dir(self_path: Path) -> bool:
-            path_str = str(self_path)
-            if path_str == "/Volumes/CIRCUITPY":
-                observed_candidates.append(path_str)
-                return False
-            if path_str == "/media/fallback_user/CIRCUITPY":
-                observed_candidates.append(path_str)
-                return True
-            return original_is_dir(self_path)
-
-        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
-        result = find_circuitpy_drive()
-        assert result == "/media/fallback_user/CIRCUITPY"
-        # Ensure we never tried a malformed `/media//CIRCUITPY` path.
-        assert "/media//CIRCUITPY" not in observed_candidates
+        bases = _circuitpy_base_paths()
+        assert Path("/media/fallback_user") in bases
+        assert Path("/media/") not in bases
+        assert Path("/run/media/fallback_user") in bases
 
     def test_skips_linux_paths_when_username_unresolvable(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """No USER and no passwd entry should fall through to /Volumes
-        only — never produce /media//CIRCUITPY."""
+        from chumicro_deploy.circuitpython_transport import (
+            _circuitpy_base_paths,
+        )
+
         monkeypatch.delenv("USER", raising=False)
 
         def boom() -> str:
@@ -1584,22 +1657,10 @@ class TestFindCircuitpyDrive:
             "chumicro_deploy.circuitpython_transport.getpass.getuser",
             boom,
         )
-
-        original_is_dir = Path.is_dir
-        observed_candidates: list[str] = []
-
-        def patched_is_dir(self_path: Path) -> bool:
-            path_str = str(self_path)
-            if "CIRCUITPY" in path_str:
-                observed_candidates.append(path_str)
-                return False
-            return original_is_dir(self_path)
-
-        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
-        result = find_circuitpy_drive()
-        assert result is None
-        # Only /Volumes/CIRCUITPY should have been probed; no /media/.
-        assert observed_candidates == ["/Volumes/CIRCUITPY"]
+        bases = _circuitpy_base_paths()
+        # Linux media bases require a username; falling back to /Volumes
+        # alone keeps us out of /media//CIRCUITPY territory.
+        assert bases == [Path("/Volumes")]
 
     def test_flash_stage_auto_detects_drive(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -1608,12 +1669,13 @@ class TestFindCircuitpyDrive:
         fake_drive = tmp_path / "CIRCUITPY"
         fake_drive.mkdir()
 
-        # Make find_circuitpy_drive return our fake path.
+        # Make _circuitpy_volume_candidates return our fake path.
         monkeypatch.setattr(
             "chumicro_deploy.circuitpython_transport"
-            ".find_circuitpy_drive",
-            lambda: str(fake_drive),
+            "._circuitpy_volume_candidates",
+            lambda: [fake_drive],
         )
+        _plant_verifiable_circuitpy(fake_drive, monkeypatch)
 
         source_dir = tmp_path / "src"
         source_dir.mkdir()
@@ -1744,11 +1806,13 @@ class TestDeployFiles:
             return port
 
         if drive_path is not None and monkeypatch is not None:
-            pinned = drive_path
+            pinned = Path(drive_path)
             monkeypatch.setattr(
-                "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-                lambda: pinned,
+                "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+                lambda: [pinned],
             )
+            if pinned.is_dir():
+                _plant_verifiable_circuitpy(pinned, monkeypatch)
 
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
@@ -1953,8 +2017,8 @@ class TestDeployFiles:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: None,
+            "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+            lambda: [],
         )
         # deploy_files in flash mode now does:
         #   _enter_raw_repl   -> consumes a prompt
@@ -2307,17 +2371,67 @@ class TestDriveVerification:
         transport.connect()
         return transport, port
 
-    def test_skips_verification_when_boot_out_missing(
-        self, tmp_path: Path,
+    def test_raises_when_boot_out_missing_and_probe_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """No boot_out.txt -> no probe roundtrip, drive path unchanged."""
+        """No boot_out.txt + no probe response -> error, not silent fall-open.
+
+        The strict-verify contract: when the drive has no identity
+        info and the probe can't supply one either, refuse to assume
+        the drive belongs to the connected board.  Silently returning
+        *drive_path* would land the deploy on whatever ``candidates[0]``
+        happened to be — on a multi-CP-board host that's often the
+        wrong board.
+        """
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+            lambda: [drive],
+        )
         transport, _ = self._make_transport(
             drive_path=str(drive),
-            reads=[_RAW_REPL_PROMPT],  # connect only — no probe expected
+            reads=[_RAW_REPL_PROMPT],  # connect only; probe will hit empty
         )
-        assert transport._verify_drive_for_board(drive) == drive
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="no boot_out.txt",
+        ):
+            transport._verify_drive_for_board(drive)
+
+    def test_auto_corrects_when_boot_out_missing_but_sibling_matches(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """boot_out.txt missing on drive_path + matching sibling -> swap silently.
+
+        Common trigger: the last deploy wiped boot_out.txt via rsync
+        --delete and the soft-reboot afterwards didn't regenerate it.
+        On a multi-board host, the right drive is still identified
+        via whichever sibling's boot_out.txt still matches the probed
+        connected board.
+        """
+        wrong_drive = tmp_path / "CIRCUITPY"
+        wrong_drive.mkdir()  # no boot_out.txt
+        right_drive = tmp_path / "CIRCUITPY 1"
+        right_drive.mkdir()
+        (right_drive / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2"),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [wrong_drive, right_drive],
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(wrong_drive),
+            reads=[
+                _RAW_REPL_PROMPT,
+                self._probe_response("S2Mini with ESP32S2-S2FN4R2"),
+            ],
+        )
+        corrected = transport._verify_drive_for_board(wrong_drive)
+        assert corrected == right_drive
 
     def test_returns_unchanged_on_machine_match(
         self, tmp_path: Path,
@@ -2715,7 +2829,6 @@ class TestListFilesInScopeAndDelete:
         (tmp_path / "code.py").write_text("# code")
         (tmp_path / "active.py").write_text("PROJECT_NAME = 'x'")
         (tmp_path / "settings.toml").write_text("WIFI = '...'")  # out of scope
-        (tmp_path / "boot_out.txt").write_text("ignored")  # out of scope
         (tmp_path / "lib").mkdir()
         (tmp_path / "lib" / "foo.py").write_text("x = 1")
         (tmp_path / "lib" / "nested").mkdir()
@@ -2724,9 +2837,13 @@ class TestListFilesInScopeAndDelete:
         (tmp_path / "data" / "log.txt").write_text("user data")  # out of scope
 
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: str(tmp_path),
+            "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+            lambda: [tmp_path],
         )
+        # boot_out.txt is planted by the helper with valid identity so
+        # ``_verify_drive_for_board`` cheap-paths; it's still filtered
+        # out of the scope listing because it's not a deploy-scope name.
+        _plant_verifiable_circuitpy(tmp_path, monkeypatch)
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
@@ -2745,8 +2862,8 @@ class TestListFilesInScopeAndDelete:
     ) -> None:
         """Drive resolution failure → empty listing (no exception)."""
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: None,
+            "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+            lambda: [],
         )
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
@@ -2765,9 +2882,10 @@ class TestListFilesInScopeAndDelete:
         keeper.write_text("# keep")
 
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: str(tmp_path),
+            "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+            lambda: [tmp_path],
         )
+        _plant_verifiable_circuitpy(tmp_path, monkeypatch)
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
@@ -2833,10 +2951,6 @@ class TestListFilesInScopeAndDelete:
             "._circuitpy_volume_candidates",
             lambda: [wrong_drive, right_drive],
         )
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: str(wrong_drive),
-        )
 
         # Probe response identifies the connected board as the Lolin S2,
         # whose mount is actually at right_drive.
@@ -2897,10 +3011,6 @@ class TestListFilesInScopeAndDelete:
             "chumicro_deploy.circuitpython_transport"
             "._circuitpy_volume_candidates",
             lambda: [wrong_drive, right_drive],
-        )
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: str(wrong_drive),
         )
         probe_marker = (
             "OK"
@@ -3032,8 +3142,8 @@ class TestWipeFilesystem:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()  # pre-existing on disk, but masked for first probes
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: str(drive),
+            "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+            lambda: [drive],
         )
         # Pretend the FAT volume hasn't remounted yet for the first two
         # poll probes, then "remount" by letting the real is_dir win.
@@ -3070,8 +3180,8 @@ class TestWipeFilesystem:
         """Drive that never reappears within budget raises a clear error."""
         drive = tmp_path / "CIRCUITPY"  # never created
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
-            lambda: str(drive),
+            "chumicro_deploy.circuitpython_transport._circuitpy_volume_candidates",
+            lambda: [drive],
         )
 
         first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])

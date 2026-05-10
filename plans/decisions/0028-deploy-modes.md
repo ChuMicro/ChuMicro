@@ -37,7 +37,7 @@ The per-device `deploy_mode` field in `devices.yml` sets the device-level defaul
 Flash mode in `stage()`:
 
 1. Send `import supervisor; supervisor.runtime.autoreload = False` via raw REPL.
-2. Copy staged files to the CIRCUITPY USB drive — resolved at deploy time via `find_circuitpy_drive()` plus UID-based auto-correction against `boot_out.txt` (see "CircuitPython drive path resolution" below).
+2. Copy staged files to the CIRCUITPY USB drive — resolved at deploy time by scanning mounted `CIRCUITPY*` volumes and UID-matching the connected board against each `boot_out.txt` (see "CircuitPython drive path resolution" below).
 3. Wait for filesystem sync.
 
 Flash mode in `execute()`:
@@ -76,7 +76,7 @@ Flash mode in `disconnect()`:
 
 ### CircuitPython drive path resolution
 
-The CIRCUITPY drive is resolved at deploy time — there is no `devices.yml` field for it.  `find_circuitpy_drive()` scans common mount points on macOS (`/Volumes/CIRCUITPY*`) and Linux (`/media/<user>/CIRCUITPY*`, `/run/media/<user>/CIRCUITPY*`) and picks whichever volume is present.  On multi-board hosts where macOS assigns `/Volumes/CIRCUITPY` versus `/Volumes/CIRCUITPY 1` in mount order, `CircuitpythonTransport._verify_drive_for_board` probes the connected board's `microcontroller.cpu.uid` and compares it against `boot_out.txt` UID lines on each mounted CIRCUITPY volume, then silently auto-corrects to the matching drive.  Pinning a path in `devices.yml` would only be a source of staleness — the auto-correct already handles every multi-board scenario it could solve.
+The CIRCUITPY drive is resolved at deploy time — there is no `devices.yml` field for it.  `_circuitpy_volume_candidates()` scans common mount points on macOS (`/Volumes/CIRCUITPY*`) and Linux (`/media/<user>/CIRCUITPY*`, `/run/media/<user>/CIRCUITPY*`) and returns every mounted CIRCUITPY volume.  `CircuitpythonTransport._verify_drive_for_board` probes the connected board's `microcontroller.cpu.uid` and compares it against `boot_out.txt` UID lines on each candidate, then picks the matching drive.  On multi-board hosts where macOS assigns `/Volumes/CIRCUITPY` versus `/Volumes/CIRCUITPY 1` in mount order, this is what routes each deploy to the right physical board.  Pinning a path in `devices.yml` would only be a source of staleness — the UID match already handles every multi-board scenario it could solve.
 
 ### Future: `chumicro-deploy` pip package
 
@@ -86,7 +86,7 @@ The transport layer is shaped for eventual extraction into a standalone pip-inst
 
 - `CircuitpythonTransport` gains a `mode` parameter.
 - `--deploy-mode` becomes the user-facing CLI override; `deploy_mode` in `devices.yml` is the per-device default, with `defaults.deploy_mode` as the workspace-wide fallback.
-- Flash mode for CircuitPython resolves the CIRCUITPY mount at deploy time via `find_circuitpy_drive()` + UID-based auto-correction.
+- Flash mode for CircuitPython resolves the CIRCUITPY mount at deploy time by scanning every mounted `CIRCUITPY*` volume and UID-matching against `boot_out.txt`.
 - Oversized CircuitPython RAM-mode submissions are chunked using a live free-heap probe instead of static board-family metadata. If even the chunked path cannot fit, the run fails early and directs the user to flash mode.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
 - MicroPython flash transport supports two follow modes via the `follow` kwarg on `MicropythonTransport.deploy_files`: `"exec"` (raw-REPL `exec_raw`, for return-bounded test-harness scripts) and `"soft_reboot"` (Ctrl-B + Ctrl-D from the persistent serial connection, for `while True` app code that would never emit the raw-REPL EOF marker).  `Deployer.deploy_diff` / `Deployer.deploy` auto-route to `"soft_reboot"` for `(MP, FLASH, /main.py)` deploys; everything else stays on `"exec"`.

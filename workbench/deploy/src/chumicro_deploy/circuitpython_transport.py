@@ -194,8 +194,8 @@ def _circuitpy_base_paths() -> list[Path]:
     """Return the OS-specific base directories that CIRCUITPY mounts under.
 
     macOS: ``/Volumes``.  Linux: ``/media/<user>``.  Linux (systemd):
-    ``/run/media/<user>``.  Used by both the bare-name finder and
-    the multi-mount glob so the discovery list lives in one place.
+    ``/run/media/<user>``.  Used by :func:`_circuitpy_volume_candidates`
+    so the discovery list lives in one place.
     """
     username = _resolve_username()
     bases = [Path("/Volumes")]
@@ -203,21 +203,6 @@ def _circuitpy_base_paths() -> list[Path]:
         bases.append(Path("/media") / username)
         bases.append(Path("/run/media") / username)
     return bases
-
-
-def find_circuitpy_drive() -> str | None:
-    """Auto-detect the CIRCUITPY USB drive mount path.
-
-    Checks common mount locations on macOS and Linux.  Returns the
-    first path that exists as a directory, or ``None`` if no drive
-    is found.  Bare-name only — does not match ``CIRCUITPY 1`` etc.;
-    use :func:`_circuitpy_volume_candidates` for the multi-mount sweep.
-    """
-    for base in _circuitpy_base_paths():
-        candidate = base / _CIRCUITPY_VOLUME_NAME
-        if candidate.is_dir():
-            return str(candidate)
-    return None
 
 
 def _circuitpy_volume_candidates() -> list[Path]:
@@ -511,9 +496,9 @@ class CircuitpythonTransport:
             wall-clock waits.
 
     The CIRCUITPY drive (``mode="flash"``) is auto-resolved at deploy
-    time via :func:`find_circuitpy_drive` and verified against the
-    connected board's identity by :meth:`_verify_drive_for_board`.  No
-    per-transport drive path is stored — multi-board hosts get the
+    time via :func:`_circuitpy_volume_candidates` and verified against
+    the connected board's identity by :meth:`_verify_drive_for_board`.
+    No per-transport drive path is stored — multi-board hosts get the
     correct mount picked from the board's UID rather than from a
     pinned-at-registration-time path that mount-order can invalidate.
     """
@@ -714,10 +699,10 @@ class CircuitpythonTransport:
         """Confirm *drive_path* is the CIRCUITPY mount for the connected board.
 
         macOS assigns ``/Volumes/CIRCUITPY`` / ``/Volumes/CIRCUITPY 1``
-        in mount order, so :func:`find_circuitpy_drive` (which returns
-        the first such mount) may pick the wrong board on multi-board
-        hosts.  This method probes the connected board and compares
-        its identity against ``boot_out.txt`` on *drive_path*:
+        in mount order, so :func:`_circuitpy_volume_candidates`'s first
+        entry may belong to a different board on multi-board hosts.
+        This method probes the connected board and compares its
+        identity against ``boot_out.txt`` on *drive_path*:
 
         1. **UID** (``microcontroller.cpu.uid`` ↔ ``UID:...`` line
            in ``boot_out.txt``) is preferred — it disambiguates two
@@ -735,16 +720,32 @@ class CircuitpythonTransport:
         user to confirm the board is plugged in and the right
         CIRCUITPY drive is mounted.
 
-        Fails open — when either side of either comparison is
-        unavailable (``boot_out.txt`` missing/malformed, probe
-        returns ``None``) the original path is returned unchanged.
+        When ``boot_out.txt`` is missing on *drive_path* (e.g. after a
+        clean rsync that didn't exclude it, or before the first hard
+        reboot of a freshly-formatted drive), the method probes the
+        connected board and scans sibling mounts for one whose
+        ``boot_out.txt`` matches.  When no candidate can be
+        identified, the method raises rather than silently returning
+        *drive_path* — a fall-open in that state risks landing the
+        deploy on the wrong board's mount on multi-CP-board hosts.
+
         ``boot_out.txt`` is checked first so the serial-probe
-        roundtrip is skipped entirely in environments that don't have
-        it (test drives mocked with a bare ``tmp_path``, for instance).
+        roundtrip is skipped entirely when the identity already
+        matches the connected board (the common single-board case).
         """
         boot_uid, boot_machine = _read_boot_out_identity(drive_path)
         if boot_uid is None and boot_machine is None:
-            return drive_path
+            # boot_out.txt missing on *drive_path*.  Probe the connected
+            # board and scan candidate mounts for a boot_out.txt that
+            # matches.  Raise if no candidate can be identified —
+            # silently falling back to *drive_path* would land the
+            # deploy on whatever happened to be ``candidates[0]``,
+            # which on a multi-CP-board host can be the wrong board.
+            # Common trigger: the last deploy wiped boot_out.txt via
+            # rsync --delete and the soft-reboot afterwards didn't
+            # regenerate it (CP only writes boot_out.txt on hard
+            # reset).
+            return self._identify_drive_via_probe(drive_path)
         probe = self.probe_implementation()
         if probe is None:
             return drive_path
@@ -765,6 +766,41 @@ class CircuitpythonTransport:
                 mount_finder=find_circuitpy_drive_for_machine,
             )
         return drive_path
+
+    def _identify_drive_via_probe(self, drive_path: Path) -> Path:
+        """Find the right drive when *drive_path* has no boot_out.txt.
+
+        Sister of :meth:`_resolve_identity_match` for the no-identity-
+        on-drive case.  Probes the connected board for its UID +
+        machine string, then scans every mounted ``CIRCUITPY*``
+        volume's ``boot_out.txt`` for a match.  Raises when the probe
+        is unavailable or no candidate matches — silently returning
+        *drive_path* would risk landing on the wrong board's mount.
+        """
+        probe = self.probe_implementation()
+        if probe is None or (not probe.uid and not probe.machine):
+            raise CircuitpythonTransportError(
+                f"CIRCUITPY drive at {drive_path} has no boot_out.txt "
+                f"and the connected board did not provide an identity "
+                f"probe.  Hard-reset the board (RESET button or "
+                f"unplug/replug) to regenerate boot_out.txt, then retry."
+            )
+        if probe.uid:
+            corrected = find_circuitpy_drive_for_uid(probe.uid)
+            if corrected is not None:
+                return Path(corrected)
+        if probe.machine:
+            corrected = find_circuitpy_drive_for_machine(probe.machine)
+            if corrected is not None:
+                return Path(corrected)
+        identity = probe.uid or probe.machine
+        raise CircuitpythonTransportError(
+            f"CIRCUITPY drive at {drive_path} has no boot_out.txt and "
+            f"no mounted CIRCUITPY* volume's boot_out.txt matches the "
+            f"connected board (UID/machine={identity!r}).  Hard-reset "
+            f"the board (RESET button or unplug/replug) to regenerate "
+            f"boot_out.txt and retry."
+        )
 
     def _resolve_identity_match(
         self,
@@ -801,15 +837,15 @@ class CircuitpythonTransport:
     def _resolve_circuitpy_drive(
         self, *, probe_writable: bool = False,
     ) -> Path:
-        """Return the CIRCUITPY drive path, raising if it isn't usable.
+        """Return a CIRCUITPY drive path, raising if none is usable.
 
-        Calls :func:`find_circuitpy_drive` to pick whichever
-        ``CIRCUITPY*`` mount macOS / Linux currently shows.  On
-        multi-board hosts that may not be the one belonging to *this*
-        transport — :meth:`_verify_drive_for_board` is the seam that
-        compares the picked mount's ``boot_out.txt`` identity against
-        the connected board and silently swaps to the correct mount
-        when they don't match.
+        Scans every mounted ``CIRCUITPY*`` directory via
+        :func:`_circuitpy_volume_candidates` and returns the first.  On
+        multi-board hosts that first pick may not be the one belonging
+        to *this* transport — callers pair this with
+        :meth:`_verify_drive_for_board`, which probes the connected
+        board and silently swaps to the UID-matching mount when the
+        first pick is for the wrong board.
 
         *probe_writable* (default ``False``) — when ``True``, additionally
         write+unlink a ``.chu-probe`` marker to confirm the mount is
@@ -829,16 +865,23 @@ class CircuitpythonTransport:
         surfaces the OS error in its stderr and ``flash_drive.rsync``
         wraps it as :class:`FlashDriveError`.
         """
-        drive_path_str = find_circuitpy_drive()
-        if not drive_path_str:
+        candidates = _circuitpy_volume_candidates()
+        if not candidates:
             raise CircuitpythonTransportError(
                 "CIRCUITPY drive not found.  Connect the board's USB "
                 "drive (or check that the host has it mounted)."
             )
-        drive_path = Path(drive_path_str)
+        drive_path = candidates[0]
+        # Belt-and-braces re-check.  ``_circuitpy_volume_candidates``
+        # already filters by ``is_dir`` at scan time, but the wipe-and-
+        # wait path re-resolves while the FAT volume is mid-remount —
+        # the cached candidates list can name a path that's
+        # temporarily ``is_dir() == False`` between the scan and the
+        # next probe iteration.  Re-checking here turns that into a
+        # clear "not mounted" error the wait loop can recognize.
         if not drive_path.is_dir():
             raise CircuitpythonTransportError(
-                f"CIRCUITPY drive not found: {drive_path}"
+                f"CIRCUITPY drive not mounted: {drive_path}"
             )
         if probe_writable:
             probe = drive_path / ".chu-probe"
@@ -1455,18 +1498,32 @@ class CircuitpythonTransport:
                         on_file_staged(device_path)
                 # ``clean=True`` (e.g. ``deploy-example``) tells rsync
                 # to delete drive files not in the staging tree so each
-                # demo lands clean.  ``settings.toml`` / ``boot.py`` are
-                # excluded from the wipe so user runtime config + custom
-                # boot logic survive.  ``clean=False`` (the default; the
-                # ``chumicro-workspace deploy`` shape) preserves every
-                # drive file outside the new payload — appropriate when
-                # users hand-install lib/ deps via circup and only the
-                # current import graph rotates per deploy.
+                # demo lands clean.  Three files are excluded from the
+                # wipe so the next deploy + the device stay healthy:
+                #
+                # * ``settings.toml`` — user runtime config.
+                # * ``boot.py`` — user custom boot logic.
+                # * ``boot_out.txt`` — CP writes this only on *hard*
+                #   reboot (deploy soft-reboots via Ctrl-D, which
+                #   doesn't regenerate it).  Wiping it strands the
+                #   drive without identity info until the next power
+                #   cycle, which breaks
+                #   :meth:`_verify_drive_for_board`'s UID match on
+                #   the next deploy — the deploy then "fails open" to
+                #   ``_circuitpy_volume_candidates()[0]`` and can land
+                #   on the wrong board's drive on multi-board hosts.
+                #
+                # ``clean=False`` (the default; the ``chumicro-workspace
+                # deploy`` shape) preserves every drive file outside
+                # the new payload — appropriate when users hand-install
+                # lib/ deps via circup and only the current import
+                # graph rotates per deploy.
                 self._push_staging_to_drive(
                     staging_path,
                     rsync_delete=clean,
                     rsync_additional_excludes=(
-                        ("settings.toml", "boot.py") if clean else ()
+                        ("settings.toml", "boot.py", "boot_out.txt")
+                        if clean else ()
                     ),
                     strip_xattrs=True,
                 )

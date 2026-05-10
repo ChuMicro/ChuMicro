@@ -201,9 +201,10 @@ def _build_ram_device(entry: DeviceEntry) -> Device:
 
 def _build_flash_device(entry: DeviceEntry) -> Device | None:
     # CircuitpythonTransport resolves the CIRCUITPY drive at deploy
-    # time via find_circuitpy_drive() + UID-based auto-correct, so we
-    # don't pin it on Device.  On MP, flash maps to mpremote copy-mode
-    # and never touches the host filesystem at all.
+    # time by scanning mounted CIRCUITPY* volumes and UID-matching the
+    # connected board against each boot_out.txt, so we don't pin it on
+    # Device.  On MP, flash maps to mpremote copy-mode and never
+    # touches the host filesystem at all.
     return Device(
         transport=entry.runtime,
         address=entry.address,

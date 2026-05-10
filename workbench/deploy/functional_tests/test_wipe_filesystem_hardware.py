@@ -188,12 +188,14 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
     board to a known-quiet state, and by leaving no host-side write
     in flight when the wipe begins.
     """
-    from chumicro_deploy.circuitpython_transport import find_circuitpy_drive
+    from chumicro_deploy.circuitpython_transport import (
+        _circuitpy_volume_candidates,
+    )
 
-    drive_path_value = find_circuitpy_drive()
-    if not drive_path_value:
+    candidates = _circuitpy_volume_candidates()
+    if not candidates:
         pytest.skip("no CIRCUITPY drive mounted on the host")
-    drive_path = Path(drive_path_value)
+    drive_path = candidates[0]
     sentinel = drive_path / "wipe_test_sentinel.txt"
 
     plant_device = Device(

@@ -43,8 +43,9 @@ def _pick_micropython_board(entries: list[DeviceEntry]) -> DeviceEntry | None:
     drives over `mpremote` and never touches the host filesystem (no
     USB-drive sentinels, no FAT cleanup, no flash wear).  Adapt to
     CircuitPython by picking a CP entry and switching to flash mode;
-    the transport resolves the CIRCUITPY mount at deploy time via
-    `find_circuitpy_drive` and UID-based auto-correction.
+    the transport resolves the CIRCUITPY mount at deploy time by
+    scanning mounted ``CIRCUITPY*`` volumes and UID-matching the
+    connected board against each ``boot_out.txt``.
     """
     for entry in entries:
         if entry.runtime == Runtime.MICROPYTHON.value:

@@ -36,7 +36,7 @@ Drive Ctrl-A raw REPL (not raw-paste — Ctrl-E didn't respond on Lolin S2 / CP 
 Two staging modes (Decision 0028):
 
 - **RAM mode (inline send)** — exec library source + test code into raw REPL as a single code block.  No file copy.
-- **Flash mode (CIRCUITPY USB copy)** — copy files to mounted CIRCUITPY drive with autoreload disabled via raw REPL.  The drive is resolved at deploy time via `find_circuitpy_drive()` plus UID-based auto-correction against `boot_out.txt`; no `devices.yml` field controls it.  macOS hardenings live in [Decision 0033](0033-macos-circuitpy-deploy-hardening.md).
+- **Flash mode (CIRCUITPY USB copy)** — copy files to mounted CIRCUITPY drive with autoreload disabled via raw REPL.  The drive is resolved at deploy time by scanning mounted `CIRCUITPY*` volumes and UID-matching the connected board against each `boot_out.txt`; no `devices.yml` field controls it.  macOS hardenings live in [Decision 0033](0033-macos-circuitpy-deploy-hardening.md).
 
 Module injection for `from chumicro_X import Y` uses the **class-as-module pattern**: exec source into a plain dict, copy attributes to a class via `setattr`, register the class in `sys.modules` (Python's import system accepts any object with attributes).
 
