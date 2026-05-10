@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from chumicro_deploy.config.devices_yaml import load_devices
 from chumicro_deploy.macos_fskit import detect_fskit_wedge
+from chumicro_deploy.recovery import diagnose_port_holders
 
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
@@ -383,13 +384,103 @@ def check_macos_fskit_wedge() -> HealthFinding:
     )
 
 
+def check_serial_ports_held(workspace: WorkspaceLayout) -> HealthFinding:
+    """Flag registered devices whose serial port is held by another process.
+
+    Walks ``devices.yml`` addresses and runs :func:`diagnose_port_holders`
+    on each.  When a port has at least one holder, surfaces as a WARN
+    finding listing the PIDs + commands — typically a serial-terminal
+    app (Mu, Thonny, screen, minicom, CoolTerm, PyCharm or VS Code
+    serial console, another mpremote) the user has open against the
+    board.  A held port doesn't imply something is broken — the user
+    may be debugging — but if the next action is a deploy, the deploy
+    will fail with ``Resource busy`` until the holder is closed.
+
+    Doctor-only.  Status skips it; the lsof probe is heavier than
+    the rest of the per-second status loop and the per-port detail
+    lives below the simple "ports look good" / "ports held" summary.
+
+    Returns OK on Windows (no portable lsof equivalent without
+    ``handle.exe``) and when no devices are registered.
+    """
+    if sys.platform.startswith("win"):
+        return HealthFinding(
+            label="SERIAL PORTS",
+            level=HealthLevel.OK,
+            message="not applicable (Windows lacks portable port-holder probe)",
+        )
+
+    devices_path = workspace.root / "devices.yml"
+    if not devices_path.is_file():
+        return HealthFinding(
+            label="SERIAL PORTS",
+            level=HealthLevel.OK,
+            message="no devices.yml; nothing to check",
+        )
+
+    try:
+        data = load_devices(devices_path)
+    except Exception:  # noqa: BLE001 — devices.yml issues surface elsewhere
+        return HealthFinding(
+            label="SERIAL PORTS",
+            level=HealthLevel.OK,
+            message="devices.yml unreadable; check skipped",
+        )
+
+    devices = data.get("devices", []) or []
+    if not devices:
+        return HealthFinding(
+            label="SERIAL PORTS",
+            level=HealthLevel.OK,
+            message="no devices registered",
+        )
+
+    held_lines: list[str] = []
+    for device in devices:
+        port = device.get("address")
+        if not port:
+            continue
+        try:
+            holders = diagnose_port_holders(port)
+        except Exception:  # noqa: BLE001 — best-effort probe
+            continue
+        if not holders:
+            continue
+        device_id = device.get("id", "<unknown>")
+        for holder in holders:
+            held_lines.append(
+                f"{device_id} ({port}) → PID {holder.pid}: {holder.command}",
+            )
+
+    if not held_lines:
+        return HealthFinding(
+            label="SERIAL PORTS",
+            level=HealthLevel.OK,
+            message=f"none of the {len(devices)} registered ports are held",
+        )
+
+    return HealthFinding(
+        label="SERIAL PORTS",
+        level=HealthLevel.WARN,
+        message=f"{len(held_lines)} port(s) held by another process",
+        hint=(
+            "Deploys will fail with `Resource busy` until the holder "
+            "releases the port.  Close the serial terminal app (Mu, "
+            "Thonny, screen, minicom, CoolTerm, PyCharm / VS Code "
+            "serial console, an orphan mpremote) holding the port, "
+            "or kill the PID directly.  Held: " + "; ".join(held_lines)
+        ),
+    )
+
+
 def collect_doctor_findings(
     workspace: WorkspaceLayout,
 ) -> list[HealthFinding]:
-    """Run the strict (status + Python version + AST + FSKit) check set."""
+    """Run the strict (status + Python version + AST + FSKit + ports) check set."""
     return [
         check_python_version(),
         *collect_health_findings(workspace),
         check_project_run_functions(workspace),
         check_macos_fskit_wedge(),
+        check_serial_ports_held(workspace),
     ]
