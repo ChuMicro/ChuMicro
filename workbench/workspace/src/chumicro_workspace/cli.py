@@ -2485,11 +2485,13 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     discoverable in workspaces that haven't pulled the ``[dev]``
     extra yet.
 
-    ``workspace.yml``'s ``quality.lint.enabled`` and
-    ``quality.lint.select`` knobs flow through.  ``enabled = false``
-    skips the entire phase; ``select`` prepends a ``--select <comma
-    list>`` flag for ruff (chumicro-checks ignores it — its rule
-    selection is via its own config and CLI flags).
+    ``workspace.yml``'s ``quality.lint`` knobs flow through.
+    ``enabled = false`` skips the entire phase; ``tools`` selects
+    which tools run (default ``["ruff", "chumicro-checks"]``, drop
+    one to disable that tool only); ``select`` prepends a
+    ``--select <comma list>`` flag for ruff (chumicro-checks
+    ignores it — its rule selection is via its own config and
+    CLI flags).
     """
     workspace = _resolve_workspace(args)
     quality = load_quality_config(workspace.workspace_yaml)
@@ -2498,45 +2500,54 @@ def _cmd_lint(args: argparse.Namespace) -> int:
             "lint: disabled in workspace.yml ([quality.lint] enabled = false).",
         )
         return 0
-    try:
-        import ruff  # noqa: F401, PLC0415  — availability probe
-    except ImportError:
+    if not quality.lint.tools:
         print(
-            "ruff is not installed in this venv.  Install the dev "
-            "extras with:\n"
-            "    .venv/bin/pip install -e .[dev]\n"
-            "or add ruff to your workspace's pyproject.toml deps.",
+            "lint: no tools selected in workspace.yml ([quality.lint] tools = []).",
         )
         return 0
-    quality_flags: list[str] = []
-    if quality.lint.select:
-        quality_flags.extend(["--select", ",".join(quality.lint.select)])
-    ruff_completed = subprocess.run(  # noqa: S603 — args fully controlled
-        [
-            sys.executable, "-m", "ruff", "check",
-            *quality_flags, *args.ruff_args, ".",
-        ],
-        cwd=workspace.root,
-        check=False,
-    )
-    if ruff_completed.returncode != 0:
-        return ruff_completed.returncode
-    try:
-        import chumicro_checks  # noqa: F401, PLC0415  — availability probe
-    except ImportError:
-        print(
-            "chumicro-checks is not installed in this venv.  Install "
-            "it (or the dev extras) to run the CHU0NN rules:\n"
-            "    .venv/bin/pip install chumicro-checks\n"
-            "or add it to your workspace's pyproject.toml dev deps.",
+    if "ruff" in quality.lint.tools:
+        try:
+            import ruff  # noqa: F401, PLC0415  — availability probe
+        except ImportError:
+            print(
+                "ruff is not installed in this venv.  Install the dev "
+                "extras with:\n"
+                "    .venv/bin/pip install -e .[dev]\n"
+                "or add ruff to your workspace's pyproject.toml deps.",
+            )
+            return 0
+        quality_flags: list[str] = []
+        if quality.lint.select:
+            quality_flags.extend(["--select", ",".join(quality.lint.select)])
+        ruff_completed = subprocess.run(  # noqa: S603 — args fully controlled
+            [
+                sys.executable, "-m", "ruff", "check",
+                *quality_flags, *args.ruff_args, ".",
+            ],
+            cwd=workspace.root,
+            check=False,
         )
-        return 0
-    checks_completed = subprocess.run(  # noqa: S603 — args fully controlled
-        [sys.executable, "-m", "chumicro_checks", "--root", str(workspace.root)],
-        cwd=workspace.root,
-        check=False,
-    )
-    return checks_completed.returncode
+        if ruff_completed.returncode != 0:
+            return ruff_completed.returncode
+    if "chumicro-checks" in quality.lint.tools:
+        try:
+            import chumicro_checks  # noqa: F401, PLC0415  — availability probe
+        except ImportError:
+            print(
+                "chumicro-checks is not installed in this venv.  Install "
+                "it (or the dev extras) to run the CHU0NN rules:\n"
+                "    .venv/bin/pip install chumicro-checks\n"
+                "or add it to your workspace's pyproject.toml dev deps.",
+            )
+            return 0
+        checks_completed = subprocess.run(  # noqa: S603 — args fully controlled
+            [sys.executable, "-m", "chumicro_checks", "--root", str(workspace.root)],
+            cwd=workspace.root,
+            check=False,
+        )
+        if checks_completed.returncode != 0:
+            return checks_completed.returncode
+    return 0
 
 
 #: Default tail-window duration (seconds) when ``repl <project>`` is

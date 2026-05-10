@@ -1,6 +1,6 @@
 """Workspace quality knobs — `lint`, `coverage`.
 
-Reads the ``quality:`` block on ``workspace.yml`` carrying two
+Reads the ``quality:`` block on ``workspace.yml`` carrying these
 pass-through knobs:
 
 .. code-block:: yaml
@@ -8,6 +8,7 @@ pass-through knobs:
     quality:
       lint:
         enabled: true
+        tools: ["ruff", "chumicro-checks"]
         select: ["E", "F", "I"]
       coverage_threshold: 85
 
@@ -16,16 +17,20 @@ typed :class:`QualityConfig` the CLI consults.  Pure file read +
 shape validation; no execution side effects.
 
 * ``lint.enabled = false`` → ``python run.py lint`` becomes a
-  no-op with a hint (still discoverable; just doesn't run ruff).
+  no-op with a hint (still discoverable; just doesn't run anything).
+* ``lint.tools`` → list selecting which tools to run.  Default runs
+  both ``ruff`` and ``chumicro-checks``; drop one to disable that
+  tool without disabling the whole phase.  Empty list short-circuits
+  to the same hint as ``enabled = false``.
 * ``lint.select`` → forwarded to ruff as ``--select <comma list>``
   before any user-supplied passthrough args (so user `--` overrides
   win).
 * ``coverage_threshold`` → forwarded to pytest as
   ``--cov-fail-under=<n>``.
 
-Defaults match a "permissive workspace" stance: lint enabled, no
-explicit select (use ruff's pyproject.toml config), no coverage
-gate.
+Defaults match a "permissive workspace" stance: lint enabled, both
+tools active, no explicit select (use ruff's pyproject.toml config),
+no coverage gate.
 """
 
 from __future__ import annotations
@@ -38,6 +43,16 @@ from ruamel.yaml import YAML
 
 from chumicro_workspace.loaders import WorkspaceConfigError
 
+#: Tools the lint phase knows how to run.  ``tools`` entries outside
+#: this set raise :class:`WorkspaceConfigError` at config-load time so
+#: typos surface up front rather than silently no-op'ing.
+KNOWN_LINT_TOOLS: frozenset[str] = frozenset({"ruff", "chumicro-checks"})
+
+
+def _default_lint_tools() -> list[str]:
+    """Default ``tools`` list — both registered tools, fixed order."""
+    return ["ruff", "chumicro-checks"]
+
 
 @dataclass(frozen=True)
 class LintConfig:
@@ -47,12 +62,17 @@ class LintConfig:
         enabled: When False, ``python run.py lint`` is a no-op.
             Defaults to True so a missing block doesn't disable
             linting silently.
+        tools: Which lint tools to run.  Defaults to running both
+            ``ruff`` and ``chumicro-checks``; drop one to disable
+            that tool without disabling the whole phase.  An empty
+            list behaves like ``enabled = false``.
         select: Optional list of ruff rule codes (``["E", "F", "I"]``).
             ``None`` means "use whatever's in pyproject.toml's
             ``[tool.ruff.lint]`` block."
     """
 
     enabled: bool = True
+    tools: list[str] = field(default_factory=_default_lint_tools)
     select: list[str] | None = None
 
 
@@ -104,6 +124,24 @@ def _coerce_lint(raw: Any, path: Path) -> LintConfig:
             f"{path}: 'quality.lint.enabled' must be a bool, "
             f"got {type(enabled_raw).__name__}",
         )
+    if "tools" in raw:
+        tools_raw = raw["tools"]
+        if not isinstance(tools_raw, list) or not all(
+            isinstance(item, str) for item in tools_raw
+        ):
+            raise WorkspaceConfigError(
+                f"{path}: 'quality.lint.tools' must be a list of strings",
+            )
+        unknown = [item for item in tools_raw if item not in KNOWN_LINT_TOOLS]
+        if unknown:
+            known_list = ", ".join(sorted(KNOWN_LINT_TOOLS))
+            raise WorkspaceConfigError(
+                f"{path}: 'quality.lint.tools' has unknown entries "
+                f"{unknown!r}; known tools are: {known_list}",
+            )
+        tools_value = list(tools_raw)
+    else:
+        tools_value = _default_lint_tools()
     select_raw = raw.get("select")
     if select_raw is not None:
         if not isinstance(select_raw, list) or not all(
@@ -115,7 +153,7 @@ def _coerce_lint(raw: Any, path: Path) -> LintConfig:
         select_value: list[str] | None = list(select_raw)
     else:
         select_value = None
-    return LintConfig(enabled=enabled_raw, select=select_value)
+    return LintConfig(enabled=enabled_raw, tools=tools_value, select=select_value)
 
 
 def load_quality_config(workspace_yaml: Path) -> QualityConfig:

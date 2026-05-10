@@ -36,6 +36,20 @@ from chumicro_checks.rules._leak_rule import (
 _RULE_CODE = "CHU006"
 
 
+def _under_subdir(filepath: Path, *, parent: str, child: str) -> bool:
+    """True when *filepath* sits under ``<parent>/<child>/`` anywhere in its parts.
+
+    Path-segment match — never a substring match — so a stray
+    ``checks-staging`` or ``my-workbench`` directory in the path
+    can't accidentally satisfy the predicate.
+    """
+    parts = filepath.parts
+    return any(
+        first == parent and second == child
+        for first, second in zip(parts, parts[1:], strict=False)
+    )
+
+
 def _outside_chumicro_workspace(filepath: Path) -> bool:
     """Exempt the ``chumicro_workspace`` package from the workspace-shim rule.
 
@@ -44,7 +58,7 @@ def _outside_chumicro_workspace(filepath: Path) -> bool:
     its job.  Bare shim mentions throughout that package's tree are
     correct.
     """
-    return "workbench/workspace/" not in filepath.as_posix()
+    return not _under_subdir(filepath, parent="workbench", child="workspace")
 
 
 def _outside_chumicro_checks(filepath: Path) -> bool:
@@ -56,7 +70,7 @@ def _outside_chumicro_checks(filepath: Path) -> bool:
     load-bearing references (they're what the rules target), and
     naming ``scripts/run.py`` documents the mono-repo wire-up.
     """
-    return "workbench/checks/" not in filepath.as_posix()
+    return not _under_subdir(filepath, parent="workbench", child="checks")
 
 
 #: Top-level directories that signal a workspace cloned from the

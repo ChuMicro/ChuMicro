@@ -3429,6 +3429,96 @@ class TestQualityKnobsLint:
         assert select_index < fix_index
         assert ruff_args[select_index + 1] == "E,F,I"
 
+    def test_tools_ruff_only_skips_chumicro_checks(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        (root / "workspace.yml").write_text(
+            (root / "workspace.yml").read_text()
+            + 'quality:\n  lint:\n    tools: ["ruff"]\n',
+        )
+
+        calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        assert len(calls) == 1
+        assert calls[0][2] == "ruff"
+
+    def test_tools_chumicro_checks_only_skips_ruff(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        (root / "workspace.yml").write_text(
+            (root / "workspace.yml").read_text()
+            + 'quality:\n  lint:\n    tools: ["chumicro-checks"]\n',
+        )
+
+        calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        assert len(calls) == 1
+        assert calls[0][1] == "-m"
+        assert calls[0][2] == "chumicro_checks"
+
+    def test_tools_empty_list_skips_phase(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        (root / "workspace.yml").write_text(
+            (root / "workspace.yml").read_text()
+            + "quality:\n  lint:\n    tools: []\n",
+        )
+
+        called = [False]
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            called[0] = True
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        assert called[0] is False
+        assert "no tools selected" in capsys.readouterr().out
+
+    def test_tools_chumicro_checks_failure_returned(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A failing chumicro-checks run propagates its exit code."""
+        root = _seed_workspace(tmp_path)
+        (root / "workspace.yml").write_text(
+            (root / "workspace.yml").read_text()
+            + 'quality:\n  lint:\n    tools: ["chumicro-checks"]\n',
+        )
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(args, 7)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        assert exit_code == 7
+
 
 class TestQualityKnobsTest:
     """workspace.yml `quality.coverage_threshold` flows through _cmd_test."""
