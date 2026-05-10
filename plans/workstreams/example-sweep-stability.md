@@ -51,7 +51,7 @@ Marked CP-only via `__chumicro_runtimes__ = ("circuitpython",)` after bench disc
 
 Both boards completed full TLS handshake against `letsencrypt.org:443` using only the embedded ISRG Root X1 as trust anchor (system store NOT consulted), proving the helper does what it claims.
 
-**Side observation, not in scope.** Lolin S2 MP currently fails any wifi-up call with `RuntimeError: Wifi Unknown Error 0x0102` (reproduced with `tcp_roundtrip.py` too, which never touches TLS — same line in `helpers.py`).  Independent pre-existing wifi issue on that board, surfaced during this bench pass; needs a separate investigation.
+**Side observation — root-caused + fixed in the same session (#7 follow-on).** Lolin S2 MP was failing every wifi-up call with `RuntimeError: Wifi Unknown Error 0x0102` (`ESP_ERR_INVALID_ARG` from ESP-IDF), reproduced with `tcp_roundtrip.py` too (no TLS).  Root cause: helpers.py's `wlan.config(pm=0xA11140)` (CYW43 power-save magic) was called on every MP board with `try / except (OSError, ValueError)`, but ESP32 raises `RuntimeError` (the catch-all branch in MP's `esp_exceptions_helper`).  Worse, the unhandled exception left the wifi stack in `ESP_ERR_WIFI_STATE` until a hard reset.  Fixed by gating the call: `if sys.platform == "rp2": wlan.config(pm=0xA11140)` — Pi Pico W is the only rp2 MP firmware with wifi, ESP boards skip the call entirely.  Propagated to all 7 helpers.py + scaffold template (md5-identical post-edit).  Bench-validated 2026-05-10: Pi Pico W MP regression green (power-save still disabled, fast connect); Lolin S2 MP after hard-reset green (`WIFI_OK ip=172.16.1.16` → HTTP/1.1 200 OK → closed cleanly).
 
 ### 4. `chumicro-config` README + docs/index.md + docs/guide.md still document the old `from_dict` pattern — SHIPPED
 
