@@ -24,7 +24,10 @@ def test_no_rules_means_no_findings(
     assert capsys.readouterr().out == ""
 
 
-def test_list_with_empty_registry(capsys: pytest.CaptureFixture[str]) -> None:
+def test_list_with_empty_registry(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("chumicro_checks.cli.registered_rules", dict)
     assert main(["--list"]) == 0
     assert "no rules registered" in capsys.readouterr().out
 

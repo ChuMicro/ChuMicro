@@ -168,10 +168,15 @@ _EXCLUDED_DIRECTORY_NAMES = frozenset({
 
 #: Files whose own contents legitimately contain the forbidden patterns
 #: (the lint's source carries them as regex literals; the lint's tests
-#: carry them as fixture strings).
+#: carry them as fixture strings).  The new-package paths are listed so
+#: the old script doesn't flag the migrated rule's source while both
+#: implementations coexist; the entries here drop when this script is
+#: retired.
 _SELF_EXEMPT_RELPATHS = frozenset({
     Path("scripts/check_dated_narration.py"),
     Path("scripts/tests/test_check_dated_narration.py"),
+    Path("workbench/checks/src/chumicro_checks/rules/chu012.py"),
+    Path("workbench/checks/tests/test_chu012.py"),
 })
 
 

@@ -8,6 +8,8 @@ returns the canonical mapping that the CLI iterates.
 from __future__ import annotations
 
 from chumicro_checks._rule import Rule
+from chumicro_checks.rules.chu011 import CHU011
+from chumicro_checks.rules.chu012 import CHU012
 
 
 def registered_rules() -> dict[str, Rule]:
@@ -16,4 +18,7 @@ def registered_rules() -> dict[str, Rule]:
     The dict is rebuilt on every call so test code can stub
     individual rule modules without leaking state.
     """
-    return {}
+    return {
+        CHU011.code: CHU011,
+        CHU012.code: CHU012,
+    }
