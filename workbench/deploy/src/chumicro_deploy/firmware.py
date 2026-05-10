@@ -928,7 +928,6 @@ def flash_firmware(
                 address=bootloader_port,
                 baudrate=device.baudrate,
                 deploy_mode=device.deploy_mode,
-                circuitpy_drive_path=device.circuitpy_drive_path,
                 entrypoint_name=device.entrypoint_name,
                 resource_prefix=device.resource_prefix,
             )

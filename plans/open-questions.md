@@ -338,8 +338,10 @@ Open sub-questions:
   entered with USB active.  Needs investigation on actual hardware.
 - Should hybrid mode be the default recommendation?  It's the most flexible
   but adds a physical-button dependency.
-- What's the interaction with `circuitpy_drive_path` in `devices.yml`?
-  A board in development mode wouldn't have a drive path.
+- Drop the CIRCUITPY-drive dependency entirely for a "development mode" board?
+  Today the drive is resolved at deploy time via `find_circuitpy_drive()` +
+  UID-based auto-correct against `boot_out.txt`; a serial-only path would
+  remove that lookup altogether.
 
 Not worth implementing now — the device transport layer works for current
 needs.  `chumicro-deploy` extraction is done (project-workspace Phase 1,

@@ -83,17 +83,15 @@ If you ejected CIRCUITPY from Finder — or the FSKit wedge partially cleared le
 
 **Symptom**
 
-Two CircuitPython boards are connected.  `chumicro-deploy` deploys to the wrong one, or `devices.yml` has `circuitpy_drive_path: /Volumes/CIRCUITPY` but macOS has the board mounted at `/Volumes/CIRCUITPY 1` (or vice versa).
+Two CircuitPython boards are connected, and the first deploy after a replug lands on the wrong one — the mount macOS labels `/Volumes/CIRCUITPY` versus `/Volumes/CIRCUITPY 1` swapped relative to the previous boot.
 
 **What's happening**
 
-macOS assigns `/Volumes/CIRCUITPY` in mount order — the first CircuitPython drive to enumerate gets the base name; the next one gets `CIRCUITPY 1`, and so on.  Pinning `circuitpy_drive_path` in `devices.yml` can therefore silently refer to the *other* board when two are attached.
+macOS assigns `/Volumes/CIRCUITPY` in mount order — the first CircuitPython drive to enumerate gets the base name; the next one gets `CIRCUITPY 1`, and so on.  The drive label alone is not a stable identity for a specific board across replugs.
 
 **Recovery**
 
-`chumicro-deploy` already detects this: `CircuitpythonTransport._verify_drive_for_board` probes the connected board's UID (`microcontroller.cpu.uid`) and compares it against the `UID:...` line in the drive's `boot_out.txt`.  On mismatch it scans every mounted `CIRCUITPY*` volume for the matching UID and silently auto-corrects when one is found, so a stale `circuitpy_drive_path` in `devices.yml` resolves to the right drive without host-side noise.  When no match is found the transport raises with a clear `"no other mounted CIRCUITPY* volume matches"` message that names both paths and points back at this fix.
-
-The clean long-term fix: **remove `circuitpy_drive_path` from `devices.yml`** and let auto-detection work.  UID-based matching is more reliable than mount-order-dependent paths.
+`chumicro-deploy` resolves the right drive at deploy time: `CircuitpythonTransport._verify_drive_for_board` probes the connected board's UID (`microcontroller.cpu.uid`) and compares it against the `UID:...` line in each mounted `CIRCUITPY*`'s `boot_out.txt`.  On mismatch it silently auto-corrects to the volume whose UID matches the board reachable over the serial port.  When no match is found the transport raises with a clear `"no other mounted CIRCUITPY* volume matches"` message that names both paths and points back at this fix.  There is no `circuitpy_drive_path` field to maintain — UID-based matching is the only mechanism.
 
 ## See also
 

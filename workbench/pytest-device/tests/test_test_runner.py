@@ -129,13 +129,9 @@ class TestCreateTransport:
 
     def test_circuitpython_flash_mode(self) -> None:
         """Flash deploy mode should pass flash to CircuitPython transport."""
-        entry = self._make_device_entry(
-            runtime="circuitpython",
-            circuitpy_drive_path="/Volumes/CIRCUITPY",
-        )
+        entry = self._make_device_entry(runtime="circuitpython")
         transport = device_testing.create_transport(entry, deploy_mode="flash")
         assert transport.mode == "flash"
-        assert transport.circuitpy_drive_path == "/Volumes/CIRCUITPY"
 
     def test_unsupported_runtime_raises(self) -> None:
         """Unsupported runtime should raise ValueError."""
@@ -176,7 +172,6 @@ class TestCreateTransport:
         entry = self._make_device_entry(
             runtime="circuitpython",
             deploy_mode="flash",
-            circuitpy_drive_path="/Volumes/CIRCUITPY",
         )
         transport = device_testing.create_transport(entry)
         assert transport.mode == "flash"

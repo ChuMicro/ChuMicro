@@ -502,9 +502,6 @@ class CircuitpythonTransport:
         baudrate: Serial baud rate.  Defaults to 115200.
         timeout: Read timeout in seconds.
         mode: ``"ram"`` (default) or ``"flash"``.
-        circuitpy_drive_path: Host path to the CIRCUITPY USB drive.
-            Used in ``mode="flash"``.  When omitted, auto-detected
-            via ``find_circuitpy_drive()``.
         serial_port_factory: Callable that creates a serial port object.
             Accepts ``(port, baudrate, timeout)`` keyword arguments.
             Defaults to ``serial.Serial``.  Inject a fake for testing.
@@ -512,6 +509,13 @@ class CircuitpythonTransport:
             Defaults to Python's ``time`` module.
             Inject ``FakeTime`` for deterministic tests with no
             wall-clock waits.
+
+    The CIRCUITPY drive (``mode="flash"``) is auto-resolved at deploy
+    time via :func:`find_circuitpy_drive` and verified against the
+    connected board's identity by :meth:`_verify_drive_for_board`.  No
+    per-transport drive path is stored — multi-board hosts get the
+    correct mount picked from the board's UID rather than from a
+    pinned-at-registration-time path that mount-order can invalidate.
     """
 
     def __init__(
@@ -521,7 +525,6 @@ class CircuitpythonTransport:
         baudrate: int = 115200,
         timeout: float = DEFAULT_TIMEOUT,
         mode: str = "ram",
-        circuitpy_drive_path: str | None = None,
         serial_port_factory: Callable[..., object] | None = None,
         time: TimeSource | None = None,
     ) -> None:
@@ -529,7 +532,6 @@ class CircuitpythonTransport:
         self.baudrate = baudrate
         self.timeout = timeout
         self.mode = mode
-        self.circuitpy_drive_path = circuitpy_drive_path
         self._serial_port_factory: Callable[..., object] = (
             serial_port_factory or self._default_serial_factory
         )
@@ -711,11 +713,11 @@ class CircuitpythonTransport:
     def _verify_drive_for_board(self, drive_path: Path) -> Path:
         """Confirm *drive_path* is the CIRCUITPY mount for the connected board.
 
-        macOS assigns ``/Volumes/CIRCUITPY`` in mount order, so a
-        ``circuitpy_drive_path`` pinned in ``devices.yml`` can silently
-        refer to the other board when two boards are attached.  This
-        method probes the connected board and compares its identity
-        against ``boot_out.txt`` on *drive_path*:
+        macOS assigns ``/Volumes/CIRCUITPY`` / ``/Volumes/CIRCUITPY 1``
+        in mount order, so :func:`find_circuitpy_drive` (which returns
+        the first such mount) may pick the wrong board on multi-board
+        hosts.  This method probes the connected board and compares
+        its identity against ``boot_out.txt`` on *drive_path*:
 
         1. **UID** (``microcontroller.cpu.uid`` ↔ ``UID:...`` line
            in ``boot_out.txt``) is preferred — it disambiguates two
@@ -726,12 +728,12 @@ class CircuitpythonTransport:
            expose a UID.
 
         On a mismatch, every mounted ``CIRCUITPY*`` volume is scanned
-        for one whose identity matches; the match wins silently — a
-        stale ``circuitpy_drive_path`` in devices.yml resolves
-        correctly without any host-side noise.  When no match is
-        found a :class:`CircuitpythonTransportError` is raised whose
-        message nudges the user to drop or fix the devices.yml
-        override.
+        for one whose identity matches; the match wins silently —
+        the wrong-mount-came-up-first case is auto-corrected without
+        host-side noise.  When no match is found a
+        :class:`CircuitpythonTransportError` is raised that asks the
+        user to confirm the board is plugged in and the right
+        CIRCUITPY drive is mounted.
 
         Fails open — when either side of either comparison is
         unavailable (``boot_out.txt`` missing/malformed, probe
@@ -787,12 +789,12 @@ class CircuitpythonTransport:
         corrected = mount_finder(probe_identity)
         if corrected is None:
             raise CircuitpythonTransportError(
-                f"Configured CIRCUITPY drive {drive_path} "
-                f"{identity_label}={drive_identity!r} does not match the "
-                f"connected board ({identity_label}={probe_identity!r}).  "
-                f"No other mounted CIRCUITPY* volume matches.  Remove or "
-                f"fix circuitpy_drive_path in devices.yml (auto-detection "
-                f"by UID works without it)."
+                f"CIRCUITPY drive at {drive_path} "
+                f"({identity_label}={drive_identity!r}) does not match the "
+                f"connected board ({identity_label}={probe_identity!r}), "
+                f"and no other mounted CIRCUITPY* volume matches either.  "
+                f"Confirm the board is plugged in and its CIRCUITPY drive "
+                f"is mounted on the host."
             )
         return Path(corrected)
 
@@ -801,9 +803,13 @@ class CircuitpythonTransport:
     ) -> Path:
         """Return the CIRCUITPY drive path, raising if it isn't usable.
 
-        Uses the configured ``circuitpy_drive_path`` when set, otherwise
-        falls back to :func:`find_circuitpy_drive`.  Raises when no drive
-        can be found or the resolved path is not a directory.
+        Calls :func:`find_circuitpy_drive` to pick whichever
+        ``CIRCUITPY*`` mount macOS / Linux currently shows.  On
+        multi-board hosts that may not be the one belonging to *this*
+        transport — :meth:`_verify_drive_for_board` is the seam that
+        compares the picked mount's ``boot_out.txt`` identity against
+        the connected board and silently swaps to the correct mount
+        when they don't match.
 
         *probe_writable* (default ``False``) — when ``True``, additionally
         write+unlink a ``.chu-probe`` marker to confirm the mount is
@@ -823,11 +829,11 @@ class CircuitpythonTransport:
         surfaces the OS error in its stderr and ``flash_drive.rsync``
         wraps it as :class:`FlashDriveError`.
         """
-        drive_path_str = self.circuitpy_drive_path or find_circuitpy_drive()
+        drive_path_str = find_circuitpy_drive()
         if not drive_path_str:
             raise CircuitpythonTransportError(
-                "CIRCUITPY drive not found.  Either set circuitpy_drive_path "
-                "or connect the board's USB drive."
+                "CIRCUITPY drive not found.  Connect the board's USB "
+                "drive (or check that the host has it mounted)."
             )
         drive_path = Path(drive_path_str)
         if not drive_path.is_dir():
@@ -1474,7 +1480,7 @@ class CircuitpythonTransport:
             # handler covers both the dict-walk and any drive-resolve
             # failure that surfaces as an OSError.
             raise CircuitpythonTransportError(
-                _format_probe_error(self.circuitpy_drive_path or "", error),
+                _format_probe_error("", error),
             ) from error
 
         # Wait for the board to see the new entrypoint before soft-
@@ -1511,11 +1517,10 @@ class CircuitpythonTransport:
         and the drive's contents *are* the device's filesystem.
 
         Pairs ``_resolve_circuitpy_drive`` with ``_verify_drive_for_board``
-        so a stale ``circuitpy_drive_path`` (the macOS multi-board
-        mount-order swap) is silently corrected to the connected
-        board's actual mount before the walk — without verify, the
-        diff layer reads the *other* board's files and reports zero
-        stale entries when there's a real diff to apply.
+        so the macOS multi-board mount-order swap is silently corrected
+        to the connected board's actual mount before the walk — without
+        verify, the diff layer reads the *other* board's files and
+        reports zero stale entries when there's a real diff to apply.
 
         RAM mode returns an empty list — RAM-mode deploys never
         touch flash, so there's nothing persistent to diff between
@@ -1542,7 +1547,7 @@ class CircuitpythonTransport:
 
         Pairs ``_resolve_circuitpy_drive`` with ``_verify_drive_for_board``
         for the same reason ``list_files_in_scope`` does — without
-        verify, a stale ``circuitpy_drive_path`` could unlink the
+        verify, the macOS first-mount-wins behavior could unlink the
         *other* board's files (this is the destructive sister of the
         list-the-wrong-drive bug).
 
@@ -1628,7 +1633,7 @@ class CircuitpythonTransport:
         self._wait_for_circuitpy_remount()
 
     def _wait_for_circuitpy_remount(self) -> None:
-        """Block until the CIRCUITPY FAT volume is usable post-wipe.
+        """Block until any CIRCUITPY FAT volume is usable post-wipe.
 
         ``storage.erase_filesystem()`` reboots the board; USB-CDC
         and the FAT volume mount on independent macOS timelines —
@@ -1648,15 +1653,11 @@ class CircuitpythonTransport:
         :meth:`_resolve_circuitpy_drive` in a retry loop because it
         already exercises both checks (``is_dir`` + tiny probe
         write/unlink); polling it covers either phase without
-        duplicating the probe logic.
-
-        No-ops when ``circuitpy_drive_path`` was not configured
-        (auto-detection mode) — the next :meth:`deploy_files` call
-        will run its own :meth:`_resolve_circuitpy_drive` and
-        surface its own clear error if needed.
+        duplicating the probe logic.  The poll waits for *any*
+        CIRCUITPY mount to come back — :meth:`_verify_drive_for_board`
+        on subsequent operations swaps to the connected board's mount
+        on multi-board hosts.
         """
-        if self.circuitpy_drive_path is None:
-            return
         deadline = (
             self._time.monotonic() + _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS
         )
@@ -1681,8 +1682,7 @@ class CircuitpythonTransport:
         # FAT-remount stall is the macOS FSKit wedge rather than a
         # generic timeout.
         raise CircuitpythonTransportError(
-            f"CIRCUITPY drive not mounted at "
-            f"{self.circuitpy_drive_path} within "
+            f"CIRCUITPY drive not mounted within "
             f"{_WIPE_FAT_REMOUNT_TIMEOUT_SECONDS:.0f}s of "
             f"storage.erase_filesystem(); last error: {last_error}"
         )

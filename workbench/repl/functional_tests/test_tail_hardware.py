@@ -25,8 +25,6 @@ that path lands, this file gains the assertion-on-output test.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from chumicro_deploy import Deployer, Device, DeviceEntry, FileMapSource
 from chumicro_repl import ExitCode, tail
 from chumicro_repl.highlight import strip_ansi_sequences
@@ -38,9 +36,6 @@ def _build_device(entry: DeviceEntry, deploy_mode: str) -> Device:
         address=entry.address,
         baudrate=entry.serial_baudrate,
         deploy_mode=deploy_mode,
-        circuitpy_drive_path=(
-            Path(entry.circuitpy_drive_path) if entry.circuitpy_drive_path else None
-        ),
     )
 
 

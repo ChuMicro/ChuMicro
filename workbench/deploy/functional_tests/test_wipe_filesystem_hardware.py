@@ -188,9 +188,11 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
     board to a known-quiet state, and by leaving no host-side write
     in flight when the wipe begins.
     """
-    drive_path_value = circuitpython_flash_device.circuitpy_drive_path
+    from chumicro_deploy.circuitpython_transport import find_circuitpy_drive
+
+    drive_path_value = find_circuitpy_drive()
     if not drive_path_value:
-        pytest.skip("circuitpy_drive_path not set on selected device")
+        pytest.skip("no CIRCUITPY drive mounted on the host")
     drive_path = Path(drive_path_value)
     sentinel = drive_path / "wipe_test_sentinel.txt"
 
@@ -199,7 +201,6 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
         address=circuitpython_flash_device.address,
         baudrate=circuitpython_flash_device.serial_baudrate,
         deploy_mode="flash",
-        circuitpy_drive_path=drive_path,
     )
     plant_result = Deployer(plant_device).deploy(
         FileMapSource(
@@ -221,7 +222,6 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
         circuitpython_flash_device.address,
         baudrate=circuitpython_flash_device.serial_baudrate,
         mode="flash",
-        circuitpy_drive_path=str(drive_path),
     )
     transport.connect()
     try:

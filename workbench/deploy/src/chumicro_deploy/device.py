@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from .protocol import DeployMode, Runtime, TransportProtocol
@@ -59,22 +58,23 @@ class Device:
         deploy_mode: ``"ram"`` or ``"flash"``.  Mapped to the
             transport's mode label at construction time
             (``mount``/``copy`` on MP, ``ram``/``flash`` on CP).
-        circuitpy_drive_path: Filesystem path where the CIRCUITPY
-            drive is mounted.  Only used on CircuitPython in flash
-            mode.  ``None`` means auto-detect.
         entrypoint_name: Top-level script the runtime executes on
             boot.  Defaults vary per runtime (``"code.py"`` on
             CircuitPython, ``"main.py"`` on MicroPython) — pass
             ``None`` to use the runtime default.
         resource_prefix: On-device directory where library files land
             at deploy time.
+
+    The CIRCUITPY drive (CP flash-mode deploys) is auto-resolved at
+    deploy time via :func:`find_circuitpy_drive` and verified against
+    the board's identity via :meth:`CircuitpythonTransport._verify_drive_for_board`,
+    so no per-device drive path is configured here.
     """
 
     transport: str
     address: str
     baudrate: int = DEFAULT_BAUDRATE
     deploy_mode: str = DEFAULT_DEPLOY_MODE
-    circuitpy_drive_path: Path | None = None
     entrypoint_name: str | None = None
     resource_prefix: str = DEFAULT_RESOURCE_PREFIX
 
@@ -110,10 +110,10 @@ class Device:
 
         Accepts the same keys as the constructor — ``transport``,
         ``address``, and optional ``baudrate``, ``deploy_mode``,
-        ``circuitpy_drive_path``, ``entrypoint_name``, and
-        ``resource_prefix``.  Unknown keys are ignored so YAML /
-        TOML / JSON inputs with extra metadata fields (``id``,
-        ``description``, etc.) pass through without filtering.
+        ``entrypoint_name``, and ``resource_prefix``.  Unknown keys
+        are ignored so YAML / TOML / JSON inputs with extra metadata
+        fields (``id``, ``description``, ``circuitpy_drive_path`` from
+        legacy registries, etc.) pass through without filtering.
 
         Args:
             data: Mapping of field names to values.  ``transport``
@@ -131,17 +131,11 @@ class Device:
                 f"Device.from_dict missing required key(s): {missing!r}"
             )
 
-        drive_value = data.get("circuitpy_drive_path")
-        drive_path = (
-            Path(drive_value) if drive_value not in (None, "") else None
-        )
-
         return cls(
             transport=data["transport"],
             address=data["address"],
             baudrate=int(data.get("baudrate", DEFAULT_BAUDRATE)),
             deploy_mode=data.get("deploy_mode", DEFAULT_DEPLOY_MODE),
-            circuitpy_drive_path=drive_path,
             entrypoint_name=data.get("entrypoint_name"),
             resource_prefix=data.get("resource_prefix", DEFAULT_RESOURCE_PREFIX),
         )
@@ -165,17 +159,8 @@ class Device:
         # supported runtimes, so we can assume circuitpython here.
         from .circuitpython_transport import CircuitpythonTransport
 
-        # ``Device`` stores the path as ``Path | None`` so consumers
-        # holding the dataclass don't have to round-trip strings;
-        # ``CircuitpythonTransport`` accepts the str form (matches
-        # the historical pyserial / mpremote shape).  Convert here.
-        drive_path_string = (
-            str(self.circuitpy_drive_path)
-            if self.circuitpy_drive_path is not None else None
-        )
         return CircuitpythonTransport(
             self.address,
             baudrate=self.baudrate,
             mode=self.deploy_mode,
-            circuitpy_drive_path=drive_path_string,
         )

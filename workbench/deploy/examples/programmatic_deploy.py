@@ -42,8 +42,9 @@ def _pick_micropython_board(entries: list[DeviceEntry]) -> DeviceEntry | None:
     MicroPython is the simplest target for this example because RAM mode
     drives over `mpremote` and never touches the host filesystem (no
     USB-drive sentinels, no FAT cleanup, no flash wear).  Adapt to
-    CircuitPython by picking a CP entry and switching to flash mode +
-    a `circuitpy_drive_path`.
+    CircuitPython by picking a CP entry and switching to flash mode;
+    the transport resolves the CIRCUITPY mount at deploy time via
+    `find_circuitpy_drive` and UID-based auto-correction.
     """
     for entry in entries:
         if entry.runtime == Runtime.MICROPYTHON.value:

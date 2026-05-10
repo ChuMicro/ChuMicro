@@ -20,7 +20,6 @@ The schema (stable subset that the loader accepts):
         address: /dev/cu.usbmodem213101
         serial_baudrate: 115200
         deploy_mode: ram              # optional; falls back to defaults.deploy_mode
-        circuitpy_drive_path: /Volumes/CIRCUITPY  # optional; CP flash only
         # description, setup_command, and other keys are tolerated
         # but ignored by this loader.
 
@@ -100,7 +99,6 @@ class DeviceEntry:
     connection_type: str = "serial"
     serial_baudrate: int = 115200
     deploy_mode: str = DEFAULT_DEPLOY_MODE
-    circuitpy_drive_path: str | None = None
     setup_command: str | None = None
     extra: dict = field(default_factory=dict)
 
@@ -191,7 +189,6 @@ def _validate_device(
         connection_type=raw.get("connection_type", "serial"),
         serial_baudrate=raw.get("serial_baudrate", 115200),
         deploy_mode=raw.get("deploy_mode", global_deploy_mode),
-        circuitpy_drive_path=raw.get("circuitpy_drive_path"),
         setup_command=raw.get("setup_command"),
         extra=extra,
     )
@@ -389,8 +386,6 @@ def _normalise_device_entry(
         normalised["deploy_mode"] = entry_deploy_mode
     elif default_deploy_mode:
         normalised["deploy_mode"] = default_deploy_mode
-    if entry.get("circuitpy_drive_path"):
-        normalised["circuitpy_drive_path"] = entry["circuitpy_drive_path"]
     return normalised
 
 

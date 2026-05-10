@@ -149,11 +149,6 @@ def _build_device(entry: DeviceEntry) -> Device:
         address=entry.address,
         baudrate=entry.serial_baudrate,
         deploy_mode=entry.deploy_mode,
-        circuitpy_drive_path=(
-            Path(entry.circuitpy_drive_path)
-            if entry.circuitpy_drive_path
-            else None
-        ),
     )
 
 

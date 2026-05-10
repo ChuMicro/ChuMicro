@@ -849,15 +849,25 @@ class TestFlashMode:
         self,
         port: FakeSerialPort,
         circuitpy_drive_path: str,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> CircuitpythonTransport:
-        """Create a flash-mode transport with a fake serial port."""
+        """Create a flash-mode transport with a fake serial port.
+
+        ``circuitpy_drive_path`` is plumbed into the transport via a
+        monkey-patch on :func:`find_circuitpy_drive` since the
+        transport no longer accepts a pinned drive path — drive
+        resolution always goes through find + verify.
+        """
         def factory(**kwargs):
             return port
 
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: circuitpy_drive_path,
+        )
         return CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=circuitpy_drive_path,
             serial_port_factory=factory,
             time=FakeTime(),
         )
@@ -867,7 +877,6 @@ class TestFlashMode:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path="/Volumes/CIRCUITPY",
             serial_port_factory=lambda **kw: None,
             time=FakeTime(),
         )
@@ -922,6 +931,7 @@ class TestFlashMode:
 
     def test_flash_stage_requires_existing_drive(
         self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """stage() in flash mode should raise when drive path doesn't exist."""
         # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
@@ -938,7 +948,7 @@ class TestFlashMode:
         )
 
         transport = self._make_flash_transport(
-            port, str(tmp_path / "NO_DRIVE"),
+            port, str(tmp_path / "NO_DRIVE"), monkeypatch,
         )
         transport.connect()
 
@@ -990,7 +1000,7 @@ class TestFlashMode:
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
-        transport = self._make_flash_transport(port, str(drive))
+        transport = self._make_flash_transport(port, str(drive), monkeypatch)
         transport.connect()
 
         source_dir = tmp_path / "src"
@@ -1027,6 +1037,7 @@ class TestFlashMode:
 
     def test_flash_stage_copies_packages_to_lib(
         self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """stage() in flash mode should copy packages to lib/ on drive."""
         drive_path = tmp_path / "CIRCUITPY"
@@ -1055,7 +1066,7 @@ class TestFlashMode:
             ],
         )
 
-        transport = self._make_flash_transport(port, str(drive_path))
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
 
@@ -1071,6 +1082,7 @@ class TestFlashMode:
 
     def test_flash_stage_copies_test_files_to_root(
         self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """stage() in flash mode should copy test files to drive root."""
         drive_path = tmp_path / "CIRCUITPY"
@@ -1095,7 +1107,7 @@ class TestFlashMode:
             ],
         )
 
-        transport = self._make_flash_transport(port, str(drive_path))
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
         transport.connect()
         transport.stage([source_dir], [test_file], harness_dir)
 
@@ -1106,6 +1118,7 @@ class TestFlashMode:
 
     def test_flash_stage_sends_autoreload_disable(
         self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """stage() in flash mode should send autoreload disable via REPL."""
         drive_path = tmp_path / "CIRCUITPY"
@@ -1127,7 +1140,7 @@ class TestFlashMode:
             ],
         )
 
-        transport = self._make_flash_transport(port, str(drive_path))
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
         transport.connect()
         port.writes.clear()
 
@@ -1210,7 +1223,7 @@ class TestFlashMode:
             return original_run(command, **kwargs)
         monkeypatch.setattr(_subprocess, "run", recording_run)
 
-        transport = self._make_flash_transport(port, str(drive_path))
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
         transport.disconnect()
@@ -1228,6 +1241,7 @@ class TestFlashMode:
 
     def test_flash_disconnect_does_not_touch_autoreload(
         self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """disconnect() in flash mode emits Ctrl-B only — no Ctrl-C, no autoreload flip.
 
@@ -1243,7 +1257,7 @@ class TestFlashMode:
         )
 
         transport = self._make_flash_transport(
-            port, str(tmp_path / "CIRCUITPY"),
+            port, str(tmp_path / "CIRCUITPY"), monkeypatch,
         )
         transport.connect()
         port.writes.clear()
@@ -1293,6 +1307,7 @@ class TestFlashMode:
 
     def test_flash_stage_is_idempotent_across_calls(
         self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Repeated stage() calls should produce the same drive state."""
         drive_path = tmp_path / "CIRCUITPY"
@@ -1323,7 +1338,7 @@ class TestFlashMode:
             ],
         )
 
-        transport = self._make_flash_transport(port, str(drive_path))
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
         transport.connect()
 
         # First stage — libs + test_one.
@@ -1345,6 +1360,7 @@ class TestFlashMode:
 
     def test_flash_stage_excludes_pycache(
         self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """stage() in flash mode should not copy __pycache__ to the drive."""
         drive_path = tmp_path / "CIRCUITPY"
@@ -1374,7 +1390,7 @@ class TestFlashMode:
             ],
         )
 
-        transport = self._make_flash_transport(port, str(drive_path))
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
 
@@ -1387,6 +1403,7 @@ class TestFlashMode:
 
     def test_flash_stage_overwrites_existing_package(
         self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """stage() should overwrite existing files and remove stale ones."""
         drive_path = tmp_path / "CIRCUITPY"
@@ -1414,7 +1431,7 @@ class TestFlashMode:
             ],
         )
 
-        transport = self._make_flash_transport(port, str(drive_path))
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
 
@@ -1713,6 +1730,7 @@ class TestDeployFiles:
         mode: str = "flash",
         drive_path: str | None = None,
         extra_responses: list[bytes] | None = None,
+        monkeypatch: pytest.MonkeyPatch | None = None,
     ) -> tuple[CircuitpythonTransport, FakeSerialPort]:
         # Responses for: connect (prompt) + re-enter raw REPL (prompt) +
         # autoreload-off command (OK) + entrypoint exec (OK with output).
@@ -1725,10 +1743,16 @@ class TestDeployFiles:
         def factory(**kwargs):
             return port
 
+        if drive_path is not None and monkeypatch is not None:
+            pinned = drive_path
+            monkeypatch.setattr(
+                "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+                lambda: pinned,
+            )
+
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode=mode,
-            circuitpy_drive_path=drive_path,
             serial_port_factory=factory,
             time=FakeTime(),
         )
@@ -1829,7 +1853,7 @@ class TestDeployFiles:
         return _repl_response(stdout=f"{size}\r\n".encode("ascii"))
 
     def test_writes_files_to_drive_and_execs_entrypoint(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
@@ -1841,7 +1865,8 @@ class TestDeployFiles:
             _RAW_REPL_PROMPT,         # _enter_raw_repl after soft-reboot
         ]
         transport, _ = self._connect(
-            drive_path=str(drive), extra_responses=extra
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         output = transport.deploy_files(
             {"/code.py": b"print('hi')", "/lib/util.py": b"X = 1"},
@@ -1851,7 +1876,9 @@ class TestDeployFiles:
         assert (drive / "code.py").read_bytes() == b"print('hi')"
         assert (drive / "lib" / "util.py").read_bytes() == b"X = 1"
 
-    def test_autoreload_disabled_before_writes(self, tmp_path: Path) -> None:
+    def test_autoreload_disabled_before_writes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
         extra = [
@@ -1862,13 +1889,16 @@ class TestDeployFiles:
             _RAW_REPL_PROMPT,
         ]
         transport, port = self._connect(
-            drive_path=str(drive), extra_responses=extra
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         transport.deploy_files({"/code.py": b"pass"}, "/code.py")
         combined_writes = b"".join(port.writes).decode("utf-8", errors="replace")
         assert "supervisor.runtime.autoreload = False" in combined_writes
 
-    def test_on_file_staged_invoked_per_file_sorted(self, tmp_path: Path) -> None:
+    def test_on_file_staged_invoked_per_file_sorted(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
         extra = [
@@ -1879,7 +1909,8 @@ class TestDeployFiles:
             _RAW_REPL_PROMPT,
         ]
         transport, _ = self._connect(
-            drive_path=str(drive), extra_responses=extra
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         staged: list[str] = []
         transport.deploy_files(
@@ -1889,7 +1920,9 @@ class TestDeployFiles:
         )
         assert staged == ["/code.py", "/lib/util.py"]
 
-    def test_on_execute_line_emits_per_line(self, tmp_path: Path) -> None:
+    def test_on_execute_line_emits_per_line(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
         extra = [
@@ -1900,7 +1933,8 @@ class TestDeployFiles:
             _RAW_REPL_PROMPT,
         ]
         transport, _ = self._connect(
-            drive_path=str(drive), extra_responses=extra
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         lines: list[str] = []
         transport.deploy_files(
@@ -1934,7 +1968,7 @@ class TestDeployFiles:
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
 
     def test_tail_seconds_zero_returns_immediately_with_empty_output(
-        self, tmp_path: Path,
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """``tail_seconds=0`` must short-circuit the post-Ctrl-D capture.
 
@@ -1951,6 +1985,7 @@ class TestDeployFiles:
         ]
         transport, _ = self._connect(
             drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         output = transport.deploy_files(
             {"/code.py": b"pass"},
@@ -1960,7 +1995,7 @@ class TestDeployFiles:
         assert output == ""
 
     def test_tail_seconds_overrides_default_window(
-        self, tmp_path: Path,
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """An explicit ``tail_seconds`` value reaches _read_code_py_output."""
         drive = tmp_path / "CIRCUITPY"
@@ -1973,6 +2008,7 @@ class TestDeployFiles:
         ]
         transport, _ = self._connect(
             drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         captured_window: list[float | None] = []
         original_read = transport._read_code_py_output
@@ -2114,7 +2150,6 @@ class TestDeployFiles:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=str(tmp_path),
             serial_port_factory=lambda **_: FakeSerialPort(),
             time=FakeTime(),
         )
@@ -2122,7 +2157,7 @@ class TestDeployFiles:
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
 
     def test_stale_pre_reboot_banner_is_discarded(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Pre-reboot stale output must not leak into the capture.
 
@@ -2154,7 +2189,8 @@ class TestDeployFiles:
             _RAW_REPL_PROMPT,
         ]
         transport, _ = self._connect(
-            drive_path=str(drive), extra_responses=extra
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         output = transport.deploy_files(
             {"/code.py": b"print('fresh')"}, "/code.py",
@@ -2195,7 +2231,7 @@ class TestDeployFiles:
         assert "fresh-output" in output
 
     def test_raises_if_board_never_sees_new_entrypoint(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """If the board never reports the expected size, deploy fails loudly."""
         drive = tmp_path / "CIRCUITPY"
@@ -2209,7 +2245,8 @@ class TestDeployFiles:
             *([stale] * 20),
         ]
         transport, _ = self._connect(
-            drive_path=str(drive), extra_responses=extra
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         with pytest.raises(
             CircuitpythonTransportError,
@@ -2264,7 +2301,6 @@ class TestDriveVerification:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=drive_path,
             serial_port_factory=factory,
             time=FakeTime(),
         )
@@ -2367,7 +2403,8 @@ class TestDriveVerification:
             ],
         )
         with pytest.raises(
-            CircuitpythonTransportError, match="devices.yml",
+            CircuitpythonTransportError,
+            match="does not match the connected board",
         ):
             transport._verify_drive_for_board(wrong_drive)
 
@@ -2670,7 +2707,9 @@ class TestListFilesInScopeAndDelete:
         # Doesn't raise even with paths supplied.
         transport.delete_files(["/lib/foo.py"])
 
-    def test_flash_mode_lists_in_scope_files(self, tmp_path: Path) -> None:
+    def test_flash_mode_lists_in_scope_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Walks the CIRCUITPY drive + filters to deploy-scope paths."""
         # Plant a mix of in-scope and out-of-scope files on a fake drive.
         (tmp_path / "code.py").write_text("# code")
@@ -2684,10 +2723,13 @@ class TestListFilesInScopeAndDelete:
         (tmp_path / "data").mkdir()
         (tmp_path / "data" / "log.txt").write_text("user data")  # out of scope
 
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: str(tmp_path),
+        )
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=str(tmp_path),
             time=FakeTime(),
         )
         result = sorted(transport.list_files_in_scope())
@@ -2699,28 +2741,36 @@ class TestListFilesInScopeAndDelete:
         ]
 
     def test_flash_mode_lists_returns_empty_on_missing_drive(
-        self, tmp_path: Path,
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Drive resolution failure → empty listing (no exception)."""
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: None,
+        )
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=str(tmp_path / "no-such-drive"),
             time=FakeTime(),
         )
         assert transport.list_files_in_scope() == []
 
-    def test_flash_mode_deletes_paths_under_drive(self, tmp_path: Path) -> None:
+    def test_flash_mode_deletes_paths_under_drive(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         (tmp_path / "lib").mkdir()
         target = tmp_path / "lib" / "stale.py"
         target.write_text("# old")
         keeper = tmp_path / "lib" / "keep.py"
         keeper.write_text("# keep")
 
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: str(tmp_path),
+        )
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=str(tmp_path),
             time=FakeTime(),
         )
         transport.delete_files(["/lib/stale.py", "/lib/missing.py"])
@@ -2738,7 +2788,6 @@ class TestListFilesInScopeAndDelete:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=str(tmp_path / "no-such"),
             time=FakeTime(),
         )
         transport.delete_files([])  # no exception, no error
@@ -2784,6 +2833,10 @@ class TestListFilesInScopeAndDelete:
             "._circuitpy_volume_candidates",
             lambda: [wrong_drive, right_drive],
         )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: str(wrong_drive),
+        )
 
         # Probe response identifies the connected board as the Lolin S2,
         # whose mount is actually at right_drive.
@@ -2800,7 +2853,6 @@ class TestListFilesInScopeAndDelete:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=str(wrong_drive),
             serial_port_factory=lambda **kw: port,
             time=FakeTime(),
         )
@@ -2846,6 +2898,10 @@ class TestListFilesInScopeAndDelete:
             "._circuitpy_volume_candidates",
             lambda: [wrong_drive, right_drive],
         )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: str(wrong_drive),
+        )
         probe_marker = (
             "OK"
             "__CHU_IMPL__:circuitpython|10.1.4|S2Mini with ESP32S2-S2FN4R2\n"
@@ -2859,7 +2915,6 @@ class TestListFilesInScopeAndDelete:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            circuitpy_drive_path=str(wrong_drive),
             serial_port_factory=lambda **kw: port,
             time=FakeTime(),
         )
@@ -2958,7 +3013,6 @@ class TestWipeFilesystem:
             "/dev/ttyUSB0",
             mode="flash",
             timeout=0.05,
-            circuitpy_drive_path=str(drive),
             serial_port_factory=lambda **_: ports.pop(0),
             time=fake_time,
         )
@@ -2977,6 +3031,10 @@ class TestWipeFilesystem:
         """Drive that appears mid-poll succeeds without raising."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()  # pre-existing on disk, but masked for first probes
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: str(drive),
+        )
         # Pretend the FAT volume hasn't remounted yet for the first two
         # poll probes, then "remount" by letting the real is_dir win.
         original_is_dir = Path.is_dir
@@ -2998,7 +3056,6 @@ class TestWipeFilesystem:
             "/dev/ttyUSB0",
             mode="flash",
             timeout=0.05,
-            circuitpy_drive_path=str(drive),
             serial_port_factory=lambda **_: ports.pop(0),
             time=FakeTime(),
         )
@@ -3008,10 +3065,14 @@ class TestWipeFilesystem:
         assert probe_count["value"] >= 3
 
     def test_flash_mode_drive_never_remounts_raises(
-        self, tmp_path: Path,
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Drive that never reappears within budget raises a clear error."""
         drive = tmp_path / "CIRCUITPY"  # never created
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: str(drive),
+        )
 
         first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
@@ -3020,7 +3081,6 @@ class TestWipeFilesystem:
             "/dev/ttyUSB0",
             mode="flash",
             timeout=0.05,
-            circuitpy_drive_path=str(drive),
             serial_port_factory=lambda **_: ports.pop(0),
             time=FakeTime(),
         )
@@ -3060,34 +3120,12 @@ class TestWipeFilesystem:
             "/dev/ttyUSB0",
             mode="flash",
             timeout=0.05,
-            circuitpy_drive_path=str(drive),
             serial_port_factory=lambda **_: ports.pop(0),
             time=FakeTime(),
         )
         transport.connect()
         transport.wipe_filesystem()
         assert write_attempts["value"] >= 3
-
-    def test_flash_mode_skips_remount_wait_when_path_unset(
-        self, tmp_path: Path,
-    ) -> None:
-        """No circuitpy_drive_path → wipe doesn't poll for any drive."""
-        first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
-        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
-        ports = [first_port, second_port]
-        transport = CircuitpythonTransport(
-            "/dev/ttyUSB0",
-            mode="flash",
-            timeout=0.05,
-            circuitpy_drive_path=None,
-            serial_port_factory=lambda **_: ports.pop(0),
-            time=FakeTime(),
-        )
-        transport.connect()
-        # Should not raise — the FAT-remount poll is a no-op when no
-        # drive path is configured.
-        transport.wipe_filesystem()
-
 
 class TestListScopeOnDriveHelper:
     """Module-level CIRCUITPY-walk helper used by `list_files_in_scope`."""

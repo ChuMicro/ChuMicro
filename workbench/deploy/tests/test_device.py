@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
-from pathlib import Path
 
 import pytest
 from chumicro_deploy import (
@@ -26,7 +25,6 @@ class TestConstruction:
         assert device.baudrate == 115200
         # Flash is the default; RAM is opt-in.
         assert device.deploy_mode == "flash"
-        assert device.circuitpy_drive_path is None
         assert device.entrypoint_name is None
         assert device.resource_prefix == "/lib"
 
@@ -36,13 +34,11 @@ class TestConstruction:
             address="COM7",
             baudrate=9600,
             deploy_mode="flash",
-            circuitpy_drive_path=Path("/Volumes/CIRCUITPY"),
             entrypoint_name="app.py",
             resource_prefix="/pkg",
         )
         assert device.baudrate == 9600
         assert device.deploy_mode == "flash"
-        assert device.circuitpy_drive_path == Path("/Volumes/CIRCUITPY")
         assert device.entrypoint_name == "app.py"
         assert device.resource_prefix == "/pkg"
 
@@ -94,7 +90,6 @@ class TestFromDict:
         assert device.baudrate == 115200
         # Flash is the default; RAM is opt-in.
         assert device.deploy_mode == "flash"
-        assert device.circuitpy_drive_path is None
 
     def test_all_fields(self):
         device = Device.from_dict(
@@ -103,14 +98,12 @@ class TestFromDict:
                 "address": "COM7",
                 "baudrate": 230400,
                 "deploy_mode": "flash",
-                "circuitpy_drive_path": "/Volumes/CIRCUITPY",
                 "entrypoint_name": "app.py",
                 "resource_prefix": "/pkg",
             },
         )
         assert device.baudrate == 230400
         assert device.deploy_mode == "flash"
-        assert device.circuitpy_drive_path == Path("/Volumes/CIRCUITPY")
         assert device.entrypoint_name == "app.py"
         assert device.resource_prefix == "/pkg"
 
@@ -133,15 +126,20 @@ class TestFromDict:
         with pytest.raises(ValueError, match="address"):
             Device.from_dict({"transport": "micropython"})
 
-    def test_empty_string_drive_path_treated_as_none(self):
+    def test_legacy_circuitpy_drive_path_field_is_ignored(self):
+        # Old devices.yml registries may carry a ``circuitpy_drive_path``
+        # entry left over from before drive resolution moved to
+        # auto-detect-and-verify.  ``from_dict`` ignores unknown keys
+        # silently so existing files don't error on load.
         device = Device.from_dict(
             {
                 "transport": "circuitpython",
                 "address": "/dev/x",
-                "circuitpy_drive_path": "",
+                "circuitpy_drive_path": "/Volumes/CIRCUITPY",
             },
         )
-        assert device.circuitpy_drive_path is None
+        assert device.transport == "circuitpython"
+        assert device.address == "/dev/x"
 
     def test_validation_propagates(self):
         with pytest.raises(ValueError, match="Unsupported transport"):
@@ -181,26 +179,18 @@ class TestCreateTransport:
             transport="circuitpython",
             address="/dev/cu.x",
             deploy_mode="flash",
-            circuitpy_drive_path=Path("/Volumes/CIRCUITPY"),
         )
         transport = device.create_transport()
         assert isinstance(transport, CircuitpythonTransport)
         assert transport.mode == "flash"
 
-    def test_circuitpython_passes_baudrate_and_drive_path(self):
-        drive = Path("/Volumes/CIRCUITPY")
+    def test_circuitpython_passes_baudrate(self):
         device = Device(
             transport="circuitpython",
             address="/dev/cu.x",
             baudrate=230400,
             deploy_mode="flash",
-            circuitpy_drive_path=drive,
         )
         transport = device.create_transport()
         assert isinstance(transport, CircuitpythonTransport)
         assert transport.baudrate == 230400
-        # ``Device`` stores the drive as a ``Path`` for typed
-        # downstream consumers; ``CircuitpythonTransport`` keeps the
-        # ``str`` shape it inherited from pyserial / mpremote.
-        # ``Device.create_transport`` does the conversion.
-        assert transport.circuitpy_drive_path == str(drive)

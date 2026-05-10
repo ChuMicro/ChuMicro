@@ -226,8 +226,8 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     message = str(error).lower()
     # Check CONFIGURATION first — these messages often contain
     # substrings that look like other kinds (e.g. "CIRCUITPY drive
-    # not found — pass circuitpy_drive_path") but really mean the
-    # caller misconfigured the deploy.
+    # not found") but really mean the caller misconfigured the
+    # deploy or hasn't connected the board yet.
     for pattern in _CONFIGURATION_PATTERNS:
         if pattern in message:
             return DeployFailureKind.CONFIGURATION_ERROR
