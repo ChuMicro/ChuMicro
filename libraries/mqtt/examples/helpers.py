@@ -45,14 +45,13 @@ MicroPython::
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    # Pi Pico W only — disable CYW43 power-save so connects don't take
-    # 30+ seconds.  Magic constant: see chumicro_wifi._adapters.mp
-    # (CYW43_PM_DISABLE) for the canonical home + provenance.  ESP32
-    # chips raise ValueError / OSError on this kwarg — silently skip there.
-    try:
+    # Pi Pico W (rp2 / CYW43) only — disable aggressive idle power-save
+    # so connects don't take 30+ seconds.  Magic constant: see
+    # chumicro_wifi._adapters.mp.CYW43_PM_DISABLE for the canonical
+    # home + provenance.  Gated to rp2 because ESP32 chips reject the
+    # kwarg (ESP_ERR_INVALID_ARG) and have their own power-save defaults.
+    if sys.platform == "rp2":
         wlan.config(pm=0xA11140)
-    except (OSError, ValueError):
-        pass
     wlan.connect("my-ssid", "my-password")
     while not wlan.isconnected():
         time.sleep(0.1)
@@ -136,16 +135,16 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         import network  # noqa: PLC0415 — MP-only
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
-        # CYW43 (Pi Pico W) defaults to aggressive power-save which makes
-        # connects take 30+ seconds.  Magic constant: see
-        # chumicro_wifi._adapters.mp.CYW43_PM_DISABLE for the canonical
-        # home + provenance; replicated here because example helpers
-        # can't import their non-deps.  ESP32 chips raise on this kwarg —
-        # silently skip there.
-        try:
+        # rp2 / CYW43 (Pi Pico W) defaults to aggressive idle power-save
+        # which makes connects take 30+ seconds.  Disable it.  Magic
+        # constant: see chumicro_wifi._adapters.mp.CYW43_PM_DISABLE for
+        # the canonical home + provenance; replicated here because
+        # example helpers can't import their non-deps.  Gated to rp2
+        # because ESP32 chips reject this kwarg with
+        # ESP_ERR_INVALID_ARG (raised as RuntimeError, NOT
+        # OSError / ValueError) and have their own power-save defaults.
+        if sys.platform == "rp2":
             wlan.config(pm=0xA11140)
-        except (OSError, ValueError):
-            pass
         wlan.connect(ssid, password)
         deadline = time.time() + timeout_s
         while not wlan.isconnected():
