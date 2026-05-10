@@ -21,6 +21,7 @@
 - **`example_source.py` adds `examples/` to `ImportGraphSource` search paths.**  Sibling `helpers.py` in a library's `examples/` directory now rides along to `/lib/helpers.py` on the device at deploy time.  Without this, `from helpers import …` from an example's entrypoint would resolve via the host import path during static analysis but fail on the device.
 - **Sweep harness classifier extended for hard-fault / safe-mode markers.**  `Hard fault: ` / `Running in safe mode` / `CircuitPython core code crashed hard` now classify as FAIL.  Pre-fix, a hard fault on Lolin S2 CP (during `tcp_roundtrip` against an unreachable host with stale wifi state) was misclassified as PASS because none of the original markers matched.
 - **8 network examples migrated to per-library `helpers.py` pattern.**  `libraries/{ntp,requests,mqtt,websockets,http_server}/examples/helpers.py` created mirroring the canonical sockets shape (`runtime_config()` + `wifi_up(ssid, password) -> (radio, ip)`, raw runtime primitives, `__chumicro_runtimes__` marker so verify_examples skips platform imports).  Eight examples refactored to drop `chumicro_wifi` + `chumicro_config` imports and the `_drive_until` / `service.check / handle / state` boilerplate: `ntp/circuitpython_ntp_query.py`, `requests/circuitpython_periodic_get.py`, `mqtt/circuitpython_telemetry.py`, `websockets/{circuitpython_client,circuitpython_server}.py`, `http_server/{circuitpython_two_thing_server,circuitpython_two_thing_sensor}.py`, `sockets/circuitpython_udp_echo_client.py`.  Examples now import only their owning library + the local `helpers` module (plus `chumicro_requests` from the http_server sensor example, which talks HTTP outbound).  `helpers.runtime_config()` returns a plain dict (raw msgpack decode) that all `from_config()` factories accept directly per `chumicro_config.section.load_section`'s dict-or-RuntimeConfig contract.  Renamed `_runtime_config` → `runtime_config` in sockets/helpers.py for the public API.  `verify_examples.py` clean (48 examples), full lint clean.  Bench validation queued.
+- **`helpers.py` made truly standalone — inline msgpack decoder + scaffold integration.**  Replaced the `try: import msgpack except ImportError: return {}` path with a 60-line inline decoder covering every msgpack type the `chumicro-workspace` deploy pipeline produces (nil / bool / every int width / float 32+64 / str / bin / array / map; no ext / timestamp).  Pi Pico W MicroPython no longer needs `mpremote mip install msgpack` — same code path on every runtime.  Decoder validated against the reference `msgpack` impl on the host across small + large maps, all int widths, every string-length tier, nested structures, floats, bools, and arrays.  Single `if not ssid or ssid == "your-wifi-ssid"` placeholder check replaces the prior 3-element sentinel set.  All 6 library `helpers.py` files now identical (md5 verified) — single canonical version.  Promoted to library scaffold: `workbench/workspace/src/chumicro_workspace/_payloads/library_template/helpers.py.template` ships with every `python scripts/run.py new-library`, so a fresh library starts with a working copy that the user deletes if its examples don't need wifi.  `new-library` skill updated with delete-if-unused instruction.  Closes follow-up #2.
 
 ## Open follow-ups
 
@@ -30,29 +31,9 @@ Each entry has enough context for a cold pickup — file paths, reproducers, fix
 
 Resolved in the helpers.py migration commit; see "What landed" above for details.  Bench validation across the 4-board matrix is queued — the static `verify_examples.py` pass is green but on-board execution hasn't been re-run since the migration.
 
-### 2. Pi Pico W MP firmware lacks built-in `msgpack` (small effort, depends on workaround chosen)
+### 2. Pi Pico W MP firmware lacks built-in `msgpack` — SHIPPED (option (c))
 
-**Symptom.** The `examples/helpers.py` pattern's optional `runtime_config.msgpack` read path falls back to in-file constants on Pi Pico W MP because `import msgpack` raises `ImportError`.  Result: `RuntimeError: set WIFI_SSID + WIFI_PASSWORD …` until the user installs msgpack or edits the example.
-
-**Repro.**
-```bash
-.venv/bin/chumicro-deploy deploy --devices-file devices.yml \
-    --device pi-pico-w-micropython-board \
-    --file-map .scratch/probe_files.json \
-    --entrypoint /main.py
-```
-Where `.scratch/probe_files.json` is `{"/main.py": "try:\n    import msgpack\n    print('OK')\nexcept ImportError as e:\n    print('FAIL', e)\n"}`.  Pi Pico W MP prints `FAIL no module named 'msgpack'`; Lolin S2 MP and both CP boards print `OK`.
-
-**Workarounds available today:**
-- **Per-bench**: `mpremote connect /dev/cu.usbmodem112401 mip install msgpack` (one-time setup).
-- **Per-example**: edit `WIFI_SSID` / `WIFI_PASSWORD` constants in the example, the helper falls back to those.
-
-**Long-term fix options:**
-- (a) Have `chumicro-workspace setup` opportunistically `mip install msgpack` on every registered MP device.  Aligns with "workspace bootstraps the device's runtime baseline".
-- (b) Ship `chumicro-msgpack` to MP boards by default at workspace setup time (already a chumicro-published library; the `chumicro-config` library declares it as a dep already).  Same delivery mechanism as (a).
-- (c) Embed a tiny msgpack decoder inline in `helpers.py` — ~50 lines, no deps; worst from a maintenance standpoint.
-
-**Recommended:** option (a) or (b).  Workspace setup already does board-side dep installs for the project's `pyproject.toml` deps; extending to "always include msgpack on MP" is a small change.
+Resolved via the inline-msgpack-decoder approach.  See "What landed" above.  Helpers are now self-contained — no `mip install` needed on Pi Pico W MP.
 
 ### 3. `libraries/sockets/examples/tls_with_custom_ca.py` design call (medium effort)
 
