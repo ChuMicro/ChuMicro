@@ -151,8 +151,7 @@ Works identically on CPython, MicroPython, and CircuitPython.  The `chumicro-soc
 
 | Example | What it shows |
 |---|---|
-| [`examples/circuitpython_two_thing_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/circuitpython_two_thing_server.py) | Display half of a two-thing demo: `GET /`, `GET /api/latest`, `POST /api/sensor` routes; in-memory latest-reading state.  Hardware-only (filename prefix). |
-| [`examples/circuitpython_two_thing_sensor.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/circuitpython_two_thing_sensor.py) | Sensor half: posts a synthetic reading to the server every 5 s using `chumicro-requests`. |
+| [`examples/circuitpython_simple_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/circuitpython_simple_server.py) | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes; drive it with `curl` from your laptop.  Hardware-only (filename prefix).  For a two-board (server + client) pattern, see the workspace template's `two_board_handshake/` example. |
 
 ## v1 non-goals
 

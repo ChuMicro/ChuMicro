@@ -111,15 +111,14 @@ runner-shaped, LED-blink-friendly progression.
 
 | Example | What it shows |
 |---|---|
-| `circuitpython_two_thing_server.py` | Display half of a two-thing demo: HTTP server with `GET /`, `GET /api/latest`, `POST /api/sensor` routes; in-memory latest-reading state.  Runs on CP / MP boards (filename prefix marks it hardware-only). |
-| `circuitpython_two_thing_sensor.py` | Sensor half of the two-thing demo: posts a synthetic reading to the server every 5 s using `chumicro-requests`. |
+| `circuitpython_simple_server.py` | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes.  Drive it with `curl` from your laptop.  Filename prefix marks it hardware-only.  For a two-physical-board demo see the workspace template's `two_board_handshake/` example. |
 
 ## Configuring wifi for examples and functional tests
 
 Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  Two paths, depending on whether you're using a `chumicro-workspace`:
 
-* **With a workspace (recommended).**  Put wifi creds in your workspace's gitignored `workspace.yml`, run `chumicro-workspace deploy <project>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The two-thing demo's `runtime_config` schema also accepts `[two_thing_sensor]` for the sensor's target server overrides — see the example file for keys.
-* **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` constants (and `SERVER_HOST` on the sensor side) near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
+* **With a workspace (recommended).**  Put wifi creds in your workspace's gitignored `workspace.yml`, run `chumicro-workspace deploy <project>`, and the example reads them via the bundled `helpers.py` (which decodes `/runtime_config.msgpack` on the device, no on-device `msgpack` module needed).
+* **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` constants near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
 
 The library itself never reads either source — it takes a `listener_factory` and goes.  The config wiring is application-layer.
 
