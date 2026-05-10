@@ -1977,7 +1977,9 @@ def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state ma
         classify_deploy_failure,
     )
     try:
-        result = runner.deploy(source, clean=args.clean)
+        result = runner.deploy(
+            source, clean=args.clean, tail_seconds=args.tail_seconds,
+        )
     except Exception as deploy_error:  # noqa: BLE001 — classify + route
         kind = classify_deploy_failure(deploy_error)
         if kind is DeployFailureKind.NO_PYTHON_RUNTIME:
@@ -3631,6 +3633,23 @@ def build_parser() -> argparse.ArgumentParser:
             "packages and other deploy-managed files so each example "
             "lands fresh; pass --no-clean if you've hand-installed "
             "extra modules on the board you want to keep."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "--tail-seconds",
+        type=float,
+        default=None,
+        help=(
+            "How long to capture serial output after the entrypoint's "
+            "soft-reboot (CircuitPython flash mode only; MP transport "
+            "ignores this).  Default uses the transport's built-in "
+            "timeout (10 s).  Raise it for slow-wifi boards (Pi Pico W "
+            "cyw43 wifi-up + first network call takes 5-10 s) so the "
+            "first prints don't land outside the capture window — "
+            "common in --non-interactive --no-tail use (sweep harness, "
+            "CI runs).  Set to 0 to skip the capture entirely and "
+            "return as soon as the soft-reboot has been triggered, "
+            "leaving the board running."
         ),
     )
     deploy_example_parser.set_defaults(func=_cmd_deploy_example)

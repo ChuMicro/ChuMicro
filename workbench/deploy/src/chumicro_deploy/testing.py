@@ -376,6 +376,7 @@ class FakeTransport:
         on_execute_line: Callable[[str], None] | None = None,
         follow: str = "exec",
         clean: bool = False,
+        tail_seconds: float | None = None,
     ) -> str:
         """Record a deploy_files call and return the configured output.
 
@@ -391,11 +392,19 @@ class FakeTransport:
         ``"soft_reboot"``) so the Deployer can pass-through without
         switching transports; the fake records it but doesn't
         otherwise change behaviour.
+
+        ``tail_seconds`` mirrors the CP transport's post-soft-reboot
+        capture-window override.  The fake records it on
+        :attr:`last_tail_seconds` so callers can assert the Deployer
+        forwarded the value (``None`` when the caller didn't pass it
+        through, or when the device is MP and the kwarg was filtered
+        out by ``_deploy_files_kwargs``).
         """
         self.calls.append(("deploy_files", (dict(files), entrypoint, follow)))
         # `clean` rides on the kwarg surface; tests asserting on it
         # check the rsync call directly or stub the transport.
         self.last_clean = clean  # type: ignore[attr-defined]
+        self.last_tail_seconds = tail_seconds  # type: ignore[attr-defined]
         # Update simulated on-device state so a subsequent
         # `list_files_in_scope` reflects what was just shipped.
         for device_path, payload in files.items():

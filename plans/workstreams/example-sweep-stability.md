@@ -79,17 +79,21 @@ Four new unit tests:
 
 Option (b) (shared `support/example_helpers/` package) considered and skipped — a future 4th wifi-adjacent helper need (RTC sync, mDNS, etc.) is the natural forcing function for revisiting.
 
-### 8. Sweep harness misses output on slow-wifi boards in `--no-tail` mode
+### 8. Sweep harness misses output on slow-wifi boards in `--no-tail` mode — SHIPPED (deploy-example side)
 
-**Symptom.** `chumicro-workspace deploy-example … --non-interactive --no-tail` captures output for ~2 s post-soft-reboot.  On Pi Pico W (cyw43), wifi-up + first TCP request can take 5-10 s.  The example's `print(...)` lines land OUTSIDE the capture window → harness sees "deploying ..." and nothing else → counts as PASS by exit code but actual output isn't visible.
+**Resolution (deploy-example side).** `chumicro-workspace deploy-example` now exposes `--tail-seconds N`, threading through to `runner.deploy(source, tail_seconds=…)` (the chumicro-deploy plumbing was already complete end-to-end; only the front-door CLI surface was missing).  CP-only — MP transport ignores the kwarg via the existing filter in `_deploy_files_kwargs`.  Help text names the slow-wifi sweep-harness use case explicitly so future operators reach for it without re-deriving.
 
-**Repro.**  Deploy `sockets/tcp_roundtrip.py` to Pi Pico W MP with `--non-interactive --no-tail` directly.  Compare against deploying with `chumicro-repl --tail 30` immediately after — the latter shows the full WIFI_OK + HTTP 200 sequence.
+`FakeTransport.deploy_files` gained a `tail_seconds: float | None = None` kwarg + `last_tail_seconds` attribute so tests can assert the value flowed end-to-end.  Two new deploy-example tests: `test_tail_seconds_flag_flows_to_transport` (asserts `--tail-seconds 30` reaches the transport with `30.0`) + `test_tail_seconds_default_is_none` (asserts no flag → `None`, preserving the prior fall-through-to-transport-default behavior).
 
-**Fix shape.**  Two-axis:
-- Sweep-harness side: `.scratch/sweep_examples.py` should optionally use the longer-tail path for known-slow examples (network ones).  `chumicro-deploy deploy` already has `--tail-seconds N` (per workbench-deploy-reliability Step 3); deploy-example doesn't expose it.
-- Deploy-example side: add `--tail-seconds N` to `chumicro-workspace deploy-example`'s flag set, threading through to `runner.deploy(source, tail_seconds=…)` (which already accepts it).
+**Bench-validated 2026-05-10** on Pi Pico W CP with `requests/circuitpython_periodic_get`:
+- Default 10 s window: captured 3 lines (`WIFI_OK ip=…`, `Polling http://example.com/ every 30 s`, one `[1] ERROR=…` cycle).
+- `--tail-seconds 45`: captured 4 lines — second polling cycle (`[2] ERROR=…`) appears, proving the longer window catches output that would otherwise land outside the capture.
 
-**Effort.** Small (1-2 hours) for the deploy-example flag exposure; harness adoption is a one-line config change.
+**Side observation (out of scope for this workstream item).** The `circuitpython_periodic_get` example is currently failing at example.com with `HttpTimeoutError` (request deadline too tight for the public host's first-request latency on cyw43).  Tracked separately when revisited; doesn't affect the tail-seconds plumbing fix.
+
+`chumicro-workspace` 0.16.0 → 0.17.0 (new public CLI flag); `chumicro-deploy` 0.13.1 → 0.13.2 (testing fake gained `tail_seconds` kwarg + `last_tail_seconds` attribute).
+
+**Sweep-harness side (gitignored, so noted not committed).** `.scratch/sweep_examples.py` can now pass `--tail-seconds 45` (or higher) for known-slow groups (network examples on cyw43 boards).  Operator adoption is a one-line config change in the harness when the next sweep runs.
 
 ### 9. Another serial-terminal app holding a port blocks deploys — SHIPPED
 
