@@ -20,38 +20,15 @@
 - **`scripts/verify_examples.py` learned `__chumicro_runtimes__` markers + sibling-import resolution.**  Files declaring a non-CPython runtime in the marker are treated as hardware-mode (skipping platform-built-in checks), matching the existing `circuitpython_*` / `micropython_*` filename-prefix behavior.  The verifier also adds each example's parent dir to `sys.path` during checking so `from helpers import wifi_up` resolves against the sibling helper.  Six new tests in `scripts/tests/test_verify_examples.py::TestHasHardwareRuntimeMarker`.
 - **`example_source.py` adds `examples/` to `ImportGraphSource` search paths.**  Sibling `helpers.py` in a library's `examples/` directory now rides along to `/lib/helpers.py` on the device at deploy time.  Without this, `from helpers import …` from an example's entrypoint would resolve via the host import path during static analysis but fail on the device.
 - **Sweep harness classifier extended for hard-fault / safe-mode markers.**  `Hard fault: ` / `Running in safe mode` / `CircuitPython core code crashed hard` now classify as FAIL.  Pre-fix, a hard fault on Lolin S2 CP (during `tcp_roundtrip` against an unreachable host with stale wifi state) was misclassified as PASS because none of the original markers matched.
+- **8 network examples migrated to per-library `helpers.py` pattern.**  `libraries/{ntp,requests,mqtt,websockets,http_server}/examples/helpers.py` created mirroring the canonical sockets shape (`runtime_config()` + `wifi_up(ssid, password) -> (radio, ip)`, raw runtime primitives, `__chumicro_runtimes__` marker so verify_examples skips platform imports).  Eight examples refactored to drop `chumicro_wifi` + `chumicro_config` imports and the `_drive_until` / `service.check / handle / state` boilerplate: `ntp/circuitpython_ntp_query.py`, `requests/circuitpython_periodic_get.py`, `mqtt/circuitpython_telemetry.py`, `websockets/{circuitpython_client,circuitpython_server}.py`, `http_server/{circuitpython_two_thing_server,circuitpython_two_thing_sensor}.py`, `sockets/circuitpython_udp_echo_client.py`.  Examples now import only their owning library + the local `helpers` module (plus `chumicro_requests` from the http_server sensor example, which talks HTTP outbound).  `helpers.runtime_config()` returns a plain dict (raw msgpack decode) that all `from_config()` factories accept directly per `chumicro_config.section.load_section`'s dict-or-RuntimeConfig contract.  Renamed `_runtime_config` → `runtime_config` in sockets/helpers.py for the public API.  `verify_examples.py` clean (48 examples), full lint clean.  Bench validation queued.
 
 ## Open follow-ups
 
 Each entry has enough context for a cold pickup — file paths, reproducers, fix sketch, effort estimate.
 
-### 1. 8 network examples violate the library-dep rule (medium effort)
+### 1. 8 network examples violate the library-dep rule — SHIPPED
 
-**Symptom.** Eight `libraries/*/examples/circuitpython_*.py` files import `chumicro_wifi` even though their owning library's `pyproject.toml` doesn't declare `chumicro-wifi` as a dependency.  Architectural rule: examples can't import libraries the owning library doesn't depend on.  The shape fix landed for `sockets/tcp_roundtrip.py` in `30de95ce` (per-library `examples/helpers.py` using raw `wifi.radio` / `network.WLAN`); the rest still need it.
-
-**Affected files:**
-- `libraries/ntp/examples/circuitpython_ntp_query.py` (uses `WifiConfig`, `WifiService`, `WifiState`)
-- `libraries/requests/examples/circuitpython_periodic_get.py`
-- `libraries/mqtt/examples/circuitpython_telemetry.py`
-- `libraries/websockets/examples/circuitpython_client.py`
-- `libraries/websockets/examples/circuitpython_server.py`
-- `libraries/http_server/examples/circuitpython_two_thing_server.py`
-- `libraries/http_server/examples/circuitpython_two_thing_sensor.py`
-- `libraries/sockets/examples/circuitpython_udp_echo_client.py`
-
-**Repro.** For any of those files: `grep "from chumicro_wifi" libraries/<lib>/examples/<file>.py` — if it has the import, check `libraries/<lib>/pyproject.toml`'s `[project] dependencies` block.  None of them list `chumicro-wifi`.
-
-**Fix shape (mirrors `sockets/examples/helpers.py` from this commit):**
-1. Create `libraries/<lib>/examples/helpers.py` with the same `wifi_up(ssid, password, *, timeout_s=15) -> (radio, ip)` shape.  Mark with `__chumicro_runtimes__ = ("circuitpython", "micropython")` so `verify_examples.py` skips platform imports.  CYW43 power-save knob (`wlan.config(pm=0xa11140)`) inside a `try / except (OSError, ValueError)` so ESP32 doesn't trip on it.
-2. Refactor each example to:
-   - Import only `chumicro_<owning-lib>` + the local `helpers` module
-   - Drop the `from chumicro_wifi import …` line
-   - Drop the `_drive_until` / `service.check / handle / state` loop
-   - Replace with `radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)`
-3. Verify: `python scripts/verify_examples.py` (should print "All 49 examples verified").
-4. Bench-validate at least one example per refactored library on Lolin S2 CP (msgpack built-in works) — Pi Pico W MP needs `mpremote mip install msgpack` first, see follow-up #2.
-
-**Effort.** Roughly 1-2 hours per library for 6 libraries (mqtt, ntp, requests, websockets, http_server, sockets — the 7th, sockets, has only `circuitpython_udp_echo_client.py` left to convert since `tcp_roundtrip.py` already shipped).  The helper itself can be near-identical across libraries; per-library variation is mostly which library APIs the example demonstrates.
+Resolved in the helpers.py migration commit; see "What landed" above for details.  Bench validation across the 4-board matrix is queued — the static `verify_examples.py` pass is green but on-board execution hasn't been re-run since the migration.
 
 ### 2. Pi Pico W MP firmware lacks built-in `msgpack` (small effort, depends on workaround chosen)
 
