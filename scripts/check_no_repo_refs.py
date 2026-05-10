@@ -74,6 +74,19 @@ def _everywhere_outside_chumicro_workspace(filepath: Path) -> bool:
     return "workbench/workspace/" not in filepath.as_posix()
 
 
+def _outside_chumicro_checks(filepath: Path) -> bool:
+    """``_everywhere`` minus the ``chumicro_checks`` package exemption.
+
+    The ``chumicro_checks`` package's purpose is to enumerate, describe,
+    and run the CHU rules.  Inside its tree, CHU code identifiers are
+    public API (not workspace-internal jargon), the mono-repo and its
+    ``plans/`` tree are load-bearing references (they're what the rules
+    target), and naming ``scripts/run.py`` is necessary to document
+    that the mono-repo's lint phase shells out to ``chumicro-checks``.
+    """
+    return "workbench/checks/" not in filepath.as_posix()
+
+
 _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
     (
         re.compile(r"\bDecision\s*0\d{3}\b"),
@@ -83,17 +96,17 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
     (
         re.compile(r"\bplans/[A-Za-z0-9_./-]*\.md\b"),
         "plans/...md path — mono-repo planning tree, not on consumer machines",
-        _everywhere,
+        _outside_chumicro_checks,
     ),
     (
         re.compile(r"\bplans/(?:decisions|workstreams|next-up|patterns|learnings)\b"),
         "plans/... path — mono-repo planning tree, not on consumer machines",
-        _everywhere,
+        _outside_chumicro_checks,
     ),
     (
         re.compile(r"\bscripts/run\.py\b"),
         "scripts/run.py ref — mono-repo command runner, not on consumer machines",
-        _everywhere,
+        _outside_chumicro_checks,
     ),
     (
         re.compile(r"(?<!scripts/)\brun\.py\b"),
@@ -104,7 +117,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
     (
         re.compile(r"\bchumicro\s+mono[\s-]?repo\b", re.IGNORECASE),
         "'chumicro mono-repo' framing — consumer reads this without that context",
-        _everywhere,
+        _outside_chumicro_checks,
     ),
     (
         re.compile(r"\bCHU\d{3}\b"),
@@ -112,7 +125,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str, Callable[[Path], bool]], ...] = (
         "rule's intent (e.g. 'silent test skips') rather than the code.  "
         "Legitimate matches inside ``# noqa: CHU0NN`` directives are "
         "already exempt",
-        _everywhere,
+        _outside_chumicro_checks,
     ),
 )
 

@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chumicro-checks"
+dynamic = ["version"]
+description = "Workspace-internal lint rules (CHU0NN) shared between the chumicro mono-repo and the ChuMicro-Workspace-Template starter."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "ChuMicro" },
+]
+keywords = [
+    "chumicro", "lint", "static-analysis", "monorepo", "workspace",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Quality Assurance",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/checks"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+
+[project.scripts]
+chumicro-checks = "chumicro_checks.cli:main"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\S+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "VERSION", "README.md"]
+exclude = [".gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chumicro_checks"]
