@@ -10,6 +10,7 @@ from __future__ import annotations
 from chumicro_checks._rule import Rule
 from chumicro_checks.rules.chu006 import CHU006
 from chumicro_checks.rules.chu007 import CHU007
+from chumicro_checks.rules.chu008 import CHU008
 from chumicro_checks.rules.chu011 import CHU011
 from chumicro_checks.rules.chu012 import CHU012
 
@@ -23,6 +24,7 @@ def registered_rules() -> dict[str, Rule]:
     return {
         CHU006.code: CHU006,
         CHU007.code: CHU007,
+        CHU008.code: CHU008,
         CHU011.code: CHU011,
         CHU012.code: CHU012,
     }
