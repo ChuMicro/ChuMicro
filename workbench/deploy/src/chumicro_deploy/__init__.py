@@ -27,7 +27,6 @@ from .circuitpython_transport import (
     CircuitpythonTransport,
     CircuitpythonTransportError,
     SerialPort,
-    find_circuitpy_drive,
 )
 from .config.default import (
     DEFAULT_DEVICES_FILENAME,
@@ -133,7 +132,6 @@ __all__ = [
     "classify_deploy_failure",
     "detect_fskit_wedge",
     "file_targets_runtime",
-    "find_circuitpy_drive",
     "flash_firmware",
     "is_in_deploy_scope",
     "load_device_registry",

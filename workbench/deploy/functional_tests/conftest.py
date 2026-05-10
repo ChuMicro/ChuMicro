@@ -24,7 +24,9 @@ from chumicro_deploy import (
     DeviceEntry,
     load_device_registry,
 )
-from chumicro_deploy.circuitpython_transport import find_circuitpy_drive
+from chumicro_deploy.circuitpython_transport import (
+    _circuitpy_volume_candidates,
+)
 from chumicro_deploy.macos_fskit import (
     MACOS_FSKIT_RECOVERY_COMMAND,
     detect_fskit_wedge,
@@ -119,10 +121,10 @@ def circuitpython_flash_device() -> DeviceEntry:
 
     Skips when no CIRCUITPY drive is currently mounted on the host —
     flash-mode deploy needs somewhere to write files, and the
-    transport resolves the drive via :func:`find_circuitpy_drive` at
-    deploy time.
+    transport resolves the drive at deploy time via
+    :func:`_circuitpy_volume_candidates` plus UID-based auto-correction.
     """
     devices, defaults = _load_registry_or_skip()
-    if find_circuitpy_drive() is None:
+    if not _circuitpy_volume_candidates():
         pytest.skip("No CIRCUITPY drive mounted on the host")
     return _pick_device(devices, defaults, "circuitpython")
