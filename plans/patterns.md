@@ -405,6 +405,50 @@ consistent API.  Keep function names aligned with CPython's stdlib.
 
 Related: `libraries/compat/`, Decision 0007.
 
+## Missing builtins on MicroPython 1.28
+
+MicroPython 1.28 doesn't ship every CPython exception builtin.  In
+particular, **`TimeoutError` is not a builtin** — `raise TimeoutError(...)`
+in cross-runtime code (`libraries/*/src/`, `support/test_harness/src/`,
+`libraries/*/examples/helpers.py`) raises `NameError: name 'TimeoutError'
+isn't defined` on MP.  Works on CPython + CircuitPython, breaks on MP.
+
+Established workarounds in this codebase:
+
+1. **Library code: subclass your own library-specific exception.**
+   `chumicro_requests` defines `HttpTimeoutError(HttpError)` and raises that
+   on request timeouts.  `chumicro_websockets` defines
+   `WebSocketTimeoutError(WebSocketError)` and raises that.  Both work
+   identically on every runtime because the base class is library-defined,
+   not borrowed from builtins.  This is the preferred shape for new
+   library code — callers can pattern-match the library type without
+   relying on the runtime's builtin set.
+
+2. **Helpers / glue code: use `OSError` directly.**  When the library
+   doesn't have its own exception hierarchy yet (e.g. example
+   `helpers.py` files doing wifi-up timeouts), `raise OSError("wifi
+   did not connect within ...")` is a one-line workaround that's a
+   CPython builtin AND an MP builtin AND a parent class of the
+   CPython `TimeoutError` — so callers catching `OSError` keep
+   working when this code later gets refactored to subclass
+   properly.  Pattern in use across the 6 `libraries/*/examples/helpers.py`.
+
+3. **Local re-define if you really need the name `TimeoutError`.**
+   `class TimeoutError(OSError): ...` at module scope shadows the
+   missing builtin on MP and matches the existing one on CPython +
+   CP (since CPython's `TimeoutError` is also an `OSError` subclass).
+   No callers want this today — the pattern is documented for
+   completeness.
+
+Don't add a `TimeoutError` polyfill to `chumicro_compat`.  A 2026-05-10
+survey found zero callers wanting bare `TimeoutError` — every library
+that has a timeout concept already defines its own subclass.  A
+compat polyfill would be public API surface with no consumers.
+
+If a future change adds bare `raise TimeoutError(` in cross-runtime
+code, `chumicro-checks` would be the right home for a lint rule that
+catches it.  Not shipped today; add when the regression first appears.
+
 ## Backend protocol (duck-typed)
 
 When a library needs swappable implementations (storage backends,

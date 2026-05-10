@@ -12,6 +12,39 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
+### Next CP hard fault on stale socketpool state — investigate
+
+**Surfaced 2026-05-09** during the 4-board example sweep on Lolin S2 CP.  After a
+prior `websockets/examples/circuitpython_server.py` deploy left a `socketpool.SocketPool(radio)`
+allocated, deploying `sockets/examples/tcp_roundtrip.py` (then targeting `127.0.0.1:8000`)
+produced `Hard fault: memory access or instruction error` → safe mode.  Fresh-boot
+reproducer raised a clean `OSError [Errno 104] ECONNRESET` against the same target.
+
+The sweep can no longer reproduce it — `tcp_roundtrip.py` was rewritten to hit
+`example.com:80` and the old `127.0.0.1:8000` shape is gone.  Recovery from safe
+mode is clean (RESET, FAT volume intact); the crash happens inside CP core code
+(likely the socketpool C implementation), not chumicro_sockets Python.
+
+**Repro recipe (when it shows up again, on Lolin S2 CP):**
+1. Deploy `websockets/examples/circuitpython_server.py` to the board, let it bind
+   `0.0.0.0:8765` for a few seconds.
+2. Deploy any code that calls `tcp_client_socket(<unreachable_host>, <port>, radio=…)`.
+3. Hard fault appears as `CircuitPython core code crashed hard` in the board's
+   serial output.
+
+**Two angles when the time comes:**
+- (a) Add socket cleanup on close to `chumicro_sockets._adapters.cp` so a fresh
+  `tcp_client_socket` starts with a clean pool.  Defensive; may not actually
+  hit the firmware bug.
+- (b) File a CircuitPython upstream issue with a minimal repro that bypasses
+  chumicro_sockets entirely (`socketpool.SocketPool(wifi.radio)` →
+  `pool.socket(pool.AF_INET, pool.SOCK_STREAM)` → `connect((unreachable, port))`).
+  Verify firmware-side responsibility before any chumicro-side workaround.
+
+Was follow-up #5 in `plans/workstreams/example-sweep-stability.md`; moved here
+because the workstream's sweep harness can't trigger it on demand and the issue
+needs a natural occurrence.
+
 ### Workspace-template `run.py` self-bootstrap pattern
 
 **Surfaced 2026-05-02 by the user** during the audit-of-the-audit
