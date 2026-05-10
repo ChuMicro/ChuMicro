@@ -52,8 +52,14 @@ _SKIP_DIRS: frozenset[str] = frozenset({
 })
 
 #: Top-level directories scanned in their entirety (no per-package
-#: subdir restriction).
-_SCAN_TOP_LEVELS: tuple[str, ...] = ("scripts",)
+#: subdir restriction).  Includes the chumicro mono-repo's
+#: ``scripts/`` plus the workspace-template's top-level user-content
+#: trees, which don't have the per-package ``src/tests/...`` shape
+#: a chumicro library has.
+_SCAN_TOP_LEVELS: tuple[str, ...] = (
+    "scripts",
+    "packages", "projects", "shared", "examples", "tests",
+)
 
 #: Per-package parent directories.  Inside each package directory, only
 #: the listed subdirs are scanned — pyproject.toml, mkdocs.yml, and

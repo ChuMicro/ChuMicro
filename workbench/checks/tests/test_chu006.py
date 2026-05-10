@@ -79,6 +79,17 @@ class TestRunPyPatterns:
         findings = CHU006.check(tmp_path)
         assert all("bare " + "run.py" not in finding.message for finding in findings)  # noqa: CHU006  assertion text matches the rule's own message
 
+    def test_template_user_content_exempt_from_bare_run_py(self, tmp_path: Path) -> None:
+        # In a workspace cloned from the template, run.py IS the
+        # legitimate command runner — bare mentions in user content
+        # are correct.
+        target = tmp_path / "packages" / "foo" / "x.py"
+        target.parent.mkdir(parents=True)
+        body = "# python " + "run.py setup\n"  # noqa: CHU006  fixture: rule-pattern data
+        target.write_text(body, encoding="utf-8")
+        findings = CHU006.check(tmp_path)
+        assert all("bare " + "run.py" not in finding.message for finding in findings)  # noqa: CHU006  assertion text matches the rule's own message
+
 
 class TestMonoRepoFraming:
     def test_chumicro_mono_repo_flagged(self, tmp_path: Path) -> None:
@@ -136,6 +147,48 @@ class TestScanRoots:
         (tmp_path / "support" / "test_harness").mkdir(parents=True)
         roots = _publishable_package_dirs(tmp_path)
         assert any(root.name == "test_harness" for root in roots)
+
+    def test_publishable_dirs_includes_template_packages(self, tmp_path: Path) -> None:
+        (tmp_path / "packages" / "foo").mkdir(parents=True)
+        (tmp_path / "projects" / "wifi_only").mkdir(parents=True)
+        roots = _publishable_package_dirs(tmp_path)
+        names = sorted(root.name for root in roots)
+        assert "foo" in names
+        assert "wifi_only" in names
+
+    def test_publishable_dirs_includes_template_flat_trees(self, tmp_path: Path) -> None:
+        (tmp_path / "shared").mkdir()
+        (tmp_path / "examples").mkdir()
+        (tmp_path / "tests").mkdir()
+        roots = _publishable_package_dirs(tmp_path)
+        names = sorted(root.name for root in roots)
+        assert "shared" in names
+        assert "examples" in names
+        assert "tests" in names
+
+
+class TestTemplateShapeFires:
+    """CHU006 fires on template-shape user content trees too."""
+
+    def test_decision_ref_in_packages(self, tmp_path: Path) -> None:
+        target = tmp_path / "packages" / "foo" / "x.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("# See Decision 0042\n")  # noqa: CHU006  fixture string
+        findings = CHU006.check(tmp_path)
+        assert any("Decision NNNN" in finding.message for finding in findings)
+
+    def test_plans_path_in_projects(self, tmp_path: Path) -> None:
+        target = tmp_path / "projects" / "wifi" / "app.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("# see plans/decisions/0001-foo.md\n")
+        findings = CHU006.check(tmp_path)
+        assert any("plans/...md" in finding.message for finding in findings)
+
+    def test_mono_repo_framing_in_shared(self, tmp_path: Path) -> None:
+        (tmp_path / "shared").mkdir()
+        (tmp_path / "shared" / "util.py").write_text("# from chumicro mono-repo\n")
+        findings = CHU006.check(tmp_path)
+        assert any("'chumicro mono-repo'" in finding.message for finding in findings)
 
 
 class TestScopePredicates:

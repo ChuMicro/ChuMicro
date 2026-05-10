@@ -1,7 +1,7 @@
 """CHU001 — descriptive names; no single-letter or banned-abbreviation bindings.
 
-Walks every ``.py`` file under ``libraries/``, ``workbench/``,
-``support/``, and ``scripts/`` and flags:
+Walks every ``.py`` file under the configured top-level directories
+and flags:
 
 * Single-letter variable names (except ``_``).  ``for``-loop targets
   are exempt — ``for i in range(n):`` is allowed for human contributors;
@@ -40,7 +40,12 @@ _BANNED_ABBREVIATIONS = frozenset({
 
 _BANNED_SUFFIXES = tuple(f"_{word}" for word in _BANNED_ABBREVIATIONS)
 
-_SCAN_TOP_LEVELS = ("libraries", "workbench", "support", "scripts")
+_SCAN_TOP_LEVELS = (
+    # Mono-repo shape.
+    "libraries", "workbench", "support", "scripts",
+    # Template / workspace shape.
+    "packages", "projects", "shared", "examples", "tests",
+)
 
 
 def _scan_roots(repo_root: Path) -> list[Path]:

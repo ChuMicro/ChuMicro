@@ -130,6 +130,30 @@ class TestScannedSuffixes:
         assert len(CHU012.check(tmp_path)) == 1
 
 
+class TestTemplateShapeScopes:
+    """Template / workspace top-level trees are walked too."""
+
+    def test_packages_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "packages/foo/bar.py", "# Surfaced 2026-05-09\n")
+        assert len(CHU012.check(tmp_path)) == 1
+
+    def test_projects_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "projects/wifi/app.py", "# Phase 4 follow-up\n")
+        assert len(CHU012.check(tmp_path)) == 1
+
+    def test_shared_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "shared/util.py", "# Item 4 caveat\n")
+        assert len(CHU012.check(tmp_path)) == 1
+
+    def test_examples_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "examples/blink.md", "Surfaced 2026-05-09\n")
+        assert len(CHU012.check(tmp_path)) == 1
+
+    def test_root_tests_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "tests/test_foo.py", "# Surfaced 2026-05-09\n")
+        assert len(CHU012.check(tmp_path)) == 1
+
+
 class TestRuleMetadata:
     def test_code(self) -> None:
         assert CHU012.code == "CHU012"

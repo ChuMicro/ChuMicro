@@ -109,6 +109,26 @@ class TestEdgeCases:
         _stage(tmp_path, "workbench/repl/src/repl/x.py", "x = 1\n")
         assert len(CHU001.check(tmp_path)) == 1
 
+    def test_walks_template_packages(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "packages/foo/x.py", "x = 1\n")
+        assert len(CHU001.check(tmp_path)) == 1
+
+    def test_walks_template_projects(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "projects/wifi_only/app.py", "x = 1\n")
+        assert len(CHU001.check(tmp_path)) == 1
+
+    def test_walks_template_shared(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "shared/util.py", "x = 1\n")
+        assert len(CHU001.check(tmp_path)) == 1
+
+    def test_walks_template_root_tests(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "tests/test_foo.py", "x = 1\n")
+        assert len(CHU001.check(tmp_path)) == 1
+
+    def test_walks_template_examples(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "examples/blink.py", "x = 1\n")
+        assert len(CHU001.check(tmp_path)) == 1
+
 
 class TestRuleMetadata:
     def test_code(self) -> None:

@@ -140,6 +140,30 @@ class TestPackageScope:
         assert CHU002.check(tmp_path) == []
 
 
+class TestTemplateShapeScope:
+    """Template / workspace top-level trees are walked too."""
+
+    def test_packages_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "packages/foo/bar.py", "x = 1")
+        assert len(CHU002.check(tmp_path)) == 1
+
+    def test_projects_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "projects/wifi/app.py", "x = 1")
+        assert len(CHU002.check(tmp_path)) == 1
+
+    def test_shared_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "shared/util.py", "x = 1")
+        assert len(CHU002.check(tmp_path)) == 1
+
+    def test_examples_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "examples/blink.py", "x = 1")
+        assert len(CHU002.check(tmp_path)) == 1
+
+    def test_root_tests_walked(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "tests/test_foo.py", "x = 1")
+        assert len(CHU002.check(tmp_path)) == 1
+
+
 class TestRuleMetadata:
     def test_codes(self) -> None:
         assert CHU002.code == "CHU002"
