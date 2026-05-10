@@ -55,6 +55,8 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/wifi/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/wifi/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/wifi/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/checks/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/checks/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/functional_tests" isTestSource="true" />
