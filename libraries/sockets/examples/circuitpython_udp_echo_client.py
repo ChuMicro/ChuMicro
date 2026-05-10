@@ -1,14 +1,14 @@
 """UDP echo client — CircuitPython on a wifi-capable board.
 
-Brings wifi up via ``chumicro-wifi``, opens a UDP socket on the
-board, sends one datagram to a known host echo server, and reads
+Brings wifi up via the local ``helpers`` module, opens a UDP socket on
+the board, sends one datagram to a known host echo server, and reads
 the echo back.  The same shape works for any UDP request/response
 protocol — NTP, mDNS, SSDP, SNMP, application-specific.
 
 Adjust ``ECHO_HOST`` / ``ECHO_PORT`` to point at your host echo
 server.  The ``chumicro-sockets`` functional-test suite ships a host-side
-echo fixture (``test_real_udp``) for automated end-to-end
-validation against a real board.
+echo fixture (``test_real_udp``) for automated end-to-end validation
+against a real board.
 
 Runs on CircuitPython only.
 
@@ -23,24 +23,18 @@ Example output::
 import time
 
 from chumicro_sockets import udp_socket
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from helpers import wifi_up
 
-SSID = "your-ssid"
-PASSWORD = "your-password"
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
 ECHO_HOST = "192.168.1.10"
 ECHO_PORT = 12345
 PAYLOAD = b"hello-from-cp"
 
-wifi = WifiService(
-    WifiConfig(ssid=SSID, password=PASSWORD, connect_timeout_ms=15_000),
-)
-while wifi.state != WifiState.CONNECTED:
-    if wifi.check(time.monotonic_ns() // 1_000_000):
-        wifi.handle(time.monotonic_ns() // 1_000_000)
-    time.sleep(0.05)
-print(f"WIFI_OK ip={wifi.ip}")
+radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
+print(f"WIFI_OK ip={ip}")
 
-sock = udp_socket(radio=wifi.adapter.radio)
+sock = udp_socket(radio=radio)
 print(f"UDP_OK bound={sock.getsockname()}")
 sock.setblocking(False)
 

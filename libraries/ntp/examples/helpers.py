@@ -1,9 +1,9 @@
-"""Wifi-up helper for `chumicro-sockets` examples.
+"""Wifi-up helper for `chumicro-ntp` examples.
 
 Hides the runtime-specific wifi setup so each example stays focused
-on the sockets API.  Uses raw runtime primitives (CP `wifi.radio`,
-MP `network.WLAN`) so the helper doesn't pull in any library that
-`chumicro-sockets` doesn't already depend on.
+on the ntp API.  Uses raw runtime primitives (CP `wifi.radio`, MP
+`network.WLAN`) so the helper doesn't pull in any library that
+`chumicro-ntp` doesn't already depend on.
 
 Optionally reads `wifi.ssid` / `wifi.password` from the deployed
 `/runtime_config.msgpack` via the on-device `msgpack` module — built
