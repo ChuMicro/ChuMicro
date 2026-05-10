@@ -22,14 +22,16 @@
 - **Sweep harness classifier extended for hard-fault / safe-mode markers.**  `Hard fault: ` / `Running in safe mode` / `CircuitPython core code crashed hard` now classify as FAIL.  Pre-fix, a hard fault on Lolin S2 CP (during `tcp_roundtrip` against an unreachable host with stale wifi state) was misclassified as PASS because none of the original markers matched.
 - **8 network examples migrated to per-library `helpers.py` pattern.**  `libraries/{ntp,requests,mqtt,websockets,http_server}/examples/helpers.py` created mirroring the canonical sockets shape (`runtime_config()` + `wifi_up(ssid, password) -> (radio, ip)`, raw runtime primitives, `__chumicro_runtimes__` marker so verify_examples skips platform imports).  Eight examples refactored to drop `chumicro_wifi` + `chumicro_config` imports and the `_drive_until` / `service.check / handle / state` boilerplate: `ntp/circuitpython_ntp_query.py`, `requests/circuitpython_periodic_get.py`, `mqtt/circuitpython_telemetry.py`, `websockets/{circuitpython_client,circuitpython_server}.py`, `http_server/{circuitpython_two_thing_server,circuitpython_two_thing_sensor}.py`, `sockets/circuitpython_udp_echo_client.py`.  Examples now import only their owning library + the local `helpers` module (plus `chumicro_requests` from the http_server sensor example, which talks HTTP outbound).  `helpers.runtime_config()` returns a plain dict (raw msgpack decode) that all `from_config()` factories accept directly per `chumicro_config.section.load_section`'s dict-or-RuntimeConfig contract.  Renamed `_runtime_config` → `runtime_config` in sockets/helpers.py for the public API.  `verify_examples.py` clean (48 examples), full lint clean.  Bench validation queued.
 - **`helpers.py` made truly standalone — inline msgpack decoder + scaffold integration.**  Replaced the `try: import msgpack except ImportError: return {}` path with a 60-line inline decoder covering every msgpack type the `chumicro-workspace` deploy pipeline produces (nil / bool / every int width / float 32+64 / str / bin / array / map; no ext / timestamp).  Pi Pico W MicroPython no longer needs `mpremote mip install msgpack` — same code path on every runtime.  Decoder validated against the reference `msgpack` impl on the host across small + large maps, all int widths, every string-length tier, nested structures, floats, bools, and arrays.  Single `if not ssid or ssid == "your-wifi-ssid"` placeholder check replaces the prior 3-element sentinel set.  All 6 library `helpers.py` files now identical (md5 verified) — single canonical version.  Promoted to library scaffold: `workbench/workspace/src/chumicro_workspace/_payloads/library_template/helpers.py.template` ships with every `python scripts/run.py new-library`, so a fresh library starts with a working copy that the user deletes if its examples don't need wifi.  `new-library` skill updated with delete-if-unused instruction.  Closes follow-up #2.
+- **`http_server` library examples reshaped.**  Deleted `circuitpython_two_thing_sensor.py` (imported `chumicro_requests` which `chumicro-http-server` doesn't declare as a dep — same architectural rule that motivated the helpers.py refactor) and replaced `circuitpython_two_thing_server.py` with a single-board `circuitpython_simple_server.py` that demonstrates the API with `GET /`, `GET /api/uptime`, `POST /api/echo` routes and tells users to drive it with `curl` from their laptop.  Two-board patterns now live exclusively in the workspace template's `examples/two_board_handshake/{server,client}/`.  README + docs/guide.md tables updated; `workbench/workspace/` 0.14.0 → 0.15.0 captures the prior `helpers.py.template` scaffold integration.
+- **Bench validation pass — helpers.py refactor + simple_server + two_board_handshake all green.**  Group 6 (CP-only network sweep) re-ran with the refactored examples — 18/18 PASS across `lolin-s2-cp` + `pi-pico-w-cp` for the 8 helpers.py'd library examples (`ntp/circuitpython_ntp_query`, `requests/circuitpython_periodic_get`, `mqtt/circuitpython_telemetry`, `websockets/{client,server}`, `sockets/{circuitpython_udp_echo_client,tcp_roundtrip}`, `msgpack/circuitpython_nvm_settings`, `http_server/circuitpython_simple_server`).  Spot-checked logs confirm the full helpers.py path fired end-to-end: `ntp_query` printed `WIFI_OK ip=172.16.1.29` then `NTP_OK unix_seconds=1778433511` (real query against the public NTP pool, proving the inline msgpack decoder reads creds from `/runtime_config.msgpack` correctly on real hardware); `simple_server` printed `WIFI_OK` + `Server listening on http://172.16.1.21:8080/`.  Workspace-template's `two_board_handshake/` validated **cross-runtime** (stronger than the planned CP↔CP): server side on `lolin-s2-cp` (CircuitPython) listening at `172.16.1.29:8080`, client side on `pi-pico-w-mp` (MicroPython) POSTing every 5 s.  Five round-trips visible in client tail (`status=201`); server tail logged `sensor=demo-temp value=24.95`; host-side `curl http://172.16.1.29:8080/api/latest` returned the latest reading as JSON.
 
 ## Open follow-ups
 
 Each entry has enough context for a cold pickup — file paths, reproducers, fix sketch, effort estimate.
 
-### 1. 8 network examples violate the library-dep rule — SHIPPED
+### 1. 8 network examples violate the library-dep rule — SHIPPED + bench-validated
 
-Resolved in the helpers.py migration commit; see "What landed" above for details.  Bench validation across the 4-board matrix is queued — the static `verify_examples.py` pass is green but on-board execution hasn't been re-run since the migration.
+Resolved in the helpers.py migration commit; bench-validated in the follow-on Group 6 sweep — see "Bench validation pass" in "What landed" above.
 
 ### 2. Pi Pico W MP firmware lacks built-in `msgpack` — SHIPPED (option (c))
 
@@ -159,6 +161,39 @@ grep -rn "chumicro_timing" libraries/sockets/src/
 **Already in effect.** `libraries/sockets/examples/helpers.py` uses `OSError` for the wifi-connect timeout (line ~63 + ~78) for this reason.  Documented inline.
 
 **Fix shape.** Document this in `plans/patterns.md` under cross-runtime gotchas, alongside existing patterns.  Optional: add a CHU rule that flags `raise TimeoutError(` in cross-runtime tree files (libraries/*/src/, support/test_harness/src/).  CHU-rule version is the rigorous fix; documentation alone is the lighter touch.
+
+### 13. Pi Pico W CP small-file deploy fails the 5 s USB-MSC see-the-file timeout (medium effort, surfaced 2026-05-10)
+
+**Symptom.** During the two-board-handshake bench validation, every `chumicro-workspace deploy two_board_test/server --device pi-pico-w-cp` failed with::
+
+    chumicro_deploy.circuitpython_transport.CircuitpythonTransportError:
+    Board did not see '/code.py' at 78 bytes within 5.0s
+    (last reported size: '22') — USB-MSC write may not have committed.
+
+The 78-byte file is the synthesised three-line boot shim (`from app import run; run()`).  The board kept reporting the 22-byte default `code.py` (CIRCUITPY freshly-formatted content).  Reproducible across `chumicro-workspace reset-board --yes` clears, after `--wipe`, after settle delays, and across both deploy entrypoints (`deploy` and `repl <project>`).  Lolin S2 CP did **not** show this — same entrypoint, same boot-shim path, deploys clean.  Larger files (3303 bytes for the prior `simple_server` sweep deploy on the same board) also pass through fine — the issue is small-file-specific.
+
+**Theory.** Pi Pico W's USB-MSC layer appears to coalesce small writes; the new 78-byte content stays in a host-side / FAT-cache write buffer that doesn't flush within 5 s.  Larger writes cross a FAT-block boundary and surface immediately.
+
+**Workaround used today.** Bench-validated the two-board demo CP↔MP instead of CP↔CP — server on `lolin-s2-cp`, client on `pi-pico-w-mp` (mpremote transport bypasses USB-MSC entirely).  Round-trip worked end-to-end including host-side `curl`.
+
+**Repro.**
+```bash
+cd ~/circuitpython/ChuMicro-Workspace-Template
+chumicro-workspace new test_small/server --from examples/two_board_handshake/server
+chumicro-workspace reset-board --device pi-pico-w-cp --yes
+chumicro-workspace deploy test_small/server --device pi-pico-w-cp --non-interactive
+# fails with the see-the-file timeout
+```
+
+Lolin S2 CP runs the same command cleanly.
+
+**Fix shape options:**
+- (a) Bump `_BOARD_FILE_VISIBLE_POST_SETTLE` (or the equivalent see-the-file timeout) to 10–15 s for boards that report `Raspberry Pi Pico W with rp2040` from `sys.implementation`.  Slowest deploys + biggest signal that we're working around a quirk.
+- (b) Skip the post-rsync see-the-file verification when the new content is below a small-file threshold (e.g. < 256 bytes).  Boot shims would skip; library files would still verify.  Tightens the fast path; relaxes the small-file path that's failing.
+- (c) Switch the boot-shim deploy path to write through USB-CDC (raw-REPL `open() / write() / close()` calls) instead of USB-MSC rsync, the way `wipe_filesystem` already does.  Most invasive but bypasses the buggy layer entirely.
+- (d) File a CircuitPython upstream bug with a minimal repro (touch a small file via macOS Finder, watch how long the board's `os.stat` takes to see the new size) and let upstream fix it.
+
+**Effort.** Option (a) is one-line + a board-specific settle table.  Option (b) needs the threshold knob + a test.  Option (c) is a small refactor of `_synthesize_boot_shim` to take a CDC writer rather than a host-side path.  Option (d) is hardware-only research time.
 
 ## Reference
 
