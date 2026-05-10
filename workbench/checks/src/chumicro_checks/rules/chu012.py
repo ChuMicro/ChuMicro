@@ -106,9 +106,6 @@ _SCANNED_SUFFIXES = (".py", ".md")
 _SELF_EXEMPT_RELPATHS: frozenset[Path] = frozenset({
     Path("workbench/checks/src/chumicro_checks/rules/chu012.py"),
     Path("workbench/checks/tests/test_chu012.py"),
-    # Old script + tests still ship while the migration is in progress.
-    Path("scripts/check_dated_narration.py"),
-    Path("scripts/tests/test_check_dated_narration.py"),
 })
 
 _SCAN_TOP_LEVELS = ("libraries", "workbench", "support", "scripts")
