@@ -436,26 +436,12 @@ def docs_deploy(channel: str, libraries: list[str] | None = None) -> int:
 def lint() -> int:
     """Run Ruff plus the chumicro-specific CHU lint checks.
 
-    CHU rules ported to the `chumicro-checks` package run via the
-    package's CLI; rules still living under `scripts/check_*.py`
-    run via their direct callers until they migrate.  Drop legacy
-    callers as their corresponding rules land in the package.
+    Every CHU rule lives in the `chumicro-checks` package; this
+    function shells out to its CLI after ruff finishes.
     """
-    from check_names import main as check_names_main
-    from check_no_silent_test_skip import main as check_no_silent_test_skip_main
-    from check_whitespace import main as check_whitespace_main
     ruff_result = run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
     if ruff_result != 0:
         return ruff_result
-    names_result = check_names_main()
-    if names_result != 0:
-        return names_result
-    whitespace_result = check_whitespace_main()
-    if whitespace_result != 0:
-        return whitespace_result
-    silent_skip_result = check_no_silent_test_skip_main()
-    if silent_skip_result != 0:
-        return silent_skip_result
     return run_command([PYTHON, "-m", "chumicro_checks"])
 
 
