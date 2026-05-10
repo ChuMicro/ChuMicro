@@ -31,7 +31,7 @@ class TestScaffoldLibrary:
         assert (library_dir / "docs" / "guide.md").exists()
         assert (library_dir / "docs" / "api.md").exists()
         assert (library_dir / "docs" / "testing.md").exists()
-        assert (library_dir / "examples" / "quickstart.py").exists()
+        assert (library_dir / "examples" / "basic_usage.py").exists()
         assert (library_dir / "functional_tests" / ".gitkeep").exists()
 
     def test_version_starts_at_0_1_0(self, tmp_path: Path, monkeypatch):

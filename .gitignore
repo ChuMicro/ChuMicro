@@ -66,3 +66,8 @@ chumicro-dev-config.toml
 # Root-anchored so `_workspace_template/secrets.toml` stays trackable.
 /secrets.toml
 
+# .envrc — direnv hook for per-checkout shell setup (e.g. auto-sourcing
+# the venv on cd).  Per-user / per-machine; not part of the canonical
+# workflow.
+.envrc
+
