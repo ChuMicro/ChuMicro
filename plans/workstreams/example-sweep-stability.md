@@ -110,20 +110,16 @@ Recommend (a) for now; revisit if we add a 4th library helper pattern beyond wif
 
 **Effort.** Small (1-2 hours) for the deploy-example flag exposure; harness adoption is a one-line config change.
 
-### 9. CoolTerm interferes with bench sweeps — current workaround is manual disconnect
+### 9. Another serial-terminal app holding a port blocks deploys — SHIPPED
 
-**Symptom.** When the user has CoolTerm open against a board's USB-CDC port, the deploy stack's serial open fails with `OSError: [Errno 16] Resource busy`.  Recovery requires the user to disconnect CoolTerm in its UI.  Happened 3+ times during this session; sweep paused each time.
+**Symptom.** When any other process has a board's USB-CDC port open, the deploy stack's serial open fails with `OSError: [Errno 16] Resource busy`.  CoolTerm is one common holder, but the same pattern fires for any serial-terminal app — Mu, Thonny, screen, minicom, PyCharm / VS Code serial console, an orphan mpremote / chumicro-deploy from a SIGINT'd previous run.  Doesn't matter which app; the symptom is identical.
 
-**Affected.** Any agent-driven workflow that targets boards a human is interactively monitoring.
+**Resolution.** Added a `SERIAL PORTS` check to `chumicro-workspace doctor` (`workbench/workspace/src/chumicro_workspace/health.py:check_serial_ports_held`).  Walks every device in `devices.yml`, runs `lsof` (via the existing `chumicro_deploy.recovery.diagnose_port_holders`), and surfaces a WARN finding listing the held ports + PIDs + commands.  Operator runs `chumicro-workspace doctor` before a sweep; if anything is held, the doctor row tells them what to close.  Doctor-only — too heavy for the per-second status loop.  Six unit tests cover Windows skip, no-devices.yml, empty registry, no-holders, held-port reporting, and best-effort behavior on `lsof` errors.  Existing `recovery.py` after-the-fact diagnosis (`_report_port_holders`) unchanged — both surfaces stay useful.
 
-**Existing diagnostic.**  `chumicro-deploy probe` already detects the holder and prints `PID 1309: /Applications/CoolTerm.app/Contents/MacOS/CoolTerm` as a hint.  That's already in `recovery.py`'s `PORT_UNAVAILABLE` plan.
+**Bigger options that didn't ship.**
 
-**Fix shape options:**
-- (a) Add a `chumicro-workspace doctor --release-port <id>` flow that politely tells CoolTerm to disconnect via AppleScript / dbus / SIGTERM-with-prompt.  Bigger lift, OS-specific.
-- (b) Just document the current behavior in `docs/contributing/working-with-agents.md` so users running bench sweeps know to close CoolTerm first.  Minimal lift.
-- (c) Add a non-interactive port-conflict detector to the sweep harness that fast-fails with a clear "close CoolTerm and re-run" message before any deploys, instead of failing on the first port-conflict deploy.  Medium lift.
-
-Recommend (b) immediately + (c) when scope allows.
+- AppleScript / dbus auto-disconnect (`chumicro-workspace doctor --release-port <id>`).  OS-specific, bigger lift, doesn't generalize across the long tail of holder apps.  Skipped — the doctor diagnosis + manual close path is good enough.
+- Sweep-harness fast-fail.  Sweep harness lives in `.scratch/` (gitignored) — option moot for a shipped feature.  Doctor's `SERIAL PORTS` row covers the same need from a checked-in surface.
 
 ### 10. `devices.yml` `circuitpy_drive_path` is fragile across boot orders
 
