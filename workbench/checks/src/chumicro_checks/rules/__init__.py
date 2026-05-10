@@ -8,9 +8,12 @@ returns the canonical mapping that the CLI iterates.
 from __future__ import annotations
 
 from chumicro_checks._rule import Rule
+from chumicro_checks.rules.chu001 import CHU001
+from chumicro_checks.rules.chu002_chu005 import CHU002, CHU003, CHU004, CHU005
 from chumicro_checks.rules.chu006 import CHU006
 from chumicro_checks.rules.chu007 import CHU007
 from chumicro_checks.rules.chu008 import CHU008
+from chumicro_checks.rules.chu009_chu010 import CHU009, CHU010
 from chumicro_checks.rules.chu011 import CHU011
 from chumicro_checks.rules.chu012 import CHU012
 
@@ -22,9 +25,16 @@ def registered_rules() -> dict[str, Rule]:
     individual rule modules without leaking state.
     """
     return {
+        CHU001.code: CHU001,
+        CHU002.code: CHU002,
+        CHU003.code: CHU003,
+        CHU004.code: CHU004,
+        CHU005.code: CHU005,
         CHU006.code: CHU006,
         CHU007.code: CHU007,
         CHU008.code: CHU008,
+        CHU009.code: CHU009,
+        CHU010.code: CHU010,
         CHU011.code: CHU011,
         CHU012.code: CHU012,
     }
