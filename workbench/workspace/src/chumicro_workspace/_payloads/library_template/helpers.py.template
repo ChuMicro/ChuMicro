@@ -17,6 +17,47 @@ What it does:
 
 When the library this `helpers.py` ships with doesn't need wifi
 (non-network library), delete the file.
+
+What `wifi_up` is doing per platform
+====================================
+
+Stripped of the config-loading + placeholder check, the per-platform
+flow is just the runtime's built-in wifi connect.  Reference for users
+who want to understand what this helper hides:
+
+CircuitPython::
+
+    import time
+    import wifi
+
+    wifi.radio.connect("my-ssid", "my-password")
+    while not wifi.radio.connected:
+        time.sleep(0.1)
+    ip = str(wifi.radio.ipv4_address)
+    # `wifi.radio` is the singleton you'd pass into chumicro-sockets
+    # factories as radio=, though they auto-detect it from `import wifi`
+    # when you pass nothing.
+
+MicroPython::
+
+    import time
+    import network
+
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    # Pi Pico W only — disable CYW43 power-save so connects don't take
+    # 30+ seconds.  ESP32 chips raise ValueError / OSError on this kwarg
+    # and the helper silently skips it there.
+    try:
+        wlan.config(pm=0xA11140)
+    except (OSError, ValueError):
+        pass
+    wlan.connect("my-ssid", "my-password")
+    while not wlan.isconnected():
+        time.sleep(0.1)
+    ip = wlan.ifconfig()[0]
+    # MP has no equivalent of `wifi.radio` — sockets just pull from the
+    # global module, so chumicro-sockets factories ignore `radio=` on MP.
 """
 
 #: Helper imports CP `wifi` and MP `network` — runtime built-ins, not
