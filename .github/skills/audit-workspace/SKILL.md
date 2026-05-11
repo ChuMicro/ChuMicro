@@ -127,7 +127,7 @@ When proposing a workstream candidate (merge / split / promote / cross-cutting r
    * **Medium + small scope** — pattern-promotion candidates that don't break public API.  Sign-off then execute.
    * **Any confidence + large scope** — merge / split / delete / promote candidates, infrastructure proposals.  These are **workstream proposals**, not edits.  Add to `plans/next-up.md` as a new entry; don't execute.
 7. **Present the punch-list to the user.**  Heavily group by scope (small fixes first, big proposals last).
-8. **Execute small-scope items.**  Each commits separately if they're unrelated.  After each batch, run `python scripts/run.py preflight --coverage-threshold 94` to confirm the full sweep still passes.  Read the `git-commit` skill before each commit; write the message to `.scratch/commit-msg.txt` first.
+8. **Execute small-scope items.**  Each commits separately if they're unrelated.  After each batch, run `python scripts/run.py preflight --coverage-threshold 94` to confirm the full sweep still passes.  Read the `git-commit` skill before each commit.
 
    For **proposal items** (merge / split / delete / promote candidates), don't execute — add an entry to `plans/next-up.md` with:
    * The proposal headline.

@@ -48,8 +48,8 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 
 - Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop — don't ship onto a broken `main`.
 - While the repo is private, commit directly to `main` — no feature branches, no PRs. This retires when the repo opens to outside contributors.
-- Use `git commit -F .scratch/commit-msg.txt`, never `git commit -m`. Read the [`git-commit`](.github/skills/git-commit/SKILL.md) skill before every commit.
-- `.scratch/` is gitignored — temp files, commit messages, log captures.
+- Pass the commit message via a single-quoted heredoc (`git commit -m "$(cat <<'EOF' … EOF)"`) so backticks, `$`, parens, and newlines pass through literally.  Read the [`git-commit`](.github/skills/git-commit/SKILL.md) skill before every commit.
+- `.scratch/` is gitignored — temp files, log captures.
 - Pipe large output through `tail` / `head` / `grep`, or redirect to `.scratch/`. Disable pagers (`git --no-pager`, `| cat`).
 - Use file tools for multi-line file content — never heredocs, `echo`, `printf`, or `cat`.
 - No backwards-compatibility burden. Nothing has shipped to PyPI yet (every package is `0.x`); edit forward, don't add migration shims, dual-read paths, or compat re-exports. "Public API" today means "us using it" — symbols with zero callers across this repo *and* the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo are dead code, not preserved future surface. Retires at the first stable (1.0+) release.

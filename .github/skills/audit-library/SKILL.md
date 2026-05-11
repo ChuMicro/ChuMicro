@@ -123,7 +123,7 @@ Libraries ship to constrained devices — less source = less flash, less parse-t
    * **Medium** — method-shape changes, naming-style decisions, "this works but I'd structure it differently."  Benefit from a second opinion.
    * **Low** — cross-library coupling questions.  Escalate to `/audit-integration`, don't fix here.
 5. **Present the punch-list to the user.**  Group by dimension.  Flag taste calls separately.
-6. **Execute high-confidence items as one cohesive commit.**  Run `python scripts/run.py test --libraries <name> --coverage-threshold 94` after each batch of changes.  Hardware-verify if the change touches a deploy / probe / transport path (Pi Pico W CP / MP boards from `devices.yml` defaults).  Read the `git-commit` skill before each commit; write the message to `.scratch/commit-msg.txt` first.
+6. **Execute high-confidence items as one cohesive commit.**  Run `python scripts/run.py test --libraries <name> --coverage-threshold 94` after each batch of changes.  Hardware-verify if the change touches a deploy / probe / transport path (Pi Pico W CP / MP boards from `devices.yml` defaults).  Read the `git-commit` skill before each commit.
 7. **Hand off remaining medium / low items to the user.**  Don't make taste calls without sign-off.
 
 ## Anti-patterns

@@ -124,6 +124,6 @@ Keep it to one line (CHU011 caps each top-level bullet at 5 lines including sub-
 
 ### 6. Show diff, commit
 
-Show the user the diff (handoff file + next-up.md edit). Once approved, follow the `git-commit` skill — write the message to `.scratch/commit-msg.txt` and commit with `git commit -F .scratch/commit-msg.txt`. Commit message names the handoff topic and links any related workstream or ADR.
+Show the user the diff (handoff file + next-up.md edit). Once approved, follow the `git-commit` skill — pass the message via a single-quoted heredoc (`git commit -m "$(cat <<'EOF' … EOF)"`). Commit message names the handoff topic and links any related workstream or ADR.
 
 After commit, the handoff is durable — the user can `/clear` knowing the next session's warm-up will surface it via `next-up.md ## Now`.

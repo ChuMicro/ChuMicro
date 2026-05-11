@@ -5,56 +5,40 @@ description: How to write and execute git commits in this workspace. Use this sk
 
 # Git Commit Mechanics
 
-**Never** use `git commit -m` — it breaks in zsh on special characters, backticks, parentheses, and multi-line messages.
+Pass the commit message inline via a **single-quoted heredoc** consumed by `git commit -m "$(cat <<'EOF' … EOF)"`.  The single quotes around the `EOF` delimiter disable shell expansion inside the heredoc, so backticks, `$`, parentheses, and newlines pass through literally.  This was bench-validated 2026-05-10 against backticks, em-dashes, arrows, and `\x`-escapes.
 
-**Never** write the commit message via the terminal — no heredocs, `echo`, `cat`, or `printf`. The agent terminal truncates multi-line input and loses closing delimiters.
-
-**Always** write the message to `.scratch/commit-msg.txt` using a file tool, then commit with a single terminal command.
+Earlier versions of this skill required writing the message to `.scratch/commit-msg.txt` first.  That rule was a workaround for a different agent harness (GitHub Copilot's terminal truncated multi-line input); it doesn't apply here.  The scratch-file path still works if you prefer it, but the heredoc form is the canonical pattern.
 
 ## Procedure
 
-### Step 1 — Write the commit message
-
-Some file-edit tools **will append to the file** if they treat the new content as an addition. This produces a commit message containing the previous commit's message concatenated with the new one. **This has happened repeatedly and must be prevented.**
-
-When writing a new commit message via your harness's file-edit tool:
-
-1. **Provide only the new commit message as the complete file content.**
-2. **Do not use `...existing code...` markers or any other content-preservation hint.** There is no existing code to preserve — the entire file is being replaced.
-3. **Do not reference or include any part of the previous message.**
-
-Use whichever file tool your harness exposes (a "write file" / "overwrite file" tool — Claude Code's `Write`, Copilot's `create_file`, Cursor's file editor, etc.) — **not** the terminal — to write the full commit message to `.scratch/commit-msg.txt`.
-
-1. Check whether `.scratch/commit-msg.txt` exists (read it or list the directory).
-2. **If it does not exist:** create it with the new content.
-3. **If it already exists:** overwrite it in place with the new content.
-
-**Never delete `.scratch/commit-msg.txt`** — not with `rm`, not from the terminal, not with any other tool. Always overwrite it in place.
-
-Follow the project's commit-message conventions: imperative subject line, body explaining *why*.
-
-**Do not add a `Co-Authored-By: Claude …` trailer (or any other agent-authorship trailer).** This repository's convention is that commits are authored by the human running the agent — the agent is a tool, not a co-author.  Claude Code's default commit template includes such a trailer; strip it before writing to `.scratch/commit-msg.txt`.
-
-### Step 2 — Stage and commit
-
-```bash
-git add -A && git commit -F .scratch/commit-msg.txt
-```
-
-Or stage selectively first, then commit:
+### Step 1 — Compose and run the commit
 
 ```bash
 git add <files>
-git commit -F .scratch/commit-msg.txt
+git commit -m "$(cat <<'EOF'
+imperative subject line — under 70 chars
+
+Body explaining *why*, not *what*.  The diff explains what.  Use blank
+lines between paragraphs.  Reference workstreams / decisions / patterns
+by name where they motivate the change.
+EOF
+)"
 ```
 
-### Step 3 — Verify
+Use `git add <files>` with explicit paths rather than `git add -A` so unrelated in-flight work in the working tree doesn't get bundled in.  Check `git --no-pager diff --cached --stat` before committing to confirm only the intended files are staged.
+
+Follow the project's commit-message conventions: imperative subject line, body explaining *why*.  No `Co-Authored-By: Claude …` trailer — this repository's convention is that commits are authored by the human running the agent.  Claude Code's default commit template includes such a trailer; omit it.
+
+### Step 2 — Verify
 
 ```bash
-git log --oneline -1
+git --no-pager log -1 --format='%H%n%s%n---body---%n%b'
 ```
 
-## Rules
+Confirms the subject + body landed intact.  Worth doing the first few times you use the heredoc pattern; routine after that.
 
-- The `.scratch/` directory is gitignored — never commit it.
-- Always verify the commit succeeded before moving on.
+## Notes
+
+- The single-quoted `<<'EOF'` is load-bearing.  An unquoted `<<EOF` would let the shell expand backticks and `$VAR` inside the message — a backtick-quoted code reference in the body could trigger a shell call and break the commit.
+- If a hook fails after the commit runs, the commit did not land — create a *new* commit after the fix.  Never `--amend` to recover from a hook failure (that would rewrite the previous commit).
+- `.scratch/` remains gitignored — handy for log captures and one-off temp files.  No commit-message workflow depends on it.
