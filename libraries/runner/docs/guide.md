@@ -279,6 +279,10 @@ assert recorder.calls == [100]
 
 See the [testing helpers](testing.md) page for detailed usage.
 
+## Platform notes
+
+All classes use only basic Python features and work identically on CPython, MicroPython, and CircuitPython.  No `abc`, `typing`, or `asyncio` dependencies.
+
 ## Examples
 
 The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples) directory contains complete runnable scripts:
@@ -296,18 +300,6 @@ The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/e
 | `micropython_button_led.py` | Button + LED gate pattern on MicroPython |
 
 Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board — see the setup notes in each file.
-
-## Platform notes
-
-All classes use only basic Python features and work identically on CPython, MicroPython, and CircuitPython.  No `abc`, `typing`, or `asyncio` dependencies.
-
-## What's new
-
-<!-- Add entries for user-visible changes when bumping VERSION.
-     One bullet per change. Internal refactors don't need entries.
-     At stable promotion, collapse/edit as needed. -->
-
-- **0.1.23**: Documentation sync and CI improvements.
 
 ---
 

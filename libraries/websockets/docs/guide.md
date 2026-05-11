@@ -2,18 +2,7 @@
 
 ## Overview
 
-`chumicro-websockets` is a non-blocking WebSocket (RFC 6455) client + server
-built on `chumicro-sockets` and `chumicro-timing`.  Two top-level classes —
-`WebSocketClient` for outbound `ws://` / `wss://` connections, and
-`WebSocketServer` for inbound — both runner-shaped: each exposes
-`check(now_ms)` / `handle(now_ms)` so an LED can keep blinking through
-the opening handshake, frame I/O, control-frame interleave, and the close
-handshake.
-
-Single library, two roles — ~80% of the wire code (frame parser,
-state machine, masking, handshake) is shared between client and
-server, so a split into separate publishable libraries would
-duplicate more than it would clarify.
+`chumicro-websockets` is a non-blocking WebSocket (RFC 6455) client + server built on `chumicro-sockets` and `chumicro-timing`.  Two top-level classes — `WebSocketClient` for outbound `ws://` / `wss://` connections, and `WebSocketServer` for inbound.  Both follow the runner pattern from `chumicro-runner` (`check(now_ms)` / `handle(now_ms)`), so an LED can keep blinking through the opening handshake, frame I/O, control-frame interleave, and the close handshake.
 
 ## Getting started — client
 
@@ -31,8 +20,9 @@ client.on_close = lambda code, reason: print(f"closed {code} {reason}")
 client.connect("ws://api.example.com/stream", timeout_ms=10000)
 
 while client.state != WebSocketState.CLOSED:
-    if client.check(ticks_ms()):
-        client.handle(ticks_ms())
+    now = ticks_ms()
+    if client.check(now):
+        client.handle(now)
     if client.state == WebSocketState.OPEN and want_to_send_now:
         client.send_text("hello")
         want_to_send_now = False
@@ -58,25 +48,25 @@ server = WebSocketServer(
 )
 
 while True:
-    if server.check(ticks_ms()):
-        server.handle(ticks_ms())
+    now = ticks_ms()
+    if server.check(now):
+        server.handle(now)
 ```
 
 ## Runner pattern
 
-Both `WebSocketClient` and `WebSocketServer` satisfy the
-chumicro tick-runner contract (`check(now_ms)` / `handle(now_ms)`) —
-drop them into a `chumicro_runner.Runner` and they get
-ticked alongside your other tasks:
+Both `WebSocketClient` and `WebSocketServer` implement the runner contract (`check(now_ms)` / `handle(now_ms)`) — register them with `chumicro_runner.Runner` and they get ticked alongside your other services:
 
 ```python
 from chumicro_runner import Runner
 
 runner = Runner()
-runner.add_task("websocket", websocket_client)   # has check + handle
-runner.add_task("led", led_blink)
-runner.add_task("sensor", sensor_loop)
-runner.run()
+runner.add(websocket_client)     # has check + handle
+runner.add_periodic(led_blink, period_ms=500)
+runner.add(sensor_service)
+
+while True:
+    runner.tick()
 ```
 
 `check(now_ms) -> bool` reports whether work is pending; `handle(now_ms)`
@@ -137,26 +127,22 @@ MCU RAM, 4 MB flash):
   client / connection, then the parser resets to header-reading.
   No held references to old frame bytes.
 
-## TLS (`wss://`)
+## Platform notes
 
-`wss://` client connections reuse `chumicro_sockets.tls_client_socket` +
-`chumicro_sockets.ssl_context_with_ca`, with the same live-board
-constraints `chumicro-requests` documents for HTTPS:
+| Runtime | Client (`ws://` + `wss://`) | Server (`ws://`) | Server (`wss://`) |
+|---|---|---|---|
+| CPython | ✅ | ✅ | ✅ |
+| MicroPython | ✅ | ✅ | ✅ |
+| CircuitPython on ESP32 family (S2 / S3) | ✅ | ✅ | ✅ |
+| CircuitPython on Pi Pico W (rp2) | ✅ | ✅ | ❌ (raises `UnsupportedSSLConfigError`) |
 
-- **Device RTC must be set before `wss://`.**  mbedTLS rejects every
-  cert as "validity starts in the future" if the RTC is at boot
-  default.  NTP-sync via `chumicro-ntp` first.
-- **CA pinning is required.**  Build the `ssl_context` with
-  `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through
-  `chumicro_sockets_factory(radio=..., ssl_context=ctx)`.
-- **Pi Pico W needs flash deploy mode** for any `wss://` use —
-  RAM-mode leaves <50 KB free for the mbedTLS handshake.
+### TLS (`wss://`)
 
-`wss://` **server** connections inherit
-`chumicro_sockets.tls_listening_socket`'s reality: works on
-MicroPython everywhere, works on CircuitPython on the ESP32 family
-(S2 / S3), refused up-front by `UnsupportedSSLConfigError` on
-CircuitPython on the Pi Pico W (rp2 port).
+`wss://` client connections reuse `chumicro_sockets.tls_client_socket` + `chumicro_sockets.ssl_context_with_ca`, with the same live-board constraints HTTPS clients have:
+
+- **Device RTC must be set before `wss://`.**  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the clock first.
+- **CA pinning is required.**  Build the `ssl_context` with `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through `chumicro_sockets_factory(radio=..., ssl_context=ctx)`.
+- **Pi Pico W needs flash deploy mode for `wss://`** — RAM-mode leaves <50 KB free for the mbedTLS handshake.
 
 ## Per-tick knobs
 
@@ -178,19 +164,6 @@ CircuitPython on the Pi Pico W (rp2 port).
 |---|---|
 | [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | Wifi-capable board (CP or MP) connecting to a remote `ws://` echo server. |
 | [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | Wifi-capable board (CP or MP) accepting inbound websocket connections. |
-
-## What's new
-
-*0.3.0 — public `chumicro_websockets.testing` (FakeConnection,
-FakeListener, TickClock) + end-to-end client↔server integration suite.*
-
-*0.2.0 — `WebSocketClient` and `WebSocketServer` + `Connection`.
-Fragmentation reassembly, oversize policy, auto-pong, optional
-auto-ping, full close handshake.*
-
-*0.1.0 — wire-format primitives (`FrameParser`, `encode_frame`,
-handshake encoders + parsers, close-payload codec, exception
-hierarchy).*
 
 ---
 

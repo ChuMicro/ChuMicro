@@ -1,6 +1,8 @@
 # chumicro-config
 
-Standardized runtime-config helpers for ChuMicro libraries — section loader + on-device runtime-config reader.
+**Typed runtime configuration for ChuMicro libraries.**
+
+Every library reads its settings from one shared file using dotted keys — write `wifi.ssid` in TOML, get `WifiConfig.ssid` on the device.
 
 ## Quick example
 

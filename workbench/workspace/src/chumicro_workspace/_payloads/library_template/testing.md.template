@@ -49,7 +49,7 @@ Libraries that depend on `chumicro-{name}` can import the fakes directly:
 from {import_name}.testing import Fake...
 ```
 
-Libraries that expose injectable services ship their own test fakes — that way every consumer gets the same battle-tested seam without each having to reinvent it.
+Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.
 
 ## API Reference
 

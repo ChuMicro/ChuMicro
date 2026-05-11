@@ -1,8 +1,8 @@
 # Guide
 
-`chumicro-workspace` is the host-side CLI for a ChuMicro project workspace — a `projects/` + `devices.yml` repo cloned from [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) (or a fork).  It composes [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) and [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets one board host multiple projects.
+`chumicro-workspace` is the host-side CLI for running ChuMicro projects on real boards from your laptop.  It composes [`chumicro-deploy`](https://chumicro.github.io/ChuMicro/deploy/stable/) and [`chumicro-repl`](https://chumicro.github.io/ChuMicro/repl/stable/) with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets one board host multiple projects.
 
-This guide walks through the typical workflows end-to-end.  See the [README](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/workspace/README.md) for the at-a-glance command list and [API reference](api.md) for the auto-generated module docs.
+This guide walks through the typical workflows end-to-end.  See the [API reference](api.md) for auto-generated module docs.
 
 ## Workspace layout
 
@@ -12,16 +12,15 @@ A workspace has this shape:
 my-workspace/
 ├── workspace.yml          # gitignored — defaults + library_sources + your credentials
 ├── devices.yml            # board registry — three-zone (defaults / devices / device-credentials)
-├── run.py                 # tiny shim: from chumicro_workspace.cli import main
 ├── pyproject.toml
 ├── projects/
-│   ├── _template/         # `python run.py new` copies from here
+│   ├── _template/         # `chumicro-workspace new` copies from here
 │   ├── back-porch/        # one project
 │   │   ├── config.toml
 │   │   └── app.py         # def run(): ...
 │   └── kitchen/
 │       └── ...
-├── shared/                  # flat shared modules — `from shared.foo import bar`
+├── shared/                # flat shared modules — `from shared.foo import bar`
 ├── libraries/             # full chumicro-style library packages (scaffolded via `new --library`)
 │   └── buttons/
 │       ├── src/chumicro_buttons/
@@ -50,26 +49,26 @@ The import-graph search path resolves in this order: explicit `library_sources:`
 The fastest path is the `bootstrap` wizard — pick a port, probe the runtime, register the device, and (optionally) deploy the built-in demo payload in one shot:
 
 ```bash
-python run.py bootstrap --with-demo
+chumicro-workspace bootstrap --with-demo
 ```
 
 For non-interactive runs (CI, scripted setup), pass `--port` and `--device-id` explicitly:
 
 ```bash
-python run.py bootstrap --port /dev/cu.usbmodem1101 --device-id back-porch
+chumicro-workspace bootstrap --port /dev/cu.usbmodem1101 --device-id back-porch
 ```
 
 The slower-but-explicit path is what `bootstrap` composes:
 
 ```bash
 # Plug a board in, see what serial ports the host exposes.
-python run.py discover
+chumicro-workspace discover
 
 # Probe the board over serial — fails with a structured diagnosis if
 # the board is in UF2 bootloader mode, the serial port is busy, or
 # the runtime doesn't respond.  Runtime auto-detected when --runtime
 # is omitted (probes both transports).
-python run.py add-device back-porch --address /dev/cu.usbmodem1101 --runtime micropython
+chumicro-workspace add-device back-porch --address /dev/cu.usbmodem1101 --runtime micropython
 
 # `add-device` writes a three-zone entry under devices.yml's `devices:`
 # block: id + description + setup_command (user-owned), address (cached
@@ -88,7 +87,7 @@ python run.py add-device back-porch --address /dev/cu.usbmodem1101 --runtime mic
 Run it directly to see the snapshot:
 
 ```bash
-python run.py status
+chumicro-workspace status
 # WORKSPACE              /Users/you/projects/my-house
 # WORKSPACE.YML          ✓ valid
 # DEVICES.YML            ✓ 2 devices registered
@@ -98,7 +97,7 @@ python run.py status
 `doctor` is the strict sibling — runs every status check plus a Python-version probe and an AST scan for `def run` in each project's `app.py`:
 
 ```bash
-python run.py doctor
+chumicro-workspace doctor
 # Adds rows for PYTHON and PROJECT run() defs.
 # Exit code is 1 only on ERROR-level findings; warnings stay 0 so
 # the command composes cleanly with shell-pipe checks.
@@ -108,21 +107,21 @@ python run.py doctor
 
 ```bash
 # Copy projects/_template/ into projects/back-porch/.
-python run.py new back-porch
+chumicro-workspace new back-porch
 
-# Nested layouts are first-class — intermediate namespace dirs are
+# Nested layouts are supported — intermediate namespace dirs are
 # auto-created with empty __init__.py markers so host-side imports
 # (`from projects.garage.sensors.door_open.app import run`) work.
-python run.py new garage/sensors/door_open
-python run.py new garage.sensors.door_open      # dotted form, same effect
+chumicro-workspace new garage/sensors/door_open
+chumicro-workspace new garage.sensors.door_open      # dotted form, same effect
 
 # Scaffold from a worked example instead of the blank template.
-python run.py new garage/heater --from examples/wifi_only
+chumicro-workspace new garage/heater --from examples/wifi_only
 
 # Scaffold a chumicro-style library (full src/tests/docs/examples
 # tree).  Lands at <workspace>/libraries/<name>/ by default;
 # --into <dir> overrides.
-python run.py new gpio --library
+chumicro-workspace new gpio --library
 ```
 
 ### How config flows from your edits to the device
@@ -189,7 +188,7 @@ def run():
 ### Single project, default flat layout
 
 ```bash
-python run.py deploy back-porch
+chumicro-workspace deploy back-porch
 ```
 
 Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the path the on-device `chumicro_config.load_runtime_config()` reads).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
@@ -197,7 +196,7 @@ Ships the project's directory contents to the device root via [`project_director
 ### Single project, AST-walked
 
 ```bash
-python run.py deploy back-porch --import-graph
+chumicro-workspace deploy back-porch --import-graph
 ```
 
 Routes through [`project_import_graph_source`](api.md): AST-parses the entrypoint, walks `import` / `from ... import` targets, resolves against the workspace's `shared/` + `packages/` + any `library_sources:` overrides in `workspace.yml`, and ships only the reachable modules.  Useful for projects that import shared libs.
@@ -205,7 +204,7 @@ Routes through [`project_import_graph_source`](api.md): AST-parses the entrypoin
 ### Single project, boot-shim layout
 
 ```bash
-python run.py deploy back-porch --boot-shim
+chumicro-workspace deploy back-porch --boot-shim
 ```
 
 Stages the on-device project layout:
@@ -226,7 +225,7 @@ Stages the on-device project layout:
 
 ### Nested project names
 
-Slash- or dotted-form project names produce a parallel namespace tree under `/lib/projects/`.  `python run.py deploy garage/sensors/door_open --boot-shim` lays down:
+Slash- or dotted-form project names produce a parallel namespace tree under `/lib/projects/`.  `chumicro-workspace deploy garage/sensors/door_open --boot-shim` lays down:
 
 ```
 /lib/projects/__init__.py
@@ -242,7 +241,7 @@ Slash- or dotted-form project names produce a parallel namespace tree under `/li
 ### Inspect what would land — `--dry-run`
 
 ```bash
-python run.py deploy garage/sensors/door_open --boot-shim --dry-run
+chumicro-workspace deploy garage/sensors/door_open --boot-shim --dry-run
 ```
 
 Builds the source like a real deploy, but prints the file map (path / size / one-word category) instead of calling the transport.  Useful when:
@@ -260,14 +259,14 @@ Multi-project-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the m
 ### Multi-board deploys — `--all-devices`
 
 ```bash
-python run.py deploy garage/door_open --all-devices
+chumicro-workspace deploy garage/door_open --all-devices
 ```
 
 Loops over every entry in `devices.yml` and ships the project to each in declaration order.  Per-device failures don't abort the loop; the exit code is 1 if any device's deploy failed, 0 otherwise.  Mutually exclusive with `--device` / `--runtime` (caught at runtime with a precise message).
 
 ### Per-project default device — `deploy_targets:`
 
-When a workspace has multiple boards, typing `--device <id>` for every deploy becomes load-bearing.  `workspace.yml`'s `deploy_targets:` block carries a per-project → per-device default; a bare `deploy <project>` (no `--device` / `--runtime`) then picks the project's mapped target.  Falls back to `devices.yml`'s `defaults:` block for unmapped projects.
+When a workspace has multiple boards, typing `--device <id>` for every deploy gets tedious.  `workspace.yml`'s `deploy_targets:` block carries a per-project → per-device default; a bare `deploy <project>` (no `--device` / `--runtime`) then picks the project's mapped target.  Falls back to `devices.yml`'s `defaults:` block for unmapped projects.
 
 ```yaml
 deploy_targets:
@@ -283,7 +282,7 @@ deploy_targets:
 ### Clean-slate deploys — `--wipe`
 
 ```bash
-python run.py deploy garage/door_open --wipe
+chumicro-workspace deploy garage/door_open --wipe
 ```
 
 Erases the entire device filesystem before staging the new payload — destructive, wipes user-managed files (`settings.toml`, uploaded assets, hand-edited `boot.py`) along with managed deploy scope.  Use for corruption recovery, freeing space, or any "I want a known-empty board before this deploy" situation; ordinary deploys already clean stale `/lib/*` files via the diff-deploy primitive, so reach for `--wipe` only when the diff isn't enough.
@@ -296,7 +295,7 @@ When the deploy traceback matches a known workspace-shaped pattern, an indented 
 
 * `NameError: name '<sym>' is not defined` → "did you forget to import…"
 * `OSError ... runtime_config.msgpack` → "RAM-mode deploys don't persist the config msgpack — switch to flash mode."
-* `ImportError`/`ModuleNotFoundError ... chumicro_*` → "library not installed in this venv — run `python run.py setup`."
+* `ImportError`/`ModuleNotFoundError ... chumicro_*` → "library not installed in this venv — run `chumicro-workspace setup`."
 * `KeyError: '<key>'` → "missing config key — check `projects/<project>/config.toml` or `workspace.yml`'s `defaults:` block (the gitignored workspace config carrying defaults + credentials)."
 
 Driven by [`detect_hints`](api.md) over the captured traceback + execute output.  Empty hints → no section header (so unmatched failures don't carry an empty heading).
@@ -327,17 +326,17 @@ assert result.success
 
 ```bash
 # Interactive REPL on the default device.
-python run.py repl
+chumicro-workspace repl
 
 # Tail-only — stream output for a window, then exit.  Useful for
 # CI / scripted "watch the next 30 seconds" checks.
-python run.py repl --tail 30
+chumicro-workspace repl --tail 30
 
 # Deploy then tail in one command — replaces the
 # `deploy <project> && repl --tail` two-command idiom.  Default tail
 # window is 30s; --tail SECONDS overrides.
-python run.py repl garage/sensors/door_open
-python run.py repl garage/sensors/door_open --tail 60
+chumicro-workspace repl garage/sensors/door_open
+chumicro-workspace repl garage/sensors/door_open --tail 60
 ```
 
 The deploy half of `repl <project>` uses [`project_boot_source`](api.md) — for flat-layout deploys, run `deploy` and `repl --tail` separately.
@@ -354,7 +353,7 @@ quality:
   coverage_threshold: 85
 ```
 
-* `lint.enabled = false` → `python run.py lint` becomes a no-op + hint (still discoverable; just doesn't run ruff).
+* `lint.enabled = false` → `chumicro-workspace lint` becomes a no-op + hint (still discoverable; just doesn't run ruff).
 * `lint.select` → forwarded to ruff as `--select <comma list>` before any user `--` passthrough so user overrides win.
 * `coverage_threshold` → forwarded to pytest as `--cov-fail-under=<n>`.  Lets workspace.yml gate without editing pyproject.toml's `[tool.coverage.report]`.
 
@@ -362,7 +361,7 @@ Loader: [`load_quality_config`](api.md).  Missing block → permissive defaults 
 
 ## Config merge
 
-[`build_runtime_config`](api.md) is the deploy-time pipeline (Decisions 0035 + 0057):
+[`build_runtime_config`](api.md) is the deploy-time pipeline:
 
 1. Read `workspace.yml`'s `defaults:` block (gitignored — workspace-wide defaults + credentials in one place).
 2. Read `projects/<name>/config.{toml,yml,yaml}`.
@@ -388,20 +387,20 @@ build_runtime_config(
 
 ```bash
 # CircuitPython: latest stable from the Adafruit S3 bucket.
-python run.py install-firmware --method uf2
+chumicro-workspace install-firmware --method uf2
 
 # MicroPython: latest dated build from micropython.org/download/<BOARD>/.
-python run.py install-firmware --method esptool
+chumicro-workspace install-firmware --method esptool
 
 # Pre-release windows (CP only):
-python run.py install-firmware --method uf2 --allow-prerelease
+chumicro-workspace install-firmware --method uf2 --allow-prerelease
 
 # Vendor / custom URL pinned in devices.yml:
 # devices.yml entry sets hardware.firmware_source: "https://my-mirror/...uf2"
-python run.py install-firmware --method uf2     # picks up firmware_source
+chumicro-workspace install-firmware --method uf2     # picks up firmware_source
 
 # Or override at the call site:
-python run.py install-firmware --url https://example/custom.uf2 --method uf2
+chumicro-workspace install-firmware --url https://example/custom.uf2 --method uf2
 ```
 
 [`derive_firmware_url`](api.md) routes the choice:
@@ -431,4 +430,16 @@ dump_devices(Path("devices.yml"), devices)
 
 ## Workbench-only
 
-This package runs on CPython only — never on a microcontroller.  Workbench tools and scripts (the workspace's `run.py` shim) consume it; the on-device side of the workspace contract is `chumicro-config`.
+This package runs on CPython only — never on a microcontroller.  The on-device side of the workspace contract is [`chumicro-config`](https://chumicro.github.io/ChuMicro/config/stable/).
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace) · \
+[PyPI](https://pypi.org/project/chumicro-workspace/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
+
+</div>

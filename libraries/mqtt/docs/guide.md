@@ -2,14 +2,9 @@
 
 ## Overview
 
-`chumicro-mqtt` is a non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks); no `async`, no threads, no blocking on network I/O.  The tick-based runner pattern (`check(now_ms)` / `handle(now_ms)`) drives every protocol step:
+`chumicro-mqtt` is a non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` and `chumicro-timing`; no `async`, no threads, no blocking on network I/O.  An LED keeps blinking on the same board while a publish or subscribe is in flight, because `client.check(now_ms)` / `client.handle(now_ms)` do at most one tick of work per call.
 
-* `client.check(now_ms) -> bool` — does the client have work to do this tick?
-* `client.handle(now_ms)` — do one tick of work (one recv, one parse, one queued send, one deadline check).
-
-That means an LED can keep blinking on the same board while a publish or subscribe is in flight, and a sensor read can happen between MQTT ticks.
-
-QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, pattern-routed handlers, and a structured oversized-message policy are all built in.
+QoS 2 raises `UnsupportedQoSError`.  Last-will, retained messages, pattern-routed handlers, and a structured oversized-message policy are built in.
 
 ## Getting started
 
@@ -18,7 +13,7 @@ from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
 
-# CP needs `radio=wifi.radio`; MP / CPython ignore the kwarg.
+# On CircuitPython pass `radio=wifi.adapter.radio` here; on MicroPython / CPython the kwarg is ignored.
 sock = tcp_client_socket("broker.example.com", 1883, radio=None)
 sock.setblocking(False)                     # MP defaults to blocking — enforce non-blocking
 client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)
@@ -149,7 +144,7 @@ Two constructor knobs let you trade tick fairness for throughput:
 
 | Knob | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` (bytes) | Soft cap on bytes drained from the socket in one `handle()` call.  Without this, a 100 KB blob in a fat kernel TCP buffer (lwIP on rp2 holds 16–32 KB) would monopolize the tick until drained — visibly stuttering a concurrent LED blink or sub-second control loop.  Raise for fast big-blob ingestion at the cost of LED smoothness. |
+| `recv_budget_per_tick` | `1024` (bytes) | Soft cap on bytes drained from the socket in one `handle()` call.  Without it, a large inbound payload would monopolize the tick until fully drained — visibly stuttering a concurrent LED blink or sub-second control loop.  Raise for faster big-payload ingestion at the cost of LED smoothness. |
 | `max_tx_queue_size` | `100` packets | Hard cap on pending outbound packets.  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; lower for memory-tight boards. |
 
 ```python
@@ -161,7 +156,7 @@ client = MQTTClient(
 )
 ```
 
-The `recv_budget_per_tick` knob exists because of a real production bug: a naive "drain until EAGAIN" loop on a fat kernel buffer can iterate 60–128 times before draining, blowing tick latency past 25 ms on a Pi Pico W RP2.
+Without `recv_budget_per_tick`, a "drain until EAGAIN" loop on a fat kernel recv buffer can blow tick latency past tens of milliseconds while it works through the backlog — long enough to skip a heartbeat on the same loop.
 
 ## Oversized-message policy
 
@@ -215,18 +210,33 @@ elif client.state == ProtocolState.FAILED:
 
 Five states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `DISCONNECTING`, `FAILED`.  `client.connected` is a shortcut for `state == CONNECTED`.
 
+## Memory notes
+
+The client actively manages its memory footprint with three caps tunable at construction time:
+
+| Cap | Default | What it bounds |
+|---|---|---|
+| `recv_budget_per_tick` | `1024` bytes | Per-tick read ceiling — see [Tuning](#tuning-for-tick-latency-vs-throughput). |
+| `max_message_size` | `256 KB` | Largest inbound PUBLISH payload accepted — see [Oversized-message policy](#oversized-message-policy). |
+| `max_tx_queue_size` | `100` packets | Outbound packet queue cap — see [Backpressure](#backpressure). |
+
+The QoS-1 retry table (`InFlightTable`, keyed by `packet_id`) and per-topic subscription list are bounded by your usage — neither has a hard cap.  On memory-tight boards (256 KB MCU RAM), lower `max_message_size` to match your actual broker payload size to avoid heap fragmentation.
+
+## Platform notes
+
+| Runtime | TCP | TLS | Notes |
+|---|---|---|---|
+| CPython | ✅ | ✅ | Reference runtime — works against any broker. |
+| MicroPython | ✅ | ✅ | mbedTLS PEM→DER conversion on rp2 (handled by `chumicro-sockets`). |
+| CircuitPython | ✅ (requires `radio=wifi.radio`) | ✅ | TLS handshake is synchronous — budget for ~100–500 ms listener stall during connection setup. |
+
+`MQTTClient` enforces non-blocking mode on every socket it acquires.  MicroPython plain TCP defaults to blocking, and a blocking `recv` on a Pi Pico W can stall the tick loop for seconds — set `sock.setblocking(False)` explicitly so the contract is visible at the call site.
+
 ## Examples
 
 | Example | What it shows |
 |---|---|
 | [`examples/telemetry.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Cross-runtime (CP + MP). |
-
-## What's new
-
-- **0.1.5**: Documentation buildout — guide rewrite, knob explainers.
-- **0.1.4**: Production-readiness sweep — `recv_budget_per_tick`, `max_tx_queue_size`, `MQTTBackpressureError`, `WhenOversized` policy enum.
-- **0.1.3**: Per-`packet_id` `InFlightTable` for QoS 1 retries; explicit `ProtocolState` ladder; 8→4 source-file consolidation.
-- **0.1.0**: Initial library — connect / publish / subscribe loop with QoS 0/1.
 
 ---
 

@@ -1,6 +1,8 @@
 # User Guide
 
-This guide walks through everything `chumicro-deploy` offers today — from the `Device` struct to `Deployer.deploy()`, file sources, probing, firmware URL resolution, and end-to-end firmware flashing with `flash_firmware`. The interactive recovery layer (`InteractiveDeployer`) classifies transport failures and coaches the user through retry loops for unplug / ejected-drive / REPL-stuck failures.
+`chumicro-deploy` writes Python code onto CircuitPython and MicroPython boards from your laptop, then helps you recover when something goes wrong.
+
+This guide walks `Device`, `Deployer.deploy()`, file sources, probing, firmware URL resolution, end-to-end firmware flashing with `flash_firmware`, and the `InteractiveDeployer` recovery wrapper that classifies transport failures and coaches you through retry loops for unplug / ejected-drive / REPL-stuck failures.
 
 ## Install
 
@@ -43,7 +45,7 @@ chumicro-deploy deploy \
     --directory ./my_app --entrypoint /code.py
 ```
 
-All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash-firmware` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `InteractiveDeployer` (see [Interactive recovery](#interactive-recovery-interactivedeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts.
+All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash-firmware` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `InteractiveDeployer` (see [Recover from deploy failures](#recover-from-deploy-failures-interactivedeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts.
 
 `main()` catches the documented exception types (transport errors, `FlashFirmwareError`, `UnresolvedFirmwareError`, `DeviceConfigError`, `FileNotFoundError`, `ValueError`) and prints `error: <message>` on stderr with exit code 1.  Anything else propagates as a Python traceback — those are bugs, not user-facing failures.
 
@@ -412,7 +414,14 @@ CircuitPython caches the FAT32 filesystem view in-memory. Writing to the CIRCUIT
 
 If your entrypoint is an infinite loop (no `return`), `deploy_files` times out at the transport's `timeout` (default 10 s) and returns whatever was captured up to that point.
 
-## See also
+---
 
-- [API Reference](api.md)
-- [Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy)
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) · \
+[PyPI](https://pypi.org/project/chumicro-deploy/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
+
+</div>

@@ -1,8 +1,8 @@
 # chumicro-repl
 
-Host-side serial REPL for CircuitPython and MicroPython boards. Runs on your laptop, not on the board.
+**Host-side serial REPL for CircuitPython and MicroPython boards.**
 
-This is a [workbench tool](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/workbench.md) — it helps you talk to boards from your laptop. It is not a library that runs on the microcontroller itself.
+Interactive TUI with traceback highlighting + a programmatic `ReplSession` for headless test fixtures.  Runs on your laptop — not on the board.
 
 ## Quick example
 
@@ -51,8 +51,10 @@ No bundle registration needed — chumicro-repl is a host tool, not on-device co
 
 <div class="chumicro-footer" markdown>
 
-[← All ChuMicro Libraries](../../)
+[← All ChuMicro Packages](../../)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) · [PyPI](https://pypi.org/project/chumicro-repl/) · [Issues](https://github.com/ChuMicro/ChuMicro/issues)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) · \
+[PyPI](https://pypi.org/project/chumicro-repl/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
 
 </div>

@@ -1,6 +1,8 @@
 # chumicro-events
 
-Runner-shaped pub/sub event bus — bounded, drop-oldest, no chumicro deps.
+**Tiny in-process pub/sub event bus.**
+
+Bounded queue with drop-oldest overflow, batched dispatch on each runner tick, zero dependencies.
 
 ## Quick example
 

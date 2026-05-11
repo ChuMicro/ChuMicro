@@ -1,12 +1,15 @@
 # chumicro-websockets
 
-Non-blocking WebSocket (RFC 6455) client + server for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` and `chumicro-timing` so an LED can keep blinking through the handshake, frame I/O, and the close handshake.
+**Non-blocking WebSocket (RFC 6455) client and server for CircuitPython, MicroPython, and CPython.**
+
+An LED keeps blinking through the handshake, frame I/O, and the close handshake — both sides take small turns on every runner tick instead of holding the loop.
 
 ## Quick example
 
 ```python
 from chumicro_websockets import WebSocketClient, WebSocketState
 from chumicro_websockets.sockets_factory import chumicro_sockets_factory
+from chumicro_timing import ticks_ms
 from chumicro_wifi import wifi
 
 client = WebSocketClient(
@@ -16,8 +19,9 @@ client.on_text = lambda text: print(text)
 client.connect("ws://api.example.com/stream")
 
 while client.state != WebSocketState.CLOSED:
-    if client.check(now_ms()):
-        client.handle(now_ms())
+    now = ticks_ms()
+    if client.check(now):
+        client.handle(now)
 ```
 
 ## Documentation

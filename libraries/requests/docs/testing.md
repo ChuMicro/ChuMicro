@@ -41,6 +41,18 @@ weather.tick(now_ms=10)
 assert weather.last_error_message == "simulated timeout"
 ```
 
+## Usage from other libraries
+
+Libraries that depend on `chumicro-requests` can import the fake directly in their own test suites:
+
+```python
+from chumicro_requests.testing import FakeHttpClient
+```
+
+Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.
+
+## API Reference
+
 ::: chumicro_requests.testing
 
 ---

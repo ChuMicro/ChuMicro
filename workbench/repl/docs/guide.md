@@ -1,6 +1,8 @@
 # User Guide
 
-`chumicro-repl` ships four surfaces — an interactive line-mode editor (default), a byte-passthrough TUI, a one-shot `tail()` follow-mode, and a programmatic `ReplSession` — that share a pyserial wrapper, a UTF-8 safe streaming decoder, and a pattern detector for the kinds of output that matter (tracebacks, safe-mode banners, hard faults, soft reboots).
+`chumicro-repl` ships four surfaces: an interactive line-mode editor (default), a byte-passthrough TUI, a one-shot `tail()` follow-mode, and a programmatic `ReplSession`.
+
+All four share a pyserial wrapper, a UTF-8-safe streaming decoder, and a pattern detector for the kinds of output that matter (tracebacks, safe-mode banners, hard faults, soft reboots).
 
 ## Install
 
@@ -81,7 +83,7 @@ History is persistent per-device at `~/.chumicro-repl/history/<sanitized-address
 Two sources merge in line mode:
 
 * **Static catalog** — Python keywords (`for`, `import`, `True`, …) and public builtins (`print`, `range`, `len`, …).  Always available; no device round-trip.
-* **On-device `dir()`** — populated lazily on first Tab via a `print(repr(dir()))` round-trip through raw REPL.  Hardware-measured RTT across the four-board matrix is 8–45 ms — well below the perceptual "instant" threshold.  Cached for the session; `:rescan` invalidates after a new `import`.
+* **On-device `dir()`** — populated lazily on first Tab via a `print(repr(dir()))` round-trip through raw REPL.  Measured RTT on the supported CircuitPython and MicroPython boards is 8–45 ms — well below the perceptual "instant" threshold.  Cached for the session; `:rescan` invalidates after a new `import`.
 
 The friendly-banner reprint that the round-trip's `Ctrl-B` triggers is captured before line-mode resumes drawing, so it never leaks into your terminal.  Embedding the round-trip in your own shape?  Call `chumicro_repl.completion.fetch_device_names(port)`.
 
@@ -198,7 +200,7 @@ except (OSError, ReplSessionError) as error:
 
 Mid-session disconnects (after the handshake completed) do *not* route through this layer — those are handled by the auto-reconnect loop in `tail()` and `run_loop()` (see `reconnect_seconds`).  Subclass `ReplSessionDisconnected` matters for that path; `InteractiveReplSession` matters for "the session never opened".
 
-The interactive demo at `workbench/repl/examples/demo_repl_robustness.py` walks every scenario against a real board — happy path, port-not-found (bogus address), port-busy (open the port elsewhere first), raw-REPL-unresponsive (board stuck in interrupt-disabled code), auto-reconnect during tail (yank + replug the cable), and abort during reconnect.
+The interactive [`demo_repl_robustness.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/repl/examples/demo_repl_robustness.py) example walks every scenario against a real board — happy path, port-not-found (bogus address), port-busy (open the port elsewhere first), raw-REPL-unresponsive (board stuck in interrupt-disabled code), auto-reconnect during tail (yank + replug the cable), and abort during reconnect.
 
 ## Pattern detection and highlighting
 
@@ -218,7 +220,7 @@ theme = Theme(traceback="32")  # green tracebacks
 print(colorize(text, theme=theme), end="")
 ```
 
-The `StreamingPatternDetector` is what `tail()` and the TUI use under the hood — it buffers a bounded amount of trailing context so a pattern that spans a chunk boundary still matches without retaining unbounded memory on long-running sessions. Use it directly for any custom streaming consumer.
+The `StreamingPatternDetector` is the primitive `tail()` and the TUI build on — it buffers a bounded amount of trailing context so a pattern that spans a chunk boundary still matches without growing memory on long-running sessions. Use it directly for any custom streaming consumer.
 
 ## Test fakes
 
@@ -265,6 +267,8 @@ Pattern detection covers:
 
 [← Home](index.md)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) · [PyPI](https://pypi.org/project/chumicro-repl/) · [Issues](https://github.com/ChuMicro/ChuMicro/issues)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) · \
+[PyPI](https://pypi.org/project/chumicro-repl/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
 
 </div>

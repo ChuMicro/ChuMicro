@@ -1,6 +1,8 @@
 # chumicro-mqtt
 
-**Non-blocking MQTT 3.1.1 client (QoS 0 + 1)** for CircuitPython, MicroPython, and CPython.  Runner-shaped: `check(now_ms) -> bool` + `handle(now_ms)` from your tick loop — your LED keeps blinking through CONNECT, SUBSCRIBE, PUBLISH, and PUBACK round-trips.  Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks).
+**Non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.**
+
+Built on `chumicro-sockets` and `chumicro-timing` — your LED keeps blinking through CONNECT, SUBSCRIBE, PUBLISH, and PUBACK round-trips because every step takes one tick of work.
 
 ## Quick example
 

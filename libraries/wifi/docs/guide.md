@@ -2,15 +2,13 @@
 
 ## Overview
 
-`chumicro-wifi` is a single, sole-supervisor wifi service that works the same way on CircuitPython, MicroPython-on-ESP32, MicroPython-on-Pi-Pico-W, and CPython.  Construct it once, hand it to the runner, and it brings the link up, watches for drops, and reconnects on its own.
+`chumicro-wifi` is a single wifi service that works the same way on CircuitPython, MicroPython-on-ESP32, MicroPython-on-Pi-Pico-W, and CPython.  Construct it once, hand it to the runner, and it brings the link up, watches for drops, and reconnects on its own — no `CIRCUITPY_WIFI_*` keys, no firmware-level auto-reconnect, no `boot.py` that connects before user code runs.  Owning the radio in one place eliminates a class of "two systems both think they own the radio" bugs.
 
-The library is the **sole** wifi supervisor on every runtime — no `CIRCUITPY_WIFI_*` keys, no firmware-level auto-reconnect, no `boot.py` that connects before user code runs.  This eliminates a class of "two systems both think they own the radio" bugs that the legacy CircuitPython auto-connect creates.
-
-Three classes form the public surface: `WifiConfig` (typed settings), `WifiService` (the supervisor), `WifiState` (the five-value state machine).  Plus `chumicro_wifi.testing.FakeWifi` for downstream library tests.
+Public surface: `WifiConfig` (typed settings), `WifiService` (the supervisor), `WifiState` (the five-value state machine), plus `chumicro_wifi.testing.FakeWifi` for downstream library tests.
 
 ## Getting started
 
-The canonical wiring — config from `runtime_config.msgpack`, service registered with the runner, ready in 4 lines of app code:
+Typical wiring — config loaded from the deployed runtime-config file, service registered with the runner, ready in a few lines of app code:
 
 ```python
 from chumicro_config import load_runtime_config
@@ -18,7 +16,7 @@ from chumicro_runner import Runner
 from chumicro_wifi import WifiConfig, WifiService
 
 config = load_runtime_config()
-wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
+wifi = WifiService(WifiConfig.from_config(config))
 
 runner = Runner()
 runner.add(wifi)                 # check/handle integration
@@ -67,7 +65,7 @@ wifi.last_error    # last exception caught, if any
 wifi.adapter_name  # "cp" / "mp" / "fake" — useful for logging
 ```
 
-`last_error` is most informative on MicroPython-ESP32, where the substrate raises `OSError("Wifi Internal State Error")` on unreachable AP.  On CircuitPython the substrate raises `TimeoutError` / `ConnectionError`; on MicroPython-CYW43 (Pi Pico W) the substrate silently leaves `isconnected()` False, so `last_error` may be `None` even though the supervisor is in `RECONNECTING` (see Platform notes).
+`last_error` is most informative on MicroPython-ESP32, where the wifi driver raises `OSError("Wifi Internal State Error")` on unreachable AP.  On CircuitPython the driver raises `TimeoutError` / `ConnectionError`; on MicroPython-CYW43 (Pi Pico W) the driver silently leaves `isconnected()` False, so `last_error` may be `None` even though the supervisor is in `RECONNECTING` (see Platform notes).
 
 ## State-change notifications
 
@@ -105,7 +103,7 @@ wifi.on_state_change = bus.publisher("wifi.state")
 | `power_save` | | `False` | Leave radio power-save on.  `False` disables it on Pi Pico W (CYW43); ignored on adapters without the knob. |
 
 ```toml
-# Inside runtime_config (workspace template).
+# Inside your project's runtime config (TOML on disk; deploy-flattened to msgpack on the device).
 [wifi]
 ssid = "HomeNet"
 password = "secret"
@@ -125,34 +123,34 @@ runner.add(wifi)
 runner.tick()             # advances every registered service one step
 ```
 
-`check` is cheap (state inspection); `handle` performs at most one substrate call per tick (connect attempt, isconnected probe, or backoff sleep update).  No tick is ever blocked — connection failures land in `RECONNECTING`, and the next backoff window resumes naturally.
+`check` is cheap (state inspection); `handle` performs at most one wifi-driver call per tick (connect attempt, isconnected probe, or backoff sleep update).  No tick is ever blocked — connection failures land in `RECONNECTING`, and the next backoff window resumes naturally.
 
-## Substrate detection
+## Adapter detection
 
 `WifiService` picks the right adapter at construction time based on `sys.implementation.name`:
 
 | Runtime | Adapter | File |
 |---|---|---|
 | CircuitPython | `CpWifiAdapter` (uses `wifi.radio`) | `_adapters/cp.py` |
-| MicroPython | substrate-aware `MpWifiAdapter` | `_adapters/mp.py` |
+| MicroPython | `MpWifiAdapter` (handles ESP32 + CYW43) | `_adapters/mp.py` |
 | CPython | `FakeWifiAdapter` | `testing.py` |
 
 The `MpWifiAdapter` auto-detects ESP-IDF vs CYW43 with a one-line `import esp32` probe, then applies the right `wlan.config(...)` knobs:
 
-* **ESP-IDF**: `config(reconnects=0)` after first link, to disable the firmware-level auto-reconnect supervisor (we own that).
+* **ESP-IDF**: `config(reconnects=0)` after first link, to disable the firmware-level auto-reconnect supervisor — `chumicro-wifi` owns reconnect logic itself.
 * **CYW43**: `config(pm=0xa11140)` at configure time, to disable idle power-save when `power_save=False`.
 
-Substrate API itself (`network.WLAN`, `active`, `connect`, `isconnected`, `ifconfig`, `disconnect`) is identical across both MP wifi stacks, which is what made the unified adapter possible (commit `0304542` collapsed the previously-split `MpEsp32WifiAdapter` + `MpRp2WifiAdapter`).
+The underlying MicroPython `network.WLAN` API (`active`, `connect`, `isconnected`, `ifconfig`, `disconnect`) is identical across both wifi chips, so a single adapter handles both.
 
 ## Platform notes
 
-Three substrates, three different ways an unreachable AP surfaces:
+Three runtimes, three different ways an unreachable AP surfaces:
 
-| Substrate | When AP is unreachable |
+| Runtime + chip | When AP is unreachable |
 |---|---|
-| CP `wifi.radio` | Blocks inside `connect()` until `timeout=` expires, raises `TimeoutError` / `ConnectionError` (both are `OSError` subclasses). |
-| MP ESP32 `network.WLAN` | Returns immediately from `connect()`, then raises `OSError("Wifi Internal State Error")` on the next interaction. |
-| MP CYW43 (Pi Pico W) | Returns immediately, `isconnected()` silently stays `False`, no exception. |
+| CircuitPython `wifi.radio` | Blocks inside `connect()` until `timeout=` expires, raises `TimeoutError` / `ConnectionError` (both are `OSError` subclasses). |
+| MicroPython on ESP32 (`network.WLAN`) | Returns immediately from `connect()`, then raises `OSError("Wifi Internal State Error")` on the next interaction. |
+| MicroPython on CYW43 (Pi Pico W) | Returns immediately, `isconnected()` silently stays `False`, no exception. |
 
 The supervisor handles all three honestly: each adapter checks `isconnected()` after a connect attempt rather than trusting that a non-raising `connect()` succeeded.
 
@@ -165,11 +163,6 @@ For downstream libraries' tests, [`chumicro_wifi.testing.FakeWifi`](testing.md) 
 | Example | What it shows |
 |---|---|
 | [`examples/connect_to_ap.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi/examples/connect_to_ap.py) | Connect to a real AP, print state transitions, observe IP — reads `wifi.ssid` / `wifi.password` from `runtime_config.msgpack`. |
-
-## What's new
-
-- **0.0.3** (2026-05-02): Unified `MpEsp32WifiAdapter` + `MpRp2WifiAdapter` into a substrate-aware `MpWifiAdapter` (commit `0304542`).  Public API unchanged.
-- **0.0.1**: Initial library — sole-supervisor model, four substrates (CP, MP-ESP32, MP-CYW43, fake), state machine, reconnect backoff.
 
 ---
 

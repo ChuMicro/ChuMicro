@@ -1,8 +1,8 @@
 # chumicro-http-server
 
-Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
+**Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.**
 
-Each connection is a state machine advanced one chunk per runner tick — an LED keeps blinking while requests are being served.  Built on `chumicro-sockets` and `chumicro-timing` only; the shared HTTP/1.1 wire primitives are inlined locally so a server-only board doesn't ship `chumicro-requests`.
+Each connection is a state machine the server advances one chunk per runner tick — an LED keeps blinking while requests are being served.  Built on `chumicro-sockets` and `chumicro-timing` only.
 
 ## Quick example
 
@@ -26,8 +26,9 @@ def widget(request):
     return build_response(200, json={"id": request.path_params["id"]})
 
 while True:
-    if server.check(ticks_ms()):
-        server.handle(ticks_ms())
+    now = ticks_ms()
+    if server.check(now):
+        server.handle(now)
 ```
 
 ## Documentation

@@ -1,0 +1,35 @@
+# chumicro-{name}
+
+<!-- Replace this with a bold one-line tagline + a supporting sentence
+     that names the audience and concrete value.  See the readme.md
+     template for tagline workshop guidance. -->
+
+**One bold sentence saying what the tool does.**
+
+One supporting sentence with the concrete value and any non-obvious caveat.
+
+> This is a workbench tool — it runs on your laptop, not on the microcontroller.
+
+## Quick example
+
+```bash
+chumicro-{name} --help
+```
+
+## Documentation
+
+- [User Guide](guide.md) — getting started and usage patterns
+- [API Reference](api.md) — full API documentation
+- [Testing Helpers](testing.md) — fakes for downstream test suites
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← All ChuMicro Packages](../../)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/{name}) · \
+[PyPI](https://pypi.org/project/chumicro-{name}/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
+
+</div>

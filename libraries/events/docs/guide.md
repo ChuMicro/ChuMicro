@@ -2,22 +2,9 @@
 
 ## Overview
 
-`chumicro-events` is a small in-process pub/sub event bus that runs
-identically on CircuitPython, MicroPython, and CPython.  Topics are
-exact-match strings — no hierarchies, no wildcards.  Publishers
-enqueue records; subscribers register handlers; the bus dispatches
-everything in batches when the runner ticks `handle`.  The queue is
-bounded and drops the **oldest** record on overflow so recent
-activity always wins.
+`chumicro-events` is a small in-process pub/sub event bus that runs identically on CircuitPython, MicroPython, and CPython.  Topics are exact-match strings — no hierarchies, no wildcards.  Publishers enqueue records; subscribers register handlers; the bus dispatches everything in batches when the runner ticks `handle`.  The queue is bounded and drops the **oldest** record on overflow so recent activity always wins.
 
-Per the ChuMicro decoration / observability rule, **no other chumicro
-library imports this one**.  Apps that want service state changes to
-land in a single
-place wire the bus themselves — typically by binding each service's
-`on_state_change` callback to a `bus.publisher(topic)`.
-
-The two key types are `EventBus` (the bus itself) and `Subscription`
-(an opaque token returned by `subscribe`).
+The two key types are `EventBus` (the bus itself) and `Subscription` (an opaque token returned by `subscribe`).  No other ChuMicro library imports this one — services expose plain callbacks, and the application decides whether to wire them into a bus.
 
 ## Getting started
 
@@ -123,10 +110,6 @@ library uses.
 
 Both examples run on every supported runtime; neither requires
 hardware.
-
-## What's new
-
-*No changes yet — this section will be updated with each release.*
 
 ---
 

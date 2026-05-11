@@ -1,8 +1,8 @@
 # chumicro-msgpack
 
-Cross-runtime [MessagePack](https://msgpack.org) serialization for CircuitPython, MicroPython, and CPython.
+**Cross-runtime [MessagePack](https://msgpack.org) serialization for CircuitPython, MicroPython, and CPython.**
 
-Encodes Python objects to compact binary bytes and decodes them back.  On CircuitPython boards with the native `msgpack` C module, all functions delegate to the built-in — the pure-Python encoder is never loaded, saving ~700 bytes of heap RAM.
+Encodes Python objects to compact binary bytes and decodes them back.  On CircuitPython boards with the native `msgpack` C module, all functions delegate to the built-in — the pure-Python encoder is never loaded.
 
 ## Quick example
 
@@ -29,6 +29,9 @@ print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
 
 [← All ChuMicro Libraries](../../)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) · [PyPI](https://pypi.org/project/chumicro-msgpack/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) · \
+[PyPI](https://pypi.org/project/chumicro-msgpack/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>
