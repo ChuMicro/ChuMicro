@@ -971,6 +971,15 @@ class DeviceTestFile(pytest.File):
             # generating wrong-runtime ImportError items.
             return
 
+        if not function_names:
+            # AST found no module-level ``test_*`` functions.  Common
+            # for ``test_*.py`` files whose tests are nested inside an
+            # ``if _IS_CPYTHON:`` guard — the cross-runtime harness
+            # would report ``NO TESTS FOUND`` and the synthetic Run-file
+            # item would fail.  Yield nothing so the file is a no-op
+            # under this target instead.
+            return
+
         # Preserve the original "session has both runtimes ⇒ suffix names"
         # convention even when the marker filters down to a single target.
         # That keeps the IDE display consistent across runtime-agnostic and

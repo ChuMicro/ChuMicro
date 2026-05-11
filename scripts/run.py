@@ -36,7 +36,6 @@ from repo_layout import (
     discover_package_dirs,
     discover_ruff_paths,
     discover_workbench_dirs,
-    filter_by_platform,
     find_publishable_packages,
     is_ref_reachable,
     pythonpath_environment,
@@ -45,9 +44,6 @@ from repo_layout import (
 from shared import run_command, stream_subprocess
 
 PYTHON = sys.executable
-# Script that runs a library's tests/ directory under a non-CPython interpreter
-# (MicroPython or CircuitPython unix-port) to verify cross-runtime compatibility.
-COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 
 
 def _default_workers() -> tuple[int, int]:
@@ -1315,7 +1311,7 @@ def preflight(
 def _emit(sink: _Sink | None, message: str) -> None:
     """Write *message* to *sink* if set, otherwise to stdout.
 
-    Lets functions like :func:`_test_runtime_compat` produce output
+    Lets functions like :func:`test_micropython` produce output
     that flows through a parallel-phase sink when run as a phase, or
     straight to the user when run standalone.
     """
@@ -1325,62 +1321,71 @@ def _emit(sink: _Sink | None, message: str) -> None:
         print(message)
 
 
-def _test_runtime_compat(
-    platform: str,
-    label: str,
-    resolve_binary: Callable[[], str | None],
-    prepare_function: Callable[[], int],
-    package_dirs: list[Path] | None = None,
-    *,
-    sink: _Sink | None = None,
-) -> int:
-    """Run cross-runtime unit tests for a single runtime.
+def _pytest_unix_port_command(
+    runtime: str, binary: str | None, package_dirs: list[Path] | None,
+) -> list[str]:
+    """Build the ``pytest ... --target unix-port --runtime <X>`` invocation.
 
-    Shared implementation for :func:`test_micropython` and
-    :func:`test_circuitpython`.  Resolves the binary,
-    auto-prepares when missing, then runs the compatibility script for libraries
-    that target *platform*.
-
-    When *sink* is provided, every line of output (banners + child
-    process output) flows through it via :func:`stream_subprocess`,
-    so a parallel-phase dispatcher can route them.  When *sink* is
-    ``None``, output goes to the parent stdout via :func:`run_command`
-    — the standalone CLI path.
+    Selects the same set of publishable libraries the parallel-phase
+    dispatcher used to pass directly to the compatibility script.  The
+    plugin handles platform filtering ([tool.chumicro].platforms) and
+    skips per-test cases for libraries that don't target *runtime*.
     """
-    # Try to find an existing binary (CLI override → repository-local build → PATH).
-    # If none is found, build the unix-port automatically on first use.
-    binary = resolve_binary()
-    if binary is None:
-        _emit(sink, f"{label} binary not found. Preparing unix-port runtime first.")
-        prepare_result = prepare_function()
-        if prepare_result != 0:
-            _emit(sink, f"{label} preparation failed.")
-            return prepare_result
-
-        binary = resolve_binary()
-        if binary is None:
-            _emit(
-                sink,
-                f"Preparation completed without the expected binary. "
-                f"Pass --{platform}-binary <path> and retry.",
-            )
-            return 1
-
-    # Only publishable libraries under libraries/ are tested against
-    # non-CPython runtimes.  support/ packages are CPython-only
-    # infrastructure and are excluded from cross-runtime validation.
+    libraries_root = ROOT / "libraries"
     library_dirs = _selected_library_dirs(package_dirs)
-    platform_libraries = filter_by_platform(library_dirs, platform)
-    if not platform_libraries:
-        _emit(sink, f"No publishable {label} libraries selected for compatibility tests.")
+    if library_dirs:
+        paths = [
+            str(library_dir / "tests")
+            for library_dir in library_dirs
+            if (library_dir / "tests").is_dir()
+        ]
+    else:
+        paths = [str(libraries_root)]
+    command = [
+        PYTHON, "-m", "pytest", *paths,
+        "--target", "unix-port",
+        "--runtime", runtime,
+        "--no-cov",
+    ]
+    if binary is not None:
+        command.extend([f"--{runtime}-binary", binary])
+    return command
+
+
+def _ensure_unix_port_binary(
+    runtime: str,
+    binary: str | None,
+    resolve: Callable[[], str | None],
+    prepare_function: Callable[[], int],
+    sink: _Sink | None,
+) -> int:
+    """Resolve or build the unix-port binary, returning a shell exit code.
+
+    Mirrors the auto-prepare-on-first-use behaviour the old
+    ``_test_runtime_compat`` helper provided — the plugin can't build
+    binaries itself, so the CLI wrapper does it before delegating.
+    Returns 0 on success, non-zero when preparation failed.
+    """
+    if binary is not None:
         return 0
-    library_names = [library_dir.name for library_dir in platform_libraries]
-    command = [binary, COMPAT_SCRIPT, *library_names]
-    if sink is not None:
-        sink.line(f"+ {' '.join(command)}")
-        exit_code, _ = stream_subprocess(command, on_line=sink.line)
-        return exit_code
-    return run_command(command)
+    if resolve() is not None:
+        return 0
+    _emit(
+        sink,
+        f"{runtime} binary not found.  Preparing unix-port runtime first.",
+    )
+    prepare_result = prepare_function()
+    if prepare_result != 0:
+        _emit(sink, f"{runtime} preparation failed.")
+        return prepare_result
+    if resolve() is None:
+        _emit(
+            sink,
+            f"Preparation completed without the expected binary.  "
+            f"Pass --{runtime}-binary <path> and retry.",
+        )
+        return 1
+    return 0
 
 
 def test_micropython(
@@ -1389,18 +1394,32 @@ def test_micropython(
     *,
     sink: _Sink | None = None,
 ) -> int:
-    """Run the cross-runtime unit tests with the MicroPython Unix binary.
+    """Run unix-port unit tests under the MicroPython binary.
 
-    Skips libraries that do not target MicroPython.  See
-    :func:`_test_runtime_compat` for the *sink* argument.
+    Thin wrapper that auto-prepares the binary on first use, then
+    delegates to ``pytest ... --target unix-port --runtime micropython``.
+    Platform filtering happens inside ``chumicro-pytest-device`` based
+    on each library's ``[tool.chumicro].platforms``.
     """
     from prepare_micropython import prepare_micropython
     from shared import resolve_micropython_binary
-    return _test_runtime_compat(
-        "micropython", "MicroPython",
-        lambda: resolve_micropython_binary(binary), prepare_micropython,
-        package_dirs, sink=sink,
+
+    prep_result = _ensure_unix_port_binary(
+        "micropython", binary,
+        lambda: resolve_micropython_binary(binary), prepare_micropython, sink,
     )
+    if prep_result != 0:
+        return prep_result
+    command = _pytest_unix_port_command("micropython", binary, package_dirs)
+    if sink is not None:
+        sink.line(f"+ {' '.join(command)}")
+        exit_code, _ = stream_subprocess(
+            command,
+            on_line=sink.line,
+            environment=pythonpath_environment(),
+        )
+        return exit_code
+    return run_command(command, environment=pythonpath_environment())
 
 
 def test_circuitpython(
@@ -1409,18 +1428,30 @@ def test_circuitpython(
     *,
     sink: _Sink | None = None,
 ) -> int:
-    """Run the cross-runtime unit tests with a configured or repo-managed CircuitPython binary.
+    """Run unix-port unit tests under the CircuitPython binary.
 
-    Skips libraries that do not target CircuitPython.  See
-    :func:`_test_runtime_compat` for the *sink* argument.
+    Thin wrapper — see :func:`test_micropython` for the shape.
     """
     from prepare_circuitpython import prepare_circuitpython
     from shared import resolve_circuitpython_binary
-    return _test_runtime_compat(
-        "circuitpython", "CircuitPython",
+
+    prep_result = _ensure_unix_port_binary(
+        "circuitpython", binary,
         lambda: resolve_circuitpython_binary(binary), prepare_circuitpython,
-        package_dirs, sink=sink,
+        sink,
     )
+    if prep_result != 0:
+        return prep_result
+    command = _pytest_unix_port_command("circuitpython", binary, package_dirs)
+    if sink is not None:
+        sink.line(f"+ {' '.join(command)}")
+        exit_code, _ = stream_subprocess(
+            command,
+            on_line=sink.line,
+            environment=pythonpath_environment(),
+        )
+        return exit_code
+    return run_command(command, environment=pythonpath_environment())
 
 
 def test_all_runtimes(

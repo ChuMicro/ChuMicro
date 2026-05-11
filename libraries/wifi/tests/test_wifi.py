@@ -1,8 +1,9 @@
 """Tests for ``chumicro_wifi`` — config + state machine + reconnect supervisor.
 
-Cross-runtime: runs on CPython pytest and (via
-``test_harness.run_cross_runtime``) under MicroPython + CircuitPython
-unix-ports.
+Cross-runtime: runs on CPython pytest, and under MicroPython +
+CircuitPython unix-ports via ``pytest libraries/wifi/tests --target
+unix-port`` (the ``chumicro-pytest-device`` plugin's unix-port
+backend).
 
 Three test surfaces:
 

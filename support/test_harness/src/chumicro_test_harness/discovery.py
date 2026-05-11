@@ -1,16 +1,21 @@
-"""Cross-runtime test discovery and orchestration.
+"""Cross-runtime test discovery — worker-side helpers.
 
-Discovers ``tests/`` for every library under ``libraries/``, sets up
-``sys.path`` so library imports resolve, and runs each test file through
-the lightweight harness runner.
+Used by :mod:`support.test_harness.run_cross_runtime` (the worker
+entry point) and by :mod:`chumicro_pytest_device.plugin` (the host
+side that spawns the workers).  Manager-mode discovery — walking
+``libraries/*/tests/`` and orchestrating one subprocess per file —
+moved into the pytest plugin's collection layer; the only thing
+this module owns now is single-file execution.
 
-Avoids ``os.path`` (unavailable on some CircuitPython builds) and keeps
-the import footprint minimal so it can execute under CPython, MicroPython
-unix-port, and CircuitPython unix-port.
+Avoids ``os.path`` (unavailable on some CircuitPython builds) and
+keeps the import footprint minimal so :func:`run_one_file` can
+execute under CPython, MicroPython unix-port, and CircuitPython
+unix-port.
 
-A non-``_pytest`` file that fails to import is a hard FAIL, not a silent
-SKIP — files that pull in pytest / unittest / tracemalloc must either be
-converted to cross-runtime or renamed to ``test_<name>_pytest.py``.
+A non-``_pytest`` file that fails to import is a hard FAIL, not a
+silent SKIP — files that pull in pytest / unittest / tracemalloc
+must either be converted to cross-runtime or renamed to
+``test_<name>_pytest.py``.
 """
 
 import os
@@ -69,31 +74,6 @@ def discover_source_roots(root_dir="."):
             if _is_dir(src_dir):
                 source_roots.append(src_dir)
     return source_roots
-
-
-def discover_tests(root_dir=".", libraries=None):
-    """Return paths to all ``test_*.py`` files under ``libraries/*/tests/``.
-
-    Args:
-        root_dir: Workspace root directory.
-        libraries: Optional list of library names to include.
-            When ``None``, all libraries are discovered.
-    """
-    libraries_dir = root_dir + "/libraries" if root_dir != "." else "libraries"
-    library_filter = set(libraries) if libraries else None
-    test_files = []
-    for name in _sorted_listdir(libraries_dir):
-        if library_filter is not None and name not in library_filter:
-            continue
-        tests_dir = libraries_dir + "/" + name + "/tests"
-        for filename in _sorted_listdir(tests_dir):
-            if filename.startswith("test_") and filename.endswith(".py"):
-                # Skip pytest-only tests — they use fixtures or assertions
-                # that don't exist on MicroPython/CircuitPython runtimes.
-                if filename.endswith("_pytest.py"):
-                    continue
-                test_files.append(tests_dir + "/" + filename)
-    return test_files
 
 
 def setup_source_paths(root_dir="."):
@@ -167,85 +147,3 @@ def run_one_file(test_file, root_dir="."):
         print(f"ERROR loading {test_file}: {error}")
         return 1
     return run_module(test_module)
-
-
-def run_all(root_dir=".", libraries=None, isolate_per_file=True):
-    """Discover and run all cross-runtime unit tests, returning a shell exit code.
-
-    Args:
-        root_dir: Workspace root directory.
-        libraries: Optional list of library names to include.
-        isolate_per_file: When ``True`` (the default), spawns a fresh
-            unix-port subprocess for every test file via
-            :func:`os.system`.  Each subprocess starts with a clean
-            heap, mirroring real-board behaviour where modules are
-            frozen in flash and don't accumulate per-file in RAM.
-            Eliminates the order-dependent fragmentation and
-            memory-pressure interactions that surface when many test
-            files share one interpreter on a constrained runtime.
-            When ``False``, runs every test file in this process — the
-            legacy behaviour, useful when the caller needs to share
-            state across files (rare).
-
-    Returns:
-        ``0`` for all-pass, ``1`` for any failure.
-    """
-    setup_source_paths(root_dir)
-
-    test_files = discover_tests(root_dir, libraries=libraries)
-    if not test_files:
-        print("NO TESTS FOUND")
-        return 0
-
-    if isolate_per_file:
-        return _run_all_isolated(root_dir, test_files)
-    return _run_all_inline(test_files)
-
-
-def _run_all_isolated(root_dir, test_files):
-    """Spawn one unix-port subprocess per test file via :func:`os.system`."""
-    binary = sys.executable
-    harness_script = (
-        root_dir + "/support/test_harness/run_cross_runtime.py"
-        if root_dir != "."
-        else "support/test_harness/run_cross_runtime.py"
-    )
-    total_failed = 0
-    for test_file in test_files:
-        # ``os.system`` is the only spawn primitive available on MP /
-        # CP unix-port (no ``subprocess``, no ``os.popen``).  The child
-        # writes its own PASS / FAIL / SKIP / HEAP / SUMMARY lines
-        # straight to stdout; we only collect the exit status.  Quote
-        # arguments to handle paths with spaces.
-        command = (
-            '"' + binary + '" "' + harness_script + '" --worker "' + test_file + '"'
-        )
-        status = os.system(command)
-        if status != 0:
-            total_failed += 1
-    return 1 if total_failed else 0
-
-
-def _run_all_inline(test_files):
-    """Run every test file in this process — legacy path for ``isolate_per_file=False``."""
-    total_failed = 0
-    for test_file in test_files:
-        print(f"== {test_file} ==")
-        try:
-            test_module = _exec_as_namespace(test_file)
-        except ImportError as error:
-            total_failed += 1
-            print(
-                f"FAIL {test_file} — import failed: {error} "
-                f"(rename to test_<name>_pytest.py if intentionally CPython-only)"
-            )
-            continue
-        except Exception as error:
-            total_failed += 1
-            print(f"ERROR loading {test_file}: {error}")
-            continue
-        result = run_module(test_module)
-        if result != 0:
-            total_failed += 1
-
-    return 1 if total_failed else 0
