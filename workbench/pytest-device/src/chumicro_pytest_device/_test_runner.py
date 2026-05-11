@@ -186,7 +186,7 @@ def resolve_effective_deploy_mode(
 
     Resolution order:
 
-    1. CLI ``--chumicro-deploy-mode`` override (highest precedence).
+    1. CLI ``--deploy-mode`` override (highest precedence).
     2. Per-device ``deploy_mode`` from ``devices.yml``.
     3. Global ``defaults.deploy_mode`` (folded into the entry by the loader).
     4. ``DEFAULT_DEPLOY_MODE`` as the last-resort default — flash is

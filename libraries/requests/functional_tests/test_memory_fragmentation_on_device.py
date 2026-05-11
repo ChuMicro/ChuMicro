@@ -148,7 +148,7 @@ def _drive_parser(response_bytes, chunk_size=512):
 
 
 # ---------------------------------------------------------------------------
-# Tests — requires ``--chumicro-deploy-mode flash``.
+# Tests — requires ``--deploy-mode flash``.
 #
 # RAM mode sends the test source inline through the serial REPL, which
 # eats ~2× the file size of working heap on Pi Pico W and OOMs the

@@ -120,7 +120,7 @@ def _drive_frame_parser(frame_bytes, chunk_size=64):
 def test_short_text_frame_no_leak_no_fragmentation_on_device():
     """8 unmasked 16-byte text frames — minimal-overhead frame churn.
 
-    Requires ``--chumicro-deploy-mode flash``.  Server-to-client traffic
+    Requires ``--deploy-mode flash``.  Server-to-client traffic
     is unmasked (RFC 6455 §5.3).  Encoded once outside the loop; each
     iteration drives a fresh parser to completion.
     """

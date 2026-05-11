@@ -124,7 +124,7 @@ def _drive_parser(request_bytes, chunk_size=512):
 def test_small_request_no_leak_no_fragmentation_on_device():
     """8 small GET requests — typical sensor-poll inbound path.
 
-    Requires ``--chumicro-deploy-mode flash``; see the response-side
+    Requires ``--deploy-mode flash``; see the response-side
     test for why RAM mode OOMs the bootstrap on Pi Pico W.
     """
     request = _build_request(target="/api/v1/state", header_count=3)

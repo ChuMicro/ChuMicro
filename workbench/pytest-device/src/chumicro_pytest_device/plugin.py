@@ -137,7 +137,7 @@ def _libraries_root(session: pytest.Session) -> Path:
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    """Register ``--chumicro-*`` command-line options on the pytest CLI.
+    """Register ChuMicro command-line options on the pytest CLI.
 
     Each option overrides the corresponding ``defaults:`` entry in
     ``devices.yml`` when supplied; when omitted, ``devices.yml``
@@ -146,52 +146,53 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
     Options:
 
-    - ``--chumicro-runtime`` (``micropython`` / ``circuitpython`` /
-      ``both``) — overrides ``defaults.ide_runtime``.
-    - ``--chumicro-micropython-device`` / ``--chumicro-circuitpython-device``
-      — per-runtime device-ID overrides.
-    - ``--chumicro-deploy-mode`` (``ram`` / ``flash``) — overrides
-      the per-device ``deploy_mode`` and ``defaults.deploy_mode``.
-    - ``--chumicro-pr-summary`` — when set, prints a Markdown
-      device-testing block at session end (the same block the
-      ``test-libraries-functional`` task used to print directly).  Opt-in so IDE
-      play-button runs stay quiet.
-    - ``--chumicro-pr-summary-command`` — literal command string to
-      render in the ``- Command:`` line of the PR block.  The
-      ``test-libraries-functional`` wrapper passes the reconstructed invocation;
-      direct pytest runs can omit it and get the raw ``pytest ...``.
+    - ``--runtime`` (``micropython`` / ``circuitpython`` / ``both``)
+      — overrides ``defaults.ide_runtime``.
+    - ``--micropython-device`` / ``--circuitpython-device`` —
+      per-runtime device-ID overrides.
+    - ``--deploy-mode`` (``ram`` / ``flash``) — overrides the
+      per-device ``deploy_mode`` and ``defaults.deploy_mode``.
+    - ``--pr-summary`` — when set, prints a Markdown device-testing
+      block at session end (the same block the
+      ``test-libraries-functional`` task used to print directly).
+      Opt-in so IDE play-button runs stay quiet.
+    - ``--pr-summary-command`` — literal command string to render in
+      the ``- Command:`` line of the PR block.  The
+      ``test-libraries-functional`` wrapper passes the reconstructed
+      invocation; direct pytest runs can omit it and get the raw
+      ``pytest ...``.
     """
     group = parser.getgroup("chumicro", "ChuMicro device-test plugin")
     group.addoption(
-        "--chumicro-runtime",
+        "--runtime",
         choices=("micropython", "circuitpython", "both"),
         default=None,
         help="override devices.yml defaults.ide_runtime",
     )
     group.addoption(
-        "--chumicro-micropython-device",
+        "--micropython-device",
         default=None,
         help="override devices.yml defaults.micropython device ID",
     )
     group.addoption(
-        "--chumicro-circuitpython-device",
+        "--circuitpython-device",
         default=None,
         help="override devices.yml defaults.circuitpython device ID",
     )
     group.addoption(
-        "--chumicro-deploy-mode",
+        "--deploy-mode",
         choices=tuple(mode.value for mode in DeployMode),
         default=None,
         help="override per-device deploy_mode (ram / flash)",
     )
     group.addoption(
-        "--chumicro-pr-summary",
+        "--pr-summary",
         action="store_true",
         default=False,
         help="print a Markdown PR block at session end",
     )
     group.addoption(
-        "--chumicro-pr-summary-command",
+        "--pr-summary-command",
         default=None,
         help="command string to render inside the PR block",
     )
@@ -219,18 +220,18 @@ def _session_targets(session: pytest.Session) -> list[DeviceEntry] | None:
 
 
 def _session_deploy_mode_override(session: pytest.Session) -> str | None:
-    """Return the ``--chumicro-deploy-mode`` override, if any."""
+    """Return the ``--deploy-mode`` override, if any."""
     return cast(
         "str | None",
-        session.config.getoption("--chumicro-deploy-mode", default=None),
+        session.config.getoption("--deploy-mode", default=None),
     )
 
 
 def _session_pr_summary(
     session: pytest.Session,
 ) -> _PRSummaryCollector | None:
-    """Return the PR-summary collector when ``--chumicro-pr-summary`` is set."""
-    return getattr(session, "_chumicro_pr_summary", None)
+    """Return the PR-summary collector when ``--pr-summary`` is set."""
+    return getattr(session, "_pr_summary", None)
 
 
 class _PRSummaryCollector:
@@ -1495,31 +1496,31 @@ def _deselect_items_missing_required_features(
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Initialize the transport cache and resolve target devices.
 
-    Applies ``--chumicro-runtime`` / ``--chumicro-micropython-device`` /
-    ``--chumicro-circuitpython-device`` overrides on top of the
-    ``devices.yml`` defaults before picking target devices, so the
-    pytest invocation mirrors what the ``test-libraries-functional`` CLI used to do
-    in its own orchestrator.  Omitted options leave the defaults
-    untouched, so IDE play-button runs continue to use
-    ``devices.yml`` defaults with no explicit flags.
+    Applies ``--runtime`` / ``--micropython-device`` /
+    ``--circuitpython-device`` overrides on top of the ``devices.yml``
+    defaults before picking target devices, so the pytest invocation
+    mirrors what the ``test-libraries-functional`` CLI used to do in
+    its own orchestrator.  Omitted options leave the defaults
+    untouched, so IDE play-button runs continue to use ``devices.yml``
+    defaults with no explicit flags.
     """
     session._device_transport_cache = _TransportCache()  # type: ignore[attr-defined]
 
     runtime_override = cast(
         "str | None",
-        session.config.getoption("--chumicro-runtime", default=None),
+        session.config.getoption("--runtime", default=None),
     )
     mp_override = cast(
         "str | None",
-        session.config.getoption("--chumicro-micropython-device", default=None),
+        session.config.getoption("--micropython-device", default=None),
     )
     cp_override = cast(
         "str | None",
-        session.config.getoption("--chumicro-circuitpython-device", default=None),
+        session.config.getoption("--circuitpython-device", default=None),
     )
     deploy_mode_override = cast(
         "str | None",
-        session.config.getoption("--chumicro-deploy-mode", default=None),
+        session.config.getoption("--deploy-mode", default=None),
     )
 
     # Eagerly resolve target devices so collection can parametrize
@@ -1541,8 +1542,8 @@ def pytest_sessionstart(session: pytest.Session) -> None:
             devices, effective_defaults,
         )
 
-    if session.config.getoption("--chumicro-pr-summary", default=False):
-        session._chumicro_pr_summary = _PRSummaryCollector()  # type: ignore[attr-defined]
+    if session.config.getoption("--pr-summary", default=False):
+        session._pr_summary = _PRSummaryCollector()  # type: ignore[attr-defined]
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
@@ -1559,7 +1560,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         return
     command = cast(
         "str | None",
-        session.config.getoption("--chumicro-pr-summary-command", default=None),
+        session.config.getoption("--pr-summary-command", default=None),
     )
     if not command:
         command = "pytest"

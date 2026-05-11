@@ -96,7 +96,7 @@ Bare `pytest` from the repo root is the everyday command for iteration — fast,
 | Run workbench hardware-gated functional tests | `python scripts/run.py test-workbench-functional --workbench deploy` |
 | Wipe a wedged board (last-resort) | `chumicro-workspace reset-board --device <id> --yes` |
 
-Both `pytest libraries/<name>/functional_tests/` and `python scripts/run.py test-libraries-functional` go through the same `chumicro-pytest-device` plugin — the bare-pytest form is what IDE play buttons use, the runner form is the commit-gating wrapper. See [device-testing.md](device-testing.md) for the `--chumicro-runtime` / `--chumicro-deploy-mode` flag matrix.
+Both `pytest libraries/<name>/functional_tests/` and `python scripts/run.py test-libraries-functional` go through the same `chumicro-pytest-device` plugin — the bare-pytest form is what IDE play buttons use, the runner form is the commit-gating wrapper. See [device-testing.md](device-testing.md) for the `--runtime` / `--deploy-mode` flag matrix.
 
 ### Docs and publishing
 
