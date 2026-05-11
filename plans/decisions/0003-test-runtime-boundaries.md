@@ -15,8 +15,8 @@ Use CPython-hosted tests as the default path, prefer simulation or emulation whe
 The working test pyramid is:
 
 - required: CPython-hosted `pytest` tests with coverage
-- required: cross-runtime unit tests on MicroPython and CircuitPython unix-ports via the lightweight harness (see [Decision 0016](0016-cross-runtime-unit-tests.md))
-- targeted: real-device `functional_tests/` run through a small ChuMicro harness — the transport layer, `devices.yml` schema, and IDE integration are defined in [Decision 0027](0027-device-testing-infrastructure.md)
+- required: cross-runtime unit tests on MicroPython and CircuitPython unix-ports via the `chumicro-pytest-device` plugin's `UnixPortBackend` (see [Decision 0016](0016-cross-runtime-unit-tests.md))
+- targeted: real-device `functional_tests/` run through the same plugin's `DeviceBackend` — transport layer, `devices.yml` schema, and IDE integration defined in [Decision 0027](0027-device-testing-infrastructure.md)
 
 ## Consequences
 

@@ -8,7 +8,7 @@ Related: Decision 0007 (cross-platform deps), Decision 0015 (board support tiers
 
 ChuMicro targets three runtimes: CPython, MicroPython, and CircuitPython.  Most libraries should support all three, but some may only work on a subset — for example, a library wrapping a CircuitPython-only hardware API has no reason to be published to PyPI, and a CPython-only dev tool shouldn't be shipped as a `.mpy` bundle.
 
-Release automation must know which platforms a library targets so it can skip irrelevant packaging and distribution channels.  The cross-runtime compatibility runners (`test-micropython-compat`, `test-circuitpython-compat`) should also skip libraries that don't target those runtimes.
+Release automation must know which platforms a library targets so it can skip irrelevant packaging and distribution channels.  The MP/CP unix-port test lane (`pytest ... --target unix-port --runtime <X>`) also needs to skip libraries that don't target the runtime under test.
 
 ## Decision
 
@@ -30,7 +30,7 @@ The canonical platform identifiers are:
 - At least one platform must be listed when the key is present.
 - The `platforms` list is the source of truth for:
   - which package managers receive release artifacts (PyPI for `cpython`, circup/bundle for `circuitpython`, etc.)
-  - which cross-runtime compatibility runners exercise the library
+  - which runtimes exercise the library in the MP/CP unix-port pytest lane
   - any future per-platform CI gates
 
 ### Where it lives
@@ -42,12 +42,12 @@ The canonical platform identifiers are:
 
 ### Reading the value
 
-`scripts/run.py` should expose a helper that reads `[tool.chumicro].platforms` from a package's `pyproject.toml`, defaulting to all three when absent.  Python 3.11+ includes `tomllib` in the stdlib, so no new dependency is required.
+`chumicro-pytest-device` reads `[tool.chumicro].platforms` per-library at collection time under `--target unix-port` and deselects items for libraries whose platforms list excludes the active `--runtime`.  Release-automation helpers in `scripts/run.py` read the same key for publish gates.  Python 3.11+ includes `tomllib` in the stdlib, so no new dependency is required.
 
 ## Consequences
 
 - Existing libraries that target all three runtimes need no change — the default covers them.
 - Libraries that are platform-restricted add a one-line table to their `pyproject.toml`.
 - Release automation checks the platforms list before publishing to each channel.
-- Cross-runtime compatibility runners skip libraries not targeting the runtime under test.
+- The MP/CP unix-port pytest lane deselects libraries not targeting the active runtime, applied by the `chumicro-pytest-device` plugin at collection time.
 - Support packages (under `support/`) are workspace-internal and not published, so the platforms key is irrelevant for them unless they need to be tested against a specific runtime.
