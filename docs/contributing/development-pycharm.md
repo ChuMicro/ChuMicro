@@ -32,7 +32,7 @@ Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` 
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `workspace.yml` if they are missing.  The starter `devices.yml` ships an empty registry — register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `workspace.yml` once to provide real-network credentials for functional tests — the file is gitignored, so wifi password / broker auth never reach git (Decision 0057).  See [device-testing.md](device-testing.md) for the full setup flow.
+This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and materialises three starter files at the repo root if they are missing: `devices.yml` (the board registry), `workspace.yml` (host-side machinery), and `secrets.toml` (credentials).  All three are gitignored.  Register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `secrets.toml` once to provide your wifi password and broker auth under `[wifi]` / `[mqtt.broker.auth]` — these flow into `runtime_config.msgpack` at deploy time.  See [config-files.md](config-files.md) for the three-file split (Decision 0057) and [device-testing.md](device-testing.md) for the full setup flow.
 
 `setup` produces a lot of output — look for this at the end:
 

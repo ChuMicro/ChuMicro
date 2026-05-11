@@ -91,7 +91,7 @@ Example: `chumicro-workspace` ships a host CLI plus a small on-device `workspace
 
 Only split into a separate `libraries/` entry if a real third-party demand appears for installing the on-device piece independently of the host CLI.  That demand is speculative for every case we know of today.
 
-See the workspace package sequencing in [`plans/workstreams/project-workspace.md`](../../plans/workstreams/project-workspace.md) for the worked example.
+See the workspace package sequencing in [`plans/workstreams/archive/project-workspace.md`](../../plans/workstreams/archive/project-workspace.md) for the worked example.
 
 ## See also
 

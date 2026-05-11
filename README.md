@@ -33,7 +33,7 @@ Small, focused libraries for microcontrollers.  Each installs independently and 
 | **[logging](libraries/logging/)** | Levelled logging that's runner-friendly and never blocks the loop.  Per-logger levels with hierarchy resolution; zero chumicro deps. |
 | **[events](libraries/events/)** | Runner-shaped pub/sub event bus — bounded, drop-oldest, zero deps.  Wires service callbacks (e.g. wifi state changes) into application-level handlers. |
 | **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
-| **[config](libraries/config/)** | Standardized runtime-config helpers — one file per project, section-namespaced, with `<Name>Config.from_dict()` for each consumer library. |
+| **[config](libraries/config/)** | Standardized runtime-config helpers — flat-key dotted config (`wifi.ssid`, `mqtt.broker.host`) with `<Name>Config.from_config(...)` for each consumer library. |
 | **[kvstore](libraries/kvstore/)** | Tiny persistent key-value store — counters, timestamps, tokens.  Picks the right backend (NVM / NVS / LittleFS) per board. |
 | **[wifi](libraries/wifi/)** | One WiFi service across CP, MP-ESP32, and MP-Pico-W — state machine, reconnect supervisor, no firmware-level surprises. |
 | **[sockets](libraries/sockets/)** | Cross-runtime TCP + TLS + UDP — one protocol per shape over CP `socketpool`, MP `socket`/`ssl`, and CPython stdlib.  Substrate for the network libraries. |
