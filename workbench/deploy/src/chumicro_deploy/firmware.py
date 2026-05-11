@@ -148,6 +148,31 @@ class FlashFirmwareError(Exception):
     """
 
 
+def _infer_reflash_method(url: str) -> str:
+    """Pick UF2 or esptool from the URL's file extension.
+
+    Adafruit's CircuitPython S3 bucket and micropython.org both
+    name release files with the bootloader-shape extension built
+    in: ``.uf2`` for boards that talk to a UF2 mass-storage
+    bootloader, ``.bin`` for ESP32-family boards that take esptool
+    over USB-CDC.  Callers who pass the URL we just resolved
+    shouldn't have to repeat the choice as a separate flag.
+
+    Raises:
+        ValueError: URL extension isn't ``.uf2`` or ``.bin`` — the
+            caller has to pass ``reflash_method`` explicitly.
+    """
+    lowered = url.split("?", 1)[0].lower()
+    if lowered.endswith(".uf2"):
+        return ReflashMethod.UF2.value
+    if lowered.endswith(".bin"):
+        return ReflashMethod.ESPTOOL.value
+    raise ValueError(
+        f"Cannot infer reflash_method from URL {url!r} — expected "
+        f"a .uf2 or .bin extension.  Pass reflash_method explicitly."
+    )
+
+
 def _report(
     on_progress: Callable[[float, str], None] | None,
     fraction: float,
@@ -681,7 +706,7 @@ def _flash_firmware_esptool(
     device: Device,
     *,
     on_progress: Callable[[float, str], None] | None,
-    erase_flash: bool = False,
+    erase_flash: bool = True,
     flash_offset: str = "0x0",
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> None:
@@ -693,17 +718,16 @@ def _flash_firmware_esptool(
     GPIO0 manually before the command runs; the caller is
     responsible for prompting in that case.
 
-    ESP32 reflash workflows commonly prefer an ``esptool erase-flash``
-    step before ``write-flash`` so leftover partitions, user data,
-    or half-written sectors from a failed previous flash do not
-    interfere with the new image.  This is opt-in via
-    *erase_flash* (default ``False`` preserves any existing
-    CIRCUITPY / data partition) but strongly recommended for
-    first-install and recovery paths.  When enabled,
-    ``erase-flash`` runs first in its own esptool invocation —
-    chaining in a single command would require staying connected
-    across the erase, and some boards re-enter bootloader
-    differently between operations.
+    Defaults to erasing flash before write-flash — leftover
+    partitions, user data, or half-written sectors from a failed
+    previous flash routinely produce confusing "works but boots
+    weird" outcomes that aren't worth the upgrade-in-place
+    convenience.  Pass ``erase_flash=False`` to keep a CIRCUITPY
+    drive or stored wifi credentials across the reflash.  The
+    erase runs in its own esptool invocation — chaining in a
+    single command would require staying connected across the
+    erase, and some boards re-enter bootloader differently between
+    operations.
 
     Args:
         firmware_path: Local firmware binary.  ESP32 boards expect
@@ -801,10 +825,10 @@ def flash_firmware(
     url: str,
     device: Device,
     *,
-    reflash_method: str,
+    reflash_method: str | None = None,
     bootloader_drive_path: Path | None = None,
     interactive: bool = True,
-    erase_flash: bool = False,
+    erase_flash: bool = True,
     flash_offset: str = "0x0",
     on_progress: Callable[[float, str], None] | None = None,
 ) -> None:
@@ -842,7 +866,11 @@ def flash_firmware(
             ``"/dev/cu.usbmodem01"`` (macOS) rather than the
             runtime's normal serial address.
         reflash_method: ``"uf2"`` or ``"esptool"``.  See method
-            selection guide above.
+            selection guide above.  When ``None`` (default), the
+            method is inferred from the URL extension: ``.uf2`` →
+            ``"uf2"``, ``.bin`` → ``"esptool"``.  Pass explicitly
+            for ambiguous URLs (e.g. a query-string URL with no
+            extension).
         bootloader_drive_path: UF2 path only.  When set, skips
             auto-detection and writes directly to this path.
             Useful when multiple UF2 drives are present or when
@@ -853,13 +881,12 @@ def flash_firmware(
             ``False`` in automated flows where stdin isn't
             available — a failure to enter bootloader raises
             :class:`FlashFirmwareError` directly.
-        erase_flash: esptool path only.  When ``True``, runs
-            ``esptool erase-flash`` before ``write-flash`` —
+        erase_flash: esptool path only.  When ``True`` (default),
+            runs ``esptool erase-flash`` before ``write-flash`` —
             wipes every user partition (CIRCUITPY drive, stored
             wifi credentials, NVS) to guarantee a clean slate.
-            Recommended for first-install and recovery workflows;
-            default ``False`` preserves user data on ordinary
-            upgrades.
+            Pass ``False`` to preserve user data on an in-place
+            upgrade.
         flash_offset: esptool path only.  Address to ``write-flash``
             at.  Different firmware sources use different layouts:
 
@@ -884,8 +911,12 @@ def flash_firmware(
             detection, copy, reboot, or esptool invocation failed.
             The message names the step and includes recovery
             guidance.
-        ValueError: Unknown *reflash_method*.
+        ValueError: Unknown *reflash_method*, or
+            *reflash_method* is ``None`` and the URL extension is
+            neither ``.uf2`` nor ``.bin``.
     """
+    if reflash_method is None:
+        reflash_method = _infer_reflash_method(url)
     if reflash_method not in ReflashMethod._value2member_map_:
         allowed = ", ".join(f"{member.value!r}" for member in ReflashMethod)
         raise ValueError(
