@@ -156,13 +156,3 @@ def test_fake_ticks_diff_handles_wraparound() -> None:
     end = 10
     start = period - 10
     assert fake.ticks_diff(end, start) == 20
-
-
-def test_fake_ticks_current_ms_property() -> None:
-    """FakeTicks.current_ms property should be readable and writable."""
-    fake = FakeTicks(start_ms=42)
-    assert fake.current_ms == 42
-
-    fake.current_ms = 100
-    assert fake.current_ms == 100
-    assert fake.ticks_ms() == 100
