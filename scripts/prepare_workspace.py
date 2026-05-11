@@ -9,6 +9,13 @@ environment and always verifies the install before reporting success:
 3. Otherwise create ``.venv`` (via ``uv`` if available, else stdlib
    ``venv``).
 
+If the resolved interpreter is a ``.venv`` the script is *not*
+currently running inside, the script re-execs itself inside that
+interpreter before installing.  This lets a fresh clone bootstrap
+correctly from a system Python that lacks ``tomllib`` (3.9 / 3.10) or
+from any host that does not yet have ``chumicro_workspace`` on its
+import path — both are required by the install-workspace step.
+
 After installing dependencies and editable libraries it runs lint and
 host tests to confirm the workspace is functional; use
 ``python scripts/run.py preflight`` for the full CI mirror.
@@ -199,6 +206,36 @@ def resolve_python() -> Path:
     return _venv_python()
 
 
+def _reexec_into_venv_if_needed(python: Path) -> None:
+    """Re-exec the script inside *python* when the host is not a venv.
+
+    ``install_workspace()`` imports ``tomllib`` (via ``runtime_versions``)
+    and ``chumicro_workspace`` (via ``generate_config_files`` / IDE-sync)
+    *in the current process*.  When the host is a system Python 3.9 / 3.10
+    or any interpreter without ``chumicro_workspace`` on its path, those
+    imports fail — even though the venv we just created has everything
+    needed.
+
+    Re-execing inside the venv interpreter resolves both problems: the
+    new process re-enters :func:`main`, ``resolve_python`` short-circuits
+    on ``_in_virtual_environment``, and ``install_workspace`` runs with
+    every import available.  Returns without re-execing when we're
+    already inside a venv or conda environment.
+
+    Args:
+        python: Interpreter resolved by :func:`resolve_python`.
+    """
+    if _in_virtual_environment() or os.environ.get("CONDA_PREFIX"):
+        return
+
+    print(f"\nRe-executing inside {python} ...\n", flush=True)
+    result = subprocess.run(
+        [str(python), str(Path(__file__).resolve()), *sys.argv[1:]],
+        cwd=ROOT,
+    )
+    raise SystemExit(result.returncode)
+
+
 def install_dependencies(python: Path) -> None:
     """Install the full workspace into *python*.
 
@@ -293,6 +330,7 @@ def main() -> None:
 
     python = resolve_python()
     _check_python_version(python)
+    _reexec_into_venv_if_needed(python)
     install_dependencies(python)
     verify_workspace(python)
     print_summary(python)

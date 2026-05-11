@@ -13,6 +13,7 @@ from prepare_workspace import (
     _has_uv,
     _in_virtual_environment,
     _missing_unix_port_tools,
+    _reexec_into_venv_if_needed,
     _venv_python,
     install_dependencies,
     print_summary,
@@ -391,11 +392,71 @@ class TestRunHelper:
         assert "Failed: Smoke test" in out
 
 
+class TestReexecIntoVenvIfNeeded:
+    """Tests for the re-exec-into-venv handoff."""
+
+    def test_no_op_inside_venv(self, monkeypatch, tmp_path):
+        """When already inside a venv, the helper returns without subprocessing."""
+        called: list = []
+        monkeypatch.setattr(prepare_workspace, "_in_virtual_environment", lambda: True)
+        monkeypatch.delenv("CONDA_PREFIX", raising=False)
+        monkeypatch.setattr(
+            prepare_workspace.subprocess, "run",
+            lambda *_args, **_kwargs: called.append("subprocess") or None,
+        )
+
+        _reexec_into_venv_if_needed(tmp_path / "python")
+
+        assert called == []
+
+    def test_no_op_inside_conda(self, monkeypatch, tmp_path):
+        """When inside a conda env (no venv), the helper returns without subprocessing."""
+        called: list = []
+        monkeypatch.setattr(prepare_workspace, "_in_virtual_environment", lambda: False)
+        monkeypatch.setenv("CONDA_PREFIX", "/opt/conda")
+        monkeypatch.setattr(
+            prepare_workspace.subprocess, "run",
+            lambda *_args, **_kwargs: called.append("subprocess") or None,
+        )
+
+        _reexec_into_venv_if_needed(tmp_path / "python")
+
+        assert called == []
+
+    def test_reexecs_from_system_python(self, monkeypatch, capsys, tmp_path):
+        """Outside any venv/conda, the helper subprocesses into *python* and exits with the rc."""
+        captured_command: list[list[str]] = []
+        target = tmp_path / "bin" / "python"
+
+        monkeypatch.setattr(prepare_workspace, "_in_virtual_environment", lambda: False)
+        monkeypatch.delenv("CONDA_PREFIX", raising=False)
+        monkeypatch.setattr(prepare_workspace.sys, "argv", ["prepare_workspace.py", "--flag"])
+
+        def fake_run(command, cwd):
+            captured_command.append(command)
+            return subprocess.CompletedProcess(args=command, returncode=4)
+
+        monkeypatch.setattr(prepare_workspace.subprocess, "run", fake_run)
+
+        with pytest.raises(SystemExit) as excinfo:
+            _reexec_into_venv_if_needed(target)
+        assert excinfo.value.code == 4
+
+        assert len(captured_command) == 1
+        assert captured_command[0][0] == str(target)
+        # The script path should come second so the re-execed interpreter
+        # re-runs *this* module from scratch.
+        assert captured_command[0][1].endswith("prepare_workspace.py")
+        # CLI args after the script path are forwarded verbatim.
+        assert captured_command[0][2:] == ["--flag"]
+        assert "Re-executing inside" in capsys.readouterr().out
+
+
 class TestMain:
     """Tests for prepare_workspace.main entry point."""
 
     def test_main_invokes_steps_in_order(self, monkeypatch, capsys, tmp_path):
-        """main() runs resolve -> check -> install -> verify -> summary."""
+        """main() runs resolve -> check -> reexec -> install -> verify -> summary."""
         called: list[str] = []
         fake_python = tmp_path / "python"
 
@@ -407,6 +468,10 @@ class TestMain:
         monkeypatch.setattr(
             prepare_workspace, "_check_python_version",
             lambda python: called.append(f"check({python})"),
+        )
+        monkeypatch.setattr(
+            prepare_workspace, "_reexec_into_venv_if_needed",
+            lambda python: called.append(f"reexec({python})"),
         )
         monkeypatch.setattr(
             prepare_workspace, "install_dependencies",
@@ -427,6 +492,7 @@ class TestMain:
         assert called == [
             "resolve",
             f"check({fake_python})",
+            f"reexec({fake_python})",
             f"install({fake_python})",
             f"verify({fake_python})",
             f"summary({fake_python})",
