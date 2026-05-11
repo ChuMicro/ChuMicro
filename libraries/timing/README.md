@@ -3,9 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Timers that don't freeze your code — your loop keeps running while waiting.**
+**Timers that don't block. Your loop keeps ticking.**
 
-Capture `ticks_ms()` once per loop, hand it to a `Heartbeat`, and you've got clean periodic timing — no `time.sleep()`, no wraparound bugs. Works on CircuitPython, MicroPython, and CPython.
+Capture `ticks_ms()` once per loop pass, hand it to a `Heartbeat`, and you've got clean periodic timing on CircuitPython, MicroPython, or CPython. Tick-source detection is automatic, wraparound is handled, and there are no dependencies on anything else in ChuMicro — it's where every other library starts.
 
 <br clear="left">
 
@@ -67,9 +67,9 @@ while True:
 | `FakeTicks(start_ms=0)` | Deterministic tick source for host-side tests |
 | `FakeTicks.advance(amount_ms)` | Move the fake clock forward |
 
-## Related libraries
+## Where this fits
 
-For structured task scheduling with multiple services, see [runner](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner). Runner is built on timing — it captures `ticks_ms()` once per tick and dispatches services on a shared timestamp.
+Leaf — no upstream ChuMicro deps.  Everything in ChuMicro that owns time depends on it: [`runner`](../runner/), [`sockets`](../sockets/), [`ntp`](../ntp/), [`requests`](../requests/), [`http_server`](../http_server/), [`mqtt`](../mqtt/), [`websockets`](../websockets/).
 
 ## Platform support
 

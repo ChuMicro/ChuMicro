@@ -3,7 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Runner-shaped SNTP client over an injected UDP socket — pure-Python, cross-runtime.
+**An SNTP client that runs in your tick loop without blocking it.**
+
+Polls one server, advances on each runner tick, and gives you the unix seconds when the response lands.  Pure Python, no compiled module, no `time.sleep()` — your LED keeps blinking through the network hop.  UDP transport is injected so apps with a custom socket layer don't drag `chumicro-sockets` into the device deploy.
 
 <br clear="left">
 
@@ -53,9 +55,13 @@ print("unix seconds:", request.unix_seconds)
 | `NTPError` | OSError subclass raised on protocol-level failures (short/malformed response, kiss-of-death, timeout, cancel). |
 | `chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=None, broadcast=False)` | One-line default UDP socket wired through `chumicro-sockets`.  Importable separately so the deploy graph doesn't pull `chumicro-sockets` for apps with a custom transport. |
 
+## Where this fits
+
+Depends on [`chumicro-sockets`](../sockets/) for UDP transport and [`chumicro-timing`](../timing/) for ticks.  A single `pip install chumicro-ntp` brings the stack.  Used directly in app code; no other ChuMicro library depends on it.
+
 ## Platform support
 
-Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  Hard dependency: `chumicro-sockets` (a single `pip install chumicro-ntp` brings the stack).
+Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.
 
 ## Examples
 
@@ -63,17 +69,17 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  Hard 
 |---|---|
 | [`examples/ntp_query.py`](examples/ntp_query.py) | Real query against `pool.ntp.org` — wifi up, UDP socket via factory, runner-shaped poll loop.  Cross-runtime (CP + MP). |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-ntp` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

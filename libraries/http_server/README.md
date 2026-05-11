@@ -3,12 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
-Built on `chumicro-sockets` (TCP listener) and `chumicro-timing` (ticks).
-Each connection is a state machine advanced one chunk per runner tick —
-an LED keeps blinking while requests are being served.  Self-contained
-(no `chumicro-requests` dep) so a server-only board only ships server
-code.
+**A non-blocking HTTP/1.1 server with `@route` — serve requests while your LED keeps blinking.**
+
+Routing with `@server.route` (method dispatch, path parameters), bounded multi-connection, per-tick byte budgets, and a streaming request parser — all without blocking your main loop.  Serves TLS on every supported board pair except CircuitPython on RP2040 (CYW43 substrate limitation; documented inline).  Self-contained — no `chumicro-requests` dependency on the device.
 
 <br clear="left">
 
@@ -70,12 +67,13 @@ while True:
 | `parse_query` / `split_target` | URL helpers. |
 | `ServerError` + subclasses | Typed exception hierarchy (subclasses `chumicro_requests.HttpError`). |
 
+## Where this fits
+
+Depends on [`chumicro-sockets`](../sockets/) (TCP listener) and [`chumicro-timing`](../timing/) (ticks).  Pairs with [`chumicro-websockets`](../websockets/) for combined HTTP + WS deployments.  Self-contained otherwise — the shared HTTP/1.1 primitives (case-insensitive header dict, charset parsing) are inlined locally, so a server-only board never ships [`chumicro-requests`](../requests/).
+
 ## Platform support
 
-Works on CPython, MicroPython, and CircuitPython.  Pure Python; depends
-only on `chumicro-sockets` and `chumicro-timing`.  The shared HTTP/1.1
-primitives (case-insensitive header dict, charset parsing) are inlined
-locally — no `chumicro-requests` dependency on the device.
+Works on CPython, MicroPython, and CircuitPython.  Pure Python — no native extensions.
 
 ### TLS server (HTTPS)
 
@@ -105,26 +103,21 @@ runner-shaped, LED-blink-friendly progression.
 |---|---|
 | `simple_server.py` | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes.  Drive it with `curl` from your laptop.  Cross-runtime (CP + MP) — runtime marker on the file gates hardware-only deploys.  For a two-physical-board demo see the workspace template's `two_board_handshake/` example. |
 
-## Configuring wifi for examples and functional tests
+## Wiring wifi credentials for examples and functional tests
 
-Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  Two paths, depending on whether you're using a `chumicro-workspace`:
+The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths.  The library itself never reads TOML — it takes a `listener_factory` and goes; config wiring is application-layer.
 
-* **With a workspace (recommended).**  Put wifi creds in your workspace's gitignored `workspace.yml`, run `chumicro-workspace deploy <project>`, and the example reads them via the bundled `helpers.py` (which decodes `/runtime_config.msgpack` on the device, no on-device `msgpack` module needed).
-* **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` constants near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
+## Contributing
 
-The library itself never reads either source — it takes a `listener_factory` and goes.  The config wiring is application-layer.
-
-## Developing this library
-
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-http-server` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

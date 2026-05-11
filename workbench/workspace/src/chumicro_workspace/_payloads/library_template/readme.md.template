@@ -3,98 +3,143 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-<!-- TODO: Add a one-line description of what the library does. -->
+<!-- HERO TAGLINE: one bold sentence saying what the library is for.
+     Workshop several angles before picking one — problem-stated ("Timers
+     that don't block"), differentiator ("Tick-based scheduling without
+     async"), audience-stated ("Stdlib polyfills for boards that ship without
+     them"), or vivid-concrete ("A persistent dict for counters and tokens").
+     Keep it under ~90 chars.  Avoid AI-tic filler ("comprehensive",
+     "seamless", "one-stop", "canonical" — see workspace style guide). -->
+
+**A single-shot timer that fires once after N milliseconds.**
+
+<!-- ELABORATION: one or two sentences that flesh out the tagline.  Name the
+     concrete user value, mention cross-runtime support, and flag any
+     non-obvious constraint a cold reader would want to know inside ~10
+     seconds.  Be honest about caveats — soften sweeping claims that aren't
+     bench-verified. -->
+
+Set a deadline, poll each tick, get `True` once when time's up — no `time.sleep()`, no callbacks.  Works identically on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
-## Installation
+## Install
 
-### CircuitPython ([circup](https://github.com/adafruit/circup))
-
-circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/bundle-commands) to find third-party packages. Register the ChuMicro bundle once, then install by name:
-
-```bash
-circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro-{name}
-```
-
-### MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html))
+<!-- INSTALL: leave this block as-is — it's the standard 3-runtime install
+     pattern.  Only edit if your library has unusual install requirements
+     (rare). -->
 
 ```bash
-mpremote mip install github:ChuMicro/ChuMicro-Bundle/{import_name}
-```
-
-> **Want pre-compiled `.mpy` bytecode?** Add `mpy6/` before the package name for faster startup and lower RAM usage on boards with mpy format v6 (MicroPython 1.24+):
-> ```
-> mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/{import_name}
-> ```
-
-### CPython (pip)
-
-```bash
-pip install chumicro-{name}
-```
-
-*Just getting started? Skip this — the install commands above are all you need.*
-
-<details>
-<summary>Experimental (pre-release) versions and channel switching</summary>
-
-Pre-release builds are published automatically when a library version is bumped. Do not register both bundles simultaneously — circup may pick either version for a given package.
-
-```bash
-# CircuitPython — switch to experimental
-circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
-circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
 circup install chumicro-{name}
 
 # MicroPython
-mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/{import_name}
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/{import_name}
 
 # CPython
-pip install chumicro-{name}-experimental
+pip install chumicro-{name}
 ```
 
-</details>
+For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [chumicro INSTALL guide](https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md).
 
 ## Quick example
 
-<!-- TODO: Replace with a real example. Show the most common use case in
-     5-10 lines. Add a comment showing expected output so readers can
-     verify it works. -->
+<!-- QUICK EXAMPLE: 5-12 lines.  Must actually run without modification on
+     at least one runtime.  Show the most common use case, not the most
+     advanced.  Add an inline comment showing the expected output so readers
+     can verify their setup works.  If the library is network-shaped (needs
+     wifi credentials), use placeholders ("your-network" / "your-password")
+     so the example doesn't look like a real working endpoint. -->
 
 ```python
-from {import_name} import ...
+from {import_name} import Countdown
+from chumicro_timing import ticks_ms
+
+countdown = Countdown(period_ms=5000)    # fires once after 5 s
+
+while True:
+    now = ticks_ms()
+    if countdown.fired(now):
+        print("time's up")               # → "time's up" after ~5 seconds
+        break
 ```
 
 ## What's included
 
-<!-- TODO: Add API summary tables (see other library READMEs for format). -->
+<!-- API SUMMARY: tables grouped by purpose.  One table per major feature
+     group, not one giant catch-all.  Reference shapes:
+     - libraries/timing/README.md — small surface, three groups
+     - libraries/runner/README.md — richer surface, API + registration
+       patterns + runtime mutation + testing
+     Each row: `| Symbol | One-line description |`.  Use the same column
+     header text across groups for visual consistency. -->
+
+### Core
+
+| Symbol | Description |
+|---|---|
+| `Countdown(period_ms, ticks=None)` | Single-shot timer that fires once after `period_ms` elapses |
+| `Countdown.fired(now_ms)` | Returns `True` the first tick after the deadline; `False` thereafter |
+| `Countdown.reset(now_ms)` | Restart the countdown from `now_ms` |
+| `Countdown.remaining_ms(now_ms)` | Milliseconds left, or `0` once fired |
+
+### Testing
+
+| Symbol | Description |
+|---|---|
+| `{import_name}.testing.FakeCountdown` | Deterministic stand-in for downstream tests |
+
+## Where this fits
+
+<!-- STACK FIT: 1-2 sentences naming what this library depends on (upstream)
+     and what depends on it (downstream).  Helps a cold reader place the
+     library in the ecosystem.  Drop this whole section if the library is
+     a leaf with no upstream chumicro deps and no downstream consumers —
+     be honest, don't pad. -->
+
+Depends on [`chumicro-timing`](../timing/) for tick arithmetic.  Used directly in user apps; no other ChuMicro library depends on it.
 
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.
 
+<!-- If the library has a runtime quirk (e.g. CP-on-rp2 lacks TLS server,
+     CP wifi.radio.connect is blocking, the native msgpack module is only
+     on CP firmware), add a `### <Quirk name>` subsection under here that
+     names the constraint concretely and tells the reader what to do about
+     it.  Don't bury the surprise in a docstring. -->
+
 ## Examples
 
-<!-- TODO: Add an examples table once examples are written.
+<!-- EXAMPLES TABLE: one row per file in `examples/`.  Filename → what
+     it demonstrates.  Hardware-specific examples (board GPIO, board LED)
+     should say so in the description.  CPython-runnable examples are
+     better default examples — easier for a cold reader to try. -->
+
 | Example | What it shows |
 |---|---|
-| `example.py` | Description |
--->
+| [`countdown_basic.py`](examples/countdown_basic.py) | Single-shot fire on CPython — no hardware needed |
+| [`circuitpython_button_hold.py`](examples/circuitpython_button_hold.py) | LED stays lit for 5 s after a button press on CircuitPython |
+| [`micropython_button_hold.py`](examples/micropython_button_hold.py) | Same button-hold pattern on MicroPython |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+<!-- CONTRIBUTING: leave the body as-is — it's the standard host + on-device
+     dev loop.  The section name has to be "Contributing" (matches every
+     other library); the audience-split opening sentence carries the
+     per-library specificity. -->
+
+Working on `chumicro-{name}` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
-python run.py test --libraries {name}
-python run.py test-libraries-functional --library {name}
+pip install -e .[test]
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running device tests, generate local board config files with `python run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 
@@ -106,3 +151,7 @@ Before running device tests, generate local board config files with `python run.
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/{import_name}) (CircuitPython & MicroPython)
 - **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/{import_name})
 - **Source:** [libraries/{name}](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
+
+## License
+
+[MIT](https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE)

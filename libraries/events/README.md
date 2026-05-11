@@ -3,7 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Runner-shaped pub/sub event bus — bounded, drop-oldest, no chumicro deps.
+**A small pub/sub bus that drains on the runner tick.**
+
+Decouple "wifi just reconnected" or "sensor reading ready" from "what to do about it" — services publish topics, the application subscribes handlers, and the runner tick drains the queue.  Backed by a `collections.deque` so overflow is bounded; zero dependencies on other ChuMicro libraries.
 
 <br clear="left">
 
@@ -62,9 +64,13 @@ Test helpers in `chumicro_events.testing`:
 
 Internally the queue is a `collections.deque(iterable, maxlen)` rather than a list — `append` and `popleft` are O(1) and the deque's native `maxlen` enforcement gives drop-oldest without the O(n) shift cost of `list.pop(0)` on small VMs.
 
+## Where this fits
+
+Leaf — no upstream ChuMicro deps, and by policy no other ChuMicro library imports `chumicro-events` (decoration / observability libraries stay out of each other's dependency graphs).  Apps wire bus publishers into service callbacks themselves.
+
 ## Platform support
 
-Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No chumicro dependencies and **no other chumicro library imports it** — by policy, decoration / observability libraries don't appear in another library's dependency graph.  Apps wire bus publishers into service callbacks themselves.
+Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.
 
 ## Examples
 
@@ -73,17 +79,17 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No ch
 | [`examples/pub_sub_drain.py`](examples/pub_sub_drain.py) | `EventBus` minimal end-to-end: publish, check, handle. |
 | [`examples/wiring_services.py`](examples/wiring_services.py) | Wiring pattern — bind service `on_state_change` callbacks to `bus.publisher(topic)`. |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-events` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

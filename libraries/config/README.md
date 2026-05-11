@@ -3,7 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Standardized runtime-config helpers for ChuMicro libraries.  One flat-key dict (dotted prefixes like `wifi.ssid`), typed `<Name>Config.from_config()` per consumer.
+**Runtime config from one shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`).**
+
+Each library exposes a `<Name>Config.from_config()` factory that reads its own dotted-prefix section from a shared dict (`wifi.*`, `mqtt.broker.*`, etc.) and returns typed configuration.  Apps load one `runtime_config.msgpack` at boot; libraries pull their slice out.  No global registry, no hand-written `if "key" in config:` walls.
 
 <br clear="left">
 
@@ -63,6 +65,10 @@ class WifiConfig:
 | `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions (also subclass `KeyError` / `TypeError`) |
 | `DEFAULT_RUNTIME_CONFIG_PATH` | The canonical on-device path (`/runtime_config.msgpack`) |
 
+## Where this fits
+
+Depends on [`chumicro-msgpack`](../msgpack/) for decode.  Every ChuMicro library that has a `<Name>Config.from_config()` factory uses this — [`chumicro-wifi`](../wifi/), [`chumicro-mqtt`](../mqtt/), and friends.
+
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.
@@ -71,17 +77,17 @@ Works on CPython, MicroPython, and CircuitPython.
 
 No standalone examples — see any consumer library (starting with `chumicro-wifi`) for the integrated usage shape.
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-config` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

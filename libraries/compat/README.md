@@ -3,9 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Standard library features that CircuitPython and MicroPython are missing.**
+**Stdlib polyfills for the bits CircuitPython and MicroPython skipped.**
 
-Import from `chumicro_compat` instead of the stdlib and your code works everywhere. On CPython it re-exports the real C implementations (zero overhead); on microcontrollers it provides lightweight pure-Python versions. Works on CircuitPython, MicroPython, and CPython.
+Import from `chumicro_compat` instead of the stdlib and your code works everywhere. CPython gets the real C implementation (zero overhead); CircuitPython and MicroPython get a lightweight pure-Python version of the same public API.
 
 <br clear="left">
 
@@ -62,6 +62,9 @@ set_status_led(100)  # pin 13 → 100%
 
 The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identical across all runtimes.
 
+## Where this fits
+
+Leaf — no upstream ChuMicro deps.  Used directly by any library or app that wants stdlib features (`functools.partial`, …) missing from CircuitPython / MicroPython.
 
 ## Examples
 
@@ -71,17 +74,17 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 | `partial_keyword_override.py` | Freeze keyword args, override at call time |
 | `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
+Working on `chumicro-compat` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

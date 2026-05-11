@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**One-stop host CLI for ChuMicro project workspaces — onboard a board, write app code, deploy to one or many targets, watch the REPL.**
+**Host CLI for ChuMicro project workspaces — onboard a board, write app code, deploy to one or many targets, watch the REPL.**
 
 Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (gitignored `workspace.yml` + `projects/*/config.toml` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one project without you writing a `code.py`.
 
@@ -121,6 +121,10 @@ Two responsibilities, one synthesised shim file: deploy owns `/code.py` (or `/ma
 
 When the project ships its own `code.py` / `main.py`, plain mode kicks in and deploy ships project files at the device root verbatim, no shim synthesis.  The runtime-matching filename declares intent: deploying a `code.py`-only project to a MicroPython board (or `main.py`-only to CircuitPython) surfaces as a clear user error before any bytes leave the host.
 
+## Where this fits
+
+Depends on [`chumicro-deploy`](../deploy/) (transport) and [`chumicro-repl`](../repl/) (lazily loaded for `repl <project>` and post-deploy `--tail`).  Top-level umbrella CLI — most users reach for `chumicro-workspace`, not the lower-level tools directly.  The on-device side is [`chumicro-config`](../../libraries/config/), which reads the msgpack this package writes.
+
 ## Public Python API
 
 ```python
@@ -176,15 +180,17 @@ This package is a CLI tool — there's no "use it in your code" example shape th
 
 The Python API surface (the `from chumicro_workspace import ...` block above) exists so [`chumicro-deploy`](../deploy/), the workspace template's `run.py` shim, and the [`chumicro-workspace` CLI](src/chumicro_workspace/cli.py) itself can compose against it — not as a "build your own workspace tool" surface.  If you find yourself reaching for it, the CLI probably already exposes what you want; file an issue if it doesn't.
 
-## Developing this library
+## Contributing
+
+Working on `chumicro-workspace` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board: `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

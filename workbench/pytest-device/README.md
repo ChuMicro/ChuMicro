@@ -69,6 +69,10 @@ The plugin discovers the board, stages `chumicro_timing/src/` + the test, execut
 | `--chumicro-pr-summary` | Append a markdown summary block to stdout at end of session |
 | `--chumicro-pr-summary-command <text>` | The command that re-runs the failed tests, included in the summary |
 
+## Where this fits
+
+Depends on [`chumicro-deploy`](../deploy/) for staging tests on a board.  Auto-registers via `pytest11`; reads `devices.yml` written by [`chumicro-workspace`](../workspace/).
+
 ## Companions
 
 | Workbench tool | Why you'd use it alongside |
@@ -77,18 +81,16 @@ The plugin discovers the board, stages `chumicro_timing/src/` + the test, execut
 | [`chumicro-repl`](../repl/) | Tail a board's REPL after a deploy — handy for follow-up debugging when a functional test surprises you |
 | [`chumicro-workspace`](../workspace/) | The host CLI for project workspaces.  Reads the same `devices.yml` schema |
 
-## Developing this library
+## Contributing
+
+Working on `chumicro-pytest-device` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
+pytest tests/                  # host-side tests
 ```
 
 No hardware-side functional tests for this package itself — its job is to drive consumer libraries' functional tests via `pytest libraries/<name>/functional_tests/` against a board registered in `devices.yml`.
-
-## Docs
-
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/pytest-device/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/pytest-device/experimental/)**
 
 ## Find this library
 

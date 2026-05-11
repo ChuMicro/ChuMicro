@@ -3,7 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Non-blocking WebSocket (RFC 6455) client + server for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` and `chumicro-timing` so an LED can keep blinking through the opening handshake, frame I/O, and the close handshake.
+**Non-blocking WebSocket (RFC 6455) client and server, plain and TLS.**
+
+RFC 6455 framing and masking, opening + closing handshakes, text + binary + ping/pong, and oversized-message guards.  Plays alongside [`chumicro-http-server`](../http_server/) for combined HTTP + WS / HTTPS + WSS deployments.  Built on [`chumicro-sockets`](../sockets/) and [`chumicro-timing`](../timing/).
 
 <br clear="left">
 
@@ -57,6 +59,10 @@ Framing primitives (`FrameParser`, `encode_frame`, the handshake parsers, the `D
 | `WebSocketState` | Lifecycle constants (`CONNECTING` / `OPEN` / `CLOSING` / `CLOSED`). |
 | `WebSocketError` + subclasses | Exception hierarchy: protocol, handshake, URL, timeout, backpressure, oversized, state. |
 
+## Where this fits
+
+Depends on [`chumicro-sockets`](../sockets/) and [`chumicro-timing`](../timing/).  Pairs with [`chumicro-http-server`](../http_server/) for combined HTTP + WS / HTTPS + WSS deployments.
+
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.
@@ -68,17 +74,17 @@ Works on CPython, MicroPython, and CircuitPython.
 | [`client.py`](examples/client.py) | WebSocket client on real CP/MP hardware — brings wifi up via the bundled `helpers`, connects to a configured echo server, prints every inbound message while a counter ticks alongside. |
 | [`server.py`](examples/server.py) | WebSocket echo server on real CP/MP hardware — accepts inbound connections on the configured host/port and echoes every frame back. |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-websockets` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 
