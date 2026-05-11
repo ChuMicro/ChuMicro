@@ -626,15 +626,17 @@ def _enter_esp32_rom_bootloader(
     2. Otherwise snapshot the current serial ports, dispatch a
        runtime-specific ``reset_into_bootloader`` via the
        transport, and poll for a new port (typically
-       ``/dev/cu.usbmodem01`` on macOS).  Programmatic entry works
-       on Pi Pico W for both runtimes, some bootstrap-wired ESP32
-       boards, and any CircuitPython target.
+       ``/dev/cu.usbmodem01`` on macOS).  Whether programmatic
+       entry succeeds depends on the board's firmware build —
+       observable as "a new ROM-bootloader port appears within
+       the poll window", not declared per-board.
     3. If no new port appears, and *interactive* is ``True``,
        prompt the user to hold BOOT + press RESET, then poll
-       again.  This is the only path that works on native-USB-CDC
-       ESP32 boards (Lolin S2 Mini, some Feather boards) where
-       neither ``machine.bootloader()`` nor esptool's RTS/DTR
-       dance are wired to the bootstrap circuit.
+       again.  This is the fallback for any board whose firmware
+       can't reach the ROM bootloader programmatically (a missing
+       ``machine.bootloader()`` implementation, a board without
+       bootstrap-wired RTS/DTR, etc.) — try-and-fall-back rather
+       than maintain a per-board table.
 
     Args:
         device: Target device.
@@ -678,12 +680,17 @@ def _enter_esp32_rom_bootloader(
     # 3. Interactive fallback.
     if not interactive:
         raise FlashFirmwareError(
-            f"Could not enter ESP32 ROM bootloader on "
-            f"{device.address!r} via transport.reset_into_bootloader().  "
-            f"Pass interactive=True to prompt for manual entry, or "
-            f"put the board in bootloader yourself "
-            f"(hold BOOT + press RESET) and retry with the new "
-            f"bootloader serial address as device.address."
+            f"This board / firmware does not currently support "
+            f"automatically entering bootloader mode "
+            f"(no new ROM-bootloader port appeared after the "
+            f"programmatic reset on {device.address!r}).\n"
+            f"  1. Hold the BOOT button on the board.\n"
+            f"  2. While holding BOOT, press and release RESET.\n"
+            f"  3. Release BOOT.  A new serial port will appear "
+            f"(typically /dev/cu.usbmodem01 on macOS).\n"
+            f"  4. Retry with --address pointing at that new port "
+            f"(or drop --non-interactive to have this command "
+            f"prompt you through the same steps automatically)."
         )
 
     baseline = _list_candidate_serial_ports(globs)

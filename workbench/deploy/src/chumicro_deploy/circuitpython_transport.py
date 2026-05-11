@@ -1053,12 +1053,17 @@ class CircuitpythonTransport:
     def reset_into_bootloader(self) -> bool:
         """Reset into the UF2 bootloader via ``microcontroller`` module.
 
-        CircuitPython's ``microcontroller.on_next_reset`` +
-        ``microcontroller.reset()`` sequence is the canonical way to
-        drop out of user code and enter the board's UF2 bootloader.
-        The raw-REPL session is killed as the board resets —
-        expected — so read-side exceptions are swallowed.  The
-        caller's drive-poll is the authoritative success signal.
+        ``microcontroller.on_next_reset(RunMode.BOOTLOADER)`` +
+        ``microcontroller.reset()`` is CircuitPython's documented
+        way to enter bootloader mode.  CP implements it across all
+        ESP32-S2/S3/C6/P4 + RP2040/RP2350 + most SAMD/nRF52 ports —
+        but whether the call actually puts a *particular* board in
+        bootloader mode depends on that board's HAL build.  Treat
+        success as observable, not declared: the raw-REPL link
+        drops as the chip resets (expected), and a new bootloader
+        port / UF2 drive shows up for the caller's drive-poll to
+        spot.  Don't add board-specific branching here; if the
+        poll comes up empty, the manual-entry fallback handles it.
 
         Closes the serial port directly so a subsequent
         :meth:`disconnect` becomes a no-op — the USB link is gone on

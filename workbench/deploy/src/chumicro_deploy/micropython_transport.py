@@ -587,13 +587,19 @@ class MicropythonTransport:
     def reset_into_bootloader(self) -> bool:
         """Issue ``machine.bootloader()`` to drop into the UF2 bootloader.
 
-        MicroPython's RP2040 + RP2350 ports implement
-        ``machine.bootloader()`` — it resets the chip into the
-        native UF2 ROM bootloader.  On ESP32 MicroPython builds the
-        call typically raises ``AttributeError`` (no such function)
-        and we return ``False`` so the flasher falls back to the
-        manual-entry prompt; that's where esptool-based flows take
-        over anyway.
+        Whether the call actually puts the chip in bootloader mode
+        depends on the board's MicroPython build — RP2040 / RP2350
+        ports wire ``machine.bootloader()`` to the native UF2 ROM
+        bootloader and it just works; other ports may not implement
+        the function at all, or may implement it as a plain reset
+        that boots straight back into the app.  We try blindly
+        rather than maintain a board / firmware-version table: a
+        successful entry shows up as a new ROM-bootloader serial
+        port for the caller's drive-poll to spot, and an
+        unsuccessful entry surfaces as no-new-port → fall back to
+        the manual-entry prompt.  Don't add board-specific
+        branching here; the try-and-poll architecture is the right
+        abstraction.
         """
         try:
             self._ensure_serial()
