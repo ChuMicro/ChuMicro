@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 from chumicro_deploy import DeviceEntry
+from chumicro_pytest_device import backends
 from chumicro_pytest_device import plugin as pytest_device
 from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
 
@@ -705,6 +706,152 @@ class TestPytestCollectFile:
         assert result is None
 
 
+class TestIsLibraryUnitTest:
+    """Tests for _is_library_unit_test path-shape classification."""
+
+    def test_matches_libraries_tests_test_file(self) -> None:
+        assert pytest_device._is_library_unit_test(
+            Path("libraries/timing/tests/test_heartbeat.py"),
+        ) is True
+
+    def test_excludes_pytest_only_suffix(self) -> None:
+        """``test_*_pytest.py`` files opt out of the cross-runtime harness."""
+        assert pytest_device._is_library_unit_test(
+            Path("libraries/timing/tests/test_ticks_pytest.py"),
+        ) is False
+
+    def test_excludes_functional_tests_path(self) -> None:
+        assert pytest_device._is_library_unit_test(
+            Path("libraries/timing/functional_tests/test_real.py"),
+        ) is False
+
+    def test_excludes_workbench_tests(self) -> None:
+        assert pytest_device._is_library_unit_test(
+            Path("workbench/deploy/tests/test_device.py"),
+        ) is False
+
+    def test_excludes_non_test_file(self) -> None:
+        assert pytest_device._is_library_unit_test(
+            Path("libraries/timing/tests/conftest.py"),
+        ) is False
+
+
+class TestSynthesizeUnixPortTargets:
+    """Tests for the unix-port DeviceEntry synthesis."""
+
+    def test_runtime_micropython_yields_one_entry(self) -> None:
+        targets = pytest_device._synthesize_unix_port_targets("micropython")
+        assert len(targets) == 1
+        assert targets[0].runtime == "micropython"
+        assert targets[0].identifier == "micropython-unix-port"
+        assert targets[0].address == "unix-port"
+
+    def test_runtime_circuitpython_yields_one_entry(self) -> None:
+        targets = pytest_device._synthesize_unix_port_targets("circuitpython")
+        assert len(targets) == 1
+        assert targets[0].runtime == "circuitpython"
+
+    def test_runtime_both_yields_two_entries(self) -> None:
+        targets = pytest_device._synthesize_unix_port_targets("both")
+        runtimes = [target.runtime for target in targets]
+        assert runtimes == ["micropython", "circuitpython"]
+
+
+class TestReadLibraryPlatforms:
+    """Tests for the per-library [tool.chumicro].platforms reader."""
+
+    def test_returns_none_when_pyproject_absent(self, tmp_path: Path) -> None:
+        result = pytest_device._read_library_platforms(tmp_path)
+        assert result is None
+
+    def test_returns_none_when_platforms_key_absent(
+        self, tmp_path: Path,
+    ) -> None:
+        (tmp_path / "pyproject.toml").write_text(
+            "[project]\nname = \"chumicro-foo\"\n",
+        )
+        result = pytest_device._read_library_platforms(tmp_path)
+        assert result is None
+
+    def test_returns_declared_platforms(self, tmp_path: Path) -> None:
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.chumicro]\nplatforms = [\"cpython\", \"micropython\"]\n",
+        )
+        result = pytest_device._read_library_platforms(tmp_path)
+        assert result == ("cpython", "micropython")
+
+
+class TestResolveUnixPortBinary:
+    """Tests for the unix-port binary resolution helper."""
+
+    def test_explicit_override_wins(self, tmp_path: Path) -> None:
+        resolved = backends.resolve_unix_port_binary(
+            tmp_path, "micropython", "/some/explicit/path",
+        )
+        assert resolved == "/some/explicit/path"
+
+    def test_falls_back_to_marker_file(self, tmp_path: Path) -> None:
+        tools_dir = tmp_path / ".tools"
+        tools_dir.mkdir()
+        binary = tools_dir / "stub_micropython"
+        binary.write_text("#!/bin/sh\necho stub\n")
+        (tools_dir / "micropython.path").write_text(str(binary))
+        resolved = backends.resolve_unix_port_binary(
+            tmp_path, "micropython", None,
+        )
+        assert resolved == str(binary)
+
+    def test_skips_marker_when_binary_missing(self, tmp_path: Path) -> None:
+        """A stale marker pointing at a deleted binary should not resolve."""
+        tools_dir = tmp_path / ".tools"
+        tools_dir.mkdir()
+        (tools_dir / "micropython.path").write_text(
+            str(tmp_path / "deleted-binary"),
+        )
+        # No PATH lookup will hit "micropython" in this isolated test env,
+        # so resolution returns None.
+        resolved = backends.resolve_unix_port_binary(
+            tmp_path, "micropython", None,
+        )
+        assert resolved is None or resolved != str(
+            tmp_path / "deleted-binary",
+        )
+
+
+class TestUnixPortBackendPrepare:
+    """Tests for UnixPortBackend.prepare raising on missing prerequisites."""
+
+    def test_missing_binary_raises_prepare_error(self, tmp_path: Path) -> None:
+        backend = backends.UnixPortBackend(
+            tmp_path, binaries={"micropython": None, "circuitpython": None},
+        )
+        target = DeviceEntry(
+            identifier="micropython-unix-port",
+            runtime="micropython",
+            address="unix-port",
+        )
+        item = SimpleNamespace(test_file=tmp_path / "test_x.py")
+        with pytest.raises(backends.BackendPrepareError, match="not found"):
+            backend.prepare(item, target)  # type: ignore[arg-type]
+
+    def test_missing_harness_script_raises_prepare_error(
+        self, tmp_path: Path,
+    ) -> None:
+        binary = tmp_path / "stub-micropython"
+        binary.write_text("#!/bin/sh\n")
+        backend = backends.UnixPortBackend(
+            tmp_path, binaries={"micropython": str(binary)},
+        )
+        target = DeviceEntry(
+            identifier="micropython-unix-port",
+            runtime="micropython",
+            address="unix-port",
+        )
+        item = SimpleNamespace(test_file=tmp_path / "test_x.py")
+        with pytest.raises(backends.BackendPrepareError, match="harness"):
+            backend.prepare(item, target)  # type: ignore[arg-type]
+
+
 # ---------------------------------------------------------------------------
 # Direct tests for the IDE-path hot loop: _ensure_prepared + _ensure_batch_result
 # + the three Item runtest() bodies.  These are what fires when the user
@@ -1364,6 +1511,9 @@ class TestPytestCollectionModifyItemsRequiredKeys:
                     pytest_deselected=lambda **_kwargs: None,
                 )
 
+            def getoption(self, _name, default=None):  # noqa: ANN001
+                return default
+
         config = _Stub()
         set_runtime_config(config, payload, required_keys=required_keys)
         return config
@@ -1540,6 +1690,9 @@ class TestPytestCollectionModifyItemsFeatures:
                 self.hook = SimpleNamespace(
                     pytest_deselected=lambda items: self.deselected.extend(items),
                 )
+
+            def getoption(self, _name, default=None):  # noqa: ANN001
+                return default
 
         config = _Stub()
         # No required_keys — keep the unrelated check inert in these tests.

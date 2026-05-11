@@ -64,7 +64,12 @@ from ._test_runner import (
     resolve_effective_deploy_mode,
     resolve_library_source_dirs,
 )
-from .backends import Backend, BackendExecuteError, BackendPrepareError
+from .backends import (
+    Backend,
+    BackendExecuteError,
+    BackendPrepareError,
+    UnixPortBackend,
+)
 from .features import (
     FEATURE_PROBE_SCRIPT,
     parse_feature_probe_output,
@@ -165,6 +170,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     """
     group = parser.getgroup("chumicro", "ChuMicro device-test plugin")
     group.addoption(
+        "--target",
+        choices=("device", "unix-port"),
+        default="device",
+        help=(
+            "execution backend: 'device' (chumicro-deploy transport) "
+            "or 'unix-port' (subprocess against a MicroPython / "
+            "CircuitPython unix-port binary)"
+        ),
+    )
+    group.addoption(
         "--runtime",
         choices=("micropython", "circuitpython", "both"),
         default=None,
@@ -179,6 +194,22 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--circuitpython-device",
         default=None,
         help="override devices.yml defaults.circuitpython device ID",
+    )
+    group.addoption(
+        "--micropython-binary",
+        default=None,
+        help=(
+            "unix-port MicroPython binary path "
+            "(overrides .tools/micropython.path and PATH lookup)"
+        ),
+    )
+    group.addoption(
+        "--circuitpython-binary",
+        default=None,
+        help=(
+            "unix-port CircuitPython binary path "
+            "(overrides .tools/circuitpython.path and PATH lookup)"
+        ),
     )
     group.addoption(
         "--deploy-mode",
@@ -1365,6 +1396,36 @@ def _is_library_functional_test(file_path: Path) -> bool:
     )
 
 
+def _is_library_unit_test(file_path: Path) -> bool:
+    """Return ``True`` for ``libraries/<name>/tests/test_*.py`` paths.
+
+    Excludes ``test_*_pytest.py`` — those are CPython-only files
+    that opt out of the cross-runtime harness (they use pytest
+    fixtures or stdlib that MP / CP unix-port doesn't have).
+    """
+    if not (
+        file_path.suffix == ".py"
+        and file_path.name.startswith("test_")
+        and file_path.name.endswith(".py")
+        and not file_path.name.endswith("_pytest.py")
+        and "tests" in file_path.parts
+    ):
+        return False
+    tests_index = file_path.parts.index("tests")
+    return (
+        tests_index >= 2
+        and file_path.parts[tests_index - 2] == "libraries"
+    )
+
+
+def _target_is_unix_port(config: pytest.Config) -> bool:
+    """Return ``True`` when ``--target unix-port`` is in effect."""
+    return cast(
+        "str",
+        config.getoption("--target", default="device"),
+    ) == "unix-port"
+
+
 class _NoImportModule(pytest.Module):
     """Stub Module that yields nothing without importing the file.
 
@@ -1383,18 +1444,30 @@ class _NoImportModule(pytest.Module):
 def pytest_pycollect_makemodule(
     module_path: Path, parent: pytest.Collector,
 ) -> pytest.Module | None:
-    """Suppress default Module collection for library functional tests.
+    """Suppress default Module collection for plugin-owned paths.
 
-    Without this, pytest's default Module factory imports the file
-    during collection, which fails for runtime-restricted files
-    declaring ``__chumicro_runtimes__`` since they import device-only
-    modules at top level (``import microcontroller``, ``import wifi``).
+    Always claims ``libraries/<name>/functional_tests/`` files — the
+    default Module factory would import them on the host, which fails
+    for runtime-restricted files that ``import microcontroller`` /
+    ``import wifi`` at top level.
 
-    Returning a no-import stub keeps the device-side collector
-    (:class:`DeviceTestFile`) as the sole owner of these files;
-    AST-based discovery means the file is never executed on the host.
+    Under ``--target unix-port`` we also claim
+    ``libraries/<name>/tests/`` files so the unix-port subprocess
+    backend gets them — without this, pytest's default Module factory
+    runs them as plain CPython tests, which is the lane bare ``pytest``
+    already covers.
+
+    AST-based discovery in :class:`DeviceTestFile` means the file is
+    never executed on the host.
     """
     if _is_library_functional_test(module_path):
+        return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
+            parent, path=module_path,
+        )
+    if (
+        _is_library_unit_test(module_path)
+        and _target_is_unix_port(parent.config)
+    ):
         return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
             parent, path=module_path,
         )
@@ -1404,25 +1477,32 @@ def pytest_pycollect_makemodule(
 def pytest_collect_file(
     parent: pytest.Collector, file_path: Path,
 ) -> DeviceTestFile | None:
-    """Collect library functional test files as device test items.
+    """Collect harness-shaped test files as runtime test items.
 
-    Activates only for ``test_*.py`` under
-    ``libraries/<name>/functional_tests/`` — the test-harness-based
-    on-device flow (stage/execute, result_parser).  Workbench
-    packages also keep hardware-gated tests under a
+    Two activation paths:
+
+    - ``libraries/<name>/functional_tests/test_*.py`` — always claimed,
+      runs through the device-transport backend.
+    - ``libraries/<name>/tests/test_*.py`` (excluding ``*_pytest.py``)
+      — only claimed under ``--target unix-port``, runs through the
+      unix-port subprocess backend.  Under the default device target
+      these files stay in the plain-pytest CPython lane.
+
+    Workbench packages also keep hardware-gated tests under a
     ``functional_tests/`` directory, but those are plain host-side
     pytest that call ``chumicro_deploy`` against a real board; they
     must not be routed through the library test harness and are left
     to run as ordinary pytest collection.
-
-    No environment variable required — ``devices.yml`` is the gate
-    (checked at collection/run time).
     """
 
-    if not _is_library_functional_test(file_path):
-        return None
-
-    return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
+    if _is_library_functional_test(file_path):
+        return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
+    if (
+        _is_library_unit_test(file_path)
+        and _target_is_unix_port(parent.config)
+    ):
+        return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
+    return None
 
 
 def pytest_collection_modifyitems(
@@ -1469,11 +1549,22 @@ def pytest_collection_modifyitems(
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
 
-    feature_deselected = _deselect_items_missing_required_features(items)
-    if feature_deselected:
-        config.hook.pytest_deselected(items=feature_deselected)
-        feature_dropped = set(map(id, feature_deselected))
-        items[:] = [item for item in items if id(item) not in feature_dropped]
+    if _target_is_unix_port(config):
+        platform_deselected = _deselect_items_for_non_targeting_libraries(items)
+        if platform_deselected:
+            config.hook.pytest_deselected(items=platform_deselected)
+            platform_dropped = set(map(id, platform_deselected))
+            items[:] = [
+                item for item in items if id(item) not in platform_dropped
+            ]
+    else:
+        feature_deselected = _deselect_items_missing_required_features(items)
+        if feature_deselected:
+            config.hook.pytest_deselected(items=feature_deselected)
+            feature_dropped = set(map(id, feature_deselected))
+            items[:] = [
+                item for item in items if id(item) not in feature_dropped
+            ]
 
     missing = missing_required_keys(config)
     if missing:
@@ -1487,6 +1578,60 @@ def pytest_collection_modifyitems(
         for item in items:
             if isinstance(item, DeviceRuntimeItem):
                 item.add_marker(skip_marker)
+
+
+def _read_library_platforms(library_dir: Path) -> tuple[str, ...] | None:
+    """Return ``[tool.chumicro].platforms`` for a library, or ``None``.
+
+    ``None`` means "no explicit declaration, library targets every
+    runtime" (the same default the workspace-wide
+    :mod:`scripts.repo_layout` enforces).  An explicit empty tuple
+    means "no runtimes" — never seen in practice but valid input.
+    """
+    pyproject = library_dir / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    try:
+        import tomllib  # noqa: PLC0415
+    except ImportError:  # pragma: no cover — 3.10 fallback
+        import tomli as tomllib  # type: ignore[no-redef]  # noqa: PLC0415
+    with pyproject.open("rb") as toml_file:
+        data = tomllib.load(toml_file)
+    platforms = data.get("tool", {}).get("chumicro", {}).get("platforms")
+    if platforms is None:
+        return None
+    return tuple(platforms)
+
+
+def _deselect_items_for_non_targeting_libraries(
+    items: list[pytest.Item],
+) -> list[pytest.Item]:
+    """Drop items whose library doesn't target the item's runtime.
+
+    Mirrors :func:`scripts.repo_layout.filter_by_platform` but operates
+    on collected items: for each :class:`DeviceRuntimeItem`, read its
+    library's ``[tool.chumicro].platforms``; if present and the target
+    runtime isn't in the list, the item is deselected.  Libraries
+    without an explicit ``platforms`` key target all three runtimes
+    and are always kept.
+    """
+    deselected: list[pytest.Item] = []
+    platforms_cache: dict[Path, tuple[str, ...] | None] = {}
+    for item in items:
+        if not isinstance(item, DeviceRuntimeItem):
+            continue
+        device = item.target_device
+        if device is None:
+            continue
+        library_dir = item.library_dir
+        if library_dir not in platforms_cache:
+            platforms_cache[library_dir] = _read_library_platforms(library_dir)
+        platforms = platforms_cache[library_dir]
+        if platforms is None:
+            continue
+        if device.runtime not in platforms:
+            deselected.append(item)
+    return deselected
 
 
 def _deselect_items_missing_required_features(
@@ -1574,57 +1719,107 @@ def _deselect_items_missing_required_features(
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
-    """Initialize the transport cache and resolve target devices.
+    """Initialize the transport cache, pick a backend, and resolve targets.
 
-    Applies ``--runtime`` / ``--micropython-device`` /
-    ``--circuitpython-device`` overrides on top of the ``devices.yml``
-    defaults before picking target devices, so the pytest invocation
-    mirrors what the ``test-libraries-functional`` CLI used to do in
-    its own orchestrator.  Omitted options leave the defaults
-    untouched, so IDE play-button runs continue to use ``devices.yml``
-    defaults with no explicit flags.
+    Two branches:
+
+    - Default (``--target device``): install :class:`DeviceBackend`,
+      load ``devices.yml``, apply ``--runtime`` / ``--micropython-device``
+      / ``--circuitpython-device`` overrides on top of the
+      ``defaults:`` block.  Omitted options preserve ``devices.yml``
+      behaviour, so IDE play-button runs work with zero flags.
+    - ``--target unix-port``: install :class:`UnixPortBackend`,
+      synthesize one or two ``DeviceEntry`` records driven by
+      ``--runtime`` (defaults to ``both``).  ``devices.yml`` is not
+      consulted; the unix-port subprocess needs no per-device config.
     """
     session._device_transport_cache = _TransportCache()  # type: ignore[attr-defined]
-    session._backend = DeviceBackend()  # type: ignore[attr-defined]
 
     runtime_override = cast(
         "str | None",
         session.config.getoption("--runtime", default=None),
     )
-    mp_override = cast(
-        "str | None",
-        session.config.getoption("--micropython-device", default=None),
-    )
-    cp_override = cast(
-        "str | None",
-        session.config.getoption("--circuitpython-device", default=None),
-    )
-    deploy_mode_override = cast(
-        "str | None",
-        session.config.getoption("--deploy-mode", default=None),
-    )
 
-    # Eagerly resolve target devices so collection can parametrize
-    # by runtime when ide_runtime is "both".
-    try:
-        devices, defaults = load_device_registry(
-            workspace_root=_workspace_root(session),
+    if _target_is_unix_port(session.config):
+        mp_binary = cast(
+            "str | None",
+            session.config.getoption("--micropython-binary", default=None),
         )
-    except DeviceConfigError:
-        session._device_targets = None  # type: ignore[attr-defined]
+        cp_binary = cast(
+            "str | None",
+            session.config.getoption("--circuitpython-binary", default=None),
+        )
+        session._backend = UnixPortBackend(  # type: ignore[attr-defined]
+            _workspace_root(session),
+            binaries={
+                "micropython": mp_binary,
+                "circuitpython": cp_binary,
+            },
+        )
+        session._device_targets = _synthesize_unix_port_targets(  # type: ignore[attr-defined]
+            runtime_override or "both",
+        )
     else:
-        effective_defaults = DeviceDefaults(
-            micropython=mp_override or defaults.micropython,
-            circuitpython=cp_override or defaults.circuitpython,
-            deploy_mode=deploy_mode_override or defaults.deploy_mode,
-            ide_runtime=runtime_override or defaults.ide_runtime,
+        session._backend = DeviceBackend()  # type: ignore[attr-defined]
+        mp_override = cast(
+            "str | None",
+            session.config.getoption("--micropython-device", default=None),
         )
-        session._device_targets = resolve_ide_devices(  # type: ignore[attr-defined]
-            devices, effective_defaults,
+        cp_override = cast(
+            "str | None",
+            session.config.getoption("--circuitpython-device", default=None),
         )
+        deploy_mode_override = cast(
+            "str | None",
+            session.config.getoption("--deploy-mode", default=None),
+        )
+
+        # Eagerly resolve target devices so collection can parametrize
+        # by runtime when ide_runtime is "both".
+        try:
+            devices, defaults = load_device_registry(
+                workspace_root=_workspace_root(session),
+            )
+        except DeviceConfigError:
+            session._device_targets = None  # type: ignore[attr-defined]
+        else:
+            effective_defaults = DeviceDefaults(
+                micropython=mp_override or defaults.micropython,
+                circuitpython=cp_override or defaults.circuitpython,
+                deploy_mode=deploy_mode_override or defaults.deploy_mode,
+                ide_runtime=runtime_override or defaults.ide_runtime,
+            )
+            session._device_targets = resolve_ide_devices(  # type: ignore[attr-defined]
+                devices, effective_defaults,
+            )
 
     if session.config.getoption("--pr-summary", default=False):
         session._pr_summary = _PRSummaryCollector()  # type: ignore[attr-defined]
+
+
+def _synthesize_unix_port_targets(runtime_selection: str) -> list[DeviceEntry]:
+    """Build synthetic ``DeviceEntry`` records for the unix-port path.
+
+    Unix-port runs don't have a real device registry — the "target"
+    is the (runtime, binary path) pair.  We reuse :class:`DeviceEntry`
+    so collection / parametrization / PR-summary code stays uniform;
+    ``address="unix-port"`` is the sentinel that flags a synthetic
+    entry for any device-aware code path that ever wants to discriminate.
+    """
+    if runtime_selection == "micropython":
+        runtimes = ("micropython",)
+    elif runtime_selection == "circuitpython":
+        runtimes = ("circuitpython",)
+    else:
+        runtimes = ("micropython", "circuitpython")
+    return [
+        DeviceEntry(
+            identifier=f"{runtime}-unix-port",
+            runtime=runtime,
+            address="unix-port",
+        )
+        for runtime in runtimes
+    ]
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
