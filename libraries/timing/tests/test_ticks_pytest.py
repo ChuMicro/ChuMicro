@@ -14,33 +14,13 @@ from types import SimpleNamespace
 
 import chumicro_timing.ticks as ticks_module
 
-# -- _try_import_supervisor --
-
-
-def test_try_import_supervisor_returns_none_when_unavailable(monkeypatch) -> None:
-    """The helper should return None when CircuitPython is not present."""
-    monkeypatch.delitem(sys.modules, "supervisor", raising=False)
-
-    assert ticks_module._try_import_supervisor() is None
-
-
-def test_try_import_supervisor_returns_module_when_available(monkeypatch) -> None:
-    """The helper should return an already-importable supervisor module."""
-    fake_supervisor = SimpleNamespace(ticks_ms=lambda: 123)
-    monkeypatch.setitem(sys.modules, "supervisor", fake_supervisor)
-
-    assert ticks_module._try_import_supervisor() is fake_supervisor
-
-
 # -- _resolve_ticks_ms --
 
 
 def test_resolve_prefers_supervisor_ticks_ms(monkeypatch) -> None:
     """supervisor.ticks_ms should be chosen first when available."""
-    monkeypatch.setattr(
-        ticks_module,
-        "_try_import_supervisor",
-        lambda: SimpleNamespace(ticks_ms=lambda: 5678),
+    monkeypatch.setitem(
+        sys.modules, "supervisor", SimpleNamespace(ticks_ms=lambda: 5678)
     )
 
     resolved = ticks_module._resolve_ticks_ms()
@@ -49,11 +29,9 @@ def test_resolve_prefers_supervisor_ticks_ms(monkeypatch) -> None:
 
 def test_resolve_skips_non_callable_supervisor_ticks_ms(monkeypatch) -> None:
     """supervisor.ticks_ms should be skipped when it exists but is not callable."""
-    monkeypatch.setattr(
-        ticks_module,
-        "_try_import_supervisor",
-        lambda: SimpleNamespace(ticks_ms=42),  # int, not callable
-    )
+    monkeypatch.setitem(
+        sys.modules, "supervisor", SimpleNamespace(ticks_ms=42)
+    )  # int, not callable
     monkeypatch.setattr(
         ticks_module,
         "time",
@@ -66,7 +44,9 @@ def test_resolve_skips_non_callable_supervisor_ticks_ms(monkeypatch) -> None:
 
 def test_resolve_falls_back_to_time_ticks_ms(monkeypatch) -> None:
     """time.ticks_ms should be used when supervisor is unavailable."""
-    monkeypatch.setattr(ticks_module, "_try_import_supervisor", lambda: None)
+    monkeypatch.delitem(sys.modules, "supervisor", raising=False)
+    # Block re-import: ImportError raised inside _resolve_ticks_ms.
+    monkeypatch.setattr(sys, "path", [])
     monkeypatch.setattr(
         ticks_module,
         "time",
@@ -79,7 +59,8 @@ def test_resolve_falls_back_to_time_ticks_ms(monkeypatch) -> None:
 
 def test_resolve_falls_back_to_monotonic_ns(monkeypatch) -> None:
     """monotonic_ns should be converted to milliseconds when available."""
-    monkeypatch.setattr(ticks_module, "_try_import_supervisor", lambda: None)
+    monkeypatch.delitem(sys.modules, "supervisor", raising=False)
+    monkeypatch.setattr(sys, "path", [])
     monkeypatch.setattr(
         ticks_module,
         "time",
@@ -92,7 +73,8 @@ def test_resolve_falls_back_to_monotonic_ns(monkeypatch) -> None:
 
 def test_resolve_falls_back_to_monotonic(monkeypatch) -> None:
     """time.monotonic should be the final fallback."""
-    monkeypatch.setattr(ticks_module, "_try_import_supervisor", lambda: None)
+    monkeypatch.delitem(sys.modules, "supervisor", raising=False)
+    monkeypatch.setattr(sys, "path", [])
     monkeypatch.setattr(
         ticks_module,
         "time",
