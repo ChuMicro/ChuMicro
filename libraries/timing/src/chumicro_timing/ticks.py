@@ -21,10 +21,8 @@ import time
 
 try:
     from micropython import const
-except ImportError:  # CPython — const() is a no-op on standard Python.
-
-    def const(value: int) -> int:
-        """Identity fallback so ``const()`` works on CPython."""
+except ImportError:
+    def const(value):
         return value
 
 
