@@ -36,6 +36,7 @@ from .result import DeployResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from .device import Device
+    from .protocol import TransportProtocol
     from .sources import FileSource
 
 #: Matches MicroPython / CircuitPython traceback output.  Both runtimes
@@ -170,6 +171,152 @@ class Deployer:
 
         return dataclasses.replace(self._device, deploy_mode=DeployMode.FLASH)
 
+    def _run_deploy(
+        self,
+        source: FileSource,
+        *,
+        force_deploy_mode: str | None,
+        on_progress: Callable[[float, str], None] | None,
+        on_file_staged: Callable[[str], None] | None,
+        on_execute_line: Callable[[str], None] | None,
+        on_preflight_message: Callable[[str], None] | None,
+        tail_seconds: float | None,
+        pre_stage_hook: Callable[
+            [TransportProtocol, dict[str, bytes], Callable[[float, str], None]],
+            None,
+        ],
+        transport_kwargs: dict[str, object],
+    ) -> DeployResult:
+        """Run the shared connect → (pre-stage) → deploy_files → disconnect flow.
+
+        :meth:`deploy` and :meth:`deploy_diff` share every step except
+        the pre-stage phase (deploy has none; deploy_diff lists in-scope
+        files and deletes the stale set, or wipes the filesystem
+        outright).  *pre_stage_hook* receives the live transport plus
+        the new payload's file map and the same progress reporter the
+        outer flow uses; it owns the 0.1 / 0.2 stage milestones.
+
+        *transport_kwargs* are passed straight through to
+        ``transport.deploy_files`` after merging with the runtime-
+        appropriate ``_deploy_files_kwargs`` (follow / tail_seconds).
+        Callers that don't pass them get the transport defaults.
+        """
+
+        def _report(fraction: float, message: str) -> None:
+            if on_progress is not None:
+                on_progress(fraction, message)
+
+        effective_device = self._resolve_effective_device(
+            source,
+            force_deploy_mode=force_deploy_mode,
+            on_preflight_message=on_preflight_message,
+        )
+
+        if (
+            effective_device.transport == Runtime.CIRCUITPYTHON
+            and effective_device.deploy_mode == DeployMode.FLASH
+        ):
+            check_rsync_available()
+
+        transport = effective_device.create_transport()
+        _report(0.0, "connecting")
+        transport.connect()
+        try:
+            files = source.files()
+            entrypoint = source.entrypoint()
+            # Hook owns the 0.1 / 0.2 (and optional further) milestones
+            # for its pre-stage work (collect files, wipe, list, delete).
+            pre_stage_hook(transport, files, _report)
+            kwargs = _deploy_files_kwargs(
+                effective_device, entrypoint, tail_seconds=tail_seconds,
+            )
+            kwargs.update(transport_kwargs)
+            output = transport.deploy_files(
+                files,
+                entrypoint,
+                on_file_staged=on_file_staged,
+                on_execute_line=on_execute_line,
+                **kwargs,
+            )
+            _report(0.9, "executing")
+        finally:
+            transport.disconnect()
+
+        traceback_text = _extract_traceback(output)
+        _report(1.0, "done")
+        return DeployResult(
+            success=traceback_text is None,
+            staged_files=sorted(files.keys()),
+            execute_output=output,
+            traceback=traceback_text,
+        )
+
+    def deploy(
+        self,
+        source: FileSource,
+        *,
+        force_deploy_mode: str | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+        on_preflight_message: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
+        clean: bool = False,
+    ) -> DeployResult:
+        """Deploy *source* to the configured device and run its entrypoint.
+
+        Flow: ``create_transport`` -> ``connect`` -> ``deploy_files``
+        -> ``disconnect``.  The transport-level ``deploy_files`` is
+        responsible for the actual file-write and execute dance; this
+        method layers progress callbacks and result packaging on top.
+
+        Args:
+            source: Any object satisfying
+                :class:`~chumicro_deploy.sources.FileSource` —
+                ``files()`` returns path -> bytes, ``entrypoint()``
+                returns the boot file's on-device path.
+            on_progress: Optional callback ``(fraction, message)``
+                invoked at coarse milestones: 0.0 "connecting", 0.3
+                "staging", 0.9 "executing", 1.0 "done".  Fractions
+                are nominal — ``deploy_files`` does not report
+                incremental progress today.
+            on_file_staged: Forwarded to
+                :meth:`TransportProtocol.deploy_files`.
+            on_execute_line: Forwarded to
+                :meth:`TransportProtocol.deploy_files`.
+            clean: Forwarded to :meth:`TransportProtocol.deploy_files`.
+                In CP flash mode triggers ``rsync --delete`` (with
+                ``settings.toml`` / ``boot.py`` / ``boot_out.txt``
+                preserved); in MP copy mode triggers a
+                ``mpremote fs rm -r :/lib`` before the new push.
+                No-op for RAM / mount modes.
+
+        Returns:
+            :class:`DeployResult` with ``success``, ``staged_files``,
+            ``execute_output``, and ``traceback`` populated.  ``success``
+            is ``True`` when the output contains no detectable traceback.
+        """
+        def plain_pre_stage(
+            transport: TransportProtocol,
+            files: dict[str, bytes],
+            report: Callable[[float, str], None],
+        ) -> None:
+            del transport, files  # plain deploy has no pre-stage work
+            report(0.1, "collecting files")
+            report(0.2, "staging")
+
+        return self._run_deploy(
+            source,
+            force_deploy_mode=force_deploy_mode,
+            on_progress=on_progress,
+            on_file_staged=on_file_staged,
+            on_execute_line=on_execute_line,
+            on_preflight_message=on_preflight_message,
+            tail_seconds=tail_seconds,
+            pre_stage_hook=plain_pre_stage,
+            transport_kwargs={"clean": clean},
+        )
+
     def deploy_diff(
         self,
         source: FileSource,
@@ -229,149 +376,34 @@ class Deployer:
             during the call but not retained on the result).
         """
 
-        def _report(fraction: float, message: str) -> None:
-            if on_progress is not None:
-                on_progress(fraction, message)
-
-        effective_device = self._resolve_effective_device(
-            source,
-            force_deploy_mode=force_deploy_mode,
-            on_preflight_message=on_preflight_message,
-        )
-
-        if (
-            effective_device.transport == Runtime.CIRCUITPYTHON
-            and effective_device.deploy_mode == DeployMode.FLASH
-        ):
-            check_rsync_available()
-
-        transport = effective_device.create_transport()
-        _report(0.0, "connecting")
-        transport.connect()
-        try:
-            files = source.files()
-            entrypoint = source.entrypoint()
+        def diff_pre_stage(
+            transport: TransportProtocol,
+            files: dict[str, bytes],
+            report: Callable[[float, str], None],
+        ) -> None:
             if wipe:
-                _report(0.1, "wiping filesystem")
+                report(0.1, "wiping filesystem")
                 transport.wipe_filesystem()
             else:
-                _report(0.1, "listing in-scope")
+                report(0.1, "listing in-scope")
                 on_device = set(transport.list_files_in_scope())
                 stale = sorted(on_device - set(files))
                 if stale:
-                    _report(0.2, f"cleaning stale ({len(stale)})")
+                    report(0.2, f"cleaning stale ({len(stale)})")
                     if on_file_deleted is not None:
                         for path in stale:
                             on_file_deleted(path)
                     transport.delete_files(stale)
-            _report(0.3, "staging")
-            kwargs = _deploy_files_kwargs(
-                effective_device, entrypoint, tail_seconds=tail_seconds,
-            )
-            output = transport.deploy_files(
-                files,
-                entrypoint,
-                on_file_staged=on_file_staged,
-                on_execute_line=on_execute_line,
-                **kwargs,
-            )
-            _report(0.9, "executing")
-        finally:
-            transport.disconnect()
+            report(0.3, "staging")
 
-        traceback_text = _extract_traceback(output)
-        _report(1.0, "done")
-        return DeployResult(
-            success=traceback_text is None,
-            staged_files=sorted(files.keys()),
-            execute_output=output,
-            traceback=traceback_text,
-        )
-
-    def deploy(
-        self,
-        source: FileSource,
-        *,
-        force_deploy_mode: str | None = None,
-        on_progress: Callable[[float, str], None] | None = None,
-        on_file_staged: Callable[[str], None] | None = None,
-        on_execute_line: Callable[[str], None] | None = None,
-        on_preflight_message: Callable[[str], None] | None = None,
-        tail_seconds: float | None = None,
-        clean: bool = False,
-    ) -> DeployResult:
-        """Deploy *source* to the configured device and run its entrypoint.
-
-        Flow: ``create_transport`` -> ``connect`` -> ``deploy_files``
-        -> ``disconnect``.  The transport-level ``deploy_files`` is
-        responsible for the actual file-write and execute dance; this
-        method layers progress callbacks and result packaging on top.
-
-        Args:
-            source: Any object satisfying
-                :class:`~chumicro_deploy.sources.FileSource` —
-                ``files()`` returns path -> bytes, ``entrypoint()``
-                returns the boot file's on-device path.
-            on_progress: Optional callback ``(fraction, message)``
-                invoked at coarse milestones: 0.0 "connecting", 0.1
-                "collecting files", 0.2 "staging", 0.9 "executing",
-                1.0 "done".  Fractions are nominal — ``deploy_files``
-                does not report incremental progress today.
-            on_file_staged: Forwarded to
-                :meth:`TransportProtocol.deploy_files`.
-            on_execute_line: Forwarded to
-                :meth:`TransportProtocol.deploy_files`.
-
-        Returns:
-            :class:`DeployResult` with ``success``, ``staged_files``,
-            ``execute_output``, and ``traceback`` populated.  ``success``
-            is ``True`` when the output contains no detectable traceback.
-        """
-
-        def _report(fraction: float, message: str) -> None:
-            if on_progress is not None:
-                on_progress(fraction, message)
-
-        effective_device = self._resolve_effective_device(
+        return self._run_deploy(
             source,
             force_deploy_mode=force_deploy_mode,
+            on_progress=on_progress,
+            on_file_staged=on_file_staged,
+            on_execute_line=on_execute_line,
             on_preflight_message=on_preflight_message,
-        )
-
-        if (
-            effective_device.transport == Runtime.CIRCUITPYTHON
-            and effective_device.deploy_mode == DeployMode.FLASH
-        ):
-            check_rsync_available()
-
-        transport = effective_device.create_transport()
-        _report(0.0, "connecting")
-        transport.connect()
-        try:
-            _report(0.1, "collecting files")
-            files = source.files()
-            entrypoint = source.entrypoint()
-            _report(0.2, "staging")
-            kwargs = _deploy_files_kwargs(
-                effective_device, entrypoint, tail_seconds=tail_seconds,
-            )
-            output = transport.deploy_files(
-                files,
-                entrypoint,
-                on_file_staged=on_file_staged,
-                on_execute_line=on_execute_line,
-                clean=clean,
-                **kwargs,
-            )
-            _report(0.9, "executing")
-        finally:
-            transport.disconnect()
-
-        traceback_text = _extract_traceback(output)
-        _report(1.0, "done")
-        return DeployResult(
-            success=traceback_text is None,
-            staged_files=sorted(files.keys()),
-            execute_output=output,
-            traceback=traceback_text,
+            tail_seconds=tail_seconds,
+            pre_stage_hook=diff_pre_stage,
+            transport_kwargs={},
         )
