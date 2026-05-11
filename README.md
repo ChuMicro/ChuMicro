@@ -39,7 +39,7 @@ Everything is non-blocking — **no `async` / `await`, no threads**.  A WiFi rec
 
 - **Iterating on real hardware is one command.**  Drop in a board, run `chumicro-workspace deploy-example <library> <example>`, and the example runs on the device.  Firmware install (UF2 or esptool), board discovery, source push, and REPL tail are all built in.  No Makefile, no manual `mpremote`, no copying files to a USB drive that mounts inconsistently.
 
-- **Tested at every level — unit, cross-runtime, on real hardware.**  Every library has CPython unit tests for fast iteration on your laptop.  The same tests also run under MicroPython and CircuitPython's desktop builds (their "unix ports"), so "works on CPython, breaks on the device runtime" is caught before code reaches a board.  On top of that, on-device functional tests stage source onto a connected board and run in its actual Python runtime — driven from regular `pytest` via the `chumicro-pytest-device` plugin, so the same `pytest` you use locally surfaces hardware results too.  Every shipped example is also exercised on real CircuitPython and MicroPython boards before each release.
+- **Tested at every level — unit, cross-runtime, on real hardware.**  Every library has CPython unit tests for fast iteration on your laptop.  The same tests also run under MicroPython and CircuitPython's desktop builds (their "unix ports"), so "works on CPython, breaks on the device runtime" is caught before code reaches a board.  On top of that, on-device functional tests stage source onto a connected board and run in its actual Python runtime.  Both the unix-port and on-device paths are driven from regular `pytest` via the `chumicro-pytest-device` plugin, so the same `pytest` you use locally surfaces every layer's results.  Every shipped example is also exercised on real CircuitPython and MicroPython boards before each release.
 
 - **A real project layout when you outgrow examples.**  The [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) gives you a clone-and-go starter with a `projects/` tree, atomic deploys (so the board's FAT filesystem doesn't wear out from save-on-every-keystroke editing), a device registry shared with the deploy tools, workspace-wide config + secrets, and a `pytest` setup that runs tests both on your laptop and on the board.
 
@@ -358,12 +358,18 @@ python3 scripts/run.py test --libraries timing,mqtt # scoped to specific librari
 python3 scripts/run.py test -k test_heartbeat_poll  # filter by test name
 ```
 
-**Cross-runtime unit tests.**  Same library tests, executed inside MicroPython and CircuitPython's desktop builds ("unix ports").  Catches "works under CPython, breaks under MicroPython's tricks" before any code reaches a board.  Runs all three runtimes in parallel:
+**Cross-runtime unit tests.**  Same library tests, executed inside MicroPython and CircuitPython's desktop builds ("unix ports").  Catches "works under CPython, breaks under MicroPython's tricks" before any code reaches a board.  The `chumicro-pytest-device` plugin's unix-port backend spawns one runtime subprocess per test file, so the same `pytest` invocation works at file or function granularity — IDE play buttons too.  Runs all three runtimes in parallel via the wrapper:
 
 ```bash
 python3 scripts/run.py test-all-runtimes           # CPython + MicroPython + CircuitPython
 python3 scripts/run.py test-micropython            # MicroPython unix-port only
 python3 scripts/run.py test-circuitpython          # CircuitPython unix-port only
+```
+
+Or invoke `pytest` directly for IDE-friendly per-file runs:
+
+```bash
+pytest libraries/timing/tests --target unix-port --runtime micropython
 ```
 
 The first run builds the unix-port binaries under `.tools/` (gitignored, ~1 minute); subsequent runs reuse them.
