@@ -225,9 +225,11 @@ class UnixPortBackend:
         if not harness.exists():
             raise BackendPrepareError(
                 f"Cross-runtime test harness not found at {harness}.  "
-                f"The unix-port target requires "
-                f"support/test_harness/run_cross_runtime.py — this is a "
-                f"chumicro mono-repo internal path.",
+                f"The unix-port target requires the test harness's "
+                f"worker script at support/test_harness/"
+                f"run_cross_runtime.py — only present in development "
+                f"checkouts of the chumicro libraries, not in installed "
+                f"packages.",
             )
 
     def execute(

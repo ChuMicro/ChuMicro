@@ -1,7 +1,8 @@
 # Cross-runtime pytest entry — workstream
 
-Status: active
+Status: closed
 Started: 2026-05-11
+Closed: 2026-05-11
 
 Wire a pytest entry point for the MicroPython / CircuitPython unix-port unit-test path so IDE play buttons can target it at file and function granularity — and so the workspace has one front-running test surface (pytest) for every runtime.
 
