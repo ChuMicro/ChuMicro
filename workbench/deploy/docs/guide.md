@@ -23,16 +23,18 @@ chumicro-deploy resolve-firmware-url \
     --board-id raspberry_pi_pico_w --runtime circuitpython --version 10.1.4
 
 # Flash a Pi Pico W (UF2 path, programmatic bootloader entry).
+# --method is inferred from the .uf2 extension.
 chumicro-deploy flash-firmware \
     --transport circuitpython --address /dev/cu.usbmodem11401 \
-    --url https://downloads.circuitpython.org/bin/raspberry_pi_pico_w/en_US/adafruit-circuitpython-raspberry_pi_pico_w-en_US-10.1.4.uf2 \
-    --method uf2
+    --url https://downloads.circuitpython.org/bin/raspberry_pi_pico_w/en_US/adafruit-circuitpython-raspberry_pi_pico_w-en_US-10.1.4.uf2
 
-# Flash a Lolin S2 Mini running MicroPython (esptool, erase, offset 0x1000).
+# Flash a Lolin S2 Mini running MicroPython (esptool path, offset 0x1000).
+# --method is inferred from the .bin extension.  erase-flash runs by
+# default; pass --no-erase to preserve user data on an in-place upgrade.
 chumicro-deploy flash-firmware \
     --transport micropython --address /dev/cu.usbmodem211101 \
     --url https://micropython.org/resources/firmware/LOLIN_S2_MINI-20260406-v1.28.0.bin \
-    --method esptool --erase --offset 0x1000
+    --offset 0x1000
 
 # Deploy a directory of Python files and run the entrypoint.
 chumicro-deploy deploy \
@@ -344,28 +346,29 @@ device = Device(
 )
 
 # UF2 path — Pi Pico W to a specific CircuitPython build.
+# reflash_method=None (the default) infers from the .uf2 extension.
 url = resolve_firmware_url(
     board_id="raspberry_pi_pico_w",
     runtime="circuitpython",
     version="10.1.4",
 )
-flash_firmware(url, device, reflash_method="uf2")
+flash_firmware(url, device)
 
-# esptool path — Lolin S2 Mini with MicroPython, erase first, offset 0x1000.
+# esptool path — Lolin S2 Mini with MicroPython, offset 0x1000.
+# erase_flash=True is the default; pass False to preserve user data.
 flash_firmware(
     "https://micropython.org/resources/firmware/LOLIN_S2_MINI-20260406-v1.28.0.bin",
     Device(transport="micropython", address="/dev/cu.usbmodem211101"),
-    reflash_method="esptool",
-    erase_flash=True,
     flash_offset="0x1000",
 )
 ```
 
 **Method selection notes:**
 
+- `reflash_method=None` (default) infers the method from the URL extension: `.uf2` → `"uf2"`, `.bin` → `"esptool"`.  Pass explicitly for URLs that don't carry an extension (e.g. signed CDN URLs with a query-string-only filename).
 - CircuitPython `.bin` images use offset `"0x0"` (the default).  MicroPython ESP32 / S2 / S3 `.bin` images need `"0x1000"`.  Using the wrong offset bricks the bootloader region and requires a manual BOOT + RESET hold to recover — `chumicro-deploy` cannot auto-detect which ecosystem a `.bin` came from.
 - Pass `interactive=False` in automated flows without stdin.  When programmatic bootloader entry fails, the default is to prompt the user to hold BOOTSEL / GPIO0; `interactive=False` raises `FlashFirmwareError` instead.
-- `erase_flash=True` wipes every user partition (CIRCUITPY drive, stored WiFi credentials, NVS).  Recommended for first-install and recovery workflows; default `False` preserves user data on ordinary upgrades.
+- `erase_flash=True` (the default for the esptool path) wipes every user partition (CIRCUITPY drive, stored WiFi credentials, NVS) so a fresh reflash doesn't inherit leftover sectors from a previous build.  Pass `False` to preserve user data on an in-place upgrade.
 - `on_progress` takes an optional `(fraction, message)` callback for UI integration — the CLI wires it to a stderr progress line.
 
 ## Tail the board with chumicro-repl

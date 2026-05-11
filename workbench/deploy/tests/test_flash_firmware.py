@@ -345,7 +345,10 @@ class TestEsptoolPath:
         device = Device(transport="micropython", address="/dev/ttyUSB0")
         firmware = tmp_path / "fw.bin"
         firmware.write_bytes(b"x")
-        _flash_firmware_esptool(firmware, device, on_progress=None, runner=fake_runner)
+        _flash_firmware_esptool(
+            firmware, device, on_progress=None, erase_flash=False,
+            runner=fake_runner,
+        )
 
         assert len(runner_calls) == 1
         assert runner_calls[0][0] == "/fake/esptool"
@@ -375,7 +378,7 @@ class TestEsptoolPath:
         firmware = tmp_path / "fw.bin"
         firmware.write_bytes(b"x")
         _flash_firmware_esptool(
-            firmware, device, on_progress=None,
+            firmware, device, on_progress=None, erase_flash=False,
             flash_offset="0x1000", runner=fake_runner,
         )
 
@@ -457,7 +460,10 @@ class TestEsptoolPath:
         firmware = tmp_path / "fw.bin"
         firmware.write_bytes(b"x")
         with pytest.raises(FlashFirmwareError, match="write"):
-            _flash_firmware_esptool(firmware, device, on_progress=None, runner=fake_runner)
+            _flash_firmware_esptool(
+                firmware, device, on_progress=None, erase_flash=False,
+                runner=fake_runner,
+            )
 
 
 class TestEnterEsp32RomBootloader:
@@ -596,6 +602,30 @@ class TestFlashFirmware:
         device = Device(transport="micropython", address="/dev/x")
         with pytest.raises(ValueError, match="Unsupported reflash_method"):
             flash_firmware("https://ex/fw.uf2", device, reflash_method="dfu")
+
+
+class TestReflashMethodInference:
+    """``reflash_method=None`` infers from the URL extension."""
+
+    def test_uf2_extension_picks_uf2(self) -> None:
+        from chumicro_deploy.firmware import _infer_reflash_method
+        assert _infer_reflash_method("https://example/fw.uf2") == "uf2"
+
+    def test_bin_extension_picks_esptool(self) -> None:
+        from chumicro_deploy.firmware import _infer_reflash_method
+        assert _infer_reflash_method("https://example/fw.bin") == "esptool"
+
+    def test_query_string_does_not_confuse_inference(self) -> None:
+        # Some CDNs append ?signed=... after the filename.
+        from chumicro_deploy.firmware import _infer_reflash_method
+        assert _infer_reflash_method(
+            "https://example/fw.bin?signed=abc",
+        ) == "esptool"
+
+    def test_unsupported_extension_raises(self) -> None:
+        from chumicro_deploy.firmware import _infer_reflash_method
+        with pytest.raises(ValueError, match="Cannot infer reflash_method"):
+            _infer_reflash_method("https://example/fw.tar.gz")
 
 
 class TestFlashFirmwareUf2End2End:

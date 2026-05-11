@@ -35,13 +35,24 @@ class TestParser:
             "--address", "/dev/x",
             "--url", "https://example/fw.bin",
             "--method", "esptool",
-            "--erase",
             "--offset", "0x1000",
         ])
         assert args.url == "https://example/fw.bin"
         assert args.method == "esptool"
-        assert args.erase is True
+        assert args.erase_flash is True
         assert args.offset == "0x1000"
+
+    def test_flash_firmware_no_erase_flag(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args([
+            "flash-firmware",
+            "--transport", "micropython",
+            "--address", "/dev/x",
+            "--url", "https://example/fw.bin",
+            "--method", "esptool",
+            "--no-erase",
+        ])
+        assert args.erase_flash is False
 
     def test_flash_firmware_defaults_offset_zero(self) -> None:
         parser = build_parser()
@@ -50,10 +61,10 @@ class TestParser:
             "--transport", "circuitpython",
             "--address", "/dev/x",
             "--url", "https://example/fw.uf2",
-            "--method", "uf2",
         ])
         assert args.offset == "0x0"
-        assert args.erase is False
+        assert args.erase_flash is True
+        assert args.method is None  # auto-detect from URL extension
 
     def test_deploy_requires_source(self) -> None:
         parser = build_parser()
@@ -211,16 +222,59 @@ class TestCommandFlashFirmware:
             "--address", "/dev/cu.usbmodem01",
             "--url", "https://example/fw.bin",
             "--method", "esptool",
-            "--erase",
             "--offset", "0x1000",
             "--non-interactive",
         ])
         assert exit_code == 0
         assert captured["url"] == "https://example/fw.bin"
         assert captured["reflash_method"] == "esptool"
-        assert captured["erase_flash"] is True
+        assert captured["erase_flash"] is True  # default
         assert captured["flash_offset"] == "0x1000"
         assert captured["interactive"] is False
+
+    def test_no_erase_forwards_false(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        captured: dict[str, Any] = {}
+
+        def fake_flash(url, device, **kwargs):  # noqa: ANN001
+            captured.update(kwargs)
+
+        monkeypatch.setattr("chumicro_deploy.cli.flash_firmware", fake_flash)
+
+        exit_code = main([
+            "flash-firmware",
+            "--transport", "micropython",
+            "--address", "/dev/cu.usbmodem01",
+            "--url", "https://example/fw.bin",
+            "--method", "esptool",
+            "--no-erase",
+            "--non-interactive",
+        ])
+        assert exit_code == 0
+        assert captured["erase_flash"] is False
+
+    def test_method_auto_inferred_from_url(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # No --method passed; flash_firmware() does the inference
+        # internally.  The CLI just forwards reflash_method=None.
+        captured: dict[str, Any] = {}
+
+        def fake_flash(url, device, **kwargs):  # noqa: ANN001
+            captured.update(kwargs)
+
+        monkeypatch.setattr("chumicro_deploy.cli.flash_firmware", fake_flash)
+
+        exit_code = main([
+            "flash-firmware",
+            "--transport", "circuitpython",
+            "--address", "/dev/cu.usbmodem01",
+            "--url", "https://example/fw.uf2",
+            "--non-interactive",
+        ])
+        assert exit_code == 0
+        assert captured["reflash_method"] is None
 
 
 class TestCommandResolveFirmwareUrl:

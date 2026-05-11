@@ -189,7 +189,7 @@ def _cmd_flash_firmware(args: argparse.Namespace) -> int:
         reflash_method=args.method,
         bootloader_drive_path=args.bootloader_drive_path,
         interactive=not args.non_interactive,
-        erase_flash=args.erase,
+        erase_flash=args.erase_flash,
         flash_offset=args.offset,
         on_progress=_stderr_progress,
     )
@@ -305,19 +305,25 @@ def build_parser() -> argparse.ArgumentParser:
     flash_parser.add_argument(
         "--method",
         choices=_REFLASH_METHOD_CHOICES,
-        required=True,
+        default=None,
         help=(
             "Reflash method: uf2 for RP2040 / RP2350 / TinyUF2-flashed "
-            "boards; esptool for ESP32 family."
+            "boards; esptool for ESP32 family.  When omitted, inferred "
+            "from the --url extension (.uf2 → uf2, .bin → esptool)."
         ),
     )
     flash_parser.add_argument(
-        "--erase",
-        action="store_true",
+        "--no-erase",
+        dest="erase_flash",
+        action="store_false",
+        default=True,
         help=(
-            "esptool path only: run erase-flash before write-flash.  "
-            "Wipes every user partition (CIRCUITPY drive, NVS, wifi "
-            "credentials).  Recommended for first-install and recovery."
+            "esptool path only: skip the erase-flash step before "
+            "write-flash.  Default erases first — wipes every user "
+            "partition (CIRCUITPY drive, NVS, wifi credentials) so a "
+            "fresh reflash doesn't inherit leftover sectors from a "
+            "previous build.  Pass --no-erase to preserve user data "
+            "on an in-place upgrade."
         ),
     )
     flash_parser.add_argument(
