@@ -19,16 +19,14 @@ of modular/ring arithmetic for tick counters.
 
 import time
 
-try:
-    from micropython import const
-except ImportError:
-    def const(value):
-        return value
-
-
-_TICKS_PERIOD = const(1 << 29)
-_TICKS_MAX = const(_TICKS_PERIOD - 1)
-_TICKS_HALFPERIOD = const(_TICKS_PERIOD // 2)
+# const() is intentionally not used here: the strip-and-inline
+# optimization only fires for leading-underscore module globals on
+# MicroPython, and these constants are public so testing.py (which is
+# imported under MP/CP cross-runtime test runs) can reuse them
+# without redefining the 2**29 period in two places.
+TICKS_PERIOD = 1 << 29
+TICKS_MAX = TICKS_PERIOD - 1
+TICKS_HALFPERIOD = TICKS_PERIOD // 2
 
 
 def _resolve_ticks_ms() -> object:
@@ -74,7 +72,7 @@ def ticks_ms() -> int:
     for arithmetic; plain subtraction gives wrong results near the
     wrap boundary.
     """
-    return _raw_ticks_ms() & _TICKS_MAX
+    return _raw_ticks_ms() & TICKS_MAX
 
 
 def ticks_add(ticks: int, delta: int) -> int:
@@ -90,8 +88,8 @@ def ticks_add(ticks: int, delta: int) -> int:
     Raises:
         OverflowError: If *delta* is outside (-2**28 .. 2**28).
     """
-    if -_TICKS_HALFPERIOD < delta < _TICKS_HALFPERIOD:
-        return (ticks + delta) % _TICKS_PERIOD
+    if -TICKS_HALFPERIOD < delta < TICKS_HALFPERIOD:
+        return (ticks + delta) % TICKS_PERIOD
     raise OverflowError("ticks interval overflow")
 
 
@@ -108,5 +106,5 @@ def ticks_diff(end: int, start: int) -> int:
     Returns:
         Signed difference in milliseconds.
     """
-    diff = (end - start) & _TICKS_MAX
-    return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
+    diff = (end - start) & TICKS_MAX
+    return ((diff + TICKS_HALFPERIOD) & TICKS_MAX) - TICKS_HALFPERIOD

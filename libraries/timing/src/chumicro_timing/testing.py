@@ -23,16 +23,7 @@ of ``ticks_diff``.
 #: Source bundle / sdist only -- never lands on a device.
 __chumicro_runtimes__ = ("cpython",)
 
-# Constants are redefined here rather than imported from ticks.py.
-# The runtime marker keeps this file off device deploys, but it IS
-# imported by cross-runtime test files (FakeTicks drives the unit
-# tests for libraries that own time).  On MicroPython and CircuitPython
-# the const()-decorated names in ticks.py compile to ``None`` at
-# module level — they're only legal in expression position — so
-# ``from chumicro_timing.ticks import _TICKS_PERIOD`` fails.
-TICKS_PERIOD = 1 << 29
-TICKS_MAX = TICKS_PERIOD - 1
-TICKS_HALFPERIOD = TICKS_PERIOD // 2
+from chumicro_timing.ticks import TICKS_HALFPERIOD, TICKS_MAX, TICKS_PERIOD
 
 
 class FakeTicks:
