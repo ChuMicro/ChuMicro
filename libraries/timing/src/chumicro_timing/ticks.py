@@ -31,16 +31,6 @@ _TICKS_MAX = const(_TICKS_PERIOD - 1)
 _TICKS_HALFPERIOD = const(_TICKS_PERIOD // 2)
 
 
-def _try_import_supervisor() -> object | None:
-    """Return the CircuitPython ``supervisor`` module, or ``None``."""
-    try:
-        import supervisor
-
-        return supervisor
-    except ImportError:
-        return None
-
-
 def _resolve_ticks_ms() -> object:
     """Choose the best raw millisecond source available on this runtime.
 
@@ -53,7 +43,10 @@ def _resolve_ticks_ms() -> object:
       3. ``time.monotonic_ns`` — CPython, some CP Express boards
       4. ``time.monotonic`` — final fallback (float seconds)
     """
-    supervisor = _try_import_supervisor()
+    try:
+        import supervisor
+    except ImportError:
+        supervisor = None
     if supervisor is not None:
         candidate = getattr(supervisor, "ticks_ms", None)
         if callable(candidate):
