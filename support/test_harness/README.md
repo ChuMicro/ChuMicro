@@ -1,46 +1,53 @@
 # chumicro-test-harness
 
-A very small test runner and cross-runtime orchestrator for ChuMicro libraries.
-
-This package is intentionally tiny.  It is meant to complement host-side `pytest`, not replace it.
+A small cross-runtime test runner for ChuMicro libraries — internal to the mono-repo (not on PyPI), and meant to complement host-side `pytest` rather than replace it.
 
 ## What it provides
 
-- `chumicro_test_harness.runner` — lightweight runner.
-- `chumicro_test_harness.discovery` — test discovery and orchestration.
-- `chumicro_test_harness.assertions` — cross-runtime assertion helpers (`raises()`, `skip()`).
+| Module | What it exports |
+|---|---|
+| `chumicro_test_harness.runner` | `run_module(module, name_filter=None)` |
+| `chumicro_test_harness.discovery` | `discover_source_roots`, `discover_tests`, `run_all`, `run_one_file` |
+| `chumicro_test_harness.assertions` | `raises` (pytest-shaped context manager) |
+| `chumicro_test_harness.skip` | `skip(reason)` |
 
-The harness is what powers cross-runtime unit tests: files under `libraries/*/tests/test_*.py` that don't `import pytest` are picked up and run on whichever interpreter the harness was launched with (CPython, MicroPython unix-port, CircuitPython unix-port).  Files ending in `_pytest.py` are skipped — those are CPython-only and run under host-side `pytest`.
+Top-level re-exports: `from chumicro_test_harness import raises, skip, run_module, run_all`.
+
+The harness powers cross-runtime unit tests.  Files under `libraries/*/tests/test_*.py` are picked up and run on whichever interpreter `run_cross_runtime.py` was launched with (CPython, MicroPython unix-port, CircuitPython unix-port).  Files whose name ends in `_pytest.py` are skipped — those are CPython-only and run under host-side `pytest`.
 
 ## CPython cross-runtime run
 
-From a checkout root that contains `libraries/<name>/tests/`:
+From the workspace root:
 
 ```zsh
-python support/test_harness/run_cross_runtime.py
+python support/test_harness/run_cross_runtime.py [library ...]
 ```
+
+Positional library names narrow the sweep to a subset; with none given, all libraries run.  Pass `--no-isolate` (before the library list) to share one process across files; the default spawns a fresh subprocess per file so each test starts with a clean heap, mirroring real-board behaviour.
 
 ## MicroPython unix-port cross-runtime run
 
+Launch the script under a MicroPython unix-port binary:
+
 ```zsh
-python -m chumicro_test_harness.runner --interpreter micropython
+micropython support/test_harness/run_cross_runtime.py [library ...]
 ```
 
-If no explicit binary is given, the runner first tries a workspace-prepared interpreter under `.tools/`, then a `micropython` executable on `PATH`.  To override, pass `--micropython-binary /path/to/binary`.
+The mono-repo's `python scripts/run.py test-micropython` wraps this — it resolves the binary (workspace-prepared `.tools/` build first, then `PATH`), auto-builds if missing, and accepts `--micropython-binary /path/to/binary` to override.
 
 ## CircuitPython unix-port run
 
+Same shape:
+
 ```zsh
-python -m chumicro_test_harness.runner --interpreter circuitpython
+circuitpython support/test_harness/run_cross_runtime.py [library ...]
 ```
 
-Same fallback rules — workspace-prepared `.tools/` interpreter, then `PATH`, then `--circuitpython-binary /path/to/binary` to override.
-
-The harness currently runs against the pinned upstream `10.x` CircuitPython unix-port build; both runtime compatibility checks are part of the workspace's standard CI gates.
+The mono-repo wrapper is `python scripts/run.py test-circuitpython` (with `--circuitpython-binary` to override).  The harness runs against the pinned upstream 10.x CircuitPython unix-port build; both runtime compatibility checks are part of the standard CI gates.
 
 ## Combined host + runtime run
 
-The full cross-runtime sweep (CPython host tests + both unix-port runtime tests) runs as a single `chumicro-workspace` command in the workspace dispatcher; standalone use of this package typically invokes the runner directly per the sections above.
+The full cross-runtime sweep (CPython unit tests + both unix-port runtimes) is `python scripts/run.py test-all-runtimes` from the workspace root.
 
 ## Device testing on real boards
 
