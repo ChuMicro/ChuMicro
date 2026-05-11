@@ -100,3 +100,58 @@ class TestScaffoldLibrary:
         with pytest.raises(LibraryAlreadyExistsError) as caught:
             scaffold_library(tmp_path / "libraries", "gpio")
         assert "gpio" in str(caught.value)
+
+    def test_workbench_kind_scaffolds_workbench_flavored_docs(
+        self, tmp_path: Path,
+    ) -> None:
+        """`package_kind="workbench"` pulls docs from the workbench template.
+
+        Workbench packages aren't cross-runtime and don't ship via
+        bundles, so their docs should not carry the library shape's
+        Runner pattern / Memory notes sections or the Bundle footer
+        link.  Also call out that the source URL points at
+        ``workbench/<name>/``, not ``libraries/<name>/``.
+        """
+        created = scaffold_library(
+            tmp_path / "workbench", "trinket", package_kind="workbench",
+        )
+        guide_text = (created / "docs" / "guide.md").read_text()
+        index_text = (created / "docs" / "index.md").read_text()
+        api_text = (created / "docs" / "api.md").read_text()
+        testing_text = (created / "docs" / "testing.md").read_text()
+
+        # Library-flavoured headings + footer link must be absent.
+        # (The workbench guide's GENERATION INSTRUCTIONS block names
+        # the missing sections by their bare titles, so match the
+        # heading form explicitly.)
+        for doc_text in (guide_text, index_text, api_text, testing_text):
+            assert "## Runner pattern" not in doc_text
+            assert "## Memory notes" not in doc_text
+            assert "ChuMicro-Bundle" not in doc_text
+
+        # Workbench source URLs replace the library path.
+        for doc_text in (guide_text, index_text, api_text, testing_text):
+            assert "tree/main/workbench/trinket" in doc_text
+            assert "tree/main/libraries/trinket" not in doc_text
+
+        # Index footer relabel: "Libraries" → "Packages".
+        assert "All ChuMicro Packages" in index_text
+        assert "All ChuMicro Libraries" not in index_text
+
+    def test_library_kind_keeps_library_flavored_docs(
+        self, tmp_path: Path,
+    ) -> None:
+        """Default `package_kind="library"` keeps the library doc shape."""
+        created = scaffold_library(tmp_path / "libraries", "gpio")
+        guide_text = (created / "docs" / "guide.md").read_text()
+        index_text = (created / "docs" / "index.md").read_text()
+
+        # Library shape includes Runner pattern + Memory notes
+        # sections and the Bundle footer link.
+        assert "Runner pattern" in guide_text
+        assert "Memory notes" in guide_text
+        assert "ChuMicro-Bundle" in guide_text
+
+        # Library source URL.
+        assert "tree/main/libraries/gpio" in guide_text
+        assert "All ChuMicro Libraries" in index_text
