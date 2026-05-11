@@ -37,33 +37,52 @@ new record sits in the queue until the next drain.
 
 ## Wiring service callbacks
 
-A common wiring pattern: services expose `on_state_change`
-callbacks; the application binds each one to a bus publisher;
-subscribers react to the cross-service stream.
+Services in this family expose their state-change hooks in one of
+two shapes:
+
+- **Registration method** — e.g. `wifi.on_state_change(callback)`,
+  where the service invokes `callback(old_state, new_state)`.
+- **Replaceable attribute** — e.g. `mqtt.on_connect = callback`,
+  where the service invokes `callback()` (or with whatever args the
+  service documents).
+
+`bus.publisher(topic)` returns a `*args`-accepting callable that
+adapts to both shapes.  Wire it in once and let the bus carry the
+traffic:
 
 ```python
 from chumicro_events import EventBus
 
 bus = EventBus()
 
-# Each service's callback becomes a one-line publisher.
-wifi.on_state_change = bus.publisher("wifi.state")
-mqtt.on_state_change = bus.publisher("mqtt.state")
+# wifi exposes a registration method; the publisher closure
+# accepts (old_state, new_state) without any adapter.
+wifi.on_state_change(bus.publisher("wifi.state"))
 
-# A single subscriber sees everything.
+# mqtt exposes a replaceable attribute.
+mqtt.on_connect = bus.publisher("mqtt.connected")
+
+# A single subscriber sees the cross-service stream.
 def audit(topic: str, payload: object) -> None:
     log.info(f"{topic}: {payload}")
 
 bus.subscribe("wifi.state", audit)
-bus.subscribe("mqtt.state", audit)
+bus.subscribe("mqtt.connected", audit)
 ```
 
-`bus.publisher(topic)` returns a callable bound to that topic.  The
-callable accepts an optional payload positional argument; calling it
-with no argument publishes `None`.  This matches the shape of the
-existing service `on_state_change` callbacks across `chumicro-wifi`,
-`chumicro-mqtt`, and any future libraries that follow the same
-optional-callback dependency pattern.
+Multi-arg service callbacks reach subscribers as a tuple payload —
+a callback fired as `callback("idle", "connecting")` becomes
+`handler("wifi.state", ("idle", "connecting"))`.  Subscribers
+unpack inline:
+
+```python
+def on_wifi_state(topic, payload):
+    old, new = payload
+    log.info(f"{old} -> {new}")
+```
+
+Single-arg and zero-arg callbacks pass through unchanged
+(`payload` is the single value or `None`, respectively).
 
 ## Runner pattern
 

@@ -7,7 +7,7 @@ unix ports.
 
 import chumicro_events
 from chumicro_events import EventBus, Subscription
-from chumicro_events.testing import FailingSubscriber, RecordingSubscriber
+from chumicro_events.testing import RecordingSubscriber
 from chumicro_test_harness.assertions import raises
 
 # ---------------------------------------------------------------------------
@@ -45,7 +45,8 @@ def test_starts_empty() -> None:
     assert bus.buffered == 0
     assert bus.dropped == 0
     assert bus.handler_errors == 0
-    assert bus.dispatched == 0
+    assert bus.drained == 0
+    assert bus.delivered == 0
     assert bus.topics() == ()
     assert bus.check(now_ms=0) is False
 
@@ -61,7 +62,6 @@ def test_subscribe_returns_subscription() -> None:
     sub = bus.subscribe("wifi.state", recorder)
     assert isinstance(sub, Subscription)
     assert sub.topic == "wifi.state"
-    assert sub.bus_id == id(bus)
 
 
 def test_subscribe_tracks_topic() -> None:
@@ -152,12 +152,13 @@ def test_handle_dispatches_to_subscribers() -> None:
     recorder = RecordingSubscriber()
     bus.subscribe("wifi.state", recorder)
     bus.publish("wifi.state", "connected")
-    dispatched = bus.handle(now_ms=0)
-    assert dispatched == 1
+    drained = bus.handle(now_ms=0)
+    assert drained == 1
     assert recorder.events == [("wifi.state", "connected")]
     assert bus.buffered == 0
     assert bus.check(now_ms=0) is False
-    assert bus.dispatched == 1
+    assert bus.drained == 1
+    assert bus.delivered == 1
 
 
 def test_handle_routes_to_correct_topic_only() -> None:
@@ -176,9 +177,10 @@ def test_handle_routes_to_correct_topic_only() -> None:
 def test_handle_with_no_subscribers_consumes_event() -> None:
     bus = EventBus()
     bus.publish("orphan.topic", "lonely")
-    dispatched = bus.handle(now_ms=0)
-    assert dispatched == 1
+    drained = bus.handle(now_ms=0)
+    assert drained == 1
     assert bus.buffered == 0
+    assert bus.delivered == 0
 
 
 def test_handle_dispatches_to_multiple_handlers_on_same_topic() -> None:
@@ -220,24 +222,38 @@ def test_handle_on_empty_queue_returns_zero() -> None:
 
 def test_handle_swallows_subscriber_exceptions() -> None:
     bus = EventBus()
-    failing = FailingSubscriber()
+
+    def boom(topic, payload):
+        raise RuntimeError("subscriber boom")
+
     recorder = RecordingSubscriber()
-    bus.subscribe("topic", failing)
+    bus.subscribe("topic", boom)
     bus.subscribe("topic", recorder)
     bus.publish("topic", "x")
     bus.handle(now_ms=0)
-    assert failing.calls == 1
     assert bus.handler_errors == 1
     assert recorder.events == [("topic", "x")]
 
 
-def test_handle_dispatched_counter_accumulates_across_calls() -> None:
+def test_drained_counter_accumulates_across_calls() -> None:
     bus = EventBus()
     bus.publish("topic", 1)
     bus.handle(now_ms=0)
     bus.publish("topic", 2)
     bus.handle(now_ms=0)
-    assert bus.dispatched == 2
+    assert bus.drained == 2
+
+
+def test_delivered_counts_handler_invocations_not_records() -> None:
+    bus = EventBus()
+    bus.subscribe("topic", RecordingSubscriber())
+    bus.subscribe("topic", RecordingSubscriber())
+    bus.subscribe("topic", RecordingSubscriber())
+    bus.publish("topic", "x")
+    bus.publish("topic", "y")
+    bus.handle(now_ms=0)
+    assert bus.drained == 2
+    assert bus.delivered == 6  # 2 records × 3 subscribers
 
 
 def test_handle_dispatch_snapshots_subscribers() -> None:
@@ -307,6 +323,28 @@ def test_publisher_helper_default_payload_is_none() -> None:
     assert recorder.events == [("ping", None)]
 
 
+def test_publish_multi_arg_packs_into_tuple_payload() -> None:
+    bus = EventBus()
+    recorder = RecordingSubscriber()
+    bus.subscribe("wifi.state", recorder)
+    bus.publish("wifi.state", "connected", "disconnected")
+    bus.handle(now_ms=0)
+    assert recorder.events == [("wifi.state", ("connected", "disconnected"))]
+
+
+def test_publisher_helper_forwards_multi_arg_calls() -> None:
+    """publisher closures handle any callback arity at the wiring site."""
+    bus = EventBus()
+    recorder = RecordingSubscriber()
+    bus.subscribe("wifi.state", recorder)
+
+    # Stand-in for a service that fires its callback with multiple args.
+    callback = bus.publisher("wifi.state")
+    callback("idle", "connecting")
+    bus.handle(now_ms=0)
+    assert recorder.events == [("wifi.state", ("idle", "connecting"))]
+
+
 # ---------------------------------------------------------------------------
 # clear()
 # ---------------------------------------------------------------------------
@@ -350,7 +388,7 @@ def test_subscription_token_increments() -> None:
 
 
 # ---------------------------------------------------------------------------
-# RecordingSubscriber / FailingSubscriber
+# RecordingSubscriber
 # ---------------------------------------------------------------------------
 
 
@@ -383,16 +421,3 @@ def test_recording_subscriber_no_filter_records_everything() -> None:
     recorder("a", 1)
     recorder("b", 2)
     assert recorder.events == [("a", 1), ("b", 2)]
-
-
-def test_failing_subscriber_default_exception() -> None:
-    failing = FailingSubscriber()
-    with raises(RuntimeError, match="subscriber boom"):
-        failing("topic", "x")
-    assert failing.calls == 1
-
-
-def test_failing_subscriber_custom_exception() -> None:
-    failing = FailingSubscriber(exception=ValueError("nope"))
-    with raises(ValueError, match="nope"):
-        failing("topic", "x")

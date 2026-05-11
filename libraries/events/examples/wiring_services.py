@@ -1,52 +1,60 @@
 """Wiring service callbacks into a single EventBus.
 
-Wires services into a shared event bus: each service exposes an
-``on_state_change`` callback, the application binds each callback
-to a publisher, and a single subscriber reacts to the resulting
-cross-service stream.
+Two service shapes coexist in this family:
 
-The fake services here stand in for the real ``chumicro-wifi`` and
-``chumicro-mqtt``; the wiring shape is identical.
+- **Registration method** like ``chumicro-wifi``'s
+  ``on_state_change(callback)``, where the service invokes
+  ``callback(old_state, new_state)``.
+- **Replaceable attribute** like ``chumicro-mqtt``'s
+  ``on_connect = callback``, where the service invokes the callback
+  with whatever args it documents.
+
+``bus.publisher(topic)`` returns a ``*args``-accepting callable that
+adapts to either shape without an inline adapter.
 
 Runs on CPython, MicroPython, and CircuitPython.
 
 Example output::
 
-    [audit] wifi.state -> connecting
-    [audit] wifi.state -> connected
-    [audit] mqtt.state -> ready
+    [audit] wifi.state -> ('idle', 'connecting')
+    [audit] wifi.state -> ('connecting', 'connected')
+    [audit] mqtt.connected -> None
 """
 
 from chumicro_events import EventBus
 
 
 class FakeWifi:
-    """Stand-in for chumicro-wifi's state-change publisher."""
+    """Stand-in for chumicro-wifi.  Registration-method shape."""
 
     def __init__(self) -> None:
-        self.on_state_change = lambda payload=None: None
+        self._callbacks: list = []
 
-    def simulate(self, state: str) -> None:
-        self.on_state_change(state)
+    def on_state_change(self, callback) -> None:
+        self._callbacks.append(callback)
+
+    def simulate(self, old_state: str, new_state: str) -> None:
+        for callback in self._callbacks:
+            callback(old_state, new_state)
 
 
 class FakeMqtt:
-    """Stand-in for chumicro-mqtt's state-change publisher."""
+    """Stand-in for chumicro-mqtt.  Replaceable-attribute shape."""
 
     def __init__(self) -> None:
-        self.on_state_change = lambda payload=None: None
+        self.on_connect = lambda: None
 
-    def simulate(self, state: str) -> None:
-        self.on_state_change(state)
+    def simulate_connected(self) -> None:
+        self.on_connect()
 
 
 bus = EventBus()
 wifi = FakeWifi()
 mqtt = FakeMqtt()
 
-# Wiring: each service's callback becomes a bus publisher.
-wifi.on_state_change = bus.publisher("wifi.state")
-mqtt.on_state_change = bus.publisher("mqtt.state")
+# Wiring: same publisher() helper covers both service shapes.
+wifi.on_state_change(bus.publisher("wifi.state"))
+mqtt.on_connect = bus.publisher("mqtt.connected")
 
 
 def audit(topic: str, payload: object) -> None:
@@ -54,12 +62,12 @@ def audit(topic: str, payload: object) -> None:
 
 
 bus.subscribe("wifi.state", audit)
-bus.subscribe("mqtt.state", audit)
+bus.subscribe("mqtt.connected", audit)
 
 # Simulate state transitions.
-wifi.simulate("connecting")
-wifi.simulate("connected")
-mqtt.simulate("ready")
+wifi.simulate("idle", "connecting")
+wifi.simulate("connecting", "connected")
+mqtt.simulate_connected()
 
 # Drain — runner would do this once per tick.
 bus.handle(now_ms=0)

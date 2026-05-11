@@ -63,32 +63,3 @@ class RecordingSubscriber:
         if self._topic_filter is not None and topic != self._topic_filter:
             return
         self._events.append((topic, payload))
-
-
-class FailingSubscriber:
-    """Subscriber that raises on every dispatch.
-
-    Useful for verifying that misbehaving subscribers don't crash
-    ``EventBus.handle`` and that ``handler_errors`` increments
-    correctly.
-
-    Args:
-        exception: The exception instance to raise.  Defaults to
-            ``RuntimeError("subscriber boom")``.
-    """
-
-    def __init__(self, exception: BaseException | None = None) -> None:
-        self._exception = exception if exception is not None else RuntimeError(
-            "subscriber boom"
-        )
-        self._calls = 0
-
-    @property
-    def calls(self) -> int:
-        """Number of times the subscriber has been invoked."""
-        return self._calls
-
-    def __call__(self, topic: str, payload: object) -> None:
-        """Increment the call counter and raise the configured exception."""
-        self._calls += 1
-        raise self._exception

@@ -18,7 +18,8 @@ class Subscription:
 
     Carry it back to ``EventBus.unsubscribe`` to detach the handler.
     Subscriptions are not interchangeable across buses — each bus
-    issues its own.
+    issues its own (tracked via the private ``_bus_id`` field, which
+    callers should not touch).
 
     Args:
         bus_id: Identity of the issuing bus (``id(bus)``).
@@ -28,26 +29,11 @@ class Subscription:
 
     def __init__(self, bus_id: int, token: int, topic: str) -> None:
         self._bus_id = bus_id
-        self._token = token
-        self._topic = topic
-
-    @property
-    def topic(self) -> str:
-        """The topic this subscription is bound to."""
-        return self._topic
-
-    @property
-    def token(self) -> int:
-        """The opaque per-bus token (used internally for lookup)."""
-        return self._token
-
-    @property
-    def bus_id(self) -> int:
-        """Identity of the bus that issued this subscription."""
-        return self._bus_id
+        self.token = token
+        self.topic = topic
 
     def __repr__(self) -> str:
-        return f"Subscription(topic={self._topic!r}, token={self._token})"
+        return f"Subscription(topic={self.topic!r}, token={self.token})"
 
 
 class EventBus:
@@ -90,7 +76,8 @@ class EventBus:
         self._next_token = 0
         self._dropped = 0
         self._handler_errors = 0
-        self._dispatched = 0
+        self._drained = 0
+        self._delivered = 0
 
     @property
     def capacity(self) -> int:
@@ -113,13 +100,25 @@ class EventBus:
         return self._handler_errors
 
     @property
-    def dispatched(self) -> int:
-        """Records dispatched to subscribers since construction.
+    def drained(self) -> int:
+        """Records taken off the queue since construction.
 
         Counts events that reached ``handle`` and were processed,
-        whether or not anyone was subscribed at the time.
+        whether or not anyone was subscribed at the time.  Pair with
+        ``delivered`` for the handler-invocation count.
         """
-        return self._dispatched
+        return self._drained
+
+    @property
+    def delivered(self) -> int:
+        """Handler invocations attempted since construction.
+
+        Counts every ``handler(topic, ...)`` call ``handle`` issued —
+        ``records_drained × subscribers_at_that_moment``.  Includes
+        handlers that raised (those also increment
+        ``handler_errors``).
+        """
+        return self._delivered
 
     def topics(self) -> tuple:
         """Snapshot of currently-subscribed topics."""
@@ -172,7 +171,7 @@ class EventBus:
             ``False`` if it was already gone or issued by a different
             bus.
         """
-        if subscription.bus_id != id(self):
+        if subscription._bus_id != id(self):
             return False
         bucket = self._subscribers.get(subscription.topic)
         if not bucket:
@@ -186,37 +185,63 @@ class EventBus:
                 return True
         return False
 
-    def publish(self, topic: str, payload: object = None) -> None:
-        """Enqueue a record on *topic* with *payload*.
+    def publish(self, topic: str, *args: object) -> None:
+        """Enqueue a record on *topic* with *args* as the payload.
 
         The record is **not** dispatched immediately.  Subscribers see
-        it the next time ``handle`` runs.  When the queue is full, the
-        oldest record is dropped to make room.
+        it the next time ``handle`` runs.  When the queue is full,
+        ``deque(maxlen)`` drops the oldest record on append; we count
+        it via ``_dropped`` rather than popping ourselves.
+
+        The payload is normalised so subscribers see a single
+        ``(topic, payload)`` shape regardless of how many positional
+        arguments were passed:
+
+        - zero args → ``payload`` is ``None``
+        - one arg → ``payload`` is that value (unchanged)
+        - two or more args → ``payload`` is the args tuple
+
+        This lets a publisher closure adapt to any service-callback
+        arity at the wiring site without forcing subscribers to use
+        ``*args``.
 
         Args:
             topic: Exact topic string.
-            payload: Any object — not interpreted by the bus.
+            *args: Any objects — not interpreted by the bus.
         """
         if len(self._queue) >= self._capacity:
             self._dropped += 1
-        # deque(maxlen=capacity) drops the oldest record automatically.
+        if len(args) == 1:
+            payload = args[0]
+        elif not args:
+            payload = None
+        else:
+            payload = args
         self._queue.append((topic, payload))
 
     def publisher(self, topic: str) -> object:
         """Return a callable bound to *topic*.
 
-        Useful for wiring up service callbacks without a lambda::
+        Useful for wiring service callbacks of any arity into the
+        bus.  The returned callable accepts ``*args`` and forwards
+        them to ``publish``::
 
-            wifi.on_state_change = bus.publisher("wifi.state")
+            # service exposes `on_state_change(callback)`; callback
+            # is invoked as `callback(old_state, new_state)`.
+            wifi.on_state_change(bus.publisher("wifi.state"))
 
-        The returned callable accepts an optional payload positional
-        argument; calling it with no argument publishes ``None``.
+            # service exposes `on_connect` as a replaceable attr;
+            # invoked with no arguments.
+            mqtt.on_connect = bus.publisher("mqtt.connected")
+
+        Subscribers always see ``handler(topic, payload)``; ``publish``
+        packs multi-arg calls into a tuple payload (see ``publish``).
 
         Args:
             topic: Exact topic string the callable will publish to.
         """
-        def _publish(payload: object = None) -> None:
-            self.publish(topic, payload)
+        def _publish(*args: object) -> None:
+            self.publish(topic, *args)
         return _publish
 
     def check(self, now_ms: int) -> bool:
@@ -232,37 +257,52 @@ class EventBus:
         """Drain the queue and dispatch every record to its subscribers.
 
         Subscribers attached at the moment of dispatch see the event;
-        subscribers attached after this call won't see records
-        already drained.  Subscriber exceptions are swallowed and
-        counted in ``handler_errors``.
+        subscribers added later in the same handler call fall past
+        the length snapshot and won't fire for the current record.
+        Subscriber exceptions are swallowed and counted in
+        ``handler_errors``.  Calling ``unsubscribe`` from inside a
+        running handler may cause sibling subscribers on the same
+        topic to be skipped for the current record — unsubscribe
+        outside dispatch to avoid this.
 
         Args:
             now_ms: Current tick value (unused; required by the runner
                 contract).
 
         Returns:
-            The number of records dispatched.
+            The number of records drained from the queue.
         """
-        dispatched = 0
+        drained = 0
+        delivered = 0
         while self._queue:
             topic, payload = self._queue.popleft()
             bucket = self._subscribers.get(topic)
             if bucket:
-                for _token, handler in tuple(bucket):
+                # Snapshot the length so subscribers added during
+                # dispatch don't fire for this record.  The min()
+                # bounds-check covers same-record unsubscribe shrinking
+                # the bucket — no IndexError, just a possible skip.
+                snapshot_count = len(bucket)
+                index = 0
+                while index < snapshot_count and index < len(bucket):
+                    _token, handler = bucket[index]
                     try:
                         handler(topic, payload)
                     except Exception:  # noqa: BLE001
                         self._handler_errors += 1
-            dispatched += 1
-        self._dispatched += dispatched
-        return dispatched
+                    delivered += 1
+                    index += 1
+            drained += 1
+        self._drained += drained
+        self._delivered += delivered
+        return drained
 
     def clear(self) -> None:
         """Drop every queued record without dispatching.
 
         Resets ``buffered`` to zero.  Subscriptions and counters
-        (``dropped``, ``handler_errors``, ``dispatched``) are not
-        affected.
+        (``dropped``, ``handler_errors``, ``drained``, ``delivered``)
+        are not affected.
         """
         # Reassign rather than calling .clear() — MicroPython's deque
         # does not implement clear() in every build.
