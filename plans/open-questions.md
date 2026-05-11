@@ -45,6 +45,109 @@ Was follow-up #5 in `plans/workstreams/example-sweep-stability.md`; moved here
 because the workstream's sweep harness can't trigger it on demand and the issue
 needs a natural occurrence.
 
+### MicroPython `machine.bootloader()` on ESP32-S2 — missing USB-CDC persist setup
+
+**Surfaced 2026-05-11** during the 4-board reflash bench test of
+`chumicro-deploy flash-firmware`.  Lolin S2 mini running MicroPython
+1.28.0 — `machine.bootloader()` over the running MP serial port writes
+the RTC force-download-boot bit and calls `esp_restart()`, but the chip
+does **not** come back as a host-visible USB-CDC ROM bootloader port.
+From the host side: original port (`/dev/cu.usbmodem11101`) remains
+enumerated but MP runtime is unresponsive (`mpremote ... exec` fails
+"could not enter raw repl"), no new `/dev/cu.usbmodem01` appears within
+chumicro-deploy's 8-second poll window, esptool's DTR/RTS auto-reset
+also fails ("Failed to connect to Espressif device: No serial data
+received").  Manual `BOOT + RESET` button-hold recovers cleanly into
+ROM bootloader at `/dev/cu.usbmodem01`.
+
+**Root cause** (read from `.tools/micropython-v1.26.0/ports/esp32/modmachine.c:230-238`):
+
+```c
+MP_NORETURN static void machine_bootloader_rtc(void) {
+    #if CONFIG_IDF_TARGET_ESP32S3 && MICROPY_HW_USB_CDC
+    usb_usj_mode();
+    usb_dc_prepare_persist();
+    chip_usb_set_persist_flags(USBDC_BOOT_DFU);
+    #endif
+    REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+    esp_restart();
+}
+```
+
+The USB-CDC persist-flag setup is gated **`CONFIG_IDF_TARGET_ESP32S3` only**.
+ESP32-S2 has the same native USB-CDC hardware as S3 and needs the same
+persist-flag dance for the USB device to come back up in ROM-bootloader
+CDC mode after `esp_restart()`.  Without it, the chip enters download
+mode at the silicon level but the host's USB stack can't smoothly
+re-enumerate the ROM bootloader's CDC interface.
+
+**CircuitPython gets this right** for both S2 and S3 — see
+`.tools/circuitpython-10.2.0/ports/espressif/common-hal/microcontroller/__init__.c:127-128`:
+
+```c
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+chip_usb_set_persist_flags(USBDC_BOOT_DFU);
+#endif
+```
+
+That's why `microcontroller.on_next_reset(RunMode.BOOTLOADER)` +
+`microcontroller.reset()` works on the same Lolin S2 hardware running
+CP 10.1.4.
+
+**Affected:** any ESP32-S2 native-USB-CDC board running MicroPython
+without a TinyUF2 bootloader — Lolin S2 mini, FeatherS2 variants
+shipped without TinyUF2, Adafruit MagTag, anything else where the
+running firmware is the only path to bootloader-mode entry.  The
+auto-define block at `mpconfigport.h:364-370` enables
+`machine.bootloader()` for the entire ESP32-S2/S3/C2/C3 SoC family
+(only `ARDUINO_NANO_ESP32` overrides), so the symptom applies broadly.
+
+**Fix is one line.**  Widen `modmachine.c:231` from:
+
+```c
+#if CONFIG_IDF_TARGET_ESP32S3 && MICROPY_HW_USB_CDC
+```
+
+to:
+
+```c
+#if (CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32S2) && MICROPY_HW_USB_CDC
+```
+
+The included headers
+(`esp32s3/rom/usb/usb_dc.h`, `esp32s3/rom/usb/usb_persist.h`,
+`esp32s3/rom/usb/chip_usb_dw_wrapper.h`) are S3-specific; the S2
+equivalents are at `esp32s2/rom/usb/*.h` and the functions
+(`chip_usb_set_persist_flags` in particular) are the same shape.
+A real PR would need to thread the right per-SoC include block
+above the `machine_bootloader_rtc()` definition too — the include
+guard is currently `#if CONFIG_IDF_TARGET_ESP32S3` at line 224.
+
+**Verify before filing:**
+
+- Confirm the same gap exists at MicroPython HEAD (user's link earlier
+  pointed at commit `8ecd9950`; v1.26.0 is what's pinned locally, 1.28.0
+  was running on the board — re-check the latest MicroPython master
+  before filing so the PR is against current code, not a stale snapshot).
+- Verify the S2 ROM USB-CDC enumeration actually works after the
+  persist-flag write (no Espressif documentation we've read here, but
+  CP's behavior on the same silicon is the strongest evidence).
+- Build a fixed MP for LOLIN_S2_MINI locally, bench-test that
+  `machine.bootloader()` produces `/dev/cu.usbmodem01` within the
+  chumicro-deploy 8-second poll window — that's the only bench-side
+  proof that matters.
+
+**Filing target:** https://github.com/micropython/micropython/issues
+(new issue, then PR if a maintainer responds positively).  Keep the
+chumicro-side workaround (manual-entry prompt + helpful non-interactive
+error message in `workbench/deploy/src/chumicro_deploy/firmware.py`'s
+`_enter_esp32_rom_bootloader`) regardless — even after upstream lands,
+some users will be on old MP versions for a while.
+
+**Not blocking anything in chumicro.**  Current behavior is correct
+(try, fall back to manual); the upstream fix would just make the
+try-path succeed on more boards.
+
 ### Workspace-template `run.py` self-bootstrap pattern
 
 **Surfaced 2026-05-02 by the user** during the audit-of-the-audit
