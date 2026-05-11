@@ -23,13 +23,15 @@ of ``ticks_diff``.
 #: Source bundle / sdist only -- never lands on a device.
 __chumicro_runtimes__ = ("cpython",)
 
-# Define tick constants directly rather than importing from ticks.py.
-# On CircuitPython, const()-decorated private names in ticks.py may be
-# compiled away and not importable.  These are mathematical constants
-# (the 2**29 tick period) that cannot drift between modules.
-TICKS_PERIOD = 1 << 29
-TICKS_MAX = TICKS_PERIOD - 1
-TICKS_HALFPERIOD = TICKS_PERIOD // 2
+from chumicro_timing.ticks import (
+    _TICKS_HALFPERIOD as TICKS_HALFPERIOD,
+)
+from chumicro_timing.ticks import (
+    _TICKS_MAX as TICKS_MAX,
+)
+from chumicro_timing.ticks import (
+    _TICKS_PERIOD as TICKS_PERIOD,
+)
 
 
 class FakeTicks:
