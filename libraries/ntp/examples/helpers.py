@@ -75,6 +75,76 @@ import time
 
 _RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
 
+
+def _resolve_ticks_ms():
+    """Pick the best raw ms tick source available on this runtime.
+
+    Resolution order matches ``chumicro_timing.ticks._resolve_ticks_ms``:
+    ``supervisor.ticks_ms`` (CP 7+) > ``time.ticks_ms`` (MP) >
+    ``time.monotonic_ns`` > ``time.monotonic`` (final fallback).
+    Reimplemented inline so example helpers don't depend on
+    ``chumicro_timing`` (examples can only import their owning
+    library + its declared deps; ``chumicro_timing`` isn't always
+    declared, e.g. ``chumicro-ntp`` only depends on chumicro-sockets).
+    """
+    try:
+        import supervisor  # type: ignore[import-not-found]
+        candidate = getattr(supervisor, "ticks_ms", None)
+        if callable(candidate):
+            return candidate
+    except ImportError:
+        pass
+    candidate = getattr(time, "ticks_ms", None)
+    if callable(candidate):
+        return candidate
+    candidate = getattr(time, "monotonic_ns", None)
+    if callable(candidate):
+        return lambda: candidate() // 1_000_000
+    monotonic = time.monotonic
+    return lambda: int(monotonic() * 1000)
+
+
+_raw_ticks_ms = _resolve_ticks_ms()
+_TICKS_MAX = (1 << 29) - 1
+_TICKS_PERIOD = 1 << 29
+_TICKS_HALFPERIOD = _TICKS_PERIOD // 2
+
+
+def ticks_ms():
+    """Return a wrapping monotonic millisecond count in ``[0, 2**29 - 1]``.
+
+    Same shape as :func:`chumicro_timing.ticks_ms`.  Pass this value
+    to ``check`` / ``handle`` of any chumicro service so the time-base
+    matches the library's internal deadline math and per-request
+    timeouts compute correctly.  Reimplemented inline (rather than
+    importing :mod:`chumicro_timing`) so example helpers stay within
+    the "examples can only import their owning library + its declared
+    deps" rule across every library.
+    """
+    return _raw_ticks_ms() & _TICKS_MAX
+
+
+def ticks_add(ticks, delta):
+    """Add *delta* milliseconds to a wrapping tick value.
+
+    Mirrors :func:`chumicro_timing.ticks_add` — wraps at ``2**29``;
+    *delta* must be in ``(-2**28, +2**28)``.
+    """
+    if -_TICKS_HALFPERIOD < delta < _TICKS_HALFPERIOD:
+        return (ticks + delta) % _TICKS_PERIOD
+    raise OverflowError("ticks interval overflow")
+
+
+def ticks_diff(end, start):
+    """Signed millisecond difference *end* minus *start* with wraparound.
+
+    Mirrors :func:`chumicro_timing.ticks_diff` — correct as long as
+    the two values are within ``2**28`` ms (~3.1 days) of each other.
+    """
+    diff = (end - start) & _TICKS_MAX
+    return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
+
+
 #: Known CYW43-based MicroPython board identifiers (``os.uname().machine``).
 #: The CYW43 chip's aggressive idle power-save makes wifi connects take
 #: 30+ seconds; ``wlan.config(pm=0xa11140)`` disables it.  Add new entries

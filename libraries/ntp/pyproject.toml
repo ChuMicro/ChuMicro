@@ -14,6 +14,7 @@ authors = [
 ]
 dependencies = [
     "chumicro-sockets",
+    "chumicro-timing",
 ]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",

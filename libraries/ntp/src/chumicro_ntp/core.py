@@ -1,8 +1,7 @@
 """Core implementation for chumicro-ntp.
 
-See ``__init__`` for the public API summary.  This module is pure-Python,
-imports only ``time`` (for the default ticks function), and is identical
-on every supported runtime.
+See ``__init__`` for the public API summary.  This module is pure-Python
+and identical on every supported runtime.
 
 The client speaks **SNTP** — a strict subset of NTPv4 sufficient for
 "what time is it?" queries against any standard NTP server.  Stratum,
@@ -12,7 +11,8 @@ them should use a full NTP implementation (out of scope for embedded).
 Wire format reference: RFC 4330 §4.
 """
 
-import time
+from chumicro_timing import ticks_diff
+from chumicro_timing import ticks_ms as _module_ticks_ms
 
 #: Seconds between the NTP epoch (1900-01-01T00:00:00Z) and the
 #: Unix epoch (1970-01-01T00:00:00Z).  Constant since both epochs
@@ -31,19 +31,6 @@ _CLIENT_FIRST_BYTE = 0x23
 #: low three bits.  Tests check the mode rather than the whole
 #: byte because some servers echo VN!=4.
 _SERVER_MODE = 4
-
-
-def _default_ticks_ms() -> int:
-    """Return a millisecond tick value derived from ``time``.
-
-    Uses MicroPython's ``time.ticks_ms`` when available so the value
-    matches the runner contract on devices.  Falls back to
-    ``time.monotonic`` * 1000 on CPython.
-    """
-    runtime_ticks_ms = getattr(time, "ticks_ms", None)
-    if callable(runtime_ticks_ms):
-        return runtime_ticks_ms()
-    return int(time.monotonic() * 1000)
 
 
 class NTPError(OSError):
@@ -297,7 +284,7 @@ class NTPClient:
         self._server = server
         self._port = port
         self._timeout_ms = timeout_ms
-        self._ticks_ms = ticks_ms if ticks_ms is not None else _default_ticks_ms
+        self._ticks_ms = ticks_ms if ticks_ms is not None else _module_ticks_ms
         self._result: NTPResult | None = None
         # Pre-allocate the receive buffer so the hot path doesn't
         # allocate.  48 bytes is the SNTP packet size; larger buffers
@@ -392,7 +379,7 @@ class NTPClient:
             if errno in (11, 35, 10035):
                 # EAGAIN / EWOULDBLOCK / WSAEWOULDBLOCK — no data
                 # this tick.  Check the timeout instead.
-                elapsed_ms = now_ms - result.ticks_started_ms
+                elapsed_ms = ticks_diff(now_ms, result.ticks_started_ms)
                 if elapsed_ms >= self._timeout_ms:
                     result._fail(
                         NTPError(
@@ -405,7 +392,7 @@ class NTPClient:
             return
         if received_count == 0:
             # No data and no error — treat as "still waiting".
-            elapsed_ms = now_ms - result.ticks_started_ms
+            elapsed_ms = ticks_diff(now_ms, result.ticks_started_ms)
             if elapsed_ms >= self._timeout_ms:
                 result._fail(
                     NTPError(
