@@ -51,15 +51,6 @@ class _TaskEntry:
                  period_ms: int | None,
                  next_due_ms: int | None,
                  run_count: int | None) -> None:
-        """Create a task entry.
-
-        Args:
-            check_function: Optional check callable, or ``None``.
-            handler_function: Handler callable invoked when the task fires.
-            period_ms: Repeat interval in ms, or ``None``.
-            next_due_ms: First eligible tick value, or ``None``.
-            run_count: Remaining fires, or ``None`` for unlimited.
-        """
         self.check_function = check_function
         self.handler_function = handler_function
         self.period_ms = period_ms
@@ -79,12 +70,6 @@ class TaskHandle:
     """
 
     def __init__(self, entry: _TaskEntry, runner: "Runner") -> None:
-        """Create a handle wrapping *entry* owned by *runner*.
-
-        Args:
-            entry: Internal task record.
-            runner: Owning runner instance.
-        """
         self._entry = entry
         self._runner = runner
 
@@ -143,45 +128,18 @@ class TaskHandle:
 class Runner:
     """Run tasks on a tick-based schedule.
 
-    Captures ``ticks_ms()`` once per ``tick()`` call and passes
-    the shared timestamp to every due component, ensuring all components
-    see the same moment in time.
-
-    Registration paths:
-
-    - ``add(obj)`` — *obj* has ``.check(now_ms) -> bool`` and
-      ``.handle(now_ms)``.  The runner calls ``.check()``; if ``True``,
-      ``.handle()`` is queued.
-    - ``add(check_function, handler=function)`` — callable check gates
-      callable handler.
-    - ``add(handler=function)`` — handler fires every tick (or per period).
-    - ``add_periodic(handler, period_ms)`` — fires ``handler(now_ms)``
-      every *period_ms* milliseconds.
-
-    ``tick()`` runs in two phases:
-
-    1. Check all entries (period gate, then check gate) and collect
-       due handlers.
-    2. Batch-fire all collected handlers.
-
-    Period gating uses ``ticks_diff`` and ``ticks_add`` directly —
-    no ``Heartbeat`` objects are created internally.
+    Captures ``ticks_ms()`` once per ``tick()`` call and passes the
+    shared timestamp to every due component.  Registration paths are
+    documented on ``add()`` and ``add_periodic()``.
 
     Args:
         ticks: Optional tick source (must have ``ticks_ms``,
             ``ticks_diff``, and ``ticks_add`` methods).
             Defaults to the ``chumicro_timing`` module-level functions.
+            Tests pass ``FakeTicks`` from ``chumicro_timing.testing``.
     """
 
     def __init__(self, ticks: object | None = None) -> None:
-        """Create a runner.
-
-        Args:
-            ticks: Optional tick source (must have ``ticks_ms``,
-                ``ticks_diff``, and ``ticks_add`` methods).
-                Defaults to the ``chumicro_timing.ticks`` module.
-                Tests pass ``FakeTicks`` from ``chumicro_timing.testing``.
-        """
         self._entries = []
         self._pending = []
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
