@@ -22,6 +22,8 @@ This skill runs **orthogonally to `/audit-library`**. They look for different th
 
 Tag a finding `cross-skill` and escalate when it really belongs in the other audit.
 
+**Running both on the same library:** one at a time, never in parallel — they both write to `src/`, so concurrent passes would clobber each other. Default order is **`/audit-library` first**, then `/audit-embedded`. The general pass shrinks the surface (dead code, single-use helpers, cargo-cult methods, duplication), which makes the embedded pass cleaner — less code to grep for hot-path allocations, lazy-import candidates, and FAT-cluster math. The reverse works but produces more churn: if `/audit-embedded` consolidates files first, `/audit-library` then re-evaluates duplication against the merged shape. You don't have to run both on every library — pick based on what the library has accumulated since its last audit.
+
 ## Audit philosophy
 
 Minimum board class is 256 KB MCU RAM + 4 MB flash ([Decision 0015](../../../plans/decisions/0015-board-architecture-support.md)). Everything below follows from that:
