@@ -339,55 +339,18 @@ Few CircuitPython / MicroPython projects let you go from a fresh `git clone` to 
 
 ## Running tests
 
-ChuMicro's test setup runs at four levels.  Day-to-day iteration uses plain `pytest` from the repo root — it discovers tests based on where you are, picks up edits immediately, and works in IDE Testing-panel play buttons.  The root `pyproject.toml` + `conftest.py` handle imports, importlib mode for test-name collisions, and `functional_tests/` deselection automatically.
+ChuMicro tests at four layers — CPython unit tests, the same tests under MicroPython + CircuitPython unix-port builds, on-device functional tests on a connected board, and a full CI mirror.  Day-to-day iteration uses plain `pytest` from the repo root; the `chumicro-pytest-device` plugin transparently routes the unix-port + on-device layers through the same `pytest` invocation, so IDE play buttons work at file or function granularity across every layer.
 
 ```bash
-pytest libraries/timing/tests/                          # one library
-pytest libraries/timing/tests/test_heartbeat.py         # one file
-pytest libraries/timing/functional_tests/               # on-device — staged + run on a connected board via the chumicro-pytest-device plugin
+pytest libraries/timing/tests                            # CPython unit tests
+pytest libraries/ --target unix-port --runtime both      # MicroPython + CircuitPython unix-port
+pytest libraries/timing/functional_tests                 # on-device — staged onto a connected board
+python3 scripts/run.py preflight                         # full CI mirror (lint + every test layer + docs)
 ```
 
-For commit-gating runs, `python3 scripts/run.py <task>` wraps pytest in per-library subprocesses that enforce the coverage gates — this is the same entry point CI uses.
+First-time unix-port use: run `python3 scripts/run.py prepare-micropython` and `prepare-circuitpython` once to build the binaries under `.tools/` (gitignored, ~1 minute each).
 
-**Unit tests (CPython).**  Fast.  Run on your laptop in seconds.  Use these while iterating on library code:
-
-```bash
-pytest libraries/                              # full sweep across every library
-pytest libraries/timing libraries/mqtt         # scoped to specific libraries
-pytest libraries/timing/tests                  # one library
-pytest libraries/ -k test_heartbeat_poll       # filter by test name
-```
-
-For commit-gating runs with per-library coverage thresholds, `python3 scripts/run.py test` wraps these in per-package subprocesses (defaults to changed packages only; `--all` runs the full sweep) — same `pytest` invocations underneath, and the form CI runs.
-
-**Cross-runtime unit tests.**  Same library tests, executed inside MicroPython and CircuitPython's desktop builds ("unix ports").  Catches "works under CPython, breaks under MicroPython's tricks" before any code reaches a board.  The `chumicro-pytest-device` plugin's unix-port backend spawns one runtime subprocess per test file — same `pytest` invocation you use locally, just with a target flag.  IDE play buttons work at file or function granularity:
-
-```bash
-pytest libraries/ --target unix-port --runtime both           # MicroPython + CircuitPython
-pytest libraries/ --target unix-port --runtime micropython    # one runtime
-pytest libraries/timing/tests --target unix-port --runtime micropython  # one library
-pytest libraries/timing/tests/test_heartbeat.py --target unix-port --runtime micropython  # one file
-```
-
-First-time setup: run `python3 scripts/run.py prepare-micropython` and `prepare-circuitpython` once to build the unix-port binaries under `.tools/` (gitignored, ~1 minute each).  Subsequent `pytest` runs reuse the built binaries.
-
-**On-device functional tests.**  Runs real `pytest` test files on a **connected microcontroller**.  When `pytest` finds a test under a `functional_tests/` directory, the `chumicro-pytest-device` plugin stages the test source onto a board you've registered, runs it inside the device's Python runtime, and reports the result back to your pytest run — same interface as the host tests.  You'll need a board plugged in and registered (see [Deploying examples to a board](#deploying-examples-to-a-board) above):
-
-```bash
-pytest libraries/timing/functional_tests                  # one library on the configured device(s)
-pytest libraries/timing/functional_tests --runtime both   # both MicroPython + CircuitPython boards
-pytest libraries/*/functional_tests                       # every library's hardware-gated suite
-pytest workbench/*/functional_tests                       # workbench host-side tests that drive a board
-```
-
-For CI parity (PR-summary markdown, scope filters, runtime + device-id overrides resolved through `devices.yml` defaults), `python3 scripts/run.py test-libraries-functional` and `test-workbench-functional` wrap these.
-
-**Full CI mirror.**  The same gate CI runs on every commit — lint + every test layer + docs build + import-check of every shipped example:
-
-```bash
-python3 scripts/run.py preflight                   # everything that doesn't need hardware
-python3 scripts/run.py preflight --with-functional # also runs the on-device suites
-```
+Full reference — when to reach for the `run.py` wrappers (per-library coverage gates, parallel runtime phases, PR-summary markdown, scope-by-library / file / function), `devices.yml` setup, IDE play-button integration — lives in [CONTRIBUTING.md › Testing](CONTRIBUTING.md#testing).
 
 ## Workbench tools
 
