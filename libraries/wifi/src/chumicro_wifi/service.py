@@ -22,6 +22,7 @@ detection); ``handle(now_ms)`` does one tick of substrate work.
 
 import sys
 
+from chumicro_timing import ticks as _DEFAULT_TICKS
 from chumicro_wifi.config import WifiConfig
 from chumicro_wifi.state import WifiState
 
@@ -61,9 +62,10 @@ class WifiService:
             :class:`FakeWifiAdapter` to drive the state machine
             deterministically.
         ticks: Optional tick source — any object exposing
-            ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
-            the ``chumicro-timing`` contract).  When ``None``, the
-            real ``chumicro_timing.ticks`` helpers are used.
+            ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches the
+            ``chumicro_timing.ticks`` submodule shape).  Defaults to
+            that submodule (real clock); tests pass ``FakeTicks``
+            from ``chumicro_timing.testing``.
     """
 
     def __init__(
@@ -75,19 +77,11 @@ class WifiService:
     ) -> None:
         self._config = config
         self._adapter = adapter if adapter is not None else _select_adapter()
-        if ticks is not None:
-            self._ticks_ms = ticks.ticks_ms
-            self._ticks_diff = ticks.ticks_diff
-            self._ticks_add = ticks.ticks_add
-        else:
-            from chumicro_timing import ticks_add, ticks_diff, ticks_ms
-            self._ticks_ms = ticks_ms
-            self._ticks_diff = ticks_diff
-            self._ticks_add = ticks_add
+        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
 
         self._state = WifiState.DISCONNECTED
         self._last_error = None
-        self._next_attempt_due_ms = self._ticks_ms()
+        self._next_attempt_due_ms = self._ticks.ticks_ms()
         self._current_backoff_ms = config.reconnect_backoff_start_ms
         self._reconnect_attempts = 0
         self._state_callbacks = []
@@ -162,7 +156,7 @@ class WifiService:
             return False
         if self._state == WifiState.CONNECTED:
             return not self._adapter.is_linked()
-        return self._ticks_diff(now_ms, self._next_attempt_due_ms) >= 0
+        return self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) >= 0
 
     def handle(self, now_ms):
         """Drive the state machine forward.
@@ -184,7 +178,7 @@ class WifiService:
             self._transition(WifiState.CONNECTING)
 
         # CONNECTING or RECONNECTING — attempt the substrate connect.
-        if self._ticks_diff(now_ms, self._next_attempt_due_ms) < 0:
+        if self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) < 0:
             return  # too early; checked once more next tick
 
         self._attempt_connect(now_ms)
@@ -214,7 +208,7 @@ class WifiService:
             self._transition(WifiState.FAILED)
             return
 
-        self._next_attempt_due_ms = self._ticks_add(now_ms, self._current_backoff_ms)
+        self._next_attempt_due_ms = self._ticks.ticks_add(now_ms, self._current_backoff_ms)
         self._current_backoff_ms = min(
             self._current_backoff_ms * 2,
             self._config.reconnect_backoff_max_ms,
