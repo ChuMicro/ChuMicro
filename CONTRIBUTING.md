@@ -172,7 +172,7 @@ A passing preflight is the bar for opening a PR.
 
 Every library has a per-library coverage gate (85% by default, configured in each library's `pyproject.toml`).  If your tests don't exercise enough lines, `run.py test` fails with the `Missing` column showing exactly which lines need coverage.
 
-Two thresholds exist: humans target the 85% baseline; AI agents pass `--coverage-threshold 94` to a higher gate.  This is set up automatically — you don't choose.
+You don't need to opt in — `pytest` and preflight apply the gate automatically.  Agent-driven workflows run against a stricter version of the same gate, which the tooling switches to on its own.
 
 The [cheat sheet](docs/contributing/cheat-sheet.md) has the command for browsing covered vs uncovered lines as an HTML report.
 
@@ -278,7 +278,7 @@ Rebasing keeps history linear and avoids merge commits cluttering the PR.  See [
 
 ## Preflight in depth
 
-`python scripts/run.py preflight` is the one command this guide asks you to memorise.  It runs three of the four test layers covered in [Testing](#testing) below — CPython unit tests, the same tests under MicroPython and CircuitPython unix-port builds, and example-import checks — plus lint, docs, and version gates.  On-device functional tests are opt-in (`--with-functional`).  A few things worth knowing about how preflight behaves:
+`python scripts/run.py preflight` is the one command this guide asks you to memorise.  It runs the automated checks from the [Testing](#testing) section below — CPython unit tests, the same tests under MicroPython and CircuitPython unix-port builds, and example-import checks — plus lint, docs, and version gates.  On-device functional tests are opt-in (`--with-functional`).  A few things worth knowing about how preflight behaves:
 
 ### When to run it
 
@@ -319,7 +319,7 @@ Docs-only PRs and trivial typo fixes can skip the full preflight — CI handles 
 
 ## Testing
 
-ChuMicro tests at four layers.  Each catches a different class of bug; together they make it hard for a regression to reach a user.  Preflight runs the first three on every commit; the fourth (manual example runs on a real board) is opt-in but worth it before a release.
+ChuMicro tests at four layers.  Each catches a different class of bug; together they make it hard for a regression to reach a user.  Preflight runs the automated layers (unit tests, cross-runtime unit tests, example-import checks) on every commit; the hardware-touching parts (on-device functional tests, manual example deploys) are opt-in.
 
 ### Unit tests (CPython)
 
