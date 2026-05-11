@@ -96,6 +96,7 @@ from chumicro_workspace.deploy_source import (
 )
 from chumicro_workspace.deploy_targets import read_deploy_targets
 from chumicro_workspace.example_source import example_source
+from chumicro_workspace.example_verify import verify_examples
 from chumicro_workspace.flatten import flatten_config
 from chumicro_workspace.import_graph import (
     build_search_paths,
@@ -188,5 +189,6 @@ __all__ = [
     "update_device_address",
     "update_device_hardware",
     "validate_runtime_config",
+    "verify_examples",
     "write_runtime_config",
 ]
