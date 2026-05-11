@@ -51,21 +51,6 @@ class FakeTicks:
         """
         self._current_ms = start_ms
 
-    @property
-    def current_ms(self) -> int:
-        """Return the raw internal counter (unmasked).
-
-        Prefer ``ticks_ms()`` for values that match the production
-        contract.  This property exists for backward compatibility
-        and for tests that need to inspect the raw counter.
-        """
-        return self._current_ms
-
-    @current_ms.setter
-    def current_ms(self, value: int) -> None:
-        """Set the raw internal counter."""
-        self._current_ms = value
-
     def advance(self, amount_ms: int) -> None:
         """Move the clock forward by *amount_ms* milliseconds.
 
