@@ -15,6 +15,15 @@ the user and the device.  Per-line:
 3. Other lines ship to the device; subsequent serial output
    prints back to the user.
 
+Key bindings mirror ``mpremote repl`` and the passthrough TUI:
+
+- ``Ctrl-C`` forwards ``\\x03`` to the device — interrupts a
+  runaway loop, returns the friendly REPL to ``>>>``.  The local
+  input buffer is cleared at the same time.
+- ``Ctrl-D`` at an empty prompt forwards ``\\x04`` — soft-reboots
+  the runtime.
+- ``Ctrl-X`` exits line mode without touching the device.
+
 History is persistent at
 ``~/.chumicro-repl/history/<sanitized-address>/history.txt`` so a
 session on ``back-porch`` doesn't pollute one on ``greenhouse``.
@@ -38,7 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO, cast
 
-from ._serial import SerialPort, TimeSource
+from ._serial import CTRL_C, CTRL_D, SerialPort, TimeSource
 from .completion import CompletionCache, build_default_completer
 from .framing import Utf8StreamDecoder
 from .highlight import DEFAULT_THEME, Theme
@@ -46,6 +55,7 @@ from .patterns import StreamingPatternDetector
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from prompt_toolkit import PromptSession
+    from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 
 #: Per-line drain window — how long to wait after sending a line
 #: for the device to print its response before re-prompting.  The
@@ -391,6 +401,81 @@ def _split_command(line: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Key bindings — mirror passthrough TUI / mpremote conventions
+# ---------------------------------------------------------------------------
+
+
+class _ExitLineMode(Exception):  # noqa: N818 — internal control-flow sentinel, not a user-facing error
+    """Internal sentinel — Ctrl-X raises this from a key binding so the
+    main loop exits without rebooting the device."""
+
+
+def _forward_ctrl_c(port: SerialPort) -> None:
+    """Send ``\\x03`` to the device.
+
+    Standard friendly-REPL convention: the runtime raises
+    :class:`KeyboardInterrupt` and unwinds the current statement, so
+    a runaway ``while True: print(...)`` snippet stops printing and
+    returns control to ``>>>``.  Harmless when nothing's running.
+    """
+    port.write(CTRL_C)
+
+
+def _forward_ctrl_d(port: SerialPort) -> None:
+    """Send ``\\x04`` to the device.
+
+    Triggers a soft reboot of the runtime — MicroPython prints
+    ``MPY: soft reboot``, CircuitPython rewinds silently.  Only bound
+    when the local input buffer is empty (matches every shell on
+    earth: Ctrl-D on a non-empty line is a no-op).
+    """
+    port.write(CTRL_D)
+
+
+def build_line_mode_key_bindings(port: SerialPort) -> KeyBindings:
+    """Build the prompt_toolkit key-binding table for line mode.
+
+    Matches the passthrough TUI exactly:
+
+    * ``Ctrl-C`` forwards to the device (interrupts a running
+      program).  Local input buffer is cleared so the prompt is fresh
+      on the next iteration.
+    * ``Ctrl-D`` (at an empty prompt) forwards to the device
+      (soft-reboot).
+    * ``Ctrl-X`` exits line mode locally without touching the device.
+
+    Imported lazily — prompt_toolkit is only loaded when line mode is
+    actually entered.
+    """
+    from prompt_toolkit.application import get_app  # noqa: PLC0415
+    from prompt_toolkit.filters import Condition  # noqa: PLC0415
+    from prompt_toolkit.key_binding import KeyBindings  # noqa: PLC0415
+
+    bindings = KeyBindings()
+
+    @Condition
+    def _buffer_empty() -> bool:
+        return not get_app().current_buffer.text
+
+    @bindings.add("c-c")
+    def _on_ctrl_c(event: KeyPressEvent) -> None:
+        _forward_ctrl_c(port)
+        event.app.current_buffer.reset()
+        event.app.exit(result="")
+
+    @bindings.add("c-d", filter=_buffer_empty)
+    def _on_ctrl_d(event: KeyPressEvent) -> None:
+        _forward_ctrl_d(port)
+        event.app.exit(result="")
+
+    @bindings.add("c-x")
+    def _on_ctrl_x(event: KeyPressEvent) -> None:
+        event.app.exit(exception=_ExitLineMode())
+
+    return bindings
+
+
+# ---------------------------------------------------------------------------
 # Drain helpers
 # ---------------------------------------------------------------------------
 
@@ -558,13 +643,19 @@ def run_line_mode(
     while True:
         try:
             line = session.prompt(prompt)
-        except (EOFError, KeyboardInterrupt):
+        except _ExitLineMode:
             output.write("\nline-mode: bye\n")
             output.flush()
             return 0
-        if not line:
-            continue
-        if line.startswith(COMMAND_PREFIX):
+        except (EOFError, KeyboardInterrupt):
+            # EOFError fires when the underlying stdin closes (test stub
+            # exhausting its script, no controlling tty).  KeyboardInterrupt
+            # only reaches here if a SIGINT slips past our key binding —
+            # the c-c handler normally converts it to an empty-line return.
+            output.write("\nline-mode: bye\n")
+            output.flush()
+            return 0
+        if line.startswith(COMMAND_PREFIX) and line:
             name, rest = _split_command(line)
             handler = command_table.get(name)
             if handler is None:
@@ -577,23 +668,17 @@ def run_line_mode(
             keep_running = handler(context, rest)
             if not keep_running:
                 return 0
-            _drain_serial(
-                port,
-                output=output,
-                decoder=decoder,
-                detector=detector,
-                theme=active_theme,
-                time=active_time,
-                window_seconds=drain_window_seconds,
-                settle_seconds=drain_settle_seconds,
-            )
-            continue
-        try:
-            context.send_line(line)
-        except OSError as error:  # pragma: no cover — port dropped mid-line
-            output.write(f"line-mode: write failed: {error!r}\n")
-            output.flush()
-            return 1
+        elif line:
+            try:
+                context.send_line(line)
+            except OSError as error:  # pragma: no cover — port dropped mid-line
+                output.write(f"line-mode: write failed: {error!r}\n")
+                output.flush()
+                return 1
+        # Empty line (Enter on blank, or Ctrl-C / Ctrl-D forwarded a byte
+        # via the key binding) falls through to drain so the device's
+        # response — KeyboardInterrupt traceback, soft-reboot banner —
+        # surfaces before the next prompt.
         _drain_serial(
             port,
             output=output,
@@ -632,6 +717,7 @@ def _build_prompt_session(
     return PromptSession(
         history=FileHistory(str(history_file)),
         completer=completer,  # type: ignore[arg-type]
+        key_bindings=build_line_mode_key_bindings(port),
     )
 
 
@@ -652,5 +738,8 @@ def format_line_mode_banner(*, address: str) -> str:
         f"chumicro-repl line mode — {address}\n"
         f"history: {history}\n"
         f"  :help     list commands\n"
-        f"  :quit     exit (Ctrl-D / Ctrl-C also work)\n"
+        f"  :quit     exit\n"
+        f"  Ctrl-X    exit\n"
+        f"  Ctrl-C    interrupt running program on device\n"
+        f"  Ctrl-D    soft-reboot device (at empty prompt)\n"
     )
