@@ -66,9 +66,9 @@ class Device:
             at deploy time.
 
     The CIRCUITPY drive (CP flash-mode deploys) is auto-resolved at
-    deploy time via :func:`_circuitpy_volume_candidates` and verified against
-    the board's identity via :meth:`CircuitpythonTransport._verify_drive_for_board`,
-    so no per-device drive path is configured here.
+    deploy time by scanning the host's mount points and matching the
+    connected board's UID / machine string against each candidate's
+    ``boot_out.txt``, so no per-device drive path is configured here.
     """
 
     transport: str
