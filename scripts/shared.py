@@ -201,6 +201,23 @@ def install_workspace(python: Path | None = None) -> int:
     if result != 0:
         return result
 
+    # Editable installs drop `.pth` files into the target's site-packages,
+    # but those are normally consumed by site.py at interpreter startup —
+    # not when they appear mid-process.  On a fresh-venv bootstrap that
+    # means `chumicro_workspace` (and every other editable library) is
+    # uninstallable into the running process's sys.path until we
+    # explicitly re-process the .pth files.  Refresh here so the
+    # generate_config_files + sync_ide imports below resolve.
+    #
+    # Only applies when we're installing into the running interpreter;
+    # cross-interpreter installs would need to subprocess the post-install
+    # steps into the target instead.
+    if python is None or Path(python).resolve() == Path(sys.executable).resolve():
+        import site
+
+        for site_packages in site.getsitepackages():
+            site.addsitedir(site_packages)
+
     # Late imports — these modules are part of the workspace itself
     # (not third-party deps), but deferring keeps shared.py importable
     # on a fresh clone before requirements-dev have been installed.
