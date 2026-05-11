@@ -149,12 +149,12 @@ Per-board status from live verification:
 
 | Runtime + board | TLS server | Notes |
 |---|---|---|
-| CircuitPython on ESP32-S2 | ✅ Works | ~6 KB context + ~35 KB handshake heap. |
+| CircuitPython on ESP32-S2 | ✅ Works | Bench-tested ~5 KB heap for `SSLContext` + `load_cert_chain` + `wrap_socket(server_side=True)` on a listening socket (RSA-2048 self-signed cert).  Each incoming connection adds heap during handshake — leave tens of KB of headroom. |
 | CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `wrap_socket(server_side=True) + accept()` raises `OSError(32)` mid-handshake AND wedges the CYW43 chip's station-mode state until USB power-cycle. Use ESP32-family for HTTPS on CP. |
 | MicroPython on ESP32-S2 / S3 | ✅ Works | Hardware-accelerated; ~1 KB heap. |
 | MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key required; ECC keys fail at context build. |
 
-The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)` — budget for a ~100–500 ms listener stall during accept.  After the handshake, the server's per-connection state machine resumes its runner-friendly progression.
+The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)` — the listener stalls until the handshake completes (single-digit to tens of milliseconds on the supported board class with a local TLS client; longer on a slow uplink as TLS rounds-trip).  After the handshake, the server's per-connection state machine resumes its runner-friendly progression.
 
 ## Memory notes
 
