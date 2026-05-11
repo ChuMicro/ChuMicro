@@ -358,21 +358,16 @@ python3 scripts/run.py test --libraries timing,mqtt # scoped to specific librari
 python3 scripts/run.py test -k test_heartbeat_poll  # filter by test name
 ```
 
-**Cross-runtime unit tests.**  Same library tests, executed inside MicroPython and CircuitPython's desktop builds ("unix ports").  Catches "works under CPython, breaks under MicroPython's tricks" before any code reaches a board.  The `chumicro-pytest-device` plugin's unix-port backend spawns one runtime subprocess per test file, so the same `pytest` invocation works at file or function granularity — IDE play buttons too.  Runs all three runtimes in parallel via the wrapper:
+**Cross-runtime unit tests.**  Same library tests, executed inside MicroPython and CircuitPython's desktop builds ("unix ports").  Catches "works under CPython, breaks under MicroPython's tricks" before any code reaches a board.  The `chumicro-pytest-device` plugin's unix-port backend spawns one runtime subprocess per test file — same `pytest` invocation you use locally, just with a target flag.  IDE play buttons work at file or function granularity:
 
 ```bash
-python3 scripts/run.py test-all-runtimes           # CPython + MicroPython + CircuitPython
-python3 scripts/run.py test-micropython            # MicroPython unix-port only
-python3 scripts/run.py test-circuitpython          # CircuitPython unix-port only
+pytest libraries/ --target unix-port --runtime both           # MicroPython + CircuitPython
+pytest libraries/ --target unix-port --runtime micropython    # one runtime
+pytest libraries/timing/tests --target unix-port --runtime micropython  # one library
+pytest libraries/timing/tests/test_heartbeat.py --target unix-port --runtime micropython  # one file
 ```
 
-Or invoke `pytest` directly for IDE-friendly per-file runs:
-
-```bash
-pytest libraries/timing/tests --target unix-port --runtime micropython
-```
-
-The first run builds the unix-port binaries under `.tools/` (gitignored, ~1 minute); subsequent runs reuse them.
+First-time setup: run `python3 scripts/run.py prepare-micropython` and `prepare-circuitpython` once to build the unix-port binaries under `.tools/` (gitignored, ~1 minute each).  Subsequent `pytest` runs reuse the built binaries.
 
 **On-device functional tests.**  Runs real `pytest` test files on a **connected microcontroller**.  When `pytest` finds a test under a `functional_tests/` directory, the `chumicro-pytest-device` plugin stages the test source onto a board you've registered, runs it inside the device's Python runtime, and reports the result back to your pytest run — same interface as the host tests.  You'll need a board plugged in and registered (see [Deploying examples to a board](#deploying-examples-to-a-board) above):
 

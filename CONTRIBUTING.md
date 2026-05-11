@@ -310,7 +310,7 @@ Preflight prints `FAIL` followed by the failing step.  Common patterns:
 - **`ruff check` errors** — code style violation.  Click the file:line in your terminal (if your terminal supports it) or open the file at that line; the error message tells you what's wrong.
 - **`griffe warnings detected`** — docstring formatting issue.  Usually a missing type annotation on a function signature or a malformed `Args:` / `Returns:` section.
 - **`check-version` failure** — you changed library source under `src/` but didn't bump the library's `VERSION` file.  Edit `libraries/<name>/VERSION` (patch bump is usually right) and re-run.
-- **Cross-runtime test failure** — your test passes under CPython but fails under MicroPython or CircuitPython.  Reproduce locally with `python scripts/run.py test-micropython` / `test-circuitpython`, or scope to one library via `pytest libraries/<name>/tests --target unix-port --runtime <X>`.  Usual culprits: `typing` imports (not available on devices), `from __future__` imports (no `__future__` module on devices), relative imports in library code (break CircuitPython RAM-mode deploys).
+- **Cross-runtime test failure** — your test passes under CPython but fails under MicroPython or CircuitPython.  Reproduce locally with `pytest libraries/<name>/tests --target unix-port --runtime <X>`.  Usual culprits: `typing` imports (not available on devices), `from __future__` imports (no `__future__` module on devices), relative imports in library code (break CircuitPython RAM-mode deploys).
 
 ### Coverage failure on code you didn't touch
 
@@ -351,19 +351,15 @@ Add a unit test when you add code.  The per-library coverage gate fails prefligh
 
 ### Cross-runtime unit tests
 
-The same unit tests, run under MicroPython and CircuitPython's "unix port" builds — desktop versions of the device runtimes that catch "works on CPython, breaks on the device" before code reaches a board.
+The same unit tests, run under MicroPython and CircuitPython's "unix port" builds — desktop versions of the device runtimes that catch "works on CPython, breaks on the device" before code reaches a board.  Same `pytest` invocation you use locally, just with a target flag:
 
 ```bash
-python scripts/run.py test-all-runtimes
+pytest libraries/ --target unix-port --runtime both
 ```
 
-The wrapper resolves (or auto-builds) the unix-port binary, then delegates to `pytest libraries/.../tests --target unix-port --runtime <X>` — the `chumicro-pytest-device` plugin spawns one runtime subprocess per test file.  Same plugin that drives on-device functional tests below, so the mental model is uniform: pytest is the front door for every layer.  For IDE-friendly per-file runs, invoke `pytest` directly:
+The `chumicro-pytest-device` plugin spawns one runtime subprocess per test file — same plugin that drives on-device functional tests below, so the mental model is uniform: pytest is the front door for every layer.  IDE play buttons reach the unix-port lane via a run configuration that adds `--target unix-port --runtime <X>`.
 
-```bash
-pytest libraries/timing/tests --target unix-port --runtime micropython
-```
-
-The first run builds the unix-port binaries under `.tools/` (gitignored, about a minute); subsequent runs reuse them.  CI runs the same sweep on every push, so contributors without unix-port builds locally still get the protection.
+First-time setup: `python scripts/run.py prepare-micropython` and `prepare-circuitpython` build the unix-port binaries under `.tools/` (gitignored, about a minute each); subsequent `pytest` runs reuse them.  CI runs the same sweep on every push, so contributors without unix-port builds locally still get the protection.
 
 These tests catch the runtime-specific gotchas — `typing` imports that don't exist on devices, `from __future__` imports that fail there, relative imports that break CircuitPython RAM-mode deploys, library quirks in the device standard libraries.
 
@@ -548,7 +544,7 @@ A short troubleshooting checklist before reaching for help — most stuck moment
 ### Tests pass locally but fail in CI
 
 1. Was your local run on the changed package only?  Run `python scripts/run.py preflight` (full sweep) to reproduce.
-2. Is the failure under MicroPython or CircuitPython?  Reproduce locally with `python scripts/run.py test-micropython` / `test-circuitpython` (or scope to one library via `pytest libraries/<name>/tests --target unix-port --runtime <X>`).
+2. Is the failure under MicroPython or CircuitPython?  Reproduce locally with `pytest libraries/<name>/tests --target unix-port --runtime <X>`.
 3. Did you forget to commit a file?  `git status` shows untracked files.
 
 ### `prepare_workspace.py` fails on a fresh clone
