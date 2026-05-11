@@ -41,6 +41,7 @@ Read top-to-bottom and flag every place you stumble.
 * **Cross-references that don't help a cold read.**  *"see Decision 0047"*, *"per CHU009"*, *"`plans/workstreams/foo.md`"* — these are internal navigation.  Inline a one-line summary instead.
 * **Assumed context.**  *"When you ran the X command above"* — confirm X was actually shown above with the right name.
 * **Implicit "we"** — *"we ship X"* in a public README assumes the reader is on the team.  Rephrase.
+* **Audience-split mentions of mono-repo-only tooling.**  Library and workbench READMEs serve **two audiences**: PyPI / circup / mip consumers (just want to use the package) and mono-repo contributors (have the workspace cloned).  Mentions like *"register a board with `chumicro-workspace add-device`"* are useful to the second but confusing to the first.  Flag every reference to mono-repo-only CLIs (`chumicro-workspace`, `python scripts/run.py`, `chumicro-deploy`) in a published library / workbench README and ask: *"can a PyPI installer act on this?  If not, prefix with 'In the [mono-repo](url)…' or move to the dev-contributing section."*
 
 ### 2. AI-tic word audit
 
@@ -84,18 +85,25 @@ User-facing docs should not expose internal metrics or development jargon.
 
 ### 5. Verify load-bearing technical claims
 
-Sweeping technical claims need bench verification.  For each, decide: verify or soften.
+Claims a reader might rely on need verification before they ship.  Stratify by stakes:
 
+**Bench-test (deploy a probe to a real board)** when the claim is *behavioural / cross-runtime / security-significant*:
 * **Cross-runtime claims** — does it work the same on CircuitPython, MicroPython, and CPython?  Runtime defaults often differ silently.  Today's example: *"built-in trust store validates against major public CAs"* — true on CP (firmware-bundled `x509-crt-bundle`), **false on MP** (`ssl.wrap_socket` with no context skips verification entirely).  Caught by deploying an `expired.badssl.com` probe to all four boards.
 * **Default-behavior claims** — *"X validates by default"*, *"Y auto-reconnects"*.  Verify with a deliberate failure case (expired cert, broker offline, etc.).
 * **Performance claims** — *"fast"*, *"in seconds"*, specific numbers.  Either measure or remove.
-* **Compatibility claims** — *"works on every board with ≥ 256 KB / 4 MB"* — at minimum, list the families actually tested.
 
-If a claim can't be verified, soften to a capability mention (*"supports TLS"* instead of *"validates TLS by default"*) or remove.  If the gap is structural, file it as a research item under `plans/next-up.md` → `## Investigations` and roll back the claim in the doc.
+**Source-read verify** (grep / Read tool, no hardware) when the claim is *API-surface / pure-Python*:
+* **API-shape claims** — *"`Heartbeat.period_ms` is read-only"*, *"`X.from_config` accepts empty dict"*.  Verify by reading the class source.
+* **Compatibility claims** — *"works on every board with ≥ 256 KB / 4 MB"* — at minimum, list the families actually tested.
+* **Detection-table claims** — *"`supervisor.ticks_ms` on CircuitPython 7+; `time.ticks_ms` on MicroPython"* — verify by reading the detection logic.
+
+If a claim can't be verified, soften to a capability mention (*"supports TLS"* instead of *"validates TLS by default"*) or remove.  If the gap is structural and worth fixing in code, file it as a research item under `plans/next-up.md` → `## Investigations` and roll back the claim in the doc.
 
 ### 6. Structural flow
 
-The cold reader's question arc — order sections to match:
+Two different cold-reader arcs depending on what the doc is.
+
+**Project / mono-repo README** (a multi-library or framework-scale README):
 
 1. **What is this?** — hero (logo + title + tagline + nav) + intro paragraphs
 2. **What's special about it?** — differentiators bullet block (often before code so the reader knows whether to keep reading)
@@ -109,12 +117,27 @@ The cold reader's question arc — order sections to match:
 10. **Contributing**
 11. **License**
 
+**Single-library / package README** (one publishable package):
+
+Simpler arc — the tagline carries the differentiator, so no separate "What makes X different" block is usually needed.
+
+1. **What is this?** — hero (title + short tagline + 1–2 sentence description)
+2. **How do I install it?** — install section (the first thing a PyPI / circup / mip reader looks for)
+3. **What does it look like?** — quick example, runs as-is on the relevant runtimes
+4. **What's available?** — API inventory (Tick functions / Heartbeat / Testing tables, or whatever the public surface is)
+5. **Related libraries** — *"if you need X, also see Y"* pointers
+6. **Reference** — platform support tables, runnable-examples table, links to hosted docs + PyPI / bundle
+7. **Developing this library** — contributing notes (audience-split: PyPI consumers can ignore this; mono-repo contributors use it)
+8. **License** — at minimum a one-line footer linking to the parent repo's LICENSE so PyPI consumers reading the rendered README see the license
+
 Common reorderings worth checking:
 
 * **Install too low** — if it's after Libraries / Tools, readers can't try the code shown earlier.  Move Install right after the first code samples.
 * **Pitch too low** — if differentiators come after the inventory, readers may leave before being convinced.  Consider above code samples.
 * **Project-template too early** — readers haven't seen what real use looks like yet.  Defer until after libraries + workflow sections.
 * **Status section mixing two concerns** — *"## Status & contributing"* with one paragraph about development status and another about how to contribute usually wants to be split (or the status content removed entirely if it just reads as a hedge).
+* **Library README missing License footer** — PyPI's rendered README is often the only license artefact a user sees from the package.  At minimum a one-line `## License — [MIT](https://github.com/.../LICENSE)` pointer.
+* **Library README's contributing section assumes mono-repo context** — mentioning `chumicro-workspace add-device` without telling the PyPI reader they need the mono-repo cloned creates a context cliff.  Prefix the section or split the audience.
 
 ### 7. Visual layout consistency
 
