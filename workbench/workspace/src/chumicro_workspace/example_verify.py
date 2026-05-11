@@ -9,9 +9,9 @@ a non-CPython runtime (CircuitPython or MicroPython) — verify only
 ``chumicro_*`` imports; platform built-ins (``board``, ``digitalio``,
 ``machine``, ``wifi``, ``network``) are skipped because they won't
 resolve on the host running the verifier.  The explicit marker is
-the contract per Decision 0037 §6 — filename conventions
-(``circuitpython_*.py`` / ``micropython_*.py``) are for human
-discoverability only and have no bearing on the verification path.
+the contract — filename conventions (``circuitpython_*.py`` /
+``micropython_*.py``) are for human discoverability only and have
+no bearing on the verification path.
 
 Examples may import sibling modules from their own ``examples/``
 directory (e.g. a per-library ``helpers.py``).  Each example's parent
@@ -139,7 +139,7 @@ def verify_examples(
 
     1. Parse the file.  Syntax errors fail it.
     2. Detect whether it's hardware-only via the
-       ``__chumicro_runtimes__`` marker (Decision 0037 §6).
+       ``__chumicro_runtimes__`` marker.
     3. Walk imports — every ``chumicro_*`` import must resolve.
        Non-``chumicro_`` imports must resolve only on non-hardware files;
        hardware files skip them so platform built-ins don't fail on the host.

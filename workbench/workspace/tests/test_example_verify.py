@@ -179,10 +179,10 @@ class TestVerifyExamples:
     ) -> None:
         """A ``circuitpython_*.py`` file without the marker is treated as universal.
 
-        Per Decision 0037 §6, the filename prefix is convention only —
-        the explicit ``__chumicro_runtimes__`` marker is the contract.
-        Without the marker, ``board`` doesn't resolve on the host and
-        the verifier reports a failure.
+        The filename prefix is convention only — the explicit
+        ``__chumicro_runtimes__`` marker is the contract.  Without
+        the marker, ``board`` doesn't resolve on the host and the
+        verifier reports a failure.
         """
         package_dir = self._make_package(tmp_path)
         (package_dir / "examples" / "circuitpython_blink.py").write_text(
