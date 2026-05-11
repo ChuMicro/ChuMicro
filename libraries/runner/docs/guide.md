@@ -252,7 +252,6 @@ tick():
 
 ## Memory notes
 
-- `_TaskEntry` and `TaskHandle` use `__slots__` to minimize per-instance memory.
 - Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.
 - No `collections.deque` or ring buffers are required.
 

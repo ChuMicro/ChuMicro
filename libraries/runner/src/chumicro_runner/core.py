@@ -46,11 +46,6 @@ class _TaskEntry:
             iteration can skip it safely.
     """
 
-    __slots__ = (
-        "check_function", "handler_function", "period_ms", "next_due_ms",
-        "run_count", "active",
-    )
-
     def __init__(self, check_function: object | None,
                  handler_function: object,
                  period_ms: int | None,
@@ -82,8 +77,6 @@ class TaskHandle:
     Read-only properties expose the current state for inspection and
     testing.
     """
-
-    __slots__ = ("_entry", "_runner")
 
     def __init__(self, entry: _TaskEntry, runner: "Runner") -> None:
         """Create a handle wrapping *entry* owned by *runner*.
@@ -179,8 +172,6 @@ class Runner:
             ``ticks_diff``, and ``ticks_add`` methods).
             Defaults to the ``chumicro_timing`` module-level functions.
     """
-
-    __slots__ = ("_entries", "_pending", "_ticks")
 
     def __init__(self, ticks: object | None = None) -> None:
         """Create a runner.
