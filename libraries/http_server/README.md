@@ -70,14 +70,6 @@ while True:
 | `parse_query` / `split_target` | URL helpers. |
 | `ServerError` + subclasses | Typed exception hierarchy (subclasses `chumicro_requests.HttpError`). |
 
-v1 ships end-to-end: listener + parser + canned response,
-`@server.route` decorator + JSON helpers + multi-method dispatch,
-bounded multi-connection + per-tick budgets + `request_timeout_ms`,
-and live-board verification on Pi Pico W.
-
-v1 non-goals: WebSockets, sessions / cookies / auth helpers, multipart
-upload, sub-app mounting, async handlers.
-
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.  Pure Python; depends
@@ -141,5 +133,10 @@ Before running functional tests, register a board with `chumicro-workspace add-d
 ## Find this library
 
 - **PyPI:** [chumicro-http-server](https://pypi.org/project/chumicro-http-server/)
-- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_http_server)
+- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_http_server) (CircuitPython & MicroPython)
+- **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/chumicro_http_server)
 - **Source:** [libraries/http_server](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server)
+
+## License
+
+[MIT](https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE)
