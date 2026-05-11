@@ -3,7 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Levelled logging for chumicro libraries — runner-friendly, no chumicro deps.
+**Standalone, stdlib-shaped levels, ChuMicro-shaped I/O.**
+
+Stdlib-compatible level constants (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`) and per-logger thresholds with parent-name resolution — drop-in for code that already speaks `logging`.  The runner-friendly bit lives in `BufferedHandler`, which splits formatting (hot path) from I/O (drained on the runner tick) so log lines never stall your control loop.
 
 <br clear="left">
 
@@ -70,9 +72,13 @@ Test helpers in `chumicro_logging.testing`:
 | `RecordingHandler` | Captures records in a list for assertions. |
 | `FailingHandler` | Raises on every `emit` — exercises error paths. |
 
+## Where this fits
+
+Leaf — no upstream ChuMicro deps, and by policy no other ChuMicro library imports `chumicro-logging` (decoration / observability libraries stay out of each other's dependency graphs).  Apps wire it in by passing a logger to libraries that accept an optional `logger=` parameter.
+
 ## Platform support
 
-Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No chumicro dependencies and **no other chumicro library imports it** — by policy, decoration / observability libraries don't appear in another library's dependency graph.  Apps wire logging in by passing the logger to libraries that accept an optional `logger=` parameter.
+Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.
 
 ## Examples
 
@@ -81,17 +87,17 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No ch
 | [`examples/stream_handler.py`](examples/stream_handler.py) | Logger + StreamHandler at INFO threshold. |
 | [`examples/buffered_runner.py`](examples/buffered_runner.py) | BufferedHandler decoupling a hot loop from I/O via runner-shaped check / handle. |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-logging` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

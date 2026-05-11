@@ -3,7 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Cross-runtime TCP + TLS + UDP sockets for CircuitPython, MicroPython, and CPython.  One protocol per shape, one factory each, runtime-appropriate adapters underneath.
+**One TCP / TLS / UDP socket surface across CircuitPython, MicroPython, and CPython.**
+
+One factory per socket shape (`tcp_client_socket`, `tls_client_socket`, `tcp_listening_socket`, `udp_socket`, …) hides the per-runtime adapter selection.  Custom-CA TLS, server-side certs, and an in-memory `FakeSocket` for downstream library tests are all included.
 
 <br clear="left">
 
@@ -65,6 +67,10 @@ without hitting the network.
 | `UnsupportedSSLConfigError` | Raised when the requested TLS shape isn't supported by the current runtime (e.g. CP's in-memory cert+key). |
 | `chumicro_sockets.testing.FakeSocket` / `FakeUDPSocket` | In-memory test doubles covering the full TCP / UDP protocol. |
 
+## Where this fits
+
+Depends on [`chumicro-timing`](../timing/) for ticks; uses [`chumicro-wifi`](../wifi/)'s radio on CircuitPython for transport.  Substrate for every networked library that follows: [`chumicro-requests`](../requests/), [`chumicro-http-server`](../http_server/), [`chumicro-mqtt`](../mqtt/), [`chumicro-websockets`](../websockets/), and [`chumicro-ntp`](../ntp/).
+
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.
@@ -77,17 +83,17 @@ Works on CPython, MicroPython, and CircuitPython.
 | [`tls_with_custom_ca.py`](examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
 | [`udp_echo_client.py`](examples/udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking.  Cross-runtime (CP + MP). |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-sockets` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

@@ -108,6 +108,10 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 | `FakeSerialPort` | Scriptable pyserial substitute for `CircuitpythonTransport` tests |
 | `FakeTime` | Deterministic clock for `Deployer` / transport / `flash_firmware` tests |
 
+## Where this fits
+
+Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `mpremote` for transport).  Sister of [`chumicro-repl`](../repl/), substrate for [`chumicro-workspace`](../workspace/) and [`chumicro-pytest-device`](../pytest-device/).
+
 ## Companion: chumicro-repl
 
 [`chumicro-repl`](../repl/) is the sister workbench tool for opening interactive serial sessions and tailing the friendly REPL after a deploy.  Both packages consume the same `devices.yml` schema (owned here in `chumicro_deploy.config.default`), so a single workspace file points both at the same boards.  Use `chumicro_repl.tail(device, seconds)` to follow a deploy and fail-fast on a traceback; use `chumicro_repl.ReplSession(device)` for headless test fixtures over raw REPL.
@@ -121,17 +125,17 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 | `import_graph_deploy.py` | `ImportGraphSource` AST-walk — ships only modules the entrypoint actually imports |
 | `demo_recovery_hand_holding.py` | Interactive walk through every `DeployFailureKind` recovery scenario against real hardware |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
+Working on `chumicro-deploy` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>` (or hand-write a `devices.yml` entry).
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>` (or hand-write a `devices.yml` entry).
 
 ## Docs
 

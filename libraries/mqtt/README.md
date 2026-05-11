@@ -3,7 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Non-blocking MQTT 3.1.1 client (QoS 0 + 1)** for CircuitPython, MicroPython, and CPython.  Runner-shaped: `check(now_ms) -> bool` + `handle(now_ms)` from your tick loop — your LED keeps blinking through CONNECT, SUBSCRIBE, PUBLISH, and PUBACK round-trips.  Built on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) (ticks).
+**A non-blocking MQTT 3.1.1 client (QoS 0 + 1) that fits inside your runner tick.**
+
+QoS 0 + QoS 1, last-will, retain, pattern-routed handlers, and a structured oversized-message policy — runner-shaped, no threads, no async.  A configurable per-tick recv budget keeps a 100 KB inbound blob from monopolising the loop, and failed QoS-1 publishes roll back the packet-id allocation cleanly on backpressure.  Built on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) (ticks).
 
 <br clear="left">
 
@@ -75,6 +77,10 @@ Two `MQTTClient(...)` constructor knobs let you trade tick fairness for throughp
 
 A naive `recv_into` loop without `recv_budget_per_tick` can starve cooperative tasks when the kernel TCP buffer is full.
 
+## Where this fits
+
+Depends on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) for ticks.  Used directly in app code; no other ChuMicro library depends on it.
+
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.
@@ -85,14 +91,9 @@ Works on CPython, MicroPython, and CircuitPython.
 |---|---|
 | [`telemetry.py`](examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Reads wifi + broker config from `runtime_config.msgpack` (chumicro-workspace) with constants fallback.  Broker host/port must be set explicitly — the library refuses to silently dial a third-party broker.  Cross-runtime (CP + MP). |
 
-## Configuring wifi + broker for examples and functional tests
+## Wiring wifi + broker config for examples and functional tests
 
-Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials (and optionally a broker override).  Two paths, depending on whether you're using a `chumicro-workspace`:
-
-* **With a workspace (recommended).**  Put wifi + broker config in your workspace's gitignored `workspace.yml` and per-project `config.toml`, run `chumicro-workspace deploy <project>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The telemetry example reads `[wifi]` for credentials and `[telemetry]` for the broker host/port/topic — see the example file for keys.
-* **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` / `BROKER_HOST` / `BROKER_PORT` / `TOPIC` constants near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
-
-The library itself never reads either source — it takes a `chumicro-sockets` socket and goes.  The config wiring is application-layer.
+The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials and a broker host / port.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths — the `telemetry` example reads `[wifi]` for credentials and `[telemetry]` for the broker host / port / topic.  The library itself never reads TOML — it takes a `chumicro-sockets` socket and goes; config wiring is application-layer.
 
 ## Memory + leak testing
 
@@ -100,17 +101,17 @@ The host-side suite under `tests/test_memory_pressure.py` uses `tracemalloc` to 
 
 For real-board fragmentation testing, `.scratch/run_mqtt_perf.py` deploys a long-running publish/subscribe loop that samples `gc.mem_free()` periodically.  Verified live: 5-minute soak on Pi Pico W MP at 1 Hz publish, 299 publishes + 299 received, **0 bytes net heap drift**.  All four supported boards (Lolin S2 CP/MP, Pi Pico W CP/MP) pass the 30 s drift check.
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-mqtt` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

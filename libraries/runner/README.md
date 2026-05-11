@@ -3,11 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Tick-based scheduling that's debuggable from `print()`.**
+**Tick-based scheduling without `async`. Every state change is one `print()` away.**
 
-`runner.tick()` runs every registered service once on a shared timestamp.  Each service is one object with `check(now_ms)` + `handle(now_ms)`; your loop is six lines.  Every state change shows up in the order you wrote.
-
-Every networked library in ChuMicro ([wifi](../wifi/), [sockets](../sockets/), [mqtt](../mqtt/), [requests](../requests/), [http_server](../http_server/), [websockets](../websockets/)) is shaped to register here — your LED can keep blinking through a TLS handshake, a slow HTTP response, or a stalled MQTT peer because every one of them gets the same fair share of every tick.
+Register your services once, call `runner.tick()` in your main loop, and each one gets a turn each tick.  Every networked library in ChuMicro ([wifi](../wifi/), [sockets](../sockets/), [mqtt](../mqtt/), [requests](../requests/), [http_server](../http_server/), [websockets](../websockets/)) registers here — your LED keeps blinking through TLS handshakes, slow HTTP responses, and stalled peers because every service gets a fair share of every tick.
 
 We picked tick-based over an event loop because transparent state matters more than syntactic concurrency on a board where serial output is your only window.  Works on CircuitPython, MicroPython, and CPython.  Built on [chumicro-timing](../timing/).
 
@@ -223,9 +221,9 @@ runner.tick()
 assert recorder.calls == [100]
 ```
 
-## Dependencies
+## Where this fits
 
-Runner depends on [timing](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for its tick source and tick arithmetic (`ticks_diff`, `ticks_add`). All three package managers resolve this automatically — just install `chumicro-runner` and timing comes along.
+Depends on [`chumicro-timing`](../timing/) for the tick source.  Every networked library in ChuMicro registers here — [`wifi`](../wifi/), [`sockets`](../sockets/), [`requests`](../requests/), [`http_server`](../http_server/), [`mqtt`](../mqtt/), [`websockets`](../websockets/) — so the runner lives at the centre of any multi-service app.
 
 ## Platform support
 
@@ -245,17 +243,17 @@ All classes use only basic Python features. Works identically on CPython, MicroP
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 | `micropython_button_led.py` | Button-gated LED on MicroPython |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
+Working on `chumicro-runner` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

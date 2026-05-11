@@ -3,7 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Tiny mutable key-value store for persisted runtime state — counters, timestamps, tokens, retry budgets — across CircuitPython, MicroPython, and CPython.  **Not** a config system; for declarative config, use `chumicro-config`.
+**A persistent dict for counters, timestamps, and tokens that need to survive a reboot.**
+
+A dict-shaped store with `commit()` semantics.  Auto-detects the right backend per runtime (NVM on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory for tests), bounds writes with `commit_if_changed()` so unchanged state doesn't wear the flash, and surfaces capacity and corruption honestly.  Not a config system — for declarative settings see [`chumicro-config`](../config/).
 
 <br clear="left">
 
@@ -50,6 +52,10 @@ print(store["boot_count"])             # → 1, 2, 3, … across power cycles
 | `KVStoreFull` / `KVStoreCorrupt` / `KVStoreReadOnly` | Targeted exceptions |
 | `chumicro_kvstore.testing.FakeKVStore` | Drop-in for downstream tests with capacity + corruption hooks |
 
+## Where this fits
+
+Leaf — no upstream ChuMicro deps.  Used directly in app code; no other ChuMicro library depends on it.
+
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.
@@ -60,17 +66,17 @@ Works on CPython, MicroPython, and CircuitPython.
 |---|---|
 | [`boot_counter.py`](examples/boot_counter.py) | Boot counter persisted across reboots; auto-detect picks the right backend per runtime |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+Working on `chumicro-kvstore` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

@@ -121,6 +121,10 @@ Two sources merge:
 
 The round-trip's friendly-banner reprint is consumed by the fetcher's read-until-`>>> ` so it never leaks into the rendered output.  See `fetch_device_names()` in `chumicro_repl.completion` if you're embedding the round-trip in your own session shape.
 
+## Where this fits
+
+Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `prompt_toolkit`).  Sister of [`chumicro-deploy`](../deploy/); used by [`chumicro-workspace`](../workspace/) for deploy-and-tail flows.
+
 ## Companion: chumicro-deploy
 
 [`chumicro-deploy`](../deploy/) is the sister workbench tool for pushing code onto a board, probing identity, and flashing firmware.  Both packages consume the same `devices.yml` schema (owned in `chumicro_deploy.config.default`), so a single workspace file points both at the same boards.  Typical flow: `Deployer.deploy(source)` writes the payload, then `tail(device, seconds=10)` follows the board for first-cycle output.
@@ -132,15 +136,17 @@ The round-trip's friendly-banner reprint is consumed by the fetcher's read-until
 | `tail_after_deploy.py` | Programmatic deploy → tail with traceback fail-fast |
 | `demo_repl_robustness.py` | Walks the interactive TUI through unplug / replug / Ctrl-C scenarios — manual demo of the auto-reconnect + retry behaviour |
 
-## Developing this library
+## Contributing
+
+Working on `chumicro-repl` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

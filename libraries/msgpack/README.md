@@ -3,11 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Compact [MessagePack](https://msgpack.org) serialization — much smaller than JSON.**
+**Binary serialization that's typically 30–50 % smaller than JSON.**
 
-Turns Python dicts, lists, and values into binary bytes, typically 30–50% smaller than JSON. Good for NVM storage, serial protocols, and anywhere bytes matter. Works on CircuitPython, MicroPython, and CPython.
-
-**Wire-compatible with standard MessagePack.** chumicro-msgpack writes a strict 32-bit-int / 16-bit-length subset of the [MessagePack spec](https://github.com/msgpack/msgpack/blob/master/spec.md) — its bytes are valid msgpack that any spec-compliant reader (PyPI `msgpack`, CircuitPython native, Go, JS, Rust, etc.) can decode. The subset is what fits on a small board: integers in `[-2^31, 2^32-1]`, single-precision floats, payload sizes under 65 536. On CircuitPython boards with the native `msgpack` C module, encoding/decoding delegates to the built-in — the pure-Python code is never loaded, saving ~700 bytes of heap.
+The subset of [MessagePack](https://msgpack.org) that fits on a 256 KB board — 32-bit ints, single-precision floats, 16-bit lengths.  Wire-compatible with the PyPI `msgpack` library when it's configured for the same subset (`use_single_float=True`); on CircuitPython firmware that ships the native `msgpack` C module, encoding and decoding delegate to the C path automatically.
 
 <br clear="left">
 
@@ -96,6 +94,10 @@ data = msgpack.packb(obj, use_single_float=True)
 
 `use_single_float=True` switches PyPI msgpack from `float64` to `float32`, matching what chumicro reads.  This is what [`chumicro-workspace`](../../workbench/workspace) uses to write `runtime_config.msgpack` for the device.
 
+## Where this fits
+
+Leaf — no upstream ChuMicro deps.  Used directly by [`chumicro-config`](../config/) to decode `/runtime_config.msgpack` on the device, and by host-side workspace tooling to write it.
+
 ## Platform support
 
 | Runtime | Implementation |
@@ -115,17 +117,17 @@ data = msgpack.packb(obj, use_single_float=True)
 | `stream_roundtrip.py` | Use the stream-based `pack` / `unpack` API with `BytesIO` |
 | `circuitpython_nvm_settings.py` | Store and load settings in non-volatile memory (hardware) |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
+Working on `chumicro-msgpack` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 
