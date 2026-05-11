@@ -1,6 +1,6 @@
 # chumicro-runner
 
-**Tick-based scheduling that's debuggable from `print()`.**
+**Tick-based scheduling for CircuitPython, MicroPython, and CPython — debuggable from `print()`.**
 
 `runner.tick()` runs every registered service once on a shared timestamp.  Each service is one object with `check(now_ms)` + `handle(now_ms)`; your loop is six lines.  Every state change shows up in the order you wrote.
 
@@ -31,6 +31,9 @@ while True:
 
 [← All ChuMicro Libraries](../../)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) · [PyPI](https://pypi.org/project/chumicro-runner/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) · \
+[PyPI](https://pypi.org/project/chumicro-runner/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>

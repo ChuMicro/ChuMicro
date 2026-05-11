@@ -2,14 +2,7 @@
 
 ## Overview
 
-`chumicro-requests` is a non-blocking HTTP/1.1 client built on
-`chumicro-sockets`. The canonical entry point is `HttpClient`, a runner-shaped
-object whose `check(now_ms)` / `handle(now_ms)` methods drive the request
-forward one tick at a time. The LED-blink invariant: an LED keeps
-blinking on the same board while a request is in flight, in a TLS
-handshake, or mid-timeout against a stalled peer. The library is single-in-flight
-in v1 — a second `client.get(...)` while another request is running raises
-`HttpBusyError`.
+`chumicro-requests` is a non-blocking HTTP/1.1 client built on `chumicro-sockets`.  `HttpClient` is the single entry point for every verb — its `check(now_ms)` / `handle(now_ms)` methods drive the request forward one tick at a time.  An LED keeps blinking on the same board while a request is in flight, in a TLS handshake, or mid-timeout against a stalled peer.  The library is single-in-flight today — a second `client.get(...)` while another request is running raises `HttpBusyError`.
 
 ## Getting started
 
@@ -165,9 +158,9 @@ supported board class (256 KB MCU RAM) in **flash deploy mode**. RAM-mode
 keeps the entire library bootstrap on the heap for the duration of the
 test, leaving < 50 KB for mbedTLS handshake — `ssl_context.wrap_socket(...)`
 then fails with `OSError(12)` (ENOMEM). Larger-heap boards (ESP32-S3 with
-> 200 KB free heap after wifi) can run HTTPS in RAM-mode; the four-board
-canonical matrix (Pi Pico W CP/MP, Lolin S2 CP/MP) needs flash-mode for
-HTTPS specifically.
+> 200 KB free heap after wifi) can run HTTPS in RAM-mode; smaller-heap
+boards in the supported class (Pi Pico W, Lolin S2 / ESP32-S2 family) need
+flash-mode for HTTPS specifically.
 
 ### TLS context — bring your own CA
 
@@ -192,20 +185,13 @@ mbedTLS `CERT_REQUIRED` checks the cert validity window against the device
 clock. A board with no RTC battery and no NTP boots at 2021-01-01 (or epoch),
 which is "before" every modern cert's `not_valid_before` field — handshake
 fails with `ValueError("certificate validity starts in the future")`.
-Standard fix on MP: `import ntptime; ntptime.settime()` after wifi is up.
-On CP: an NTP query over `socketpool` (e.g. `adafruit_ntp`). The chumicro
-workspace will eventually bake this into a `chumicro-ntp` library; until
-then it's the caller's responsibility.
+Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the device clock from a public NTP server before the TLS handshake.  Cross-runtime, non-blocking, takes a UDP socket you provide.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
 | `periodic_get.py` | Periodic GET on a real CP/MP board — wifi up, hits a configured URL every N seconds, drives an LED-blink counter to verify the request never blocks the loop.  Cross-runtime (CP + MP). |
-
-## What's new
-
-*No changes yet — this section will be updated with each release.*
 
 ---
 

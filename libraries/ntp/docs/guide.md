@@ -21,22 +21,18 @@ object that satisfies `chumicro_sockets.UDPSocket`.  Tests inject
 socket either directly or via the
 `chumicro_ntp.sockets_factory.chumicro_sockets_factory()` helper.
 
-Per the ChuMicro library-dependency policy:
+A few notes on dependencies:
 
-- `chumicro-sockets` is a **hard dep** — single `pip install
-  chumicro-ntp` brings the stack.
-- The default-wiring helper lives in a **separate submodule**
-  (`chumicro_ntp.sockets_factory`) — apps with a custom transport
-  don't pull `chumicro-sockets` into their deploy graph.
-- No `chumicro-events` or `chumicro-logging` deps; the library
-  exposes no callbacks (the result handle is the observation
-  surface).
+- `chumicro-sockets` is a hard dependency — `pip install chumicro-ntp` brings the whole stack.
+- The default-wiring helper lives in a separate submodule (`chumicro_ntp.sockets_factory`).  Apps that supply their own UDP socket don't import the helper, so `chumicro-sockets` doesn't get deployed to the device for those apps.
+- No `chumicro-events` or `chumicro-logging` deps.  The library exposes no callbacks — the result handle returned by `query()` is the observation surface.
 
 ## Getting started
 
 ```python
 from chumicro_ntp import NTPClient
 from chumicro_ntp.sockets_factory import chumicro_sockets_factory
+from chumicro_timing import ticks_ms
 
 sock = chumicro_sockets_factory(radio=wifi.adapter.radio)
 sock.setblocking(False)
@@ -45,8 +41,9 @@ client = NTPClient(socket=sock, server="pool.ntp.org")
 request = client.query()
 
 while not request.done:
-    if client.check(now_ms()):
-        client.handle(now_ms())
+    now = ticks_ms()
+    if client.check(now):
+        client.handle(now)
 
 if request.error is not None:
     print(f"NTP failed: {request.error}")
@@ -71,12 +68,7 @@ from chumicro_ntp import NTPClient
 client = NTPClient(socket=my_custom_udp_socket, server="my.lan.ntp")
 ```
 
-The deploy-graph walker never enters `chumicro_ntp.sockets_factory`
-in this case, so `chumicro-sockets` is not shipped to the device.
-This is the structural reason the helper lives in its own submodule:
-the import-graph deploy walker only ships modules that are actually
-imported, so a custom-transport app pays no `chumicro-sockets`
-on-device cost.
+An app that supplies its own UDP socket never imports `chumicro_ntp.sockets_factory`, so `chumicro-sockets` doesn't get deployed to the device — the on-device cost drops to just `chumicro-ntp` itself.
 
 ## Runner pattern
 
@@ -112,23 +104,9 @@ sync).
 
 ## Platform notes
 
-Runs identically on CPython, MicroPython, and CircuitPython.  The
-default tick source is `chumicro_timing.ticks_ms` (a wrapping
-millisecond counter that resolves to the right substrate for each
-runtime — `supervisor.ticks_ms` on CP, `time.ticks_ms` on MP,
-`time.monotonic_ns` on CPython); inject a custom callable via the
-`ticks_ms=` constructor kwarg if you have your own time source.
-All UDP work goes through the injected socket — `chumicro-sockets`
-already hides the per-runtime adapter chase.
+Runs identically on CPython, MicroPython, and CircuitPython.  The default tick source is `chumicro_timing.ticks_ms` (a wrapping millisecond counter that picks the right underlying call per runtime: `supervisor.ticks_ms` on CircuitPython, `time.ticks_ms` on MicroPython, `time.monotonic_ns` on CPython).  Inject a custom callable via the `ticks_ms=` constructor kwarg if you have your own time source.  All UDP work goes through the injected socket, so `chumicro-sockets` hides the per-runtime adapter chase.
 
-The same NTPClient shape worked on:
-
-- Pi Pico W (rp2040) on CircuitPython 10.2.0 + MicroPython 1.28.0
-- Lolin S2 Mini (ESP32-S2) on CircuitPython 10.2.0 + MicroPython 1.28.0
-
-Each board's `functional_tests/test_real_ntp.py` ran a real query
-against `pool.ntp.org`, parsed the response, and asserted the
-returned timestamp falls inside the 2024-2030 plausibility window.
+Tested on real CircuitPython and MicroPython boards with live `pool.ntp.org` queries before each release; returned timestamps validated against a 2024-2030 plausibility window.
 
 ## Failure modes
 
@@ -152,10 +130,6 @@ returned timestamp falls inside the 2024-2030 plausibility window.
 | Example | What it shows |
 |---|---|
 | [`examples/ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/ntp_query.py) | Real query against `pool.ntp.org` from a wifi-capable board (CircuitPython or MicroPython). |
-
-## What's new
-
-*No changes yet — this section will be updated with each release.*
 
 ---
 

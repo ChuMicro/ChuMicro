@@ -100,11 +100,20 @@ print(f"JSON:    {json_size} bytes")
 
 Unsupported types raise `TypeError`.  Integers outside the 32-bit range raise `OverflowError`.
 
+## Memory notes
+
+The two API shapes have different allocation behavior:
+
+* **Stream-based (`pack` / `unpack`)** writes incrementally to your file-like and reads incrementally from it, so there's no intermediate buffer.  Preferred on memory-tight boards.
+* **Bytes-based (`packb` / `unpackb`)** builds a `bytearray`, grows it as encoding proceeds, then copies it to `bytes`.  Convenient for small payloads (typical settings dicts) — for large payloads or tight loops, switch to the stream-based path to avoid the temporary copy.
+
+`unpackb` accepts `bytes`, `bytearray`, and `memoryview`, so you can decode directly from a pre-allocated buffer without copying.
+
 ## Platform notes
 
 | Runtime | What happens |
 |---|---|
-| CircuitPython (hardware) | Native C `msgpack` module handles all four functions.  The pure-Python encoder (`_pure.py`) is never imported — saves ~700 bytes of heap RAM. |
+| CircuitPython (hardware) | Native C `msgpack` module handles all four functions.  The pure-Python encoder (`_pure.py`) is never imported, keeping heap usage lower on memory-tight boards. |
 | CircuitPython (unix port) | Native module is not compiled in; uses the pure-Python encoder. |
 | MicroPython | Pure-Python encoder (MicroPython has no built-in msgpack). |
 | CPython | Pure-Python encoder (CPython's `msgpack` is a third-party PyPI package, not stdlib). |
@@ -113,11 +122,7 @@ The wire format is identical regardless of which implementation is used — data
 
 ## Wire-format compatibility with PyPI `msgpack`
 
-`chumicro_msgpack.packb(obj)` produces bytes byte-for-byte identical to
-`msgpack.packb(obj, use_single_float=True)` for any subset-conforming
-input.  This is the load-bearing fact that lets a host-side workbench
-package import PyPI `msgpack` while the device-side payload uses
-`chumicro_msgpack` — they share a wire format with zero conversion.
+`chumicro_msgpack.packb(obj)` produces bytes byte-for-byte identical to `msgpack.packb(obj, use_single_float=True)` for any subset-conforming input.  This lets a host-side tool encode with PyPI `msgpack` while the device decodes with `chumicro_msgpack` — same wire format, no conversion step.
 
 The subset is:
 
@@ -127,34 +132,10 @@ The subset is:
 * Strings, bytes, arrays, and maps with sizes under `65_536`.
 * No ext types.
 
-The decoder names the offending tag in its `ValueError` if a stricter
-encoder produces something outside the subset — for example,
-`"float64 (0xcb) not in chumicro msgpack subset; encode with
-msgpack.packb(obj, use_single_float=True)"`.  Two recurring sharp edges
-this avoids:
+The decoder names the offending tag in its `ValueError` if a stricter encoder produces something outside the subset — for example, `"float64 (0xcb) not in chumicro msgpack subset; encode with msgpack.packb(obj, use_single_float=True)"`.  Two sharp edges this avoids:
 
-1. **PyPI's default float encoding is float64.**  Without
-   `use_single_float=True`, `msgpack.packb(0.5)` emits `0xcb` + 8 bytes,
-   which `chumicro_msgpack.unpackb` rejects.
-2. **CPython sees PyPI msgpack via the same `import msgpack`.**  An
-   earlier version of `chumicro_msgpack/__init__.py` did
-   `try: from msgpack import pack, unpack` on every runtime — on CPython
-   that succeeded against the PyPI package and silently switched the
-   encoder to one that produced float64 / int64 / strict_map_key bytes.
-   The native delegation is now gated to
-   `sys.implementation.name == "circuitpython"`.
-
-If you ever see a similar pattern elsewhere (`try: import <X>` where
-`<X>` is a CPython PyPI package name with a different contract from a
-device-side library), flag it.
-
-## What's new
-
-<!-- Add entries for user-visible changes when bumping VERSION.
-     One bullet per change. Internal refactors don't need entries.
-     At stable promotion, collapse/edit as needed. -->
-
-- **0.1.23**: CI and documentation improvements.
+1. **PyPI's default float encoding is float64.**  Without `use_single_float=True`, `msgpack.packb(0.5)` emits `0xcb` + 8 bytes, which `chumicro_msgpack.unpackb` rejects.
+2. **Native delegation is gated to CircuitPython only.**  On CPython, `import msgpack` would resolve to the PyPI package (with a different contract — float64, int64, `strict_map_key`), so `chumicro_msgpack` only delegates to the native C module when `sys.implementation.name == "circuitpython"`.  Other runtimes use the pure-Python encoder bundled in `_pure.py`.
 
 ---
 
@@ -162,6 +143,9 @@ device-side library), flag it.
 
 [← Home](index.md)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) · [PyPI](https://pypi.org/project/chumicro-msgpack/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) · \
+[PyPI](https://pypi.org/project/chumicro-msgpack/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>

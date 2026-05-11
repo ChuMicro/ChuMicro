@@ -1,0 +1,56 @@
+# Testing Helpers
+
+<!-- GENERATION INSTRUCTIONS — delete this block once the page is written.
+
+     This page documents the fakes in the package's `testing` submodule.
+     If this workbench tool does NOT expose injectable services that
+     downstream consumers need to fake, delete all testing-helper refs:
+       1. Delete this file (`docs/testing.md`)
+       2. Delete `src/{import_name}/testing.py`
+       3. Remove the `- Testing Helpers: testing.md` line from `mkdocs.yml`
+       4. Remove the Testing Helpers link from `docs/index.md`
+       5. Remove the Testing helpers link from `README.md`
+
+     Workbench tools that accept dependencies via constructor injection
+     (subprocess, serial port, filesystem) should provide ready-made
+     fakes so downstream tests don't have to invent their own mocks. -->
+
+`{import_name}.testing` provides ...
+
+## Usage
+
+<!-- Show a realistic test snippet using the fake.  Import from the
+     public testing submodule.  Use descriptive variable names. -->
+
+```python
+from {import_name}.testing import Fake...
+
+def test_example():
+    ...
+```
+
+## Usage from other packages
+
+Other workbench tools that depend on `chumicro-{name}` can import the fakes directly:
+
+```python
+from {import_name}.testing import Fake...
+```
+
+Workbench tools that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.
+
+## API Reference
+
+::: {import_name}.testing
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/{name}) · \
+[PyPI](https://pypi.org/project/chumicro-{name}/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
+
+</div>

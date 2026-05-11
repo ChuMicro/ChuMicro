@@ -1,9 +1,8 @@
 # chumicro-requests
 
-Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.
-Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks): an
-LED keeps blinking on the same board while a request is in flight, in a TLS
-handshake, or mid-timeout against a stalled peer.
+**Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.**
+
+An LED keeps blinking on the same board while a request is in flight, in a TLS handshake, or mid-timeout against a stalled peer.  Built on `chumicro-sockets` and `chumicro-timing`.
 
 ## Quick example
 
@@ -15,8 +14,9 @@ client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio
 handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
 while not handle.done:
-    if client.check(ticks_ms()):
-        client.handle(ticks_ms())
+    now = ticks_ms()
+    if client.check(now):
+        client.handle(now)
 
 response = handle.result   # raises HttpError on failure
 print(response.status_code, response.headers["content-type"])

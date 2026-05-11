@@ -108,20 +108,15 @@ The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat/e
 | `partial_keyword_override.py` | Freeze keyword args, override at call time |
 | `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
 
-## What's new
-
-<!-- Add entries for user-visible changes when bumping VERSION.
-     One bullet per change. Internal refactors don't need entries.
-     At stable promotion, collapse/edit as needed. -->
-
-- **0.1.23**: CI and documentation improvements.
-
 ---
 
 <div class="chumicro-footer" markdown>
 
 [← Home](index.md)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat) · [PyPI](https://pypi.org/project/chumicro-compat/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat) · \
+[PyPI](https://pypi.org/project/chumicro-compat/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>

@@ -39,14 +39,6 @@
      | Example | What it shows |
      Note which are simulated (CPython) vs hardware. -->
 
-## What's new
-
-<!-- Add entries for user-visible changes when bumping VERSION.
-     One bullet per change. Internal refactors don't need entries.
-     At stable promotion, collapse/edit as needed. -->
-
-*No changes yet — this section will be updated with each release.*
-
 ---
 
 <div class="chumicro-footer" markdown>

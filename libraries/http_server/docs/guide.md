@@ -4,7 +4,6 @@
 
 `chumicro-http-server` is a non-blocking HTTP/1.1 server that runs on CircuitPython, MicroPython, and CPython.  Each connection is a state machine the server advances one chunk per tick — an LED keeps blinking, a control loop keeps running, sensor reads keep happening, all while requests are being served.  Built on `chumicro-sockets` (TCP listener + accepted client sockets) and `chumicro-timing` (ticks) only; no `async`, no threads, no `chumicro-requests` dependency on the device.
 
-
 ## Getting started
 
 A minimal, hello-world server with one route:
@@ -25,11 +24,29 @@ def index(request):
     return build_response(200, html="<h1>Hello from a Pi Pico W</h1>")
 
 while True:
-    if server.check(ticks_ms()):
-        server.handle(ticks_ms())
+    now = ticks_ms()
+    if server.check(now):
+        server.handle(now)
 ```
 
 `listener_factory` is a callable — the listener opens lazily on the first `handle()` call so construction is side-effect-free and unit-testable against a `FakeSocket`.
+
+## Runner pattern
+
+`HttpServer` implements the runner contract (`check(now_ms)` / `handle(now_ms)`) — register it with `chumicro_runner.Runner` and it gets ticked alongside your other services:
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add(server)
+runner.add_periodic(led_blink, period_ms=500)
+
+while True:
+    runner.tick()
+```
+
+`check(now_ms) -> bool` reports whether the server has work pending; `handle(now_ms)` does at most one tick of progress, capped by the per-connection budgets below.
 
 ## Routing
 
@@ -61,7 +78,7 @@ Method dispatch:
 
 * Path matched, method matched → handler runs.
 * Path matched, method not registered → automatic `405 Method Not Allowed` with an `Allow:` header.
-* Path not matched → 404, or fall through to a bare `handler=` callable if you set one (catch-all shape, slice-7a-style).
+* Path not matched → 404, or fall through to a bare `handler=` callable if you set one (catch-all — useful for a static-file fallback or single-page app).
 
 ## `Request` and `Response`
 
@@ -151,17 +168,11 @@ Works identically on CPython, MicroPython, and CircuitPython.  The `chumicro-soc
 
 | Example | What it shows |
 |---|---|
-| [`examples/simple_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/simple_server.py) | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes; drive it with `curl` from your laptop.  Cross-runtime (CP + MP); runtime marker gates hardware-only deploys.  For a two-board (server + client) pattern, see the workspace template's `two_board_handshake/` example. |
+| [`examples/simple_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/simple_server.py) | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes; drive it with `curl` from your laptop.  Cross-runtime (CP + MP); runtime marker gates hardware-only deploys. |
 
-## v1 non-goals
+## Not included
 
-WebSockets, sessions / cookies / auth helpers, multipart upload, sub-app mounting, async handlers.  Out of scope for the v1 surface; reopen if a real consumer needs them.
-
-## What's new
-
-- **0.1.2**: TLS-server matrix surfaced; doc + framing fixes.
-- **0.1.1**: Routing decorator + per-tick budgets + multi-connection support.
-- **0.1.0**: Initial library — listener + parser + canned response (slice 7a).
+WebSockets, sessions / cookies / auth helpers, multipart upload, sub-app mounting, async handlers — out of scope for now.  Reach for [`chumicro-websockets`](https://chumicro.github.io/ChuMicro/websockets/stable/) for the websocket case.
 
 ---
 

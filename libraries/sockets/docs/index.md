@@ -1,13 +1,16 @@
 # chumicro-sockets
 
-Cross-runtime TCP + TLS client sockets.  One protocol, one factory, runtime-appropriate adapters for CircuitPython (`socketpool`), MicroPython (`socket` + `ssl`), and CPython (stdlib).
+**Cross-runtime TCP + TLS client sockets for CircuitPython, MicroPython, and CPython.**
+
+One protocol, one factory, runtime-appropriate adapters underneath — CircuitPython's `socketpool`, MicroPython's `socket` + `ssl`, CPython's stdlib.
 
 ## Quick example
 
 ```python
-from chumicro_sockets import tcp_client_socket, tls_client_socket
+from chumicro_sockets import tcp_client_socket
 
-sock = tcp_client_socket("broker.example.com", 1883, radio=wifi_radio_or_none)
+# On CircuitPython pass `radio=wifi.radio` here; MP / CPython ignore the kwarg.
+sock = tcp_client_socket("broker.example.com", 1883, radio=None)
 sock.send(b"PING\r\n")
 buffer = bytearray(64)
 nbytes = sock.recv_into(buffer, 64)

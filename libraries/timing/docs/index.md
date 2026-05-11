@@ -1,6 +1,6 @@
 # chumicro-timing
 
-Cross-runtime millisecond tick helpers and periodic timing utilities for CircuitPython, MicroPython, and CPython.
+**Cross-runtime millisecond tick helpers and periodic timing for CircuitPython, MicroPython, and CPython.**
 
 All timing is non-blocking — nothing in this library calls `time.sleep()`.
 
@@ -30,6 +30,9 @@ while True:
 
 [← All ChuMicro Libraries](../../)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) · [PyPI](https://pypi.org/project/chumicro-timing/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) · \
+[PyPI](https://pypi.org/project/chumicro-timing/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>

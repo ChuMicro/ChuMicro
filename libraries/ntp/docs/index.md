@@ -1,19 +1,23 @@
 # chumicro-ntp
 
-Runner-shaped SNTP client over an injected UDP socket — pure-Python, cross-runtime.
+**Non-blocking SNTP client for CircuitPython, MicroPython, and CPython.**
+
+Pure-Python, takes a UDP socket you provide, returns the server's transmit timestamp without blocking your tick loop.
 
 ## Quick example
 
 ```python
 from chumicro_ntp import NTPClient
 from chumicro_ntp.sockets_factory import chumicro_sockets_factory
+from chumicro_timing import ticks_ms
 
 sock = chumicro_sockets_factory(radio=wifi.adapter.radio)
 client = NTPClient(socket=sock, server="pool.ntp.org")
 request = client.query()
 while not request.done:
-    if client.check(now_ms()):
-        client.handle(now_ms())
+    now = ticks_ms()
+    if client.check(now):
+        client.handle(now)
 print("unix seconds:", request.unix_seconds)
 ```
 

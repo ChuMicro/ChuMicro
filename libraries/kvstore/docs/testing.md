@@ -56,7 +56,7 @@ except KVStoreFull:
 
 ## Simulating corruption
 
-`simulate_corrupt()` marks the underlying memory backend corrupt; the next `reload()` (or `KVStore` re-construction) surfaces a corruption event.  In-memory state stays intact until explicitly reloaded — that mirrors the production behavior, where in-flight state isn't poisoned by a substrate-level fault.
+`simulate_corrupt()` marks the underlying memory backend corrupt; the next `reload()` (or `KVStore` re-construction) surfaces a corruption event.  In-memory state stays intact until explicitly reloaded — matching the real device behavior, where in-flight state isn't poisoned by a backend-level fault.
 
 ```python
 from chumicro_kvstore import KVStoreCorrupt

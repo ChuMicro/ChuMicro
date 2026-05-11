@@ -103,7 +103,7 @@ The tick counter uses a 2²⁹ ms period (~6.2 days). This keeps all arithmetic 
 
 `ticks_add()` rejects deltas at or beyond the half-period (±2²⁸ ms) with an `OverflowError`.
 
-## Platform behavior
+## Platform notes
 
 The tick source is selected automatically at import time:
 
@@ -116,11 +116,7 @@ The tick source is selected automatically at import time:
 
 All sources are masked to the 2²⁹ period, so behavior is identical regardless of which source is used.
 
-## Using with Runner
-
-For applications with many components, `chumicro-runner` provides a `Runner` that captures the timestamp for you and services active components. See the [chumicro-runner guide](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/runner/docs/guide.md) for details.
-
-## Integration with a tick-based scheduler
+## Using with chumicro-runner
 
 `Heartbeat` is designed to be polled from a main loop or tick-based scheduler — it never blocks. A typical pattern:
 
@@ -136,6 +132,8 @@ def on_tick() -> None:
         do_periodic_work()
 ```
 
+For applications with many components, [`chumicro-runner`](https://chumicro.github.io/ChuMicro/runner/stable/) captures the timestamp once per tick and dispatches it to every registered service.
+
 ## Examples
 
 The [examples](../examples/) directory contains complete runnable scripts:
@@ -146,22 +144,13 @@ The [examples](../examples/) directory contains complete runnable scripts:
 | `multiple_heartbeats.py` | Several heartbeats at different rates sharing one timestamp |
 | `timeout_check.py` | Using `ticks_diff()` for deadline-based timeout detection |
 | `debounce.py` | Button debounce using `ticks_ms()` and `ticks_diff()` |
-| `periodic_tick.py` | Manual periodic action — what `Heartbeat` does under the hood |
+| `periodic_tick.py` | Manual periodic action — the same logic `Heartbeat` wraps |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `circuitpython_debounce.py` | Button debounce on CircuitPython hardware |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 | `micropython_debounce.py` | Button debounce on MicroPython hardware |
 
 Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board — see the setup notes in each file.
-
-## What's new
-
-<!-- Add entries for user-visible changes when bumping VERSION.
-     One bullet per change. Internal refactors don't need entries.
-     At stable promotion, collapse/edit as needed. -->
-
-- **0.1.25**: Functional tests for timing on real boards; doc and template fixes from the device-testing audit.
-- **0.1.24**: Documentation sync and CI build performance improvements.
 
 ---
 

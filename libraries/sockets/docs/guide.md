@@ -2,11 +2,9 @@
 
 ## Overview
 
-`chumicro-sockets` provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in irreducible ways — CP has no `socket` module, only `socketpool(radio)`; MP has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack — so the library exposes one [`TCPClientSocket`](api.md#chumicro_sockets.TCPClientSocket) protocol and routes [`tcp_client_socket`](api.md#chumicro_sockets.tcp_client_socket) / [`tls_client_socket`](api.md#chumicro_sockets.tls_client_socket) to a runtime-appropriate adapter.
+`chumicro-sockets` provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in ways the library can't paper over — CircuitPython has no `socket` module, only `socketpool(radio)`; MicroPython has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack — so the library exposes one [`TCPClientSocket`](api.md#chumicro_sockets.TCPClientSocket) protocol and routes [`tcp_client_socket`](api.md#chumicro_sockets.tcp_client_socket) / [`tls_client_socket`](api.md#chumicro_sockets.tls_client_socket) to a runtime-appropriate adapter.
 
-Architecture rationale: there's no dependency on `adafruit_connection_manager` (CircuitPython-only, missing on MicroPython); TLS is a sibling factory (`tls_client_socket`) rather than an `ssl=True|context` flag because CP and MP take different SSL inputs; `recv()` is omitted in favor of `recv_into()` so callers can manage their own pre-allocated buffers without per-call allocations.
-
-This library is the substrate for `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, and `chumicro-websockets`; none of them import `socketpool`, `socket`, or `ssl` directly.
+`chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, and `chumicro-websockets` all build on this library; none of them import `socketpool`, `socket`, or `ssl` directly.
 
 ## Getting started
 
@@ -104,22 +102,20 @@ def read(sock):
 
 CircuitPython requires a `radio=` kwarg pointing at the board's wifi radio (typically `wifi.radio`).  MicroPython and CPython ignore the kwarg.
 
-The TLS surface is uniform across runtimes because the supported board class (256 KB MCU RAM / 4 MB flash, current-LTS firmware) all ships the on-board `ssl` module — Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi.  Legacy radios without `ssl` (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.
+The TLS surface is uniform across runtimes because every supported board (256 KB MCU RAM / 4 MB flash, current-LTS firmware — Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi) ships the on-board `ssl` module.  Legacy radios without `ssl` (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.
 
-### Substrate quirks observed on real hardware
+### Runtime + chip quirks
 
-Live-AP acceptance runs against the supported boards surfaced two
-substrate-level limitations that aren't bugs in this library — they
-constrain how you build certs and shape your TLS handshakes:
+Live-AP acceptance runs against the supported boards surfaced four limitations that aren't bugs in this library — they constrain how you build certs and shape your TLS handshakes:
 
-| Substrate | Quirk | Workaround |
+| Runtime + chip | Quirk | Workaround |
 |---|---|---|
-| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) — TLS *server* | `tls_listening_socket` raises `UnsupportedSSLConfigError` up-front. The CYW43 TLS handshake path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state until USB power-cycle. | Use an ESP32-family board for HTTPS server, or run MicroPython on the same Pi Pico W (verified working). TLS *client* on CP-rp2 is unaffected. |
+| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) — TLS *server* | `tls_listening_socket` raises `UnsupportedSSLConfigError` up-front. The CYW43 TLS handshake path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state until you unplug-and-replug USB power. | Use an ESP32-family board for HTTPS server, or run MicroPython on the same Pi Pico W (verified working). TLS *client* on CircuitPython rp2 is unaffected. |
 | MicroPython on rp2 (Pi Pico W) | mbedTLS build rejects self-signed certs entirely (`ValueError('invalid cert')`) | Use a CA-signed cert.  For dev, skip TLS testing on this combo or use a real CA chain. |
 | MicroPython SSLSocket on some ports | Wrapped TLS socket lacks `settimeout` / `setblocking` / `fileno` | Wrapper falls back to no-op + `fileno() = -1`; non-blocking semantics still hold via the TLS layer. |
 | Stricter mbedTLS builds | Reject IP-only SAN certs | Generate certs with at least one DNS SAN.  On a LAN, `<hostname>.local` works via mDNS; set `server_hostname=` to that DNS name. |
 
-Run `.scratch/run_sockets_acceptance.py --tls` to verify TLS end-to-end on your boards.  Plain TCP works on every supported board (verified live on Lolin S2 CP/MP and Pi Pico W CP/MP).
+Tested on real CircuitPython and MicroPython boards for both plain TCP and TLS before each release.
 
 ## Examples
 
@@ -128,10 +124,6 @@ Run `.scratch/run_sockets_acceptance.py --tls` to verify TLS end-to-end on your 
 | [`tcp_roundtrip.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close, runs identically on every runtime. |
 | [`tls_with_custom_ca.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`. |
 | [`udp_echo_client.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram, read echo back.  Cross-runtime (CP + MP). |
-
-## What's new
-
-*No releases yet — this section will be updated with each version bump.*
 
 ---
 

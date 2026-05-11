@@ -1,8 +1,8 @@
 # chumicro-compat
 
-Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.
+**Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.**
 
-Provides lightweight reimplementations of CPython standard-library features that are missing or incomplete on microcontroller runtimes.  On CPython, re-exports the real C implementations for zero overhead.
+Lightweight reimplementations of CPython standard-library features missing on microcontroller runtimes — on CPython, the real C implementations are re-exported with no overhead.
 
 ## Quick example
 
@@ -30,6 +30,9 @@ set_status_led(100)  # pin 13 → 100%
 
 [← All ChuMicro Libraries](../../)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat) · [PyPI](https://pypi.org/project/chumicro-compat/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat) · \
+[PyPI](https://pypi.org/project/chumicro-compat/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>

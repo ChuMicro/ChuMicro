@@ -1,8 +1,8 @@
 # chumicro-deploy
 
-Host-side transports and deploy tooling for CircuitPython and MicroPython boards. Runs on your laptop, not on the board.
+**Host-side transports and deploy tooling for CircuitPython and MicroPython boards.**
 
-This is a [workbench tool](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/workbench.md) — it helps you manage boards from your laptop. It is not a library that runs on the microcontroller itself.
+Push code, probe identity, flash firmware, recover from common transport failures.  Runs on your laptop — not on the board.
 
 ## Quick example
 
@@ -68,8 +68,10 @@ No bundle registration needed — chumicro-deploy is a host tool, not on-device 
 
 <div class="chumicro-footer" markdown>
 
-[← All ChuMicro Libraries](../../)
+[← All ChuMicro Packages](../../)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) · [PyPI](https://pypi.org/project/chumicro-deploy/) · [Issues](https://github.com/ChuMicro/ChuMicro/issues)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) · \
+[PyPI](https://pypi.org/project/chumicro-deploy/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
 
 </div>

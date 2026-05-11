@@ -104,3 +104,15 @@ fake = FakeTime(start=1_000_000.0)
 ## Companion fakes in chumicro-repl
 
 If your tests cover the deploy → tail pipeline, [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) ships parallel fakes (`FakeSerialPort`, `FakeKeyboard`, `FakeTime`) under `chumicro_repl.testing`.  The `FakeTime` shape is identical to the one here, so the same fake clock can drive both halves of an integration test — `Deployer(device, time=clock).deploy(source)` followed by `tail(device, seconds=10, time=clock)` — without any cross-package adapter code.
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) · \
+[PyPI](https://pypi.org/project/chumicro-deploy/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
+
+</div>

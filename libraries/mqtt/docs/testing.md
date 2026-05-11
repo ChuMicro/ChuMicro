@@ -1,55 +1,96 @@
 # Testing Helpers
 
-<!-- GENERATION INSTRUCTIONS — delete this block once the page is written.
+`chumicro_mqtt.testing` provides pre-baked broker-response byte sequences for unit tests.  Tests typically drive `MQTTClient` against a `chumicro_sockets.testing.FakeSocket` — script the broker's responses with these helpers, let the client tick, then assert the wire-format on `sock.sent`.
 
-     This page documents the fakes in the library's `testing` submodule.
-     If this library does NOT expose injectable services that downstream
-     consumers need to fake, delete all testing-helper references:
-       1. Delete this file (`docs/testing.md`)
-       2. Delete `src/chumicro_mqtt/testing.py`
-       3. Remove the `- Testing Helpers: testing.md` line from `mkdocs.yml` nav
-       4. Remove the Testing Helpers link from `docs/index.md`
-       5. Remove the Testing helpers link from `README.md`
-
-     Libraries that accept dependencies via constructor injection (time,
-     I/O, network) should provide ready-made fakes so downstream tests
-     don't have to invent their own mocks.
-
-     To fill this in, read:
-       1. `src/chumicro_mqtt/testing.py` — the fake classes/functions
-       2. `tests/` — see how the fakes are used in this library's own tests
-       3. Existing examples: libraries/timing/docs/testing.md,
-          libraries/runner/docs/testing.md
-
-     Structure:
-       - Open with one sentence: what the module provides and why.
-       - One section per fake class, showing a realistic test snippet.
-       - A "Usage from other libraries" section with a cross-library import.
-       - An "API Reference" section with a ::: autodoc directive. -->
-
-`chumicro_mqtt.testing` provides ...
+The canned-bytes helpers stay in sync with the encoder/decoder, so a hand-rolled byte literal in a test doesn't drift if the wire format changes.
 
 ## Usage
 
-<!-- Show a realistic test snippet using the fake.  Import from the public
-     testing submodule.  Use descriptive variable names. -->
+```python
+from chumicro_mqtt import MQTTClient
+from chumicro_mqtt.testing import (
+    canned_connack_bytes,
+    canned_puback_bytes,
+    canned_suback_bytes,
+    canned_publish_bytes,
+)
+from chumicro_sockets.testing import FakeSocket
+
+def test_connect_publish_subscribe_roundtrip():
+    sock = FakeSocket()
+    sock.enqueue_recv(canned_connack_bytes(return_code=0))
+    sock.enqueue_recv(canned_suback_bytes(packet_id=1))
+    sock.enqueue_recv(canned_puback_bytes(packet_id=2))
+
+    client = MQTTClient(sock, client_id="test")
+    client.connect()
+    client.subscribe("commands/+")
+    handle = client.publish("sensors/temp", b"21.5", qos=1)
+
+    for _ in range(10):
+        client.handle(now_ms=0)
+
+    assert client.connected
+    assert handle.acked
+    # Inspect what the client wrote on the wire.
+    assert sock.sent[0][0] == 0x10  # CONNECT fixed header
+```
+
+## Available helpers
+
+| Helper | Returns |
+|---|---|
+| `canned_connack_bytes(return_code=0, session_present=False)` | CONNACK packet — `return_code=0` means accepted; 1-5 are rejection codes per MQTT 3.1.1 §3.2.2.3. |
+| `canned_puback_bytes(packet_id)` | PUBACK packet — drives QoS-1 publish acknowledgement. |
+| `canned_suback_bytes(packet_id, granted_qos=0)` | SUBACK packet — acknowledges a one-subscription SUBSCRIBE. |
+| `canned_unsuback_bytes(packet_id)` | UNSUBACK packet — acknowledges an UNSUBSCRIBE. |
+| `canned_pingresp_bytes()` | PINGRESP packet — keep-alive response. |
+| `canned_publish_bytes(topic, payload, qos=0, retain=False, packet_id=None)` | PUBLISH packet shaped like the broker would send — feed it to `sock.enqueue_recv()` to simulate an inbound message. |
+
+## Simulating a broker rejection
 
 ```python
-from chumicro_mqtt.testing import Fake...
+def test_client_handles_connect_refusal():
+    sock = FakeSocket()
+    sock.enqueue_recv(canned_connack_bytes(return_code=4))   # bad credentials
 
-def test_example():
-    ...
+    client = MQTTClient(sock, client_id="test")
+    client.connect()
+    client.handle(now_ms=0)
+
+    assert client.state == ProtocolState.FAILED
+```
+
+## Simulating an inbound message
+
+```python
+def test_subscriber_receives_publish():
+    sock = FakeSocket()
+    sock.enqueue_recv(canned_connack_bytes(return_code=0))
+    sock.enqueue_recv(canned_suback_bytes(packet_id=1))
+    sock.enqueue_recv(canned_publish_bytes("sensors/temp", b"22.1"))
+
+    received = []
+    client = MQTTClient(sock, client_id="test")
+    client.on_message = lambda topic, payload: received.append((topic, payload))
+    client.connect()
+    client.subscribe("sensors/+")
+
+    for _ in range(10):
+        client.handle(now_ms=0)
+
+    assert received == [("sensors/temp", b"22.1")]
 ```
 
 ## Usage from other libraries
 
-Libraries that depend on `chumicro-mqtt` can import the fakes directly:
+Libraries that depend on `chumicro-mqtt` can import the helpers directly in their own test suites:
 
 ```python
-from chumicro_mqtt.testing import Fake...
+from chumicro_mqtt.testing import canned_connack_bytes, canned_publish_bytes
 ```
 
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
+Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.
 
 ## API Reference
 

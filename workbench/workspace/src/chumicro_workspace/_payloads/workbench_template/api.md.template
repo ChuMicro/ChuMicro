@@ -1,0 +1,20 @@
+# API Reference
+
+<!-- Starts as a single autodoc directive for the whole package.  As
+     the workbench tool grows multiple modules, split into per-module
+     sections with `## Heading` + `::: {import_name}.<module>`
+     directives. -->
+
+::: {import_name}
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/{name}) · \
+[PyPI](https://pypi.org/project/chumicro-{name}/) · \
+[Issues](https://github.com/ChuMicro/ChuMicro/issues)
+
+</div>
