@@ -1,11 +1,27 @@
 # chumicro-{name}
 
-<!-- Replace this with a one-line description of the library. -->
+<!-- This template is a worked example for fictional `chumicro-foo` —
+     a single-shot countdown timer.  Replace the tagline + quick
+     example with your real library's shape.  Keep the Documentation
+     block + footer as-is. -->
+
+**A single-shot timer that fires once after N milliseconds.**
+
+Set a deadline, poll each tick, get `True` once when time's up — no `time.sleep()`, no callbacks.
 
 ## Quick example
 
 ```python
-from {import_name} import ...
+from {import_name} import Countdown
+from chumicro_timing import ticks_ms
+
+countdown = Countdown(period_ms=5000)
+
+while True:
+    now = ticks_ms()
+    if countdown.fired(now):
+        print("time's up")
+        break
 ```
 
 ## Documentation
