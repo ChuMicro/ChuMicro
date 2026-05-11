@@ -50,7 +50,7 @@ Open the integrated terminal (`⌃\`` / `` Ctrl+` ``) and run:
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and materialises three starter files at the repo root if they are missing: `devices.yml` (the board registry), `workspace.yml` (host-side machinery), and `secrets.toml` (credentials).  All three are gitignored.  Register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `secrets.toml` once to provide your wifi password and broker auth under `[wifi]` / `[mqtt.broker.auth]` — these flow into `runtime_config.msgpack` at deploy time.  See [config-files.md](config-files.md) for the three-file split (Decision 0057) and [device-testing.md](device-testing.md) for the full setup flow.
+This installs dependencies, runs editable installs for every library and support package, and regenerates IDE configs.  It also materialises three gitignored starter files at the repo root if they're missing: `devices.yml`, `workspace.yml`, and `secrets.toml`.  If you plan to run functional tests on real hardware, see [Device Testing](device-testing.md) for board registration and `secrets.toml` setup.
 
 `setup` produces a lot of output — look for this at the end:
 
@@ -115,16 +115,9 @@ VS Code's Testing panel (beaker icon in the sidebar, or `⌘⇧T` / `Ctrl+Shift+
 
 Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the coverage threshold.
 
-For real-board `functional_tests/`, the same Testing panel can target the explicit `functional_tests/` file, directory, or function. The repository's pytest device plugin intercepts those targets and routes them to hardware instead of importing them on the host. The test tree shows synthetic `Setup — MicroPython`, `Run overhead — MicroPython`, `Setup — CircuitPython`, and `Run overhead — CircuitPython` nodes (see [device-testing.md](device-testing.md) for what they mean — same nodes appear in PyCharm's Test Results pane).
+For real-board `functional_tests/`, the same Testing panel can target the explicit `functional_tests/` file, directory, or function — the repository's pytest device plugin intercepts those targets and routes them to hardware.  The test tree shows extra `Setup — <runtime>` and `Run overhead — <runtime>` nodes alongside the individual tests.
 
-To enable that workflow:
-
-1. Run `python scripts/run.py setup`
-2. Register a board: `python scripts/run.py add-device <id> --address <port>` (probes the connected hardware and fills in defaults on first registration)
-3. Fill in real-network creds in `secrets.toml` if your tests need wifi (set `[wifi]` `ssid` / `password`; the file is gitignored)
-4. Open a `libraries/<name>/functional_tests/test_*.py` file and use the normal VS Code play button
-
-If no device is configured yet, pytest skips the run with a message telling you to generate or fill in `devices.yml`. See [Device Testing](device-testing.md) for the schema and CLI options.
+If no device is configured yet, pytest skips the run with a message telling you to generate or fill in `devices.yml`.  See [Device Testing](device-testing.md) for setup, the schema, and CLI options.
 
 ### From the terminal
 
@@ -199,34 +192,7 @@ python scripts/run.py test-libraries-functional --circuitpython-device desk-cp-b
 python scripts/run.py test-libraries-functional --library timing --deploy-mode flash
 ```
 
-## What "valid" means
-
-Every check enforces a specific quality gate. Here's what each one verifies and what a typical failure looks like:
-
-| Check | Pass condition | Typical output on failure |
-|-------|---------------|--------------------------|
-| **Lint** | Zero Ruff errors | `F841 Local variable 'x' is assigned to but never used` |
-| **Test** | All tests pass + coverage gate met | `FAIL Required test coverage of …% not reached.` followed by a hint pointing to the `Missing` column |
-| **Verify Examples** | All examples have valid syntax | `FAIL: examples/broken.py — SyntaxError: invalid syntax (line 12)` |
-| **Docs** | Clean build, zero griffe warnings | `WARNING — griffe: No type in parameter 'interval_ms'` |
-| **Check Version** | VERSION bumped when `src/` changed | `FAIL: timing has source changes but VERSION was not bumped` |
-| **Check API** | No removed public symbols without bump | `FAIL: timing — removed function 'ticks_add'` |
-
-## Navigating the workspace
-
-### Key locations
-
-| What | Where |
-|------|-------|
-| Library source | `libraries/<name>/src/chumicro_<name>/` |
-| Library tests | `libraries/<name>/tests/` |
-| Library docs | `libraries/<name>/docs/` |
-| Library examples | `libraries/<name>/examples/` |
-| Version file | `libraries/<name>/VERSION` |
-| Developer tasks | `scripts/run.py` |
-| Project decisions | `plans/decisions/` |
-
-### Useful shortcuts
+## Useful shortcuts
 
 | Action | macOS | Windows/Linux |
 |--------|-------|--------------|

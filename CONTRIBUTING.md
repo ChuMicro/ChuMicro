@@ -57,6 +57,22 @@ Browse [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussio
 
 Each page is self-contained.  You don't need to read all of them — just the ones relevant to what you're doing.
 
+## Repo layout
+
+| What | Where |
+|---|---|
+| Library source | `libraries/<name>/src/chumicro_<name>/` |
+| Library host tests | `libraries/<name>/tests/` |
+| Library real-board tests | `libraries/<name>/functional_tests/` |
+| Library docs | `libraries/<name>/docs/` |
+| Library examples | `libraries/<name>/examples/` |
+| Version file | `libraries/<name>/VERSION` |
+| Host-only tools | `workbench/<name>/` |
+| Internal shared packages | `support/<name>/` |
+| Developer task runner | `scripts/run.py` |
+| Design decisions (ADRs) | `plans/decisions/` |
+| Agent work queue | `plans/next-up.md` |
+
 ## Prerequisites
 
 | Tool | Version | Why |
