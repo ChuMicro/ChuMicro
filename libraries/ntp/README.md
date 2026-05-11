@@ -85,3 +85,7 @@ Before running functional tests, register a board with `chumicro-workspace add-d
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_ntp) (CircuitPython & MicroPython)
 - **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/chumicro_ntp)
 - **Source:** [libraries/ntp](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp)
+
+## License
+
+[MIT](https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE)

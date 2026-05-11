@@ -1,6 +1,7 @@
 # chumicro-timing
 
-<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
+align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Timers that don't freeze your code — your loop keeps running while waiting.**
 
@@ -117,23 +118,23 @@ assert heartbeat.poll(now) is True
 | `multiple_heartbeats.py` | Multiple heartbeats at different rates |
 | `timeout_check.py` | One-shot timeout using `is_due` |
 | `debounce.py` | Simulated button debounce |
-| `periodic_tick.py` | Manual periodic loop (what Heartbeat does under the hood) |
+| `periodic_tick.py` | Manual periodic loop (the same logic `Heartbeat` wraps internally) |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `circuitpython_debounce.py` | GPIO button debounce on CircuitPython |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 | `micropython_debounce.py` | GPIO button debounce on MicroPython |
 
-## Developing this library
+## Contributing
 
-Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
+Working on `chumicro-timing` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.
 
 ```bash
 pip install -e .[test]
-pytest tests/
-pytest functional_tests/   # needs a registered board in devices.yml
+pytest tests/                  # host-side tests
+pytest functional_tests/       # on-device tests (needs a board registered in devices.yml)
 ```
 
-Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
+Register a board before running functional tests: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 
@@ -145,3 +146,7 @@ Before running functional tests, register a board with `chumicro-workspace add-d
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_timing) (CircuitPython & MicroPython)
 - **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/chumicro_timing)
 - **Source:** [libraries/timing](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing)
+
+## License
+
+[MIT](https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE)

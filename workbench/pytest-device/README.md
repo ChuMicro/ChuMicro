@@ -1,6 +1,7 @@
 # chumicro-pytest-device
 
-<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
+align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Pytest plugin that runs your tests on a real CircuitPython or MicroPython board.**
 
@@ -8,10 +9,10 @@ Drop tests under any `functional_tests/` directory and the plugin intercepts col
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all workbench tools.](https://github.com/ChuMicro/ChuMicro/tree/main/workbench)
 > This is a [workbench tool](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/workbench.md) — runs on your laptop, drives the boards over serial.
 
-## Installation
+## Install
 
 ```bash
 pip install chumicro-pytest-device
@@ -68,10 +69,6 @@ The plugin discovers the board, stages `chumicro_timing/src/` + the test, execut
 | `--chumicro-pr-summary` | Append a markdown summary block to stdout at end of session |
 | `--chumicro-pr-summary-command <text>` | The command that re-runs the failed tests, included in the summary |
 
-### Status
-
-> Pre-alpha.  Auto-registers via `pytest11` — no explicit plugin import is needed in your `conftest.py`.
-
 ## Companions
 
 | Workbench tool | Why you'd use it alongside |
@@ -88,6 +85,10 @@ pytest tests/
 ```
 
 No hardware-side functional tests for this package itself — its job is to drive consumer libraries' functional tests via `pytest libraries/<name>/functional_tests/` against a board registered in `devices.yml`.
+
+## Docs
+
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/pytest-device/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/pytest-device/experimental/)**
 
 ## Find this library
 

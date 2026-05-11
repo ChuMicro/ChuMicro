@@ -65,11 +65,6 @@ print(response.json())            # parsed JSON when Content-Type is application
 | `HttpError` + subclasses | `HttpBusyError`, `HttpTimeoutError`, `HttpProtocolError`, `HttpURLError`, `HttpOversizedError`. |
 | `chumicro_requests.testing.FakeHttpClient` | Host-only fake for downstream test suites. |
 
-v1 ships: plain HTTP GET, body decode + `.text` / `.json()` / charset
-sniff, HTTPS via TLS (live-verified on Pi Pico W), POST + PUT + PATCH +
-DELETE + JSON helper, 301 / 302 / 303 / 307 / 308 redirects with
-per-request budget, and `Transfer-Encoding: chunked` decode.
-
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython. Pure Python; depends only
@@ -112,3 +107,7 @@ Before running functional tests, register a board with `chumicro-workspace add-d
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_requests) (CircuitPython & MicroPython)
 - **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/chumicro_requests)
 - **Source:** [libraries/requests](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests)
+
+## License
+
+[MIT](https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE)

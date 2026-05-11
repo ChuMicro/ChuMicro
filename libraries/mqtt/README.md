@@ -122,3 +122,7 @@ Before running functional tests, register a board with `chumicro-workspace add-d
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_mqtt) (CircuitPython & MicroPython)
 - **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/chumicro_mqtt)
 - **Source:** [libraries/mqtt](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt)
+
+## License
+
+[MIT](https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE)

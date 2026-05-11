@@ -26,7 +26,7 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ## Quick example
 
-User-app pattern (the canonical 4-line bring-up):
+User-app pattern (the 4-line bring-up):
 
 ```python
 from chumicro_config import load_runtime_config
@@ -99,3 +99,7 @@ Before running functional tests, register a board with `chumicro-workspace add-d
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_wifi) (CircuitPython & MicroPython)
 - **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/chumicro_wifi)
 - **Source:** [libraries/wifi](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi)
+
+## License
+
+[MIT](https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE)

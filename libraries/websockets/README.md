@@ -63,11 +63,10 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Examples
 
-<!-- TODO: Add an examples table once examples are written.
 | Example | What it shows |
 |---|---|
-| `example.py` | Description |
--->
+| [`client.py`](examples/client.py) | WebSocket client on real CP/MP hardware — brings wifi up via the bundled `helpers`, connects to a configured echo server, prints every inbound message while a counter ticks alongside. |
+| [`server.py`](examples/server.py) | WebSocket echo server on real CP/MP hardware — accepts inbound connections on the configured host/port and echoes every frame back. |
 
 ## Developing this library
 
@@ -91,3 +90,7 @@ Before running functional tests, register a board with `chumicro-workspace add-d
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_websockets) (CircuitPython & MicroPython)
 - **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/chumicro_websockets)
 - **Source:** [libraries/websockets](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets)
+
+## License
+
+[MIT](https://github.com/ChuMicro/ChuMicro/blob/main/LICENSE)

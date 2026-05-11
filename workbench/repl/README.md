@@ -1,6 +1,7 @@
 # chumicro-repl
 
-<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
+align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Host-side serial REPL for CircuitPython and MicroPython boards — line-mode editor, passthrough TUI, programmatic `ReplSession`, and a `tail()` follower for deploy orchestration.**
 
@@ -8,10 +9,10 @@ Two interactive surfaces: a line-mode editor with persistent per-device history,
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all workbench tools.](https://github.com/ChuMicro/ChuMicro/tree/main/workbench)
 > This is a [workbench tool](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/workbench.md) — runs on your laptop, not on the board.
 
-## Installation
+## Install
 
 ```bash
 pip install chumicro-repl
@@ -98,7 +99,7 @@ if result is ExitCode.TRACEBACK_DETECTED:
 
 ### Line-mode `:commands`
 
-Type `:` at the start of a line to invoke a builtin command.  `:help` lists every command live in your session; the canonical six are:
+Type `:` at the start of a line to invoke a builtin command.  `:help` lists every command live in your session; the built-in six are:
 
 | Command | What it does |
 |---|---|
@@ -116,7 +117,7 @@ History is persisted per-device under `~/.chumicro-repl/history/<sanitized-addre
 Two sources merge:
 
 * **Keywords + builtins** — `print`, `range`, `for`, `import`, `True`, …  Always works, no device round-trip.  Covers most "what's that builtin called again" Tab presses.
-* **On-device `dir()`** — populated on first Tab via a friendly-→raw-→`dir()`-→friendly round-trip (8–45 ms across the four-board canonical matrix; well below the perceptual "instant" threshold).  Cached for the session; `:rescan` invalidates after a new `import`.
+* **On-device `dir()`** — populated on first Tab via a friendly-→raw-→`dir()`-→friendly round-trip (8–45 ms on tested CircuitPython and MicroPython boards; well below the perceptual "instant" threshold).  Cached for the session; `:rescan` invalidates after a new `import`.
 
 The round-trip's friendly-banner reprint is consumed by the fetcher's read-until-`>>> ` so it never leaks into the rendered output.  See `fetch_device_names()` in `chumicro_repl.completion` if you're embedding the round-trip in your own session shape.
 

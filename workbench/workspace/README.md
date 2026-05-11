@@ -1,6 +1,7 @@
 # chumicro-workspace
 
-<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
+align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **One-stop host CLI for ChuMicro project workspaces — onboard a board, write app code, deploy to one or many targets, watch the REPL.**
 
@@ -8,16 +9,16 @@ Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces tho
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all workbench tools.](https://github.com/ChuMicro/ChuMicro/tree/main/workbench)
 > This is a [workbench tool](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/workbench.md) — runs on your laptop, not on the board.  The on-device side is [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config), which reads the msgpack this package writes.
 
-## Installation
+## Install
 
 ```bash
 pip install chumicro-workspace
 ```
 
-`chumicro-deploy` (and its `pyserial` / `mpremote` deps) plus `msgpack` and `ruamel.yaml` come along.  The canonical workspace template lives at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) — typical bootstrap is `git clone` it (or click "Use this template" on GitHub) then run `python run.py setup`, which creates a venv and installs this package.
+`chumicro-deploy` (and its `pyserial` / `mpremote` deps) plus `msgpack` and `ruamel.yaml` come along.  The starter workspace lives at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) — typical bootstrap is `git clone` it (or click "Use this template" on GitHub) then run `python run.py setup`, which creates a venv and installs this package.
 
 <details>
 <summary>Experimental (pre-release) versions and channel switching</summary>
@@ -119,10 +120,6 @@ When the project ships `app.py` with a `run()` callable and no `code.py` / `main
 Two responsibilities, one synthesised shim file: deploy owns `/code.py` (or `/main.py`) at the device root and the user owns everything else.  One project per board — switch by redeploying.
 
 When the project ships its own `code.py` / `main.py`, plain mode kicks in and deploy ships project files at the device root verbatim, no shim synthesis.  The runtime-matching filename declares intent: deploying a `code.py`-only project to a MicroPython board (or `main.py`-only to CircuitPython) surfaces as a clear user error before any bytes leave the host.
-
-### Status
-
-> Pre-alpha but feature-complete on the day-zero surface: nested project namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots (also a pre-deploy gate), `deploy --dry-run`, `deploy --all-devices`, `deploy --all-projects` + per-project `deploy_targets:` defaults, `repl <project>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for publishable-library scaffolding, `workspace.yml` `quality:` knob wiring, `preflight` + `dump-config` commands.
 
 ## Public Python API
 
