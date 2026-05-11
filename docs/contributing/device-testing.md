@@ -337,9 +337,7 @@ chumicro-workspace deploy --wipe <project> [--device <id>]
 chumicro-workspace reset-board --device <id> --yes
 ```
 
-Both routes call the same primitive
-(`chumicro_deploy.TransportProtocol.wipe_filesystem`).  Per-runtime
-recipe matrix:
+Both routes share one implementation.  Per-runtime recipe matrix:
 
 | Runtime / board family | Recipe |
 |---|---|
