@@ -191,7 +191,7 @@ def _cmd_resolve_firmware_url(args: argparse.Namespace) -> int:
 def _cmd_deploy(args: argparse.Namespace) -> int:
     """Push a file set onto a connected board and run the entrypoint."""
     from .deployer import Deployer
-    from .recovery import InteractiveDeployer
+    from .recovery import InteractiveDeployer, NonInteractiveDeployer
 
     if args.directory is not None and args.file_map is not None:
         print(
@@ -235,8 +235,10 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         return 2
 
     deployer = Deployer(device)
-    runner: Deployer | InteractiveDeployer = (
-        deployer if args.non_interactive else InteractiveDeployer(deployer)
+    runner: NonInteractiveDeployer | InteractiveDeployer = (
+        NonInteractiveDeployer(deployer)
+        if args.non_interactive
+        else InteractiveDeployer(deployer)
     )
     result = runner.deploy(
         source,
@@ -399,10 +401,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--non-interactive",
         action="store_true",
         help=(
-            "Skip the recovery-coaching wrapper and let transport "
-            "errors propagate uncaught.  Use in CI / scripted flows "
-            "that don't have stdin to answer retry prompts.  "
-            "Interactive coaching is on by default."
+            "Run once, print the classified failure + ordered fix "
+            "steps (and lsof PID/command for port-busy errors), then "
+            "re-raise.  No retry loop, no user prompt.  Use in CI / "
+            "scripted flows that don't have stdin.  Interactive "
+            "coaching with a retry loop is on by default."
         ),
     )
     deploy_parser.add_argument(
