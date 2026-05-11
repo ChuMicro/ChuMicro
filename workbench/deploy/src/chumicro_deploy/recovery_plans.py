@@ -15,7 +15,7 @@ straight through it.  Tests import it directly to assert content.
 from __future__ import annotations
 
 from .macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND
-from .recovery import DeployFailureKind, RecoveryPlan
+from .recovery_kind import DeployFailureKind, RecoveryPlan
 
 PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     DeployFailureKind.PORT_UNAVAILABLE: RecoveryPlan(
