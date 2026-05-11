@@ -270,7 +270,7 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
             "cable.",
             "If the board has no MicroPython / CircuitPython "
             "firmware on it, flash one with "
-            "`chumicro-deploy flash` first.",
+            "`chumicro-deploy flash-firmware` first.",
         ),
         retryable=True,
     ),

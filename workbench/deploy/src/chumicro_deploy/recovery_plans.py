@@ -74,7 +74,7 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "manually from Finder.",
             "If the board has no RESET button, unplug + replug it.",
             "If the board isn't running CircuitPython, reflash it "
-            "first with `chumicro-deploy flash --method uf2`.",
+            "first with `chumicro-deploy flash-firmware --method uf2`.",
         ),
         retryable=True,
     ),
