@@ -18,9 +18,6 @@ Raw REPL protocol:
 
 from __future__ import annotations
 
-import errno
-import getpass
-import os
 import shutil
 import tempfile
 import time as _time_module
@@ -28,7 +25,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, cast
 
-from . import flash_drive
+from . import circuitpy_drive, flash_drive
 from .circuitpython_bootstrap import build_circuitpython_deploy_scripts
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
@@ -86,9 +83,6 @@ _BOARD_FILE_VISIBLE_POLL_INTERVAL = 0.25
 #: against by remounting the volume read-only.
 _BOARD_FILE_VISIBLE_POST_SETTLE = 2.0
 
-#: Volume name CircuitPython uses by default.
-_CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
-
 #: Seconds to wait after ``storage.erase_filesystem()`` before
 #: Initial settle delay before the first reconnect attempt after
 #: ``storage.erase_filesystem()`` reboots the board.  CDC takes a
@@ -123,179 +117,9 @@ _WIPE_RECONNECT_POLL_SECONDS = 0.5
 _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS = 10.0
 
 
-def _format_probe_error(drive_path: Path, error: OSError) -> str:
-    """Translate a probe-write OSError into a recovery-friendly message.
-
-    The transport's ``.chu-probe`` write distinguishes three classes of
-    failure on the drive:
-
-    - ``ENOSPC`` — drive is full.  Includes the exact errno phrasing
-      (``No space left on device``) so the recovery classifier's
-      :data:`~chumicro_deploy.recovery._FLASH_DRIVE_STATE_PATTERNS`
-      check picks it up.
-    - ``EROFS`` — drive remounted read-only (rare on CIRCUITPY but
-      possible after a USB hiccup or a board that booted into
-      protected mode).
-    - Anything else (typically ``EACCES`` from a stale Finder-eject
-      mount) — kept as the original "not found or not writable"
-      wrapper that documents both candidate causes.
-
-    The first two are *drive-found* states, so the message no longer
-    leads with "not found" — that was misleading when, e.g., the user
-    was running a disk-full demo and saw the drive in Finder while
-    chumicro-deploy claimed it wasn't there.
-    """
-    error_name = error.__class__.__name__
-    error_text = str(error) or error_name
-    if error.errno == errno.ENOSPC:
-        return (
-            f"CIRCUITPY drive at {drive_path} is full "
-            f"({error_name}: {error_text})"
-        )
-    if error.errno == errno.EROFS:
-        return (
-            f"CIRCUITPY drive at {drive_path} is read-only "
-            f"({error_name}: {error_text})"
-        )
-    return (
-        f"CIRCUITPY drive not found or not writable: {drive_path} "
-        f"({error_name}: {error_text})"
-    )
-
-
-def _resolve_username() -> str:
-    """Return the host user name, with a fallback for environments
-    that do not export ``$USER``.
-
-    Reads ``$USER`` first (the value Linux desktops use for
-    ``/media/<user>/`` mount paths); falls back to
-    :func:`getpass.getuser` (which consults ``LOGNAME`` / ``LNAME`` /
-    ``USERNAME`` and finally ``pwd.getpwuid(os.getuid())``) when
-    ``$USER`` is unset, e.g. inside slim containers.  Returns the
-    empty string when even the password database is unavailable so
-    the caller can skip building malformed ``/media//CIRCUITPY``
-    paths and try the macOS ``/Volumes/`` candidate instead.
-    """
-    user = os.environ.get("USER", "")
-    if user:
-        return user
-    try:
-        return getpass.getuser()
-    except (KeyError, OSError):
-        return ""
-
-
 # RAM-mode inline scripts are chunked based on live free-heap measurements.
 _MIN_INLINE_SCRIPT_BUDGET_BYTES = 8 * 1024
 _MAX_INLINE_SCRIPT_BUDGET_BYTES = 48 * 1024
-
-
-def _circuitpy_base_paths() -> list[Path]:
-    """Return the OS-specific base directories that CIRCUITPY mounts under.
-
-    macOS: ``/Volumes``.  Linux: ``/media/<user>``.  Linux (systemd):
-    ``/run/media/<user>``.  Used by :func:`_circuitpy_volume_candidates`
-    so the discovery list lives in one place.
-    """
-    username = _resolve_username()
-    bases = [Path("/Volumes")]
-    if username:
-        bases.append(Path("/media") / username)
-        bases.append(Path("/run/media") / username)
-    return bases
-
-
-def _circuitpy_volume_candidates() -> list[Path]:
-    """Return every mounted CIRCUITPY* directory across the base paths.
-
-    macOS assigns ``/Volumes/CIRCUITPY`` by mount order; additional
-    CircuitPython boards get ``/Volumes/CIRCUITPY 1``, ``CIRCUITPY 2``,
-    etc.  Globs all of them so the drive-verification path can scan
-    every mounted device to find the one whose ``boot_out.txt``
-    matches the connected board.  Bare-name match is included.
-    """
-    found: list[Path] = []
-    for base in _circuitpy_base_paths():
-        if not base.is_dir():
-            continue
-        for candidate in sorted(base.glob(f"{_CIRCUITPY_VOLUME_NAME}*")):
-            if candidate.is_dir():
-                found.append(candidate)
-    return found
-
-
-def _read_boot_out_text(drive_path: Path) -> str | None:
-    """Return the full text of ``boot_out.txt`` on *drive_path*, or ``None``.
-
-    Centralised so the identity reader has one error-swallowing policy.
-    A missing or unreadable file yields ``None`` and the caller
-    degrades gracefully.
-    """
-    boot_out = drive_path / "boot_out.txt"
-    if not boot_out.is_file():
-        return None
-    try:
-        return boot_out.read_text(encoding="utf-8", errors="replace")
-    except OSError:  # pragma: no cover — hard to mock read_text
-        return None
-
-
-def _read_boot_out_identity(
-    drive_path: Path,
-) -> tuple[str | None, str | None]:
-    """Return ``(uid, machine)`` from ``boot_out.txt`` in one file read.
-
-    CircuitPython writes ``boot_out.txt`` at boot with a header line::
-
-        Adafruit CircuitPython 10.2.0-rc.0 on 2026-04-16; Raspberry Pi Pico W with rp2040
-
-    plus a ``UID:...`` line.  Both fields are needed by
-    :meth:`CircuitpythonTransport._verify_drive_for_board` on every
-    deploy and by the per-candidate identity sweep in
-    :func:`find_circuitpy_drive_for_uid` /
-    :func:`find_circuitpy_drive_for_machine`; reading once and
-    extracting both avoids redundant I/O on a USB FAT mount.
-
-    Either field is ``None`` when the file is missing, unreadable,
-    or doesn't carry that field.
-    """
-    text = _read_boot_out_text(drive_path)
-    if text is None:
-        return None, None
-    uid: str | None = None
-    machine: str | None = None
-    lines = text.splitlines()
-    if lines:
-        first_line = lines[0]
-        semicolon_index = first_line.find(";")
-        if semicolon_index != -1:
-            machine = first_line[semicolon_index + 1:].strip()
-    for line in lines:
-        if line.startswith("UID:"):
-            uid = line[len("UID:"):].strip().upper()
-            break
-    return uid, machine
-
-
-def find_circuitpy_drive_for_uid(target_uid: str) -> str | None:
-    """Return the mounted CIRCUITPY drive whose UID matches *target_uid*.
-
-    Scans every mounted ``CIRCUITPY*`` volume, reads the ``UID:...``
-    line from ``boot_out.txt``, and returns the first path whose UID
-    equals *target_uid* (case-insensitive).  Returns ``None`` when no
-    mount matches.  This is the preferred discovery path —
-    :meth:`CircuitpythonTransport._verify_drive_for_board` only falls
-    back to :func:`find_circuitpy_drive_for_machine` when the UID
-    probe is unavailable on either side of the comparison.
-    """
-    if not target_uid:
-        return None
-    target = target_uid.upper()
-    for candidate in _circuitpy_volume_candidates():
-        uid, _machine = _read_boot_out_identity(candidate)
-        if uid and uid == target:
-            return str(candidate)
-    return None
 
 
 def _walk_package_sources(
@@ -372,51 +196,6 @@ def _walk_package_files(
     if init_entry is not None:
         collected.append(init_entry)
     return collected
-
-
-def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
-    """Return the mounted CIRCUITPY drive whose board matches *target_machine*.
-
-    Fallback path when UID-based discovery isn't possible (older
-    firmware that doesn't expose the UID probe, or a ``boot_out.txt``
-    missing its ``UID:...`` line).  Scans every mounted ``CIRCUITPY*``
-    volume, reads ``boot_out.txt``, and returns the first path whose
-    board identity equals *target_machine*.  Returns ``None`` when no
-    mount matches.  Cannot disambiguate two boards of the same model
-    — prefer :func:`find_circuitpy_drive_for_uid` when the UID is
-    known.
-    """
-    if not target_machine:
-        return None
-    for candidate in _circuitpy_volume_candidates():
-        _uid, machine = _read_boot_out_identity(candidate)
-        if machine and machine == target_machine:
-            return str(candidate)
-    return None
-
-
-def _list_scope_on_drive(drive: Path) -> list[str]:
-    """Walk a CIRCUITPY drive and return the deploy's in-scope paths.
-
-    Flash-mode helper for :meth:`CircuitpythonTransport.list_files_in_scope`.
-    Returns the four canonical state files (``/code.py``,
-    ``/main.py``, ``/active.py``, ``/runtime_config.msgpack``) when
-    they exist, plus every file under ``/lib/`` recursively.
-    Out-of-scope files (user-uploaded images, hand-edited
-    ``settings.toml``, the dotfile sentinels CIRCUITPY drops itself)
-    are omitted so the diff routine never deletes them.
-    """
-    found: list[str] = []
-    for filename in ("code.py", "main.py", "active.py", "runtime_config.msgpack"):
-        if (drive / filename).is_file():
-            found.append(f"/{filename}")
-    lib_root = drive / "lib"
-    if lib_root.is_dir():
-        for path in sorted(lib_root.rglob("*")):
-            if path.is_file():
-                relative = path.relative_to(drive).as_posix()
-                found.append(f"/{relative}")
-    return found
 
 
 class SerialPort(Protocol):
@@ -733,7 +512,7 @@ class CircuitpythonTransport:
         roundtrip is skipped entirely when the identity already
         matches the connected board (the common single-board case).
         """
-        boot_uid, boot_machine = _read_boot_out_identity(drive_path)
+        boot_uid, boot_machine = circuitpy_drive._read_boot_out_identity(drive_path)
         if boot_uid is None and boot_machine is None:
             # boot_out.txt missing on *drive_path*.  Probe the connected
             # board and scan candidate mounts for a boot_out.txt that
@@ -755,7 +534,7 @@ class CircuitpythonTransport:
                 identity_label="UID",
                 drive_identity=boot_uid,
                 probe_identity=probe.uid,
-                mount_finder=find_circuitpy_drive_for_uid,
+                mount_finder=circuitpy_drive.find_circuitpy_drive_for_uid,
             )
         if probe.machine and boot_machine is not None:
             return self._resolve_identity_match(
@@ -763,7 +542,7 @@ class CircuitpythonTransport:
                 identity_label="machine",
                 drive_identity=boot_machine,
                 probe_identity=probe.machine,
-                mount_finder=find_circuitpy_drive_for_machine,
+                mount_finder=circuitpy_drive.find_circuitpy_drive_for_machine,
             )
         return drive_path
 
@@ -792,8 +571,8 @@ class CircuitpythonTransport:
                 f"unplug/replug) to regenerate boot_out.txt, then retry."
             )
         candidate_identities = [
-            (candidate, *_read_boot_out_identity(candidate))
-            for candidate in _circuitpy_volume_candidates()
+            (candidate, *circuitpy_drive._read_boot_out_identity(candidate))
+            for candidate in circuitpy_drive._circuitpy_volume_candidates()
         ]
         if probe.uid:
             target = probe.uid.upper()
@@ -876,7 +655,7 @@ class CircuitpythonTransport:
         surfaces the OS error in its stderr and ``flash_drive.rsync``
         wraps it as :class:`FlashDriveError`.
         """
-        candidates = _circuitpy_volume_candidates()
+        candidates = circuitpy_drive._circuitpy_volume_candidates()
         if not candidates:
             raise CircuitpythonTransportError(
                 "CIRCUITPY drive not found.  Connect the board's USB "
@@ -901,7 +680,7 @@ class CircuitpythonTransport:
                 probe.unlink()
             except OSError as error:
                 raise CircuitpythonTransportError(
-                    _format_probe_error(drive_path, error),
+                    circuitpy_drive._format_probe_error(drive_path, error),
                 ) from error
         return drive_path
 
@@ -1548,7 +1327,7 @@ class CircuitpythonTransport:
             # handler covers both the dict-walk and any drive-resolve
             # failure that surfaces as an OSError.
             raise CircuitpythonTransportError(
-                _format_probe_error("", error),
+                circuitpy_drive._format_probe_error("", error),
             ) from error
 
         # Wait for the board to see the new entrypoint before soft-
@@ -1601,7 +1380,7 @@ class CircuitpythonTransport:
             drive = self._verify_drive_for_board(drive)
         except CircuitpythonTransportError:
             return []
-        return _list_scope_on_drive(drive)
+        return circuitpy_drive._list_scope_on_drive(drive)
 
     def delete_files(self, paths: list[str]) -> None:
         """Delete *paths* from the CIRCUITPY drive.
