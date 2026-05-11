@@ -10,7 +10,6 @@ Use it when you want to:
 
 - run `functional_tests/` on a connected MicroPython or CircuitPython board
 - understand how `devices.yml` and `workspace.yml` are structured
-- use `python scripts/run.py test-libraries-functional`
 - use IDE play buttons for `functional_tests/`
 
 Host-side `tests/` still run through normal CPython pytest. Real-board validation is an extra layer for behavior that mocks and unix-port checks cannot prove.
@@ -25,7 +24,7 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 
 Full per-file detail (shape, purpose, who edits what) lives in [config-files.md](config-files.md).  The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).
 
-## 1. Generate the starter files
+## Generate the starter files
 
 ```bash
 python scripts/run.py setup
@@ -33,19 +32,19 @@ python scripts/run.py setup
 
 If the files already exist, setup leaves them alone.
 
-The first-materialised `devices.yml` ships with an empty `devices: []` registry — the same shape the mono-repo and the workspace-template repo both materialise from `chumicro_deploy.read_devices_yml_template` (schema and template co-located).  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
+The first-materialised `devices.yml` ships with an empty `devices: []` registry.  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
 
-## 2. Register your boards via `add-device`
+## Register your boards via `add-device`
 
 ```bash
 python scripts/run.py add-device pi-pico-w-mp --address /dev/cu.usbmodem1101
 ```
 
-This is a thin shim around `chumicro-workspace add-device`.  It probes the connected board (UID, machine type, board_id), writes the entry to `devices.yml` with three-zone awareness (USER-OWNED / HARDWARE-ONCE / PROBED-ALWAYS), and fills in `defaults.{micropython,circuitpython}` on first registration of each runtime.
+This is a thin shim around `chumicro-workspace add-device`.  It probes the connected board (UID, machine type, board_id), writes the entry to `devices.yml`, and fills in `defaults.{micropython,circuitpython}` on first registration of each runtime.
 
 Pass `--runtime` if you want to skip the auto-detect probe (faster), or `--description "Desk board"` to add a free-form note.  See `python scripts/run.py add-device --help` for the full flag set.
 
-## 3. Tune `devices.yml` if you need to
+## Tune `devices.yml` if you need to
 
 `add-device` writes a complete, usable entry on every registration — id, runtime, address, probed hardware identity, and (on first registration of each runtime) the matching `defaults.<runtime>` pointer.  The day-to-day flow doesn't require hand-editing.
 
@@ -132,13 +131,22 @@ Supported fields today:
 
 Use `ram` for day-to-day functional-test iteration. Use `flash` when a board cannot hold the RAM-mode payload comfortably or when you need persistence semantics.
 
-#### When `flash` is required, not optional
+#### When you must use `flash`
 
-`ram` is fine for single-library unit-style functional tests (no chumicro deps beyond the library under test, no runtime-config file). `flash` is **required** when a test exercises a multi-stack chain — runtime-config-driven setup, `kvstore` persistence semantics across resets, full `deploy → wifi → mqtt` chains, or any test that needs `extra_files` staging on CircuitPython (CP RAM-mode deploy doesn't support `extra_files`, see [Decision 0056](../../plans/decisions/0056-transport-extra-files-staging.md)). If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `flash` rather than chasing fallback paths like staging files via `/remote/` — they don't exist on CP RAM mode for a reason.
+`ram` is fine for single-library unit-style functional tests — no chumicro deps beyond the library under test, no runtime-config file.
 
-## 4. Configure `secrets.toml`
+`flash` is **required** when a test exercises:
 
-Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` from the template (`chumicro_workspace.read_secrets_toml_template`), carrying placeholders for `wifi.ssid` and `mqtt.broker.host`.
+- runtime-config-driven setup
+- `kvstore` persistence semantics across resets
+- full `deploy → wifi → mqtt` chains
+- `extra_files` staging on CircuitPython (CP RAM-mode deploy doesn't support `extra_files`, see [Decision 0056](../../plans/decisions/0056-transport-extra-files-staging.md))
+
+If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `flash` rather than chasing fallback paths like staging files via `/remote/` — they don't exist on CP RAM mode for a reason.
+
+## Configure `secrets.toml`
+
+Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` with placeholder values for `wifi.ssid` and `mqtt.broker.host`.
 
 Edit `secrets.toml` once per clone — fill in your wifi credentials + your broker host (the mqtt library refuses to silently dial a third-party broker, so this is required for mqtt-touching tests):
 
@@ -155,9 +163,16 @@ port = 1883
 # password = "my-mqtt-password"
 ```
 
-The deploy-time deep-merge layers `secrets.toml` → per-library `functional_tests/config.toml`.  Both layers share the same section-namespaced shape; per-library configs win at any nesting depth.  The result is flattened to dotted keys (`wifi.ssid`, `mqtt.broker.host`) and msgpack-encoded into `/runtime_config.msgpack`, which on-device tests read via `chumicro_config.load_runtime_config()` — the same API user code uses.
+Per-library `functional_tests/config.toml` files override `secrets.toml` at deploy time — both layers share the same section-namespaced shape, and per-library configs win at any nesting depth.  The merged result is flattened to dotted keys (`wifi.ssid`, `mqtt.broker.host`) and msgpack-encoded into `/runtime_config.msgpack`; on-device tests read it via `chumicro_config.load_runtime_config()` — the same API user code uses.
 
-How the staging happens: each library's `functional_tests/conftest.py` calls `chumicro_workspace.compose_runtime_config(secrets_toml=…, project_config=…)` from its `pytest_configure` hook, then hands the merged dict to `chumicro_pytest_device.set_runtime_config(config, payload)`.  The pytest-device plugin msgpack-encodes the payload once per session and stages it via `transport.stage(extra_files={"/runtime_config.msgpack": …})`.  When `secrets.toml` is missing or carries the placeholder SSID, the conftest registers `None` and the on-device test hits its silent-skip path (no creds, no run) — fresh-clone-friendly by default.
+When `secrets.toml` is missing or still carries the placeholder SSID, tests skip cleanly rather than running with empty credentials — fresh clones stay green by default.
+
+<details>
+<summary>How the runtime-config staging works (click to expand)</summary>
+
+Each library's `functional_tests/conftest.py` calls `chumicro_workspace.compose_runtime_config(secrets_toml=…, project_config=…)` from its `pytest_configure` hook, then hands the merged dict to `chumicro_pytest_device.set_runtime_config(config, payload)`.  The pytest-device plugin msgpack-encodes the payload once per session and stages it via `transport.stage(extra_files={"/runtime_config.msgpack": …})`.  When `secrets.toml` is missing or carries the placeholder SSID, the conftest registers `None` and the on-device test hits its silent-skip path (no creds, no run).
+
+</details>
 
 Typical uses:
 
@@ -168,7 +183,7 @@ Typical uses:
 If a library does not need shared environment data, no override file is needed.
 
 
-## 5. Run device tests from the CLI
+## Run device tests from the CLI
 
 ### Default target set
 
@@ -216,7 +231,9 @@ python scripts/run.py test-libraries-functional --library timing --deploy-mode f
 - Flags compose as AND: `--library timing --file test_heartbeat --function fires_on_interval` runs only `fires_on_interval` inside `test_heartbeat.py` in `timing/`.
 - Any filter that matches nothing exits 2 so typos don't silently pass.
 
-## 6. Run functional tests via pytest directly
+`devices.yml` is always resolved at `<workspace_root>/devices.yml` — CI environments or unusual local layouts just need to drop a `devices.yml` at the workspace root before running tests.
+
+## Run functional tests via pytest directly
 
 `scripts/run.py test-libraries-functional` is a thin wrapper over pytest — it runs `pytest libraries/<name>/functional_tests/` with the `--chumicro-*` flags the device plugin exposes.  Invoking pytest directly is useful when you want pytest-native UX (a specific folder, file, or method) without going through `scripts/run.py`.
 
@@ -249,7 +266,7 @@ Driving pytest directly gives you access to the same overrides `test-libraries-f
 | `--chumicro-pr-summary` | Print the Markdown PR block at session end (paste-ready).  Opt-in so IDE play-button runs stay quiet. |
 | `--chumicro-pr-summary-command <str>` | Literal command string rendered inside the PR block's `- Command:` line.  `test-libraries-functional` passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare `pytest`. |
 
-## 7. Run workbench functional tests — `test-workbench-functional`
+## Run workbench functional tests
 
 Workbench packages (`workbench/<name>/`, Decision 0032) can ship their own `functional_tests/` directories.  Unlike library functional tests, these run host-side — the workbench tool is the project *driving* a connected board through its public API rather than code that ships onto the device.
 
@@ -266,7 +283,7 @@ python scripts/run.py test-workbench-functional --file test_deploy_files_hardwar
 
 Device selection lives inside each suite's own `conftest.py` (typically by reading `devices.yml` defaults), so `test-workbench-functional` itself exposes no runtime / device flags — change the target board via `devices.yml` defaults or by editing the suite's fixtures.  Suites skip cleanly when `devices.yml` is missing or no matching board is configured.
 
-## 8. Run `functional_tests/` from an IDE
+## Run `functional_tests/` from an IDE
 
 The repository registers a pytest plugin that intercepts explicit `functional_tests/` targets and routes them to hardware instead of importing them on the host.
 
@@ -278,7 +295,7 @@ What that means in practice:
 
 ### PyCharm
 
-PyCharm is the primary live-tested IDE path during current device-testing development. Once `devices.yml` is configured, play buttons on `functional_tests/` files, directories, and functions route to hardware.
+PyCharm is the most-exercised IDE path. Once `devices.yml` is configured, play buttons on `functional_tests/` files, directories, and functions route to hardware.
 
 ### VS Code
 
@@ -290,7 +307,7 @@ VS Code uses the same pytest entrypoint and committed workspace settings/tasks a
 
 A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md`, so if you hit a VS Code-only issue, treat that as a real bug rather than user error.
 
-## 9. How functional tests differ from host tests
+## How functional tests differ from host tests
 
 | Test type | Location | How to run |
 |---|---|---|
@@ -298,12 +315,6 @@ A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md
 | Real-board functional tests | `libraries/<name>/functional_tests/` | `python scripts/run.py test-libraries-functional --library <name>` or an IDE play button |
 | Workbench hardware-gated tests | `workbench/<name>/functional_tests/` | `python scripts/run.py test-workbench-functional --workbench <name>` |
 | Cross-runtime unix-port tests | reuses `tests/` | `python scripts/run.py test-all-runtimes` |
-
-## 10. Alternate `devices.yml` locations
-
-`devices.yml` is always resolved at `<workspace_root>/devices.yml`. CI or
-unusual local layouts can drop a `devices.yml` at the workspace root
-before running tests; nothing else is needed.
 
 ## Wiping a board's filesystem
 
@@ -318,7 +329,7 @@ on device` errors mid-test.
 Two ways to wipe a board:
 
 ```bash
-# Wipe + redeploy in one step (the original "wipe" surface).
+# Wipe + redeploy in one step.
 chumicro-workspace deploy --wipe <project> [--device <id>]
 
 # Wipe only — leave the board idle, no follow-up deploy.
