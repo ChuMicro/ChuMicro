@@ -19,6 +19,9 @@
     </style>
   </defs>
 
+  <!-- Background panel — keeps the graph readable on both light and dark GitHub themes (the SVG is rendered as a flat image and doesn't inherit the page background). -->
+  <rect x="0" y="0" width="700" height="380" fill="#fafafa" />
+
   <!-- Row labels -->
   <text x="20" y="50" class="row-label">Composers</text>
   <text x="20" y="230" class="row-label">Primitives</text>

@@ -19,6 +19,9 @@
     </style>
   </defs>
 
+  <!-- Background panel — keeps the graph readable on both light and dark GitHub themes (the SVG is rendered as a flat image and doesn't inherit the page background). -->
+  <rect x="0" y="0" width="1120" height="720" fill="#fafafa" />
+
   <!-- Row labels -->
   <text x="20" y="50" class="row-label">Services</text>
   <text x="20" y="290" class="row-label">Building blocks</text>
