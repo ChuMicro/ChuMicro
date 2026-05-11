@@ -1,12 +1,10 @@
 """Periodic heartbeat driven by cross-runtime tick helpers."""
 
-# Default tick helpers are imported eagerly (not lazily inside
-# ``Heartbeat.__init__``) so that MicroPython mount-mode functional tests
-# don't pay the mpremote RPC cost for an extra file read the *first* time
-# a ``Heartbeat()`` is constructed.  See the companion comment in
-# ``chumicro_runner.core`` for the broader rationale.
-from chumicro_timing.ticks import ticks_diff as _DEFAULT_TICKS_DIFF
-from chumicro_timing.ticks import ticks_ms as _DEFAULT_TICKS_MS
+# Default tick source imported eagerly at module load.  Lazy import inside
+# ``Heartbeat.__init__`` would add ~1 s to the first test on MP mount-mode
+# (each fresh import becomes an mpremote RPC); eager import pushes the
+# cost to module-import time, before the harness starts its timer.
+from chumicro_timing import ticks as _DEFAULT_TICKS
 
 
 class Heartbeat:
@@ -16,12 +14,11 @@ class Heartbeat:
     each loop iteration.  The timestamp should be captured once per loop
     and shared across all components to avoid time drift.
 
-    By default, uses the module-level ``ticks_diff`` helper for
-    wraparound-safe comparison.  Pass a *ticks* object with ``ticks_ms``
-    and ``ticks_diff`` methods to override (e.g. for tests).
+    Pass a *ticks* object with ``ticks_ms`` and ``ticks_diff`` methods
+    to override the real clock (e.g. for tests).
     """
 
-    __slots__ = ("_period_ms", "_ticks_diff", "_last_beat_ms")
+    __slots__ = ("_period_ms", "_ticks", "_last_beat_ms")
 
     def __init__(self, period_ms: int, ticks: object | None = None) -> None:
         """Create a heartbeat that becomes due once every *period_ms* milliseconds.
@@ -36,12 +33,8 @@ class Heartbeat:
             raise ValueError("period_ms must be greater than zero")
 
         self._period_ms = period_ms
-        if ticks is not None:
-            self._ticks_diff = ticks.ticks_diff
-            self._last_beat_ms = ticks.ticks_ms()
-        else:
-            self._ticks_diff = _DEFAULT_TICKS_DIFF
-            self._last_beat_ms = _DEFAULT_TICKS_MS()
+        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        self._last_beat_ms = self._ticks.ticks_ms()
 
     @property
     def period_ms(self) -> int:
@@ -65,7 +58,7 @@ class Heartbeat:
         Returns:
             ``True`` if the period has elapsed.
         """
-        return self._ticks_diff(now_ms, self._last_beat_ms) >= self._period_ms
+        return self._ticks.ticks_diff(now_ms, self._last_beat_ms) >= self._period_ms
 
     def poll(self, now_ms: int) -> bool:
         """Return ``True`` once per elapsed period and advance the heartbeat state.
