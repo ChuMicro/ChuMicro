@@ -77,88 +77,22 @@ jobs:
             echo "bundle_repository=ChuMicro/ChuMicro-Bundle" >> "$GITHUB_OUTPUT"
           fi
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
       - id: detect
         name: Find packages to release
-        env:
-          INPUT_LIBRARIES: ${{ inputs.libraries }}
+        # release_matrix.py walks libraries/*/VERSION + workbench/*/VERSION,
+        # filters by --libraries, skips existing tags, and emits the
+        # has_releases / matrix / has_library_releases / library_matrix
+        # outputs.  Workbench entries carry kind=workbench so the bundle
+        # + validate-mip jobs filter them out (Decision 0032 rule 3 —
+        # workbench ships to PyPI only, not circup / mip).
         run: |
-          suffix="${{ steps.channel.outputs.suffix }}"
-
-          # Scan both libraries/*/VERSION and workbench/*/VERSION.  Each
-          # entry carries a "kind" field — "library" entries flow through
-          # the full PyPI + bundle path; "workbench" entries publish to
-          # PyPI only and skip bundle staging / .mpy compilation
-          # (Decision 0032 rule 3 — workbench is host-only, never lands
-          # on a microcontroller).
-          entries="[]"
-          for version_file in libraries/*/VERSION workbench/*/VERSION; do
-            [[ -f "$version_file" ]] || continue
-            library_dir=$(dirname "$version_file")
-            library_name=$(basename "$library_dir")
-
-            # Determine kind from the parent directory.  basename of the
-            # parent is "libraries" or "workbench"; default to "library"
-            # for unknown layouts so additions to the matrix are
-            # conservative (still publish to PyPI, still tag).
-            parent_dir=$(basename "$(dirname "$library_dir")")
-            case "$parent_dir" in
-              libraries) kind="library" ;;
-              workbench) kind="workbench" ;;
-              *) kind="library" ;;
-            esac
-
-            # Filter to requested packages if specified.
-            if [[ -n "$INPUT_LIBRARIES" ]]; then
-              if ! echo ",$INPUT_LIBRARIES," | grep -q ",${library_name},"; then
-                continue
-              fi
-            fi
-
-            version=$(tr -d '[:space:]' < "$version_file")
-            tag="chumicro-${library_name}-v${version}${suffix}"
-
-            # Skip if this tag already exists (re-run safety).
-            if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
-              echo "Tag ${tag} already exists — skipping ${library_name}."
-              continue
-            fi
-
-            entries=$(jq -c \
-              --arg library_name "$library_name" \
-              --arg library_dir "$library_dir" \
-              --arg version "$version" \
-              --arg tag "$tag" \
-              --arg kind "$kind" \
-              '. + [{"library_name": $library_name, "library_dir": $library_dir, "version": $version, "tag": $tag, "kind": $kind}]' \
-              <<< "$entries")
-          done
-
-          # The full matrix flows into the per-package release job (PyPI
-          # publish + tag + GitHub Release); the library_matrix subset
-          # flows into the bundle + validate-mip jobs which only apply
-          # to library packages.  bundle_manager.py stage-matrix and
-          # validate_mip_install.py both read library_dir / library_name
-          # from the matrix entries, so the subset's entry shape is
-          # unchanged — only library entries are passed through.
-          library_entries=$(jq -c '[.[] | select(.kind == "library")]' <<< "$entries")
-
-          if [[ "$entries" == "[]" ]]; then
-            echo "has_releases=false" >> "$GITHUB_OUTPUT"
-            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
-          else
-            echo "has_releases=true" >> "$GITHUB_OUTPUT"
-            matrix=$(jq -c '{"include": .}' <<< "$entries")
-            echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
-          fi
-
-          if [[ "$library_entries" == "[]" ]]; then
-            echo "has_library_releases=false" >> "$GITHUB_OUTPUT"
-            echo 'library_matrix={"include":[]}' >> "$GITHUB_OUTPUT"
-          else
-            echo "has_library_releases=true" >> "$GITHUB_OUTPUT"
-            library_matrix=$(jq -c '{"include": .}' <<< "$library_entries")
-            echo "library_matrix=${library_matrix}" >> "$GITHUB_OUTPUT"
-          fi
+          python scripts/release_matrix.py \
+            --suffix "${{ steps.channel.outputs.suffix }}" \
+            --libraries "${{ inputs.libraries }}"
 
   release:
     name: "Release ${{ matrix.library_name }} v${{ matrix.version }}"
@@ -311,7 +245,7 @@ jobs:
       - name: Validate staged bundle locally
         run: |
           libraries=$(jq -r '[.include[].library_name] | join(",")' <<< "$MATRIX_JSON")
-          python scripts/validate_mip_install.py \
+          python scripts/run.py validate-mip \
             --staging-dir .bundle-staging \
             --libraries "$libraries"
 
@@ -350,26 +284,16 @@ jobs:
             --repo-name "$repository_name" --date-tag "$date_tag"
 
       - name: Push to bundle repository
+        # bundle_push.py builds the commit message from MATRIX_JSON,
+        # commits + tags + pushes via the SSH deploy key configured above,
+        # and exits 0 cleanly when staging is identical to the current
+        # bundle head (no-op re-run safety).  Tag protection rules require
+        # the SSH path; gh release create later references the pushed tag.
         run: |
-          cd .bundle-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          # Nothing to push if the staging content is identical to what
-          # was already in the bundle (e.g. a no-op re-run).
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
-
-          message=$(jq -r '"Update: " + ([.include[] | .library_name + " v" + .version] | join(", "))' <<< "$MATRIX_JSON")
-          git commit -m "$message"
-
-          # Tag the bundle release commit before pushing.  The tag is
-          # pushed via SSH (deploy key) so it works with tag protection
-          # rules.  gh release create then references the existing tag.
-          git tag "${{ env.date_tag }}"
-          git push origin main "${{ env.date_tag }}"
+          python scripts/bundle_push.py \
+            --bundle-dir .bundle-repo \
+            --tag "${{ env.date_tag }}" \
+            --matrix "$MATRIX_JSON"
 
       - name: Create bundle release
         run: |
@@ -435,7 +359,7 @@ jobs:
           # Strip the org prefix (ChuMicro/ChuMicro-Bundle → ChuMicro-Bundle).
           bundle_repo="${bundle_repository##*/}"
 
-          python scripts/validate_mip_install.py \
+          python scripts/run.py validate-mip \
             --bundle-repo "$bundle_repo" \
             --libraries "$libraries"
 

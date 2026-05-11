@@ -39,86 +39,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      library_name: ${{ steps.parse.outputs.library_name }}
-      version: ${{ steps.parse.outputs.version }}
-      stable_tag: ${{ steps.parse.outputs.stable_tag }}
-      library_dir: ${{ steps.locate.outputs.library_dir }}
-      package_kind: ${{ steps.locate.outputs.package_kind }}
-      source_zip: ${{ steps.parse.outputs.source_zip }}
+      library_name: ${{ steps.validate.outputs.library_name }}
+      version: ${{ steps.validate.outputs.version }}
+      stable_tag: ${{ steps.validate.outputs.stable_tag }}
+      library_dir: ${{ steps.validate.outputs.library_dir }}
+      package_kind: ${{ steps.validate.outputs.package_kind }}
+      source_zip: ${{ steps.validate.outputs.source_zip }}
     steps:
-      - name: Parse experimental tag
-        id: parse
-        env:
-          TAG: ${{ inputs.experimental_tag }}
-        run: |
-          echo "Tag: ${TAG}"
-
-          if [[ "$TAG" =~ ^chumicro-([a-z][a-z0-9_-]*)-v([0-9]+\.[0-9]+\.[0-9]+)-experimental$ ]]; then
-            library_name="${BASH_REMATCH[1]}"
-            version="${BASH_REMATCH[2]}"
-            echo "library_name=${library_name}" >> "$GITHUB_OUTPUT"
-            echo "version=${version}" >> "$GITHUB_OUTPUT"
-            echo "stable_tag=chumicro-${library_name}-v${version}" >> "$GITHUB_OUTPUT"
-            echo "source_zip=chumicro-${library_name}-v${version}-source.zip" >> "$GITHUB_OUTPUT"
-            echo "✓ Promoting ${library_name} v${version} from experimental to stable"
-          else
-            echo "::error::Expected an experimental tag (e.g. chumicro-timing-v0.3.0-experimental), got '${TAG}'."
-            exit 1
-          fi
-
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Locate package directory
-        id: locate
-        # The promote-tag format doesn't encode whether the package is a
-        # library (libraries/<name>/) or a workbench tool (workbench/<name>/),
-        # so probe the filesystem.  Workbench packages (Decision 0032 rule
-        # 3) skip the bundle + validate-mip jobs further down — only the
-        # PyPI publish, tag, GitHub Release, and docs steps run for them.
-        run: |
-          library_name="${{ steps.parse.outputs.library_name }}"
-          if [[ -d "libraries/${library_name}" ]]; then
-            echo "library_dir=libraries/${library_name}" >> "$GITHUB_OUTPUT"
-            echo "package_kind=library" >> "$GITHUB_OUTPUT"
-            echo "✓ Found libraries/${library_name}/ — promoting as library"
-          elif [[ -d "workbench/${library_name}" ]]; then
-            echo "library_dir=workbench/${library_name}" >> "$GITHUB_OUTPUT"
-            echo "package_kind=workbench" >> "$GITHUB_OUTPUT"
-            echo "✓ Found workbench/${library_name}/ — promoting as workbench (PyPI-only, no bundle)"
-          else
-            echo "::error::No package found at libraries/${library_name}/ or workbench/${library_name}/."
-            exit 1
-          fi
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
 
-      - name: Validate preconditions
+      - id: validate
+        name: Parse, locate, validate preconditions
+        # promote_validate.py parses the experimental tag, locates the
+        # source package under libraries/ or workbench/, and verifies
+        # the experimental tag exists, the stable tag does not, and the
+        # source archive is attached to the experimental GitHub Release.
+        # Workbench packages (Decision 0032 rule 3) get package_kind=workbench
+        # so the bundle + validate-mip jobs further down skip them.
         env:
+          TAG: ${{ inputs.experimental_tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tag="${{ inputs.experimental_tag }}"
-          stable_tag="${{ steps.parse.outputs.stable_tag }}"
-          source_zip="${{ steps.parse.outputs.source_zip }}"
-
-          # 1. The experimental tag must exist.
-          if ! git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
-            echo "::error::Experimental tag ${tag} does not exist."
-            exit 1
-          fi
-
-          # 2. The stable tag must not already exist.
-          if git rev-parse "refs/tags/${stable_tag}" >/dev/null 2>&1; then
-            echo "::error::Stable tag ${stable_tag} already exists."
-            exit 1
-          fi
-
-          # 3. The experimental release must have a source archive.
-          if ! gh release view "$tag" --json assets -q ".assets[].name" | grep -q "^${source_zip}$"; then
-            echo "::error::Source archive ${source_zip} not found in release ${tag}.  Was the experimental release created before Decision 0023?"
-            exit 1
-          fi
-
-          echo "✓ All preconditions met"
+        run: python scripts/promote_validate.py
 
   # ---------------------------------------------------------------------------
   # Build and publish the stable package to PyPI.
@@ -132,34 +79,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Download and unpack source archive
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          library_dir="${{ needs.validate.outputs.library_dir }}"
-          source_zip="${{ needs.validate.outputs.source_zip }}"
-          tag="${{ inputs.experimental_tag }}"
-
-          gh release download "$tag" \
-            --pattern "$source_zip" \
-            --dir /tmp/source-archive
-
-          # Replace main's package source with the frozen experimental
-          # source.  Only src/, pyproject.toml, VERSION, and README.md are
-          # in the archive — that's everything the build needs.  Works
-          # for both libraries/<name>/ and workbench/<name>/ — library_dir
-          # is whichever the validate job found.
-          rm -rf "${library_dir}/src"
-          rm -f "${library_dir}/pyproject.toml" \
-                "${library_dir}/VERSION" \
-                "${library_dir}/README.md"
-          unzip -o "/tmp/source-archive/${source_zip}" \
-            -d "${library_dir}/"
-
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: "pip"
+
+      - name: Download and unpack source archive
+        # release_source.py replaces main's package source with the
+        # frozen experimental source from the GitHub Release archive.
+        # Works for both libraries/<name>/ and workbench/<name>/.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/release_source.py \
+            --tag "${{ inputs.experimental_tag }}" \
+            --source-zip "${{ needs.validate.outputs.source_zip }}" \
+            --library-dir "${{ needs.validate.outputs.library_dir }}"
 
       - name: Install build tooling
         run: python -m pip install --upgrade pip build
@@ -211,6 +146,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
       # Intentionally duplicates the download+unpack from the release job.
       # Each job runs on a separate runner, and artifact-passing would add
       # complexity for a lightweight download that only happens on promotion.
@@ -218,24 +158,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          library_dir="${{ needs.validate.outputs.library_dir }}"
-          source_zip="${{ needs.validate.outputs.source_zip }}"
-          tag="${{ inputs.experimental_tag }}"
-
-          gh release download "$tag" \
-            --pattern "$source_zip" \
-            --dir /tmp/source-archive
-          rm -rf "${library_dir}/src"
-          rm -f "${library_dir}/pyproject.toml" \
-                "${library_dir}/VERSION" \
-                "${library_dir}/README.md"
-          unzip -o "/tmp/source-archive/${source_zip}" \
-            -d "${library_dir}/"
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-          cache: "pip"
+          python scripts/release_source.py \
+            --tag "${{ inputs.experimental_tag }}" \
+            --source-zip "${{ needs.validate.outputs.source_zip }}" \
+            --library-dir "${{ needs.validate.outputs.library_dir }}"
 
       # Single unified cache for all .tools/ artifacts (mpy-cross + unix-port).
       # Using separate cache actions for the same path causes the second
@@ -274,7 +200,7 @@ jobs:
 
       - name: Validate staged bundle locally
         run: |
-          python scripts/validate_mip_install.py \
+          python scripts/run.py validate-mip \
             --staging-dir .bundle-staging \
             --libraries "${{ needs.validate.outputs.library_name }}"
 
@@ -307,21 +233,10 @@ jobs:
 
       - name: Push to bundle repository
         run: |
-          cd .bundle-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
-
-          library_name="${{ needs.validate.outputs.library_name }}"
-          version="${{ needs.validate.outputs.version }}"
-          git commit -m "Update: ${library_name} v${version}"
-
-          git tag "${{ env.date_tag }}"
-          git push origin main "${{ env.date_tag }}"
+          python scripts/bundle_push.py \
+            --bundle-dir .bundle-repo \
+            --tag "${{ env.date_tag }}" \
+            --commit-message "Update: ${{ needs.validate.outputs.library_name }} v${{ needs.validate.outputs.version }}"
 
       - name: Create bundle release
         run: |
@@ -376,7 +291,7 @@ jobs:
 
       - name: Validate mip install and import
         run: |
-          python scripts/validate_mip_install.py \
+          python scripts/run.py validate-mip \
             --bundle-repo ChuMicro-Bundle \
             --libraries "${{ needs.validate.outputs.library_name }}"
 
@@ -429,32 +344,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Deploy and push stable docs
+        # docs_deploy_retry.py fetches gh-pages, runs run.py docs-deploy,
+        # and pushes — retrying when a concurrent experimental deploy
+        # forces a re-base.
         run: |
-          library_name="${{ needs.validate.outputs.library_name }}"
-          max_attempts=3
-
-          for attempt in $(seq 1 $max_attempts); do
-            echo "::group::Attempt $attempt of $max_attempts"
-
-            # Fetch the latest gh-pages so mike builds on top of the
-            # current remote state (including any concurrent experimental
-            # deploys that landed since the last attempt).
-            git fetch origin gh-pages:gh-pages --force 2>/dev/null || true
-
-            python scripts/run.py docs-deploy \
-              --channel stable \
-              --libraries "$library_name"
-
-            if git push origin gh-pages; then
-              echo "::endgroup::"
-              echo "✓ Stable docs deployed for ${library_name}."
-              exit 0
-            fi
-
-            echo "::endgroup::"
-            echo "Push failed (likely concurrent update), retrying in 10s..."
-            sleep 10
-          done
-
-          echo "::error::Failed to deploy stable docs after $max_attempts attempts."
-          exit 1
+          python scripts/docs_deploy_retry.py \
+            --channel stable \
+            --libraries "${{ needs.validate.outputs.library_name }}"
