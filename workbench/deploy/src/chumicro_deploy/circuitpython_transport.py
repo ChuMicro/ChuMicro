@@ -630,9 +630,9 @@ class CircuitpythonTransport:
         """Read source files into memory for inline execution.
 
         **Test-harness API.**  Sister of :meth:`deploy_files` for the
-        ``test-libraries-functional`` orchestrator (`source_dirs` +
-        `test_files` + `harness_source` are test-runner concepts).
-        Production deploys use :meth:`deploy_files` with a flat
+        functional-test orchestrator (`source_dirs` + `test_files` +
+        `harness_source` are test-runner concepts).  Production
+        deploys use :meth:`deploy_files` with a flat
         ``files: dict[device_path, bytes]`` instead.
 
         In RAM mode, source code is read and stored for embedding into

@@ -340,11 +340,9 @@ def add_device(
         # Treat both "absent key" and "key present with null value" as
         # "no default set yet".  The materialized devices.yml.template
         # ships with ``micropython:`` and ``circuitpython:`` (null
-        # values, keys present) so the original ``runtime not in
-        # defaults`` check failed to fire on the first add-device —
-        # gap #6 of the workspace-template
-        # dev-and-regular-mode-gaps audit.  ``defaults.get(runtime)
-        # is None`` covers both cases.
+        # values, keys present), so ``runtime in defaults`` would be
+        # True before any add-device ran.  ``defaults.get(runtime)
+        # is None`` covers both shapes.
         if defaults.get(runtime) is None:
             defaults[runtime] = device_id
 

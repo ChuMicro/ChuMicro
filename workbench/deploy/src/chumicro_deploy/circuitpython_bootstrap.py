@@ -305,8 +305,6 @@ def _build_test_execution_script(
         + test_execution_template
         .replace("$TEST_SOURCE", escaped_test)
         .replace("$FILTER_REPR", filter_repr)
-        .replace("$STUB_REGISTRATIONS", "")
-        .replace("$MODULE_POPULATIONS", "")
     ).strip()
 
 

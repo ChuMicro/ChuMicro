@@ -22,9 +22,6 @@ def _populate_module(module_name, source_code):
 
 
 # Pass 1: register empty stubs so import statements resolve.
-$STUB_REGISTRATIONS
-
-$MODULE_POPULATIONS
 
 # Execute the test file.
 _test_namespace={}

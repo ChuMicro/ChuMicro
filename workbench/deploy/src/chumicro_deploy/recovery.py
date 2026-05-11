@@ -957,9 +957,13 @@ class InteractiveDeployer(_RecoveringDeployer):
         Same shape for both :meth:`deploy` and :meth:`deploy_diff` —
         only the inner deployer call differs, so the loop body lives
         here once and the public methods are thin lambda wrappers.
+
+        Every exit path returns or raises from inside the loop:
+        success returns the :class:`DeployResult`; non-retryable
+        plans, exhausted attempts, and user-requested aborts all
+        ``raise``.  The loop has no trailing fallthrough.
         """
         attempt = 0
-        last_error: Exception | None = None
         while attempt < self._max_attempts:
             attempt += 1
             try:
@@ -968,7 +972,6 @@ class InteractiveDeployer(_RecoveringDeployer):
                 CircuitpythonTransportError,
                 MicropythonTransportError,
             ) as error:
-                last_error = error
                 kind = self._resolve_kind(error)
                 plan = recovery_plan_for(kind)
                 self._report_failure(
@@ -989,11 +992,7 @@ class InteractiveDeployer(_RecoveringDeployer):
                 self._report_traceback(attempt, result.traceback, plan)
             return result
 
-        # Unreachable in practice — the except branch always raises
-        # once attempts are exhausted — but keep a deterministic
-        # fallback so static analysis is happy.
-        assert last_error is not None
-        raise last_error  # pragma: no cover
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _ask_retry(self, attempt: int) -> bool:
         """Ask the user whether to retry; return ``True`` to continue.

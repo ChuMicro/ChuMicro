@@ -37,7 +37,7 @@ chumicro-deploy flash \
 # Deploy a directory of Python files and run the entrypoint.
 chumicro-deploy deploy \
     --transport circuitpython --address /dev/cu.usbmodem11401 \
-    --deploy-mode flash --drive "/Volumes/CIRCUITPY" \
+    --deploy-mode flash \
     --directory ./my_app --entrypoint /code.py
 ```
 
@@ -277,10 +277,10 @@ Recent macOS releases replaced the in-kernel `msdosfs` driver with a user-space 
 `InteractiveDeployer` auto-detects this condition.  On a `CIRCUITPY_DRIVE_MISSING` failure it calls `detect_fskit_wedge()` (from `chumicro_deploy.macos_fskit`); if the daemon is wedged, it promotes the kind to `MACOS_FSKIT_WEDGED` and prints a coaching block with the exact recovery command:
 
 ```
-sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd fskit_agent diskarbitrationd && launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent
+sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd fskit_agent diskarbitrationd DiskArbitrationAgent
 ```
 
-The system daemons respawn via launchd; the `launchctl kickstart -k` bounces the per-user agent (which doesn't auto-respawn).  After the paste, CIRCUITPY drives mount and `chumicro-deploy` can proceed — hit Enter at the retry prompt to continue.
+Each killed daemon respawns under launchd in a clean state.  The per-user `DiskArbitrationAgent` is killed directly (rather than bounced via `launchctl kickstart`, which is SIP-blocked on modern macOS) — XPC clients re-trigger its on-demand load despite `KeepAlive=false`.  After the paste, CIRCUITPY drives mount and `chumicro-deploy` can proceed — hit Enter at the retry prompt to continue.
 
 Heads-up: on recent macOS the drives may be fully functional (mounted at `/Volumes`, readable, writable, deployable) but *not* appear in Finder's Locations sidebar.  That's an Apple FSKit-Finder regression unrelated to the deploy — reach them via Shift+Cmd+C (Computer view) or drag one into the Favorites sidebar section.  A reboot clears it.
 
@@ -309,7 +309,7 @@ else:
     print("probe did not return marker — firmware may not support sys.implementation")
 ```
 
-`DeviceInfo` carries `implementation` (name / version / machine), plus reserved `board_id` and `uid` fields — empty today, populated in a future slice by a richer on-device probe.
+`DeviceInfo` carries `implementation` (name / version / machine), plus a `uid` field populated from the same probe (`microcontroller.cpu.uid` on CircuitPython, `machine.unique_id()` on MicroPython) and a reserved `board_id` field — empty today, populated in a future slice by a richer on-device probe.
 
 ## Resolve firmware URLs — `resolve_firmware_url`
 
@@ -365,21 +365,6 @@ flash_firmware(
 - Pass `interactive=False` in automated flows without stdin.  When programmatic bootloader entry fails, the default is to prompt the user to hold BOOTSEL / GPIO0; `interactive=False` raises `FlashFirmwareError` instead.
 - `erase_flash=True` wipes every user partition (CIRCUITPY drive, stored WiFi credentials, NVS).  Recommended for first-install and recovery workflows; default `False` preserves user data on ordinary upgrades.
 - `on_progress` takes an optional `(fraction, message)` callback for UI integration — the CLI wires it to a stderr progress line.
-
-## Interactive recovery — `InteractiveDeployer`
-
-`InteractiveDeployer` wraps a `Deployer` with a classify-and-coach retry loop.  On a `CircuitpythonTransportError` or `MicropythonTransportError`, it routes the failure through `classify_deploy_failure`, prints the matching `RecoveryPlan` (headline + ordered fix-steps), and — when the plan is retryable — prompts the user to fix the condition and press Enter to retry.  After `max_attempts` attempts the last exception re-raises.
-
-```python
-from chumicro_deploy import Deployer, InteractiveDeployer
-
-deployer = InteractiveDeployer(Deployer(device), max_attempts=3)
-result = deployer.deploy(source)
-```
-
-Use it from the CLI or any interactive tool where a human is present and can unplug, tap RESET, or close a conflicting app; stick with the plain `Deployer` for scripts where retries would just confuse the output.
-
-On macOS, the `CIRCUITPY_DRIVE_MISSING` kind auto-promotes to `MACOS_FSKIT_WEDGED` when `detect_fskit_wedge()` confirms the FSKit / DiskArbitration daemons are stuck — the recovery block then prints the exact `sudo killall … && launchctl kickstart …` command to unstick them.
 
 ## Tail the board with chumicro-repl
 
