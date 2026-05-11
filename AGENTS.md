@@ -224,6 +224,7 @@ Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/
 | `guide-generation` | Writing or refreshing a library's `docs/guide.md` |
 | `validate-scripts` | Changing or validating `scripts/` infrastructure |
 | `audit-library` | Single-library code-quality audit |
+| `audit-embedded` | Single device-library on-device audit — flash, heap, fragmentation, runtime branches, `const()` / `memoryview` / `__slots__` reality, docs-match-code |
 | `audit-integration` | Cross-library boundary audit |
 | `audit-workspace` | Mono-repo-wide audit |
 | `audit-publishable-isolation` | Cross-repo audit for mono-repo concept leaks into shipped artifacts |

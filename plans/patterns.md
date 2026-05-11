@@ -291,6 +291,50 @@ input buffer (`PacketDecoder._buffer_view` in `chumicro_mqtt`,
 bytes for a downstream `.decode("utf-8")` or hashing, the wrap stays
 — memoryview lacks `.decode()`.
 
+## `__slots__` on MicroPython and CircuitPython
+
+`__slots__` does not save memory on the runtimes that matter for
+ChuMicro.  MicroPython has no `__slots__` implementation
+([discussion #13745](https://github.com/orgs/micropython/discussions/13745))
+— the syntax parses without error but the instance still gets a regular
+`__dict__`, so per-instance memory is identical to a plain class.
+CircuitPython inherits this.  Only CPython actually drops the per-instance
+dict and locks the attribute set.
+
+So when you see `__slots__` in chumicro library code today
+(`chumicro_mqtt._wire.PacketPublish`, `chumicro_requests.client.HttpClient`,
+`chumicro_runner.core.Runner`, etc.) the value it provides is **CPython-test
+attribute locking**, not on-device RAM savings — typo'd attribute writes
+(`self.feild = ...`) fail loudly under CPython's `pytest` instead of
+silently creating a new attribute.
+
+Audit guidance:
+
+* **New classes:** don't add `__slots__` reflexively.  Add it only when
+  CPython-test attribute-locking is the deliberate goal (a class with
+  many similarly-named fields where a typo would silently shadow a real
+  attribute and pass tests by accident).
+* **Existing usages:** not a regression — leave them.  A coordinated
+  removal pass is on the work queue when audit-embedded gets run on each
+  library.
+* **In docstrings or comments:** never write "`__slots__` saves memory"
+  / "`__slots__` keeps the instance lean."  False on MP and CP — and
+  the comment ships in the source distribution.
+
+```python
+# ✅ Locks attribute names so a typo in tests doesn't silently shadow
+class PacketPublish:
+    __slots__ = ("packet_id", "payload", "qos", "retain", "topic")
+
+# ✅ Plain class — same on-device RAM, slightly less ceremony
+class PacketPublish:
+    pass  # attributes assigned in __init__
+```
+
+The audit angle is in
+[`.github/skills/audit-embedded/SKILL.md`](../.github/skills/audit-embedded/SKILL.md)
+§7 ("Code shape for embedded" → "`__slots__` reality").
+
 ## Constructor injection
 
 Accept dependencies (time, I/O, network) as constructor parameters.  Never
