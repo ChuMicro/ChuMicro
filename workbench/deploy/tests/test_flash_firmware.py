@@ -542,13 +542,23 @@ class TestEnterEsp32RomBootloader:
             lambda *_args, **_kwargs: {"/dev/cu.usbmodem211101"},
         )
         clock = _FakeClock()
-        with pytest.raises(FlashFirmwareError, match="ROM bootloader"):
+        with pytest.raises(
+            FlashFirmwareError,
+            match="does not currently support automatically entering bootloader",
+        ) as exc_info:
             _enter_esp32_rom_bootloader(
                 device,
                 interactive=False,
                 sleep=clock.sleep,
                 monotonic=clock.monotonic,
             )
+        # Manual-entry steps + the --non-interactive escape hatch
+        # are part of the message — verify they're present so the
+        # user sees the recovery instructions, not just the symptom.
+        message = str(exc_info.value)
+        assert "Hold the BOOT button" in message
+        assert "press and release RESET" in message
+        assert "--non-interactive" in message
 
     def test_interactive_fallback_recovers(
         self, monkeypatch: pytest.MonkeyPatch,
