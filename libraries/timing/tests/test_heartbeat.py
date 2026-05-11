@@ -103,9 +103,9 @@ def test_heartbeat_default_ticks_uses_real_clock() -> None:
     """Creating a Heartbeat without ticks= should use the real clock."""
     heartbeat = Heartbeat(period_ms=1000)
 
-    # The real clock path sets _ticks_diff to the module-level ticks_diff
-    # and _last_beat_ms to a live ticks_ms() reading.
-    assert heartbeat._ticks_diff is not None
+    # The real clock path stores the chumicro_timing.ticks submodule
+    # and captures a live ticks_ms() reading at __init__.
+    assert heartbeat._ticks is not None
     assert isinstance(heartbeat._last_beat_ms, int)
     assert heartbeat.period_ms == 1000
 
