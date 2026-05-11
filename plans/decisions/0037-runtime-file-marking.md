@@ -85,6 +85,20 @@ def _find_bundle_modules(
 
 `build_bundle` calls it three times (once per output bundle) with the appropriate target.  The universal source bundle passes `DEVICE_RUNTIMES` (frozenset of `{"circuitpython", "micropython"}`) so any file marked exclusively for `cpython` (notably `testing.py`) drops out — those files only land in the PyPI sdist / wheel, since `pip install` doesn't go through this pipeline.
 
+### 6. Examples follow the same marker-is-the-contract rule
+
+Library examples (`libraries/<lib>/examples/*.py`) often use a filename convention to flag runtime-specific files for human discoverability:
+
+- `circuitpython_blink.py` — uses CircuitPython-specific APIs (`board`, `digitalio`).
+- `micropython_blink.py` — uses MicroPython-specific APIs (`machine.Pin`).
+- `blink.py` (no prefix) — cross-runtime; works on both CP and MP via shared abstractions in `helpers.py`.
+
+The filename prefix is **convention only**, identical to the principle in Section 2.  The runtime gating that the deploy-example tool and `verify-examples` apply is driven by the explicit `__chumicro_runtimes__` marker, not by the filename.  When both signals exist, the marker wins.  A file named `circuitpython_<x>.py` lacking the marker is treated as universal by the gate logic — and historically that produced silent breakage where examples named for one runtime turned out to be cross-runtime (or vice versa).
+
+Every prefix-named example MUST declare an explicit marker matching its actual constraint.  The filename then becomes pure discoverability: browse the directory, see at a glance which examples target which runtime.  When an example genuinely runs on both runtimes, drop the prefix and add `__chumicro_runtimes__ = ("circuitpython", "micropython")`.
+
+The historical filename-prefix shortcut in `chumicro_workspace.example_verify` (the `_HARDWARE_PREFIXES` tuple that auto-marked `circuitpython_*.py` / `micropython_*.py` as hardware-only) is documented for removal in a follow-on commit; the marker is the single source of truth.
+
 ## Consequences
 
 - ~10 dead-weight files per device drop out of CP-mpy / MP-mpy bundles.  Pi Pico W MP shrinks ~32 KB on top of the prior 24 KB testing.py win.

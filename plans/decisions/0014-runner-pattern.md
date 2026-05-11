@@ -32,6 +32,19 @@ def check(self, now_ms: int) -> bool:
 
 This is a duck-typed contract — components do not need to import or subclass anything from `chumicro-runner`.
 
+### `now_ms` time-base contract
+
+`now_ms` MUST be a value in `chumicro_timing.ticks_ms`'s wrapping ticks domain — modulo `2**29` milliseconds (~6.2 days), produced by the runtime's best monotonic source via the resolution chain `supervisor.ticks_ms` (CP) → `time.ticks_ms` (MP) → `time.monotonic_ns // 1_000_000` (CPython) → `int(time.monotonic() * 1000)` (final fallback).  Library implementations of runner-shaped services compute deadlines via `chumicro_timing.ticks_add` and compare elapsed time via `chumicro_timing.ticks_diff` against this base.
+
+Any free-form monotonic value (raw `time.monotonic_ns() // 1_000_000`, `int(time.monotonic() * 1000)`, etc.) is **wrong** — even though it looks plausible.  Mixing time bases breaks `ticks_diff` because the wrap-aware signed-difference math returns nonsense when comparing a wrapping value against a non-wrapping one.  A request whose deadline computes against `chumicro_timing.ticks_ms` but is checked against `time.monotonic_ns // 1_000_000` will appear "expired" immediately on a board that has been up for more than a few seconds (the two clocks share a starting epoch on fresh boot but diverge as the non-wrapping side accumulates beyond the wrap window).
+
+Drivers — application code or examples that own the `tick()` loop — pull the timestamp from one of two sources:
+
+- `chumicro_timing.ticks_ms()` directly, when the driver's owning library declares `chumicro-timing` as a dependency.
+- `helpers.ticks_ms()` (the per-library example helper that re-implements `chumicro_timing.ticks_ms`'s shape inline), when the driver is a library example that can't import `chumicro-timing` per the example dependency rule.
+
+Both produce identical values on every supported runtime.
+
 ### Runner
 
 `Runner(ticks=None)` captures `ticks_ms()` once per `tick()` call and passes the shared timestamp to every service.  It returns `now_ms` so user code can use it for passive checks alongside the dispatch loop.
