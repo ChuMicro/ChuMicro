@@ -1,8 +1,9 @@
 """Tests for ``chumicro_config`` — flat-key runtime config + section loader.
 
-Cross-runtime: runs on CPython pytest and (via
-``test_harness.run_cross_runtime``) under MicroPython + CircuitPython
-unix-ports.
+Cross-runtime: runs on CPython pytest, and under MicroPython +
+CircuitPython unix-ports via ``pytest libraries/config/tests --target
+unix-port`` (the ``chumicro-pytest-device`` plugin's unix-port
+backend).
 
 The ``load_runtime_config`` tests that need pytest fixtures
 (``tmp_path``, ``monkeypatch``) are CPython-only because the

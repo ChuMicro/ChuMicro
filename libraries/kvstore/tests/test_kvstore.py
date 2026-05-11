@@ -1,9 +1,10 @@
 """Host-side tests for ``chumicro-kvstore`` against the memory backend.
 
-Cross-runtime compatible: runs under CPython pytest and (via
-``test_harness.run_cross_runtime``) under MicroPython + CircuitPython
-unix-ports.  Only ``MemoryBackend`` is exercised here — the per-runtime
-backends have their own functional-test suites under
+Cross-runtime compatible: runs under CPython pytest, and under
+MicroPython + CircuitPython unix-ports via ``pytest libraries/kvstore/
+tests --target unix-port`` (the ``chumicro-pytest-device`` plugin's
+unix-port backend).  Only ``MemoryBackend`` is exercised here — the
+per-runtime backends have their own functional-test suites under
 ``functional_tests/``.
 """
 
