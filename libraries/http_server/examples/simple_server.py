@@ -50,10 +50,16 @@ Example output (board side)::
     [+] POST /api/echo  body={"hello": "board"}
 """
 
+#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: ``sys.implementation.name`` (CP / MP) and the HTTP server is
+#: pure-Python.  The marker tells :func:`scripts.verify_examples`
+#: + ``deploy-example`` to allow this file on either runtime.
+__chumicro_runtimes__ = ("circuitpython", "micropython")
+
 import time
 
 from chumicro_http_server import HttpServer, build_response
-from helpers import runtime_config, ticks_ms, wifi_up
+from helpers import runtime_config, ticks_diff, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
@@ -64,7 +70,7 @@ print(f"WIFI_OK ip={ip}")
 
 server = HttpServer.from_config(config, radio=radio)
 
-start_ns = time.monotonic_ns()
+start_ticks = ticks_ms()
 
 
 @server.route("/")
@@ -81,7 +87,9 @@ def index(_request):
 @server.route("/api/uptime")
 def uptime(_request):
     print("[+] GET /api/uptime")
-    uptime_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+    # ticks_ms wraps every ~6.2 days; ticks_diff handles the
+    # signed wraparound math correctly.
+    uptime_ms = ticks_diff(ticks_ms(), start_ticks)
     return build_response(200, json={"uptime_ms": uptime_ms})
 
 

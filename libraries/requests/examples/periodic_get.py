@@ -29,7 +29,7 @@ Deploying
 
 Deploy with ``chumicro-workspace``::
 
-    chumicro-workspace deploy-example requests circuitpython_periodic_get --device <id>
+    chumicro-workspace deploy-example requests periodic_get --device <id>
 
 Example output::
 
@@ -38,6 +38,12 @@ Example output::
     [1] status=200 bytes=1256 led_ticks=87
     [2] status=200 bytes=1256 led_ticks=89
 """
+
+#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: ``sys.implementation.name`` (CP / MP) and the HTTP client is
+#: pure-Python.  The marker tells :func:`scripts.verify_examples`
+#: + ``deploy-example`` to allow this file on either runtime.
+__chumicro_runtimes__ = ("circuitpython", "micropython")
 
 import time
 

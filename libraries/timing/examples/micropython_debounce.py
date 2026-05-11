@@ -14,6 +14,10 @@ Setup:
 Runs on MicroPython.
 """
 
+#: MicroPython-only — uses ``machine.Pin`` (MP API).
+#: Pair: ``circuitpython_debounce.py`` for the CP equivalent (``board`` + ``digitalio``).
+__chumicro_runtimes__ = ("micropython",)
+
 from chumicro_timing import ticks_diff, ticks_ms
 from machine import Pin
 

@@ -38,6 +38,12 @@ Setup:
 3. Save as ``code.py`` on the CIRCUITPY drive.
 """
 
+#: CircuitPython-only — uses ``microcontroller.nvm`` (CP-specific
+#: API; MicroPython has no equivalent module).  The marker tells
+#: ``deploy-example`` to refuse this file on MP boards instead of
+#: silently AttributeError'ing at import.
+__chumicro_runtimes__ = ("circuitpython",)
+
 import microcontroller
 from chumicro_msgpack import packb, unpackb
 

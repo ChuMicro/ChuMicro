@@ -151,7 +151,7 @@ returned timestamp falls inside the 2024-2030 plausibility window.
 
 | Example | What it shows |
 |---|---|
-| [`examples/circuitpython_ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/circuitpython_ntp_query.py) | Real query against `pool.ntp.org` from a CircuitPython board. |
+| [`examples/ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/ntp_query.py) | Real query against `pool.ntp.org` from a wifi-capable board (CircuitPython or MicroPython). |
 
 ## What's new
 

@@ -18,6 +18,10 @@ Setup:
 Runs on MicroPython.
 """
 
+#: MicroPython-only — uses ``machine.Pin`` (MP API).
+#: Pair: ``circuitpython_button_led.py`` for the CP equivalent (``board`` + ``digitalio``).
+__chumicro_runtimes__ = ("micropython",)
+
 from chumicro_runner import Runner
 from machine import Pin
 

@@ -75,7 +75,7 @@ Works on CPython, MicroPython, and CircuitPython.
 |---|---|
 | [`tcp_roundtrip.py`](examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; CP auto-detects `wifi.radio`. |
 | [`tls_with_custom_ca.py`](examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
-| [`circuitpython_udp_echo_client.py`](examples/circuitpython_udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking. |
+| [`udp_echo_client.py`](examples/udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking.  Cross-runtime (CP + MP). |
 
 ## Developing this library
 

@@ -127,7 +127,7 @@ Run `.scratch/run_sockets_acceptance.py --tls` to verify TLS end-to-end on your 
 |---|---|
 | [`tcp_roundtrip.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close, runs identically on every runtime. |
 | [`tls_with_custom_ca.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`. |
-| [`circuitpython_udp_echo_client.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/circuitpython_udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram, read echo back. |
+| [`udp_echo_client.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram, read echo back.  Cross-runtime (CP + MP). |
 
 ## What's new
 

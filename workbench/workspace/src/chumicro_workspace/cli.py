@@ -1874,11 +1874,16 @@ def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state ma
     if marker is not None and len(marker) == 1:
         (runtime_required,) = marker
     elif marker is not None and len(marker) > 1:
-        # Multi-runtime example — pick from --runtime if supplied,
-        # else error and ask the user to disambiguate.
+        # Multi-runtime example — disambiguation order:
+        # 1. --runtime explicit on the command line wins.
+        # 2. --device <id> implies a runtime via the device's transport
+        #    — let the device resolve below pick it up; runtime_required
+        #    stays None here and the post-resolve validation below
+        #    re-reads the marker against the resolved device.
+        # 3. Neither — error and ask the user to disambiguate.
         if args.runtime and args.runtime in marker:
             runtime_required = args.runtime
-        else:
+        elif args.device_id is None:
             print(
                 f"deploy-example: example targets multiple runtimes "
                 f"({sorted(marker)}); pass --runtime to disambiguate.",
@@ -1930,17 +1935,31 @@ def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state ma
             return DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
 
     # Validate device runtime matches the example's marker (if any).
-    if runtime_required and str(device.transport) != runtime_required:
+    # Single-runtime marker: device.transport must match.  Multi-runtime
+    # marker (runtime_required is None at this point per the
+    # disambiguation block above): device.transport must be one of the
+    # accepted runtimes — covers the `--device <id>` path on a
+    # cross-runtime example.
+    device_runtime = str(device.transport)
+    if runtime_required and device_runtime != runtime_required:
         print(
             f"deploy-example: example requires {runtime_required} but "
-            f"selected device runs {device.transport}.  Pass --device "
+            f"selected device runs {device_runtime}.  Pass --device "
             f"<id> or --runtime {runtime_required} to pick a matching "
             f"board.",
             file=sys.stderr,
         )
         return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+    if marker is not None and device_runtime not in marker:
+        print(
+            f"deploy-example: example targets {sorted(marker)} but "
+            f"selected device runs {device_runtime}.  Pick a "
+            f"compatible board with --device <id>.",
+            file=sys.stderr,
+        )
+        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
 
-    target_runtime = runtime_required or str(device.transport)
+    target_runtime = runtime_required or device_runtime
 
     # Build the FileSource — every other lib in libraries/ contributes
     # its src/ to the import-graph search paths so cross-library imports

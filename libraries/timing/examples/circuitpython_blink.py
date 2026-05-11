@@ -13,6 +13,10 @@ Setup:
 Runs on CircuitPython.
 """
 
+#: CircuitPython-only — uses ``board`` + ``digitalio`` (CP API).
+#: Pair: ``micropython_blink.py`` for the MP equivalent (``machine.Pin``).
+__chumicro_runtimes__ = ("circuitpython",)
+
 import board
 import digitalio
 from chumicro_timing import Heartbeat, ticks_ms

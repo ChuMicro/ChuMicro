@@ -61,7 +61,7 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  Hard 
 
 | Example | What it shows |
 |---|---|
-| [`examples/circuitpython_ntp_query.py`](examples/circuitpython_ntp_query.py) | Real query against `pool.ntp.org` — wifi up, UDP socket via factory, runner-shaped poll loop. |
+| [`examples/ntp_query.py`](examples/ntp_query.py) | Real query against `pool.ntp.org` — wifi up, UDP socket via factory, runner-shaped poll loop.  Cross-runtime (CP + MP). |
 
 ## Developing this library
 

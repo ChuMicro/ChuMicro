@@ -27,13 +27,19 @@ Deploying
 
 Deploy with ``chumicro-workspace``::
 
-    chumicro-workspace deploy-example ntp circuitpython_ntp_query --device <id>
+    chumicro-workspace deploy-example ntp ntp_query --device <id>
 
 Example output::
 
     WIFI_OK ip=10.0.0.42
     NTP_OK unix_seconds=1745782634
 """
+
+#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: ``sys.implementation.name`` (CP / MP) and the SNTP client itself
+#: is pure-Python.  The marker tells :func:`scripts.verify_examples`
+#: + ``deploy-example`` to allow this file on either runtime.
+__chumicro_runtimes__ = ("circuitpython", "micropython")
 
 import time
 

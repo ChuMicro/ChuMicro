@@ -111,7 +111,7 @@ runner-shaped, LED-blink-friendly progression.
 
 | Example | What it shows |
 |---|---|
-| `circuitpython_simple_server.py` | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes.  Drive it with `curl` from your laptop.  Filename prefix marks it hardware-only.  For a two-physical-board demo see the workspace template's `two_board_handshake/` example. |
+| `simple_server.py` | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes.  Drive it with `curl` from your laptop.  Cross-runtime (CP + MP) — runtime marker on the file gates hardware-only deploys.  For a two-physical-board demo see the workspace template's `two_board_handshake/` example. |
 
 ## Configuring wifi for examples and functional tests
 
