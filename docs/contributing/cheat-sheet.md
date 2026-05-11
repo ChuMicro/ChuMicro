@@ -75,10 +75,10 @@ Bare `pytest` from the repo root is the everyday command for iteration — fast,
 
 | What | Command |
 |---|---|
-| Library unit tests on MicroPython unix-port | `python scripts/run.py test-micropython` |
-| Library unit tests on CircuitPython unix-port | `python scripts/run.py test-circuitpython` |
-| Unit tests on all three runtimes (CPython + both unix ports, parallelized) | `python scripts/run.py test-all-runtimes` |
-| Unix-port unit tests via bare pytest (IDE play / single-file targeting) | `pytest libraries/timing/tests --target unix-port --runtime micropython` |
+| Library unit tests on MicroPython unix-port | `pytest libraries/ --target unix-port --runtime micropython` |
+| Library unit tests on CircuitPython unix-port | `pytest libraries/ --target unix-port --runtime circuitpython` |
+| Unit tests on both unix ports | `pytest libraries/ --target unix-port --runtime both` |
+| Per-file unix-port run (IDE play / single-file targeting) | `pytest libraries/timing/tests/test_heartbeat.py --target unix-port --runtime micropython` |
 | Full CI mirror including hardware-gated functional tests | `python scripts/run.py preflight --with-functional` |
 | Prepare MicroPython unix-port (one-time, slow) | `python scripts/run.py prepare-micropython` |
 | Prepare CircuitPython unix-port (one-time, slow) | `python scripts/run.py prepare-circuitpython` |
