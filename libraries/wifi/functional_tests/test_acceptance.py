@@ -52,13 +52,13 @@ def _drive_until(service, predicate, *, deadline_ms):
 
     Returns ``True`` on success, ``False`` on deadline timeout.
     """
-    runtime_ticks_ms = service._ticks_ms  # noqa: SLF001 - reuse the wired clock
-    start = runtime_ticks_ms()
+    ticks = service._ticks  # noqa: SLF001 - reuse the wired clock
+    start = ticks.ticks_ms()
     while True:
-        now = runtime_ticks_ms()
+        now = ticks.ticks_ms()
         if predicate(service):
             return True
-        elapsed = service._ticks_diff(now, start)  # noqa: SLF001
+        elapsed = ticks.ticks_diff(now, start)
         if elapsed >= deadline_ms:
             return False
         if service.check(now):
