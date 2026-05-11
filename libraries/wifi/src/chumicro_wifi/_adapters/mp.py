@@ -14,15 +14,19 @@ two stack-specific knobs the adapter applies are:
   ~30-100 ms tick spikes on chip wake-up).  CYW43 has no firmware
   reconnect supervisor, so no ``reconnects`` knob is issued.
 
-Stack detection at construction time matches ``os.uname().machine``
-against :data:`CYW43_MACHINES` — a positive whitelist of
-known-CYW43 board identifiers.  Anything outside the whitelist
-(today's ESP boards + future unknowns) falls through to
-``"espidf"``, where the ESP-side knob has its own try/except
-guard so it no-ops cleanly on chips that don't expose it.  This
-shape avoids the prior "if not ESP, assume CYW43" inference —
-new CYW43-bearing boards extend :data:`CYW43_MACHINES` rather
-than relying on an exception path to do the right thing.
+Stack detection at construction time matches the runtime's machine
+identifier against :data:`CYW43_MACHINES` — a positive whitelist of
+known-CYW43 board identifiers.  The identifier comes from
+``sys.implementation._machine`` (present on MicroPython and
+CircuitPython, including unix-port host builds), falling back to
+``os.uname().machine`` on CPython where ``_machine`` is absent.
+Anything outside the whitelist (today's ESP boards + future
+unknowns) falls through to ``"espidf"``, where the ESP-side knob
+has its own try/except guard so it no-ops cleanly on chips that
+don't expose it.  This shape avoids the prior "if not ESP, assume
+CYW43" inference — new CYW43-bearing boards extend
+:data:`CYW43_MACHINES` rather than relying on an exception path to
+do the right thing.
 
 Tests inject the stack explicitly via ``stack="espidf"`` /
 ``stack="cyw43"`` to exercise both branches on CPython.
@@ -37,6 +41,7 @@ remain stable across the unification.
 __chumicro_runtimes__ = ("micropython",)
 
 import os
+import sys
 
 from chumicro_wifi._adapters.base import WifiAdapter
 
@@ -45,13 +50,33 @@ from chumicro_wifi._adapters.base import WifiAdapter
 #: when ``WifiConfig.power_save`` is ``False`` (the default).
 CYW43_PM_DISABLE = 0xA11140
 
-#: Known CYW43-based MicroPython board identifiers (``os.uname().machine``).
+#: Known CYW43-based MicroPython board identifiers.
 #: Add new entries as CYW43-bearing boards land in upstream MP — match the
-#: exact string ``os.uname().machine`` returns on the board (visible via
-#: ``import os; print(os.uname().machine)`` at the REPL).
+#: exact string the board reports (visible via
+#: ``import sys; print(sys.implementation._machine)`` at the REPL).
 CYW43_MACHINES = (
     "Raspberry Pi Pico W with RP2040",
 )
+
+
+def _get_machine_name():
+    """Return the runtime's machine identifier, or ``""`` when unavailable.
+
+    Prefers ``sys.implementation._machine`` — present on MicroPython and
+    CircuitPython on both real boards and unix-port hosts.  On a Pi Pico W
+    MP firmware this matches what ``os.uname().machine`` returns; on
+    unix-port hosts it's the host build string (which won't match any
+    entry in :data:`CYW43_MACHINES`).  Falls back to ``os.uname().machine``
+    on CPython hosts where ``sys.implementation._machine`` is absent.
+    Returns ``""`` when neither source works, which falls through to
+    ``"espidf"`` in :meth:`MpWifiAdapter._detect_stack` (the safe default).
+    """
+    machine = getattr(sys.implementation, "_machine", None)
+    if machine is not None:
+        return machine
+    if hasattr(os, "uname"):
+        return os.uname().machine
+    return ""  # pragma: no cover - no host runtime hits this
 
 
 class MpWifiAdapter(WifiAdapter):
@@ -88,16 +113,17 @@ class MpWifiAdapter(WifiAdapter):
 
     @staticmethod
     def _detect_stack():
-        """Return ``"cyw43"`` if ``os.uname().machine`` is a known CYW43 board.
+        """Return ``"cyw43"`` if the runtime reports a known CYW43 board.
 
-        Falls through to ``"espidf"`` for everything outside
+        Reads the machine identifier via :func:`_get_machine_name` and
+        falls through to ``"espidf"`` for everything outside
         :data:`CYW43_MACHINES` — ESP-side handling has its own
         try/except guards so a misclassified non-ESP board still
         operates safely (the ESP-specific knob no-ops cleanly on
         chips that don't expose it).  Extend :data:`CYW43_MACHINES`
         when a new CYW43-bearing board appears.
         """
-        if os.uname().machine in CYW43_MACHINES:
+        if _get_machine_name() in CYW43_MACHINES:
             return "cyw43"
         return "espidf"
 
