@@ -51,7 +51,22 @@ Marked CP-only via `__chumicro_runtimes__ = ("circuitpython",)` after bench disc
 
 Both boards completed full TLS handshake against `letsencrypt.org:443` using only the embedded ISRG Root X1 as trust anchor (system store NOT consulted), proving the helper does what it claims.
 
-**Side observation — root-caused + fixed in the same session (#7 follow-on).** Lolin S2 MP was failing every wifi-up call with `RuntimeError: Wifi Unknown Error 0x0102` (`ESP_ERR_INVALID_ARG` from ESP-IDF), reproduced with `tcp_roundtrip.py` too (no TLS).  Root cause: helpers.py's `wlan.config(pm=0xA11140)` (CYW43 power-save magic) was called on every MP board with `try / except (OSError, ValueError)`, but ESP32 raises `RuntimeError` (the catch-all branch in MP's `esp_exceptions_helper`).  Worse, the unhandled exception left the wifi stack in `ESP_ERR_WIFI_STATE` until a hard reset.  Fixed by gating the call: `if sys.platform == "rp2": wlan.config(pm=0xA11140)` — Pi Pico W is the only rp2 MP firmware with wifi, ESP boards skip the call entirely.  Propagated to all 7 helpers.py + scaffold template (md5-identical post-edit).  Bench-validated 2026-05-10: Pi Pico W MP regression green (power-save still disabled, fast connect); Lolin S2 MP after hard-reset green (`WIFI_OK ip=172.16.1.16` → HTTP/1.1 200 OK → closed cleanly).
+**Side observation — root-caused + fixed in the same session (#7 follow-on).** Lolin S2 MP was failing every wifi-up call with `RuntimeError: Wifi Unknown Error 0x0102` (`ESP_ERR_INVALID_ARG` from ESP-IDF), reproduced with `tcp_roundtrip.py` too (no TLS).  Root cause: helpers.py's `wlan.config(pm=0xA11140)` (CYW43 power-save magic) was called on every MP board with `try / except (OSError, ValueError)`, but ESP32 raises `RuntimeError` (the catch-all branch in MP's `esp_exceptions_helper`).  Worse, the unhandled exception left the wifi stack in `ESP_ERR_WIFI_STATE` until a hard reset.
+
+Fixed by switching from "fire and hope" to a positive whitelist on the actual board identifier `os.uname().machine`.  Both helpers.py and `chumicro_wifi._adapters.mp` now check `if os.uname().machine in CYW43_MACHINES:` (today: `("Raspberry Pi Pico W with RP2040",)`).  Aligned shape across both: helpers.py uses module-level `_CYW43_MACHINES` constant, chumicro_wifi exports `CYW43_MACHINES` publicly.  Replaces the prior heuristics — helpers.py's first attempt at `sys.platform == "rp2"` and chumicro_wifi's `try: import esp32` (negative-by-elimination).  New CYW43-bearing boards extend the whitelist rather than hoping the inference does the right thing.
+
+chumicro_wifi tests updated: `test_default_stack_detection_on_cpython_is_cyw43` → `test_default_stack_detection_on_cpython_is_espidf` (CPython's machine string isn't in the whitelist so it falls through to espidf, the safe default with try/except guards on its ESP-specific knob).  New `test_default_stack_detection_picks_cyw43_for_pico_w_machine` monkeypatches `os.uname` to assert positive cyw43 detection on the Pi Pico W machine string.  `test_construction_with_default_stack_uses_auto_detect` updated: CPython auto-detect now lands on `mp_esp32` (was `mp_rp2`).
+
+Propagated to all 7 helpers.py + scaffold template (md5-identical post-edit).  `chumicro-wifi` 0.1.0 → 0.2.0 (public detection-behavior shift; pre-1.0 minor).
+
+**Bench-validated 2026-05-10** on both MP boards via two paths:
+
+* **chumicro_wifi adapter detection** via `wifi/connect_to_ap.py`:
+  * Pi Pico W MP: `ADAPTER: mp_rp2` → `WIFI_OK ip=172.16.1.2`
+  * Lolin S2 MP: `ADAPTER: mp_esp32` → `WIFI_OK ip=172.16.1.16`
+* **helpers.py whitelist** via `sockets/tcp_roundtrip.py`:
+  * Pi Pico W MP: `WIFI_OK ip=172.16.1.2` → HTTP/1.1 200 OK → closed cleanly (fast — pm= still fires)
+  * Lolin S2 MP: `WIFI_OK ip=172.16.1.16` → HTTP/1.1 200 OK → closed cleanly (pm= correctly skipped)
 
 ### 4. `chumicro-config` README + docs/index.md + docs/guide.md still document the old `from_dict` pattern — SHIPPED
 
