@@ -6,8 +6,13 @@ The canned-bytes helpers stay in sync with the encoder/decoder, so a hand-rolled
 
 ## Usage
 
+Enqueue each broker response *just before* the client action that
+expects it — the client drains the socket greedily, so a PUBACK
+sitting in the recv queue before its PUBLISH has been sent is
+treated as an unsolicited ack and faults the client.
+
 ```python
-from chumicro_mqtt import MQTTClient
+from chumicro_mqtt import MQTTClient, ProtocolState
 from chumicro_mqtt.testing import (
     canned_connack_bytes,
     canned_puback_bytes,
@@ -19,21 +24,30 @@ from chumicro_sockets.testing import FakeSocket
 def test_connect_publish_subscribe_roundtrip():
     sock = FakeSocket()
     sock.enqueue_recv(canned_connack_bytes(return_code=0))
-    sock.enqueue_recv(canned_suback_bytes(packet_id=1))
-    sock.enqueue_recv(canned_puback_bytes(packet_id=2))
 
     client = MQTTClient(sock, client_id="test")
     client.connect()
-    client.subscribe("commands/+")
-    handle = client.publish("sensors/temp", b"21.5", qos=1)
-
-    for _ in range(10):
+    while client.state != ProtocolState.CONNECTED:
         client.handle(now_ms=0)
 
-    assert client.connected
-    assert handle.acked
-    # Inspect what the client wrote on the wire.
-    assert sock.sent[0][0] == 0x10  # CONNECT fixed header
+    sock.enqueue_recv(canned_suback_bytes(packet_id=1))
+    client.subscribe("commands/+")
+    for _ in range(3):
+        client.handle(now_ms=0)
+
+    acked = []
+    sock.enqueue_recv(canned_puback_bytes(packet_id=2))
+    client.publish(
+        "sensors/temp", b"21.5", qos=1,
+        on_publish=lambda topic, payload: acked.append(topic),
+    )
+    for _ in range(3):
+        client.handle(now_ms=0)
+
+    assert acked == ["sensors/temp"]
+    # Inspect what the client wrote on the wire.  `sock.sent` is a
+    # bytearray of everything send()'d in order.
+    assert sock.sent[0] == 0x10  # CONNECT fixed header
 ```
 
 ## Available helpers
@@ -67,16 +81,22 @@ def test_client_handles_connect_refusal():
 def test_subscriber_receives_publish():
     sock = FakeSocket()
     sock.enqueue_recv(canned_connack_bytes(return_code=0))
-    sock.enqueue_recv(canned_suback_bytes(packet_id=1))
-    sock.enqueue_recv(canned_publish_bytes("sensors/temp", b"22.1"))
 
     received = []
     client = MQTTClient(sock, client_id="test")
     client.on_message = lambda topic, payload: received.append((topic, payload))
     client.connect()
-    client.subscribe("sensors/+")
+    while client.state != ProtocolState.CONNECTED:
+        client.handle(now_ms=0)
 
-    for _ in range(10):
+    sock.enqueue_recv(canned_suback_bytes(packet_id=1))
+    client.subscribe("sensors/+")
+    for _ in range(3):
+        client.handle(now_ms=0)
+
+    # Broker now pushes a retained / fresh message on the subscription.
+    sock.enqueue_recv(canned_publish_bytes("sensors/temp", b"22.1"))
+    for _ in range(3):
         client.handle(now_ms=0)
 
     assert received == [("sensors/temp", b"22.1")]

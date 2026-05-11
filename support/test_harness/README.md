@@ -33,7 +33,7 @@ Launch the script under a MicroPython unix-port binary:
 micropython support/test_harness/run_cross_runtime.py [library ...]
 ```
 
-The mono-repo's `python scripts/run.py test-micropython` wraps this — it resolves the binary (workspace-prepared `.tools/` build first, then `PATH`), auto-builds if missing, and accepts `--micropython-binary /path/to/binary` to override.
+The mono-repo ships a CLI wrapper that resolves the binary (workspace-prepared `.tools/` build first, then `PATH`), auto-builds if missing, and accepts a `--micropython-binary /path/to/binary` override.
 
 ## CircuitPython unix-port run
 
@@ -43,11 +43,11 @@ Same shape:
 circuitpython support/test_harness/run_cross_runtime.py [library ...]
 ```
 
-The mono-repo wrapper is `python scripts/run.py test-circuitpython` (with `--circuitpython-binary` to override).  The harness runs against the pinned upstream 10.x CircuitPython unix-port build; both runtime compatibility checks are part of the standard CI gates.
+The mono-repo wrapper has a parallel CircuitPython invocation with `--circuitpython-binary` override.  The harness runs against the pinned upstream 10.x CircuitPython unix-port build; both runtime compatibility checks are part of the standard CI gates.
 
 ## Combined host + runtime run
 
-The full cross-runtime sweep (CPython unit tests + both unix-port runtimes) is `python scripts/run.py test-all-runtimes` from the workspace root.
+The full cross-runtime sweep (CPython unit tests + both unix-port runtimes) ships as a single mono-repo command that fans out across the three runtimes from the workspace root.
 
 ## Device testing on real boards
 

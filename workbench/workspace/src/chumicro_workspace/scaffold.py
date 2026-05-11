@@ -4,6 +4,9 @@ External users developing their own chumicro-style libraries get
 the same starter layout chumicro libraries themselves use.  The
 shipped templates live alongside this module under
 ``_payloads/library_template/`` and travel with the wheel.
+Workbench-kind packages pull their four ``docs/`` files from a
+companion ``_payloads/workbench_template/`` tree instead — see
+:func:`scaffold_library` ``package_kind`` for the details.
 
 The output layout::
 
@@ -36,11 +39,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-#: Directory under :mod:`chumicro_workspace`'s package tree where
-#: scaffolding templates live.  Resolved at import time so
-#: filesystem reads stay simple — the wheel ships the same path.
+#: Directories under :mod:`chumicro_workspace`'s package tree where
+#: scaffolding templates live.  Resolved at import time so filesystem
+#: reads stay simple — the wheel ships both paths.  The workbench
+#: tree only carries the four ``docs/`` templates today (workbench
+#: packages need a different doc shape: no Runner pattern, no Memory
+#: notes, no Bundle footer links).  Every other scaffolded file is
+#: shared, so it lives under :data:`_LIBRARY_TEMPLATE_DIR` and
+#: workbench scaffolds pull from there too.
 _LIBRARY_TEMPLATE_DIR = (
     Path(__file__).resolve().parent / "_payloads" / "library_template"
+)
+_WORKBENCH_TEMPLATE_DIR = (
+    Path(__file__).resolve().parent / "_payloads" / "workbench_template"
 )
 
 
@@ -52,14 +63,17 @@ class LibraryAlreadyExistsError(FileExistsError):
     """
 
 
-def _load_template(filename: str) -> str:
+def _load_template(
+    filename: str, *, template_dir: Path = _LIBRARY_TEMPLATE_DIR,
+) -> str:
     """Read a scaffolding template by filename.
 
-    Templates live at :data:`_LIBRARY_TEMPLATE_DIR`.  Pure
-    filesystem read — no caching, no formatting.  Caller does
-    ``.format(**vars)`` on the returned string.
+    Defaults to :data:`_LIBRARY_TEMPLATE_DIR`; pass
+    *template_dir=_WORKBENCH_TEMPLATE_DIR* for the workbench-flavoured
+    docs templates.  Pure filesystem read — no caching, no formatting.
+    Caller does ``.format(**vars)`` on the returned string.
     """
-    template_path = _LIBRARY_TEMPLATE_DIR / filename
+    template_path = template_dir / filename
     if not template_path.is_file():
         raise FileNotFoundError(
             f"library scaffold template missing at {template_path} — "
@@ -104,11 +118,11 @@ def scaffold_library(
             shape with no extras.  ``"workbench"`` for host-only
             CPython tools — uses a workbench-flavoured pyproject
             template with a ``[project.scripts]`` block (CLI entry
-            point) and source URL pointing at ``workbench/<name>/``
-            instead of ``libraries/<name>/``.  All other
-            scaffolded files (src/tests/docs/examples/README/mkdocs)
-            are identical between kinds — same directory shape for
-            both.
+            point), and pulls the four ``docs/`` templates from
+            ``_payloads/workbench_template/`` (no Runner pattern,
+            no Memory notes, no Bundle footer link).  The rest of
+            the tree (src/tests/examples/README/mkdocs) is shared
+            between kinds — same directory shape for both.
 
     Returns:
         Path to the created library directory.
@@ -167,24 +181,34 @@ def scaffold_library(
         ),
     )
 
-    # docs/.
+    # docs/.  Workbench-kind packages pull these four files from a
+    # separate template tree — workbench tools have no Runner pattern,
+    # no Memory notes, no cross-runtime story, and footer links go to
+    # PyPI + Issues only (no bundle).
+    docs_template_dir = (
+        _WORKBENCH_TEMPLATE_DIR
+        if package_kind == "workbench"
+        else _LIBRARY_TEMPLATE_DIR
+    )
     (library_dir / "docs" / "index.md").write_text(
-        _load_template("index.md.template").format(
-            name=name, import_name=import_name,
-        ),
+        _load_template(
+            "index.md.template", template_dir=docs_template_dir,
+        ).format(name=name, import_name=import_name),
     )
     (library_dir / "docs" / "guide.md").write_text(
-        _load_template("guide.md.template").format(name=name),
+        _load_template(
+            "guide.md.template", template_dir=docs_template_dir,
+        ).format(name=name, import_name=import_name),
     )
     (library_dir / "docs" / "api.md").write_text(
-        _load_template("api.md.template").format(
-            name=name, import_name=import_name,
-        ),
+        _load_template(
+            "api.md.template", template_dir=docs_template_dir,
+        ).format(name=name, import_name=import_name),
     )
     (library_dir / "docs" / "testing.md").write_text(
-        _load_template("testing.md.template").format(
-            name=name, import_name=import_name,
-        ),
+        _load_template(
+            "testing.md.template", template_dir=docs_template_dir,
+        ).format(name=name, import_name=import_name),
     )
 
     # examples/basic_usage.py.

@@ -80,7 +80,10 @@ def test_supervisor_handles_exception_during_connect():
         ticks=ticks,
     )
     service.handle(0)
-    assert service.state == "RECONNECTING"
+    # Exception is captured rather than propagated — the service
+    # stays in CONNECTING with a retry scheduled.
+    assert isinstance(service.last_error, OSError)
+    assert service.state == "connecting"
 ```
 
 ## Usage from other libraries
