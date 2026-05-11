@@ -17,7 +17,7 @@ This skill is narrower than `/audit-workspace` (which covers library shapes, dep
 * **Workspace-template repo:** `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template/`
   * Whole repo — every file a fresh `git clone` of the starter receives.
 
-Argument: none, or `--repo mono` / `--repo template` / `--pattern <N>` to scope.  Default is both repos, all seven patterns.
+Argument: none, or `--repo mono` / `--repo template` / `--pattern <N>` to scope.  Default is both repos, all eight patterns.
 
 ## What "publishable" means here
 
@@ -36,9 +36,9 @@ Argument: none, or `--repo mono` / `--repo template` / `--pattern <N>` to scope.
 
 Tests and `scripts/` source are mono-repo-internal — they can name `Decision NNNN` and `plans/` freely.  The audit only fires when those names cross into something that *ships*.
 
-## The seven patterns
+## The eight patterns
 
-Each pattern is a distinct leak shape with its own search recipe.  The names below are stable — refer to them as P1–P7 in the punch-list.
+Each pattern is a distinct leak shape with its own search recipe.  The names below are stable — refer to them as P1–P8 in the punch-list.
 
 ### P1. User-facing strings naming chumicro-internal tools
 
@@ -55,9 +55,19 @@ This is in `workbench/pytest-device/src/chumicro_pytest_device/plugin.py` — a 
 grep -rn "run\.py\b" libraries/*/src/ workbench/*/src/ support/test_harness/src/
 grep -rn "python scripts/" libraries/*/src/ workbench/*/src/
 grep -rn -E "(via your workspace|in the mono-repo|chumicro-style)" libraries/*/src/ workbench/*/src/
+# Bare scripts/run.py workflow names — "test-libraries-functional",
+# "test-circuitpython", "verify-examples" etc. appear in docstrings
+# without the `run.py` prefix, so the run.py grep above misses them.
+grep -rn -E "\btest-(libraries-functional|all-runtimes|circuitpython|micropython|workbench-functional)\b|\bverify-examples\b|\bprepare-(circuitpython|micropython|mpy-cross)\b" libraries/*/src/ workbench/*/src/ support/test_harness/src/
+# Workstream-file names referenced in comments / docstrings —
+# "gap #6 of the workspace-template / dev-and-regular-mode-gaps
+# audit" is the same shape as a plans/ ref but the slug appears
+# bare.  Catch the audit + cleanup + reliability + followups suffix
+# vocabulary the workstream filenames use.
+grep -rn -iE "\b[a-z][a-z0-9-]+-(audit|cleanup|followups|reliability|hardening|gaps|research)\b" libraries/*/src/ workbench/*/src/ support/test_harness/src/
 ```
 
-**Replacement:** generic phrasing that names the user-facing concept, not the upstream tool.  "Register a device with your workspace's CLI" — not "via your workspace's `run.py`".  "Configure with `runtime_config.msgpack`" — not "via `python run.py dump-config`".
+**Replacement:** generic phrasing that names the user-facing concept, not the upstream tool.  "Register a device with your workspace's CLI" — not "via your workspace's `run.py`".  "Configure with `runtime_config.msgpack`" — not "via `python run.py dump-config`".  For workstream-name leaks, inline the underlying fact ("treat null + absent identically") and drop the workstream-slug pointer entirely — the slug is plans-tree internal and means nothing to a PyPI consumer.
 
 ### P2. `Decision NNNN` references in shipped source
 
@@ -131,6 +141,35 @@ grep -rn "starter repo\|starter clone" workbench/*/src/   # often paired with im
 
 **Replacement:** `template_apply.py`'s default URL stays (with a comment noting it's overridable); functional tests use a fixture-controlled URL; READMEs frame the package's role as "renders a starter from any chumicro-shaped template repo," not "ships *the* template."
 
+### P8. Test-harness scaffolding in publishable `src/`
+
+Code in `libraries/*/src/` or `workbench/*/src/` that exists *only* to keep test infrastructure stable — `__all__` placeholders that re-export private names solely so `monkeypatch.setattr` paths don't churn, lazy in-function imports introduced to silence import cycles caused by test-extracted modules, "kept around so monkeypatch paths keep working" comment blocks.  These are mono-repo-test-shape concerns leaking into shipped code; a `pip install` consumer has no monkeypatch paths to preserve.
+
+Surfaced during the deploy library audit: an extraction landed re-exports + an `__all__` declaration in `circuitpython_transport.py` whose entire purpose was to keep test patch paths stable.  Per user feedback in that session: *"code that exists to support a test harness that isn't a part of testing.py or a part of mockability shouldn't be in the package code."*
+
+**Search recipes:**
+```
+# Re-export blocks with a test-stability comment.
+grep -rnB2 -E "monkeypatch|test patch|patch path" libraries/*/src/ workbench/*/src/ | grep -iE "re-export|kept around|so tests|so monkeypatch"
+# Function-scope imports in publishable src — usually a smell;
+# legitimate cases (lazy-loading heavy deps) get a one-line comment
+# naming the dep.  Bare ones often turn out to be cycle workarounds.
+grep -rnB1 -E "^\s{4,}(from|import) \.[a-zA-Z_]" libraries/*/src/ workbench/*/src/ | grep -B1 -v "pragma: no cover\|TYPE_CHECKING\|noqa: PLC0415"
+# __all__ that includes private names (leading underscore) — almost
+# always a test-harness re-export tell.
+grep -rnB1 -E "^\s*['\"]_[a-zA-Z_]" libraries/*/src/ workbench/*/src/  | grep -B1 "__all__"
+```
+
+**Distinguish:**
+
+* Lazy imports that exist to avoid loading a heavy optional dep on every import (e.g. PyYAML inside a config-loader function) are fine — they have a clear one-line "Late import so importing :mod:`config` alone does not pull in PyYAML" comment.
+* Public-API re-exports from a parent `__init__.py` are normal — `chumicro_deploy/__init__.py` re-exporting `Device` from `device.py` is *the* public surface, not a test crutch.
+* The leak is specifically: re-exports of private names (leading underscore), or `__all__` declarations whose justification is "tests patch this here."
+
+**Replacement:** delete the re-export; update test patch paths to follow the canonical definition module (e.g. `chumicro_X.helpers._do_thing` instead of `chumicro_X.transport._do_thing`).  Break import cycles caused by extractions with a shared leaf types module (e.g. `recovery_kind.py` holding the types that both `recovery.py` and `recovery_plans.py` import) instead of lazy in-function imports.  See `/audit-library`'s "Extraction patterns" section.
+
+P8 sits with the other src/ leak patterns (P1–P3) rather than the cross-repo / generator patterns; it's a P1-relative ordering that prioritises depth of remediation (P8 fixes usually need a test-patch-path update plus a src/ edit), not search ordering.  Run greps for P1–P3, then P8, then move on to P4 onward.
+
 ### P7. Bundle / config / scaffolder generators baking in mono-repo identity
 
 `scripts/bundle_manager.py` writes the bundle README that ships *to consumers*.  `scripts/generate_config_files.py` emits user-facing strings written into user workspaces.  These generators are mono-repo-internal, so audit their **output** — what string the consumer ultimately sees — not the generator's own implementation.
@@ -148,7 +187,7 @@ grep -rn -E "f-?strings? .* (run\.py|scripts/|plans/|Decision \d)" scripts/
 
 ## Process
 
-1. **Run all seven greps**, both repos.  Use `--include` filters to keep noise down (`grep -rn --include='*.py' --include='*.md' --include='*.toml'`).  Pipe results into `.scratch/audit-isolation-<date>.txt` so the punch-list survives compaction.
+1. **Run all eight greps**, both repos.  Use `--include` filters to keep noise down (`grep -rn --include='*.py' --include='*.md' --include='*.toml'`).  Pipe results into `.scratch/audit-isolation-<date>.txt` so the punch-list survives compaction.
 2. **Spot-check 3–5 hits per pattern** before reporting.  Greps generate false positives — `Decision` in a class name (`DecisionTreeClassifier`) or `run.py` inside a generator's literal string that *is* meant to land on a user's machine via the workspace-template (legitimate self-reference).  The user's verify-sub-agent-claims memory applies: report only after reading.
 3. **Group by pattern, not by file.**  Punch-list shape:
    ```
@@ -193,7 +232,7 @@ Repos audited:
   mono       /Users/chuxor/circuitpython/chumicro
   template   /Users/chuxor/circuitpython/ChuMicro-Workspace-Template
 
-Pattern hits (P1–P7):
+Pattern hits (P1–P8):
 
   P1  user-facing strings naming chumicro-internal tools           N hits
       <file:line>  <snippet>  →  <proposed rephrase>
@@ -216,6 +255,9 @@ Pattern hits (P1–P7):
 
   P7  generators baking mono-repo identity into emitted artifacts   N hits
       ...
+
+  P8  test-harness scaffolding in publishable src/                  N hits
+      <file:line>  <snippet>  →  delete + update test patch path
 
 CHU006 lint gaps surfaced:
 

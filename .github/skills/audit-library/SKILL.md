@@ -38,6 +38,7 @@ Look for cases where the code works but the call site, type, or name doesn't mat
 * **Return type uses string sentinels instead of an enum / dataclass.**  Fragile, no type-check support.  Fix: small `dataclass` or `StrEnum`.
 * **Docstring claims behaviour the code doesn't implement.**  E.g. "format-agnostic" when a regex is YAML-shaped.  Fix: correct the docstring (cheaper than retrofitting behaviour).
 * **Two-step state machines for one conceptual operation.**  Function A finds a thing, then function B post-processes the result by re-checking what A already could have known.  Collapse into one step.
+* **Stale CLI / recovery-command / status claims in docs.**  Grep `docs/guide.md`, `README.md`, and `docs/*.md` for every CLI flag, error-message text, recovery command, environment-variable name, and feature-status assertion they reference by name; confirm each still exists with the documented shape.  Field reality:  this audit found a `--drive` flag the CLI no longer exposes, a `launchctl kickstart` recovery command the source had dropped (SIP-blocked), and a "uid is reserved, empty today" claim that pre-dated the probe that now populates it.  All three were HIGH-confidence single-line edits — and all three would have rotted further without the grep.
 
 ### 2. Duplication
 
@@ -113,6 +114,20 @@ Libraries ship to constrained devices — less source = less flash, less parse-t
 
 * **Final state matters less than the audit quality.**  A pass that cuts 20% of source but misses its self-set target by 15% is still a successful audit — base-class plus subclass deltas often cost more overhead than estimated.  The audit's goal is "find the unnecessary mass," not "hit a number."  Numbers are useful for triggering and bounding the work, not for grading it.
 
+## Extraction patterns and module hygiene
+
+When a finding ends in "extract these helpers to a sibling module," the *how* matters as much as the *what*.  Several patterns landed wrong on the first try during the deploy audit; capture them once.
+
+* **Call extracted helpers through the module attribute, not by bare name.**  After extracting `helpers.py` from `transport.py`, write `from . import helpers` in `transport.py` and call `helpers.do_thing()`, not `from .helpers import do_thing` + `do_thing()`.  The bare-name form binds the function object into `transport.py`'s namespace at import time; a `monkeypatch.setattr("chumicro_X.helpers.do_thing", fake)` rebinds the name in `helpers` only, while the binding inside `transport.py` still points at the original.  Tests then patch the canonical location and one patch site affects every caller transparently.
+
+* **Update test patch paths to follow the canonical definition.**  Tests that did `monkeypatch.setattr("chumicro_X.transport.do_thing", ...)` have to switch to `"chumicro_X.helpers.do_thing"` after the extraction.  Yes it's churn.  No, don't avoid it by re-exporting names from the old module.
+
+* **Test-cater scaffolding in src is wrong.**  If a code change in `src/` exists *only* to keep test patch paths or test imports stable — re-exports, `__all__` placeholders, dummy module attributes, lazy imports threading through a public function — the test is the thing to change, not src.  Mockability surfaces belong in `testing.py` (where they're declared and documented).  Per user feedback during the deploy audit: "code that exists to support a test harness that isn't a part of testing.py or a part of mockability shouldn't be in the package code."
+
+* **Break import cycles with a leaf types module, not a lazy import.**  If `recovery.py` defines `DeployFailureKind` + `RecoveryPlan` and you extract a `recovery_plans.py` that needs both, a `from .recovery_plans import PLANS` inside `recovery.py`'s body works but is a smell — function-scope imports are how "import cycle" usually manifests in code review.  Cleaner: pull the shared types into a `recovery_kind.py` leaf module that imports nothing from siblings, and let both `recovery.py` and `recovery_plans.py` import from it.  Linear dependency graph; no lazy imports; tests see honest module-scope structure.
+
+* **Renames are diff-local.**  Renaming a private function (`_enter_uf2_bootloader_programmatic` → `_dispatch_bootloader_reset`) updates every caller — including tests — in the same commit.  Don't leave a back-compat alias.  Private names don't earn migration windows.
+
 ## Process
 
 1. **Read the library top-to-bottom first.**  One full pass through every `.py` under `src/` to build mental model.  Touch the tests too.  No edits yet.
@@ -123,8 +138,11 @@ Libraries ship to constrained devices — less source = less flash, less parse-t
    * **Medium** — method-shape changes, naming-style decisions, "this works but I'd structure it differently."  Benefit from a second opinion.
    * **Low** — cross-library coupling questions.  Escalate to `/audit-integration`, don't fix here.
 5. **Present the punch-list to the user.**  Group by dimension.  Flag taste calls separately.
-6. **Execute high-confidence items as one cohesive commit.**  Run `python scripts/run.py test --libraries <name> --coverage-threshold 94` after each batch of changes.  Hardware-verify if the change touches a deploy / probe / transport path (Pi Pico W CP / MP boards from `devices.yml` defaults).  Read the `git-commit` skill before each commit.
-7. **Hand off remaining medium / low items to the user.**  Don't make taste calls without sign-off.
+6. **Execute high-confidence items as one cohesive commit.**  Run the library's tests + every sibling package that imports from it after each batch of changes — e.g. extracting helpers from `chumicro_deploy` means also running `workbench/workspace/tests`, `workbench/repl/tests`, `workbench/pytest-device/tests` because they all import `chumicro_deploy.*` symbols and a bad-rename or namespace-binding regression won't surface in the library's own suite.  Hardware-verify if the change touches a deploy / probe / transport path (Pi Pico W CP / MP boards from `devices.yml` defaults).  Read the `git-commit` skill before each commit.
+7. **Execute medium-confidence items as separate commits, one per finding.**  Per user request: small reversible commits beat one big merge — if one of N refactors turns out wrong, the other N-1 stay.  Order from lowest risk (single-call-site internal dedup, docstring fixes) to highest (module extractions that touch test patch paths) so each new commit lands on a known-good base.  Run tests + siblings after each.
+8. **Surface user-facing-behavior changes separately even when technically HIGH-confidence.**  A "wiring" finding like *"the `--non-interactive` CLI flag should construct `NonInteractiveDeployer` instead of bare `Deployer`"* changes stderr output for CI log scrapers, even though the symbol swap is a 4-line patch.  Hold it back from the HIGH batch, name the behavior delta to the user, let them sign off.
+9. **Pre-existing lint / test failures: confirm and flag, don't sneak fixes.**  When preflight reports a failure that looks unrelated to the audit, `git stash` + re-run preflight + `git stash pop` to verify it's pre-existing.  Flag it in the punch-list output as a separate finding so the user can scope a fix into the same session or a follow-up.  Don't silently fold the fix into an audit commit — it muddies the diff and breaks the "this commit only audited X" review contract.
+10. **Hand off remaining low items to the user.**  Don't make taste calls without sign-off.
 
 ## Anti-patterns
 
@@ -134,12 +152,15 @@ Libraries ship to constrained devices — less source = less flash, less parse-t
 * **Don't break public API in an audit pass.**  Library symbols imported by sibling libraries / workbench / examples are out-of-scope for renames; flag separately.
 * **Don't move trivial helpers into a `utils.py`.**  Utility-bucket modules are death by a thousand cuts.
 * **Don't diverge a sibling pattern unilaterally.**  When a stylistic refactor would only touch this library while sibling libraries keep the old pattern (e.g. a namespace-classes-of-string-constants idiom shared across multiple device libraries; a particular state-machine shape replicated across networking libs), the right move is "all libs or none."  Switching one library alone diverges the family for what's usually a modest savings, and public-API ergonomics often suffer (`if state == ServiceState.OPEN` reads better than a bare module-level constant).  Defer the finding to a workspace-level decision instead of executing it in the library pass.  Escalate to `/audit-workspace` for cross-lib coordination.
+* **Don't add re-export shims, `__all__` placeholders, or "kept around so monkeypatch paths keep working" comment blocks to publishable `src/`.**  If a test patch path needs to follow an extracted helper to its new module, update the test.  Mockability surfaces belong in `testing.py`; back-compat re-exports for tests don't belong in shipped code.  (See "Extraction patterns" above.)
+* **Don't use lazy in-function imports to paper over a cycle you caused by extracting a sibling module.**  The cycle is a signal that the shared types belong in a third leaf module — see the recovery_kind pattern in "Extraction patterns" above.
+* **Don't silently break the on-callback contract during a "shape" refactor.**  Tests pin observable interface contracts that diff-readers may miss — `on_progress` milestone sequences, `on_file_staged` call ordering, `on_execute_line` line splitting.  When extracting a shared method scaffold across two public entry points, confirm the test still sees the same callback-fraction sequence (e.g. `[0.0, 0.1, 0.2, 0.9, 1.0]`) for each entry point before committing.
 
 ## After the audit
 
 If the audit produced commits:
 
-* Bump the library's `VERSION` file per AGENTS.md (patch unless structural).
+* Bump the library's `VERSION` file *once* at the end of the audit pass — not per commit.  A multi-commit audit (HIGH batch + N medium-confidence singletons) bumps patch one time, in a final commit that also includes any post-audit lint / preflight fixes.  Per-commit bumps make the version history noisier than the actual semantic shift warrants.
 * Run the `task-checkpoint` skill: `python scripts/run.py preflight --coverage-threshold 94` to confirm the full sweep (lint + build + docs + unit tests on all runtimes + checks) still passes.
 * If the change touched device libraries that own time / I/O, also run `python scripts/run.py test-libraries-functional --library <name>` to hardware-verify against `devices.yml` defaults.
 * Run `python scripts/run.py check-version` and `python scripts/run.py check-api` if the library has a public API surface.
