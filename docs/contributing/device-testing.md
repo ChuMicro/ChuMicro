@@ -253,18 +253,38 @@ pytest libraries/timing/functional_tests/ -k heartbeat
 
 Target device selection still follows `devices.yml` defaults. Without a populated `devices.yml`, the tests skip with a clear message rather than failing.
 
-### `--chumicro-*` plugin options
+### Plugin options
 
 Driving pytest directly gives you access to the same overrides `test-libraries-functional` passes through the plugin:
 
 | Flag | Purpose |
 |---|---|
-| `--runtime {micropython,circuitpython,both}` | Override `defaults.ide_runtime` from `devices.yml`. |
-| `--micropython-device <id>` | Override `defaults.micropython` for this run. |
-| `--circuitpython-device <id>` | Override `defaults.circuitpython` for this run. |
-| `--deploy-mode {ram,flash}` | Override each device's `deploy_mode`. |
+| `--target {device,unix-port}` | Pick the execution backend.  Default `device` (real board via `chumicro-deploy`).  `unix-port` runs each test file in a MicroPython / CircuitPython unix-port subprocess instead. |
+| `--runtime {micropython,circuitpython,both}` | Under `--target device`: override `defaults.ide_runtime` from `devices.yml`.  Under `--target unix-port`: pick which runtime(s) to spawn — defaults to `both`. |
+| `--micropython-device <id>` | Override `defaults.micropython` for this run (device target only). |
+| `--circuitpython-device <id>` | Override `defaults.circuitpython` for this run (device target only). |
+| `--micropython-binary <path>` | Unix-port MicroPython binary override (unix-port target only).  Otherwise resolved via `.tools/micropython.path` then `PATH`. |
+| `--circuitpython-binary <path>` | Unix-port CircuitPython binary override (unix-port target only).  Same resolution order. |
+| `--deploy-mode {ram,flash}` | Override each device's `deploy_mode` (device target only). |
 | `--pr-summary` | Print the Markdown PR block at session end (paste-ready).  Opt-in so IDE play-button runs stay quiet. |
 | `--pr-summary-command <str>` | Literal command string rendered inside the PR block's `- Command:` line.  `test-libraries-functional` passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare `pytest`. |
+
+## Run unix-port unit tests from an IDE
+
+Pytest is the single front door for every runtime: bare `pytest libraries/<name>/tests/` runs CPython, and `pytest libraries/<name>/tests/ --target unix-port --runtime <X>` runs the same files under a MicroPython or CircuitPython unix-port subprocess.  The plugin owns collection in both cases and stays out of the way of plain CPython collection when `--target` is left at its `device` default.
+
+```bash
+# Whole library's tests under MicroPython unix-port.
+pytest libraries/timing/tests --target unix-port --runtime micropython
+
+# One file under both unix-port runtimes (parametrized once per runtime).
+pytest libraries/timing/tests/test_heartbeat.py --target unix-port --runtime both
+
+# One function under CircuitPython unix-port.
+pytest libraries/timing/tests/test_heartbeat.py::test_heartbeat_fires_on_real_clock --target unix-port --runtime circuitpython
+```
+
+IDE play buttons that target `libraries/<name>/tests/` files go through CPython pytest by default.  To click play and get the unix-port path instead, add a dedicated run configuration that passes `--target unix-port --runtime <X>` (and `--no-cov`, since coverage isn't collected through a subprocess).  The `--target` flag is opt-in by design — the default `pytest libraries/timing/tests/` invocation is unchanged.
 
 ## Run workbench functional tests
 

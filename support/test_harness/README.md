@@ -22,7 +22,7 @@ The pytest plugin `chumicro-pytest-device` owns discovery and orchestration.  Tw
 - `pytest libraries/<name>/tests --target unix-port --runtime micropython` — plugin spawns one `<micropython-binary> run_cross_runtime.py --worker <test_file>` subprocess per file.  The worker `exec()`s the file as a module, calls `run_module`, and prints `PASS` / `FAIL` / `SKIP` / `HEAP` / `SUMMARY` lines back to the host.
 - `pytest libraries/<name>/functional_tests/` — plugin routes through the `chumicro-deploy` transport instead, staging source onto a real board and running it there.
 
-The mono-repo wrappers `python scripts/run.py test-micropython` / `test-circuitpython` / `test-all-runtimes` resolve the unix-port binary (workspace-prepared `.tools/` build first, then `PATH`), auto-build it on first use, and delegate to the pytest invocation above.  Pass `--micropython-binary <path>` / `--circuitpython-binary <path>` to override.
+The chumicro workspace ships CLI wrappers that resolve the unix-port binary (workspace-prepared `.tools/` build first, then `PATH`), auto-build it on first use, and delegate to the pytest invocation above.  Pass `--micropython-binary <path>` / `--circuitpython-binary <path>` to override.
 
 ## Device testing on real boards
 
