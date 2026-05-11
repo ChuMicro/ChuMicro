@@ -32,6 +32,20 @@ URL shape: `/<library>/<channel-or-version>/` — `/timing/stable/`, `/timing/ex
 
 GitHub Pages over ReadTheDocs because: free for private repos (RTD requires paid Business), no external account, mono-repo-friendly subdirectory structure, full control over URL layout.  RTD remains compatible if revisited.
 
+### Example dependency rule: owning library + declared deps + sibling helpers
+
+An example may import only:
+
+1. **Its owning library** (`libraries/<lib>/examples/foo.py` may `import chumicro_<lib>`).
+2. **Libraries that owning-lib's `pyproject.toml` `dependencies` declares** (transitive deps the user pip-installs alongside owning-lib are fair game).
+3. **Sibling files in its own `examples/` directory** — typically a per-library `helpers.py` containing wifi-up + msgpack decode + ticks math + per-board GPIO whitelists.  The deploy stack stages these alongside the entrypoint.
+
+Examples may NOT import any other chumicro library, even if installed in the workspace's venv.  The point of an example is to teach what its owning library does — every additional import dilutes the lesson and (worse) misleads users into thinking the imported library is required.  An example demonstrating `chumicro-ntp` that also imports `chumicro-wifi` for wifi-up is structurally wrong: ntp doesn't need wifi to function (the socket factory does, separately), so the example is teaching a coupling the library doesn't have.
+
+The `examples/helpers.py` pattern exists to provide what every example needs (wifi creds + connect, runtime config, GPIO abstractions, ticks) without inflating any single library's deps.  Each library's helpers.py is identical (md5-verified) and re-implements upstream-library shapes inline (ticks_ms / ticks_add / ticks_diff mirror chumicro_timing; the msgpack decoder mirrors chumicro_msgpack).  When a new library needs something cross-cutting, extend helpers.py rather than reaching into another chumicro library.
+
+A `chumicro-checks` lint that catches example imports outside the allowed set is the right enforcement surface for this rule; not yet shipped.
+
 ### Example verification: AST static analysis, not execution
 
 `scripts/run.py verify-examples` compiles each example, walks the AST for imports, and resolves each import via `importlib`.  Hardware examples (files matching `circuitpython_*.py` / `micropython_*.py`) verify only `chumicro_*` imports — platform modules (`board`, `digitalio`, `machine`) are skipped because they don't exist on CPython.  No example code is executed; runs as part of `preflight`.
