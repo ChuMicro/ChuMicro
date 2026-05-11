@@ -78,37 +78,43 @@ def test_runtime_acquisition_raises_clear_error_on_cpython() -> None:
         MpWifiAdapter(stack="cyw43")
 
 
-def test_default_stack_detection_on_cpython_is_espidf() -> None:
+def test_default_stack_detection_on_host_is_espidf() -> None:
     """Auto-detect falls through to ``espidf`` when machine isn't whitelisted.
 
-    On CPython, ``os.uname().machine`` is the host arch (``x86_64`` /
-    ``arm64`` / etc.) which is not in :data:`CYW43_MACHINES`, so the
+    On any host (CPython, MicroPython unix-port, CircuitPython unix-port)
+    the reported machine string is not a Pi Pico W entry, so the
     auto-detect path lands on ``espidf`` (the safe default — its
     ESP-specific knob has its own try/except guard).
     """
     assert MpWifiAdapter._detect_stack() == "espidf"
 
 
-def test_default_stack_detection_picks_cyw43_for_pico_w_machine(monkeypatch) -> None:
-    """``os.uname().machine`` = Pi Pico W string → ``cyw43``.
+def test_default_stack_detection_picks_cyw43_for_pico_w_machine() -> None:
+    """A whitelisted CYW43 machine string routes ``_detect_stack`` to ``cyw43``.
 
-    Monkeypatches ``os.uname`` on the host to simulate the Pi Pico W
-    MP firmware's machine string, then asserts ``_detect_stack``
-    returns ``cyw43`` against the whitelist.
+    Patches the module-level :func:`_get_machine_name` helper to simulate
+    the Pi Pico W firmware string, then asserts ``_detect_stack`` returns
+    ``cyw43`` against the whitelist.  Avoids pytest's ``monkeypatch``
+    fixture so the test runs unchanged under MicroPython and CircuitPython
+    unix-port runners.
     """
     import chumicro_wifi._adapters.mp as mp_mod
-    fake_uname = type("UnameResult", (), {"machine": "Raspberry Pi Pico W with RP2040"})()
-    monkeypatch.setattr(mp_mod.os, "uname", lambda: fake_uname)
-    assert MpWifiAdapter._detect_stack() == "cyw43"
+    original = mp_mod._get_machine_name
+    mp_mod._get_machine_name = lambda: "Raspberry Pi Pico W with RP2040"
+    try:
+        assert MpWifiAdapter._detect_stack() == "cyw43"
+    finally:
+        mp_mod._get_machine_name = original
 
 
 def test_construction_with_default_stack_uses_auto_detect() -> None:
     """``stack=None`` (default) routes through ``_detect_stack``.
 
-    On CPython that lands on ``espidf`` (host machine isn't in the
-    CYW43 whitelist), so the resulting adapter has ``name ==
-    "mp_esp32"``.  Explicit injection of the wlan fake sidesteps
-    the runtime acquisition path so the test runs on the host.
+    On any host (CPython, MP/CP unix-port) the reported machine string
+    isn't in the CYW43 whitelist, so auto-detect lands on ``espidf`` and
+    the resulting adapter has ``name == "mp_esp32"``.  Explicit injection
+    of the wlan fake sidesteps the runtime acquisition path so the test
+    runs on the host.
     """
     adapter = MpWifiAdapter(wlan=_FakeWlan())
     assert adapter.name == "mp_esp32"
