@@ -31,22 +31,24 @@ dropped.  Useful when wiring one recorder against `bus.publisher("*")`-
 shaped patterns or when a single recorder is shared across many
 topics.  Call `clear()` between assertions.
 
-## FailingSubscriber
+## Verifying handler-error swallowing
 
-Raises a configured exception on every dispatch.  Useful for verifying
-that misbehaving subscribers don't crash `EventBus.handle` and that
-`handler_errors` increments correctly:
+A subscriber that raises shouldn't crash `EventBus.handle`.  Inline a
+small failing callable when you need to verify this:
 
 ```python
 from chumicro_events import EventBus
-from chumicro_events.testing import FailingSubscriber, RecordingSubscriber
+from chumicro_events.testing import RecordingSubscriber
 
 
 def test_failing_subscriber_does_not_crash_bus():
     bus = EventBus()
-    failing = FailingSubscriber()
+
+    def boom(topic, payload):
+        raise RuntimeError("subscriber boom")
+
     survivor = RecordingSubscriber()
-    bus.subscribe("topic", failing)
+    bus.subscribe("topic", boom)
     bus.subscribe("topic", survivor)
 
     bus.publish("topic", "x")
@@ -55,10 +57,6 @@ def test_failing_subscriber_does_not_crash_bus():
     assert bus.handler_errors == 1
     assert survivor.events == [("topic", "x")]
 ```
-
-The default exception is `RuntimeError("subscriber boom")`.  Pass a
-custom exception via the `exception=` keyword to simulate specific
-failure modes.
 
 ## Usage from other libraries
 

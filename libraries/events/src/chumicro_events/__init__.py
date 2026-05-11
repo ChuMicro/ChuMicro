@@ -14,10 +14,12 @@ state changes to reach a single place wire it themselves::
     from chumicro_events import EventBus
 
     bus = EventBus()
-    wifi.on_state_change = bus.publisher("wifi.state")
-    mqtt.on_state_change = bus.publisher("mqtt.state")
-    bus.subscribe("wifi.state", on_wifi_state)
-    bus.subscribe("mqtt.state", on_mqtt_state)
+    bus.subscribe("sensor.temp", lambda topic, value: print(topic, value))
+    bus.publish("sensor.temp", 23.5)
+    bus.handle(now_ms=0)        # -> sensor.temp 23.5
+
+``bus.publisher(topic)`` returns a ``*args``-accepting callable that
+adapts to any service-callback shape — see ``publisher`` for examples.
 
 Public API
 ----------

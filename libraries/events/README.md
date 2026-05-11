@@ -60,7 +60,6 @@ Test helpers in `chumicro_events.testing`:
 | Symbol | Purpose |
 |---|---|
 | `RecordingSubscriber(topic_filter)` | Captures `(topic, payload)` tuples for assertions; optional exact-match filter. |
-| `FailingSubscriber(exception)` | Raises on every dispatch — exercises `handler_errors` paths. |
 
 Internally the queue is a `collections.deque(iterable, maxlen)` rather than a list — `append` and `popleft` are O(1) and the deque's native `maxlen` enforcement gives drop-oldest without the O(n) shift cost of `list.pop(0)` on small VMs.
 
