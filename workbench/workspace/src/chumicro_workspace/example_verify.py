@@ -4,11 +4,14 @@ Verifies that example files (``<package>/examples/*.py``) have valid
 syntax and resolvable imports using static analysis — no execution
 required.
 
-Hardware examples — files named ``circuitpython_*.py`` / ``micropython_*.py``
-or declaring ``__chumicro_runtimes__`` listing a non-CPython runtime —
-verify only ``chumicro_*`` imports; platform built-ins (``board``,
-``digitalio``, ``machine``, ``wifi``, ``network``) are skipped because
-they won't resolve on the host running the verifier.
+Hardware examples — files declaring ``__chumicro_runtimes__`` listing
+a non-CPython runtime (CircuitPython or MicroPython) — verify only
+``chumicro_*`` imports; platform built-ins (``board``, ``digitalio``,
+``machine``, ``wifi``, ``network``) are skipped because they won't
+resolve on the host running the verifier.  The explicit marker is
+the contract per Decision 0037 §6 — filename conventions
+(``circuitpython_*.py`` / ``micropython_*.py``) are for human
+discoverability only and have no bearing on the verification path.
 
 Examples may import sibling modules from their own ``examples/``
 directory (e.g. a per-library ``helpers.py``).  Each example's parent
@@ -26,11 +29,6 @@ import ast
 import importlib
 import sys
 from pathlib import Path
-
-#: Filename prefixes that mark hardware-specific examples.  For these,
-#: only chumicro_* imports are verified — platform built-ins like
-#: ``board``, ``digitalio``, ``machine`` are skipped.
-_HARDWARE_PREFIXES = ("circuitpython_", "micropython_")
 
 #: Non-CPython runtime markers that flag a file as hardware-only.
 _HARDWARE_RUNTIME_MARKERS = frozenset({"circuitpython", "micropython"})
@@ -140,8 +138,8 @@ def verify_examples(
     For each ``examples/*.py``:
 
     1. Parse the file.  Syntax errors fail it.
-    2. Detect whether it's hardware-only (filename prefix or
-       ``__chumicro_runtimes__`` marker).
+    2. Detect whether it's hardware-only via the
+       ``__chumicro_runtimes__`` marker (Decision 0037 §6).
     3. Walk imports — every ``chumicro_*`` import must resolve.
        Non-``chumicro_`` imports must resolve only on non-hardware files;
        hardware files skip them so platform built-ins don't fail on the host.
@@ -185,10 +183,7 @@ def verify_examples(
                 failures += 1
                 continue
 
-            hardware = (
-                example_file.name.startswith(_HARDWARE_PREFIXES)
-                or _has_hardware_runtime_marker(tree)
-            )
+            hardware = _has_hardware_runtime_marker(tree)
 
             example_dir = str(example_file.parent)
             inserted_example_dir = example_dir not in sys.path
