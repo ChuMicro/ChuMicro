@@ -143,7 +143,7 @@ jobs:
           python-version: "3.13"
 
       - name: Check VERSION enforcement
-        run: python scripts/check_version.py --base origin/${{ github.base_ref }}
+        run: python scripts/run.py check-version --base origin/${{ github.base_ref }}
 
   # Detect backwards-incompatible API changes by comparing the PR branch
   # against the base branch using griffe.
@@ -166,7 +166,7 @@ jobs:
         run: python -m pip install --upgrade pip griffe
 
       - name: Check API breakages
-        run: python scripts/check_api.py --base origin/${{ github.base_ref }}
+        run: python scripts/run.py check-api --base origin/${{ github.base_ref }}
 
 
   # -------------------------------------------------------------------------
@@ -262,7 +262,5 @@ jobs:
 
 
       - name: Validate mip install from staged bundle
-        run: |
-          python scripts/validate_mip_install.py \
-            --staging-dir .bundle-staging
+        run: python scripts/run.py validate-mip --staging-dir .bundle-staging
 

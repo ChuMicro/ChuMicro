@@ -1895,19 +1895,22 @@ def validate_mip(
     return 1
 
 
-def check_version() -> int:
+def check_version(*, base: str = "origin/main") -> int:
     """Check VERSION enforcement for changed libraries (PR check)."""
     from check_version import main as check_version_main
-    return check_version_main([])
+    return check_version_main(["--base", base])
 
 
 def check_api(
     *,
     max_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+    base: str = "origin/main",
 ) -> int:
     """Check API breakages against last release tag (PR check)."""
     from check_api import main as check_api_main
-    return check_api_main(["--max-workers", str(max_workers)])
+    return check_api_main(
+        ["--base", base, "--max-workers", str(max_workers)],
+    )
 
 
 def check_dep_graph() -> int:
@@ -2176,9 +2179,19 @@ def _build_parser() -> argparse.ArgumentParser:
         help="stop on first failure",
     )
 
-    subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
+    check_version_parser = subparsers.add_parser(
+        "check-version", help="check VERSION enforcement for changed libraries",
+    )
+    check_version_parser.add_argument(
+        "--base", default="origin/main",
+        help="git ref to diff against (default: origin/main)",
+    )
     check_api_parser = subparsers.add_parser(
         "check-api", help="check API breakages against last release tag",
+    )
+    check_api_parser.add_argument(
+        "--base", default="origin/main",
+        help="git ref to detect changed packages (default: origin/main)",
     )
     check_api_parser.add_argument(
         "--max-workers", type=int, metavar="N",
@@ -2500,7 +2513,10 @@ def main(argv: list[str]) -> int:
         return build(package_workers=args.package_workers, quiet=args.quiet)
 
     if args.task == "check-api":
-        return check_api(max_workers=args.max_workers)
+        return check_api(max_workers=args.max_workers, base=args.base)
+
+    if args.task == "check-version":
+        return check_version(base=args.base)
 
     # --- no-arg tasks ---
     no_arg: dict[str, Callable[[], int]] = {
@@ -2510,7 +2526,6 @@ def main(argv: list[str]) -> int:
         "prepare-micropython": prepare_micropython,
         "prepare-circuitpython": prepare_circuitpython,
         "prepare-mpy-cross": prepare_mpy_cross,
-        "check-version": check_version,
         "check-dep-graph": check_dep_graph,
     }
 
