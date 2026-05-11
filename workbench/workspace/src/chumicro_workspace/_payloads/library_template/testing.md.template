@@ -1,52 +1,56 @@
 # Testing Helpers
 
-<!-- GENERATION INSTRUCTIONS — delete this block once the page is written.
-
-     This page documents the fakes in the library's `testing` submodule.
-     If this library does NOT expose injectable services that downstream
-     consumers need to fake, delete all testing-helper references:
+<!-- This template is a worked example for fictional `chumicro-foo` —
+     a single-shot countdown timer.  Rewrite the snippets to use your
+     real library's classes + fakes.  If your library does NOT expose
+     injectable services that downstream consumers need to fake,
+     delete all testing-helper references instead:
        1. Delete this file (`docs/testing.md`)
        2. Delete `src/{import_name}/testing.py`
-       3. Remove the `- Testing Helpers: testing.md` line from `mkdocs.yml` nav
+       3. Remove the `- Testing Helpers: testing.md` line from `mkdocs.yml`
        4. Remove the Testing Helpers link from `docs/index.md`
        5. Remove the Testing helpers link from `README.md`
 
      Libraries that accept dependencies via constructor injection (time,
      I/O, network) should provide ready-made fakes so downstream tests
-     don't have to invent their own mocks.
+     don't have to invent their own mocks. -->
 
-     To fill this in, read:
-       1. `src/{import_name}/testing.py` — the fake classes/functions
-       2. `tests/` — see how the fakes are used in this library's own tests
-       3. Existing examples: libraries/timing/docs/testing.md,
-          libraries/runner/docs/testing.md
-
-     Structure:
-       - Open with one sentence: what the module provides and why.
-       - One section per fake class, showing a realistic test snippet.
-       - A "Usage from other libraries" section with a cross-library import.
-       - An "API Reference" section with a ::: autodoc directive. -->
-
-`{import_name}.testing` provides ...
+`{import_name}.testing` provides `FakeCountdown` — a stand-in for `Countdown` whose fire state is controlled directly by the test, so downstream code that owns a `Countdown` can be driven through deadlines without managing real ticks.
 
 ## Usage
 
-<!-- Show a realistic test snippet using the fake.  Import from the public
-     testing submodule.  Use descriptive variable names. -->
-
 ```python
-from {import_name}.testing import Fake...
+from {import_name}.testing import FakeCountdown
 
-def test_example():
-    ...
+def test_screensaver_dims_on_idle_timeout():
+    idle = FakeCountdown()
+    screen = Screensaver(timeout=idle)
+
+    idle.set_fired(False)
+    screen.tick()
+    assert not screen.dimmed
+
+    idle.set_fired(True)
+    screen.tick()
+    assert screen.dimmed
 ```
+
+`FakeCountdown` defaults to "not fired" so a fresh instance behaves like an armed countdown that hasn't elapsed.  Call `set_fired(True)` to simulate the deadline passing.
+
+## Test hooks
+
+| Hook | What it does |
+|---|---|
+| `set_fired(True)` | Next `fired(now_ms)` returns `True` once, then `False` thereafter — same one-shot semantics as the real `Countdown`. |
+| `set_fired(False)` | Reset the fake to the armed state. |
+| `reset_calls` | List of `(now_ms,)` tuples recorded each time the code under test called `reset()`.  Assert on this to verify reset ordering. |
 
 ## Usage from other libraries
 
-Libraries that depend on `chumicro-{name}` can import the fakes directly:
+Libraries that depend on `chumicro-{name}` can import the fakes directly in their own test suites:
 
 ```python
-from {import_name}.testing import Fake...
+from {import_name}.testing import FakeCountdown
 ```
 
 Libraries that expose injectable services ship their own test fakes alongside the production code, so every consumer uses the same shared fake.

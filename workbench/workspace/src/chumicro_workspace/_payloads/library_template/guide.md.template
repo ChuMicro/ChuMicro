@@ -1,43 +1,112 @@
 # User Guide
 
-<!-- GENERATION INSTRUCTIONS — delete this block once the guide is written.
-
-     This guide should be generated from the library's source code, docstrings,
-     tests, and examples.  See the guide-generation skill for the
-     full prompt an AI agent can use.  Every section below is required unless
-     marked conditional.  Do not leave placeholder comments in the final guide. -->
+<!-- This template is a worked example for fictional `chumicro-foo` —
+     a single-shot countdown timer.  Same fictional library as
+     readme.md.template + the other three docs templates.  Rewrite
+     each section for your real library, keeping the same shape and
+     section ordering.  Drop the conditional Runner-pattern + Memory-
+     notes sections if they don't apply.  Delete this comment when
+     you're done. -->
 
 ## Overview
 
-<!-- Required. 2-4 sentences: what the library does, why it exists, the core
-     concept. Name the key classes/functions. -->
+`chumicro-{name}` provides `Countdown` — a single-shot timer that fires once after a period elapses, then stays fired until you reset it.  No `time.sleep()`, no callbacks, no async — you poll once per tick and the timer tells you when the deadline has passed.
+
+The typical use is a watchdog or a delayed action: arm the countdown, poll it each iteration of your main loop, run the side-effect once on the first `True`.
 
 ## Getting started
 
-<!-- Required. The most common usage pattern as a copy-pasteable snippet.
-     Import from the public package, not internal modules. -->
+### Single-shot fire
+
+```python
+from {import_name} import Countdown
+from chumicro_timing import ticks_ms
+
+countdown = Countdown(period_ms=5000)    # fires once after 5 s
+
+while True:
+    now = ticks_ms()
+    if countdown.fired(now):
+        print("time's up")
+        break
+```
+
+`fired(now_ms)` returns `True` exactly once — the first poll after the deadline.  Every subsequent call returns `False` until you `reset()`.
+
+### Sharing timestamps
+
+Capture `ticks_ms()` once per loop iteration and pass the same value to every component.  Independent clock reads drift on slow microcontrollers, which can desynchronize timers that should fire together.
+
+```python
+from {import_name} import Countdown
+from chumicro_timing import ticks_ms
+
+display_off = Countdown(period_ms=10_000)
+wifi_retry = Countdown(period_ms=30_000)
+
+while True:
+    now = ticks_ms()            # ONE reading per iteration
+    if display_off.fired(now):
+        screen.off()
+    if wifi_retry.fired(now):
+        radio.reconnect()
+```
+
+### Resetting
+
+`reset(now_ms)` restarts the countdown from `now_ms`:
+
+```python
+now = ticks_ms()
+countdown.reset(now)
+# Next fire is now period_ms from this moment.
+```
+
+### Checking remaining time
+
+`remaining_ms(now_ms)` returns the time left, or `0` once the countdown has fired:
+
+```python
+now = ticks_ms()
+if countdown.remaining_ms(now) < 1000:
+    show_warning_banner()
+```
 
 ## Runner pattern
 
-<!-- Conditional. Include if the library has classes that implement
-     check(now_ms) -> bool. Show how to wire them into a Runner.
-     Omit if not applicable. -->
+`Countdown` is poll-shaped, not runner-shaped — it doesn't own a clock or schedule itself.  Wire it into a `Runner` by polling from a check function:
+
+```python
+from chumicro_runner import Runner
+from {import_name} import Countdown
+
+countdown = Countdown(period_ms=5000)
+
+def deadline_check():
+    if countdown.fired(runner.now_ms):
+        print("time's up")
+        runner.stop()
+
+runner = Runner()
+runner.add(deadline_check)
+runner.run()
+```
 
 ## Memory notes
 
-<!-- Conditional. Include if the library manages buffers, queues, or
-     pre-allocated structures. Explain allocation strategy and tuning. -->
+`Countdown` holds three ints (period, deadline, fired flag) — under 50 bytes per instance.  No buffers, no allocations on `fired()` or `reset()`.  Safe to instantiate one per logical timer; preallocating a pool gains nothing.
 
 ## Platform notes
 
-<!-- Required. Runtime-specific behavior or limitations. If the library works
-     identically on all three runtimes, say so in one line. -->
+Works identically on CPython, MicroPython, and CircuitPython.  All tick arithmetic flows through `chumicro_timing`, which handles counter wrap on every runtime.
 
 ## Examples
 
-<!-- Required. List all examples from the examples/ directory in a table:
-     | Example | What it shows |
-     Note which are simulated (CPython) vs hardware. -->
+| Example | What it shows |
+|---|---|
+| [`countdown_basic.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/{name}/examples/countdown_basic.py) | Single-shot fire on CPython — no hardware needed |
+| [`circuitpython_button_hold.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/{name}/examples/circuitpython_button_hold.py) | LED stays lit for 5 s after a button press on CircuitPython |
+| [`micropython_button_hold.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/{name}/examples/micropython_button_hold.py) | Same button-hold pattern on MicroPython |
 
 ---
 
