@@ -96,7 +96,6 @@ class TestMainDispatch:
             ("prepare-micropython", "prepare_micropython"),
             ("prepare-circuitpython", "prepare_circuitpython"),
             ("prepare-mpy-cross", "prepare_mpy_cross"),
-            ("check-version", "check_version"),
         ],
     )
     def test_no_argument_tasks_dispatch(
@@ -111,6 +110,26 @@ class TestMainDispatch:
         assert result == 23
         assert calls == [((), {})]
 
+    def test_check_version_dispatches_base(self, monkeypatch) -> None:
+        """``check-version`` forwards ``--base`` to ``check_version()``."""
+        calls, fake_check_version = _make_fake_command(return_value=23)
+        monkeypatch.setattr(run, "check_version", fake_check_version)
+
+        result = run.main(["run.py", "check-version", "--base", "origin/dev"])
+
+        assert result == 23
+        assert calls == [((), {"base": "origin/dev"})]
+
+    def test_check_version_defaults_base_to_origin_main(self, monkeypatch) -> None:
+        """``check-version`` defaults ``--base`` to ``origin/main``."""
+        calls, fake_check_version = _make_fake_command(return_value=23)
+        monkeypatch.setattr(run, "check_version", fake_check_version)
+
+        result = run.main(["run.py", "check-version"])
+
+        assert result == 23
+        assert calls == [((), {"base": "origin/main"})]
+
     def test_build_dispatches_package_workers(self, monkeypatch) -> None:
         """``build`` forwards ``--package-workers`` to ``build()``."""
         calls, fake_build = _make_fake_command(return_value=24)
@@ -122,14 +141,26 @@ class TestMainDispatch:
         assert calls == [((), {"package_workers": 8, "quiet": False})]
 
     def test_check_api_dispatches_max_workers(self, monkeypatch) -> None:
-        """``check-api`` forwards ``--max-workers`` to ``check_api()``."""
+        """``check-api`` forwards ``--max-workers`` and ``--base`` to ``check_api()``."""
         calls, fake_check_api = _make_fake_command(return_value=25)
         monkeypatch.setattr(run, "check_api", fake_check_api)
 
         result = run.main(["run.py", "check-api", "--max-workers", "6"])
 
         assert result == 25
-        assert calls == [((), {"max_workers": 6})]
+        assert calls == [((), {"max_workers": 6, "base": "origin/main"})]
+
+    def test_check_api_dispatches_base(self, monkeypatch) -> None:
+        """``check-api`` forwards ``--base`` to ``check_api()``."""
+        calls, fake_check_api = _make_fake_command(return_value=25)
+        monkeypatch.setattr(run, "check_api", fake_check_api)
+
+        result = run.main(
+            ["run.py", "check-api", "--base", "origin/dev", "--max-workers", "2"],
+        )
+
+        assert result == 25
+        assert calls == [((), {"max_workers": 2, "base": "origin/dev"})]
 
     def test_test_command_without_filter_uses_resolved_scope(
         self, monkeypatch,
