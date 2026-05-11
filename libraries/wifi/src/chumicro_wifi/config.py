@@ -4,12 +4,6 @@ Reads from the flat-key runtime config produced by
 ``chumicro_workspace.compose_runtime_config``: keys ``wifi.ssid``,
 ``wifi.password``, ``wifi.hostname``, etc. live at the top of the
 flat dict, joined to their values by dots.
-
-The required / optional vocabulary is duplicated between ``__init__``
-parameter defaults and the ``from_config`` call: both construction
-paths (direct kwargs in tests, runtime-config in production) must
-agree, and writing them twice is clearer than deriving one from the
-other.
 """
 
 from chumicro_config import load_section, try_load_section
@@ -38,6 +32,19 @@ class WifiConfig:
             backends that support it (Pi Pico W CYW43); ignored
             on backends that don't expose the knob.
     """
+
+    #: Optional flat keys read by ``from_config`` / ``try_from_config``,
+    #: mapped to their default when absent.  Kept in sync with the
+    #: ``__init__`` signature defaults; the signature stays the
+    #: documentation surface for direct construction.
+    _OPTIONAL_DEFAULTS = {
+        "hostname": None,
+        "connect_timeout_ms": 15_000,
+        "reconnect_backoff_start_ms": 1_000,
+        "reconnect_backoff_max_ms": 60_000,
+        "reconnect_max": None,
+        "power_save": False,
+    }
 
     def __init__(
         self,
@@ -84,14 +91,7 @@ class WifiConfig:
             config,
             prefix="wifi",
             required=("ssid", "password"),
-            optional={
-                "hostname": None,
-                "connect_timeout_ms": 15_000,
-                "reconnect_backoff_start_ms": 1_000,
-                "reconnect_backoff_max_ms": 60_000,
-                "reconnect_max": None,
-                "power_save": False,
-            },
+            optional=cls._OPTIONAL_DEFAULTS,
         )
 
     @classmethod
@@ -126,12 +126,5 @@ class WifiConfig:
             config,
             prefix="wifi",
             required=("ssid", "password"),
-            optional={
-                "hostname": None,
-                "connect_timeout_ms": 15_000,
-                "reconnect_backoff_start_ms": 1_000,
-                "reconnect_backoff_max_ms": 60_000,
-                "reconnect_max": None,
-                "power_save": False,
-            },
+            optional=cls._OPTIONAL_DEFAULTS,
         )
