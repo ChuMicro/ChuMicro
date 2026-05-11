@@ -274,6 +274,11 @@ def render_svg(
         '    </style>',
         '  </defs>',
         '',
+        '  <!-- Background panel — keeps the graph readable on both light '
+        'and dark GitHub themes (the SVG is rendered as a flat image and '
+        'doesn\'t inherit the page background). -->',
+        f'  <rect x="0" y="0" width="{canvas_w}" height="{canvas_h}" fill="#fafafa" />',
+        '',
         '  <!-- Row labels -->',
         *[
             f'  <text x="{rx}" y="{ry}" class="row-label">{label}</text>'
