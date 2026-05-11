@@ -159,7 +159,7 @@ Common failures:
 | `check-version` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
 | `check-api` | Removed or renamed a public function | Bump VERSION to next minor/major |
 | `validate-mpy` | mpy-cross failed to compile a library, or the staged bundle's `package.json` is broken | Build the bundle locally (`python scripts/run.py build`) and check the validate-mpy job log for the failing library |
-| `cross-runtime-tests` (MicroPython / CircuitPython) | Test fails under the unix-port build of one runtime | Reproduce locally with `python scripts/run.py test-micropython` or `test-circuitpython` |
+| `cross-runtime-tests` (MicroPython / CircuitPython) | Test fails under the unix-port build of one runtime | Reproduce locally with `python scripts/run.py test-micropython` / `test-circuitpython`, or `pytest libraries/<name>/tests --target unix-port --runtime <X>` for one library |
 
 For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#setting-up-your-development-environment).
 
