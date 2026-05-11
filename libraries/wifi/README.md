@@ -37,7 +37,7 @@ from chumicro_wifi import WifiConfig, WifiService
 
 config = load_runtime_config()
 runner = Runner()
-wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
+wifi = WifiService(WifiConfig.from_config(config))
 runner.add(wifi)
 ```
 
@@ -55,7 +55,7 @@ wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))
 
 | Symbol | What it does |
 |---|---|
-| `WifiConfig` | Typed connection settings (`ssid`, `password`, hostname, timeouts, reconnect tuning) with a `from_dict` factory matching the chumicro-config convention. |
+| `WifiConfig` | Typed connection settings (`ssid`, `password`, hostname, timeouts, reconnect tuning).  `from_config(config)` reads the flat `wifi.*` keys; `try_from_config(config)` returns `None` when the section isn't deployed. |
 | `WifiService` | State machine + reconnect supervisor; implements `Runner.add()`-compatible `check`/`handle`. Auto-detects the runtime adapter at construction time (`FakeWifiAdapter` on CPython, `CpWifiAdapter` on CircuitPython, substrate-aware `MpWifiAdapter` on MicroPython — handles ESP-IDF + CYW43 transparently). |
 | `WifiState` | String-sentinel state names: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECTING`, `FAILED`. |
 | `chumicro_wifi.testing.FakeWifi` | Drop-in `WifiService` wrapping a `FakeWifiAdapter` with `set_connect_outcome`, `drop_link`, `calls` hooks for downstream library tests. |
@@ -83,7 +83,7 @@ MicroPython's `wlan.connect()` is genuinely non-blocking on both ESP32 and Pi Pi
 
 ## Wiring wifi credentials for examples and functional tests
 
-The acceptance test in `functional_tests/test_acceptance.py` connects to a real AP and skips silently when no credentials are configured.  Two paths for getting credentials onto the device — workspace-based deploy or raw single-file deploy — are documented in [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md).  The library itself never reads TOML — it takes a `WifiConfig` and goes; `WifiConfig.from_dict()` is the dict-construction path used by the standard pipeline.
+The acceptance test in `functional_tests/test_acceptance.py` connects to a real AP and skips silently when no credentials are configured.  Two paths for getting credentials onto the device — workspace-based deploy or raw single-file deploy — are documented in [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md).  The library itself never reads TOML — it takes a `WifiConfig` and goes; `WifiConfig.from_config(config)` is the construction path used by the standard pipeline.
 
 ## Contributing
 

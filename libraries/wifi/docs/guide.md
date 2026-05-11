@@ -62,7 +62,7 @@ After the supervisor reaches `CONNECTED`:
 ```python
 wifi.ip            # "192.168.1.42" or None
 wifi.last_error    # last exception caught, if any
-wifi.adapter_name  # "cp" / "mp" / "fake" — useful for logging
+wifi.adapter_name  # "cp" / "mp_esp32" / "mp_rp2" / "fake" — useful for logging
 ```
 
 `last_error` is most informative on MicroPython-ESP32, where the wifi driver raises `OSError("Wifi Internal State Error")` on unreachable AP.  On CircuitPython the driver raises `TimeoutError` / `ConnectionError`; on MicroPython-CYW43 (Pi Pico W) the driver silently leaves `isconnected()` False, so `last_error` may be `None` even though the supervisor is in `RECONNECTING` (see Platform notes).
@@ -84,12 +84,12 @@ A common pattern is to wire this into `chumicro-events`' bus so other services c
 from chumicro_events import EventBus
 
 bus = EventBus()
-wifi.on_state_change = bus.publisher("wifi.state")
+wifi.on_state_change(bus.publisher("wifi.state"))
 ```
 
 ## Configuration
 
-`WifiConfig` accepts a section dict (typically `config["wifi"]`):
+`WifiConfig.from_config(config)` reads the flat `wifi.*` keys from a `RuntimeConfig` (or plain dict with the same shape).  `try_from_config(config)` is the soft variant that returns `None` when the section isn't deployed.  Accepted keys:
 
 | Key | Required | Default | Notes |
 |---|---|---|---|
@@ -135,7 +135,7 @@ runner.tick()             # advances every registered service one step
 | MicroPython | `MpWifiAdapter` (handles ESP32 + CYW43) | `_adapters/mp.py` |
 | CPython | `FakeWifiAdapter` | `testing.py` |
 
-The `MpWifiAdapter` auto-detects ESP-IDF vs CYW43 with a one-line `import esp32` probe, then applies the right `wlan.config(...)` knobs:
+The `MpWifiAdapter` auto-detects ESP-IDF vs CYW43 by matching `sys.implementation._machine` against a positive whitelist of known CYW43 boards (`CYW43_MACHINES` in `_adapters/mp.py`); anything outside the whitelist falls through to ESP-IDF.  It then applies the right `wlan.config(...)` knobs:
 
 * **ESP-IDF**: `config(reconnects=0)` after first link, to disable the firmware-level auto-reconnect supervisor — `chumicro-wifi` owns reconnect logic itself.
 * **CYW43**: `config(pm=0xa11140)` at configure time, to disable idle power-save when `power_save=False`.
