@@ -81,15 +81,7 @@ def discover_config_loaders() -> dict[str, ConfigLoader]:
     from importlib.metadata import entry_points
 
     loaders: dict[str, ConfigLoader] = {BUILTIN_LOADER_NAME: _default_loader}
-    try:
-        group_entries = entry_points(group=CONFIG_LOADERS_ENTRY_POINT_GROUP)
-    except TypeError:  # pragma: no cover — Python <3.10 fallback shape
-        all_entries = entry_points()
-        # pyright: ignore[reportAttributeAccessIssue]
-        # mypy: ignore — pre-3.10 shape returned a dict-like with .get
-        group_entries = all_entries.get(  # type: ignore[union-attr]
-            CONFIG_LOADERS_ENTRY_POINT_GROUP, []
-        )
+    group_entries = entry_points(group=CONFIG_LOADERS_ENTRY_POINT_GROUP)
     for entry_point in group_entries:
         if entry_point.name == BUILTIN_LOADER_NAME:
             # Prevent third parties from shadowing the built-in.

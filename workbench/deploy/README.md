@@ -109,7 +109,7 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 
 ### Status
 
-> Pre-alpha.  Host-side device transports, `Device` / `Deployer` facade, `FileSource` pluggability, `probe_device`, `flash_firmware` (UF2 + esptool), the `chumicro-deploy` CLI, and the `InteractiveDeployer` recovery layer are all shipped and hardware-verified on ESP32-S2, ESP32-S3, and Pi Pico W across CircuitPython and MicroPython.
+> Pre-alpha.  Host-side device transports, `Device` / `Deployer` facade, `FileSource` pluggability, `probe_device`, `flash_firmware` (UF2 + esptool), the `chumicro-deploy` CLI, and the `InteractiveDeployer` recovery layer are all shipped and hardware-verified on Lolin S2 Mini (ESP32-S2) and Pi Pico W across CircuitPython and MicroPython.
 
 ## Companion: chumicro-repl
 
