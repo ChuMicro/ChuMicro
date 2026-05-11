@@ -35,8 +35,6 @@ class FakeTicks:
     code is tested against the real tick semantics.
     """
 
-    __slots__ = ("_current_ms",)
-
     def __init__(self, start_ms: int = 0) -> None:
         """Create a fake tick source starting at *start_ms*.
 
