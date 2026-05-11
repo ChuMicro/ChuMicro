@@ -36,7 +36,7 @@ Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` 
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and materialises three starter files at the repo root if they are missing: `devices.yml` (the board registry), `workspace.yml` (host-side machinery), and `secrets.toml` (credentials).  All three are gitignored.  Register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `secrets.toml` once to provide your wifi password and broker auth under `[wifi]` / `[mqtt.broker.auth]` — these flow into `runtime_config.msgpack` at deploy time.  See [config-files.md](config-files.md) for the three-file split (Decision 0057) and [device-testing.md](device-testing.md) for the full setup flow.
+This installs dependencies, runs editable installs for every library and support package, and regenerates IDE configs.  It also materialises three gitignored starter files at the repo root if they're missing: `devices.yml`, `workspace.yml`, and `secrets.toml`.  If you plan to run functional tests on real hardware, see [Device Testing](device-testing.md) for board registration and `secrets.toml` setup.
 
 `setup` produces a lot of output — look for this at the end:
 
@@ -103,11 +103,9 @@ pytest libraries/timing/tests/
 
 Right-click a test file or test function in the editor → **Run 'test_...'**. PyCharm runs it with pytest using the source roots from `.idea/chumicro.iml`. This is fast for iterating on a single test but does not produce coverage data.
 
-For real-board `functional_tests/`, the same play buttons route to hardware once `devices.yml` is configured.  Run `python scripts/run.py setup` (materialises `devices.yml` + `workspace.yml` + `secrets.toml` from the workbench-shipped starters), then `python scripts/run.py add-device <id> --address <port>` to register your board.  Fill in `secrets.toml` with your wifi credentials under `[wifi]` (the file is gitignored — Decision 0057), then right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.
+Right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory — play buttons route to hardware once `devices.yml` is populated.  See [Device Testing](device-testing.md) for setup.
 
-For device-backed `functional_tests/`, the test tree includes synthetic nodes such as `Setup — MicroPython`, `Run overhead — MicroPython`, `Setup — CircuitPython`, and `Run overhead — CircuitPython`. The setup node owns staging time. Individual test functions show the durations reported by the on-device harness, while the run-overhead node keeps only the remaining batch overhead that is not attributable to a single test.
-
-Large CircuitPython RAM-mode functional tests are sent in multiple raw-REPL chunks instead of one giant inline bootstrap. Before sending those chunks, the transport asks the board for its live free heap (`gc.collect()` then `gc.mem_free()`), strips docstrings from staged library and harness source, and sizes each chunk conservatively from the measured RAM budget. If a single chunk still cannot fit, the run fails early with a flash-mode hint. In that case, set the board's `deploy_mode: flash` in `devices.yml` or use the CLI with `--deploy-mode flash`.
+For functional tests, the test tree shows extra `Setup — <runtime>` and `Run overhead — <runtime>` nodes alongside the individual test functions.  CP RAM-mode tests may fail early with a flash-mode hint when the staged code doesn't fit the board's live free heap — in that case set the board's `deploy_mode: flash` in `devices.yml` or run with `--deploy-mode flash`.  See [Device Testing](device-testing.md) for the transport details.
 
 > **Note:** PyCharm also offers **Run with Coverage** (shield icon). This uses PyCharm's built-in coverage runner, which doesn't understand the project's multi-library layout. Use the **Test** run config or the terminal for accurate coverage.
 
@@ -191,4 +189,3 @@ open htmlcov/index.html
 - **If a new library is added**, run `python scripts/run.py sync-ide` (or click the **Sync IDE** run configuration). New source roots appear after reloading.
 - **If choosing an interpreter rewrites `.idea/chumicro.iml`,** run **Sync IDE** (or `python scripts/run.py sync-ide`) to restore the managed source-root layout before committing. `Setup` and `Prepare Workspace` do the same regeneration if you want a fuller refresh.
 - **The `.idea/` directory is partially committed** — `modules.xml`, `chumicro.iml`, run configurations, and inspection profiles are shared. Workspace-specific files (`.idea/workspace.xml`, `.idea/misc.xml`, etc.) are gitignored. `sync-ide` seeds `misc.xml` with a `Python <major>.<minor> (chumicro)` SDK hint only when it is missing — PyCharm owns it after that.
-- **Run `sync-ide` from the main checkout, not a worktree.** `.idea/chumicro.iml` stores source-folder entries as `$MODULE_DIR$`-relative paths. Running `scripts/run.py sync-ide` from inside a git worktree (`.claude/worktrees/<name>/`, etc.) writes paths relative to the worktree's own root, so a commit of the regenerated `.iml` from that checkout drags wrong paths into `main`. If you have to edit IDE config while another task is open in a worktree, `cd` back to the main checkout first.
