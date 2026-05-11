@@ -1,6 +1,6 @@
 # Decision 0042: Library dependency policy
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-04-27`
 Related: [Decision 0010](0010-library-testability.md) (constructor injection + fakes), [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (sockets), [Decision 0040](0040-chumicro-requests.md) (requests + factory helper pattern), `plans/workstreams/library-pipeline.md` §"Dependency policy".
 

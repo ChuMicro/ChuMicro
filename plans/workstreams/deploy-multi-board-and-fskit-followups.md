@@ -1,6 +1,6 @@
 # Workstream: Multi-board CP deploy + FSKit recovery follow-ups
 
-Status: **partly shipped.**  Items 1 and 3 landed 2026-05-09 in the same investigation session.  Items 2, 4, and 5 remain open.  Each item below names the *evidence*, the *current thinking*, and (for the open ones) *what the next session should verify*.
+Status: **partly shipped.**  Items 1, 2, 3, 4 + the `doctor --fix-fskit-wedge` wrapper landed 2026-05-09; Item 6 considered and dropped.  Item 5 (end-to-end bench validation of the recovery command) is deferred to the next natural FSKit-wedge occurrence — try-on-demand didn't reproduce.  Each item below names the *evidence*, the *current thinking*, and (for Item 5) *what the next session should verify when the wedge surfaces*.
 
 ## For the new session — pickup checklist
 

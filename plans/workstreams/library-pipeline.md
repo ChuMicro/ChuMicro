@@ -45,7 +45,7 @@ A fresh agent picking this up should NOT re-do the Tier A surveys — they shipp
 * [Decision 0043](../decisions/0043-chumicro-sockets-udp.md) — UDP support that ntp consumes.
 * [Decision 0040](../decisions/0040-chumicro-requests.md) — earlier-shipped pattern that Decision 0042 generalised.
 * [`archive/phase-7-integration.md`](archive/phase-7-integration.md) §"LED / UX hooks for service state" — original StatusIndicator HAL idea that the device-feedback layer here supersedes.
-* [`beginner-onramp.md`](beginner-onramp.md) — references `chumicro-requests` and `chumicro-http-server` (both shipped) as part of the demo story; future Tier B / presence work would feed into the same beginner flow.
+* [`archive/beginner-onramp.md`](archive/beginner-onramp.md) — references `chumicro-requests` and `chumicro-http-server` (both shipped) as part of the demo story; future Tier B / presence work would feed into the same beginner flow.
 
 ## Context
 

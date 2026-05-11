@@ -157,23 +157,6 @@ Python project bootstrap (mono-repo's pattern: separate
   audit) is "less doc volume, fewer entry points" — a change
   that *adds* steps to the quickstart cuts against that.
 
-### Library dependency policy (hard-injection vs. lazy default vs. hard dep)
-
-Today every chumicro service takes its dependencies via constructor injection
-(e.g. `MQTTClient(sockets=…)`).  Clean for testing, but creates an onboarding
-cliff — users without prior context don't know they need to install
-`chumicro-sockets` separately, and every example carries injection boilerplate.
-
-`plans/workstreams/library-pipeline.md` §"Dependency policy" lays out three
-options (A: hard-injection, B: lazy default with optional dep, C: hard dep
-with override) and recommends a split: **hard-dep + override** for *core
-infrastructure* (sockets, runner, timing) so libraries work on a single
-`pip install`; **callbacks-only** for *decoration / observability*
-(events, logging, the proposed presence/feedback layer) so they can never
-become required deps.  Decide before the next batch of libraries
-(logging, ntp, events) lands and audit existing `pyproject.toml` files
-against it.  Should land as `plans/decisions/NNNN-library-dependency-policy.md`.
-
 ### Boot-cost measurement benchmark for libraries
 
 The 2026-04-25 lazy-loading investigation
@@ -426,6 +409,16 @@ cheaper than the abstraction tax of an extra published package.
 
 ## Resolved
 
+
+### Library dependency policy (hard-injection vs. lazy default vs. hard dep)
+
+Resolved as [Decision 0042](decisions/0042-library-dependency-policy.md) (`accepted`):
+**hard-dep + factory helper** for *core infrastructure* (sockets, runner, timing)
+so libraries work on a single `pip install`; **optional callback** for
+*decoration / observability* (events, logging, presence) so they can never
+become required deps.  Each new library starts under this contract.
+`chumicro-requests` (Decision 0040) was the worked example that established the
+shape.
 
 ### Is `test-everything` the right name for an opt-in-device sweep?
 

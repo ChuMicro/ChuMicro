@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
-Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), [Decision 0040](0040-chumicro-requests.md) (sibling client library), `plans/workstreams/beginner-onramp.md` Step 7.
+Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), [Decision 0040](0040-chumicro-requests.md) (sibling client library), `plans/workstreams/archive/beginner-onramp.md` Step 7.
 
 ## Context
 
