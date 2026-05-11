@@ -64,6 +64,7 @@ from ._test_runner import (
     resolve_effective_deploy_mode,
     resolve_library_source_dirs,
 )
+from .backends import Backend, BackendExecuteError, BackendPrepareError
 from .features import (
     FEATURE_PROBE_SCRIPT,
     parse_feature_probe_output,
@@ -232,6 +233,19 @@ def _session_pr_summary(
 ) -> _PRSummaryCollector | None:
     """Return the PR-summary collector when ``--pr-summary`` is set."""
     return getattr(session, "_pr_summary", None)
+
+
+def _session_backend(session: pytest.Session) -> Backend:
+    """Return the execution backend installed for this session.
+
+    ``pytest_sessionstart`` installs a single :class:`DeviceBackend`
+    (or the unix-port equivalent once ``--target`` is wired up).
+    Items dispatch through this getter so the device-vs-unix-port
+    branch lives in one place — the rest of the plugin is shape-agnostic.
+    """
+    backend = getattr(session, "_backend", None)
+    assert backend is not None, "pytest_sessionstart must run before backend access"
+    return cast("Backend", backend)
 
 
 class _PRSummaryCollector:
@@ -773,6 +787,138 @@ class _TransportCache:
         self._batch_results.clear()
 
 
+class DeviceBackend:
+    """Backend that runs tests on a real board via a ``chumicro-deploy`` transport.
+
+    Owns the connect → stage → execute → recover flow.  Stateless — all
+    per-device state lives in the session-scoped :class:`_TransportCache`.
+    """
+
+    name = "device"
+
+    def prepare(
+        self,
+        item: DeviceRuntimeItem,
+        device_entry: DeviceEntry,
+    ) -> None:
+        """Connect the transport and stage source files if needed.
+
+        Raises :class:`BackendPrepareError` on transport-connection
+        failure; lets staging exceptions propagate as plain exceptions
+        (matching the original behavior for that path).
+        """
+        cache = _session_cache(item.session)
+        deploy_mode = _session_deploy_mode_override(item.session)
+
+        try:
+            transport = cache.get_transport(device_entry, deploy_mode)
+        except Exception as error:
+            raise BackendPrepareError(
+                f"Transport connection failed: {error}",
+            ) from error
+
+        # Flash/copy modes persist files on the device filesystem,
+        # so we bulk-stage one library's sources + test files per
+        # rsync.  Per-library scope keeps the drive working-set
+        # bounded — Pi Pico W CIRCUITPY drives are 491 KB; staging
+        # every library at once overflows.  When switching libraries
+        # the next rsync ``--delete`` cleans the prior library off.
+        # RAM mode embeds source inline, so it re-stages per file.
+        is_filesystem_mode = transport.mode not in ("ram", "mount")
+        if is_filesystem_mode:
+            current_library = cache.current_staged_library(
+                device_entry.identifier,
+            )
+            if current_library != item._library_name:  # noqa: SLF001
+                _bulk_stage_for_device(
+                    item.session,
+                    device_entry,
+                    transport,
+                    library_filter=item._library_name,  # noqa: SLF001
+                )
+                cache.mark_library_staged(
+                    device_entry.identifier,
+                    item._library_name,  # noqa: SLF001
+                )
+        else:
+            staging_key = item._batch_key(device_entry)  # noqa: SLF001
+            if cache.needs_staging(staging_key):
+                if _should_soft_reset_before_stage(
+                    cache,
+                    device_entry,
+                    transport,
+                    item._library_name,  # noqa: SLF001
+                    item.test_file.name,
+                ):
+                    try:
+                        transport.soft_reset()
+                    except Exception as error:
+                        pytest.fail(
+                            f"Device reset failed between test files: {error}",
+                        )
+                source_dirs = resolve_library_source_dirs(
+                    item.library_dir,
+                    libraries_root=_libraries_root(item.session),
+                    test_files=[item.test_file],
+                )
+                transport.stage(
+                    source_dirs,
+                    [item.test_file],
+                    _harness_source_dir(item.session),
+                    extra_files=_encode_runtime_config_extra_files(
+                        item.session.config,
+                    ),
+                )
+                cache.mark_staged(staging_key)
+
+    def execute(
+        self,
+        item: DeviceRuntimeItem,
+        device_entry: DeviceEntry,
+    ) -> str:
+        """Run every test in ``item.test_file`` on the device.
+
+        On execution failure, attempts ``transport.recover()`` so the
+        next file can run independently; if recovery itself fails,
+        evicts the transport from the cache so the next item reconnects
+        from scratch.  Always raises :class:`BackendExecuteError` —
+        the caller turns that into a single ``pytest.fail``.
+        """
+        cache = _session_cache(item.session)
+        transport = cache.get_transport(
+            device_entry,
+            _session_deploy_mode_override(item.session),
+        )
+        # Run ALL tests in the file (no name_filter) to amortize the
+        # per-invocation overhead.
+        bootstrap = build_device_bootstrap(
+            device_entry, transport, item.test_file, None,
+        )
+        try:
+            return execute_device_bootstrap(transport, bootstrap)
+        except Exception as error:
+            # Try to recover the board so the next file can run
+            # independently of this failure; if recovery itself
+            # fails, evict the transport so the next item reconnects
+            # from scratch.  Without this, every subsequent file
+            # cascade-failed because the cached transport was stuck
+            # mid-raw-REPL or mid-mpremote.
+            error_message = f"Device execution failed: {error}"
+            recovery_failed = False
+            try:
+                transport.recover()
+            except Exception as recover_error:  # pragma: no cover - hardware-only
+                recovery_failed = True
+                error_message = (
+                    f"{error_message}\n"
+                    f"Recovery failed: {recover_error}; "
+                    f"evicting transport for {device_entry.identifier}"
+                )
+            if recovery_failed:
+                cache.invalidate_device(device_entry.identifier)
+            raise BackendExecuteError(error_message) from error
+
+
 class DeviceTestFile(pytest.File):
     """Collector that discovers ``test_*`` functions via AST parsing.
 
@@ -897,67 +1043,28 @@ class DeviceRuntimeItem(pytest.Item):
         )
 
     def _ensure_prepared(self, device_entry: DeviceEntry) -> None:
-        """Connect to the device and stage source files if needed."""
+        """Run the backend's prepare step for this item.
 
-        cache = _session_cache(self.session)
-        deploy_mode = _session_deploy_mode_override(self.session)
-
+        Connection-style failures (transport-level on device, binary
+        not found on unix-port) raise :class:`BackendPrepareError`,
+        which we cache as a batch failure so subsequent items for the
+        same file fail fast without re-attempting.  Other prepare
+        failures (staging exceptions) propagate naturally — they
+        either match the previous "uncaught exception during prepare"
+        behavior or get caught by ``_ensure_batch_result`` when
+        prepare runs as part of execute.
+        """
+        backend = _session_backend(self.session)
         try:
-            transport = cache.get_transport(device_entry, deploy_mode)
-        except Exception as error:
+            backend.prepare(self, device_entry)
+        except BackendPrepareError as error:
+            cache = _session_cache(self.session)
             cache.cache_batch_result(
                 self._batch_key(device_entry),
                 None,
-                f"Transport connection failed: {error}",
+                str(error),
             )
-            pytest.fail(f"Transport connection failed: {error}")
-
-        # Flash/copy modes persist files on the device filesystem,
-        # so we bulk-stage one library's sources + test files per
-        # rsync.  Per-library scope keeps the drive working-set
-        # bounded — Pi Pico W CIRCUITPY drives are 491 KB; staging
-        # every library at once overflows.  When switching libraries
-        # the next rsync ``--delete`` cleans the prior library off.
-        # RAM mode embeds source inline, so it re-stages per file.
-        is_filesystem_mode = transport.mode not in ("ram", "mount")
-        if is_filesystem_mode:
-            current_library = cache.current_staged_library(
-                device_entry.identifier,
-            )
-            if current_library != self._library_name:
-                _bulk_stage_for_device(
-                    self.session,
-                    device_entry,
-                    transport,
-                    library_filter=self._library_name,
-                )
-                cache.mark_library_staged(
-                    device_entry.identifier, self._library_name,
-                )
-        elif not is_filesystem_mode:
-            staging_key = self._batch_key(device_entry)
-            if cache.needs_staging(staging_key):
-                if _should_soft_reset_before_stage(
-                    cache, device_entry, transport, self._library_name, self.test_file.name,
-                ):
-                    try:
-                        transport.soft_reset()
-                    except Exception as error:
-                        pytest.fail(f"Device reset failed between test files: {error}")
-                source_dirs = resolve_library_source_dirs(
-                    self.library_dir,
-                    libraries_root=_libraries_root(self.session),
-                    test_files=[self.test_file],
-                )
-                transport.stage(
-                    source_dirs,
-                    [self.test_file],
-                    _harness_source_dir(self.session),
-                    extra_files=_encode_runtime_config_extra_files(
-                        self.session.config,
-                    ),
-                )
-                cache.mark_staged(staging_key)
+            pytest.fail(str(error))
 
     def _ensure_batch_result(
         self,
@@ -973,39 +1080,12 @@ class DeviceRuntimeItem(pytest.Item):
         if batch is None:
             # First item for this (device, file) — run all tests.
             self._ensure_prepared(device_entry)
-            transport = cache.get_transport(
-                device_entry, _session_deploy_mode_override(self.session),
-            )
-
-            # Run ALL tests in the file (no name_filter) to amortize
-            # the per-invocation overhead.
-            bootstrap = build_device_bootstrap(
-                device_entry, transport, self.test_file, None,
-            )
+            backend = _session_backend(self.session)
             try:
-                raw_output = execute_device_bootstrap(transport, bootstrap)
-            except Exception as error:
-                # Try to recover the board so the next file can run
-                # independently of this failure; if recovery itself
-                # fails, evict the transport so the next item reconnects
-                # from scratch.  Without this, every subsequent file
-                # cascade-failed because the cached transport was stuck
-                # mid-raw-REPL or mid-mpremote.
-                error_message = f"Device execution failed: {error}"
-                recovery_failed = False
-                try:
-                    transport.recover()
-                except Exception as recover_error:  # pragma: no cover - hardware-only
-                    recovery_failed = True
-                    error_message = (
-                        f"{error_message}\n"
-                        f"Recovery failed: {recover_error}; "
-                        f"evicting transport for {device_entry.identifier}"
-                    )
-                if recovery_failed:
-                    cache.invalidate_device(device_entry.identifier)
-                cache.cache_batch_result(batch_key, None, error_message)
-                pytest.fail(error_message)
+                raw_output = backend.execute(self, device_entry)
+            except BackendExecuteError as error:
+                cache.cache_batch_result(batch_key, None, str(error))
+                pytest.fail(str(error))
 
             result = parse_output(raw_output)
             cache.cache_batch_result(batch_key, result, raw_output)
@@ -1505,6 +1585,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     defaults with no explicit flags.
     """
     session._device_transport_cache = _TransportCache()  # type: ignore[attr-defined]
+    session._backend = DeviceBackend()  # type: ignore[attr-defined]
 
     runtime_override = cast(
         "str | None",
