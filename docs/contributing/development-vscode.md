@@ -10,7 +10,7 @@ This guide covers the full development workflow in Visual Studio Code.  The proj
 
 ### 1. Fork, clone, and install
 
-Follow steps 1–4 of the [quick start](../../CONTRIBUTING.md#quick-start) in the contributing guide to fork the repository, clone it, and install dependencies. Then come back here for VS Code–specific setup.
+Follow steps 1–4 of the [setup walkthrough](../../CONTRIBUTING.md#setting-up-your-development-environment) in the contributing guide to fork the repository, clone it, and install dependencies. Then come back here for VS Code–specific setup.
 
 ### 2. Open in VS Code
 
@@ -131,7 +131,7 @@ If no device is configured yet, pytest skips the run with a message telling you 
 The integrated terminal (`` ⌃` `` / `` Ctrl+` ``) works the same as any terminal:
 
 ```bash
-python scripts/run.py test --libraries timing
+pytest libraries/timing/tests/
 ```
 
 ## Validating your work
@@ -173,11 +173,11 @@ If preflight fails, run individual tasks to isolate the problem:
 Or use the terminal for more control:
 
 ```bash
-# Test one library with coverage details
+# Test one library with the coverage gate
 python scripts/run.py test --libraries timing
 
-# Quick test — no coverage, stop on first failure
-python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov
+# Day-to-day iteration (no coverage gate)
+pytest libraries/timing/tests/ -k heartbeat -x -v
 ```
 
 ### Device functional tests from the terminal or task runner

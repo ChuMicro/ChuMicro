@@ -8,7 +8,7 @@ This guide is for developers using editors other than PyCharm and VS Code — Ne
 
 ## Setup
 
-Follow steps 1–4 of the [quick start](../../CONTRIBUTING.md#quick-start) in the contributing guide to fork the repository, clone it, and install dependencies:
+Follow steps 1–4 of the [setup walkthrough](../../CONTRIBUTING.md#setting-up-your-development-environment) in the contributing guide to fork the repository, clone it, and install dependencies:
 
 ```bash
 cd ChuMicro
@@ -37,13 +37,13 @@ If your editor uses a different language server (e.g., Jedi), the editable insta
 
 ## Running tasks
 
-All tasks go through `scripts/run.py` in the terminal. There are no editor-specific task runners to set up:
+Tests go through plain `pytest`; other tasks go through `scripts/run.py` in the terminal.  No editor-specific task runners to set up:
 
 ```bash
-python scripts/run.py test --libraries timing   # test one library
+pytest libraries/timing/tests/                                  # test one library (everyday)
 python scripts/run.py test-libraries-functional --library timing  # real-board functional tests
-python scripts/run.py lint                       # lint the workspace
-python scripts/run.py preflight                  # full CI mirror
+python scripts/run.py lint                                       # lint the workspace
+python scripts/run.py preflight                                  # full CI mirror
 ```
 
 See the [Cheat Sheet](cheat-sheet.md) for the full command list.
@@ -107,7 +107,7 @@ If your editor has a terminal, you're ready. The CLI workflow is the primary pat
 After running tests, a `.coverage` data file is left at the repository root. Generate an HTML report for line-by-line browsing:
 
 ```bash
-python scripts/run.py test --libraries timing
+pytest libraries/timing/tests/
 python -m coverage html
 open htmlcov/index.html    # macOS — use xdg-open on Linux
 ```
