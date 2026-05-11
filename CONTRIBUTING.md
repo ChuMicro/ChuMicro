@@ -342,24 +342,60 @@ ChuMicro tests at four layers.  Each catches a different class of bug; together 
 The everyday layer.  Each library has a `tests/` directory next to its source, with pytest tests that exercise the code on CPython.  Fast — a full library's tests run in a second or two.
 
 ```bash
-pytest libraries/timing/tests/
+pytest libraries/timing/tests/              # one library
+pytest libraries/                            # every library + workbench
+pytest libraries/ -k test_heartbeat_poll     # filter by test name
 ```
 
 These tests catch logic bugs, regressions in covered code paths, and API behavior changes.  The shape: construct the object under test with fakes injected for any hardware-touching dependencies (sockets, ticks, I2C buses), then assert observable behavior.  Each library's `testing.py` ships fakes downstream tests can import (`from chumicro_timing.testing import FakeTicks`).
 
-Add a unit test when you add code.  The per-library coverage gate fails preflight if you don't.
+For commit-gating runs with per-library coverage thresholds, use the `run.py` wrapper:
+
+```bash
+python scripts/run.py test                          # changed packages only (git-diff scoped)
+python scripts/run.py test --all                    # full sweep
+python scripts/run.py test --libraries timing,mqtt  # explicit scope
+python scripts/run.py test -k test_heartbeat_poll   # filter, like pytest's -k
+```
+
+What the wrapper adds over bare `pytest`:
+
+- **Per-package subprocesses** — each library runs in its own pytest invocation, so each one's `pyproject.toml` `addopts` (coverage source, threshold, exclusion patterns) takes effect independently.  Bare `pytest libraries/` runs everything in one process under the workspace-root config, which doesn't enforce per-library coverage gates.
+- **Per-library coverage threshold** — agent-generated code must clear 94%, human contributors 85% (Decision 0025).  Preflight fails if any library dips below; bare pytest does not gate on this.
+- **Changed-package detection** — the default scope uses `git diff` against `main` to skip libraries whose source hasn't changed.  Useful when you're iterating on one library and don't want to re-run unrelated suites.
+- **CI parity** — CI invokes `python scripts/run.py test --all` verbatim, so "passes under `run.py test`" is the load-bearing signal before pushing.
+
+Use bare `pytest` for IDE play buttons + tight iteration; switch to `run.py test` before committing.  Add a unit test when you add code — the per-library coverage gate fails preflight if you don't.
 
 ### Cross-runtime unit tests
 
 The same unit tests, run under MicroPython and CircuitPython's "unix port" builds — desktop versions of the device runtimes that catch "works on CPython, breaks on the device" before code reaches a board.  Same `pytest` invocation you use locally, just with a target flag:
 
 ```bash
-pytest libraries/ --target unix-port --runtime both
+pytest libraries/ --target unix-port --runtime both          # MicroPython + CircuitPython
+pytest libraries/ --target unix-port --runtime micropython   # one runtime
+pytest libraries/timing/tests --target unix-port --runtime micropython  # one library
 ```
 
 The `chumicro-pytest-device` plugin spawns one runtime subprocess per test file — same plugin that drives on-device functional tests below, so the mental model is uniform: pytest is the front door for every layer.  IDE play buttons reach the unix-port lane via a run configuration that adds `--target unix-port --runtime <X>`.
 
-First-time setup: `python scripts/run.py prepare-micropython` and `prepare-circuitpython` build the unix-port binaries under `.tools/` (gitignored, about a minute each); subsequent `pytest` runs reuse them.  CI runs the same sweep on every push, so contributors without unix-port builds locally still get the protection.
+First-time setup: `python scripts/run.py prepare-micropython` and `prepare-circuitpython` build the unix-port binaries under `.tools/` (gitignored, about a minute each).  Subsequent `pytest` runs reuse them.
+
+For commit-gating runs, the `run.py` wrappers add a parallel-phases shape:
+
+```bash
+python scripts/run.py test-micropython              # MP unix-port only
+python scripts/run.py test-circuitpython            # CP unix-port only
+python scripts/run.py test-all-runtimes             # CPython, then MP + CP in parallel
+```
+
+What the wrappers add over bare `pytest --target unix-port`:
+
+- **Auto-build the unix-port binary on first use** — no separate `prepare-*` step.  Resolves explicit `--micropython-binary` / `--circuitpython-binary` overrides first, then `.tools/<runtime>.path` markers, then `PATH`; if none resolve, runs the prepare task and retries.
+- **Parallel runtime phases** — `test-all-runtimes` runs the CPython suite first (fastest signal), then spawns the MicroPython + CircuitPython phases as concurrent subprocesses with phase-prefixed output (`[test-micropython] …` / `[test-circuitpython] …`).  Faster than sequential `--runtime both` on multi-core hosts; same plugin underneath either way.
+- **CI parity** — `test-all-runtimes` is what CI calls.
+
+CI runs the same sweep on every push, so contributors without unix-port builds locally still get the protection.
 
 These tests catch the runtime-specific gotchas — `typing` imports that don't exist on devices, `from __future__` imports that fail there, relative imports that break CircuitPython RAM-mode deploys, library quirks in the device standard libraries.
 
@@ -372,8 +408,27 @@ For behavior that only emerges on real hardware — USB-CDC timing, filesystem s
 How it works: the `chumicro-pytest-device` plugin intercepts pytest collection under `functional_tests/`, stages the test source and library source onto a connected board, runs the test inside the device runtime, and reports the result back through the host's pytest — same UX as any other pytest run.
 
 ```bash
-pytest libraries/timing/functional_tests/
+pytest libraries/timing/functional_tests/                  # one library, default device(s)
+pytest libraries/timing/functional_tests/ --runtime both   # both MP and CP boards
+pytest libraries/timing/functional_tests/ -k heartbeat     # filter by test name
+pytest workbench/deploy/functional_tests/                  # workbench tests that drive a board
 ```
+
+For PR-grade runs with a paste-ready markdown summary, use the `run.py` wrappers:
+
+```bash
+python scripts/run.py test-libraries-functional --library timing
+python scripts/run.py test-libraries-functional --runtime both --deploy-mode flash
+python scripts/run.py test-libraries-functional --library timing --file test_heartbeat --function fires
+python scripts/run.py test-workbench-functional --workbench deploy
+```
+
+What the wrappers add over bare `pytest libraries/.../functional_tests/`:
+
+- **`--pr-summary` markdown block** — at session end, prints a paste-ready table (per-device pass/fail/error counts, runtime + deploy-mode + implementation detail, total duration) that drops straight into the "Device testing" section of a PR description.  Bare pytest doesn't render this.
+- **Reconstructed-command line** in the PR block — the wrapper records the exact `python scripts/run.py test-libraries-functional …` invocation so a reviewer can re-run the same scope with one paste.
+- **Scope flags** — `--library <name>`, `--file <substring>`, `--function <substring>`, `--deploy-mode {ram,flash}`, `--runtime {micropython,circuitpython,both}`.  Composes them into the corresponding `--micropython-device` / `--deploy-mode` / `-k` pytest args under the hood.
+- **`devices.yml` defaults resolution** — `--runtime both` selects the configured MP + CP boards from `defaults:` automatically; `--micropython-device <id>` / `--circuitpython-device <id>` override per-runtime targets.  Bare pytest reads the same `devices.yml`, but the wrapper's CLI shape is the one CI uses.
 
 You need a board plugged in and registered (`python scripts/run.py add-device …`).  Without a `devices.yml`, the tests skip cleanly — no error, no false failure.  Full hardware setup (deploy modes, multi-runtime, wifi credentials, IDE play-button integration) lives in [Device Testing](docs/contributing/device-testing.md).
 
