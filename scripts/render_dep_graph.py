@@ -1,29 +1,35 @@
-"""Render the chumicro library dependency graph to an SVG artifact.
+"""Render chumicro dependency graphs to SVG artifacts.
 
-Source of truth for the rendered graph at
-``support/docs/dependency-graph.svg``.  Pure-Python; no external deps.
+Two graphs are produced from this single script:
 
-Two edge kinds:
+* ``support/docs/dependency-graph.svg`` — device libraries under
+  ``libraries/<name>/``.
+* ``support/docs/workbench-dependency-graph.svg`` — host-side tools under
+  ``workbench/<name>/``.
+
+Both pure-Python; no external deps.
+
+Two edge kinds (same convention in each graph):
 
 * **Strict deps** (solid arrows) — exactly the chumicro-prefixed entries
-  in each ``libraries/<name>/pyproject.toml``'s ``[project].dependencies``.
-  Auto-discovered at script invocation; if a library's pyproject changes,
+  in each package's ``pyproject.toml`` ``[project].dependencies``.
+  Auto-discovered at script invocation; if a package's pyproject changes,
   re-running this script picks the change up.
 * **DI / typical-wiring deps** (dashed arrows) — relationships expressed
-  through constructor injection rather than ``import``.  These don't show
-  up in pyproject but are real (apps wire them up at runtime); the user
-  who pulls a library in should know they exist.  Hand-curated below.
+  through constructor injection or lazy runtime import rather than a
+  declared dep.  Hand-curated below — the user who pulls a package in
+  should know they exist.
 
 Run::
 
-    python scripts/render_dep_graph.py            # regenerate the SVG
-    python scripts/render_dep_graph.py --check    # verify the committed SVG
-                                                  # matches what the current
-                                                  # pyproject deps would render
+    python scripts/render_dep_graph.py            # regenerate both SVGs
+    python scripts/render_dep_graph.py --check    # verify both committed
+                                                  # SVGs match what the
+                                                  # current pyprojects render
 
-Preflight runs ``--check`` so a contributor who changes a library's
-``[project].dependencies`` without re-rendering the SVG sees the failure
-in CI rather than discovering it months later when the docs go stale.
+Preflight runs ``--check`` so a contributor who changes a package's
+``[project].dependencies`` without re-rendering sees the failure in CI
+rather than discovering it months later when the docs go stale.
 """
 
 from __future__ import annotations
@@ -34,11 +40,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LIBRARIES_DIR = REPO_ROOT / "libraries"
+WORKBENCH_DIR = REPO_ROOT / "workbench"
 SVG_OUT = REPO_ROOT / "support" / "docs" / "dependency-graph.svg"
+WORKBENCH_SVG_OUT = REPO_ROOT / "support" / "docs" / "workbench-dependency-graph.svg"
 
 # Hand-curated DI / typical-wiring relationships.  Each library on the
-# left is shaped to register with / receive an instance of the library
-# on the right at runtime, but doesn't `import` it.  Apps wire them up.
+# left registers with / receives an instance of the library on the right
+# at runtime, but doesn't `import` it.  Apps wire them up.
 DI_DEPS: dict[str, list[str]] = {
     "wifi": ["runner"],
     "ntp": ["runner", "timing"],
@@ -46,6 +54,14 @@ DI_DEPS: dict[str, list[str]] = {
     "http_server": ["runner"],
     "mqtt": ["runner"],
     "websockets": ["runner"],
+}
+
+# Workbench DI / soft-dep relationships.  ``chumicro-workspace`` imports
+# ``chumicro_repl`` lazily inside CLI functions and prints an install hint
+# if the import fails — so it's a real runtime relationship but not a
+# declared pyproject dep.
+WORKBENCH_DI_DEPS: dict[str, list[str]] = {
+    "workspace": ["repl"],
 }
 
 # Hand-curated node positions for an orthogonal three-tier layout.
@@ -73,17 +89,38 @@ NODES: dict[str, tuple[int, int]] = {
     "events":      (400,  640),
 }
 
+# Workbench layout: composers on top, primitives below, lint-only
+# ``checks`` package off to the side as a standalone node.
+WORKBENCH_NODES: dict[str, tuple[int, int]] = {
+    # Top row — composers (y=60).
+    "workspace":     (40,   60),
+    "pytest-device": (240,  60),
+    # Bottom row — primitives (y=240).
+    "deploy":        (40,   240),
+    "repl":          (240,  240),
+    # Standalone (no edges) — workspace-internal lint rules.
+    "checks":        (470,  240),
+}
+
+WORKBENCH_STANDALONE = {"checks"}
+
 NODE_W, NODE_H = 130, 36
+WORKBENCH_NODE_W = 170  # fits "chumicro-pytest-device" comfortably
 CANVAS_W, CANVAS_H = 1120, 720
+WORKBENCH_CANVAS_W, WORKBENCH_CANVAS_H = 700, 380
 
 
-def discover_strict_deps() -> dict[str, list[str]]:
-    """Walk libraries/*/pyproject.toml and return chumicro-prefixed deps."""
+def discover_strict_deps(source_dir: Path = LIBRARIES_DIR) -> dict[str, list[str]]:
+    """Walk ``source_dir/*/pyproject.toml`` and return chumicro-prefixed deps.
+
+    Defaults to the libraries tree to preserve the original call shape; pass
+    ``WORKBENCH_DIR`` for the host-side tools.
+    """
     deps: dict[str, list[str]] = {}
-    for library_dir in sorted(LIBRARIES_DIR.iterdir()):
-        if not library_dir.is_dir():
+    for package_dir in sorted(source_dir.iterdir()):
+        if not package_dir.is_dir():
             continue
-        pyproject = library_dir / "pyproject.toml"
+        pyproject = package_dir / "pyproject.toml"
         if not pyproject.is_file():
             continue
         text = pyproject.read_text()
@@ -91,54 +128,78 @@ def discover_strict_deps() -> dict[str, list[str]]:
         marker = "dependencies = ["
         start = text.find(marker)
         if start == -1:
-            deps[library_dir.name] = []
+            deps[package_dir.name] = []
             continue
         end = text.find("]", start)
         block = text[start + len(marker) : end]
         chumicro_deps = []
         for raw_line in block.splitlines():
             line = raw_line.strip().strip(",").strip('"').strip("'")
-            if line.startswith("chumicro-"):
-                chumicro_deps.append(line.removeprefix("chumicro-"))
-        deps[library_dir.name] = chumicro_deps
+            if not line.startswith("chumicro-"):
+                continue
+            # Strip PEP 508 version specifiers + environment markers so
+            # "chumicro-deploy>=0.1.0" becomes "deploy".
+            name = line.removeprefix("chumicro-")
+            for separator in (">=", "<=", "==", "!=", "~=", ">", "<", ";", " ", "["):
+                if separator in name:
+                    name = name.split(separator, 1)[0]
+            chumicro_deps.append(name)
+        deps[package_dir.name] = chumicro_deps
     return deps
 
 
 def edge_endpoints(
-    source: str, destination: str
+    source: str,
+    destination: str,
+    nodes: dict[str, tuple[int, int]] = NODES,
+    node_w: int = NODE_W,
+    node_h: int = NODE_H,
 ) -> tuple[float, float, float, float]:
     """Return (sx, sy, dx, dy) where the edge starts at the source's bottom
     edge and ends at the destination's top edge.  Both anchored to box
     centers in the perpendicular axis.
     """
-    source_x, source_y = NODES[source]
-    destination_x, destination_y = NODES[destination]
-    source_cx = source_x + NODE_W / 2
-    destination_cx = destination_x + NODE_W / 2
+    source_x, source_y = nodes[source]
+    destination_x, destination_y = nodes[destination]
+    source_cx = source_x + node_w / 2
+    destination_cx = destination_x + node_w / 2
     if source_y < destination_y:
         # Source is above destination — line drops from source bottom
         # to destination top.
-        return source_cx, source_y + NODE_H, destination_cx, destination_y
+        return source_cx, source_y + node_h, destination_cx, destination_y
     # Source is below destination (rare here) — flip.
-    return source_cx, source_y, destination_cx, destination_y + NODE_H
+    return source_cx, source_y, destination_cx, destination_y + node_h
 
 
-def render_node(name: str, kind: str = "default") -> str:
-    """Box + label for one library."""
-    box_x, box_y = NODES[name]
+def render_node(
+    name: str,
+    kind: str = "default",
+    nodes: dict[str, tuple[int, int]] = NODES,
+    node_w: int = NODE_W,
+    node_h: int = NODE_H,
+) -> str:
+    """Box + label for one package."""
+    box_x, box_y = nodes[name]
     return (
         f'  <g class="node {kind}">\n'
-        f'    <rect x="{box_x}" y="{box_y}" width="{NODE_W}" height="{NODE_H}" '
+        f'    <rect x="{box_x}" y="{box_y}" width="{node_w}" height="{node_h}" '
         f'rx="6" ry="6" />\n'
-        f'    <text x="{box_x + NODE_W / 2}" y="{box_y + NODE_H / 2 + 5}" '
+        f'    <text x="{box_x + node_w / 2}" y="{box_y + node_h / 2 + 5}" '
         f'text-anchor="middle">chumicro-{name}</text>\n'
         f'  </g>'
     )
 
 
-def render_edge(source: str, destination: str, dashed: bool) -> str:
+def render_edge(
+    source: str,
+    destination: str,
+    dashed: bool,
+    nodes: dict[str, tuple[int, int]] = NODES,
+    node_w: int = NODE_W,
+    node_h: int = NODE_H,
+) -> str:
     """One arrow from source's bottom to destination's top."""
-    sx, sy, dx, dy = edge_endpoints(source, destination)
+    sx, sy, dx, dy = edge_endpoints(source, destination, nodes, node_w, node_h)
     css_class = "edge-di" if dashed else "edge-strict"
     return (
         f'  <line x1="{sx}" y1="{sy}" x2="{dx}" y2="{dy}" '
@@ -146,33 +207,48 @@ def render_edge(source: str, destination: str, dashed: bool) -> str:
     )
 
 
-def render_svg(strict: dict[str, list[str]], di: dict[str, list[str]]) -> str:
+def render_svg(
+    strict: dict[str, list[str]],
+    di: dict[str, list[str]],
+    nodes: dict[str, tuple[int, int]] = NODES,
+    standalone: set[str] = frozenset({"compat", "logging", "events"}),
+    node_w: int = NODE_W,
+    node_h: int = NODE_H,
+    canvas_w: int = CANVAS_W,
+    canvas_h: int = CANVAS_H,
+    row_labels: list[tuple[str, int, int]] = (
+        ("Services",        20,  50),
+        ("Building blocks", 20, 290),
+        ("Foundation",      20, 530),
+        ("Standalone",      20, 630),
+    ),
+    legend_pos: tuple[int, int] = (740, 620),
+) -> str:
     """Assemble the full SVG document."""
     edges_strict = [
-        render_edge(source, destination, dashed=False)
+        render_edge(source, destination, False, nodes, node_w, node_h)
         for source, targets in strict.items()
         for destination in targets
-        if source in NODES and destination in NODES
+        if source in nodes and destination in nodes
     ]
     edges_di = [
-        render_edge(source, destination, dashed=True)
+        render_edge(source, destination, True, nodes, node_w, node_h)
         for source, targets in di.items()
         for destination in targets
-        if source in NODES and destination in NODES
+        if source in nodes and destination in nodes
     ]
 
-    standalone = {"compat", "logging", "events"}
     nodes_kind = []
-    for name in NODES:
+    for name in nodes:
         if name in standalone:
-            nodes_kind.append(render_node(name, kind="standalone"))
+            nodes_kind.append(render_node(name, "standalone", nodes, node_w, node_h))
         else:
-            nodes_kind.append(render_node(name))
+            nodes_kind.append(render_node(name, "default", nodes, node_w, node_h))
 
     parts: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" '
-        f'viewBox="0 0 {CANVAS_W} {CANVAS_H}" '
-        f'width="{CANVAS_W}" height="{CANVAS_H}" '
+        f'viewBox="0 0 {canvas_w} {canvas_h}" '
+        f'width="{canvas_w}" height="{canvas_h}" '
         f'font-family="system-ui, -apple-system, Helvetica, Arial, sans-serif" '
         f'font-size="13">',
         '  <defs>',
@@ -199,10 +275,10 @@ def render_svg(strict: dict[str, list[str]], di: dict[str, list[str]]) -> str:
         '  </defs>',
         '',
         '  <!-- Row labels -->',
-        '  <text x="20" y="50" class="row-label">Services</text>',
-        '  <text x="20" y="290" class="row-label">Building blocks</text>',
-        '  <text x="20" y="530" class="row-label">Foundation</text>',
-        '  <text x="20" y="630" class="row-label">Standalone</text>',
+        *[
+            f'  <text x="{rx}" y="{ry}" class="row-label">{label}</text>'
+            for label, rx, ry in row_labels
+        ],
         '',
         '  <!-- Strict-dep arrows (pyproject.toml dependencies) -->',
         '  <g>',
@@ -214,13 +290,13 @@ def render_svg(strict: dict[str, list[str]], di: dict[str, list[str]]) -> str:
         *edges_di,
         '  </g>',
         '',
-        '  <!-- Library boxes -->',
+        '  <!-- Package boxes -->',
         '  <g>',
         *nodes_kind,
         '  </g>',
         '',
         '  <!-- Legend -->',
-        '  <g transform="translate(740, 620)">',
+        f'  <g transform="translate({legend_pos[0]}, {legend_pos[1]})">',
         '    <text class="legend-title" x="0" y="0">Legend</text>',
         '    <line x1="0" y1="20" x2="40" y2="20" class="edge-strict" '
         'marker-end="url(#arrow-strict)" />',
@@ -237,6 +313,29 @@ def render_svg(strict: dict[str, list[str]], di: dict[str, list[str]]) -> str:
     return "\n".join(parts) + "\n"
 
 
+def render_workbench_svg(
+    strict: dict[str, list[str]],
+    di: dict[str, list[str]] = WORKBENCH_DI_DEPS,
+) -> str:
+    """Workbench dependency graph — composers above, primitives below."""
+    return render_svg(
+        strict,
+        di,
+        nodes=WORKBENCH_NODES,
+        standalone=WORKBENCH_STANDALONE,
+        node_w=WORKBENCH_NODE_W,
+        node_h=NODE_H,
+        canvas_w=WORKBENCH_CANVAS_W,
+        canvas_h=WORKBENCH_CANVAS_H,
+        row_labels=(
+            ("Composers",  20,  50),
+            ("Primitives", 20, 230),
+            ("Standalone", 410, 230),
+        ),
+        legend_pos=(30, 320),
+    )
+
+
 def _display_path(path: Path) -> str:
     """Format a path for human-readable error / status messages.
 
@@ -249,57 +348,86 @@ def _display_path(path: Path) -> str:
         return str(path)
 
 
+def _check_or_write(
+    rendered: str, out_path: Path, *, check: bool, label: str
+) -> int:
+    """Either compare *rendered* against the committed SVG at *out_path*
+    and return 0/1, or write it.  *label* is "library" / "workbench" for
+    error messages."""
+    if check:
+        if not out_path.is_file():
+            print(
+                f"ERROR: {_display_path(out_path)} is missing.  "
+                f"Run `python scripts/render_dep_graph.py` to generate it.",
+                file=sys.stderr,
+            )
+            return 1
+        if out_path.read_text() != rendered:
+            print(
+                f"ERROR: {_display_path(out_path)} is out of date.  "
+                f"A {label} package's pyproject.toml deps changed but the "
+                f"rendered SVG was not regenerated.  Run "
+                f"`python scripts/render_dep_graph.py` and commit the result.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"OK: {_display_path(out_path)} matches the current pyproject deps.")
+        return 0
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(rendered)
+    print(f"wrote {_display_path(out_path)}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Render or verify the chumicro library dependency graph SVG.",
+        description="Render or verify the chumicro dependency graph SVGs.",
     )
     parser.add_argument(
         "--check",
         action="store_true",
         help=(
-            "Verify mode: re-render in memory, compare against the committed "
-            "SVG, exit 1 if they differ.  Runs in preflight so a contributor "
-            "who changes a library's [project].dependencies without re-rendering "
-            "sees the failure in CI."
+            "Verify mode: re-render both graphs in memory, compare against "
+            "the committed SVGs, exit 1 if either differs.  Runs in preflight "
+            "so a contributor who changes a package's [project].dependencies "
+            "without re-rendering sees the failure in CI."
         ),
     )
     args = parser.parse_args(argv)
 
-    strict = discover_strict_deps()
-    rendered = render_svg(strict, DI_DEPS)
+    library_strict = discover_strict_deps()
+    library_svg = render_svg(library_strict, DI_DEPS)
+
+    workbench_strict = discover_strict_deps(WORKBENCH_DIR)
+    workbench_svg = render_workbench_svg(workbench_strict, WORKBENCH_DI_DEPS)
+
+    library_status = _check_or_write(
+        library_svg, SVG_OUT, check=args.check, label="library"
+    )
+    workbench_status = _check_or_write(
+        workbench_svg, WORKBENCH_SVG_OUT, check=args.check, label="workbench"
+    )
 
     if args.check:
-        if not SVG_OUT.is_file():
-            print(
-                f"ERROR: {_display_path(SVG_OUT)} is missing.  "
-                f"Run `python scripts/render_dep_graph.py` to generate it.",
-                file=sys.stderr,
-            )
-            return 1
-        committed = SVG_OUT.read_text()
-        if committed != rendered:
-            print(
-                f"ERROR: {_display_path(SVG_OUT)} is out of date.  "
-                f"A library's pyproject.toml deps changed but the rendered "
-                f"SVG was not regenerated.  Run "
-                f"`python scripts/render_dep_graph.py` and commit the result.",
-                file=sys.stderr,
-            )
-            return 1
-        print(f"OK: {_display_path(SVG_OUT)} matches the current pyproject deps.")
-        return 0
+        return library_status or workbench_status
 
-    SVG_OUT.parent.mkdir(parents=True, exist_ok=True)
-    SVG_OUT.write_text(rendered)
-    print(f"wrote {_display_path(SVG_OUT)}")
     print()
-    print("Strict deps (auto-discovered from pyproject.toml):")
-    for source, targets in sorted(strict.items()):
+    print("Library strict deps (auto-discovered from pyproject.toml):")
+    for source, targets in sorted(library_strict.items()):
         if targets:
             print(f"  chumicro-{source} -> {', '.join('chumicro-' + name for name in targets)}")
     print()
-    print("DI / typical-wiring deps (hand-curated):")
+    print("Library DI / typical-wiring deps (hand-curated):")
     for source, targets in sorted(DI_DEPS.items()):
+        print(f"  chumicro-{source} -> {', '.join('chumicro-' + name for name in targets)}")
+    print()
+    print("Workbench strict deps (auto-discovered from pyproject.toml):")
+    for source, targets in sorted(workbench_strict.items()):
+        if targets:
+            print(f"  chumicro-{source} -> {', '.join('chumicro-' + name for name in targets)}")
+    print()
+    print("Workbench DI / soft-import deps (hand-curated):")
+    for source, targets in sorted(WORKBENCH_DI_DEPS.items()):
         print(f"  chumicro-{source} -> {', '.join('chumicro-' + name for name in targets)}")
     return 0
 

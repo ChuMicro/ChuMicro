@@ -57,7 +57,7 @@
   <line x1="1005.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
   </g>
 
-  <!-- Library boxes -->
+  <!-- Package boxes -->
   <g>
   <g class="node default">
     <rect x="40" y="60" width="130" height="36" rx="6" ry="6" />

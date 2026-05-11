@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 380" width="700" height="380" font-family="system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow-strict" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b6db5" />
+    </marker>
+    <marker id="arrow-di" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#999" />
+    </marker>
+    <style>
+      .node rect { fill: #ffffff; stroke: #1f2937; stroke-width: 1.5; }
+      .node text { fill: #1f2937; font-weight: 500; }
+      .node.standalone rect { fill: #f3f4f6; stroke: #9ca3af; stroke-dasharray: 3 2; }
+      .node.standalone text { fill: #6b7280; }
+      .edge-strict { stroke: #3b6db5; stroke-width: 1.5; fill: none; }
+      .edge-di { stroke: #999; stroke-width: 1.2; stroke-dasharray: 5 4; fill: none; }
+      .legend-label { fill: #1f2937; font-size: 12px; }
+      .legend-title { fill: #1f2937; font-size: 13px; font-weight: 600; }
+      .row-label { fill: #6b7280; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    </style>
+  </defs>
+
+  <!-- Row labels -->
+  <text x="20" y="50" class="row-label">Composers</text>
+  <text x="20" y="230" class="row-label">Primitives</text>
+  <text x="410" y="230" class="row-label">Standalone</text>
+
+  <!-- Strict-dep arrows (pyproject.toml dependencies) -->
+  <g>
+  <line x1="325.0" y1="96" x2="125.0" y2="240" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="125.0" y1="96" x2="125.0" y2="240" class="edge-strict" marker-end="url(#arrow-strict)" />
+  </g>
+
+  <!-- DI / typical-wiring arrows (constructor injection) -->
+  <g>
+  <line x1="125.0" y1="96" x2="325.0" y2="240" class="edge-di" marker-end="url(#arrow-di)" />
+  </g>
+
+  <!-- Package boxes -->
+  <g>
+  <g class="node default">
+    <rect x="40" y="60" width="170" height="36" rx="6" ry="6" />
+    <text x="125.0" y="83.0" text-anchor="middle">chumicro-workspace</text>
+  </g>
+  <g class="node default">
+    <rect x="240" y="60" width="170" height="36" rx="6" ry="6" />
+    <text x="325.0" y="83.0" text-anchor="middle">chumicro-pytest-device</text>
+  </g>
+  <g class="node default">
+    <rect x="40" y="240" width="170" height="36" rx="6" ry="6" />
+    <text x="125.0" y="263.0" text-anchor="middle">chumicro-deploy</text>
+  </g>
+  <g class="node default">
+    <rect x="240" y="240" width="170" height="36" rx="6" ry="6" />
+    <text x="325.0" y="263.0" text-anchor="middle">chumicro-repl</text>
+  </g>
+  <g class="node standalone">
+    <rect x="470" y="240" width="170" height="36" rx="6" ry="6" />
+    <text x="555.0" y="263.0" text-anchor="middle">chumicro-checks</text>
+  </g>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(30, 320)">
+    <text class="legend-title" x="0" y="0">Legend</text>
+    <line x1="0" y1="20" x2="40" y2="20" class="edge-strict" marker-end="url(#arrow-strict)" />
+    <text x="50" y="24" class="legend-label">strict dependency (pyproject.toml)</text>
+    <line x1="0" y1="44" x2="40" y2="44" class="edge-di" marker-end="url(#arrow-di)" />
+    <text x="50" y="48" class="legend-label">typical wiring (constructor injection)</text>
+  </g>
+
+</svg>
