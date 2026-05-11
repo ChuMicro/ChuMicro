@@ -30,6 +30,8 @@ Independent items.  Most have either shipped phases (status in the linked workst
 
 - [ ] **Performance + resource benchmarking infrastructure** — measure heap + CPU per library operation with explicit GC control; per-benchmark thresholds that fail on regression; separate `bench` task or deeper test tier so slow benchmarks don't run on standard `test`; CI on a schedule.
 
+- [ ] **`scripts/run.py new-library --workbench` parity shim** — `chumicro-workspace new --workbench <name>` scaffolds a workbench package today (calls `scaffold_library` with `package_kind="workbench"`); the mono-repo's `scripts/run.py new-library` only forwards to `--library`.  Add the flag to the shim so contributors don't have to know about the underlying workspace CLI.  Small (~10 lines + one test).  Surfaced 2026-05-11 during the contributing-docs audit (`new-library.md:9` was claiming the scaffolder doesn't support workbench at all).
+
 ## Out of scope (until revisited)
 
 - CI-hosted device testing (`device-test.yml` / `workflow_dispatch`, CI-injected `devices.yml` / `workspace.yml` / `secrets.yml`). Parked over security concerns around shared-runner device access; bring back up before any design work resumes.

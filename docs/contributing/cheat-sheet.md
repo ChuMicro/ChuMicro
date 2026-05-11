@@ -1,6 +1,10 @@
 # Contributor Cheat Sheet
 
-Everything you need to know on one page. The full docs are linked if you want details.
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
+Everything you need to know on one page.  The full docs are linked if you want details.
+
+<br clear="left">
 
 ## Setup (once)
 
@@ -14,7 +18,7 @@ source .venv/bin/activate                           # then activate the venv
 
 **Why `prepare_workspace.py`?** It's the only command that runs on a fresh clone with zero third-party packages installed — it auto-detects or creates `.venv`, installs every library and support package, and runs lint + host tests to confirm the install. After that, your environment is live.
 
-**For everyday refreshes** — after a `git pull` that touches dependencies or adds a library — run `python scripts/run.py setup`. It's idempotent and does the same install/refresh work, but it assumes the venv already exists.
+**For everyday refreshes** — after a `git pull` that touches dependencies or adds a library — run `python scripts/run.py setup`.  Safe to re-run any time; does the same install/refresh work as the first-time bootstrap, but assumes the venv already exists.
 
 ## Workflow (every change)
 
@@ -61,8 +65,11 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 | Filter by test name (vanilla pytest style) | `python scripts/run.py test -k heartbeat` |
 | Filter scoped to one library | `python scripts/run.py test -k timing/test_heartbeat` |
 | Quick test (no coverage, stop on first failure) | `python scripts/run.py test -k heartbeat -x -v --no-cov` |
+| Bare pytest from the repo root (IDE play, ad-hoc; coverage **not** enforced) | `pytest libraries/timing/tests/` |
 | Test scripts infrastructure | `python scripts/run.py test-scripts` |
 | Verify examples | `python scripts/run.py verify-examples --libraries timing` |
+
+`python scripts/run.py test` is the commit-gating path (enforces per-library coverage thresholds, per [Decision 0009](../../plans/decisions/0009-per-library-test-runs.md)).  Bare `pytest` from the repo root is supported for IDE Testing-panel runs and quick iteration; it discovers tests via the root `pyproject.toml` + `conftest.py` but doesn't run the coverage gate.
 
 ### Cross-runtime testing
 
@@ -81,11 +88,15 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 | What | Command |
 |---|---|
 | Refresh workspace + generate starter device configs | `python scripts/run.py setup` |
+| Register a board (probes hardware identity, fills defaults) | `python scripts/run.py add-device <id> --address <port>` |
 | Run all hardware-gated functional tests (libraries + workbench) | `python scripts/run.py test-functional` |
 | Run real-board functional tests for one library | `python scripts/run.py test-libraries-functional --library timing` |
 | Run real-board tests on both runtimes | `python scripts/run.py test-libraries-functional --runtime both` |
+| Run real-board pytest directly (IDE play / pytest-native UX) | `pytest libraries/timing/functional_tests/` |
 | Run workbench hardware-gated functional tests | `python scripts/run.py test-workbench-functional --workbench deploy` |
 | Wipe a wedged board (last-resort) | `chumicro-workspace reset-board --device <id> --yes` |
+
+Both `pytest libraries/<name>/functional_tests/` and `python scripts/run.py test-libraries-functional` go through the same `chumicro-pytest-device` plugin — the bare-pytest form is what IDE play buttons use, the runner form is the commit-gating wrapper. See [device-testing.md](device-testing.md) for the `--chumicro-runtime` / `--chumicro-deploy-mode` flag matrix.
 
 ### Docs and publishing
 

@@ -1,6 +1,10 @@
 # Development with VS Code
 
-This guide covers the full development workflow in Visual Studio Code. The project includes shared task definitions and settings that work out of the box — no manual configuration needed beyond selecting a Python interpreter.
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
+This guide covers the full development workflow in Visual Studio Code.  The project ships committed task definitions and settings under `.vscode/` — once you select a Python interpreter, every common task is available from the Command Palette with no extra configuration.
+
+<br clear="left">
 
 ## Setup
 

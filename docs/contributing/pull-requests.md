@@ -1,6 +1,10 @@
 # Creating a Pull Request
 
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
 This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](../../CONTRIBUTING.md) and your [development environment guide](../../CONTRIBUTING.md#development-environment).
+
+<br clear="left">
 
 ## Before you start
 
@@ -152,8 +156,8 @@ Common failures:
 |---|---|---|
 | `test` | Coverage below threshold | Follow the hint below the FAIL line — it points to the uncovered lines |
 | `lint` | Formatting issue, banned name, or one of the workspace's `CHU0NN` checks | Run `python scripts/run.py lint` locally — the [Style Guide](style-guide.md#lint) lists every rule the linter enforces |
-| `version-check` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
-| `api-check` | Removed or renamed a public function | Bump VERSION to next minor/major |
+| `check-version` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
+| `check-api` | Removed or renamed a public function | Bump VERSION to next minor/major |
 | `validate-mpy` | mpy-cross failed to compile a library, or the staged bundle's `package.json` is broken | Build the bundle locally (`python scripts/run.py build`) and check the validate-mpy job log for the failing library |
 | `cross-runtime-tests` (MicroPython / CircuitPython) | Test fails under the unix-port build of one runtime | Reproduce locally with `python scripts/run.py test-micropython` or `test-circuitpython` |
 
