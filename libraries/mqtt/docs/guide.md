@@ -31,7 +31,7 @@ while True:
 
 `connect()` queues the CONNECT packet; the first few `handle()` calls drive it through CONNECTING → CONNECTED.  Subscribe / publish before or after `connect()` — both are queued either way and flushed once the broker session is up.
 
-`MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it — MP plain TCP defaults to blocking, and a blocking `recv` on a Pi Pico W RP2 silently stalls the tick loop for 5–30 s.
+`MQTTClient` actually enforces non-blocking mode on every socket it acquires (force-`setblocking(False)`), so the explicit `sock.setblocking(False)` line above is belt-and-suspenders.  Don't omit it — MP plain TCP defaults to blocking, and a blocking `recv` against a silent peer (broker that's hung mid-handshake, network blackholing returning packets) stalls the tick loop indefinitely on Pi Pico W RP2.  Bench-tested with a stalled TCP listener: recv was still blocked at the 3-minute mark, with no TCP keepalive timeout fired within that window.  Whole-app freeze, not a recoverable hiccup.
 
 ## Publishing
 
