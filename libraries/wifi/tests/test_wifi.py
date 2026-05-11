@@ -149,17 +149,6 @@ def test_wifi_state_constants_are_strings() -> None:
     assert WifiState.FAILED == "failed"
 
 
-def test_wifi_state_all_covers_every_constant() -> None:
-    """``ALL`` is the canonical iteration target for state-machine tests."""
-    assert set(WifiState.ALL) == {
-        WifiState.DISCONNECTED,
-        WifiState.CONNECTING,
-        WifiState.CONNECTED,
-        WifiState.RECONNECTING,
-        WifiState.FAILED,
-    }
-
-
 # ---------------------------------------------------------------------------
 # WifiService — happy-path state machine via FakeWifiAdapter
 # ---------------------------------------------------------------------------

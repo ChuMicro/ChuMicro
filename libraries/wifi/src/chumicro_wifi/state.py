@@ -23,5 +23,3 @@ class WifiState:
     CONNECTED = "connected"
     RECONNECTING = "reconnecting"
     FAILED = "failed"
-
-    ALL = (DISCONNECTED, CONNECTING, CONNECTED, RECONNECTING, FAILED)
