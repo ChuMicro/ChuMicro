@@ -159,12 +159,13 @@ class TestVerifyExamples:
         assert result == 0
         assert "No examples" in capsys.readouterr().out
 
-    def test_hardware_example_prefix(
+    def test_hardware_example_via_marker(
         self, tmp_path: Path, capsys: pytest.CaptureFixture,
     ) -> None:
-        """circuitpython_* examples skip non-chumicro imports."""
+        """``__chumicro_runtimes__`` marker triggers hardware-mode skip."""
         package_dir = self._make_package(tmp_path)
         (package_dir / "examples" / "circuitpython_blink.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n'
             "import board\nimport digitalio\n",
         )
 
@@ -172,6 +173,26 @@ class TestVerifyExamples:
 
         assert result == 0
         assert "hardware" in capsys.readouterr().out
+
+    def test_filename_prefix_no_longer_implies_hardware(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture,
+    ) -> None:
+        """A ``circuitpython_*.py`` file without the marker is treated as universal.
+
+        Per Decision 0037 §6, the filename prefix is convention only —
+        the explicit ``__chumicro_runtimes__`` marker is the contract.
+        Without the marker, ``board`` doesn't resolve on the host and
+        the verifier reports a failure.
+        """
+        package_dir = self._make_package(tmp_path)
+        (package_dir / "examples" / "circuitpython_blink.py").write_text(
+            "import board\nimport digitalio\n",
+        )
+
+        result = verify_examples([package_dir], display_root=tmp_path)
+
+        assert result == 1
+        assert "FAIL" in capsys.readouterr().out
 
     def test_bad_import_example(
         self, tmp_path: Path, capsys: pytest.CaptureFixture,
