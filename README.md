@@ -352,11 +352,13 @@ For commit-gating runs, `python3 scripts/run.py <task>` wraps pytest in per-libr
 **Unit tests (CPython).**  Fast.  Run on your laptop in seconds.  Use these while iterating on library code:
 
 ```bash
-python3 scripts/run.py test                         # changed packages only (default)
-python3 scripts/run.py test --all                   # full sweep across every library + workbench tool
-python3 scripts/run.py test --libraries timing,mqtt # scoped to specific libraries
-python3 scripts/run.py test -k test_heartbeat_poll  # filter by test name
+pytest libraries/                              # full sweep across every library
+pytest libraries/timing libraries/mqtt         # scoped to specific libraries
+pytest libraries/timing/tests                  # one library
+pytest libraries/ -k test_heartbeat_poll       # filter by test name
 ```
+
+For commit-gating runs with per-library coverage thresholds, `python3 scripts/run.py test` wraps these in per-package subprocesses (defaults to changed packages only; `--all` runs the full sweep) — same `pytest` invocations underneath, and the form CI runs.
 
 **Cross-runtime unit tests.**  Same library tests, executed inside MicroPython and CircuitPython's desktop builds ("unix ports").  Catches "works under CPython, breaks under MicroPython's tricks" before any code reaches a board.  The `chumicro-pytest-device` plugin's unix-port backend spawns one runtime subprocess per test file — same `pytest` invocation you use locally, just with a target flag.  IDE play buttons work at file or function granularity:
 
@@ -372,10 +374,13 @@ First-time setup: run `python3 scripts/run.py prepare-micropython` and `prepare-
 **On-device functional tests.**  Runs real `pytest` test files on a **connected microcontroller**.  When `pytest` finds a test under a `functional_tests/` directory, the `chumicro-pytest-device` plugin stages the test source onto a board you've registered, runs it inside the device's Python runtime, and reports the result back to your pytest run — same interface as the host tests.  You'll need a board plugged in and registered (see [Deploying examples to a board](#deploying-examples-to-a-board) above):
 
 ```bash
-python3 scripts/run.py test-functional             # every hardware-gated suite
-python3 scripts/run.py test-libraries-functional   # only library functional tests
-python3 scripts/run.py test-workbench-functional   # only workbench host-side tests that drive a board
+pytest libraries/timing/functional_tests                  # one library on the configured device(s)
+pytest libraries/timing/functional_tests --runtime both   # both MicroPython + CircuitPython boards
+pytest libraries/*/functional_tests                       # every library's hardware-gated suite
+pytest workbench/*/functional_tests                       # workbench host-side tests that drive a board
 ```
+
+For CI parity (PR-summary markdown, scope filters, runtime + device-id overrides resolved through `devices.yml` defaults), `python3 scripts/run.py test-libraries-functional` and `test-workbench-functional` wrap these.
 
 **Full CI mirror.**  The same gate CI runs on every commit — lint + every test layer + docs build + import-check of every shipped example:
 
