@@ -1,8 +1,10 @@
 # ChuMicro libraries
 
-Small, focused libraries for microcontrollers and laptops.  Use what you need — every library installs independently, depends on as little as possible, and is the same runner-shape under the hood (`check(now_ms) -> bool` + `handle(now_ms)`).
+Small, focused libraries for microcontrollers and laptops.  Use what you need — every library installs independently, depends on as little as possible, and follows the same `check(now_ms) -> bool` + `handle(now_ms)` tick contract so [`runner`](runner/) can drive them uniformly.
 
-> Looking for the front door?  → [`/README.md`](../README.md) — the 8-line demo, install, and "now what?" doors.
+> Looking for the project README?  → [`/README.md`](../README.md) — 8-line demo, install, and next-step pointers.
+>
+> Looking for host-side tools?  → [`/workbench/`](../workbench/) — laptop tools for deploy, REPL, and project workspaces.
 
 ## What's in the box?
 
@@ -14,17 +16,17 @@ Small, focused libraries for microcontrollers and laptops.  Use what you need �
 | **[logging](logging/)** | Levelled logging that's runner-friendly and never blocks your loop.  Per-logger levels with hierarchy resolution; zero chumicro deps. |
 | **[events](events/)** | Runner-shaped pub/sub event bus — bounded, drop-oldest, zero deps.  Wires service callbacks (e.g. wifi state changes) into application-level handlers. |
 | **[msgpack](msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
-| **[config](config/)** | Standardized runtime-config helpers — flat-key dotted config (`wifi.ssid`, `mqtt.broker.host`) with `<Name>Config.from_config(...)` for each consumer library. |
+| **[config](config/)** | Type-checked runtime config with a shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`); each library reads its settings via `<Name>Config.from_config(...)`. |
 | **[kvstore](kvstore/)** | Tiny persistent key-value store — counters, timestamps, tokens.  Picks the right backend (NVM / NVS / LittleFS) for your board. |
-| **[wifi](wifi/)** | One WiFi service across CP, MP-ESP32, and MP-Pico-W — state machine, reconnect supervisor, no firmware-level surprises. |
+| **[wifi](wifi/)** | One WiFi service across CircuitPython, MicroPython on ESP32, and MicroPython on Pi Pico W — state machine, reconnect supervisor, no firmware-level surprises. |
 | **[sockets](sockets/)** | Cross-runtime TCP + TLS + UDP — one protocol per shape over CP `socketpool`, MP `socket`/`ssl`, and CPython stdlib.  Substrate for the network libraries above and below. |
 | **[ntp](ntp/)** | Runner-shaped SNTP client over an injected UDP socket.  Pure-Python, cross-runtime; gets the device clock close enough for TLS validity-period checks. |
 | **[requests](requests/)** | Non-blocking HTTP/1.1 client — LED keeps blinking through a TLS handshake, mid-timeout, or against a stalled peer. |
-| **[http_server](http_server/)** | Non-blocking HTTP/1.1 server — `@server.route` decorator with method dispatch + path params; per-connection state machine advances one chunk per tick.  TLS-server-capable on every supported runtime/board pair *except* CP-on-rp2. |
+| **[http_server](http_server/)** | Non-blocking HTTP/1.1 server — `@server.route` decorator with method dispatch + path params; per-connection state machine advances one chunk per tick.  Serves TLS on every supported runtime/board pair *except* CircuitPython on RP2040. |
 | **[mqtt](mqtt/)** | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) — runner-shaped, no threads or async.  Concurrent QoS 1 publishes, configurable oversized-message policy, last-will + retain. |
-| **[websockets](websockets/)** | Non-blocking WebSocket client + server — RFC 6455 framing + masking, runner-shaped, plays alongside `chumicro-http-server` for combined HTTP/WS deployments. |
+| **[websockets](websockets/)** | Non-blocking WebSocket client + server — RFC 6455 framing + masking, runner-shaped, plays alongside [`http_server`](http_server/) for combined HTTP/WS deployments. |
 
-Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico, Pico W), STM32, and most boards with at least 256 KB RAM and 4 MB flash.
+Validated on ESP32 (S2, S3, C3, C6) and RP2040 / RP2350 (Raspberry Pi Pico, Pico W).  Should work on any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 4 MB of flash — STM32 and nRF52840 builds included, untested.
 
 ## Install
 
@@ -36,9 +38,9 @@ Each library's own README has a one-line install command for that library.
 
 ![ChuMicro library dependency graph](../support/docs/dependency-graph.svg)
 
-Solid arrows are strict pyproject.toml dependencies — `pip install chumicro-mqtt` brings `chumicro-sockets` and `chumicro-timing` along.  Dashed arrows are typical-wiring dependencies expressed through constructor injection — every networked service is shaped to register with `chumicro-runner` and most accept an injected `ticks_ms` callable, but the runtime objects don't `import` each other; apps wire them up.
+Solid arrows are strict pyproject.toml dependencies — `pip install chumicro-mqtt` brings `chumicro-sockets` and `chumicro-timing` along.  Dashed arrows are typical-wiring dependencies expressed through constructor injection — every networked service registers with `chumicro-runner` and most accept a `ticks_ms` function as a parameter, so the runtime objects don't `import` each other; apps wire them up.
 
-The SVG is regenerated from each library's pyproject.toml by [`scripts/render_dep_graph.py`](../scripts/render_dep_graph.py).  Preflight runs `--check` mode so a contributor who changes a library's deps without re-rendering sees the failure in CI rather than discovering it months later.
+The SVG is regenerated from each library's pyproject.toml by [`scripts/render_dep_graph.py`](../scripts/render_dep_graph.py).
 
 ## Pick by problem
 
@@ -57,7 +59,3 @@ The SVG is regenerated from each library's pyproject.toml by [`scripts/render_de
 - **"I want levelled logging that doesn't pull in chumicro deps"** → [logging](logging/)
 - **"I want a pub/sub bus to wire wifi-state-change into app handlers"** → [events](events/)
 - **"`functools.partial` doesn't exist on my board"** → [compat](compat/)
-
-## Companion host-side tools
-
-For deploy automation, REPL workflows, and project workspaces, see [`workbench/`](../workbench/) — those are CPython-only host tools (laptop, not device) but they live alongside the device libraries in the same repo.

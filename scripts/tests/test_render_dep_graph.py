@@ -5,10 +5,14 @@ from __future__ import annotations
 from render_dep_graph import (
     DI_DEPS,
     NODES,
+    WORKBENCH_DI_DEPS,
+    WORKBENCH_DIR,
+    WORKBENCH_NODES,
     discover_strict_deps,
     edge_endpoints,
     main,
     render_svg,
+    render_workbench_svg,
 )
 
 
@@ -51,6 +55,46 @@ class TestDiscoverStrictDeps:
         # Indirect: every library that has deps has *only* chumicro-prefixed ones.
         deps = discover_strict_deps()
         assert "msgpack" not in deps["timing"]
+
+    def test_strips_pep508_version_specifiers(self):
+        """``chumicro-deploy>=0.1.0`` should surface as just ``deploy``."""
+        # chumicro-pytest-device pins chumicro-deploy with a version specifier.
+        deps = discover_strict_deps(WORKBENCH_DIR)
+        assert deps["pytest-device"] == ["deploy"], (
+            f"version specifier leaked: {deps['pytest-device']!r}"
+        )
+
+
+class TestWorkbenchGraph:
+    """Workbench dep graph is rendered from workbench/*/pyproject.toml."""
+
+    def test_workbench_strict_deps_picked_up(self):
+        deps = discover_strict_deps(WORKBENCH_DIR)
+        assert "deploy" in deps["workspace"]
+        assert "deploy" in deps["pytest-device"]
+        assert deps["repl"] == []
+        assert deps["deploy"] == []
+
+    def test_workbench_svg_includes_every_node(self):
+        deps = discover_strict_deps(WORKBENCH_DIR)
+        svg = render_workbench_svg(deps, WORKBENCH_DI_DEPS)
+        for package_name in WORKBENCH_NODES:
+            assert f"chumicro-{package_name}" in svg, (
+                f"workbench package {package_name} missing from rendered SVG"
+            )
+
+    def test_workbench_svg_marks_checks_as_standalone(self):
+        deps = discover_strict_deps(WORKBENCH_DIR)
+        svg = render_workbench_svg(deps, WORKBENCH_DI_DEPS)
+        assert 'class="node standalone"' in svg
+        assert ">chumicro-checks<" in svg
+
+    def test_workbench_svg_renders_di_arrow_for_workspace_repl(self):
+        """workspace → repl is a soft / lazy-import edge."""
+        deps = discover_strict_deps(WORKBENCH_DIR)
+        svg = render_workbench_svg(deps, WORKBENCH_DI_DEPS)
+        # One DI arrow + one legend example = 2.
+        assert svg.count('class="edge-di"') == 2
 
 
 class TestEdgeEndpoints:
