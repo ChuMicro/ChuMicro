@@ -1,6 +1,10 @@
 # ChuMicro libraries
 
+<img src="../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
 Small, focused libraries for microcontrollers and laptops.  Use what you need — every library installs independently, depends on as little as possible, and follows the same `check(now_ms) -> bool` + `handle(now_ms)` tick contract so [`runner`](runner/) can drive them uniformly.
+
+<br clear="left">
 
 > Looking for the project README?  → [`/README.md`](../README.md) — 8-line demo, install, and next-step pointers.
 >
