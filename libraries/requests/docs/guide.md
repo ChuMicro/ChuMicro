@@ -151,16 +151,19 @@ Works identically on CPython, MicroPython, and CircuitPython once the
 connection factory is wired up. HTTPS uses the same
 `chumicro_sockets_factory(ssl_context=...)` pattern as plain HTTP.
 
-### HTTPS on Pi Pico W class boards
+### HTTPS heap headroom on minimum-class boards
 
-The wifi → sockets → TLS → requests stack only fits on the minimum
-supported board class (256 KB MCU RAM) in **flash deploy mode**. RAM-mode
-keeps the entire library bootstrap on the heap for the duration of the
-test, leaving < 50 KB for mbedTLS handshake — `ssl_context.wrap_socket(...)`
-then fails with `OSError(12)` (ENOMEM). Larger-heap boards (ESP32-S3 with
-> 200 KB free heap after wifi) can run HTTPS in RAM-mode; smaller-heap
-boards in the supported class (Pi Pico W, Lolin S2 / ESP32-S2 family) need
-flash-mode for HTTPS specifically.
+mbedTLS handshake costs heap — bench-tested on Pi Pico W MP with a
+raw-stdlib `ssl.wrap_socket()` against `letsencrypt.org:443`, the
+handshake consumed about 25 KB of heap on top of whatever the app
+already had loaded.  Headroom matters: an app that's loaded a lot
+into RAM (chumicro stack + workspace fixtures + per-example helpers)
+can run the handshake out of memory and surface as `OSError(12)`
+(ENOMEM) inside `wrap_socket()`.  If you see ENOMEM on HTTPS, the
+two levers are (a) drop unused imports before the request, or (b)
+switch to flash deploy mode (chumicro-deploy `--mode flash`) so the
+library bootstrap lives on flash and the heap is free for the
+handshake.
 
 ### TLS context — bring your own CA
 
