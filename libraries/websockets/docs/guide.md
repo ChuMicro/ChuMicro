@@ -176,8 +176,8 @@ CircuitPython on the Pi Pico W (rp2 port).
 
 | Example | What it shows |
 |---|---|
-| [`circuitpython_client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/circuitpython_client.py) | CircuitPython board connecting to a remote `ws://` echo server. |
-| [`circuitpython_server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/circuitpython_server.py) | CircuitPython board accepting inbound websocket connections. |
+| [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | Wifi-capable board (CP or MP) connecting to a remote `ws://` echo server. |
+| [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | Wifi-capable board (CP or MP) accepting inbound websocket connections. |
 
 ## What's new
 

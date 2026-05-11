@@ -1,4 +1,4 @@
-"""UDP echo client — CircuitPython on a wifi-capable board.
+"""UDP echo client — wifi-capable CircuitPython / MicroPython board.
 
 Brings wifi up via the local ``helpers`` module, opens a UDP socket on
 the board, sends one datagram to a known host echo server, and reads
@@ -10,8 +10,6 @@ server.  The ``chumicro-sockets`` functional-test suite ships a host-side
 echo fixture (``test_real_udp``) for automated end-to-end validation
 against a real board.
 
-Runs on CircuitPython only.
-
 Example output::
 
     WIFI_OK ip=192.168.1.42
@@ -20,16 +18,22 @@ Example output::
     RECV bytes=17 src=('192.168.1.10', 51232)
 """
 
+#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: ``sys.implementation.name`` (CP / MP) and the UDP socket helpers
+#: are runtime-neutral.  The marker tells :func:`scripts.verify_examples`
+#: + ``deploy-example`` to allow this file on either runtime.
+__chumicro_runtimes__ = ("circuitpython", "micropython")
+
 import time
 
 from chumicro_sockets import udp_socket
-from helpers import wifi_up
+from helpers import ticks_add, ticks_diff, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
 ECHO_HOST = "192.168.1.10"
 ECHO_PORT = 12345
-PAYLOAD = b"hello-from-cp"
+PAYLOAD = b"hello-from-board"
 
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
@@ -42,9 +46,9 @@ sock.sendto(PAYLOAD, ECHO_HOST, ECHO_PORT)
 print(f"SENT bytes={len(PAYLOAD)} dst={ECHO_HOST}:{ECHO_PORT}")
 
 buffer = bytearray(64)
-deadline_ms = (time.monotonic_ns() // 1_000_000) + 5_000
+deadline = ticks_add(ticks_ms(), 5_000)
 while True:
-    if (time.monotonic_ns() // 1_000_000) > deadline_ms:
+    if ticks_diff(deadline, ticks_ms()) <= 0:
         print("TIMEOUT")
         break
     sender = None

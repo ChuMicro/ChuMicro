@@ -151,7 +151,7 @@ Works identically on CPython, MicroPython, and CircuitPython.  The `chumicro-soc
 
 | Example | What it shows |
 |---|---|
-| [`examples/circuitpython_simple_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/circuitpython_simple_server.py) | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes; drive it with `curl` from your laptop.  Hardware-only (filename prefix).  For a two-board (server + client) pattern, see the workspace template's `two_board_handshake/` example. |
+| [`examples/simple_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/simple_server.py) | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes; drive it with `curl` from your laptop.  Cross-runtime (CP + MP); runtime marker gates hardware-only deploys.  For a two-board (server + client) pattern, see the workspace template's `two_board_handshake/` example. |
 
 ## v1 non-goals
 

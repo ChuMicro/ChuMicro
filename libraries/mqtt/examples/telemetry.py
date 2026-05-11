@@ -39,7 +39,7 @@ Deploying
 
 Deploy with ``chumicro-workspace``::
 
-    chumicro-workspace deploy-example mqtt circuitpython_telemetry --device <id>
+    chumicro-workspace deploy-example mqtt telemetry --device <id>
 
 Example output::
 
@@ -50,6 +50,12 @@ Example output::
     [tx 2] {"sensor": "demo-temp", "value": 21.6} led_ticks=24
     [rx]  chumicro-demo/cmd <- b'ping'
 """
+
+#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: ``sys.implementation.name`` (CP / MP) and the MQTT client is
+#: pure-Python.  The marker tells :func:`scripts.verify_examples`
+#: + ``deploy-example`` to allow this file on either runtime.
+__chumicro_runtimes__ = ("circuitpython", "micropython")
 
 import json
 import math

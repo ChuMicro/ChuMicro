@@ -13,6 +13,10 @@ Setup:
 Runs on MicroPython.
 """
 
+#: MicroPython-only — uses ``machine.Pin`` (MP API).
+#: Pair: ``circuitpython_blink.py`` for the CP equivalent (``board`` + ``digitalio``).
+__chumicro_runtimes__ = ("micropython",)
+
 from chumicro_timing import Heartbeat, ticks_ms
 from machine import Pin
 

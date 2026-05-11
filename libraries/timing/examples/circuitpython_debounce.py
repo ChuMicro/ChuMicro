@@ -15,6 +15,10 @@ Setup:
 Runs on CircuitPython.
 """
 
+#: CircuitPython-only — uses ``board`` + ``digitalio`` (CP API).
+#: Pair: ``micropython_debounce.py`` for the MP equivalent (``machine.Pin``).
+__chumicro_runtimes__ = ("circuitpython",)
+
 import board
 import digitalio
 from chumicro_timing import ticks_diff, ticks_ms
