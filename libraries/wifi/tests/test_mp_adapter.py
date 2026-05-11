@@ -78,27 +78,40 @@ def test_runtime_acquisition_raises_clear_error_on_cpython() -> None:
         MpWifiAdapter(stack="cyw43")
 
 
-def test_default_stack_detection_on_cpython_is_cyw43() -> None:
-    """Auto-detect falls through to ``cyw43`` when MP ``esp32`` is absent.
+def test_default_stack_detection_on_cpython_is_espidf() -> None:
+    """Auto-detect falls through to ``espidf`` when machine isn't whitelisted.
 
-    On CPython, ``import esp32`` raises ``ImportError`` (no MP esp32
-    module on the host), so the auto-detect path lands on ``cyw43``.
-    Real ESP-IDF boards exercise the ``espidf`` branch via the
-    on-device functional suite.
+    On CPython, ``os.uname().machine`` is the host arch (``x86_64`` /
+    ``arm64`` / etc.) which is not in :data:`CYW43_MACHINES`, so the
+    auto-detect path lands on ``espidf`` (the safe default — its
+    ESP-specific knob has its own try/except guard).
     """
+    assert MpWifiAdapter._detect_stack() == "espidf"
+
+
+def test_default_stack_detection_picks_cyw43_for_pico_w_machine(monkeypatch) -> None:
+    """``os.uname().machine`` = Pi Pico W string → ``cyw43``.
+
+    Monkeypatches ``os.uname`` on the host to simulate the Pi Pico W
+    MP firmware's machine string, then asserts ``_detect_stack``
+    returns ``cyw43`` against the whitelist.
+    """
+    import chumicro_wifi._adapters.mp as mp_mod
+    fake_uname = type("UnameResult", (), {"machine": "Raspberry Pi Pico W with RP2040"})()
+    monkeypatch.setattr(mp_mod.os, "uname", lambda: fake_uname)
     assert MpWifiAdapter._detect_stack() == "cyw43"
 
 
 def test_construction_with_default_stack_uses_auto_detect() -> None:
     """``stack=None`` (default) routes through ``_detect_stack``.
 
-    On CPython that lands on ``cyw43``, so the resulting adapter
-    has ``name == "mp_rp2"``.  Explicit injection of the wlan fake
-    sidesteps the runtime acquisition path so the test runs on the
-    host.
+    On CPython that lands on ``espidf`` (host machine isn't in the
+    CYW43 whitelist), so the resulting adapter has ``name ==
+    "mp_esp32"``.  Explicit injection of the wlan fake sidesteps
+    the runtime acquisition path so the test runs on the host.
     """
     adapter = MpWifiAdapter(wlan=_FakeWlan())
-    assert adapter.name == "mp_rp2"
+    assert adapter.name == "mp_esp32"
 
 
 def test_invalid_stack_raises_value_error() -> None:
