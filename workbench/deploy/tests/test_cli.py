@@ -27,10 +27,10 @@ class TestParser:
         assert args.address == "/dev/x"
         assert args.json_output is False
 
-    def test_flash_parses_required_args(self) -> None:
+    def test_flash_firmware_parses_required_args(self) -> None:
         parser = build_parser()
         args = parser.parse_args([
-            "flash",
+            "flash-firmware",
             "--transport", "micropython",
             "--address", "/dev/x",
             "--url", "https://example/fw.bin",
@@ -43,10 +43,10 @@ class TestParser:
         assert args.erase is True
         assert args.offset == "0x1000"
 
-    def test_flash_defaults_offset_zero(self) -> None:
+    def test_flash_firmware_defaults_offset_zero(self) -> None:
         parser = build_parser()
         args = parser.parse_args([
-            "flash",
+            "flash-firmware",
             "--transport", "circuitpython",
             "--address", "/dev/x",
             "--url", "https://example/fw.uf2",
@@ -192,7 +192,7 @@ class TestDevicesFileWiring:
         assert exit_code == 0
 
 
-class TestCommandFlash:
+class TestCommandFlashFirmware:
     def test_forwards_flags_to_flash_firmware(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -206,7 +206,7 @@ class TestCommandFlash:
         monkeypatch.setattr("chumicro_deploy.cli.flash_firmware", fake_flash)
 
         exit_code = main([
-            "flash",
+            "flash-firmware",
             "--transport", "micropython",
             "--address", "/dev/cu.usbmodem01",
             "--url", "https://example/fw.bin",
@@ -327,12 +327,16 @@ class TestCommandDeploy:
         ])
         assert exit_code == 1
 
-    def test_non_interactive_skips_recovery_wrapper(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    def test_non_interactive_transport_error_is_friendly(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
-        # With --non-interactive, a transport error must propagate
-        # uncaught instead of being captured by InteractiveDeployer's
-        # retry loop (which would block for stdin).
+        # With --non-interactive, a transport error escapes
+        # NonInteractiveDeployer (which only prints coaching, no retry
+        # loop) and is caught by main()'s friendly-error wrapper —
+        # users see "error: <message>" instead of a Python traceback.
         from chumicro_deploy.circuitpython_transport import (
             CircuitpythonTransportError,
         )
@@ -350,15 +354,17 @@ class TestCommandDeploy:
 
         monkeypatch.setattr("chumicro_deploy.deployer.Deployer", FakeDeployer)
 
-        with pytest.raises(CircuitpythonTransportError):
-            main([
-                "deploy",
-                "--transport", "circuitpython",
-                "--address", "/dev/x",
-                "--directory", str(source_dir),
-                "--entrypoint", "/code.py",
-                "--non-interactive",
-            ])
+        exit_code = main([
+            "deploy",
+            "--transport", "circuitpython",
+            "--address", "/dev/x",
+            "--directory", str(source_dir),
+            "--entrypoint", "/code.py",
+            "--non-interactive",
+        ])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "error: Failed to open serial port" in captured.err
 
     def test_default_wraps_in_interactive_deployer(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
@@ -511,3 +517,72 @@ class TestCommandDeployRuntimeFiltering:
         files = captured["files"]
         assert "/_adapters/mp.py" in files
         assert "/_adapters/cp.py" not in files
+
+
+class TestFriendlyErrors:
+    """``main()`` converts documented exception types to ``error: …``."""
+
+    def test_unresolved_firmware_url(
+        self, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # MicroPython needs --version like 1.28.0-YYYYMMDD; bare
+        # 1.28.0 fails UrlResolution.
+        exit_code = main([
+            "resolve-firmware-url",
+            "--board-id", "RPI_PICO_W",
+            "--runtime", "micropython",
+            "--version", "1.28.0",
+        ])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert captured.err.startswith("error: ")
+        assert "Traceback" not in captured.err
+
+    def test_device_config_value_error_for_missing_id(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        yaml_path = tmp_path / "devices.yml"
+        yaml_path.write_text(
+            "defaults:\n"
+            "  micropython: mp-board\n"
+            "  deploy_mode: ram\n"
+            "devices:\n"
+            "  - id: mp-board\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyACM0\n"
+        )
+        exit_code = main([
+            "probe",
+            "--devices-file", str(yaml_path),
+            "--device", "does-not-exist",
+        ])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert captured.err.startswith("error: ")
+        assert "Traceback" not in captured.err
+
+    def test_flash_firmware_error_surfaces_cleanly(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        from chumicro_deploy import FlashFirmwareError
+
+        def fake_flash(*_args, **_kwargs):  # noqa: ANN002, ANN003
+            raise FlashFirmwareError("download failed: 404")
+
+        monkeypatch.setattr("chumicro_deploy.cli.flash_firmware", fake_flash)
+        exit_code = main([
+            "flash-firmware",
+            "--transport", "circuitpython",
+            "--address", "/dev/x",
+            "--url", "http://example/none.uf2",
+            "--method", "uf2",
+            "--non-interactive",
+        ])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "error: download failed: 404" in captured.err
+        assert "Traceback" not in captured.err

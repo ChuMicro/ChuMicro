@@ -18,11 +18,28 @@ import json
 import sys
 from pathlib import Path
 
+from .circuitpython_transport import CircuitpythonTransportError
+from .config.default import DeviceConfigError
 from .device import Device
-from .firmware import flash_firmware, resolve_firmware_url
+from .firmware import FlashFirmwareError, flash_firmware, resolve_firmware_url
+from .firmware_url import UnresolvedFirmwareError
+from .micropython_transport import MicropythonTransportError
 from .probe import probe_device
 from .protocol import DeployMode, ReflashMethod, Runtime
 from .sources import DirectorySource, FileMapSource
+
+#: Exceptions ``main()`` converts into a one-line ``error: <message>``
+#: + exit 1.  Everything else propagates and gets the default Python
+#: traceback — those are bugs, not user-facing failures.
+_FRIENDLY_ERRORS: tuple[type[Exception], ...] = (
+    CircuitpythonTransportError,
+    DeviceConfigError,
+    FileNotFoundError,
+    FlashFirmwareError,
+    MicropythonTransportError,
+    UnresolvedFirmwareError,
+    ValueError,
+)
 
 _RUNTIME_CHOICES = tuple(runtime.value for runtime in Runtime)
 _DEPLOY_MODE_CHOICES = tuple(mode.value for mode in DeployMode)
@@ -164,7 +181,7 @@ def _cmd_probe(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_flash(args: argparse.Namespace) -> int:
+def _cmd_flash_firmware(args: argparse.Namespace) -> int:
     """Download + apply firmware to a connected board."""
     flash_firmware(
         args.url,
@@ -278,7 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
     probe_parser.set_defaults(func=_cmd_probe)
 
     flash_parser = subparsers.add_parser(
-        "flash",
+        "flash-firmware",
         help="Download a firmware URL and flash it onto the board.",
     )
     _add_device_args(flash_parser)
@@ -331,7 +348,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Use in automated flows that don't have stdin."
         ),
     )
-    flash_parser.set_defaults(func=_cmd_flash)
+    flash_parser.set_defaults(func=_cmd_flash_firmware)
 
     firmware_url_parser = subparsers.add_parser(
         "resolve-firmware-url",
@@ -428,7 +445,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point.  Returns the process exit code."""
+    """CLI entry point.  Returns the process exit code.
+
+    Wraps the subcommand dispatch in a friendly-error catch so users
+    see a one-line ``error: <message>`` for the documented exception
+    types instead of a Python traceback.  Recovery output (e.g. the
+    coaching block from :class:`NonInteractiveDeployer`) still prints
+    before the catch fires.  Unrecognized exceptions propagate — a
+    traceback there is a bug, not a UX defect.
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except _FRIENDLY_ERRORS as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1

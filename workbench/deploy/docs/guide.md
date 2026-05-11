@@ -23,13 +23,13 @@ chumicro-deploy resolve-firmware-url \
     --board-id raspberry_pi_pico_w --runtime circuitpython --version 10.1.4
 
 # Flash a Pi Pico W (UF2 path, programmatic bootloader entry).
-chumicro-deploy flash \
+chumicro-deploy flash-firmware \
     --transport circuitpython --address /dev/cu.usbmodem11401 \
     --url https://downloads.circuitpython.org/bin/raspberry_pi_pico_w/en_US/adafruit-circuitpython-raspberry_pi_pico_w-en_US-10.1.4.uf2 \
     --method uf2
 
 # Flash a Lolin S2 Mini running MicroPython (esptool, erase, offset 0x1000).
-chumicro-deploy flash \
+chumicro-deploy flash-firmware \
     --transport micropython --address /dev/cu.usbmodem211101 \
     --url https://micropython.org/resources/firmware/LOLIN_S2_MINI-20260406-v1.28.0.bin \
     --method esptool --erase --offset 0x1000
@@ -41,7 +41,9 @@ chumicro-deploy deploy \
     --directory ./my_app --entrypoint /code.py
 ```
 
-All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `InteractiveDeployer` (see [Interactive recovery](#interactive-recovery-interactivedeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts.
+All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash-firmware` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `InteractiveDeployer` (see [Interactive recovery](#interactive-recovery-interactivedeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts.
+
+`main()` catches the documented exception types (transport errors, `FlashFirmwareError`, `UnresolvedFirmwareError`, `DeviceConfigError`, `FileNotFoundError`, `ValueError`) and prints `error: <message>` on stderr with exit code 1.  Anything else propagates as a Python traceback — those are bugs, not user-facing failures.
 
 Every CLI command also accepts `--devices-file devices.yml --device <id>` instead of `--transport` + `--address`, so a workspace with one source-of-truth `devices.yml` doesn't repeat the same connection details everywhere:
 
