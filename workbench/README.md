@@ -1,6 +1,10 @@
 # ChuMicro workbench tools
 
+<img src="../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
 Host-side tools that run on your laptop and help you manage connected boards.  CPython-only, ship to PyPI, never reach the device.
+
+<br clear="left">
 
 > Looking for the project README?  → [`/README.md`](../README.md) — 8-line demo, install, and next-step pointers.
 >
