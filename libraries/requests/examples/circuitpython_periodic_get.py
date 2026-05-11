@@ -42,7 +42,7 @@ Example output::
 import time
 
 from chumicro_requests import HttpClient
-from helpers import runtime_config, wifi_up
+from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
@@ -58,18 +58,14 @@ client = HttpClient.from_config(config, radio=radio)
 print(f"Polling {target_url} every {POLL_INTERVAL_S} s")
 
 
-def _now_ms() -> int:
-    return time.monotonic_ns() // 1_000_000
-
-
 attempt = 0
 while True:
     attempt += 1
     request = client.get(target_url)
     led_counter = 0
     while not request.done:
-        if client.check(_now_ms()):
-            client.handle(_now_ms())
+        if client.check(ticks_ms()):
+            client.handle(ticks_ms())
         led_counter += 1
         time.sleep(0.02)
 
@@ -82,6 +78,6 @@ while True:
             f"bytes={len(response.body)} led_ticks={led_counter}",
         )
 
-    next_at = time.monotonic() + POLL_INTERVAL_S
-    while time.monotonic() < next_at:
+    next_due = ticks_add(ticks_ms(), POLL_INTERVAL_S * 1000)
+    while ticks_diff(next_due, ticks_ms()) > 0:
         time.sleep(0.05)

@@ -34,7 +34,7 @@ Deploy with ``chumicro-workspace``::
 import time
 
 from chumicro_websockets import WebSocketServer
-from helpers import runtime_config, wifi_up
+from helpers import runtime_config, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
@@ -42,10 +42,6 @@ WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
 config = runtime_config()
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
-
-
-def _now_ms() -> int:
-    return time.monotonic_ns() // 1_000_000
 
 
 def on_connection(connection):
@@ -66,6 +62,6 @@ bound_port = config.get("websockets.server.port", 8765)
 print(f"[server] listening on {bound_host}:{bound_port}")
 
 while True:
-    if server.check(_now_ms()):
-        server.handle(_now_ms())
+    if server.check(ticks_ms()):
+        server.handle(ticks_ms())
     time.sleep(0.02)

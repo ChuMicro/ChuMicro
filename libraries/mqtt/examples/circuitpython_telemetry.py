@@ -56,7 +56,7 @@ import math
 import time
 
 from chumicro_mqtt import MQTTClient, ProtocolState
-from helpers import runtime_config, wifi_up
+from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
@@ -98,18 +98,13 @@ mqtt.on_message = on_message
 mqtt.connect()
 
 
-def _now_ms() -> int:
-    return time.monotonic_ns() // 1_000_000
-
-
 def _drive_until(predicate, deadline_ms):
-    start = _now_ms()
+    deadline = ticks_add(ticks_ms(), deadline_ms)
     while not predicate():
-        now = _now_ms()
-        if (now - start) >= deadline_ms:
+        if ticks_diff(deadline, ticks_ms()) <= 0:
             return False
-        if mqtt.check(now):
-            mqtt.handle(now)
+        if mqtt.check(ticks_ms()):
+            mqtt.handle(ticks_ms())
         time.sleep(0.02)
     return True
 
@@ -130,15 +125,15 @@ def _synthetic_reading(elapsed_seconds: float) -> float:
 
 
 attempt = 0
-start_seconds = time.monotonic()
+start_ticks = ticks_ms()
 
 while True:
     attempt += 1
-    elapsed = time.monotonic() - start_seconds
+    elapsed_s = ticks_diff(ticks_ms(), start_ticks) / 1000
     payload = json.dumps({
         "sensor": sensor_id,
-        "value": _synthetic_reading(elapsed),
-        "uptime_s": round(elapsed, 1),
+        "value": _synthetic_reading(elapsed_s),
+        "uptime_s": round(elapsed_s, 1),
     })
 
     publish_done = [False]
@@ -151,17 +146,15 @@ while True:
 
     led_counter = 0
     while not publish_done[0]:
-        now = _now_ms()
-        if mqtt.check(now):
-            mqtt.handle(now)
+        if mqtt.check(ticks_ms()):
+            mqtt.handle(ticks_ms())
         led_counter += 1
         time.sleep(0.02)
 
     print(f"[tx {attempt}] {payload} led_ticks={led_counter}")
 
-    next_at = time.monotonic() + PUBLISH_INTERVAL_S
-    while time.monotonic() < next_at:
-        now = _now_ms()
-        if mqtt.check(now):
-            mqtt.handle(now)
+    next_due = ticks_add(ticks_ms(), PUBLISH_INTERVAL_S * 1000)
+    while ticks_diff(next_due, ticks_ms()) > 0:
+        if mqtt.check(ticks_ms()):
+            mqtt.handle(ticks_ms())
         time.sleep(0.02)

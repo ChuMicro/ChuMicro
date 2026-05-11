@@ -34,10 +34,8 @@ Deploy with ``chumicro-workspace``::
     chumicro-workspace deploy-example websockets circuitpython_client --device <id>
 """
 
-import time
-
 from chumicro_websockets import WebSocketClient, WebSocketState
-from helpers import runtime_config, wifi_up
+from helpers import runtime_config, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
@@ -48,11 +46,6 @@ radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
 connect_url = config.get("websockets.client.connect_url", WS_URL)
-
-
-def _now_ms() -> int:
-    return time.monotonic_ns() // 1_000_000
-
 
 client = WebSocketClient.from_config(config, radio=radio)
 client.on_open = lambda: print("[client] open")
@@ -65,8 +58,8 @@ client.connect(connect_url, timeout_ms=10_000)
 
 sent_count = 0
 while client.state != WebSocketState.CLOSED:
-    if client.check(_now_ms()):
-        client.handle(_now_ms())
+    if client.check(ticks_ms()):
+        client.handle(ticks_ms())
     if client.state == WebSocketState.OPEN and sent_count < 3:
         client.send_text(f"ping {sent_count}")
         sent_count += 1

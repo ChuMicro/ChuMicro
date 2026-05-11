@@ -113,10 +113,13 @@ sync).
 ## Platform notes
 
 Runs identically on CPython, MicroPython, and CircuitPython.  The
-only stdlib import is `time` (for the default `_default_ticks_ms`
-fallback when `time.ticks_ms` is unavailable on CPython).  All UDP
-work goes through the injected socket — `chumicro-sockets` already
-hides the per-runtime adapter chase.
+default tick source is `chumicro_timing.ticks_ms` (a wrapping
+millisecond counter that resolves to the right substrate for each
+runtime — `supervisor.ticks_ms` on CP, `time.ticks_ms` on MP,
+`time.monotonic_ns` on CPython); inject a custom callable via the
+`ticks_ms=` constructor kwarg if you have your own time source.
+All UDP work goes through the injected socket — `chumicro-sockets`
+already hides the per-runtime adapter chase.
 
 The same NTPClient shape worked on:
 

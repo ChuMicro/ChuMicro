@@ -53,7 +53,7 @@ Example output (board side)::
 import time
 
 from chumicro_http_server import HttpServer, build_response
-from helpers import runtime_config, wifi_up
+from helpers import runtime_config, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
@@ -65,10 +65,6 @@ print(f"WIFI_OK ip={ip}")
 server = HttpServer.from_config(config, radio=radio)
 
 start_ns = time.monotonic_ns()
-
-
-def _now_ms() -> int:
-    return time.monotonic_ns() // 1_000_000
 
 
 @server.route("/")
@@ -101,6 +97,6 @@ bound_port = config.get("http_server.bind_port", 8080)
 print(f"Server listening on http://{ip}:{bound_port}/  (bound {bound_host}:{bound_port})")
 
 while True:
-    if server.check(_now_ms()):
-        server.handle(_now_ms())
+    if server.check(ticks_ms()):
+        server.handle(ticks_ms())
     time.sleep(0.02)

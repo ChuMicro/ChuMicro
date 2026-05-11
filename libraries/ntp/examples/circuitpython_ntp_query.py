@@ -38,7 +38,7 @@ Example output::
 import time
 
 from chumicro_ntp import NTPClient
-from helpers import runtime_config, wifi_up
+from helpers import runtime_config, ticks_ms, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
@@ -49,15 +49,10 @@ print(f"WIFI_OK ip={ip}")
 
 client = NTPClient.from_config(config, radio=radio)
 
-
-def _now_ms() -> int:
-    return time.monotonic_ns() // 1_000_000
-
-
 request = client.query()
 while not request.done:
-    if client.check(_now_ms()):
-        client.handle(_now_ms())
+    if client.check(ticks_ms()):
+        client.handle(ticks_ms())
     time.sleep(0.02)
 
 if request.error is not None:
