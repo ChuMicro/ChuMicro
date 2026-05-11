@@ -184,29 +184,57 @@ _CONFIGURATION_PATTERNS = (
 _TRACEBACK_IN_MESSAGE_PATTERN = "traceback (most recent call last)"
 
 
+#: Ordered classification table.  Each row is ``(patterns, kind)``;
+#: the first row whose any-substring matches ``str(error).lower()``
+#: wins.  Order is load-bearing:
+#:
+#: 1. ``CONFIGURATION_ERROR`` first — caller misuse messages often
+#:    contain substrings that look like other kinds (e.g. "CIRCUITPY
+#:    drive not found").
+#: 2. ``TRACEBACK_RETURNED`` before bootstrap / flash buckets so a
+#:    board-side traceback lands the same way whether CP RAM raised
+#:    inline or CP flash / MP returned it on the DeployResult.
+#: 3. ``FLASH_COPY_FAILED`` (drive-state subset) wins over
+#:    ``CIRCUITPY_DRIVE_MISSING``: a found-but-full / read-only /
+#:    I/O-erroring drive deserves "free up space / remount" coaching,
+#:    not the generic "tap RESET" CIRCUITPY_DRIVE_MISSING gives.
+#: 4. ``CIRCUITPY_DRIVE_MISSING`` before ``PORT_UNAVAILABLE``: the
+#:    stale-mount error in _resolve_circuitpy_drive wraps a
+#:    PermissionError whose text ("permission denied") would
+#:    otherwise collide with the generic port table.
+#: 5. ``NO_PYTHON_RUNTIME`` before ``PORT_UNAVAILABLE`` /
+#:    ``RAW_REPL_UNRESPONSIVE``: explicit "no python here" is strictly
+#:    more specific than "port unreachable" or "REPL silent", and
+#:    points at a different recovery (install-firmware, not plug-in).
+_CLASSIFICATION_TABLE: tuple[
+    tuple[tuple[str, ...], DeployFailureKind], ...
+] = (
+    (_CONFIGURATION_PATTERNS, DeployFailureKind.CONFIGURATION_ERROR),
+    ((_TRACEBACK_IN_MESSAGE_PATTERN,), DeployFailureKind.TRACEBACK_RETURNED),
+    (_FLASH_DRIVE_STATE_PATTERNS, DeployFailureKind.FLASH_COPY_FAILED),
+    (_CIRCUITPY_DRIVE_PATTERNS, DeployFailureKind.CIRCUITPY_DRIVE_MISSING),
+    (_NO_PYTHON_RUNTIME_PATTERNS, DeployFailureKind.NO_PYTHON_RUNTIME),
+    (_PORT_UNAVAILABLE_PATTERNS, DeployFailureKind.PORT_UNAVAILABLE),
+    (_RAW_REPL_PATTERNS, DeployFailureKind.RAW_REPL_UNRESPONSIVE),
+    (_INSUFFICIENT_MEMORY_PATTERNS, DeployFailureKind.INSUFFICIENT_MEMORY),
+    (_FLASH_COPY_PATTERNS, DeployFailureKind.FLASH_COPY_FAILED),
+    (_BOOTSTRAP_EXEC_PATTERNS, DeployFailureKind.BOOTSTRAP_EXEC_FAILED),
+)
+
+
 def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     """Map a deploy-path exception to a :class:`DeployFailureKind`.
 
     The classifier is intentionally string-based — it inspects
-    ``str(error).lower()`` for any pattern in the per-kind tables
-    above.  That keeps the classifier decoupled from the specific
-    exception subclass, which matters because a raised
+    ``str(error).lower()`` against :data:`_CLASSIFICATION_TABLE`.
+    That keeps the classifier decoupled from the specific exception
+    subclass, which matters because a raised
     ``CircuitpythonTransportError`` often wraps a ``SerialException``
     or ``OSError`` whose text is the real signal.
 
-    Order of checks matters: the most specific kinds
-    (CIRCUITPY drive, raw REPL, memory) are tested before the
-    broader buckets (flash copy, bootstrap exec) so a message that
-    happens to share a substring with a looser bucket still lands
-    in the right place.
-
-    Args:
-        error: Any exception raised from the deploy path.
-
-    Returns:
-        :attr:`DeployFailureKind.UNKNOWN` when no pattern matches —
-        :class:`InteractiveDeployer` treats that as retryable so
-        the user isn't locked out of an unclassified hiccup.
+    Returns :attr:`DeployFailureKind.UNKNOWN` when no row matches —
+    :class:`InteractiveDeployer` treats that as retryable so the
+    user isn't locked out of an unclassified hiccup.
     """
     # Typed disconnect subclasses skip the string-pattern dance —
     # they were raised because the device dropped, period.  Routes
@@ -224,65 +252,9 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
         return DeployFailureKind.PORT_UNAVAILABLE
 
     message = str(error).lower()
-    # Check CONFIGURATION first — these messages often contain
-    # substrings that look like other kinds (e.g. "CIRCUITPY drive
-    # not found") but really mean the caller misconfigured the
-    # deploy or hasn't connected the board yet.
-    for pattern in _CONFIGURATION_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.CONFIGURATION_ERROR
-    # An embedded Python traceback is a user-code failure no matter
-    # which wrapper exception carries it.  Route to TRACEBACK_RETURNED
-    # before the broader bootstrap / flash-copy buckets so CP RAM mode
-    # (which raises with the traceback inline) lands alongside CP
-    # flash + MP (which return a DeployResult with a traceback field).
-    if _TRACEBACK_IN_MESSAGE_PATTERN in message:
-        return DeployFailureKind.TRACEBACK_RETURNED
-    # Drive *state* failures (disk-full, read-only, I/O error, rsync)
-    # win over the generic "CIRCUITPY drive not found or not writable"
-    # wrapper.  The transport's _resolve_circuitpy_drive probes the
-    # mount with a tiny write before staging; if that probe surfaces
-    # an ENOSPC / EROFS / EIO, the drive is found and its problem is
-    # specific.  Routing to FLASH_COPY_FAILED here surfaces the
-    # right coaching ("free up space", "remount writable") instead of
-    # CIRCUITPY_DRIVE_MISSING's "tap RESET to remount".
-    for pattern in _FLASH_DRIVE_STATE_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.FLASH_COPY_FAILED
-    # CIRCUITPY drive checks come BEFORE port-unavailable: the stale
-    # mount path in CircuitpythonTransport._resolve_circuitpy_drive
-    # raises with a message that starts "CIRCUITPY drive not found
-    # or not writable" but wraps a PermissionError whose text
-    # ("permission denied") collides with the generic port patterns.
-    # A message that literally says "CIRCUITPY drive" should never
-    # land in PORT_UNAVAILABLE — the drive prefix is strictly more
-    # informative than the nested errno string.
-    for pattern in _CIRCUITPY_DRIVE_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.CIRCUITPY_DRIVE_MISSING
-    # NO_PYTHON_RUNTIME is checked before PORT_UNAVAILABLE + RAW_REPL:
-    # the patterns explicitly assert "no python here" — that's strictly
-    # more specific than "port not reachable" or "REPL didn't answer"
-    # and points at a different recovery (install-firmware vs. plug-in
-    # / RESET).
-    for pattern in _NO_PYTHON_RUNTIME_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.NO_PYTHON_RUNTIME
-    for pattern in _PORT_UNAVAILABLE_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.PORT_UNAVAILABLE
-    for pattern in _RAW_REPL_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.RAW_REPL_UNRESPONSIVE
-    for pattern in _INSUFFICIENT_MEMORY_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.INSUFFICIENT_MEMORY
-    for pattern in _FLASH_COPY_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.FLASH_COPY_FAILED
-    for pattern in _BOOTSTRAP_EXEC_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.BOOTSTRAP_EXEC_FAILED
+    for patterns, kind in _CLASSIFICATION_TABLE:
+        if any(pattern in message for pattern in patterns):
+            return kind
     return DeployFailureKind.UNKNOWN
 
 
