@@ -32,40 +32,18 @@ import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING
 
 from .circuitpython_transport import CircuitpythonTransportError
 from .macos_fskit import detect_fskit_wedge
 from .micropython_transport import MicropythonTransportError
+from .recovery_kind import DeployFailureKind, RecoveryPlan
+from .recovery_plans import PLANS
 from .result import DeployResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from .deployer import Deployer
     from .sources import FileSource
-
-
-class DeployFailureKind(Enum):
-    """Broad categories of deploy failures, keyed to recovery guidance.
-
-    The classifier collapses the ~20 distinct
-    :class:`CircuitpythonTransportError` sites and MP transport
-    errors into these buckets.  Each bucket has a canned
-    :class:`RecoveryPlan`; :class:`InteractiveDeployer` consults the
-    plan's ``retryable`` flag to decide whether to loop or bail.
-    """
-
-    PORT_UNAVAILABLE = "port_unavailable"
-    RAW_REPL_UNRESPONSIVE = "raw_repl_unresponsive"
-    NO_PYTHON_RUNTIME = "no_python_runtime"
-    CIRCUITPY_DRIVE_MISSING = "circuitpy_drive_missing"
-    MACOS_FSKIT_WEDGED = "macos_fskit_wedged"
-    FLASH_COPY_FAILED = "flash_copy_failed"
-    BOOTSTRAP_EXEC_FAILED = "bootstrap_exec_failed"
-    INSUFFICIENT_MEMORY = "insufficient_memory"
-    TRACEBACK_RETURNED = "traceback_returned"
-    CONFIGURATION_ERROR = "configuration_error"
-    UNKNOWN = "unknown"
 
 
 #: Substrings that indicate the serial port couldn't be opened.
@@ -259,26 +237,6 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
 
 
 @dataclass(frozen=True)
-class RecoveryPlan:
-    """User-facing guidance for a single :class:`DeployFailureKind`.
-
-    Attributes:
-        headline: One-line summary the user reads first.
-        fix_steps: Ordered physical actions the user can take.  Each
-            step is a short imperative sentence; the interactive
-            deployer renders them as a bulleted list.
-        retryable: ``True`` when retrying after the user takes the
-            fix steps is worth attempting.  ``False`` for hard
-            failures (wrong flags, runtime tracebacks, too-small
-            boards) where a retry would change nothing.
-    """
-
-    headline: str
-    fix_steps: tuple[str, ...]
-    retryable: bool
-
-
-@dataclass(frozen=True)
 class PortHolder:
     """A process currently holding a serial port open.
 
@@ -411,12 +369,6 @@ def _looks_like_chumicro(holder: PortHolder) -> bool:
 
 def recovery_plan_for(kind: DeployFailureKind) -> RecoveryPlan:
     """Return the canned :class:`RecoveryPlan` for *kind*."""
-    # Import here rather than at module scope to break the cycle:
-    # recovery_plans imports DeployFailureKind + RecoveryPlan from
-    # this module, which the import-time evaluation has already
-    # bound by the time we land here at first call.
-    from .recovery_plans import PLANS
-
     return PLANS[kind]
 
 

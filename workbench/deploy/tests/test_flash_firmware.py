@@ -12,9 +12,9 @@ import pytest
 from chumicro_deploy import Device, FlashFirmwareError, flash_firmware
 from chumicro_deploy.firmware import (
     _copy_uf2_to_drive,
+    _dispatch_bootloader_reset,
     _download_firmware,
     _enter_esp32_rom_bootloader,
-    _dispatch_bootloader_reset,
     _flash_firmware_esptool,
     _flash_firmware_uf2,
     _prompt_manual_bootloader_entry,
