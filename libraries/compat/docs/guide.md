@@ -93,8 +93,8 @@ print(p())           # 255
 | Runtime | Implementation |
 |---|---|
 | CPython | Re-exports `functools.partial` (C implementation, zero overhead) |
-| MicroPython | Pure-Python polyfill with `__slots__` for minimal memory |
-| CircuitPython | Pure-Python polyfill with `__slots__` for minimal memory |
+| MicroPython | Pure-Python polyfill |
+| CircuitPython | Pure-Python polyfill |
 
 The public API is identical across all runtimes.  Code that imports `partial` from `chumicro_compat.functools` will work on any supported runtime without changes.
 

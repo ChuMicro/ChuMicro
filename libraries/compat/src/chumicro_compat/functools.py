@@ -26,8 +26,6 @@ class _PurePythonPartial:
         keywords: Frozen keyword arguments (dict).
     """
 
-    __slots__ = ("func", "args", "keywords")
-
     def __init__(self, func: object, *args: object, **keywords: object) -> None:
         """Create a partial object.
 
