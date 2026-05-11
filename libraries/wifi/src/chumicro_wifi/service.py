@@ -23,6 +23,7 @@ detection); ``handle(now_ms)`` does one tick of substrate work.
 import sys
 
 from chumicro_timing import ticks as _DEFAULT_TICKS
+
 from chumicro_wifi.config import WifiConfig
 from chumicro_wifi.state import WifiState
 
