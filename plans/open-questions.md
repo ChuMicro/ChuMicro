@@ -60,7 +60,9 @@ also fails ("Failed to connect to Espressif device: No serial data
 received").  Manual `BOOT + RESET` button-hold recovers cleanly into
 ROM bootloader at `/dev/cu.usbmodem01`.
 
-**Root cause** (read from `.tools/micropython-v1.26.0/ports/esp32/modmachine.c:230-238`):
+**Root cause** (re-verified against MicroPython `master` HEAD 2026-05-11
+via raw.githubusercontent.com — the bug is unchanged from v1.26.0;
+`ports/esp32/modmachine.c:277-290` at HEAD):
 
 ```c
 MP_NORETURN static void machine_bootloader_rtc(void) {
@@ -69,17 +71,30 @@ MP_NORETURN static void machine_bootloader_rtc(void) {
     usb_dc_prepare_persist();
     chip_usb_set_persist_flags(USBDC_BOOT_DFU);
     #endif
+    #if !CONFIG_IDF_TARGET_ESP32P4
     REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
     esp_restart();
+    #else
+    REG_WRITE(LP_SYSTEM_REG_SYS_CTRL_REG, LP_SYSTEM_REG_FORCE_DOWNLOAD_BOOT);
+    esp_restart();
+    #endif
 }
 ```
 
-The USB-CDC persist-flag setup is gated **`CONFIG_IDF_TARGET_ESP32S3` only**.
-ESP32-S2 has the same native USB-CDC hardware as S3 and needs the same
-persist-flag dance for the USB device to come back up in ROM-bootloader
-CDC mode after `esp_restart()`.  Without it, the chip enters download
-mode at the silicon level but the host's USB stack can't smoothly
-re-enumerate the ROM bootloader's CDC interface.
+The function has gained an ESP32-P4 branch since v1.26.0 (LP_SYSTEM_REG
+path), but the S2/S3 USB-CDC persist gating is identical: the
+persist-flag setup is gated **`CONFIG_IDF_TARGET_ESP32S3` only**.
+ESP32-S2 has the same native USB-CDC hardware as S3 and needs the
+same persist-flag dance for the USB device to come back up in
+ROM-bootloader CDC mode after `esp_restart()`.  Without it, the chip
+enters download mode at the silicon level but the host's USB stack
+can't smoothly re-enumerate the ROM bootloader's CDC interface.
+
+The auto-define block at `mpconfigport.h:373-379` at HEAD has been
+widened to include ESP32-P4 (today: ESP32-S2/S3/C2/C3/P4); S2 has
+been in the family since at least v1.26.0, so this isn't a recent
+regression — it's been latent for as long as ESP32-S2 has had
+`machine.bootloader()`.
 
 **CircuitPython gets this right** for both S2 and S3 — see
 `.tools/circuitpython-10.2.0/ports/espressif/common-hal/microcontroller/__init__.c:127-128`:
@@ -102,40 +117,59 @@ auto-define block at `mpconfigport.h:364-370` enables
 `machine.bootloader()` for the entire ESP32-S2/S3/C2/C3 SoC family
 (only `ARDUINO_NANO_ESP32` overrides), so the symptom applies broadly.
 
-**Fix is one line.**  Widen `modmachine.c:231` from:
+**Fix shape (one logical change, two physical edits at HEAD).**  Widen
+both the per-SoC include guard at `modmachine.c:271` and the
+persist-flag block at `modmachine.c:278`:
 
 ```c
+// Was — line 271:
+#if CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/usb/usb_dc.h"
+#include "esp32s3/rom/usb/usb_persist.h"
+#include "esp32s3/rom/usb/chip_usb_dw_wrapper.h"
+#endif
+
+// Was — line 278:
 #if CONFIG_IDF_TARGET_ESP32S3 && MICROPY_HW_USB_CDC
+usb_usj_mode();
+usb_dc_prepare_persist();
+chip_usb_set_persist_flags(USBDC_BOOT_DFU);
+#endif
 ```
 
-to:
+The S3-specific headers live at `esp32s3/rom/usb/*.h`; the S2
+equivalents are at `esp32s2/rom/usb/*.h`.  Function signatures
+(`chip_usb_set_persist_flags`, `usb_dc_prepare_persist`,
+`usb_usj_mode`) match between targets, so the body of
+`machine_bootloader_rtc()` can keep its three-call shape — only the
+`#if` predicate widens, and the include section needs the same widen
+to pull in the right per-SoC USB-ROM headers conditionally.
 
-```c
-#if (CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32S2) && MICROPY_HW_USB_CDC
-```
+**Already verified (2026-05-11):**
 
-The included headers
-(`esp32s3/rom/usb/usb_dc.h`, `esp32s3/rom/usb/usb_persist.h`,
-`esp32s3/rom/usb/chip_usb_dw_wrapper.h`) are S3-specific; the S2
-equivalents are at `esp32s2/rom/usb/*.h` and the functions
-(`chip_usb_set_persist_flags` in particular) are the same shape.
-A real PR would need to thread the right per-SoC include block
-above the `machine_bootloader_rtc()` definition too — the include
-guard is currently `#if CONFIG_IDF_TARGET_ESP32S3` at line 224.
+- Same gap present at MicroPython `master` HEAD — checked
+  `ports/esp32/modmachine.c` + `mpconfigport.h` via raw GitHub.  No
+  recent commit has touched the S2/S3 persist gating; the function
+  has only gained an ESP32-P4 branch since v1.26.0.
+- The flag is broadly enabled — the
+  `MICROPY_BOARD_ENTER_BOOTLOADER` auto-define block at
+  `mpconfigport.h:373-379` covers ESP32-S2/S3/C2/C3/P4 with only
+  `ARDUINO_NANO_ESP32` opting out via its own override.
 
-**Verify before filing:**
+**Still to verify before opening the upstream issue:**
 
-- Confirm the same gap exists at MicroPython HEAD (user's link earlier
-  pointed at commit `8ecd9950`; v1.26.0 is what's pinned locally, 1.28.0
-  was running on the board — re-check the latest MicroPython master
-  before filing so the PR is against current code, not a stale snapshot).
-- Verify the S2 ROM USB-CDC enumeration actually works after the
-  persist-flag write (no Espressif documentation we've read here, but
-  CP's behavior on the same silicon is the strongest evidence).
+- Whether ESP32-P4 needs the analogous persist-flag setup too.
+  P4 was added to the function body but not to the persist block;
+  same questionable shape as the S2 case.  If yes, the PR should
+  cover P4 alongside S2 — even if no chumicro bench board uses
+  P4 today.
 - Build a fixed MP for LOLIN_S2_MINI locally, bench-test that
   `machine.bootloader()` produces `/dev/cu.usbmodem01` within the
   chumicro-deploy 8-second poll window — that's the only bench-side
   proof that matters.
+- Whether `MICROPY_HW_USB_CDC` is the right secondary predicate for
+  S2 (the LOLIN_S2_MINI board does enable native USB-CDC by default;
+  worth re-confirming with `make BOARD=LOLIN_S2_MINI` output).
 
 **Filing target:** https://github.com/micropython/micropython/issues
 (new issue, then PR if a maintainer responds positively).  Keep the
