@@ -828,6 +828,7 @@ class _FakeSession:
         self, cache: pytest_device._TransportCache, *, rootpath: Path,
     ) -> None:
         self._device_transport_cache = cache
+        self._backend = pytest_device.DeviceBackend()
         self.config = _FakeConfig(rootpath=rootpath)
 
 
