@@ -8,9 +8,9 @@ Setup:
 1. Install ``chumicro_runner`` and ``chumicro_timing``
    (``circup install chumicro-runner`` or copy both packages
    to ``lib/``).
-2. Wire a momentary button between ``D5`` and ``GND``.  The
-   internal pull-up keeps ``D5`` high when the button is open.
-   The built-in LED (``board.LED``) needs no extra wiring.
+2. Wire a momentary button between the chosen GPIO and **GND**.
+   The internal pull-up keeps the pin high when the button is
+   open.  The built-in LED (``board.LED``) needs no extra wiring.
 3. Save this file as ``code.py`` on the board.
 
 
@@ -21,14 +21,48 @@ import board
 import digitalio
 from chumicro_runner import Runner
 
+# Set BUTTON_PIN to the pin attribute on the `board` module
+# (e.g. "D5", "GP14", "BUTTON") to override autodetection.
+# Leave empty to look up your board in BOARD_BUTTON_PINS below.
+BUTTON_PIN = ""
+
+# Per-board fallback used when BUTTON_PIN is empty.  Key is the
+# string ``board.board_id`` returns on each board (find yours
+# at the REPL with ``import board; print(board.board_id)``).
+# One entry per line — add your board if it isn't listed.
+BOARD_BUTTON_PINS = {
+    "raspberry_pi_pico_w":     "GP14",
+    "raspberry_pi_pico2_w":    "GP14",
+    "lolin_s2_mini":           "D5",
+    "lolin_s2_pico":           "D5",
+    "adafruit_feather_esp32s2":               "BUTTON",
+    "adafruit_feather_esp32s3_4mbflash_2mbpsram": "BUTTON",
+}
+
+
+def _resolve_button_pin():
+    """Return the ``board`` attribute for the configured button pin."""
+    pin_name = BUTTON_PIN or BOARD_BUTTON_PINS.get(board.board_id)
+    if not pin_name:
+        raise RuntimeError(
+            f"no button pin for board {board.board_id!r} — set BUTTON_PIN "
+            f"at the top of this file (e.g. \"D5\") or add an entry to "
+            f"BOARD_BUTTON_PINS.",
+        )
+    pin = getattr(board, pin_name, None)
+    if pin is None:
+        raise RuntimeError(
+            f"board has no pin named {pin_name!r} — check your "
+            f"BUTTON_PIN setting / BOARD_BUTTON_PINS mapping.",
+        )
+    return pin
+
+
 # Set up the onboard LED.
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
-# Edit this line to match your board (e.g. board.GP14 on Pi Pico W,
-# board.BUTTON on Feather / QT Py).  `import board; print(dir(board))`
-# in the REPL lists the pin names your board exposes.
-button = digitalio.DigitalInOut(board.D5)
+button = digitalio.DigitalInOut(_resolve_button_pin())
 button.direction = digitalio.Direction.INPUT
 button.pull = digitalio.Pull.UP
 

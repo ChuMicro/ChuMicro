@@ -6,6 +6,17 @@
 
 **Sweep loop closed — 128/128 deploys green across the canonical 4-board matrix** (Lolin S2 CP, Pi Pico W CP, Lolin S2 MP, Pi Pico W MP).  Six groups, stop-on-first-FAIL per group.  Every FAIL was either a real bug fixed mid-sweep or a shape problem that required structural cleanup.  Several follow-ups remain open (see "Open follow-ups" below); those are tracked here rather than retried in the harness.
 
+**Re-validation pass 2026-05-10 — 127/128 PASS + 1 transient flake.**  Re-ran the full sweep after the day's substantial follow-ups (helpers.py refactor x2, 5 examples switched to `helpers.ticks_ms`, ntp library → chumicro_timing + DI alignment, chumicro-wifi detection → `os.uname().machine` whitelist, deploy-example `--tail-seconds` flag, tls_with_custom_ca rewrite).  Initial Group 4 surfaced a known design limitation — `runner/circuitpython_button_led` + `timing/circuitpython_debounce` hardcoded `board.D5` (Wemos-only), AttributeError on Pi Pico W.  Refactored both to a `BUTTON_PIN = ""` override + `BOARD_BUTTON_PINS` whitelist keyed on `board.board_id` (one entry per line: Pi Pico W/2 W → GP14, Lolin S2 mini/pico → D5, Adafruit Feather S2/S3 → BUTTON); autodetect picks the right pin when BUTTON_PIN is empty, explicit override wins when set.  Re-run Group 4 with autodetect: 8/8 PASS on both CP boards.  Group 6's transient FAIL (`websockets/circuitpython_server` @ pi-pico-w-cp at deploy 10/20 — `KeyboardInterrupt` mid-`time.sleep(0.02)` loop) didn't reproduce on manual re-test; cyw43 USB-CDC residue from the immediately-prior client deploy is the prime suspect, but no clear source in the disconnect path.
+
+**Timing analysis from the re-validation sweep:**
+
+| group | S2-cp | PicoW-cp | S2-mp | PicoW-mp |
+|---|---|---|---|---|
+| smoke (1) | 19.3s | 7.0s | 5.3s | **2.5s** |
+| network (6) | 43.8s | 21.8s | — | — |
+
+Lolin S2 CP is 3-10× slower than Pi Pico W MP (the fastest combo) for the same example.  Root cause: S2's slow USB-CDC throughput produces a ~20s rsync floor on `/Volumes/CIRCUITPY` for any deploy (vs PicoW-cp ~6-7s; MP boards bypass entirely via mpremote RAM mode).  Network examples on cyw43 show 1.5-2× run-to-run variance from wifi-up timing (mqtt/circuitpython_telemetry on S2-cp: 35.8 → 52.4 → 57.1s across three runs).  For dev iteration, Pi Pico W MP is the fastest target; for worst-case-production validation, S2 CP is the slowest.
+
 ## What landed
 
 - **Recovery hint corrected (`FLASH_COPY_FAILED`).**  `workbench/deploy/src/chumicro_deploy/recovery.py` — dropped the wrong "msdosfs read-only flag, RESET clears it" framing; reformat (`chumicro-workspace reset-board --yes`) is now the primary recovery, with RESET demoted to optional pre-step.  Same correction applied to the test docstring at `workbench/deploy/tests/test_circuitpython_transport.py:1995-2001`.  User feedback: read-only-after-rsync is repeatable across resets in real bench experience, not a transient hiccup.
