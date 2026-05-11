@@ -1,12 +1,16 @@
 # Adding a New Library
 
-This guide walks you through the full lifecycle of adding a new library to ChuMicro — from idea to published package. If you're working with an AI agent, point it at the [`new-library` skill](../../.github/skills/new-library/SKILL.md).
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
+This guide walks you through the full lifecycle of adding a new library to ChuMicro — from idea to published package.  If you're working with an AI agent, point it at the [`new-library` skill](../../.github/skills/new-library/SKILL.md).
+
+<br clear="left">
 
 ## Before you start
 
 Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions), and skim [`plans/next-up.md`](../../plans/next-up.md) and [`plans/decisions/`](../../plans/decisions/) to see if your idea overlaps with planned work or settled design choices. If you're unsure whether the library fits the project, open a discussion first — it's much faster to align on scope before building.
 
-> **Is your package host-only?**  This guide is for *device libraries* — code that runs on CircuitPython, MicroPython, and CPython.  If you're adding a tool that runs only on the developer's laptop (a CLI that drives devices, a REPL client, a firmware helper), it belongs in `workbench/` instead.  See [`workbench.md`](workbench.md) for the layout and conventions — the scaffolder does not yet create workbench packages, so for now you hand-roll the layout off this guide as a template.
+> **Is your package host-only?**  This guide is for *device libraries* — code that runs on CircuitPython, MicroPython, and CPython.  If you're adding a tool that runs only on the developer's laptop (a CLI that drives devices, a REPL client, a firmware helper), it belongs in `workbench/` instead.  See [`workbench.md`](workbench.md) for the layout and conventions.  The scaffolder supports workbench packages via `chumicro-workspace new --workbench <name>`; from inside the mono-repo, drop the workspace prefix and invoke `python -m chumicro_workspace new --workbench <name>` (the `scripts/run.py new-library` shim is library-only — track `plans/next-up.md` for the parity item).
 
 ## 1. Scaffold
 

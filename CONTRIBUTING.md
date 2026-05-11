@@ -29,10 +29,11 @@ Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMi
 | **Find something to work on** | [Good first contributions](#good-first-contributions) |
 | **Set up and develop** | This page → then your [development environment guide](#development-environment) |
 | **Configure real-board testing** | [Device Testing](docs/contributing/device-testing.md) |
-| **Understand devices.yml / workspace.yml / secrets.toml** | [Config files](docs/contributing/config-files.md) |
+| **Understand devices.yml / workspace.yml / secrets.toml** | [Workspace, devices, and secrets](docs/contributing/config-files.md) |
 | **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
+| **Add a host-only workbench tool** | [Workbench — host-only tools](docs/contributing/workbench.md) |
 | **Understand releases** | [Releases and Promotion](docs/contributing/releases.md) |
 | **Use an AI coding agent** | [Working with Agents](docs/contributing/working-with-agents.md) |
 | **Recover from a broken state** | [Troubleshooting](docs/troubleshooting/) — macOS CIRCUITPY wedge, stale mounts |
@@ -175,7 +176,7 @@ These aren't arbitrary — each traces to a design decision with rationale.  The
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `ImportError` running `pytest` directly | Bare `pytest` doesn't know about the per-library layout | Use `python scripts/run.py test --libraries <name>` |
+| Tests pass via `pytest` but `preflight` fails coverage | Bare `pytest` runs your tests but doesn't enforce the per-library coverage gate | Use `python scripts/run.py test --libraries <name>` for commit-gating runs |
 | `functional_tests/` says no device is configured | `devices.yml` is missing or has wrong board IDs | Run `python scripts/run.py setup`, then update `devices.yml`.  See [Device Testing](docs/contributing/device-testing.md) |
 | `check-version` fails but you only changed tests | CI checks source changes under `src/` | No VERSION bump needed for test-only / docs-only / infra changes — note in PR description |
 | Coverage fails on code you didn't touch | Pre-existing gap | Note in PR description; a maintainer can help |

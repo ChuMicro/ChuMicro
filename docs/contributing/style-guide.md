@@ -1,6 +1,10 @@
 # Style Guide
 
-This is the definitive reference for code style in the ChuMicro workspace. All code — library, infrastructure, and tests — follows these conventions unless explicitly noted.
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
+This is the definitive reference for code style in the ChuMicro workspace.  All code — library, infrastructure, and tests — follows these conventions unless explicitly noted.
+
+<br clear="left">
 
 The linter (`python scripts/run.py lint`) enforces most of these automatically. If lint passes, you're almost certainly fine. This guide explains what the rules are, why they exist, and what to do when the linter flags something.
 
@@ -102,7 +106,7 @@ The docs build fails on [griffe](https://mkdocstrings.github.io/griffe/) warning
 
 Style for READMEs, library guides, and contributing docs (not docstrings — those are above). These rules apply to the root README, every library's README and `docs/guide.md`, every workbench README, and contributing pages.
 
-- **Anchor on a concrete user-visible promise, not an abstract design principle.** *"Keep a status LED blinking through a slow network call"* beats *"transparent state matters more than syntactic concurrency."* First-time readers don't share the vocabulary; they share the LED. Design philosophy belongs in ADRs, not on the front door.
+- **Anchor on a concrete user-visible promise, not an abstract design principle.** *"Keep a status LED blinking through a slow network call"* beats *"transparent state matters more than syntactic concurrency."* First-time readers don't share the vocabulary; they share the LED. Design philosophy belongs in ADRs, not in the project's top-level README.
 - **No second-person ("you" / "your") in third-person documentation.** *"A microcontroller running anything beyond blink has to handle slow operations without freezing"* beats *"you're building something on a CircuitPython board."* Second-person presumes the reader's situation. READMEs land on PyPI homepages, GitHub search results, and blog links — they need to be welcoming without narrating at the reader. (Code-block comments and step-by-step tutorials are different — imperative is fine: *"install the package."*) Quick check: grep the draft for `\byou\b` / `\byour\b` / `\bwe\b`.
 - **Don't bury the substantive matrix behind a folder-README link.** The library matrix and workbench matrix belong on the root README, not as a one-line `[Libraries](libraries/)` link. Most visitors only see one URL — the root. Folder-READMEs reinforce with deeper context (dependency graph, problem-driven selection); they're not the *only* home for the matrix.
 - **Code, prose, and any visual must tell the same story.** If the hero promises an LED, the code shows `led.value = not led.value`, not `print()`. If the hero promises composition, the code shows multiple services on one runner. If a visual is added, it depicts what the prose says. When in doubt, skip the visual — prose + code can carry the load alone.

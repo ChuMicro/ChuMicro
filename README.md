@@ -339,7 +339,15 @@ Few CircuitPython / MicroPython projects let you go from a fresh `git clone` to 
 
 ## Running tests
 
-ChuMicro's test setup runs at four levels.  All four are driven through `python3 scripts/run.py <task>` — the same entry point CI uses — so anything that passes here is what's enforced on every commit.  Bare `pytest` works too: run it from the repo root or any subdirectory and it discovers tests based on where you are (great for IDE Testing-panel runs and quick ad-hoc loops).  Only `run.py` enforces per-library coverage thresholds, so use it for commit-gating runs.
+ChuMicro's test setup runs at four levels.  All four are driven through `python3 scripts/run.py <task>` — the same entry point CI uses — so anything that passes here is what's enforced on every commit.
+
+**Bare `pytest` works too.**  Run it from the repo root or any subdirectory — it discovers tests based on where you are (great for IDE Testing-panel runs and quick ad-hoc iteration).  The root `pyproject.toml` + `conftest.py` handle imports, importlib mode for test-name collisions, and `functional_tests/` deselection so you don't have to.  Only `run.py` enforces per-library coverage thresholds, so use it for commit-gating runs.
+
+```bash
+pytest libraries/timing/tests/                          # one library
+pytest libraries/timing/tests/test_heartbeat.py         # one file
+pytest libraries/timing/functional_tests/               # on-device — staged + run on a connected board via the chumicro-pytest-device plugin
+```
 
 **Unit tests (CPython).**  Fast.  Run on your laptop in seconds.  Use these while iterating on library code:
 

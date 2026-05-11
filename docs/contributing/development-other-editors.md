@@ -1,6 +1,10 @@
 # Development with Other Editors
 
-This guide is for developers using editors other than PyCharm and VS Code — Neovim, Zed, Emacs, Sublime Text, Fleet, or anything else with a terminal. You don't need IDE-specific configuration to work in this project.
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
+This guide is for developers using editors other than PyCharm and VS Code — Neovim, Zed, Emacs, Sublime Text, Fleet, or anything else with a terminal.  You don't need IDE-specific configuration to work in this project.
+
+<br clear="left">
 
 ## Setup
 
@@ -13,7 +17,7 @@ python scripts/prepare_workspace.py
 
 This auto-detects or creates `.venv`, installs dependencies, runs **editable installs** (`pip install -e`) for every library and support package, then runs lint + host tests to verify the install. Look for `Workspace is ready` at the end.
 
-After the first run, `python scripts/run.py setup` is the canonical front door for refreshing the workspace — same install + IDE sync + starter device-config generation.
+After the first run, `python scripts/run.py setup` is what refreshes the workspace day-to-day — same install + IDE sync + starter device-config generation.
 
 Activate the venv before opening your editor so it picks up the right interpreter:
 
@@ -53,7 +57,7 @@ python scripts/run.py setup
 python scripts/run.py test-libraries-functional
 ```
 
-`setup` materialises local `devices.yml`, `workspace.yml`, and `secrets.toml` starter files if they do not exist yet (from the canonical workbench-shipped starters in `chumicro_workspace`).  Register a board with `python scripts/run.py add-device <id> --address <port>`, fill in `secrets.toml` with your wifi credentials under `[wifi]` (the file is gitignored — Decision 0057), then use:
+`setup` materialises local `devices.yml`, `workspace.yml`, and `secrets.toml` starter files if they do not exist yet (shipped by `chumicro_workspace`).  Register a board with `python scripts/run.py add-device <id> --address <port>`, fill in `secrets.toml` with your wifi credentials under `[wifi]` (the file is gitignored — Decision 0057), then use:
 
 ```bash
 python scripts/run.py test-libraries-functional --library timing
@@ -61,7 +65,7 @@ python scripts/run.py test-libraries-functional --runtime both
 python scripts/run.py test-libraries-functional --library timing --deploy-mode flash
 ```
 
-If your editor has a pytest integration, explicit `functional_tests/` targets use the same pytest device plugin as PyCharm and VS Code. The CLI path above is still the canonical fallback. See [Device Testing](device-testing.md) for the config schema and workflow details.
+If your editor has a pytest integration, explicit `functional_tests/` targets use the same pytest device plugin as PyCharm and VS Code. The CLI path above is still the fallback when an editor doesn't have pytest integration. See [Device Testing](device-testing.md) for the config schema and workflow details.
 
 ## Editor-specific tips
 
@@ -96,7 +100,7 @@ Install `LSP-pyright` via Package Control. It reads `pyrightconfig.json` automat
 
 ### Any other editor
 
-If your editor has a terminal, you're ready. The CLI workflow is the canonical one — the PyCharm and VS Code guides are convenience wrappers around the same `scripts/run.py` commands.
+If your editor has a terminal, you're ready. The CLI workflow is the primary path — the PyCharm and VS Code guides are convenience wrappers around the same `scripts/run.py` commands.
 
 ## Browsing coverage reports
 

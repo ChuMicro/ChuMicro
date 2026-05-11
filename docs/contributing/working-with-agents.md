@@ -1,6 +1,10 @@
 # Working with AI Agents
 
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
 This project is set up to work well with AI coding agents — the rules are documented, the patterns are explicit, and agents can be productive here quickly. The page below explains what that looks like in practice, what agents are good at here, and how a contributor can try one.
+
+<br clear="left">
 
 ## What agents do in this workspace
 

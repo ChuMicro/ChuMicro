@@ -1,37 +1,14 @@
-# The three workspace config files
+# Workspace, devices, and secrets
 
-Every ChuMicro workspace materialises three gitignored config files at its root on first `setup`.  Each has a single job; together they configure boards, host-side tooling, and credentials without any of them duplicating the others.
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-| File | Owns | Flows onto the device? | Safe to share? |
-|---|---|---|---|
-| **`devices.yml`** | Board registry — id, runtime, serial address, deploy-mode default | No | Yes (no secrets) |
-| **`workspace.yml`** | Host machinery — `library_sources`, `deploy_targets`, lint/coverage knobs | No | Yes (no secrets) |
-| **`secrets.toml`** | Wifi password, MQTT broker auth, any other credentials a project inherits at deploy time | Yes — flattened into `/runtime_config.msgpack` | **Never** |
+Three gitignored files live at the root of every ChuMicro workspace.  Each does what its name says.  `python scripts/run.py setup` materialises starter versions on first run; edit them as needs come up.
 
-The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).  All three files are gitignored at the workspace root to keep local config out of the tree; the canonical starter templates live under `workbench/workspace/src/chumicro_workspace/_payloads/` (tracked).
+<br clear="left">
 
-## Where each file gets edited
+## workspace.yml — host-side tooling knobs
 
-```text
-workspace-root/
-├── devices.yml     # written by `chumicro-workspace add-device …`; hand-editable for tuning defaults
-├── workspace.yml   # rarely edited; library_sources + deploy_targets + quality knobs
-└── secrets.toml    # edited once per clone: wifi password, broker auth
-```
-
-### `devices.yml` — the board registry
-
-`add-device` is the primary path; hand-editing is fine for tuning defaults.
-
-```bash
-python scripts/run.py add-device pi-pico-w-mp --address /dev/cu.usbmodem1101
-```
-
-Shape: a top-level `defaults:` block (which board is selected when no `--device` flag is passed) plus a `devices:` list with one entry per board.  Full schema in [device-testing.md § Configure `devices.yml`](device-testing.md#3-configure-devicesyml).
-
-### `workspace.yml` — host machinery
-
-Host-only.  Nothing here reaches a device.
+Linting / coverage settings, optional editable library clones, default deploy targets.  Sensible defaults cover everything; most contributors never touch this file.
 
 ```yaml
 # library_sources:
@@ -46,11 +23,21 @@ Host-only.  Nothing here reaches a device.
 #     tools: [ruff, chumicro-checks]
 ```
 
-All four blocks (`library_sources`, `deploy_targets`, `quality`, `environments`) are optional.  Empty file = workspace defaults.
+All blocks are optional.  Empty file = workspace defaults.
 
-### `secrets.toml` — credentials + device-bound defaults
+## devices.yml — the board registry
 
-The wifi password and broker auth a project needs at runtime.
+One entry per plugged-in board: serial port, runtime, deploy-mode default, and which board the IDE play button targets.
+
+```bash
+python scripts/run.py add-device pi-pico-w-mp --address /dev/cu.usbmodem1101
+```
+
+`add-device` probes the connected board, writes the entry, and (on first registration of each runtime) fills in the `defaults.<runtime>` pointer automatically.  Full flow + field reference in [Device Testing](device-testing.md).
+
+## secrets.toml — runtime credentials for on-device code
+
+Wifi password, MQTT broker host/port/auth — anything a deployed program needs at runtime that can't live in source control.  Edited once per clone.
 
 ```toml
 [wifi]
@@ -65,15 +52,17 @@ port = 1883
 # password = "my-mqtt-password"
 ```
 
-Nested TOML tables on disk, flat dotted keys on the board (`config["wifi.ssid"]`, `config["mqtt.broker.host"]`).  Per-project `project_config.toml` (and per-library `functional_tests/config.toml`) deep-merge on top of these defaults at deploy time, then the result is flattened and msgpack-encoded into `/runtime_config.msgpack`.
+At deploy time the host reads this file, deep-merges per-project `project_config.toml` + per-library `functional_tests/config.toml` overrides on top, flattens the result to dotted keys (`wifi.ssid`, `mqtt.broker.host`), and msgpack-encodes it into `/runtime_config.msgpack` on the board.  On-device code reads it back via `chumicro_config.load_runtime_config()` — the same API user-written programs use.
 
-## Why three files, not one
+## Why three files
 
-- **Different gitignore promises.**  `secrets.toml` is "never commit, even by accident."  `workspace.yml` and `devices.yml` are gitignored to avoid local-config drift, but contents are share-safe.
-- **Different lifecycles.**  `devices.yml` changes when a board is plugged in.  `workspace.yml` changes when the workspace layout shifts.  `secrets.toml` is edited once per clone.
-- **Different consumers.**  `devices.yml` feeds `chumicro-deploy`'s transport selection.  `workspace.yml` feeds the host-side workbench tooling.  `secrets.toml` feeds the deploy-time runtime-config merge that lands on the device.
+Three different jobs with three different gitignore promises and three different lifecycles:
 
-Combining any two pairs would force the other one to inherit the strictest promise — `workspace.yml`-with-credentials would have to be strictly never-commit even though its host-machinery content is share-safe.
+- **`secrets.toml`** is "never commit, even by accident."  Folding it into either of the others would force them to inherit the same strict promise even though their content is share-safe.
+- **`devices.yml`** changes whenever a board is plugged or unplugged.  Per-machine state — drift between contributors would noise up shared history.
+- **`workspace.yml`** changes when the workspace layout shifts.  Stable across most days.
+
+The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).  Starter templates live under `workbench/workspace/src/chumicro_workspace/_payloads/` (tracked); the materialised files at the workspace root are gitignored.
 
 ## Where to learn more
 

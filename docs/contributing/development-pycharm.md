@@ -1,6 +1,10 @@
 # Development with PyCharm
 
-This guide covers the full development workflow in PyCharm. The project includes shared run configurations that work out of the box — open the project, set up an interpreter, and you're ready to go.
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
+This guide covers the full development workflow in PyCharm.  The project ships committed run configurations under `.idea/runConfigurations/` — open the project, set up an interpreter, and the run dropdown lists every common task without any extra setup.
+
+<br clear="left">
 
 ## Setup
 
@@ -99,7 +103,7 @@ python scripts/run.py test --libraries timing
 
 Right-click a test file or test function in the editor → **Run 'test_...'**. PyCharm runs it with pytest using the source roots from `.idea/chumicro.iml`. This is fast for iterating on a single test but does not produce coverage data.
 
-For real-board `functional_tests/`, the same play buttons route to hardware once `devices.yml` is configured.  Run `python scripts/run.py setup` (materialises `devices.yml` + `workspace.yml` + `secrets.toml` from the canonical workbench-shipped starters), then `python scripts/run.py add-device <id> --address <port>` to register your board.  Fill in `secrets.toml` with your wifi credentials under `[wifi]` (the file is gitignored — Decision 0057), then right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.
+For real-board `functional_tests/`, the same play buttons route to hardware once `devices.yml` is configured.  Run `python scripts/run.py setup` (materialises `devices.yml` + `workspace.yml` + `secrets.toml` from the workbench-shipped starters), then `python scripts/run.py add-device <id> --address <port>` to register your board.  Fill in `secrets.toml` with your wifi credentials under `[wifi]` (the file is gitignored — Decision 0057), then right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.
 
 For device-backed `functional_tests/`, the test tree includes synthetic nodes such as `Setup — MicroPython`, `Run overhead — MicroPython`, `Setup — CircuitPython`, and `Run overhead — CircuitPython`. The setup node owns staging time. Individual test functions show the durations reported by the on-device harness, while the run-overhead node keeps only the remaining batch overhead that is not attributable to a single test.
 
