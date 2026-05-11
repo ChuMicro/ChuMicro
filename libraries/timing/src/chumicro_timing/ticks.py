@@ -19,14 +19,21 @@ of modular/ring arithmetic for tick counters.
 
 import time
 
-# const() is intentionally not used here: the strip-and-inline
-# optimization only fires for leading-underscore module globals on
-# MicroPython, and these constants are public so testing.py (which is
-# imported under MP/CP cross-runtime test runs) can reuse them
-# without redefining the 2**29 period in two places.
-TICKS_PERIOD = 1 << 29
-TICKS_MAX = TICKS_PERIOD - 1
-TICKS_HALFPERIOD = TICKS_PERIOD // 2
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
+
+
+# const() on a public name keeps both wins on MicroPython: the use
+# sites get inlined as compile-time literals, AND the name remains
+# importable from this module (which testing.py relies on for the
+# cross-runtime test runs).  Only the leading-underscore form
+# additionally strips the module-level binding.
+TICKS_PERIOD = const(1 << 29)
+TICKS_MAX = const(TICKS_PERIOD - 1)
+TICKS_HALFPERIOD = const(TICKS_PERIOD // 2)
 
 
 def _resolve_ticks_ms() -> object:
