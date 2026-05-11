@@ -57,7 +57,7 @@ python scripts/run.py setup
 python scripts/run.py test-libraries-functional
 ```
 
-`setup` materialises local `devices.yml`, `workspace.yml`, and `secrets.toml` starter files if they do not exist yet (shipped by `chumicro_workspace`).  Register a board with `python scripts/run.py add-device <id> --address <port>`, fill in `secrets.toml` with your wifi credentials under `[wifi]` (the file is gitignored — Decision 0057), then use:
+`setup` materialises three gitignored starter files at the repo root: `devices.yml`, `workspace.yml`, and `secrets.toml`.  See [Device Testing](device-testing.md) for board registration and `secrets.toml` setup, then use:
 
 ```bash
 python scripts/run.py test-libraries-functional --library timing

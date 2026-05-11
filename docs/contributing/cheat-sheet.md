@@ -105,6 +105,22 @@ Both `pytest libraries/<name>/functional_tests/` and `python scripts/run.py test
 | Build docs for one library | `python scripts/run.py docs --libraries timing` |
 | Validate mip install against a bundle repo | `python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle-Experimental --libraries timing` |
 
+## Where things live
+
+| What | Where |
+|---|---|
+| Library source | `libraries/<name>/src/chumicro_<name>/` |
+| Library host tests | `libraries/<name>/tests/` |
+| Library real-board tests | `libraries/<name>/functional_tests/` |
+| Library docs | `libraries/<name>/docs/` |
+| Library examples | `libraries/<name>/examples/` |
+| Version file | `libraries/<name>/VERSION` |
+| Host-only tools | `workbench/<name>/` |
+| Internal shared packages | `support/<name>/` |
+| Developer task runner | `scripts/run.py` |
+| Design decisions (ADRs) | `plans/decisions/` |
+| Agent work queue | `plans/next-up.md` |
+
 ## When something fails
 
 Every failure message tells you exactly what to do.
