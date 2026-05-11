@@ -102,10 +102,9 @@ __all__ = ["MyClass", "helper_function"]
 Tests go in `libraries/my-sensor/tests/`. Every library must independently meet the coverage threshold configured in `pyproject.toml`.
 
 ```bash
-python scripts/run.py test --libraries my-sensor
-
-# Quick iteration (skip coverage, stop on first failure)
-python scripts/run.py test -k my-sensor/test_core -x -v --no-cov
+pytest libraries/my-sensor/tests/                          # everyday iteration
+pytest libraries/my-sensor/tests/test_core.py -x -v        # one file, stop on first failure
+python scripts/run.py test --libraries my-sensor           # gated run with coverage enforcement
 ```
 
 ### What a test looks like

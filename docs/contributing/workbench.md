@@ -17,7 +17,7 @@ Workbench packages follow the same per-library conventions as code under `librar
 - `tests/` with the 94 % coverage gate ([Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md))
 - f-strings, PEP 604/585 annotations ([Decision 0021](../../plans/decisions/0021-docstring-type-policy.md)), descriptive names ([Decision 0022](../../plans/decisions/0022-naming-conventions.md))
 - Constructor injection for injected dependencies ([Decision 0010](../../plans/decisions/0010-library-testability.md)) where relevant
-- Lint via `python scripts/run.py lint`, tests via `python scripts/run.py test --libraries <name>`
+- Tests via `pytest workbench/<name>/tests/` for iteration, `python scripts/run.py test --libraries <name>` for the gated run; lint via `python scripts/run.py lint`
 
 ## Scaffolding
 

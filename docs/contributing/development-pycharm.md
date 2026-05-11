@@ -10,7 +10,7 @@ This guide covers the full development workflow in PyCharm.  The project ships c
 
 ### 1. Fork, clone, and install
 
-Follow steps 1–4 of the [quick start](../../CONTRIBUTING.md#quick-start) in the contributing guide to fork the repository, clone it, and install dependencies. Then come back here for PyCharm-specific setup.
+Follow steps 1–4 of the [setup walkthrough](../../CONTRIBUTING.md#setting-up-your-development-environment) in the contributing guide to fork the repository, clone it, and install dependencies. Then come back here for PyCharm-specific setup.
 
 ### 2. Open in PyCharm
 
@@ -96,7 +96,7 @@ Select **Test** from the dropdown and click ▶. This runs all libraries with th
 To test a single library, use the terminal:
 
 ```bash
-python scripts/run.py test --libraries timing
+pytest libraries/timing/tests/
 ```
 
 ### From a test file (quick check, no coverage)
@@ -116,7 +116,7 @@ Large CircuitPython RAM-mode functional tests are sent in multiple raw-REPL chun
 The built-in terminal (`⌥F12` / `Alt+F12`) works the same as any terminal:
 
 ```bash
-python scripts/run.py test --libraries timing
+pytest libraries/timing/tests/
 ```
 
 For real-board runs:

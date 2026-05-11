@@ -37,7 +37,7 @@ git push -u origin fix/my-change      # then open PR on GitHub
 2. **Use descriptive names.** The linter catches abbreviations and suggests replacements. Single-letter for-loop targets (`for i in range(10)`) are fine.
 3. **No `async`/`await`.** Use the tick-based runner. It's easier to test and debug on microcontrollers.
 4. **Accept dependencies as constructor parameters.** Don't import `board` or `busio` at the top level. This makes code testable without hardware.
-5. **Tests live next to the code.** `libraries/<name>/tests/`. Run them with `python scripts/run.py test --libraries <name>`.
+5. **Tests live next to the code.** `libraries/<name>/tests/`. Run them with `pytest libraries/<name>/tests/`.
 6. **Bump VERSION when you change source code.** Edit `libraries/<name>/VERSION`. CI catches it if you forget.
 7. **Docstrings are required** on public functions. Types go on the signature, descriptions in the docstring.
 8. **f-strings everywhere.** No `%` formatting, no `.format()`.
@@ -60,16 +60,16 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 
 | What | Command |
 |---|---|
-| Run all CPython package tests | `python scripts/run.py test --all` |
-| Test one library | `python scripts/run.py test --libraries timing` |
-| Filter by test name (vanilla pytest style) | `python scripts/run.py test -k heartbeat` |
-| Filter scoped to one library | `python scripts/run.py test -k timing/test_heartbeat` |
-| Quick test (no coverage, stop on first failure) | `python scripts/run.py test -k heartbeat -x -v --no-cov` |
-| Bare pytest from the repo root (IDE play, ad-hoc; coverage **not** enforced) | `pytest libraries/timing/tests/` |
+| Test one library | `pytest libraries/timing/tests/` |
+| Filter by test name | `pytest libraries/timing/tests/ -k heartbeat` |
+| Quick test (stop on first failure, verbose) | `pytest libraries/timing/tests/ -k heartbeat -x -v` |
+| Test a single file | `pytest libraries/timing/tests/test_heartbeat.py` |
+| Test all CPython package tests with the coverage gate | `python scripts/run.py test --all` |
+| Test one library with the coverage gate | `python scripts/run.py test --libraries timing` |
 | Test scripts infrastructure | `python scripts/run.py test-scripts` |
 | Verify examples | `python scripts/run.py verify-examples --libraries timing` |
 
-`python scripts/run.py test` is the commit-gating path (enforces per-library coverage thresholds, per [Decision 0009](../../plans/decisions/0009-per-library-test-runs.md)).  Bare `pytest` from the repo root is supported for IDE Testing-panel runs and quick iteration; it discovers tests via the root `pyproject.toml` + `conftest.py` but doesn't run the coverage gate.
+Bare `pytest` from the repo root is the everyday command for iteration — fast, IDE-play-button-friendly.  `python scripts/run.py test` wraps pytest in per-library subprocesses that enforce the coverage gates ([Decision 0009](../../plans/decisions/0009-per-library-test-runs.md)); preflight uses that wrapper, so you usually don't need to invoke it directly.
 
 ### Cross-runtime testing
 

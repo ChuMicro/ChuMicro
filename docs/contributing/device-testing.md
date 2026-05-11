@@ -294,7 +294,7 @@ A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md
 
 | Test type | Location | How to run |
 |---|---|---|
-| Host/unit tests | `libraries/<name>/tests/` | `python scripts/run.py test --libraries <name>` |
+| Host/unit tests | `libraries/<name>/tests/` | `pytest libraries/<name>/tests/` (iteration) or `python scripts/run.py test --libraries <name>` (with coverage gate) |
 | Real-board functional tests | `libraries/<name>/functional_tests/` | `python scripts/run.py test-libraries-functional --library <name>` or an IDE play button |
 | Workbench hardware-gated tests | `workbench/<name>/functional_tests/` | `python scripts/run.py test-workbench-functional --workbench <name>` |
 | Cross-runtime unix-port tests | reuses `tests/` | `python scripts/run.py test-all-runtimes` |

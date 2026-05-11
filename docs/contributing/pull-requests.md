@@ -2,7 +2,7 @@
 
 <img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](../../CONTRIBUTING.md) and your [development environment guide](../../CONTRIBUTING.md#development-environment).
+This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](../../CONTRIBUTING.md) and your [development environment guide](../../CONTRIBUTING.md#setting-up-your-development-environment).
 
 <br clear="left">
 
@@ -11,8 +11,8 @@ This guide covers what happens once you have changes ready to submit. For enviro
 Make sure you've:
 
 1. Forked and cloned the repository
-2. Set up your development environment (see [Quick start](../../CONTRIBUTING.md#quick-start))
-3. Created a branch (see [Branching conventions](../../CONTRIBUTING.md#branching-conventions))
+2. Set up your development environment (see [Setting up your development environment](../../CONTRIBUTING.md#setting-up-your-development-environment))
+3. Created a branch (see [Branching](../../CONTRIBUTING.md#branching))
 4. Made your changes and validated them
 
 > **Trivial docs fix?** GitHub's web editor (the pencil icon on any file) + the PR template is a legitimate path for typos, broken links, and one-line clarifications. You skip the local setup entirely; CI still runs the checks. Save the full local workflow for changes that need preflight.
@@ -66,7 +66,7 @@ GitHub loads the PR template automatically. Fill in each section:
 
 - **Summary:** What your PR does (one sentence)
 - **Changes:** List the files changed
-- **How to verify:** Concrete steps (`python scripts/run.py test --libraries timing`)
+- **How to verify:** Concrete steps (`pytest libraries/timing/tests/`)
 - **Device testing:** Evidence of on-device testing, or N/A (see [below](#device-testing))
 - **Version impact:** Bump type and affected libraries, or N/A for test/docs/infra changes
 - **Breaking changes:** Describe any removed or renamed public API, or None
@@ -87,7 +87,7 @@ Fix wraparound bug in ticks_diff when end is near zero and start is near max.
 
 ## How to verify
 
-Run `python scripts/run.py test --libraries timing` — new tests in `test_ticks.py` cover the boundary case.
+Run `pytest libraries/timing/tests/` — new tests in `test_ticks.py` cover the boundary case.
 
 ## Device testing
 
@@ -161,7 +161,7 @@ Common failures:
 | `validate-mpy` | mpy-cross failed to compile a library, or the staged bundle's `package.json` is broken | Build the bundle locally (`python scripts/run.py build`) and check the validate-mpy job log for the failing library |
 | `cross-runtime-tests` (MicroPython / CircuitPython) | Test fails under the unix-port build of one runtime | Reproduce locally with `python scripts/run.py test-micropython` or `test-circuitpython` |
 
-For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#development-environment).
+For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#setting-up-your-development-environment).
 
 ## Review and merge
 
@@ -191,7 +191,7 @@ git checkout -b fix/next-change
 | Step | Command |
 |------|---------|
 | Create branch | `git checkout -b fix/description` |
-| Run tests | `python scripts/run.py test --libraries <name>` |
+| Run tests | `pytest libraries/<name>/tests/` |
 | Run lint | `python scripts/run.py lint` |
 | Full check | `python scripts/run.py preflight` |
 | Commit | `git add -A && git commit` |
