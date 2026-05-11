@@ -278,7 +278,7 @@ Rebasing keeps history linear and avoids merge commits cluttering the PR.  See [
 
 ## Preflight in depth
 
-`python scripts/run.py preflight` is the one command this guide asks you to memorise.  It runs the automated checks from the [Testing](#testing) section below — CPython unit tests, the same tests under MicroPython and CircuitPython unix-port builds, and example-import checks — plus lint, docs, and version gates.  On-device functional tests are opt-in (`--with-functional`).  A few things worth knowing about how preflight behaves:
+`python scripts/run.py preflight` is the one command this guide asks you to memorise.  It runs the automated checks from the [Testing](#testing) section below — CPython unit tests, the same tests under MicroPython and CircuitPython unix-port builds, and example-import checks — plus lint, docs, and version gates.  On-device functional tests are opt-in (`--with-functional`).
 
 ### When to run it
 
