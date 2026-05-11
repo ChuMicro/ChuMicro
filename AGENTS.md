@@ -227,6 +227,7 @@ Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/
 | `audit-integration` | Cross-library boundary audit |
 | `audit-workspace` | Mono-repo-wide audit |
 | `audit-publishable-isolation` | Cross-repo audit for mono-repo concept leaks into shipped artifacts |
+| `audit-docs` | User-facing markdown doc audit — cold-reader readability, AI-tic phrases, jargon, unverified claims, section flow |
 
 `end-of-session` is a human-only checklist; agents use `task-checkpoint`.
 
