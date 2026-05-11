@@ -1702,16 +1702,16 @@ def test_libraries_functional(
     if keyword_parts:
         command.extend(["-k", " and ".join(keyword_parts)])
     if runtime is not None:
-        command.extend(["--chumicro-runtime", runtime])
+        command.extend(["--runtime", runtime])
     if micropython_device is not None:
-        command.extend(["--chumicro-micropython-device", micropython_device])
+        command.extend(["--micropython-device", micropython_device])
     if circuitpython_device is not None:
-        command.extend(["--chumicro-circuitpython-device", circuitpython_device])
+        command.extend(["--circuitpython-device", circuitpython_device])
     if deploy_mode is not None:
-        command.extend(["--chumicro-deploy-mode", deploy_mode])
+        command.extend(["--deploy-mode", deploy_mode])
     command.extend([
-        "--chumicro-pr-summary",
-        "--chumicro-pr-summary-command",
+        "--pr-summary",
+        "--pr-summary-command",
         _format_test_libraries_functional_command(
             runtime, micropython_device, circuitpython_device,
             library, file_filter, function_filter, deploy_mode,

@@ -1,6 +1,6 @@
 """Markdown PR-summary rendering for device test runs.
 
-The ``--chumicro-pr-summary`` hook of the chumicro-pytest-device
+The ``--pr-summary`` hook of the chumicro-pytest-device
 plugin consumes per-test reports and feeds
 :func:`format_pr_summary_block` a :class:`DeviceRunResult` list
 to render the final Markdown block users paste into PRs.

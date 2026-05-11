@@ -150,5 +150,5 @@ walks users through fixes.
   in the graph.
 * Existing functional-test suites assuming RAM mode by default need
   per-suite override audits — most pass through unchanged because
-  pytest-device's `--chumicro-deploy-mode` flag still works; only
+  pytest-device's `--deploy-mode` flag still works; only
   the *unflagged* default changes from `ram` to `flash`.

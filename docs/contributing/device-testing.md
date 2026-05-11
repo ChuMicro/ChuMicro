@@ -259,12 +259,12 @@ Driving pytest directly gives you access to the same overrides `test-libraries-f
 
 | Flag | Purpose |
 |---|---|
-| `--chumicro-runtime {micropython,circuitpython,both}` | Override `defaults.ide_runtime` from `devices.yml`. |
-| `--chumicro-micropython-device <id>` | Override `defaults.micropython` for this run. |
-| `--chumicro-circuitpython-device <id>` | Override `defaults.circuitpython` for this run. |
-| `--chumicro-deploy-mode {ram,flash}` | Override each device's `deploy_mode`. |
-| `--chumicro-pr-summary` | Print the Markdown PR block at session end (paste-ready).  Opt-in so IDE play-button runs stay quiet. |
-| `--chumicro-pr-summary-command <str>` | Literal command string rendered inside the PR block's `- Command:` line.  `test-libraries-functional` passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare `pytest`. |
+| `--runtime {micropython,circuitpython,both}` | Override `defaults.ide_runtime` from `devices.yml`. |
+| `--micropython-device <id>` | Override `defaults.micropython` for this run. |
+| `--circuitpython-device <id>` | Override `defaults.circuitpython` for this run. |
+| `--deploy-mode {ram,flash}` | Override each device's `deploy_mode`. |
+| `--pr-summary` | Print the Markdown PR block at session end (paste-ready).  Opt-in so IDE play-button runs stay quiet. |
+| `--pr-summary-command <str>` | Literal command string rendered inside the PR block's `- Command:` line.  `test-libraries-functional` passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare `pytest`. |
 
 ## Run workbench functional tests
 

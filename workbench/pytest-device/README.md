@@ -43,7 +43,7 @@ def test_heartbeat_fires_on_real_clock() -> None:
 Run on every device targeted by your `devices.yml` defaults:
 
 ```bash
-pytest libraries/timing/functional_tests --chumicro-runtime both
+pytest libraries/timing/functional_tests --runtime both
 ```
 
 The plugin discovers the board, stages `chumicro_timing/src/` + the test, executes on-device, parses the on-device pytest result back, and reports PASS / FAIL through host-side pytest.
@@ -62,12 +62,12 @@ The plugin discovers the board, stages `chumicro_timing/src/` + the test, execut
 
 | Option | Effect |
 |---|---|
-| `--chumicro-runtime {micropython,circuitpython,both}` | Override `defaults.ide_runtime` |
-| `--chumicro-micropython-device <id>` | Override `defaults.micropython` |
-| `--chumicro-circuitpython-device <id>` | Override `defaults.circuitpython` |
-| `--chumicro-deploy-mode {ram,flash}` | Override the per-device deploy mode |
-| `--chumicro-pr-summary` | Append a markdown summary block to stdout at end of session |
-| `--chumicro-pr-summary-command <text>` | The command that re-runs the failed tests, included in the summary |
+| `--runtime {micropython,circuitpython,both}` | Override `defaults.ide_runtime` |
+| `--micropython-device <id>` | Override `defaults.micropython` |
+| `--circuitpython-device <id>` | Override `defaults.circuitpython` |
+| `--deploy-mode {ram,flash}` | Override the per-device deploy mode |
+| `--pr-summary` | Append a markdown summary block to stdout at end of session |
+| `--pr-summary-command <text>` | The command that re-runs the failed tests, included in the summary |
 
 ## Where this fits
 

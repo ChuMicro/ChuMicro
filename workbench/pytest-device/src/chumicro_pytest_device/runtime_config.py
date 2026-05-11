@@ -81,7 +81,7 @@ def set_runtime_config(
         the resolved deploy mode is RAM, ``transport.stage()`` raises
         :class:`chumicro_deploy.UnsupportedExtraFilesError`; switch
         the device's ``deploy_mode`` to ``"flash"`` (or set
-        ``--chumicro-deploy-mode=flash``) to fix.
+        ``--deploy-mode=flash``) to fix.
     """
     config.stash[_RUNTIME_CONFIG_KEY] = payload
     config.stash[_REQUIRED_KEYS_KEY] = tuple(required_keys)

@@ -1496,7 +1496,7 @@ class TestPytestCollectionModifyItemsFeatures:
 
         session = MagicMock(spec=pytest.Session)
         session.config = MagicMock()
-        # The default getoption ('--chumicro-deploy-mode') returns ``None``.
+        # The default getoption ('--deploy-mode') returns ``None``.
         session.config.getoption = lambda *_args, **_kwargs: None
         session._device_transport_cache = _StubTransportCache(transport_features)
         # Drop the auto-spec attribute pre-set by MagicMock so the

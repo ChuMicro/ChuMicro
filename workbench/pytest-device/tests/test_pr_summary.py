@@ -64,7 +64,7 @@ class TestFormatPrSummaryBlock:
             identifier="pico-w", passed=5, duration_seconds=1.5,
         )
         block = pr_summary.format_pr_summary_block(
-            command="pytest libraries/timing/functional_tests --chumicro-runtime micropython",
+            command="pytest libraries/timing/functional_tests --runtime micropython",
             per_device_results=[result],
         )
         # Header + separator + data row present.
@@ -98,7 +98,7 @@ class TestFormatPrSummaryBlock:
             passed=3, errors=2, deploy_mode="flash",
         )
         block = pr_summary.format_pr_summary_block(
-            command="pytest libraries/timing/functional_tests --chumicro-runtime both",
+            command="pytest libraries/timing/functional_tests --runtime both",
             per_device_results=[mp_result, cp_result],
         )
         # Both devices appear as table rows.
