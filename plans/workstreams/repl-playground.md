@@ -1,9 +1,12 @@
 # Workstream: REPL Playground
 
-Status: `phase-1-planned` — backlog drafted 2026-04-21; concrete Phase 1
-implementation plan added 2026-04-27 below.  Triggered now that
-project-workspace closed (Phase 7) and the immediate workspace-template
-testing-infrastructure audit shipped.
+Status: `phase-1-shipped` — Phase 1a/1b/1c landed across commits
+`abc81ff4` (line mode + per-device history), `835eb5c2` (`:edit` /
+`:save` / `:load` / `:snippets`), and `730301f6` (tab completion),
+followed by audit pass `2ff929d4`.  Phase 2+ (device introspection,
+recording, multi-device, fun layer) remains unscoped — see
+`## Phase 1 — shipped` below for what landed and `## Feature buckets`
+for what's still on the menu.
 
 ## Purpose
 
@@ -165,6 +168,21 @@ Three input modes, hot-toggleable mid-session:
 ### Phase 1 success criteria
 
 A user `pip install chumicro-repl && chumicro-repl --device /dev/cu.usbmodem1101` lands in line mode by default, gets up-arrow history that persists across sessions, can hit `:edit` to compose a function in `vim`, and can tab-complete attributes on imported modules.  Beats `mpremote` on every dimension that matters for interactive work.
+
+## Phase 1 — shipped
+
+What landed (commits in chronological order):
+
+- **1a — line mode + persistent history** (`abc81ff4`): `prompt_toolkit.PromptSession` with cursor edit, history navigation, `Ctrl-R` reverse search; per-device history at `~/.chumicro-repl/history/<sanitized-address>/history.txt`; `--mode {line,passthrough}` CLI flag defaulting to line.
+- **1b — editor handoff + snippets** (`835eb5c2`): `:edit` opens `$EDITOR` with the last 10 input lines prefilled, ships on save; `:save <name>` / `:load <name>` / `:snippets` for named snippets at `~/.chumicro-repl/snippets/`.
+- **1c — tab completion** (`730301f6`): on `<Tab>`, queries device `dir()` on the current namespace, caches per-session; `:rescan` invalidates the cache after `import`.
+- **Audit pass** (`2ff929d4`): post-Phase-1 cleanup across the package.
+
+Phase 1 follow-up shipped 2026-05-10 (this session):
+
+- **Line-mode key bindings match `mpremote` / passthrough TUI**: `Ctrl-C` forwards `\x03` to the device (interrupts a running program — the standard REPL convention), `Ctrl-D` at an empty prompt forwards `\x04` (soft-reboot), `Ctrl-X` is the local exit.  Previously, `Ctrl-C` exited line mode entirely, leaving the user with no way to interrupt a runaway loop without dropping the serial connection.
+
+What's deliberately deferred (Phase 2+): every feature in `## Feature buckets` above except the Phase 1 items.  The biggest natural next cluster is **device introspection** (`:pins` / `:fs` / `:mem` / `:reset` / `:pin`) — independently shippable, high utility per line of code, and the user-visible "playground" feel that motivates this workstream's name.
 
 ## Success criteria
 

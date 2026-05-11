@@ -11,7 +11,11 @@ from chumicro_repl.line_mode import (
     BUILTIN_COMMANDS,
     DEFAULT_HISTORY_ROOT,
     LineModeContext,
+    _ExitLineMode,
+    _forward_ctrl_c,
+    _forward_ctrl_d,
     _split_command,
+    build_line_mode_key_bindings,
     format_line_mode_banner,
     history_path_for,
     run_line_mode,
@@ -198,6 +202,15 @@ class TestFormatLineModeBanner:
         assert "/dev/cu.fake" in banner
         assert ":help" in banner
         assert ":quit" in banner
+
+    def test_advertises_mpremote_style_key_bindings(self) -> None:
+        """Users learn the keys from the banner — must list all three."""
+        banner = format_line_mode_banner(address="/dev/cu.fake")
+        assert "Ctrl-X" in banner
+        assert "Ctrl-C" in banner
+        assert "Ctrl-D" in banner
+        assert "interrupt" in banner
+        assert "soft-reboot" in banner
 
 
 # ---------------------------------------------------------------------------
@@ -589,6 +602,134 @@ class TestEditCommand:
         assert "seed_b" in captured["seed"]
 
 
+class _FakeBuffer:
+    def __init__(self, text: str = "") -> None:
+        self.text = text
+        self.reset_called = 0
+
+    def reset(self) -> None:
+        self.reset_called += 1
+        self.text = ""
+
+
+class _FakeApp:
+    """Minimal prompt_toolkit ``Application`` stand-in for binding tests."""
+
+    def __init__(self, buffer_text: str = "") -> None:
+        self.current_buffer = _FakeBuffer(buffer_text)
+        self.exit_calls: list[dict[str, object]] = []
+
+    def exit(  # noqa: A003 — matches prompt_toolkit's method name
+        self,
+        result: object = None,
+        exception: BaseException | None = None,
+    ) -> None:
+        self.exit_calls.append({"result": result, "exception": exception})
+
+
+class _FakeEvent:
+    def __init__(self, app: _FakeApp) -> None:
+        self.app = app
+
+
+def _binding_for(bindings: object, key: str) -> object:
+    """Return the registered ``Binding`` for *key* (raises if missing)."""
+    pytest.importorskip("prompt_toolkit")
+    from prompt_toolkit.keys import Keys
+    target = {
+        "c-c": Keys.ControlC,
+        "c-d": Keys.ControlD,
+        "c-x": Keys.ControlX,
+    }[key]
+    for binding in bindings.bindings:  # type: ignore[attr-defined]
+        if binding.keys == (target,):
+            return binding
+    raise AssertionError(f"no binding registered for {key!r}")
+
+
+class TestForwardCtrlBytes:
+    """Standalone helpers — verify the byte-level contract first."""
+
+    def test_forward_ctrl_c_writes_etx(self) -> None:
+        port = _StubSerialPort()
+        _forward_ctrl_c(port)  # type: ignore[arg-type]
+        assert port.writes == [b"\x03"]
+
+    def test_forward_ctrl_d_writes_eot(self) -> None:
+        port = _StubSerialPort()
+        _forward_ctrl_d(port)  # type: ignore[arg-type]
+        assert port.writes == [b"\x04"]
+
+
+class TestKeyBindings:
+    """Key bindings forward Ctrl-bytes to the device, not the local prompt.
+
+    Verifies the convention change: ``Ctrl-C`` used to exit line mode,
+    leaving the user with no way to interrupt a runaway program.
+    """
+
+    def test_ctrl_c_forwards_to_device_and_clears_buffer(self) -> None:
+        pytest.importorskip("prompt_toolkit")
+        port = _StubSerialPort()
+        bindings = build_line_mode_key_bindings(port)  # type: ignore[arg-type]
+        binding = _binding_for(bindings, "c-c")
+        app = _FakeApp(buffer_text="half-typed-line")
+        event = _FakeEvent(app)
+        binding.handler(event)  # type: ignore[attr-defined]
+        assert port.writes == [b"\x03"], "Ctrl-C should send ETX to the device"
+        assert app.current_buffer.reset_called == 1, "local buffer should clear"
+        assert app.exit_calls == [{"result": "", "exception": None}]
+
+    def test_ctrl_d_forwards_to_device(self) -> None:
+        pytest.importorskip("prompt_toolkit")
+        port = _StubSerialPort()
+        bindings = build_line_mode_key_bindings(port)  # type: ignore[arg-type]
+        binding = _binding_for(bindings, "c-d")
+        app = _FakeApp(buffer_text="")
+        event = _FakeEvent(app)
+        binding.handler(event)  # type: ignore[attr-defined]
+        assert port.writes == [b"\x04"], "Ctrl-D should send EOT to the device"
+        assert app.exit_calls == [{"result": "", "exception": None}]
+
+    def test_ctrl_x_raises_exit_sentinel_locally(self) -> None:
+        pytest.importorskip("prompt_toolkit")
+        port = _StubSerialPort()
+        bindings = build_line_mode_key_bindings(port)  # type: ignore[arg-type]
+        binding = _binding_for(bindings, "c-x")
+        app = _FakeApp()
+        event = _FakeEvent(app)
+        binding.handler(event)  # type: ignore[attr-defined]
+        # Nothing leaves the host — Ctrl-X is the local-exit key.
+        assert port.writes == []
+        assert len(app.exit_calls) == 1
+        assert isinstance(app.exit_calls[0]["exception"], _ExitLineMode)
+
+
+class TestRunLineModeExitPaths:
+    """Loop handles the new ``_ExitLineMode`` sentinel from Ctrl-X."""
+
+    def test_exit_line_mode_exception_yields_clean_exit(
+        self, tmp_path: Path,
+    ) -> None:
+        class _CtrlXSession:
+            def prompt(self, _prompt_text: str = "") -> str:
+                raise _ExitLineMode
+
+        port = _stub_port()
+        output = io.StringIO()
+        exit_code = run_line_mode(
+            port,
+            output=output,
+            address="/dev/cu.fake",
+            history_root=tmp_path,
+            prompt_session=_CtrlXSession(),
+            time=_FastTime(),  # type: ignore[arg-type]
+        )
+        assert exit_code == 0
+        assert "bye" in output.getvalue()
+        assert port.writes == []  # type: ignore[attr-defined]
+
+
 class TestPromptSessionConstruction:
     """Real `prompt_toolkit.PromptSession` factory must build cleanly."""
 
@@ -610,3 +751,13 @@ class TestPromptSessionConstruction:
         # Path matches our convention.
         expected = history_path_for("/dev/cu.fake", root=tmp_path)
         assert Path(session.history.filename) == expected
+        # Mpremote-style key bindings are wired in — without these the
+        # user has no way to interrupt a runaway loop on the device.
+        assert session.key_bindings is not None
+        registered_keys = {
+            binding.keys for binding in session.key_bindings.bindings
+        }
+        from prompt_toolkit.keys import Keys
+        assert (Keys.ControlC,) in registered_keys
+        assert (Keys.ControlD,) in registered_keys
+        assert (Keys.ControlX,) in registered_keys
