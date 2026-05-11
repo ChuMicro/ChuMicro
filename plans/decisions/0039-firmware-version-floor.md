@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
-Related: [Decision 0015](0015-board-architecture-support.md) (board support tiers), [Decision 0029](0029-project-workspace.md) (project workspace architecture), [`plans/workstreams/beginner-onramp.md`](../workstreams/beginner-onramp.md)
+Related: [Decision 0015](0015-board-architecture-support.md) (board support tiers), [Decision 0029](0029-project-workspace.md) (project workspace architecture), [`plans/workstreams/archive/beginner-onramp.md`](../workstreams/archive/beginner-onramp.md)
 
 ## Context
 
@@ -77,5 +77,5 @@ This decision adds the *fourth* case — `REPL_REACHABLE` but the running firmwa
 - New module `chumicro_workspace.firmware_support` owns the floor constants + status enum + check function.  Future bumps land here.
 - `_cmd_add_device` gains a post-probe warning emit.  No new positional args, no flag changes — purely additive output.
 - `devices.yml`'s `firmware_version` probed-always slot starts being populated.  Existing entries written before this change have an empty `firmware_version`; that's fine — re-running `add-device --force` populates it.  No migration needed.
-- `plans/workstreams/beginner-onramp.md` Step 1 closes with this decision + the implementation slice that ships alongside it.
+- `plans/workstreams/archive/beginner-onramp.md` Step 1 closes with this decision + the implementation slice that ships alongside it.
 - The bootstrap wizard (Step 4 of beginner-onramp) will reuse the same `check_firmware_supported` + `explain_status` pair to drive the "your board is too old, want me to upgrade?" prompt — no second copy of the policy.
