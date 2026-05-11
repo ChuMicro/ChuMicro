@@ -18,7 +18,7 @@ A few things this shape means for contributing:
 
 - **Cross-runtime by default.**  Library code lands on devices that may have 256 KB of RAM and no `typing` module.  The tooling tests every library under all three runtimes automatically; you don't set up the cross-runtime builds yourself.
 - **Tests next to the code.**  Each library has its own `tests/` directory with CPython unit tests, and optionally a `functional_tests/` directory for tests that stage onto a real connected board.
-- **Strong tooling.**  Preflight (`python scripts/run.py preflight`) is one command that mirrors CI locally before you commit.
+- **Preflight mirrors CI.**  `python scripts/run.py preflight` is one command that runs every CI check locally before you commit.
 - **Lots of small libraries, not one big one.**  Most contributions touch a single library.  Bigger features that span libraries are easier to land as a sequence of per-library PRs than as one large change.
 
 The rest of this page walks through what that looks like in practice.
@@ -32,7 +32,7 @@ Not sure where to start?  These are real ways to contribute that don't require d
 - **Improve test coverage** — run `python scripts/run.py test --libraries <name>`, check the `Missing` column, and write tests for uncovered lines.
 - **Try a library on your board** and report what happened — even "it worked on my ESP32-S3" is valuable.  Use the [board test report](https://github.com/ChuMicro/ChuMicro/issues/new?template=board_test_report.yml) template.
 
-Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMicro/labels/good%20first%20issue) — scoped, described, ready to pick up.
+Browse [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions) for things people are working on or thinking about; smaller items are easier first PRs.
 
 ## Reading guide
 
@@ -43,6 +43,7 @@ Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMi
 | **Set up your environment** | [Setting up your development environment](#setting-up-your-development-environment) below |
 | **Understand the development loop** | [How development works here](#how-development-works-here) below |
 | **Walk through your first PR end-to-end** | [Your first change: a worked example](#your-first-change-a-worked-example) below |
+| **Understand the four test layers** | [Testing](#testing) below |
 | **Configure real-board testing** | [Device Testing](docs/contributing/device-testing.md) |
 | **Understand devices.yml / workspace.yml / secrets.toml** | [Workspace, devices, and secrets](docs/contributing/config-files.md) |
 | **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
@@ -171,7 +172,7 @@ A passing preflight is the bar for opening a PR.
 
 Every library has a per-library coverage gate (85% by default, configured in each library's `pyproject.toml`).  If your tests don't exercise enough lines, `run.py test` fails with the `Missing` column showing exactly which lines need coverage.
 
-Two thresholds exist: humans target the 85% baseline; AI agents pass `--coverage-threshold 94` to a higher gate ([Decision 0025](plans/decisions/0025-dual-coverage-thresholds.md)).  This is set up automatically — you don't choose.
+Two thresholds exist: humans target the 85% baseline; AI agents pass `--coverage-threshold 94` to a higher gate.  This is set up automatically — you don't choose.
 
 The [cheat sheet](docs/contributing/cheat-sheet.md) has the command for browsing covered vs uncovered lines as an HTML report.
 
@@ -181,7 +182,7 @@ Here's an end-to-end walkthrough of contributing a small change.  The example ta
 
 ### Pick something small
 
-Browse the [good-first-issue label](https://github.com/ChuMicro/ChuMicro/labels/good%20first%20issue) or pick a docstring you noticed could be clearer.  Smaller is better for a first PR — easier to review, faster to merge, builds confidence for a larger one.
+Pick a docstring you noticed could be clearer, a typo in a README, or a one-line fix from a recent commit you spotted.  Smaller is better for a first PR — easier to review, faster to merge, builds confidence for a larger one.
 
 ### Branch off main
 
@@ -201,7 +202,7 @@ Make the change.  Then run the test for the library you touched:
 pytest libraries/timing/tests/
 ```
 
-The [cheat sheet](docs/contributing/cheat-sheet.md) has the focused-test variants — `-k` filters, stop-on-first-failure, scoping to one file or function.  Use those while iterating tight.
+The [cheat sheet](docs/contributing/cheat-sheet.md) has the focused-test variants — `-k` filters, stop-on-first-failure, scoping to one file or function.  Reach for those during tight iteration loops.
 
 ### Run preflight before committing
 
@@ -275,13 +276,9 @@ git push --force-with-lease    # update the PR (force is safe with --force-with-
 
 Rebasing keeps history linear and avoids merge commits cluttering the PR.  See [Git's rebase docs](https://git-scm.com/book/en/v2/Git-Branching-Rebasing) if you hit conflicts you're unsure how to resolve.
 
-## Branching
-
-All work happens on branches off `main`; PRs target `main`.  No `develop` branch.  Prefix branch names with `fix/`, `docs/`, or `feature/` to signal intent at a glance.
-
 ## Preflight in depth
 
-`python scripts/run.py preflight` is the one command you have to remember.  A few things worth knowing about how it behaves:
+`python scripts/run.py preflight` is the one command this guide asks you to memorise.  It runs three of the four test layers covered in [Testing](#testing) below — CPython unit tests, the same tests under MicroPython and CircuitPython unix-port builds, and example-import checks — plus lint, docs, and version gates.  On-device functional tests are opt-in (`--with-functional`).  A few things worth knowing about how preflight behaves:
 
 ### When to run it
 
@@ -320,17 +317,63 @@ Docs-only PRs and trivial typo fixes can skip the full preflight — CI handles 
 
 </details>
 
-## Testing on real hardware
+## Testing
 
-CI runs every library's tests under unix-port builds of CircuitPython and MicroPython, which catches most cross-runtime issues without anyone needing a board plugged in.  Real-hardware tests are an extra layer for behavior that only surfaces on a physical device — timing-sensitive code, hardware I/O, anything touching USB-CDC or the device filesystem.
+ChuMicro tests at four layers.  Each catches a different class of bug; together they make it hard for a regression to reach a user.  Preflight runs the first three on every commit; the fourth (manual example runs on a real board) is opt-in but worth it before a release.
 
-**You usually don't need it.**  Docs changes, test additions, infrastructure changes, trivial fixes, and most library code changes pass CI without a real board.  Reach for hardware testing when:
+### Unit tests (CPython)
 
-- Your change is timing-sensitive or interacts with hardware (GPIO, USB, filesystem).
-- A reviewer asks for it.
-- You're working on `chumicro-deploy`, `chumicro-pytest-device`, or one of the on-device transport paths.
+The everyday layer.  Each library has a `tests/` directory next to its source, with pytest tests that exercise the code on CPython.  Fast — a full library's tests run in a second or two.
 
-**When you do test on a board,** the short version is: plug it in, register it with `python scripts/run.py add-device`, run `python scripts/run.py test-libraries-functional --library <name>`.  Full hardware setup (deploy modes, multi-runtime, wifi credentials, board recipes, IDE integration) lives in [Device Testing](docs/contributing/device-testing.md).
+```bash
+pytest libraries/timing/tests/
+```
+
+These tests catch logic bugs, regressions in covered code paths, and API behavior changes.  The shape: construct the object under test with fakes injected for any hardware-touching dependencies (sockets, ticks, I2C buses), then assert observable behavior.  Each library's `testing.py` ships fakes downstream tests can import (`from chumicro_timing.testing import FakeTicks`).
+
+Add a unit test when you add code.  The per-library coverage gate fails preflight if you don't.
+
+### Cross-runtime unit tests
+
+The same unit tests, run under MicroPython and CircuitPython's "unix port" builds — desktop versions of the device runtimes that catch "works on CPython, breaks on the device" before code reaches a board.
+
+```bash
+python scripts/run.py test-all-runtimes
+```
+
+The first run builds the unix-port binaries under `.tools/` (gitignored, about a minute); subsequent runs reuse them.  CI runs the same sweep on every push, so contributors without unix-port builds locally still get the protection.
+
+These tests catch the runtime-specific gotchas — `typing` imports that don't exist on devices, `from __future__` imports that fail there, relative imports that break CircuitPython RAM-mode deploys, library quirks in the device standard libraries.
+
+Test files that need to skip on a particular runtime declare it via the `__chumicro_runtimes__` module marker — see the [Style Guide](docs/contributing/style-guide.md) for the format.
+
+### On-device functional tests
+
+For behavior that only emerges on real hardware — USB-CDC timing, filesystem semantics, GPIO state, anything a fake can't realistically model.  These tests live in `functional_tests/` (parallel to `tests/`) and run in the device's actual Python runtime.
+
+How it works: the `chumicro-pytest-device` plugin intercepts pytest collection under `functional_tests/`, stages the test source and library source onto a connected board, runs the test inside the device runtime, and reports the result back through the host's pytest — same UX as any other pytest run.
+
+```bash
+pytest libraries/timing/functional_tests/
+```
+
+You need a board plugged in and registered (`python scripts/run.py add-device …`).  Without a `devices.yml`, the tests skip cleanly — no error, no false failure.  Full hardware setup (deploy modes, multi-runtime, wifi credentials, IDE play-button integration) lives in [Device Testing](docs/contributing/device-testing.md).
+
+Write a functional test only when the behavior under test can't be proven with constructor injection + fakes.  Most contributions don't need new ones; reach for functional tests when you're touching `chumicro-deploy`, `chumicro-pytest-device`, the on-device transport paths, or any code where the bug only shows up on a real device.
+
+### Example execution (manual testing)
+
+Every library ships runnable examples in `libraries/<name>/examples/`.  Two pieces of testing cover them.
+
+The automated piece — `verify-examples` — AST-parses every example file to confirm it imports cleanly with the library's declared deps.  This catches "the example references a function the library doesn't export" before a user does.  Preflight runs it on every commit.
+
+The manual piece — deploying an example to a real board — is how to confirm the documented pattern still works on actual hardware:
+
+```bash
+chumicro-workspace deploy-example timing heartbeat_blink
+```
+
+This is the smoke-test that catches "unit tests pass but the documented quickstart no longer runs."  Not required on every PR — reach for it on API changes, significant refactors, or anything that affects user-visible behavior.  A release-prep pass typically includes deploying each touched library's examples to the project's board matrix.
 
 ## Commit messages
 
@@ -458,12 +501,6 @@ Why: `const()`, `memoryview`, pre-allocated buffers all help on a 256-KB MCU but
 
 How: write correct code first.  When a library hits a memory ceiling on a real board, optimize.  The [Style Guide § Memory patterns](docs/contributing/style-guide.md#memory-patterns-library-code-only) section has the cookbook for when you get there.
 
-### No backwards-compatibility burden
-
-Why: nothing has shipped to PyPI yet at a 1.0+ version.  Every library is `0.x`.  Adding migration shims, dual-read paths, or compat re-exports for unreleased code multiplies maintenance for no user benefit.
-
-How: edit forward.  If a public symbol changes, change it everywhere and bump VERSION.  This rule retires at the first stable (1.0+) release; the project will grow real compat discipline then.
-
 ## Common mistakes
 
 | Symptom | Cause | Fix |
@@ -523,17 +560,7 @@ Once you're comfortable with the basic loop, these resources explain the *why* b
 - **[`AGENTS.md`](AGENTS.md)** — the AI-agent operating manual.  Useful for humans too as a strict-rules reference.
 - **[Workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)** — the clone-and-go starter repo for projects built *on* ChuMicro.  Reading it shows how a real downstream user assembles libraries into an application.
 
-Sub-docs under `docs/contributing/`:
-
-- [Cheat sheet](docs/contributing/cheat-sheet.md) — the dense one-page reference once the basics feel familiar
-- [Style guide](docs/contributing/style-guide.md) — naming, type annotations, docstrings, linting in detail
-- [Workspace, devices, and secrets](docs/contributing/config-files.md) — the three gitignored config files
-- [Device testing](docs/contributing/device-testing.md) — the full real-hardware workflow
-- [Releases and Promotion](docs/contributing/releases.md) — experimental vs stable channels
-- [Pull requests](docs/contributing/pull-requests.md) — conventions, template, review flow
-- [Adding a New Library](docs/contributing/new-library.md) — device library scaffolder + lifecycle
-- [Adding a Workbench Package](docs/contributing/workbench.md) — host-only tool scaffolder + lifecycle
-- [Working with Agents](docs/contributing/working-with-agents.md) — using AI agents on this project
+For per-topic sub-docs (style guide, device testing, releases, PR flow, new library, workbench, agents) see the [Reading guide](#reading-guide) table above.
 
 ## License
 
