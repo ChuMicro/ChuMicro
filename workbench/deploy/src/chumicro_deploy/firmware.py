@@ -330,33 +330,38 @@ def _wait_for_drive_gone(
     ) is True
 
 
-def _enter_uf2_bootloader_programmatic(
-    device: Device,
-) -> bool:
-    """Try to put *device* into UF2 bootloader via the transport.
+def _dispatch_bootloader_reset(device: Device) -> bool:
+    """Open *device*'s transport and dispatch its ``reset_into_bootloader``.
 
-    Delegates to :meth:`TransportProtocol.reset_into_bootloader`,
-    which knows the right runtime-specific script to send
+    Delegates to :meth:`TransportProtocol.reset_into_bootloader`, which
+    knows the right runtime-specific script to send
     (``machine.bootloader()`` on MP, the ``microcontroller`` API on
     CP).  Returns ``True`` when the command was dispatched; the
-    caller's drive-poll remains the authoritative success signal
-    because the board's serial link drops as it resets.  Returns
-    ``False`` when connect() failed, the runtime does not expose a
-    bootloader API, or the dispatch raised — callers fall back to
-    the interactive manual-entry prompt.
+    caller's drive-poll / serial-port-snapshot is the authoritative
+    success signal because the board's serial link drops as it
+    resets.  Returns ``False`` when connect() failed, the runtime
+    does not expose a bootloader API, or the dispatch raised —
+    callers fall back to interactive manual-entry prompts.
+
+    Shared by the UF2 path (uses the bool return) and the esptool
+    path (which polls a serial-port baseline for the bootloader
+    re-enumeration regardless of what the dispatch reports).
     """
-    transport = device.create_transport()
     try:
-        transport.connect()
-    except Exception:  # pragma: no cover — hardware-only connect failures
-        return False
-    try:
-        return transport.reset_into_bootloader()
-    finally:
+        transport = device.create_transport()
         try:
-            transport.disconnect()
-        except Exception:  # pragma: no cover — serial may already be gone
-            pass
+            transport.connect()
+        except Exception:  # pragma: no cover — hardware-only connect failures
+            return False
+        try:
+            return transport.reset_into_bootloader()
+        finally:
+            try:
+                transport.disconnect()
+            except Exception:  # pragma: no cover — serial may already be gone
+                pass
+    except Exception:  # pragma: no cover — best-effort hardware path
+        return False
 
 
 def _prompt_manual_bootloader_entry(
@@ -366,8 +371,8 @@ def _prompt_manual_bootloader_entry(
 ) -> None:
     """Ask the user to manually put the board in bootloader mode.
 
-    Used when :func:`_enter_uf2_bootloader_programmatic` returns
-    ``False`` or when UF2 drive detection fails.  The prompt text
+    Used when :func:`_dispatch_bootloader_reset` returns ``False``
+    or when UF2 drive detection fails.  The prompt text
     is general because the correct physical action depends on the
     board: hold BOOTSEL on a Pi Pico, hold GPIO0 on a bare ESP32,
     double-tap RESET on some Adafruit boards.
@@ -446,7 +451,7 @@ def _flash_firmware_uf2(
     """Drive the full UF2 reflash flow — bootloader, copy, reboot."""
     # Step 1: put the board in bootloader mode.
     _report(on_progress, 0.0, "entering bootloader")
-    programmatic_ok = _enter_uf2_bootloader_programmatic(device)
+    programmatic_ok = _dispatch_bootloader_reset(device)
 
     # Step 2: locate the UF2 drive (explicit override → auto-detect
     # → interactive prompt → give up).
@@ -634,19 +639,10 @@ def _enter_esp32_rom_bootloader(
     if "cu.usbmodem01" in device.address or device.address.endswith("usbmodem01"):
         return device.address
 
-    # 2. Programmatic entry via the transport.
-    try:
-        transport = device.create_transport()
-        try:
-            transport.connect()
-            transport.reset_into_bootloader()
-        finally:
-            try:
-                transport.disconnect()
-            except Exception:  # pragma: no cover — serial may already be gone
-                pass
-    except Exception:  # pragma: no cover — best-effort hardware path
-        pass
+    # 2. Programmatic entry via the transport.  Discard the bool —
+    #    the serial-port baseline poll below is the authoritative
+    #    success signal regardless of what the dispatch reports.
+    _dispatch_bootloader_reset(device)
 
     new_port = _wait_for_new_serial_port(
         baseline, timeout=8.0, sleep=sleep, monotonic=monotonic, globs=globs,

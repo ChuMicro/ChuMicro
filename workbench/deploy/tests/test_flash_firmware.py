@@ -14,7 +14,7 @@ from chumicro_deploy.firmware import (
     _copy_uf2_to_drive,
     _download_firmware,
     _enter_esp32_rom_bootloader,
-    _enter_uf2_bootloader_programmatic,
+    _dispatch_bootloader_reset,
     _flash_firmware_esptool,
     _flash_firmware_uf2,
     _prompt_manual_bootloader_entry,
@@ -244,7 +244,7 @@ class TestBootloaderEntry:
                 return fake
 
         device = DeviceForTest(transport="circuitpython", address="/dev/x")
-        assert _enter_uf2_bootloader_programmatic(device) is True
+        assert _dispatch_bootloader_reset(device) is True
         method_order = [call[0] for call in fake.calls]
         assert method_order == ["connect", "reset_into_bootloader", "disconnect"]
 
@@ -258,7 +258,7 @@ class TestBootloaderEntry:
                 return fake
 
         device = DeviceForTest(transport="micropython", address="/dev/x")
-        assert _enter_uf2_bootloader_programmatic(device) is False
+        assert _dispatch_bootloader_reset(device) is False
 
     def test_connect_failure_returns_false(self) -> None:
         class FailingTransport:
@@ -299,7 +299,7 @@ class TestBootloaderEntry:
                 return FailingTransport()
 
         device = DeviceForTest(transport="circuitpython", address="/dev/x")
-        assert _enter_uf2_bootloader_programmatic(device) is False
+        assert _dispatch_bootloader_reset(device) is False
 
 
 class TestManualBootloaderPrompt:
