@@ -776,6 +776,12 @@ class CircuitpythonTransport:
         volume's ``boot_out.txt`` for a match.  Raises when the probe
         is unavailable or no candidate matches — silently returning
         *drive_path* would risk landing on the wrong board's mount.
+
+        Reads each ``boot_out.txt`` exactly once into a
+        ``(path, uid, machine)`` list and matches both fields
+        in-memory — the UID and machine probes target the same files
+        on the same FAT volumes, so reading twice (one per probe)
+        would double the disk I/O on the auto-correct path.
         """
         probe = self.probe_implementation()
         if probe is None or (not probe.uid and not probe.machine):
@@ -785,14 +791,19 @@ class CircuitpythonTransport:
                 f"probe.  Hard-reset the board (RESET button or "
                 f"unplug/replug) to regenerate boot_out.txt, then retry."
             )
+        candidate_identities = [
+            (candidate, *_read_boot_out_identity(candidate))
+            for candidate in _circuitpy_volume_candidates()
+        ]
         if probe.uid:
-            corrected = find_circuitpy_drive_for_uid(probe.uid)
-            if corrected is not None:
-                return Path(corrected)
+            target = probe.uid.upper()
+            for candidate, uid, _machine in candidate_identities:
+                if uid and uid == target:
+                    return candidate
         if probe.machine:
-            corrected = find_circuitpy_drive_for_machine(probe.machine)
-            if corrected is not None:
-                return Path(corrected)
+            for candidate, _uid, machine in candidate_identities:
+                if machine and machine == probe.machine:
+                    return candidate
         identity = probe.uid or probe.machine
         raise CircuitpythonTransportError(
             f"CIRCUITPY drive at {drive_path} has no boot_out.txt and "
