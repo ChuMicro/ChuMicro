@@ -19,7 +19,7 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 - `workspace.yml` — host-side machinery (library_sources, deploy_targets, quality knobs); not a credentials file
 - `secrets.toml` — workspace-wide credentials + device-bound defaults (wifi SSID/password, broker host/port/auth) that flow into `runtime_config.msgpack` at deploy time.  Per-library `functional_tests/config.toml` overrides land on top via deep-merge.
 
-The three-file split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md) (extended by the config-shape-beginner-ergonomics workstream): `workspace.yml` is host-only, `secrets.toml` is device-bound.  Setup materialises starters from the canonical workbench-shipped templates; fill in your wifi password / broker auth in `secrets.toml`, then leave it gitignored.  Do not commit any of the three.
+Full per-file detail (shape, purpose, who edits what) lives in [config-files.md](config-files.md).  The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).
 
 ## 1. Generate the starter files
 

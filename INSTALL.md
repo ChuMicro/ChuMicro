@@ -86,7 +86,7 @@ pip install chumicro-timing-experimental
 
 ## Project workspaces
 
-For a real project — multiple libraries, deploy automation, no live-on-device editing of fragile CIRCUITPY drives — use the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  `python3 run.py setup` self-bootstraps the venv and installs the workspace tooling; `python run.py new my_project` scaffolds a project from the template; `python run.py deploy my_project` ships it to your board safely (atomic flash mode by default — no half-written files when something goes wrong, no FAT-filesystem wear from save-on-every-keystroke).
+For a real project — multiple libraries, deploy automation, no live-on-device editing of fragile CIRCUITPY drives — use the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  `python3 run.py setup` self-bootstraps the venv and installs the workspace tooling; `python run.py new my_project` scaffolds a project from the template; `python run.py deploy my_project` ships it to your board with verified flash deploys by default — rsync + post-write checksum, plus no FAT-filesystem wear from save-on-every-keystroke.
 
 Recommended even for a single-project board.
 

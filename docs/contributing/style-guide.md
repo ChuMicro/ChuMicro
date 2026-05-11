@@ -15,8 +15,8 @@ We use descriptive names so everyone can read the code without extra context. Th
 | Rule | Example | Enforced by |
 |---|---|---|
 | No single-letter variables (except `_` and for-loop targets) | `index`, not `i` in assignments; `for i in range(10)` is fine | `CHU001` linter |
-| Abbreviations we spell out | `environment`, not `env`; `buffer`, not `buf`; `source`, not `src`; `command`, not `cmd`; `message`, not `msg`; `error`, not `err`; `reference`, not `ref`; `address`, not `addr`; `exception`, not `exc`; `execute`, not `exec` | `CHU001` linter |
-| Spell them out as suffixes too | `base_reference`, not `base_ref`; `build_environment`, not `build_env` | `CHU001` linter |
+| Abbreviations to expand | `env` → `environment`; `buf` → `buffer`; `src` → `source`; `cmd` → `command`; `msg` → `message`; `err` → `error`; `ref` → `reference`; `addr` → `address`; `exc` → `exception`; `exec` → `execute` | `CHU001` linter |
+| Same expansions apply as suffixes | `base_ref` → `base_reference`; `build_env` → `build_environment` | `CHU001` linter |
 | Short-but-complete words are fine | `dir`, `key`, `tag`, `raw`, `pin`, `led`, `ok`, `end`, `args`, `config` | — |
 | For-loop targets are exempt | `for i in range(10)`, `for k, v in items()` | — |
 | Suppress with `# noqa: CHU001` | Only when matching an upstream API that you cannot rename | — |
@@ -285,6 +285,8 @@ open htmlcov/index.html
 
 Covered lines show in green, missed lines in red. Much easier than reading line numbers from the terminal output. (`htmlcov/` is gitignored.)
 
+
+## Lint
 
 `python scripts/run.py lint` runs three tools back to back. If all three pass, your code is style-correct.
 

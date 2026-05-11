@@ -46,7 +46,7 @@ Affects: timing
 
 Use imperative mood in the subject — "Add test", not "Added" or "Adds". Name affected libraries in the body.
 
-> **Working with an AI agent?** Strip any default agent-authorship trailer (e.g. `Co-Authored-By: Claude …`) before committing.  Commits in this repo are authored by the human running the agent — see the AGENTS.md non-negotiable rules and the `git-commit` skill.  Most agent harnesses add the trailer automatically; the `git-commit` skill includes a pre-commit step to remove it.
+> **Working with an AI agent?** Strip any default agent-authorship trailer (e.g. `Co-Authored-By: Claude …`) before committing.  Commits in this repo are authored by the human running the agent — see the AGENTS.md non-negotiable rules and the `git-commit` skill.  Most agent harnesses add the trailer automatically; strip it from your commit message before invoking `git commit`.
 
 ## Push and open the PR
 
@@ -151,7 +151,7 @@ Common failures:
 | Check | Typical cause | Fix |
 |---|---|---|
 | `test` | Coverage below threshold | Follow the hint below the FAIL line — it points to the uncovered lines |
-| `lint` | Formatting issue or banned name/whitespace | Run `python scripts/run.py lint` locally — it runs Ruff plus the workspace's `CHU001` (names) and `CHU002`–`CHU005` (whitespace) checks |
+| `lint` | Formatting issue, banned name, or one of the workspace's `CHU0NN` checks | Run `python scripts/run.py lint` locally — the [Style Guide](style-guide.md#lint) lists every rule the linter enforces |
 | `version-check` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
 | `api-check` | Removed or renamed a public function | Bump VERSION to next minor/major |
 | `validate-mpy` | mpy-cross failed to compile a library, or the staged bundle's `package.json` is broken | Build the bundle locally (`python scripts/run.py build`) and check the validate-mpy job log for the failing library |

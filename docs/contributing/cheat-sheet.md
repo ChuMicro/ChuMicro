@@ -27,7 +27,7 @@ git add -A && git commit              # imperative subject, explain why
 git push -u origin fix/my-change      # then open PR on GitHub
 ```
 
-## The 10 projects
+## The 10 rules
 
 1. **One command to rule them all:** `python scripts/run.py preflight`. If it passes, CI will pass.
 2. **Use descriptive names.** The linter catches abbreviations and suggests replacements. Single-letter for-loop targets (`for i in range(10)`) are fine.
@@ -85,6 +85,7 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 | Run real-board functional tests for one library | `python scripts/run.py test-libraries-functional --library timing` |
 | Run real-board tests on both runtimes | `python scripts/run.py test-libraries-functional --runtime both` |
 | Run workbench hardware-gated functional tests | `python scripts/run.py test-workbench-functional --workbench deploy` |
+| Wipe a wedged board (last-resort) | `chumicro-workspace reset-board --device <id> --yes` |
 
 ### Docs and publishing
 
@@ -105,7 +106,8 @@ Every failure message tells you exactly what to do.
 | `check-version` | Edit `libraries/<name>/VERSION` (patch bump is usually right) |
 | `griffe warnings` | Add type annotations to function signatures |
 | `functional_tests/` say no device is configured | Run `python scripts/run.py setup`, then fill in `devices.yml`. See [device testing](device-testing.md) |
-| macOS CIRCUITPY drive won't mount, `diskutil list` hangs, flash-mode deploys fail | You hit the FSKit / DiskArbitration wedge.  See [macOS CIRCUITPY troubleshooting](../troubleshooting/macos-circuitpy.md) for the `sudo killall … && launchctl kickstart -k …` recovery |
+| macOS CIRCUITPY drive won't mount, `diskutil list` hangs, flash-mode deploys fail | You hit the FSKit / DiskArbitration wedge.  Run `chumicro-workspace doctor --fix-fskit-wedge` (or paste the equivalent `sudo killall -9 …` chain) — see [macOS CIRCUITPY troubleshooting](../troubleshooting/macos-circuitpy.md) for full detail |
+| `mpremote: cp: ...: No space left on device` mid-deploy | LittleFS partition is full of stage residue from prior runs — wipe with `chumicro-workspace reset-board --device <id> --yes` (destructive; mkfs the filesystem).  Do NOT `diskutil unmount` CIRCUITPY drives to "clean up" — that wedges FSKit instead. |
 | Stuck or confused | Ask in the PR — someone will help |
 
 **Browsing coverage in detail:** After running tests, generate an HTML report with `python -m coverage html` and open `htmlcov/index.html`. Covered lines show in green, missed lines in red — much easier than reading line numbers from the terminal. (`htmlcov/` is gitignored.)

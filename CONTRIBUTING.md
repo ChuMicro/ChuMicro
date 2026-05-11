@@ -29,6 +29,7 @@ Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMi
 | **Find something to work on** | [Good first contributions](#good-first-contributions) |
 | **Set up and develop** | This page → then your [development environment guide](#development-environment) |
 | **Configure real-board testing** | [Device Testing](docs/contributing/device-testing.md) |
+| **Understand devices.yml / workspace.yml / secrets.toml** | [Config files](docs/contributing/config-files.md) |
 | **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
