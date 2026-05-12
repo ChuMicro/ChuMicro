@@ -23,22 +23,6 @@ Public API::
             client.handle(now_ms())
 
 QoS 0 + QoS 1 are implemented; QoS 2 raises :class:`UnsupportedQoSError`.
-
-Source layout:
-
-* :mod:`chumicro_mqtt._wire` — wire-format primitives, packet
-  encoders/decoder, and protocol exceptions.
-* :mod:`chumicro_mqtt.client` — :class:`MQTTClient` plus its connection-
-  lifecycle classes (``Awaiting``, ``InFlightPublish``, ``InFlightTable``,
-  ``PendingResponse``) — internal to the orchestration; reach into the
-  submodule directly if you need them.
-* :mod:`chumicro_mqtt.sockets_factory` — opt-in
-  :func:`chumicro_sockets_factory` convenience helper that wires the
-  default :mod:`chumicro_sockets` transport.  Lives in its own
-  submodule so users with a custom ``socket_factory`` never trigger
-  the :mod:`chumicro_sockets` deploy.
-* :mod:`chumicro_mqtt.testing` — host-only fakes (excluded from device
-  bundle).
 """
 
 from chumicro_mqtt._wire import (
