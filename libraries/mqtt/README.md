@@ -92,6 +92,7 @@ Works on CPython, MicroPython, and CircuitPython.
 | Example | What it shows |
 |---|---|
 | [`telemetry.py`](examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Reads wifi + broker config from `runtime_config.msgpack` (chumicro-workspace) with constants fallback.  Broker host/port must be set explicitly — the library refuses to silently dial a third-party broker.  Cross-runtime (CP + MP). |
+| [`bench.py`](examples/bench.py) | Self-driving validation bench.  Deploy + watch serial — the device runs 8 scenarios end-to-end (tier-1 steady, tier-2 intact, tier-3 oversize, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary table.  Used to confirm the library's heap-bounded oversize handling and the three-tier inbound model behave as advertised on a 256 KB-RAM-class board.  Optional companion [`bench_host.py`](examples/bench_host.py) (host-side, needs `pip install paho-mqtt`) captures the verdict from the broker and can publish a 64 KB hostile payload for extra tier-3 stress. |
 
 ## Wiring wifi + broker config for examples and functional tests
 
