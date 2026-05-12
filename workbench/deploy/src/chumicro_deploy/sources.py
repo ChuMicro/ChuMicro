@@ -22,6 +22,11 @@ from typing import Protocol, runtime_checkable
 
 from .protocol import validate_entrypoint_in_files
 from .runtime_marker import file_targets_runtime
+from .skip_factories import (
+    discover_factory_modules,
+    read_skip_factories_marker,
+    resolve_skip_targets,
+)
 
 
 @runtime_checkable
@@ -242,10 +247,26 @@ class ImportGraphSource:
             on misclassification.  The entrypoint itself is never
             filtered.
 
+    If *entrypoint* declares a module-level
+    ``__chumicro_skip_factories__`` constant, named chumicro factory
+    submodules are filtered out of the deploy graph before resolution.
+    Family-form entries (``"sockets_factory"``) match every
+    ``chumicro_*.sockets_factory`` discovered under *search_paths*;
+    exact-form entries (``"chumicro_mqtt.sockets_factory"``) match one
+    module.  Unmatched entries fail the walk (typo guard).  Skip
+    targets the user references directly elsewhere in the entrypoint
+    survive with a warning surfaced through
+    :attr:`skip_factories_warnings`; skip targets whose parent library
+    is never imported at all emit a dead-skip notice through the same
+    property.  :class:`DirectorySource` has no concept of an import
+    graph and is not affected.
+
     Raises:
         FileNotFoundError: If *entrypoint* does not exist.
         NotADirectoryError: If any of *search_paths* is not a
             directory.
+        ValueError: If ``__chumicro_skip_factories__`` lists entries
+            that match zero discovered factory modules.
     """
 
     def __init__(
@@ -272,7 +293,56 @@ class ImportGraphSource:
         self._resource_prefix = resource_prefix
         self._target_runtime = target_runtime
         self._host_paths: list[Path] = []
+        self._skip_warnings: list[str] = []
+        self._skip_per_entry: dict[str, frozenset[str]] = {}
+        self._skip_modules = self._compute_skip_modules()
         self._files = self._collect()
+
+    def _compute_skip_modules(self) -> frozenset[str]:
+        """Resolve ``__chumicro_skip_factories__`` to fully-qualified module names.
+
+        Returns the set of module names the queue loop should drop.
+        Empty frozenset when the entrypoint declares no marker.  Raises
+        :class:`ValueError` on typo'd entries.  Direct-import overrides
+        (skip targets the entrypoint imports explicitly) are recorded
+        as warnings and removed from the returned set so they ship.
+        Stores the per-entry match mapping on ``self._skip_per_entry``
+        for later dead-skip diagnostics.
+        """
+        skip_entries = read_skip_factories_marker(self._entrypoint_path)
+        if not skip_entries:
+            return frozenset()
+        discovered = discover_factory_modules(self._search_paths)
+        per_entry, unmatched = resolve_skip_targets(skip_entries, discovered)
+        if unmatched:
+            raise ValueError(
+                "__chumicro_skip_factories__ entries did not match any "
+                f"discovered factory module: {list(unmatched)!r}.  "
+                "Discovered families: "
+                f"{sorted({stem for stem in discovered.values()})!r}.",
+            )
+        matched: set[str] = set()
+        for matches in per_entry.values():
+            matched.update(matches)
+        entrypoint_imports = set(self._imports_from_file(self._entrypoint_path))
+        overrides = matched & entrypoint_imports
+        for override in sorted(overrides):
+            self._skip_warnings.append(
+                f"__chumicro_skip_factories__ names {override!r} but the "
+                "entrypoint imports it directly; shipping it anyway.",
+            )
+        self._skip_per_entry = per_entry
+        return frozenset(matched - overrides)
+
+    def skip_factories_warnings(self) -> tuple[str, ...]:
+        """Return diagnostic messages emitted by the skip mechanism.
+
+        Direct-import overrides and dead-skip notices land here.  CLI
+        wrappers surface this to the user after construction.  Empty
+        tuple when the deploy used no skip mechanism or nothing was
+        worth saying.
+        """
+        return tuple(self._skip_warnings)
 
     def _collect(self) -> dict[str, bytes]:
         collected: dict[str, bytes] = {
@@ -288,6 +358,12 @@ class ImportGraphSource:
             if module_name in visited:
                 continue
             visited.add(module_name)
+            if module_name in self._skip_modules:
+                # User opted this factory out at the entrypoint via
+                # __chumicro_skip_factories__.  Drop without resolving
+                # so its closure (typically chumicro_sockets) is not
+                # pulled in.
+                continue
             resolved_path = self._resolve_module(module_name)
             if resolved_path is None:
                 continue
@@ -301,7 +377,39 @@ class ImportGraphSource:
             collected[device_path] = resolved_path.read_bytes()
             self._host_paths.append(resolved_path)
             queue.extend(self._imports_from_file(resolved_path))
+        self._check_dead_skips(visited)
         return collected
+
+    def _check_dead_skips(self, visited: set[str]) -> None:
+        """Emit an informational warning per user-written entry whose
+        matched modules' parent libraries were never imported.
+
+        For an exact-form entry like ``"chumicro_websockets.sockets_factory"``,
+        dead means the user lists it but never imports ``chumicro_websockets``.
+        For a family-form entry like ``"sockets_factory"`` that matches
+        five libraries, dead means none of those five were used — a
+        single-library project listing the family form is *not* dead.
+
+        Visit-set membership of the skip targets themselves is excluded
+        from the "reached anything" check: the targets are added to the
+        visited set before the skip filter runs, so they always look
+        reached.
+        """
+        for entry, matched in self._skip_per_entry.items():
+            parent_packages = {target.rsplit(".", 1)[0] for target in matched}
+            reached_anything = any(
+                seen not in matched and (
+                    seen in parent_packages
+                    or any(seen.startswith(f"{parent}.") for parent in parent_packages)
+                )
+                for seen in visited
+            )
+            if not reached_anything:
+                self._skip_warnings.append(
+                    f"__chumicro_skip_factories__ entry {entry!r} matches "
+                    f"{sorted(matched)!r} but none of those libraries are "
+                    "imported; skip entry has no effect.",
+                )
 
     def _imports_from_file(self, path: Path) -> list[str]:
         try:

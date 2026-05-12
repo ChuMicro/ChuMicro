@@ -82,6 +82,11 @@ from .recovery import (
 )
 from .result import DeployError, DeployResult
 from .runtime_marker import file_targets_runtime, read_runtime_marker
+from .skip_factories import (
+    discover_factory_modules,
+    read_skip_factories_marker,
+    resolve_skip_targets,
+)
 from .sources import DirectorySource, FileMapSource, FileSource, ImportGraphSource
 from .testing import FakeTransport
 
@@ -131,6 +136,7 @@ __all__ = [
     "build_circuitpython_deploy_scripts",
     "classify_deploy_failure",
     "detect_fskit_wedge",
+    "discover_factory_modules",
     "file_targets_runtime",
     "flash_firmware",
     "is_in_deploy_scope",
@@ -139,8 +145,10 @@ __all__ = [
     "probe_device",
     "read_devices_yml_template",
     "read_runtime_marker",
+    "read_skip_factories_marker",
     "recovery_plan_for",
     "resolve_firmware_url",
     "resolve_ide_devices",
+    "resolve_skip_targets",
 ]
 assert sorted(__all__) == __all__, "__all__ must be alphabetized"
