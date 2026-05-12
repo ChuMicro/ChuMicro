@@ -235,8 +235,8 @@ def _force_non_blocking(socket):
 # ---------------------------------------------------------------------------
 
 
-def _build_default_socket_factory(config, *, radio=None):
-    """Return a socket factory that opens a TCPClientSocket using
+def _build_default_socket_factory(config, *, radio=None, ssl_context=None):
+    """Return a socket factory that opens a TCP / TLS client socket using
     config-supplied broker host/port.
 
     Used by :meth:`MQTTClient.from_config` when the caller doesn't
@@ -245,6 +245,11 @@ def _build_default_socket_factory(config, *, radio=None):
     raises :class:`chumicro_config.MissingConfigKey` if either key
     is absent — the library refuses to silently dial a third-party
     broker on the user's behalf.
+
+    When *ssl_context* is supplied the factory uses
+    :func:`chumicro_sockets.tls_client_socket` (lazy-imported so
+    plain-TCP users don't pay the ``ssl`` cost); ``None`` keeps the
+    plain-TCP path.
 
     Raises:
         chumicro_config.MissingConfigKey: ``mqtt.broker.host`` or
@@ -261,8 +266,16 @@ def _build_default_socket_factory(config, *, radio=None):
     host = config["mqtt.broker.host"]
     port = config["mqtt.broker.port"]
 
+    if ssl_context is None:
+        def factory():
+            return tcp_client_socket(host, port, radio=radio)
+
+        return factory
+
     def factory():
-        return tcp_client_socket(host, port, radio=radio)
+        from chumicro_sockets import tls_client_socket  # noqa: PLC0415 - lazy
+
+        return tls_client_socket(host, port, context=ssl_context, radio=radio)
 
     return factory
 
@@ -286,6 +299,7 @@ class MQTTClient:
         config: object,
         *,
         radio: object | None = None,
+        ssl_context: object | None = None,
         socket: object | None = None,
         socket_factory: object | None = None,
     ) -> "MQTTClient":
@@ -310,17 +324,24 @@ class MQTTClient:
             config: A :class:`chumicro_config.RuntimeConfig` (typically
                 ``chumicro_config.config``) or plain flat dict.  Keys
                 read are flat dotted strings (``"mqtt.broker.host"``).
-            radio: WiFi radio for the auto-built socket factory —
-                CircuitPython needs this; MicroPython auto-detects.
-                Ignored when *socket* or *socket_factory* is passed
-                directly.
+            radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
+                (auto-detected); ignored on MP and CPython.  Pass explicitly
+                for multi-radio prototypes or CP boards without a ``wifi``
+                module.  Ignored when *socket* or *socket_factory* is passed.
+            ssl_context: Pre-built ``ssl.SSLContext`` for ``mqtts://`` brokers
+                (typically port 8883).  When supplied, the auto-built factory
+                opens the connection via ``chumicro_sockets.tls_client_socket``
+                instead of ``tcp_client_socket``.  Build via
+                ``chumicro_sockets.ssl_context_with_ca`` for the CA-pinned
+                shape production brokers (AWS IoT, HiveMQ Cloud) require.
+                Ignored when *socket* or *socket_factory* is passed.
             socket: Pre-built :class:`TCPClientSocket`.  When supplied,
                 the auto-built factory is skipped — caller owns the
                 connection.
             socket_factory: Custom ``callable() -> TCPClientSocket``.
                 When supplied, the auto-built factory is skipped.
-                Useful for custom TLS contexts or non-default radio
-                wiring.
+                Useful for non-default radio wiring or hand-built TLS
+                contexts the *ssl_context* shortcut doesn't cover.
 
         Raises:
             chumicro_config.MissingConfigKey: Neither *socket* nor
@@ -342,7 +363,9 @@ class MQTTClient:
                 f"dict, got {type(config).__name__}",
             )
         if socket is None and socket_factory is None:
-            socket_factory = _build_default_socket_factory(config, radio=radio)
+            socket_factory = _build_default_socket_factory(
+                config, radio=radio, ssl_context=ssl_context,
+            )
         return cls(
             socket=socket,
             socket_factory=socket_factory,
