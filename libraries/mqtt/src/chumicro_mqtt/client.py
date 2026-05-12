@@ -19,6 +19,7 @@ from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 from chumicro_mqtt._wire import (
     PACKET_CONNACK,
+    PACKET_DISCONNECT,
     PACKET_PINGREQ,
     PACKET_PINGRESP,
     PACKET_PUBACK,
@@ -568,7 +569,7 @@ class MQTTClient:
         the client always returns in a known DISCONNECTED state.
         """
         try:
-            self._send_raw(b"\xe0\x00")
+            self._send_raw(PACKET_DISCONNECT)
         except Exception:  # noqa: BLE001 — disconnect is best-effort  # pragma: no cover - defensive
             pass
         try:
@@ -740,10 +741,13 @@ class MQTTClient:
     # ------------------------------------------------------------------
 
     def check(self, now_ms):  # noqa: ARG002 — runner contract uses now_ms
-        """Return ``True`` if there's outbound work or readable bytes."""
-        if self._state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
-            return False
-        return bool(self._tx_queue) or self._socket_readable()
+        """Return ``True`` when the client wants a ``handle()`` this tick.
+
+        The recv path is cooperative — ``handle()`` always attempts a
+        non-blocking recv and bails on EAGAIN — so any non-terminal
+        state is worth a tick.
+        """
+        return self._state not in (ProtocolState.DISCONNECTED, ProtocolState.FAILED)
 
     def handle(self, now_ms):
         """One tick of progress.
@@ -913,15 +917,6 @@ class MQTTClient:
     # ------------------------------------------------------------------
     # Internal — RX path
     # ------------------------------------------------------------------
-
-    def _socket_readable(self):
-        """Always optimistic — the recv may raise EAGAIN, which we handle.
-
-        The cooperative tick model already guarantees we revisit every
-        tick, so calling recv unconditionally is cheap when there's
-        nothing to read.
-        """
-        return True
 
     def _read_inbound(self):
         """Pull bytes off the socket; process complete packets.

@@ -59,7 +59,9 @@ class UnsupportedQoSError(MQTTError):
 
 
 # ---------------------------------------------------------------------------
-# Packet types — first byte of the fixed header (with flags zero'd)
+# Packet types — first byte of the fixed header.  Most have flags zero'd;
+# PACKET_SUBSCRIBE (0x82) and PACKET_UNSUBSCRIBE (0xA2) carry the
+# spec-required 0x02 low-nibble flag bit.
 # ---------------------------------------------------------------------------
 
 PACKET_CONNECT = const(0x10)
