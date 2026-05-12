@@ -1,6 +1,6 @@
 # Decision 0062: Entrypoint opt-out for chumicro factory submodules
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-05-12`
 Related: [Decision 0042](0042-library-dependency-policy.md) (the sub-rule this corrects), [Decision 0029](0029-project-workspace.md) (the AST walker this extends), [Decision 0037](0037-runtime-file-marking.md) (precedent for entrypoint-level marker constants).
 
@@ -95,3 +95,14 @@ Per-entrypoint only.  Each deployable entrypoint (typically `app.py` or `code.py
 - **Per-factory marker file** (`__chumicro_conditional__ = True` in each `*_factory.py`).  Rejected as the primary mechanism: adds a file-side declaration the new-library scaffolder must remember to write.  Naming convention covers the same ground at lower cost; reach for an explicit marker only when a factory module legitimately falls outside the convention.
 
 The implementation punch-list (walker change + per-library `try`/`except` wraps + new-library scaffolder updates + the documentation page on slimming deploys) lives in `plans/next-up.md`, not here.
+
+## Bench validation
+
+End-to-end run against the same two fixtures that disproved the original 0042 sub-rule (`mqtt` deploy, search paths over the six infra libraries):
+
+| Fixture | Before walker change | After walker change |
+|---|---|---|
+| `app_default.py` (no constant) | 20 files including all of `chumicro_sockets/*` + `chumicro_mqtt/sockets_factory.py` | 20 files (identical — no opt-out signal) |
+| `app_custom.py` with `__chumicro_skip_factories__ = ("sockets_factory",)` | Same 20 files (opt-out didn't fire) | 12 files — `chumicro_mqtt/{__init__,_wire,client}.py` + transitive `chumicro_config`, `chumicro_msgpack`, `chumicro_timing`; zero `chumicro_sockets/*`, zero `sockets_factory.py` |
+
+The post-implementation diff is the eight-file drop (`chumicro_mqtt/sockets_factory.py` + seven `chumicro_sockets/*` files).  Walker behavior under the legacy fixture is unchanged — the mechanism is opt-in via the entrypoint constant, no default behavior shift.

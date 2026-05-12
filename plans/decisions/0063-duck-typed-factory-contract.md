@@ -1,6 +1,6 @@
 # Decision 0063: Duck-typed factory contract for transport-injecting libraries
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-05-12`
 Related: [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0042](0042-library-dependency-policy.md) (factory-helper sub-rule), [Decision 0062](0062-entrypoint-factory-skip.md) (deploy-time skip), [Decision 0021](0021-docstring-type-policy.md) (type-policy precedent).
 
