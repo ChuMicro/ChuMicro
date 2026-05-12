@@ -13,6 +13,8 @@ served, even through a slow upload or a stalled client.
 
 Public API::
 
+    import wifi
+
     from chumicro_http_server import HttpServer, build_response
     from chumicro_http_server.sockets_factory import chumicro_sockets_factory
     from chumicro_timing import ticks_ms
@@ -30,8 +32,9 @@ Public API::
     )
 
     while True:
-        if server.check(ticks_ms()):
-            server.handle(ticks_ms())
+        now = ticks_ms()
+        if server.check(now):
+            server.handle(now)
 
 Source layout:
 
