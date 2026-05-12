@@ -36,11 +36,19 @@ def _wipe_runtime_config() -> None:
 
 
 def test_round_trip_via_default_path() -> None:
-    """Write a real msgpack file at the canonical path, read it back."""
+    """Write a real msgpack file at the canonical path, read it back.
+
+    Uses the flat dotted-key shape every consumer library actually
+    reads — the same shape ``chumicro_workspace.compose_runtime_config``
+    writes at deploy time.  A nested payload would deserialize without
+    error here (the reader only requires the outer value to be a dict)
+    but would mislead readers of the test about the on-wire contract.
+    """
     _wipe_runtime_config()
     payload = {
-        "wifi": {"ssid": "TestNet", "password": "fake"},
-        "app": {"sample_period_ms": 1000},
+        "wifi.ssid": "TestNet",
+        "wifi.password": "fake",
+        "app.sample_period_ms": 1000,
     }
     with open(DEFAULT_RUNTIME_CONFIG_PATH, "wb") as handle:
         handle.write(packb(payload))

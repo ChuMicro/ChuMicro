@@ -98,11 +98,7 @@ class RuntimeConfig:
         return self._data[key]
 
     def __getitem__(self, key):
-        if key not in self._data:
-            raise MissingConfigKey(
-                f"required config key {key!r} is missing",
-            )
-        return self._data[key]
+        return self.require(key)
 
     def __contains__(self, key):
         return key in self._data
