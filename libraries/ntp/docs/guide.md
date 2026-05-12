@@ -94,17 +94,17 @@ Cancel with `client.cancel()` to abort and free the slot.
 ## Memory notes
 
 `NTPClient` pre-allocates a 48-byte `bytearray` for the recv buffer
-in `__init__` so `handle` doesn't allocate on the hot path.
-`_build_request` creates a fresh 48-byte `bytes` per `query()` —
-the request is sent and immediately released, so the cost is one
-allocation per query (acceptable for a once-every-N-minutes time
-sync).
+in `__init__` so `handle` doesn't allocate on the hot path.  The
+client request is a 48-byte module-level `bytes` constant, sent
+directly each `query()` — no per-call packet construction.  The
+parse step reads through a `memoryview` window into the recv
+buffer, so the success path doesn't copy bytes either.
 
-`NTPResult` is a tiny holder — three integer / object fields.
+`NTPResult` is a tiny holder — a handful of integer / object fields.
 
 ## Platform notes
 
-Runs identically on CPython, MicroPython, and CircuitPython.  The default tick source is `chumicro_timing.ticks_ms` (a wrapping millisecond counter that picks the right underlying call per runtime: `supervisor.ticks_ms` on CircuitPython, `time.ticks_ms` on MicroPython, `time.monotonic_ns` on CPython).  Inject a custom callable via the `ticks_ms=` constructor kwarg if you have your own time source.  All UDP work goes through the injected socket, so `chumicro-sockets` hides the per-runtime adapter chase.
+Runs identically on CPython, MicroPython, and CircuitPython.  The default tick source is the `chumicro_timing.ticks` submodule — an object that exposes `ticks_ms` / `ticks_diff` / `ticks_add`, each picking the right underlying primitive per runtime (`supervisor.ticks_ms` on CircuitPython, `time.ticks_ms` on MicroPython, `time.monotonic_ns` on CPython).  Inject a custom source via the `ticks=` constructor kwarg if you have your own — must expose those same three names.  All UDP work goes through the injected socket, so `chumicro-sockets` hides the per-runtime adapter chase.
 
 Tested on real CircuitPython and MicroPython boards with live `pool.ntp.org` queries before each release; returned timestamps validated against a 2024-2030 plausibility window.
 
