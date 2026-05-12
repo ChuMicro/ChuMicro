@@ -123,6 +123,40 @@ submodule so users with a custom transport never trigger the
 `chumicro-sockets` deploy. Tests typically pass a hand-rolled factory
 that returns a `chumicro_sockets.testing.FakeSocket`.
 
+## Bring your own transport
+
+`HttpClient` does not care which library produces its sockets.  The `connection_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> socket` that returns any object exposing the four-method contract:
+
+| Method | Contract |
+|---|---|
+| `recv_into(buffer, nbytes) -> int` | Reads up to `nbytes` into `buffer` (a `memoryview`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` on no data, returns 0 on peer-close, otherwise returns bytes written. |
+| `send(payload) -> int` | Sends `payload` (a `bytes`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full, otherwise returns bytes sent (may be partial). |
+| `close() -> None` | Releases the connection. |
+| `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
+
+`chumicro_sockets.tcp_client_socket` / `tls_client_socket` is one producer.  Stdlib `socket.socket` after `setblocking(False)` is another.  Hand-rolled wrappers around any upstream library work the same way:
+
+```python
+import socket as stdlib_socket
+
+def make_connection(host, port, use_tls):
+    sock = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_STREAM)
+    sock.connect((host, port))
+    sock.setblocking(False)
+    return sock  # use_tls handled by caller's wrapper if needed
+
+client = HttpClient(connection_factory=make_connection)
+```
+
+If you supply your own factory and want `chumicro_sockets` dropped from the deploy, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
+
+```python
+# code.py / app.py
+__chumicro_skip_factories__ = ("sockets_factory",)
+```
+
+The constant accepts a family form (the bare stem, matches every `chumicro_*.sockets_factory`) or an exact dotted path (`chumicro_requests.sockets_factory`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpClient.from_config(...)` on a deploy that has skipped `chumicro_requests.sockets_factory` raises `RuntimeError` naming the bypass kwarg.
+
 ## Runner pattern
 
 `HttpClient.check(now_ms) -> bool` and `handle(now_ms) -> None` satisfy the

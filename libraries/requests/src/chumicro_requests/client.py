@@ -416,9 +416,12 @@ class HttpClient:
                 TLS branch.  ``None`` uses the runtime default.
                 Ignored when *connection_factory* is passed.
             connection_factory: Custom ``(host, port, use_tls) ->
-                TCPClientSocket`` callable.  When supplied, the
-                auto-built factory is skipped — caller owns the
-                connection-opening behaviour.
+                socket`` callable.  When supplied, the auto-built
+                factory is skipped — caller owns the
+                connection-opening behaviour.  The returned object
+                must match the structural contract documented on
+                :meth:`__init__` (recv_into / send / close /
+                setblocking).
 
         Returns:
             A configured ``HttpClient`` ready for ``get()`` / ``post()``.
@@ -429,9 +432,17 @@ class HttpClient:
                 f"dict, got {type(config).__name__}",
             )
         if connection_factory is None:
-            from chumicro_requests.sockets_factory import (  # noqa: PLC0415 - lazy
-                chumicro_sockets_factory,
-            )
+            try:
+                from chumicro_requests.sockets_factory import (  # noqa: PLC0415 - lazy
+                    chumicro_sockets_factory,
+                )
+            except ImportError as exception:
+                raise RuntimeError(
+                    "HttpClient.from_config() default wiring needs "
+                    "chumicro_requests.sockets_factory.  This module "
+                    "was excluded via __chumicro_skip_factories__ — "
+                    "pass connection_factory= explicitly.",
+                ) from exception
 
             connection_factory = chumicro_sockets_factory(
                 radio=radio, ssl_context=ssl_context,
@@ -465,10 +476,27 @@ class HttpClient:
         """Wire up the client.
 
         Args:
-            connection_factory: Callable ``(host, port, use_tls) ->
-                TCPClientSocket`` that opens a connected socket.  Use
-                :func:`chumicro_sockets_factory` for the default
-                wiring on a board.
+            connection_factory: Callable ``(host: str, port: int,
+                use_tls: bool) -> socket`` that opens and returns a
+                connected, non-blocking TCP-shaped object.  The
+                returned object must expose:
+
+                * ``recv_into(buffer: memoryview, nbytes: int) -> int``
+                  — raises ``OSError(EAGAIN | EWOULDBLOCK)`` on no
+                  data, returns 0 on peer-close, otherwise bytes
+                  written.
+                * ``send(payload: bytes) -> int`` — raises
+                  ``OSError(EAGAIN | EWOULDBLOCK)`` when the send
+                  buffer is full, otherwise bytes sent (may be
+                  partial).
+                * ``close() -> None``
+                * ``setblocking(flag: bool) -> None`` — best-effort;
+                  absence is tolerated.
+
+                :func:`chumicro_sockets_factory` is one valid
+                producer; stdlib ``socket.socket`` after
+                ``setblocking(False)`` or an upstream-library
+                wrapper are others.
             recv_budget_per_tick: Soft cap on bytes drained from the
                 socket in a single :meth:`handle` call.  Default 1024.
                 Bounds tick latency so concurrent runner tasks (LED
