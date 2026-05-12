@@ -316,6 +316,22 @@ The client actively manages its memory footprint with four caps tunable at const
 
 The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) and the registered pattern-handler list grow with your usage — neither has a hard cap.  On memory-tight boards, set `max_message_bytes` to your actual largest expected broker payload — anything bigger routes through the oversized tier where it can't blow the heap.
 
+### What fits in the 256 B steady-state buffer
+
+The decoder sees the whole MQTT packet, not just the payload — `1` (fixed byte) `+ 1–2` (varlen) `+ 2` (topic-length field) `+ len(topic)` `+ 0/2` (packet_id when QoS 1) `+ len(payload)`.  At a glance:
+
+| Use case | Wire size | Tier |
+|---|---|---|
+| Plain sensor reading — `home/livingroom/temp` `21.3` | ~30 B | steady |
+| Small JSON sensor — `home/livingroom/sensor` `{"t":21.3,"h":45}` | ~45 B | steady |
+| Device-prefixed status — `livingRoom/mainLightSwitch/online` `false` | ~45 B | steady |
+| Multi-field JSON — `home/livingroom/env` `{"temp":21.3,"hum":45,"pressure":1013,"co2":412}` | ~75 B | steady |
+| Verbose JSON sensor (~150 B payload, 20 B topic) | ~175 B | steady |
+| HomeAssistant discovery (`homeassistant/.../config` + ~300 B JSON) | ~350 B | **intact** |
+| AWS IoT Core shadow `update/accepted` (~250–600 B JSON) | ~300–700 B | **intact** |
+
+So **plain sensor data, small-to-medium JSON readings (payload ≤ ~200 B on a ≤ 40 B topic), and chumicro-`root_topic`-prefixed status messages all parse inline with zero per-message allocation.**  Structured-config workloads — HomeAssistant discovery descriptors, AWS IoT shadow documents, MQTT-SN gateway state — drop into the intact tier: one one-shot buffer per message, freed on the next tick, no churn.  If your typical PUBLISH is consistently above ~250 B, bump `rx_buffer_size` to `512` to keep tier 1 active; if you publish OTA-firmware-class payloads (multi-KB), raise `max_message_bytes` to cover the largest you expect.
+
 ## Platform notes
 
 | Runtime | TCP | TLS | Notes |
