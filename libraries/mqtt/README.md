@@ -73,7 +73,7 @@ Two `MQTTClient(...)` constructor knobs let you trade tick fairness for throughp
 | Knob | Default | What it bounds |
 |---|---|---|
 | `recv_budget_per_tick` | `1024` (bytes) | Soft cap on bytes drained from the socket in one `handle()` call.  Without this, a 100 KB blob in a fat kernel TCP buffer (lwIP on rp2 holds 16–32 KB) would monopolize the tick until drained — visibly stuttering a concurrent LED blink or sub-second control loop.  Raise for fast big-blob ingestion at the cost of LED smoothness. |
-| `max_tx_queue_size` | `100` packets | Hard cap on pending outbound packets.  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; lower for memory-tight boards. |
+| `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for the runner-shaped sensor profile (publish every N seconds; queue stays near zero).  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
 
 A naive `recv_into` loop without `recv_budget_per_tick` can starve cooperative tasks when the kernel TCP buffer is full.
 

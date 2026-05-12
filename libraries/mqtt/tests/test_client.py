@@ -889,12 +889,12 @@ class TestBoundedRecvPerTick:
 class TestTxQueueBackpressure:
     """User-initiated publishes raise ``MQTTBackpressureError`` past the cap."""
 
-    def test_default_cap_is_100_packets(self) -> None:
+    def test_default_cap_is_20_packets(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
         client = _new_client(sock, ticks)  # default cap
-        assert client._max_tx_queue_size == 100  # noqa: SLF001 — pin the default
+        assert client._max_tx_queue_size == 20  # noqa: SLF001 — pin the default
 
     def test_publish_raises_when_cap_exceeded(self) -> None:
         sock = FakeSocket()
