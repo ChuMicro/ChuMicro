@@ -11,6 +11,7 @@ them should use a full NTP implementation (out of scope for embedded).
 Wire format reference: RFC 4330 §4.
 """
 
+from chumicro_config import InvalidConfigType, is_config_like
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 #: Seconds between the NTP epoch (1900-01-01T00:00:00Z) and the
@@ -213,14 +214,8 @@ class NTPClient:
         * ``ntp.port`` → 123 (NTP standard).
         * ``ntp.timeout_ms`` → 5000.
 
-        Unlike :meth:`chumicro_mqtt.MQTTClient.from_config`, which
-        refuses to silently dial a third-party broker, this factory
-        *does* fall back to the public NTP pool.  The pool is
-        purpose-built for unkeyed clients with sensible-default
-        behaviour; an MQTT broker is typically private infrastructure,
-        so the asymmetry is deliberate.  No key in the ntp manifest
-        is required, and the auto-built socket factory reads zero
-        config keys, so an empty ``config`` dict is valid input.
+        No key is required, so an empty ``config`` dict is valid
+        input — the public pool is the documented fallback.
 
         When *socket* or *socket_factory* is supplied, the caller
         owns the connection.  When neither is supplied, an auto-built
@@ -247,6 +242,11 @@ class NTPClient:
         Returns:
             A configured ``NTPClient`` ready for ``query()``.
         """
+        if not is_config_like(config):
+            raise InvalidConfigType(
+                f"NTPClient.from_config requires a RuntimeConfig or "
+                f"dict, got {type(config).__name__}",
+            )
         if socket is None and socket_factory is None:
             socket_factory = _build_default_socket_factory(radio=radio)
         if socket is None:
