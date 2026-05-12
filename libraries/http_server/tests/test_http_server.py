@@ -1280,3 +1280,34 @@ class TestFromConfig:
         for bad_input in (None, "not-a-dict", 42, ["not", "a", "dict"]):
             with raises(InvalidConfigType):
                 HttpServer.from_config(bad_input)
+
+    def test_skipped_factory_module_raises_runtime_error(self) -> None:
+        """When ``chumicro_http_server.sockets_factory`` is excluded
+        via ``__chumicro_skip_factories__``, the default branch of
+        ``from_config`` raises ``RuntimeError`` naming the bypass
+        kwarg instead of leaking ``ImportError``.  CPython-only —
+        sys.modules None-sentinel is CPython-specific; the
+        translation behavior itself is runtime-agnostic.
+        """
+        import sys  # noqa: PLC0415
+
+        from chumicro_test_harness import skip  # noqa: PLC0415
+
+        if sys.implementation.name != "cpython":
+            skip("sys.modules None-sentinel is CPython-specific")
+
+        original = sys.modules.get("chumicro_http_server.sockets_factory")
+        sys.modules["chumicro_http_server.sockets_factory"] = None
+        try:
+            try:
+                HttpServer.from_config({})
+            except RuntimeError as exception:
+                assert "listener_factory=" in str(exception)
+                assert "__chumicro_skip_factories__" in str(exception)
+            else:
+                raise AssertionError("expected RuntimeError")
+        finally:
+            if original is None:
+                sys.modules.pop("chumicro_http_server.sockets_factory", None)
+            else:
+                sys.modules["chumicro_http_server.sockets_factory"] = original

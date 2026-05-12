@@ -123,6 +123,43 @@ The constructor exposes per-connection budgets so you can tune for your workload
 
 Defaults are conservative; the per-tick budgets keep an LED blink visible even with a chatty client and a big POST body.
 
+## Bring your own transport
+
+`HttpServer` doesn't care which library produces its listener.  The `listener_factory` you pass is a zero-arg callable returning any object exposing the three-method contract:
+
+| Method | Contract |
+|---|---|
+| `accept() -> (socket, address)` | Returns the next accepted client (a TCP-shaped object with `recv_into` / `send` / `close` / `setblocking`) plus the peer's address.  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when no connection is pending. |
+| `close() -> None` | Stops accepting new connections. |
+| `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
+
+Each accepted socket must in turn expose `recv_into(buffer, nbytes) -> int`, `send(payload) -> int`, `close() -> None`, and best-effort `setblocking(flag)` — the same shape every other chumicro library expects from a TCP-like object.
+
+`chumicro_sockets.tcp_listening_socket` / `tls_listening_socket` is one valid producer.  Stdlib `socket.socket` bound + listening after `setblocking(False)` is another:
+
+```python
+import socket as stdlib_socket
+
+def make_listener():
+    listener = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_STREAM)
+    listener.setsockopt(stdlib_socket.SOL_SOCKET, stdlib_socket.SO_REUSEADDR, 1)
+    listener.bind(("0.0.0.0", 8080))
+    listener.listen(4)
+    listener.setblocking(False)
+    return listener
+
+server = HttpServer(listener_factory=make_listener, handler=...)
+```
+
+If you supply your own listener and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
+
+```python
+# code.py / app.py
+__chumicro_skip_factories__ = ("sockets_factory",)
+```
+
+Family form (the bare stem) or exact path (`"chumicro_http_server.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpServer.from_config(...)` on a deploy that has skipped `chumicro_http_server.sockets_factory` raises `RuntimeError` naming the bypass kwarg.
+
 ## TLS server (HTTPS)
 
 `HttpServer` is transport-agnostic — its `listener_factory` returns whatever listener you give it.  For HTTPS, build a TLS-wrapped listener via [`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets):
