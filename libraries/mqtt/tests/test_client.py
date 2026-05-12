@@ -1041,7 +1041,7 @@ class TestFromConfig:
         ``from_config`` builds a factory that reads
         ``mqtt.broker.host`` / ``mqtt.broker.port`` from the config.
         Validates the factory closure without needing a real socket
-        by monkey-patching ``chumicro_sockets.tcp_client_socket``."""
+        by monkey-patching the eager binding in ``chumicro_mqtt.client``."""
         captured: dict = {}
 
         def fake_tcp_client_socket(host, port, *, radio=None):
@@ -1050,17 +1050,17 @@ class TestFromConfig:
             captured["radio"] = radio
             return FakeSocket()
 
-        import chumicro_sockets  # noqa: PLC0415
+        import chumicro_mqtt.client as mqtt_client  # noqa: PLC0415
 
-        original = chumicro_sockets.tcp_client_socket
-        chumicro_sockets.tcp_client_socket = fake_tcp_client_socket
+        original = mqtt_client.tcp_client_socket
+        mqtt_client.tcp_client_socket = fake_tcp_client_socket
         try:
             MQTTClient.from_config(
                 {"mqtt.broker.host": "10.0.0.42", "mqtt.broker.port": 8883},
                 radio="fake-radio",
             )
         finally:
-            chumicro_sockets.tcp_client_socket = original
+            mqtt_client.tcp_client_socket = original
 
         assert captured == {"host": "10.0.0.42", "port": 8883, "radio": "fake-radio"}
 
