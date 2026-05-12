@@ -14,6 +14,7 @@ from chumicro_ntp import NTPClient, NTPError, NTPResult
 from chumicro_ntp.core import _NTP_TO_UNIX, _build_request, _parse_response
 from chumicro_sockets.testing import FakeUDPSocket
 from chumicro_test_harness.assertions import raises
+from chumicro_timing.testing import FakeTicks
 
 # ---------------------------------------------------------------------------
 # Helpers — synthesize SNTP responses
@@ -128,20 +129,10 @@ def test_custom_server_and_port() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _MutableTicks:
-    """Test helper — increments on demand to drive timeout windows."""
-
-    def __init__(self, start: int = 0) -> None:
-        self.value = start
-
-    def __call__(self) -> int:
-        return self.value
-
-
 def test_query_sends_packet_and_records_destination() -> None:
     sock = FakeUDPSocket()
-    ticks = _MutableTicks()
-    client = NTPClient(socket=sock, ticks_ms_func=ticks, server="time.test", port=4242)
+    ticks = FakeTicks()
+    client = NTPClient(socket=sock, ticks=ticks, server="time.test", port=4242)
     client.query()
     assert len(sock.sent) == 1
     data, host, port = sock.sent[0]
@@ -153,15 +144,15 @@ def test_query_sends_packet_and_records_destination() -> None:
 
 def test_query_marks_client_busy_until_handle_completes() -> None:
     sock = FakeUDPSocket()
-    ticks = _MutableTicks()
-    client = NTPClient(socket=sock, ticks_ms_func=ticks)
+    ticks = FakeTicks()
+    client = NTPClient(socket=sock, ticks=ticks)
     request = client.query()
     assert client.busy is True
     assert client.check(now_ms=0) is True
     assert request.done is False
 
     sock.enqueue_recv(_server_response(1_700_000_000))
-    client.handle(now_ms=ticks.value)
+    client.handle(now_ms=ticks.ticks_ms())
     assert request.done is True
     assert client.busy is False
     assert request.unix_seconds == 1_700_000_000
@@ -202,17 +193,17 @@ def test_unix_seconds_before_done_raises() -> None:
 
 def test_unix_seconds_when_errored_raises_underlying() -> None:
     sock = FakeUDPSocket()
-    ticks = _MutableTicks()
+    ticks = FakeTicks()
     client = NTPClient(
         socket=sock,
         timeout_ms=10,
-        ticks_ms_func=ticks,
+        ticks=ticks,
     )
     request = client.query()
     # No response queued; advance time past the timeout and handle.
-    ticks.value = 100
+    ticks.advance(100)
     sock.enqueue_eagain_for_recv()  # simulate "no data this tick"
-    client.handle(now_ms=ticks.value)
+    client.handle(now_ms=ticks.ticks_ms())
     assert request.done is True
     assert isinstance(request.error, NTPError)
     with raises(NTPError):
@@ -226,24 +217,24 @@ def test_unix_seconds_when_errored_raises_underlying() -> None:
 
 def test_handle_swallows_eagain_until_timeout() -> None:
     sock = FakeUDPSocket()
-    ticks = _MutableTicks()
-    client = NTPClient(socket=sock, timeout_ms=200, ticks_ms_func=ticks)
+    ticks = FakeTicks()
+    client = NTPClient(socket=sock, timeout_ms=200, ticks=ticks)
     request = client.query()
-    ticks.value = 50
+    ticks.advance(50)
     sock.enqueue_eagain_for_recv()
-    client.handle(now_ms=ticks.value)
+    client.handle(now_ms=ticks.ticks_ms())
     assert request.done is False  # still waiting — under timeout
 
 
 def test_handle_times_out_when_no_data_arrives() -> None:
     sock = FakeUDPSocket()
-    ticks = _MutableTicks()
-    client = NTPClient(socket=sock, timeout_ms=200, ticks_ms_func=ticks)
+    ticks = FakeTicks()
+    client = NTPClient(socket=sock, timeout_ms=200, ticks=ticks)
     request = client.query()
     # Advance past the timeout, then handle returns "no data + EAGAIN".
-    ticks.value = 500
+    ticks.advance(500)
     sock.enqueue_eagain_for_recv()
-    client.handle(now_ms=ticks.value)
+    client.handle(now_ms=ticks.ticks_ms())
     assert request.done is True
     assert isinstance(request.error, NTPError)
     assert "timed out" in str(request.error)
@@ -252,22 +243,22 @@ def test_handle_times_out_when_no_data_arrives() -> None:
 def test_handle_timeout_via_zero_byte_recv() -> None:
     """Empty queue (no EAGAIN) and timeout elapsed → fail."""
     sock = FakeUDPSocket()
-    ticks = _MutableTicks()
-    client = NTPClient(socket=sock, timeout_ms=200, ticks_ms_func=ticks)
+    ticks = FakeTicks()
+    client = NTPClient(socket=sock, timeout_ms=200, ticks=ticks)
     request = client.query()
-    ticks.value = 500
-    client.handle(now_ms=ticks.value)
+    ticks.advance(500)
+    client.handle(now_ms=ticks.ticks_ms())
     assert request.done is True
     assert isinstance(request.error, NTPError)
 
 
 def test_handle_zero_byte_recv_under_timeout_keeps_waiting() -> None:
     sock = FakeUDPSocket()
-    ticks = _MutableTicks()
-    client = NTPClient(socket=sock, timeout_ms=500, ticks_ms_func=ticks)
+    ticks = FakeTicks()
+    client = NTPClient(socket=sock, timeout_ms=500, ticks=ticks)
     request = client.query()
-    ticks.value = 50
-    client.handle(now_ms=ticks.value)
+    ticks.advance(50)
+    client.handle(now_ms=ticks.ticks_ms())
     assert request.done is False
 
 

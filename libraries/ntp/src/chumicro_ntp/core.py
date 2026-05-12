@@ -11,7 +11,7 @@ them should use a full NTP implementation (out of scope for embedded).
 Wire format reference: RFC 4330 §4.
 """
 
-from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_timing import ticks as _DEFAULT_TICKS
 
 #: Seconds between the NTP epoch (1900-01-01T00:00:00Z) and the
 #: Unix epoch (1970-01-01T00:00:00Z).  Constant since both epochs
@@ -195,19 +195,11 @@ class NTPClient:
         port: NTP server UDP port.  Defaults to ``123``.
         timeout_ms: Maximum tick budget for the recv side of the
             exchange.  Defaults to ``5000``.
-        ticks_ms_func: Inject a fake ``ticks_ms`` for testing;
-            defaults to :func:`chumicro_timing.ticks_ms`.
-        ticks_add_func: Inject a fake ``ticks_add`` for testing;
-            defaults to :func:`chumicro_timing.ticks_add`.
-        ticks_diff_func: Inject a fake ``ticks_diff`` for testing;
-            defaults to :func:`chumicro_timing.ticks_diff`.  The
-            three must agree on a single ticks domain — wrap
-            period, sign convention, and ``ticks_add`` overflow
-            limits — so injecting one fake without the other two
-            mismatches the math.  Mirrors the
-            :class:`chumicro_requests.HttpClient` /
-            :class:`chumicro_mqtt.MQTTClient` /
-            :class:`chumicro_websockets.WebSocketClient` shape.
+        ticks: Optional tick source — any object exposing
+            ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches the
+            ``chumicro_timing.ticks`` submodule shape).  Defaults to
+            that submodule (real clock); tests pass ``FakeTicks``
+            from ``chumicro_timing.testing``.
 
     Raises:
         ValueError: ``timeout_ms`` is non-positive.
@@ -285,9 +277,7 @@ class NTPClient:
         server: str = "pool.ntp.org",
         port: int = 123,
         timeout_ms: int = 5_000,
-        ticks_ms_func: object = ticks_ms,
-        ticks_add_func: object = ticks_add,
-        ticks_diff_func: object = ticks_diff,
+        ticks: object | None = None,
     ) -> None:
         if timeout_ms <= 0:
             raise ValueError("timeout_ms must be positive")
@@ -295,12 +285,7 @@ class NTPClient:
         self._server = server
         self._port = port
         self._timeout_ms = timeout_ms
-        # Inject the full ticks suite for testing — same shape as
-        # chumicro_requests.HttpClient / chumicro_mqtt.MQTTClient /
-        # chumicro_websockets.  Defaults wire to chumicro_timing.
-        self._ticks_ms = ticks_ms_func
-        self._ticks_add = ticks_add_func
-        self._ticks_diff = ticks_diff_func
+        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
         self._result: NTPResult | None = None
         # Pre-allocate the receive buffer so the hot path doesn't
         # allocate.  48 bytes is the SNTP packet size; larger buffers
@@ -350,7 +335,7 @@ class NTPClient:
             raise RuntimeError(
                 "NTP query already in flight; await result before re-querying",
             )
-        now_ms = self._ticks_ms()
+        now_ms = self._ticks.ticks_ms()
         result = NTPResult(ticks_started_ms=now_ms)
         request = _build_request()
         try:
@@ -395,7 +380,7 @@ class NTPClient:
             if errno in (11, 35, 10035):
                 # EAGAIN / EWOULDBLOCK / WSAEWOULDBLOCK — no data
                 # this tick.  Check the timeout instead.
-                elapsed_ms = self._ticks_diff(now_ms, result.ticks_started_ms)
+                elapsed_ms = self._ticks.ticks_diff(now_ms, result.ticks_started_ms)
                 if elapsed_ms >= self._timeout_ms:
                     result._fail(
                         NTPError(
@@ -408,7 +393,7 @@ class NTPClient:
             return
         if received_count == 0:
             # No data and no error — treat as "still waiting".
-            elapsed_ms = self._ticks_diff(now_ms, result.ticks_started_ms)
+            elapsed_ms = self._ticks.ticks_diff(now_ms, result.ticks_started_ms)
             if elapsed_ms >= self._timeout_ms:
                 result._fail(
                     NTPError(
