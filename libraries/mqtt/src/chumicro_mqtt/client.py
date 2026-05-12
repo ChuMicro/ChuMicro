@@ -648,8 +648,10 @@ class MQTTClient:
                 topic=topic, payload=payload_bytes, qos=0, retain=retain,
             )
             self._enqueue_user_tx(packet)
-            # QoS 0 has no ack — fire the callback once the bytes hit the wire.
-            if on_publish is not None:
+            # QoS 0 has no ack — fire the callback(s) once the bytes hit
+            # the wire.  Skip the marker enqueue entirely when no callback
+            # is wired, so the no-callback fast path stays single-slot.
+            if on_publish is not None or self.on_publish is not _no_callback:
                 self._enqueue_user_tx(
                     ("__qos0_callback__", on_publish, topic, payload_bytes),
                 )
@@ -890,7 +892,8 @@ class MQTTClient:
             if isinstance(head, tuple) and head[0] == "__qos0_callback__":
                 _, callback, topic, payload = head
                 self._tx_queue.popleft()
-                callback(topic, payload)
+                if callback is not None:
+                    callback(topic, payload)
                 self.on_publish(topic, payload)
                 continue
             packet = head
