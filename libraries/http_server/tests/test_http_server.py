@@ -79,9 +79,7 @@ def _make_server(*, sockets, handler=None, **kwargs):
     server = HttpServer(
         listener_factory=listener_factory,
         handler=handler,
-        ticks_ms_func=ticks.ticks_ms,
-        ticks_add_func=ticks.ticks_add,
-        ticks_diff_func=ticks.ticks_diff,
+        ticks=ticks,
         **kwargs,
     )
     return server, ticks, listener_called
@@ -657,9 +655,7 @@ class TestHttpServerRouting:
         ticks = FakeTicks()
         server = HttpServer(
             listener_factory=lambda: _FakeListener(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
             **kwargs,
         )
         return server, ticks
@@ -876,9 +872,7 @@ class TestHttpServerAcceptVariants:
         server = HttpServer(
             listener_factory=lambda: NoneListener(),
             handler=lambda request: build_response(200),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         server.handle(ticks.ticks_ms())
         assert server.in_flight == 0
@@ -905,9 +899,7 @@ class TestRequestParserBodyStateTransition:
             listener_factory=lambda: _FakeListener([(sock, ("127.0.0.1", 1))]),
             handler=lambda request: build_response(200),
             request_timeout_ms=1_000_000,  # don't time out
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         # Drive a few ticks; connection should be stalled mid-body, not done.
         for _ in range(5):

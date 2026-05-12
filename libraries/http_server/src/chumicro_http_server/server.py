@@ -28,7 +28,7 @@ budgets are future work.
 
 import json
 
-from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_http_server._wire import (
     CRLF,
@@ -663,9 +663,7 @@ class HttpServer:
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,
         send_budget_per_tick: int = DEFAULT_SEND_BUDGET_PER_TICK,
         max_request_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
-        ticks_ms_func: object = ticks_ms,
-        ticks_add_func: object = ticks_add,
-        ticks_diff_func: object = ticks_diff,
+        ticks: object | None = None,
     ) -> None:
         """Wire up the server.
 
@@ -696,9 +694,11 @@ class HttpServer:
             max_request_body_bytes: Cap on a single buffered request
                 body.  Default 16 KB.  Bigger bodies are rejected
                 with 400.
-            ticks_ms_func: Inject a fake ``ticks_ms`` for testing.
-            ticks_add_func: Inject a fake ``ticks_add`` for testing.
-            ticks_diff_func: Inject a fake ``ticks_diff`` for testing.
+            ticks: Optional tick source — any object exposing
+                ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
+                the ``chumicro_timing.ticks`` submodule shape).
+                Defaults to that submodule (real clock); tests pass
+                ``FakeTicks`` from ``chumicro_timing.testing``.
         """
         self._listener_factory = listener_factory
         self._fallback_handler = handler
@@ -708,9 +708,7 @@ class HttpServer:
         self._send_budget_per_tick = send_budget_per_tick
         self._max_request_body_bytes = max_request_body_bytes
 
-        self._ticks_ms = ticks_ms_func
-        self._ticks_add = ticks_add_func
-        self._ticks_diff = ticks_diff_func
+        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
 
         self._listener = None
         self._connections = []
@@ -929,7 +927,7 @@ class HttpServer:
         # Advance every in-flight connection.  Iterate over a copy so
         # connections can finish + be removed during the loop.
         for connection in list(self._connections):
-            connection.tick(now_ms, ticks_diff_func=self._ticks_diff)
+            connection.tick(now_ms, ticks_diff_func=self._ticks.ticks_diff)
             if connection.is_done:
                 connection.close()
                 self._connections.remove(connection)
@@ -947,7 +945,7 @@ class HttpServer:
             return
         client_socket, peer = accept_result
         _force_non_blocking(client_socket)
-        deadline = self._ticks_add(now_ms, self._request_timeout_ms)
+        deadline = self._ticks.ticks_add(now_ms, self._request_timeout_ms)
         connection = _Connection(
             client_socket,
             peer,
