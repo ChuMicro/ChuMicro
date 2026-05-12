@@ -159,21 +159,6 @@ class PendingResponse:
 
 
 # ---------------------------------------------------------------------------
-# CONNACK return-code → spec-defined human-readable reason.  MQTT 3.1.1
-# §3.2.2.3.  Code 0 is "accepted"; 1-5 are the rejection codes a broker
-# may send.  Anything outside this range falls back to the numeric code.
-# ---------------------------------------------------------------------------
-
-_CONNACK_REJECT_REASON = {
-    1: "unacceptable protocol version",
-    2: "identifier rejected",
-    3: "server unavailable",
-    4: "bad username or password",
-    5: "not authorized",
-}
-
-
-# ---------------------------------------------------------------------------
 # WhenOversized policy
 # ---------------------------------------------------------------------------
 
@@ -1247,7 +1232,16 @@ class MQTTClient:
         """CONNACK return-code 0 = success, anything else = failure."""
         self._discard_pending(Awaiting.CONNACK, packet_id=None)
         if packet.return_code != 0:
-            reason = _CONNACK_REJECT_REASON.get(packet.return_code)
+            # MQTT 3.1.1 §3.2.2.3 — codes 1-5 are the rejection codes a
+            # broker may send.  Built inline so the dict only allocates
+            # on rejection (rare); the success path never touches it.
+            reason = {
+                1: "unacceptable protocol version",
+                2: "identifier rejected",
+                3: "server unavailable",
+                4: "bad username or password",
+                5: "not authorized",
+            }.get(packet.return_code)
             if reason is None:
                 message = f"broker rejected CONNECT (return code {packet.return_code})"
             else:
