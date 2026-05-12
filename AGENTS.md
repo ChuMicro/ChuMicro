@@ -7,7 +7,7 @@
 Every session, in this order:
 
 1. `git --no-pager log --oneline -20` — see what just shipped.
-2. Read [`plans/next-up.md`](plans/next-up.md) — the agent-managed work queue (`## Now`, `## Next`, `## Done (recent)`).  If the top entry of `## Now` is a session-handoff pointer (matches `**Resume <topic> from session handoff** — see [handoffs/...](...)`), invoke the [`session-resume`](.github/skills/session-resume/SKILL.md) skill before doing anything else.
+2. Read [`plans/next-up.md`](plans/next-up.md) — the agent-managed work queue (`## Now`, `## Next`, `## Done (recent)`).  If the top entry of `## Now` is a session-handoff pointer (matches `**Resume <topic> from session handoff** — see [handoffs/...](...)`) **and** the user signals intent to resume (`/session-resume`, "pick up where we left off", or similar), invoke the [`session-resume`](.github/skills/session-resume/SKILL.md) skill — a queued handoff is not itself a directive to resume.
 3. Skim [`plans/decisions/`](plans/decisions/) before any structural / pattern / tooling change. ADRs are co-located with the code they govern.
 4. Check [`plans/open-questions.md`](plans/open-questions.md) for unresolved threads on the area you're touching.
 5. Read the relevant skill at [`.github/skills/<name>/SKILL.md`](.github/skills/) before starting (also reachable at `.claude/skills/` via symlink).
@@ -230,7 +230,7 @@ Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/
 | `audit-publishable-isolation` | Cross-repo audit for mono-repo concept leaks into shipped artifacts |
 | `audit-docs` | User-facing markdown doc audit — cold-reader readability, AI-tic phrases, jargon, unverified claims, section flow |
 | `session-handoff` | Capture session-transition context to `plans/handoffs/` before clearing or switching sessions.  User-invoked via `/session-handoff` — do not auto-trigger |
-| `session-resume` | Resume work from a session handoff.  Auto-triggers when the top of `## Now` matches the handoff-pointer shape; also user-invoked via `/session-resume [<slug>]` |
+| `session-resume` | Resume work from a session handoff.  User-invoked via `/session-resume [<slug>]` or by plain-language ask at session start — do not auto-trigger from a handoff pointer alone |
 
 `end-of-session` is a human-only checklist; agents use `task-checkpoint`.
 
