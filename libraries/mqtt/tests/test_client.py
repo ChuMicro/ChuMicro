@@ -17,6 +17,7 @@ from chumicro_mqtt.testing import (
     canned_unsuback_bytes,
 )
 from chumicro_sockets.testing import FakeSocket
+from chumicro_test_harness import skip
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
@@ -1153,3 +1154,41 @@ class TestFromConfig:
         for bad_input in (None, "not-a-dict", 42, ["not", "a", "dict"]):
             with raises(InvalidConfigType):
                 MQTTClient.from_config(bad_input)
+
+    def test_skipped_factory_module_raises_runtime_error(self) -> None:
+        """When ``chumicro_mqtt.sockets_factory`` is excluded via
+        ``__chumicro_skip_factories__``, the default branch of
+        ``from_config`` raises ``RuntimeError`` naming the bypass
+        kwarg instead of leaking ``ImportError``.
+
+        Simulates the post-deploy state by stuffing ``None`` into
+        ``sys.modules`` for the factory submodule — a ``None`` entry
+        makes a subsequent ``import`` raise ``ImportError`` on
+        CPython.  MicroPython / CircuitPython do not honor the
+        ``None``-sentinel convention so the test only runs on
+        CPython; the RuntimeError-translation behavior itself is
+        runtime-agnostic (a real on-device skip-factories deploy
+        triggers the same code path).
+        """
+        import sys  # noqa: PLC0415
+
+        if sys.implementation.name != "cpython":
+            skip("sys.modules None-sentinel is CPython-specific")
+
+        original = sys.modules.get("chumicro_mqtt.sockets_factory")
+        sys.modules["chumicro_mqtt.sockets_factory"] = None
+        try:
+            try:
+                MQTTClient.from_config(
+                    {"mqtt.broker.host": "h", "mqtt.broker.port": 1883},
+                )
+            except RuntimeError as exception:
+                assert "socket_factory=" in str(exception)
+                assert "__chumicro_skip_factories__" in str(exception)
+            else:
+                raise AssertionError("expected RuntimeError")
+        finally:
+            if original is None:
+                sys.modules.pop("chumicro_mqtt.sockets_factory", None)
+            else:
+                sys.modules["chumicro_mqtt.sockets_factory"] = original

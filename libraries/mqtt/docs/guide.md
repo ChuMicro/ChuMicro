@@ -138,6 +138,43 @@ client.connect()
 
 Without a factory the client transitions to `FAILED` on socket death and stays there until the caller manually tears down + reconstructs.
 
+## Bring your own transport
+
+`MQTTClient` does not care which library produces its socket.  Any object exposing the four-method contract works:
+
+| Method | Contract |
+|---|---|
+| `recv_into(buffer, nbytes) -> int` | Reads up to `nbytes` into `buffer` (a `memoryview`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` on no data, returns 0 on peer-close, otherwise returns bytes written. |
+| `send(payload) -> int` | Sends `payload` (a `bytes`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full, otherwise returns bytes sent (may be partial). |
+| `close() -> None` | Releases the connection. |
+| `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
+
+`chumicro_sockets.tcp_client_socket` (and `tls_client_socket`) is one valid producer.  Stdlib `socket.socket` after `setblocking(False)` is another.  An upstream-library wrapper or a hand-rolled fake works the same way:
+
+```python
+# Example: stdlib socket on CPython for a test or desktop demo.
+import socket
+
+def make_socket():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(("broker.example.com", 1883))
+    sock.setblocking(False)
+    return sock
+
+client = MQTTClient(socket_factory=make_socket, client_id="desktop-demo")
+```
+
+The library has no `isinstance` checks against `chumicro_sockets` types — the contract is the four methods above.  Runtime errors surface at first call, not at construction time, so a misshaped object fails on the first `recv_into` / `send` rather than silently misbehaving.
+
+If you supply your own transport and never want `chumicro_sockets` to land on the device, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
+
+```python
+# code.py / app.py
+__chumicro_skip_factories__ = ("sockets_factory",)
+```
+
+The constant accepts a family form (the bare stem, matches every `chumicro_*.sockets_factory`) or an exact dotted path (`chumicro_mqtt.sockets_factory`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `MQTTClient.from_config(...)` on a deploy that has skipped `chumicro_mqtt.sockets_factory` raises `RuntimeError` naming the bypass kwarg, so the failure mode is loud rather than mysterious.
+
 ## Tuning for tick-latency vs throughput
 
 Two constructor knobs let you trade tick fairness for throughput:
