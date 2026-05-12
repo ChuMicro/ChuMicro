@@ -1,11 +1,11 @@
 """Tests for ProtocolState + InFlightTable + PendingResponse."""
 
-from chumicro_mqtt import (
+from chumicro_mqtt import ProtocolState
+from chumicro_mqtt.client import (
     Awaiting,
     InFlightPublish,
     InFlightTable,
     PendingResponse,
-    ProtocolState,
 )
 from chumicro_test_harness.assertions import raises
 
