@@ -11,9 +11,7 @@ Two responsibilities:
    blank substrate.  Raise ``KVStoreCorrupt`` if integrity-check
    framing fails (CP NVM's CRC mismatch is the canonical case).
 2. ``save(payload)`` — overwrite the persisted state with *payload*.
-   Raise ``KVStoreFull`` if the substrate can't accept that many
-   bytes.  Raise ``KVStoreReadOnly`` if the substrate refuses the
-   write right now (CP USB-MSC active, …).
+   Raise ``KVStoreFull`` if the substrate can't accept that many bytes.
 
 The ``capacity`` attribute is honored by ``KVStore`` *before* calling
 ``save``, so backends only need to enforce it as a defensive last
@@ -46,6 +44,5 @@ class Backend:
 
         Raises:
             KVStoreFull: Payload exceeds substrate capacity.
-            KVStoreReadOnly: Substrate refuses writes right now.
         """
         raise NotImplementedError

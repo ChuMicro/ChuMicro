@@ -43,16 +43,6 @@ class KVStoreCorrupt(KVStoreError):
     """
 
 
-class KVStoreReadOnly(KVStoreError):
-    """Backend won't accept a write right now.
-
-    On CircuitPython this is the USB-MSC-active case: the filesystem
-    refuses ``storage.remount`` while the host has the drive mounted.
-    The data fits, the substrate just isn't writable this tick — the
-    typical recovery is to retry on a future commit.
-    """
-
-
 def _select_backend() -> Backend:
     """Pick the best backend for this runtime.
 
@@ -172,7 +162,6 @@ class KVStore:
 
         Raises:
             KVStoreFull: Encoded payload exceeds ``capacity``.
-            KVStoreReadOnly: Backend refused the write.
         """
         payload = packb(self._data)
         if len(payload) > self._backend.capacity:
@@ -271,7 +260,7 @@ class KVStore:
 
     @property
     def is_corrupt(self) -> bool:
-        """``True`` if the last load failed integrity check."""
+        """``True`` after a failed-integrity load; cleared by the next successful commit or reload."""
         return self._is_corrupt
 
     @property

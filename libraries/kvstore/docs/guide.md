@@ -131,17 +131,7 @@ store.commit_if_changed()
 
 ### USB-MSC read-only window (CircuitPython)
 
-While the host has CIRCUITPY mounted, the device can't `storage.remount(readonly=False)` to write to flash.  The CircuitPython NVM backend writes to NVM (not the FAT volume) so it's mostly unaffected, but if you've layered something on top of the LittleFS backend on a CircuitPython board, you may hit `KVStoreReadOnly`:
-
-```python
-try:
-    store.commit()
-except KVStoreReadOnly:
-    # Backend refused write — typical recovery is to retry next tick.
-    pass
-```
-
-The data fits, the backend just isn't writable this tick.
+While the host has CIRCUITPY mounted, the device can't `storage.remount(readonly=False)` to write to flash.  The default `nvm` backend on CircuitPython writes to NVM (not the FAT volume) so it's unaffected — the boot-counter pattern continues to persist across reboots even with the drive mounted.
 
 ## Examples
 

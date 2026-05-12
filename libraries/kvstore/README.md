@@ -49,7 +49,7 @@ print(store["boot_count"])             # → 1, 2, 3, … across power cycles
 | `store.commit_if_changed()` | Skip write when payload is unchanged (wear defense) |
 | `store.reload()` | Discard in-memory state, reread from backend |
 | `store.capacity` / `bytes_used` / `is_corrupt` / `backend_name` | Honest substrate introspection |
-| `KVStoreFull` / `KVStoreCorrupt` / `KVStoreReadOnly` | Targeted exceptions |
+| `KVStoreFull` / `KVStoreCorrupt` | Targeted exceptions (catch `KVStoreError` for both) |
 | `chumicro_kvstore.testing.FakeKVStore` | Drop-in for downstream tests with capacity + corruption hooks |
 
 ## Where this fits
