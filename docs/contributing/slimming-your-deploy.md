@@ -1,22 +1,30 @@
 # Slimming your deploy
 
-`chumicro-workspace`'s deployer ships exactly the files your `app.py` imports — the AST walker (`chumicro_deploy.ImportGraphSource`) follows every static `import`, including lazy ones inside function bodies.  Most of the time that's exactly what you want.  But ChuMicro libraries inject their I/O dependencies through a `from_config(...)` constructor that lazy-imports a default factory submodule.  If you supply your own dependency through the constructor's kwargs and never want the default factory's helper library on the device, the walker still ships it — the lazy import inside `from_config` is statically discoverable, so the factory submodule and its closure ride along.
+When you deploy a project, `chumicro-workspace` copies every chumicro library that anything in your project imports onto the board — including the small helper each library uses to build its default transport (typically a `chumicro_sockets` socket).
 
-[Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md) introduces an entrypoint-level opt-out for those factory submodules.  Drop a module-level constant into `app.py` (or `code.py` — whichever your project's entrypoint is) and the walker filters the named factories out of the deploy graph before resolution, taking their closure-only dependencies with them.
+Most of the time that's fine.  But if you're passing your own socket into a library — say `MQTTClient(socket_factory=my_factory, ...)` — the default-builder helper is dead code on your board, and so is `chumicro_sockets` underneath it.  The deployer can't tell at deploy time which path your code will take at runtime, so it ships both.
 
-The walker matches any `chumicro_*/[a-z][a-z0-9_]*_factory.py` under the search paths.  The file-name convention is what makes the family form (`"sockets_factory"` matching every library's `sockets_factory.py`) work; the mechanism itself doesn't care what kind of dependency a factory produces.
+[Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md) lets you say "skip the default builder; I'm bringing my own."  Add one line to your `app.py` (or `code.py` — whichever your project's entrypoint is):
 
-## The mechanism in one paragraph
+```python
+__chumicro_skip_factories__ = ("sockets_factory",)
+```
+
+The deployer reads that constant, leaves the named factory helpers out of the deploy, and the libraries they pull in (typically `chumicro_sockets`) stay off the board.
+
+## Family form and exact form
+
+The skip constant accepts two entry shapes, mix freely:
 
 ```python
 # app.py
 __chumicro_skip_factories__ = (
-    "sockets_factory",                       # family form
-    "chumicro_websockets.tls_factory",       # exact form
+    "sockets_factory",                       # family — skip every <library>.sockets_factory
+    "chumicro_websockets.tls_factory",       # exact — skip just this one
 )
 ```
 
-`sockets_factory` (no dot) is a *family* match — every discovered `chumicro_*/sockets_factory.py` under your search paths gets filtered.  `chumicro_websockets.tls_factory` (one dot) is an *exact* match — only that one module gets filtered.  Mix both forms freely.
+A bare stem like `"sockets_factory"` (no dot) matches every library's `sockets_factory.py`.  A dotted path like `"chumicro_websockets.tls_factory"` matches one module only.
 
 ## Two failure modes that surface loudly, not silently
 
