@@ -483,13 +483,10 @@ class MQTTClient:
             when_oversized: Policy for inbound messages above
                 ``max_message_bytes``.  See :class:`WhenOversized`.
             recv_budget_per_tick: Soft cap on bytes drained from the
-                socket in a single :meth:`handle` call.  Default 1024.
-                Bounds tick latency so concurrent runner tasks (LED,
-                LCD update, control loop) keep getting CPU time when a
-                large inbound PUBLISH is mid-flight; without this, a
-                100 KB blob in the kernel TCP buffer would monopolize
-                the tick until the buffer drains.  Configurable for
-                things that genuinely want fast big-blob ingestion.
+                socket in a single :meth:`handle` call (default 1024).
+                Bounds tick latency when a large inbound PUBLISH is
+                mid-flight so concurrent runner tasks keep getting
+                CPU time.
             max_tx_queue_size: Maximum number of pending outbound
                 packets.  Default 20 — sized for the runner-shaped
                 sensor profile (publish every N seconds, queue stays
