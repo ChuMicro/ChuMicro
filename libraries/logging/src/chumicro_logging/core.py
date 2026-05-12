@@ -35,19 +35,7 @@ _LEVEL_NAMES = {
 
 
 def level_name(level: int) -> str:
-    """Return the human name for *level*.
-
-    Unknown levels render as ``LEVEL<n>`` so log output stays readable
-    even when callers use intermediate values.
-
-    Args:
-        level: An integer level.
-
-    Returns:
-        ``"DEBUG"`` / ``"INFO"`` / ``"WARNING"`` / ``"ERROR"`` /
-        ``"CRITICAL"`` for the standard levels, or ``"LEVEL<n>"``
-        for any other integer.
-    """
+    """Return the human name for *level*, or ``"LEVEL<n>"`` if unknown."""
     name = _LEVEL_NAMES.get(level)
     if name is not None:
         return name
@@ -55,16 +43,7 @@ def level_name(level: int) -> str:
 
 
 def default_formatter(level: int, name: str, message: str) -> str:
-    """Render a record as ``LEVEL:name:message`` on a single line.
-
-    Args:
-        level: The record's integer level.
-        name: The originating logger's name.
-        message: The pre-formatted message.
-
-    Returns:
-        A single-line string suitable for writing to a stream.
-    """
+    """Render a record as ``LEVEL:name:message`` on a single line."""
     return f"{level_name(level)}:{name}:{message}"
 
 
@@ -146,19 +125,11 @@ class Logger:
 
         Useful for skipping expensive message construction when the
         record would be dropped anyway.
-
-        Args:
-            level: An integer level.
         """
         return level >= self._level
 
     def log(self, level: int, message: str) -> None:
-        """Emit *message* at *level* to every attached handler.
-
-        Args:
-            level: An integer level.
-            message: The pre-formatted message.
-        """
+        """Emit *message* at *level* to every attached handler."""
         if level < self._level:
             return
         for handler in self._handlers:
