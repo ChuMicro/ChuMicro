@@ -152,7 +152,7 @@ MCU RAM, 4 MB flash):
 | `send_budget_per_tick` | `1024` | LED-friendly outbound drain. |
 | `max_message_bytes` | `16384` | 16 KB cap on assembled inbound messages. |
 | `max_tx_queue_size` | `8` | Bounded TX queue. |
-| `when_oversized` | `WhenOversized.DROP_WITH_EVENT` | Fire `on_oversized`, close with 1009. |
+| `when_oversized` | `WhenOversized.DROP_WITH_EVENT` | Drop the oversized message, fire `on_oversized(reported_length)`, stay connected.  `DISCONNECT` closes with 1009 instead. |
 | `ping_interval_ms` | `None` (disabled) | Optional client-side keep-alive ping cadence. |
 | `pong_timeout_ms` | `30000` | Close after 30 s without PONG to a PING. |
 | `handshake_timeout_ms` | `10000` | Total opening-handshake budget. |

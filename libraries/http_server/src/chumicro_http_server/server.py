@@ -474,64 +474,6 @@ def _build_method_not_allowed_response(allowed_methods) -> Response:
 # ---------------------------------------------------------------------------
 
 
-def _build_default_listener_factory(config, *, radio=None, ssl_context=None):
-    """Build a ``() -> ListeningSocket`` factory from runtime config.
-
-    Used by :meth:`HttpServer.from_config` when the caller doesn't
-    pass ``listener_factory=``.  TLS resolution rules live in
-    :meth:`HttpServer.from_config`'s docstring.
-
-    Raises:
-        chumicro_config.MissingConfigKey: Exactly one of
-            ``http_server.tls.cert_path`` / ``http_server.tls.key_path``
-            is set in *config* — both-or-neither is the only valid
-            TLS shape.
-    """
-    host = config.get("http_server.bind_host", "0.0.0.0")
-    port = config.get("http_server.bind_port", 8080)
-    cert_path = config.get("http_server.tls.cert_path")
-    key_path = config.get("http_server.tls.key_path")
-
-    # Half-TLS guard: both keys present or both absent.  Surfacing
-    # this loudly beats silently dropping into a plain TCP listener
-    # when the user obviously *meant* TLS.
-    if (cert_path is None) != (key_path is None):
-        from chumicro_config import MissingConfigKey  # noqa: PLC0415
-        missing = (
-            "http_server.tls.cert_path" if cert_path is None
-            else "http_server.tls.key_path"
-        )
-        raise MissingConfigKey(
-            f"required config key {missing!r} is missing — TLS "
-            "requires both cert_path and key_path",
-        )
-
-    use_tls = ssl_context is not None or cert_path is not None
-
-    def factory():
-        from chumicro_sockets import (  # noqa: PLC0415 - lazy
-            ssl_context_with_cert_and_key_paths,
-            tcp_listening_socket,
-            tls_listening_socket,
-        )
-        if not use_tls:
-            return tcp_listening_socket(host, port, radio=radio)
-        # Either explicit ssl_context or both config paths: build the
-        # context if needed, then open the TLS listener.
-        context = (
-            ssl_context
-            if ssl_context is not None
-            else ssl_context_with_cert_and_key_paths(
-                cert_path=cert_path, key_path=key_path,
-            )
-        )
-        return tls_listening_socket(
-            host, port, context=context, radio=radio,
-        )
-
-    return factory
-
-
 class HttpServer:
     """Non-blocking HTTP/1.1 server.
 
@@ -641,7 +583,14 @@ class HttpServer:
                 f"dict, got {type(config).__name__}",
             )
         if listener_factory is None:
-            listener_factory = _build_default_listener_factory(
+            # Lazy import so users who pass their own listener_factory
+            # don't pull chumicro_sockets into the deploy graph.  See
+            # ``chumicro_http_server.sockets_factory`` for the helper itself.
+            from chumicro_http_server.sockets_factory import (  # noqa: PLC0415 - lazy
+                chumicro_sockets_factory,
+            )
+
+            listener_factory = chumicro_sockets_factory(
                 config, radio=radio, ssl_context=ssl_context,
             )
         return cls(

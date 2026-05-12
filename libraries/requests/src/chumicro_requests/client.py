@@ -68,9 +68,8 @@ class WhenOversized:
     #: care about the status code (e.g. liveness checks).
     DROP_SILENT = "drop_silent"
 
-    #: Default.  Drop the body, fire ``client.on_oversized(url,
-    #: reported_length)`` if set, otherwise behave like
-    #: :data:`DROP_SILENT`.
+    #: Default.  Drop the body, fire ``client.on_oversized(reported_length,
+    #: url)`` if set, otherwise behave like :data:`DROP_SILENT`.
     DROP_WITH_EVENT = "drop_with_event"
 
     #: Fail the request with :class:`HttpOversizedError`.  Use when
@@ -940,7 +939,7 @@ class HttpClient:
                 self._complete_oversized_drop()
                 return
             if self._when_oversized == WhenOversized.DROP_WITH_EVENT:
-                self.on_oversized(self._url, error)
+                self.on_oversized(error.reported_length, self._url)
                 self._complete_oversized_drop()
                 return
             # DISCONNECT — fall through to fail path.

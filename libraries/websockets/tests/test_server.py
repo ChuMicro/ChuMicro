@@ -22,7 +22,6 @@ from chumicro_websockets import (
     CLOSE_BAD_DATA,
     CLOSE_GOING_AWAY,
     CLOSE_PROTOCOL_ERROR,
-    CLOSE_TOO_BIG,
     OPCODE_BINARY,
     OPCODE_CLOSE,
     OPCODE_CONTINUATION,
@@ -655,12 +654,12 @@ class TestCloseHandshake:
 
 
 class TestOversize:
-    def test_drop_with_event_fires_and_closes(self):
+    def test_drop_with_event_fires_and_stays_open(self):
         observed = []
         oversized = []
 
         def on_open(conn):
-            conn.on_oversized = lambda length: oversized.append(length)
+            conn.on_oversized = lambda reported_length: oversized.append(reported_length)
 
         server, listener, clock = _make_server(
             max_message_bytes=10,
@@ -675,22 +674,14 @@ class TestOversize:
         server.handle(clock.ticks_ms())
         server.handle(clock.ticks_ms())
         assert oversized
-        # Drain close.
-        for _tick in range(3):
-            if server.connection_count == 0:
-                break
-            server.handle(clock.ticks_ms())
-        outbound = peer.read_outbound()
-        parser = FrameParser()
-        parser.feed(outbound)
-        code = struct.unpack("!H", parser.payload[:2])[0]
-        assert code == CLOSE_TOO_BIG
+        # Connection still OPEN; ready for next inbound message.
+        assert observed[0].state == WebSocketState.OPEN
 
     def test_drop_silent(self):
         oversized = []
 
         def on_open(conn):
-            conn.on_oversized = lambda length: oversized.append(length)
+            conn.on_oversized = lambda reported_length: oversized.append(reported_length)
 
         server, listener, clock = _make_server(
             max_message_bytes=10,
@@ -714,7 +705,7 @@ class TestOversize:
 
         def on_open(connection):
             observed.append(connection)
-            connection.on_oversized = lambda length: oversized.append(length)
+            connection.on_oversized = lambda reported_length: oversized.append(reported_length)
 
         server, listener, clock = _make_server(
             max_message_bytes=10,

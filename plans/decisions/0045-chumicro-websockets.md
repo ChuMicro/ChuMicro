@@ -69,7 +69,7 @@ The "share a port with chumicro-http-server" question is sidestepped: `WebSocket
 | `send_budget_per_tick` | `1024` | Drain TX queue cooperatively. |
 | `max_message_bytes` | `16384` (16 KB) | Cap the buffered inbound message.  Decision 0015 minimum board class is 256 KB MCU RAM — 16 KB leaves headroom; oversize triggers `when_oversized`. |
 | `max_tx_queue_size` | `8` | Bounded send queue.  Mirrors `chumicro-mqtt.max_tx_queue_size`. |
-| `when_oversized` | `DROP_WITH_EVENT` | Same enum shape as `chumicro_mqtt.WhenOversized`.  Fires `client.on_oversized(reported_length)`; `DISCONNECT` closes with code `1009`. |
+| `when_oversized` | `DROP_WITH_EVENT` | Same enum shape as `chumicro_mqtt.WhenOversized`.  `DROP_WITH_EVENT` drops the oversized message, fires `client.on_oversized(reported_length)`, and stays connected for the next inbound message.  `DISCONNECT` closes with code `1009` (`CLOSE_TOO_BIG`).  Per Decision [0061](0061-whenoversized-cross-library-contract.md), the same semantic holds across `chumicro-mqtt` + `chumicro-requests`. |
 | `ping_interval_ms` | `None` | Optional auto-ping.  Off by default (most servers drive their own keep-alive). |
 | `pong_timeout_ms` | `30000` | Auto-close with `1011` if no pong received within window of last ping. |
 | `handshake_timeout_ms` | `10000` | Total opening-handshake budget. |

@@ -14,7 +14,7 @@ served, even through a slow upload or a stalled client.
 Public API::
 
     from chumicro_http_server import HttpServer, build_response
-    from chumicro_sockets import tcp_listening_socket
+    from chumicro_http_server.sockets_factory import chumicro_sockets_factory
     from chumicro_timing import ticks_ms
 
     def handle_request(request):
@@ -23,8 +23,8 @@ Public API::
         return build_response(404, text="not found")
 
     server = HttpServer(
-        listener_factory=lambda: tcp_listening_socket(
-            host="0.0.0.0", port=8080, radio=wifi.radio,
+        listener_factory=chumicro_sockets_factory(
+            {"http_server.bind_port": 8080}, radio=wifi.radio,
         ),
         handler=handle_request,
     )
@@ -41,6 +41,12 @@ Source layout:
 * :mod:`chumicro_http_server.server` — `HttpServer`, `Request`,
   `Response`, per-connection state machine, response writer,
   `build_response()` helper.
+* :mod:`chumicro_http_server.sockets_factory` — opt-in
+  :func:`chumicro_sockets_factory` convenience helper that wires
+  the default :mod:`chumicro_sockets` listener (plain TCP or TLS,
+  driven by config).  Lives in its own submodule so users with a
+  custom ``listener_factory`` never trigger the
+  :mod:`chumicro_sockets` deploy.
 
 TLS-server support is provided transport-side by
 :func:`chumicro_sockets.ssl_context_with_cert_and_key_paths` —

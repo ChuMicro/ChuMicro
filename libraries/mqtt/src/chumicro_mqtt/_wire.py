@@ -389,7 +389,7 @@ DEFAULT_RX_BUFFER_SIZE = const(256)
 
 #: Default cap on a single inbound message.  Anything bigger triggers
 #: the user-configured ``WhenOversized`` policy.
-DEFAULT_MAX_MESSAGE_SIZE = const(256 * 1024)
+DEFAULT_MAX_MESSAGE_BYTES = const(256 * 1024)
 
 
 class ParsedPublish:
@@ -426,10 +426,10 @@ class ParsedAck:
 
 
 class _OversizedMessage:
-    """Signal that the next message exceeds ``max_message_size``.
+    """Signal that the next message exceeds ``max_message_bytes``.
 
     Carries topic + reported length so DROP_WITH_EVENT can fire
-    ``on_oversized(topic, reported_length)`` after the payload is
+    ``on_oversized(reported_length, topic)`` after the payload is
     discarded.
     """
 
@@ -464,7 +464,7 @@ class PacketDecoder:
         self,
         *,
         rx_buffer_size=DEFAULT_RX_BUFFER_SIZE,
-        max_message_size=DEFAULT_MAX_MESSAGE_SIZE,
+        max_message_bytes=DEFAULT_MAX_MESSAGE_BYTES,
     ):
         self._buffer = bytearray(rx_buffer_size)
         # Cached memoryview into ``_buffer`` — the steady-state buffer
@@ -484,7 +484,7 @@ class PacketDecoder:
         # of the old "shift after every drain" shape.
         self._buffer_length = 0
         self._read_offset = 0
-        self._max_message_size = max_message_size
+        self._max_message_bytes = max_message_bytes
         # Degraded path: one-shot buffer for oversize messages whose
         # bodies don't fit in the steady-state buffer.  Drained to
         # recover sync, then released.  ``_degraded_view`` mirrors the
@@ -698,7 +698,7 @@ class PacketDecoder:
         if payload_to_drain <= 0:
             # Whole oversized message already in the steady-state buffer
             # (extreme corner case where buffer is huge but
-            # max_message_size is even larger).  Emit immediately.
+            # max_message_bytes is even larger).  Emit immediately.
             return _OversizedMessage(
                 topic=topic,
                 reported_length=message_length,

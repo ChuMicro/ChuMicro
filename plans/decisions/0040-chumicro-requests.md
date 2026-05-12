@@ -69,7 +69,7 @@ default consumer path on a board.
 | `max_body_bytes` | 65 536 (64 KB) | Cap the buffered response.  Decision 0015 minimum board class is 256 KB MCU RAM — a 64 KB body leaves headroom. |
 | `max_redirects` | 5 | Per request.  Slice 3e wires this in. |
 | `recv_budget_per_tick` | 1024 | Client-level (mirrors `MQTTClient.recv_budget_per_tick`).  A 64 KB body takes ~64 ticks to drain — the LED keeps blinking. |
-| `when_oversized` | `DROP_WITH_EVENT` | Same enum shape as `chumicro_mqtt.WhenOversized`.  Fires `client.on_oversized(url, reported_length)`. |
+| `when_oversized` | `DROP_WITH_EVENT` | Same enum shape as `chumicro_mqtt.WhenOversized`.  Fires `client.on_oversized(reported_length, url)`.  Per Decision [0061](0061-whenoversized-cross-library-contract.md), all three implementing libraries put `reported_length` first and drop-and-stay-connected on `DROP_WITH_EVENT`. |
 
 ### 4. Headers are case-insensitive
 
@@ -135,5 +135,5 @@ Two constraints of the embedded TLS stack (not of `chumicro-requests` per se) th
   hook: `HttpClient` satisfies `check(now_ms) -> bool` so `Runner` can
   drive it directly.
 - The "fetch weather" demo and the two-project demo (sensor → HTTP server) become writable.
-- `WhenOversized` enum lives in `chumicro_requests`, parallel to `chumicro_mqtt.WhenOversized`.  Tempted to factor a shared one out; not yet — copy first, abstract on the third user.
+- `WhenOversized` enum lives in `chumicro_requests`, parallel to `chumicro_mqtt.WhenOversized` and `chumicro_websockets.WhenOversized`.  Decision [0061](0061-whenoversized-cross-library-contract.md) settled the cross-library shape: values stay copy-pasted (no shared module), but callback signature, policy semantics, and cap-attribute naming converge by ADR.
 - The single-in-flight constraint may bite users who want to fan out N concurrent requests.  Documented; v2 can add a pool if a consumer asks.

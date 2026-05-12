@@ -160,7 +160,7 @@ Without `recv_budget_per_tick`, a "drain until EAGAIN" loop on a fat kernel recv
 
 ## Oversized-message policy
 
-`max_message_size` caps a single inbound PUBLISH payload (default 256 KB).  When a payload exceeds the cap, `when_oversized` selects the policy:
+`max_message_bytes` caps a single inbound PUBLISH payload (default 256 KB).  When a payload exceeds the cap, `when_oversized` selects the policy:
 
 ```python
 from chumicro_mqtt import MQTTClient, WhenOversized
@@ -168,7 +168,7 @@ from chumicro_mqtt import MQTTClient, WhenOversized
 client = MQTTClient(
     sock,
     client_id="my-thing",
-    max_message_size=8192,                          # 8 KB cap
+    max_message_bytes=8192,                          # 8 KB cap
     when_oversized=WhenOversized.DROP_WITH_EVENT,   # default
 )
 ```
@@ -178,7 +178,7 @@ Three policies:
 | `WhenOversized` | Behavior |
 |---|---|
 | `DROP_SILENT` | Skip the message, no event. |
-| `DROP_WITH_EVENT` (default) | Skip the message, fire `on_oversized(topic, byte_count)` for telemetry. |
+| `DROP_WITH_EVENT` (default) | Skip the message, fire `on_oversized(reported_length, topic)` for telemetry. |
 | `DISCONNECT` | Cleanly disconnect from the broker — appropriate when oversized inputs indicate a misconfiguration. |
 
 ## Backpressure
@@ -217,10 +217,10 @@ The client actively manages its memory footprint with three caps tunable at cons
 | Cap | Default | What it bounds |
 |---|---|---|
 | `recv_budget_per_tick` | `1024` bytes | Per-tick read ceiling — see [Tuning](#tuning-for-tick-latency-vs-throughput). |
-| `max_message_size` | `256 KB` | Largest inbound PUBLISH payload accepted — see [Oversized-message policy](#oversized-message-policy). |
+| `max_message_bytes` | `256 KB` | Largest inbound PUBLISH payload accepted — see [Oversized-message policy](#oversized-message-policy). |
 | `max_tx_queue_size` | `20` packets | Outbound packet queue cap — see [Backpressure](#backpressure). |
 
-The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) and the registered pattern-handler list grow with your usage — neither has a hard cap.  On memory-tight boards (256 KB MCU RAM), lower `max_message_size` to match your actual broker payload size to avoid heap fragmentation.
+The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) and the registered pattern-handler list grow with your usage — neither has a hard cap.  On memory-tight boards (256 KB MCU RAM), lower `max_message_bytes` to match your actual broker payload size to avoid heap fragmentation.
 
 ## Platform notes
 

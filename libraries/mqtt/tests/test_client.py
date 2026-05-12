@@ -450,19 +450,23 @@ class TestWhenOversized:
         client = _new_client(
             sock, ticks,
             rx_buffer_size=64,
-            max_message_size=8192,
+            max_message_bytes=8192,
             when_oversized=WhenOversized.DROP_WITH_EVENT,
         )
         client.connect()
         _drive(client, ticks, count=2)
 
-        captured: list[tuple[str, int]] = []
-        client.on_oversized = lambda topic, length: captured.append((topic, length))
+        captured: list[tuple[int, str]] = []
+
+        def _record(reported_length: int, topic: str) -> None:
+            captured.append((reported_length, topic))
+
+        client.on_oversized = _record
         sock.enqueue_recv(canned_publish_bytes("log", b"x" * 200, qos=0))
         # Drive enough ticks for the decoder's degraded path to drain.
         _drive(client, ticks, count=10)
         assert len(captured) == 1
-        assert captured[0][0] == "log"
+        assert captured[0][1] == "log"
 
     def test_disconnect_policy_marks_failed(self) -> None:
         sock = FakeSocket()
@@ -471,7 +475,7 @@ class TestWhenOversized:
         client = _new_client(
             sock, ticks,
             rx_buffer_size=64,
-            max_message_size=8192,
+            max_message_bytes=8192,
             when_oversized=WhenOversized.DISCONNECT,
         )
         client.connect()
@@ -591,7 +595,7 @@ class TestDecoderEdgeCases:
         client = _new_client(
             sock, ticks,
             rx_buffer_size=64,
-            max_message_size=8192,
+            max_message_bytes=8192,
             when_oversized=WhenOversized.DISCONNECT,
         )
         client.connect()
@@ -607,13 +611,17 @@ class TestDecoderEdgeCases:
         client = _new_client(
             sock, ticks,
             rx_buffer_size=64,
-            max_message_size=8192,
+            max_message_bytes=8192,
             when_oversized=WhenOversized.DROP_SILENT,
         )
         client.connect()
         _drive(client, ticks, count=2)
         captured: list[object] = []
-        client.on_oversized = lambda topic, length: captured.append((topic, length))
+
+        def _record(reported_length: int, topic: str) -> None:
+            captured.append((reported_length, topic))
+
+        client.on_oversized = _record
         sock.enqueue_recv(canned_publish_bytes("topic", b"x" * 200, qos=0))
         _drive(client, ticks, count=10)
         assert captured == []
@@ -1041,7 +1049,8 @@ class TestFromConfig:
         ``from_config`` builds a factory that reads
         ``mqtt.broker.host`` / ``mqtt.broker.port`` from the config.
         Validates the factory closure without needing a real socket
-        by monkey-patching the eager binding in ``chumicro_mqtt.client``."""
+        by monkey-patching ``chumicro_sockets.tcp_client_socket``,
+        which the factory closure reaches at call time."""
         captured: dict = {}
 
         def fake_tcp_client_socket(host, port, *, radio=None):
@@ -1050,17 +1059,17 @@ class TestFromConfig:
             captured["radio"] = radio
             return FakeSocket()
 
-        import chumicro_mqtt.client as mqtt_client  # noqa: PLC0415
+        import chumicro_sockets  # noqa: PLC0415
 
-        original = mqtt_client.tcp_client_socket
-        mqtt_client.tcp_client_socket = fake_tcp_client_socket
+        original = chumicro_sockets.tcp_client_socket
+        chumicro_sockets.tcp_client_socket = fake_tcp_client_socket
         try:
             MQTTClient.from_config(
                 {"mqtt.broker.host": "10.0.0.42", "mqtt.broker.port": 8883},
                 radio="fake-radio",
             )
         finally:
-            mqtt_client.tcp_client_socket = original
+            chumicro_sockets.tcp_client_socket = original
 
         assert captured == {"host": "10.0.0.42", "port": 8883, "radio": "fake-radio"}
 

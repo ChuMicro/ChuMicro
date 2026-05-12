@@ -69,7 +69,15 @@ class HttpOversizedError(HttpError):
     Raised when ``when_oversized=DISCONNECT``.  The other policies
     (``DROP_SILENT``, ``DROP_WITH_EVENT``) drop the payload silently
     or fire an event without raising.
+
+    ``reported_length`` is the projected total body size at the moment
+    the cap was crossed — useful when the error is re-raised to the
+    caller under ``DISCONNECT``.
     """
+
+    def __init__(self, message: str, *, reported_length: int) -> None:
+        super().__init__(message)
+        self.reported_length = reported_length
 
 
 # ---------------------------------------------------------------------------
@@ -874,6 +882,7 @@ class ResponseParser:
                 self._fail(HttpOversizedError(
                     f"Content-Length {content_length} exceeds cap "
                     f"{self._max_body_bytes}",
+                    reported_length=content_length,
                 ))
                 return
             self._body_remaining = content_length
@@ -954,6 +963,7 @@ class ResponseParser:
         if self._body_write_offset + chunk_size > self._max_body_bytes:
             self._fail(HttpOversizedError(
                 f"chunked body would exceed cap {self._max_body_bytes}",
+                reported_length=self._body_write_offset + chunk_size,
             ))
             return True
         if chunk_size == 0:
@@ -1064,6 +1074,7 @@ class ResponseParser:
         if self._body_write_offset + chunk_len > self._max_body_bytes:
             self._fail(HttpOversizedError(
                 f"response body exceeded cap {self._max_body_bytes}",
+                reported_length=self._body_write_offset + chunk_len,
             ))
             return
         self._absorb_body_chunk(chunk)
