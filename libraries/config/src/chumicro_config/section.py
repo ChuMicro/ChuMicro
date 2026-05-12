@@ -1,96 +1,51 @@
 """Flat-key runtime-config wrapper + section-loading helpers.
 
-The on-device runtime config is a **flat dict** with dotted keys::
-
-    {"wifi.ssid": "bench-ap",
-     "wifi.password": "...",
-     "mqtt.broker.host": "test.mosquitto.org",
-     "mqtt.broker.port": 1883}
-
-Compose-time (host-side) flattening turns nested ``[wifi]``/``[mqtt]``
-TOML tables into dotted keys before they reach the msgpack wire
-format.  On device, ``chumicro_config.config`` exposes that flat dict
-through :class:`RuntimeConfig` — a small dict-like wrapper with
-beginner-friendly accessors:
-
-* ``config.get("wifi.ssid")`` → value or ``None`` on miss.
-* ``config.get("wifi.ssid", default)`` → value or *default* on miss.
-* ``config["wifi.ssid"]`` → value or :class:`MissingConfigKey` on miss.
-* ``config.require("wifi.ssid")`` → value or :class:`MissingConfigKey`
-  on miss.  Same as ``[]`` today; library code uses ``require`` to
-  signal intent (the key is mandatory) and gives the validator a
-  hook to attach declared-by context to the error message.
-
+The on-device runtime config is a flat dict with dotted keys
+(``"wifi.ssid"``, ``"mqtt.broker.host"``) — compose-time flattening on
+the host turns nested TOML tables into this shape before the msgpack
+encode.  :class:`RuntimeConfig` wraps that dict for dict-like access;
 :func:`load_section` / :func:`try_load_section` build typed
-``<Name>Config`` instances by reading dotted keys with a shared
-prefix.  Each library's ``<Name>Config.from_config`` /
-``try_from_config`` classmethods wrap them so the required /
-optional vocabulary lives in one place.
+``<Name>Config`` instances from it.
 """
 
 
 class ConfigError(Exception):
-    """Base for every ``chumicro-config`` failure.
-
-    Catch this to handle every config-specific failure uniformly.
-    Catch :class:`MissingConfigKey` / :class:`InvalidConfigType`
-    individually for targeted recovery.
-    """
+    """Base for every ``chumicro-config`` failure."""
 
 
 class MissingConfigKey(ConfigError):
-    """A required config key was missing.
+    """A required config key was missing."""
 
-    Single-inheritance only — MicroPython rejects multiple inheritance
-    from ``Exception`` subclasses with differing memory layouts, so
-    ``KeyError`` (the natural second parent on CPython) isn't a base.
-    Callers that want broader catching use ``except ConfigError``.
-    """
+    # Single-inheritance only: MicroPython rejects multiple inheritance
+    # from Exception subclasses with differing memory layouts, so
+    # KeyError isn't a base.  Catch via ConfigError for broad handling.
 
 
 class InvalidConfigType(ConfigError):
-    """A config value had the wrong shape — typically the wire payload
-    decoded to something other than a dict.
+    """A config value had the wrong shape (typically not a dict)."""
 
-    Single-inheritance for the same MP reason as
-    :class:`MissingConfigKey`.
-    """
+    # Single-inheritance for the same MP reason as MissingConfigKey.
 
 
 class RuntimeConfig:
     """Flat-key dict-like view over the deployed runtime config.
 
-    Wraps the dict decoded from ``/runtime_config.msgpack`` so beginner
-    access patterns work the way Python users expect:
-
-    * ``config.get(key)`` returns ``None`` for missing keys.
-    * ``config.get(key, default)`` returns *default* for missing keys.
-    * ``config[key]`` raises :class:`MissingConfigKey` on miss.
-    * ``config.require(key)`` raises :class:`MissingConfigKey` on miss.
-    * ``key in config`` checks membership.
-    * Iteration yields keys (like a plain dict).
-
-    Constructed with a flat dict whose keys are dotted strings
-    (``"wifi.ssid"``, ``"mqtt.broker.host"``).  Compose-time flattening
-    on the host produces this shape; the device-side reader unwraps
-    the msgpack and hands the dict to this constructor.
+    Supports ``config.get(key[, default])``, ``config[key]`` /
+    ``config.require(key)`` (raises :class:`MissingConfigKey` on miss),
+    ``key in config``, iteration, ``len()``, and equality against
+    another ``RuntimeConfig`` or a plain dict.
     """
 
     def __init__(self, data: dict | None = None) -> None:
-        self._data: dict = dict(data) if data else {}
+        self._data: dict = data if data is not None else {}
 
     def get(self, key, default=None):
-        """Return ``self[key]`` if present, else *default* (or ``None``)."""
         return self._data.get(key, default)
 
     def require(self, key):
-        """Return ``self[key]`` or raise :class:`MissingConfigKey`.
-
-        Library code uses this to express "this key is mandatory" —
-        equivalent to ``self[key]`` today.  The dedicated method gives
-        downstream tooling (e.g. deploy-time manifest validators) a
-        clean hook to wrap the error with declared-by context.
-        """
+        # `require()` exists separately from `__getitem__` so downstream
+        # validators (e.g. deploy-time manifest checks) have a hook to
+        # wrap the error with declared-by context.
         if key not in self._data:
             raise MissingConfigKey(
                 f"required config key {key!r} is missing",
@@ -143,30 +98,13 @@ def load_section(
 ) -> object:
     """Build *target_class* by reading flat keys with a shared *prefix*.
 
-    Reads ``f"{prefix}.{key}"`` for each name in *required* / *optional*,
-    then calls ``target_class(**kwargs)`` with the per-subkey values
-    found.  The library's ``<Name>Config.from_config`` classmethod
-    typically wraps this with its declared required / optional vocabulary.
-
-    Args:
-        target_class: Class to instantiate.  Called as
-            ``target_class(**kwargs)`` where each kwarg name is the
-            *subkey* (no prefix) and the value comes from
-            ``config[f"{prefix}.{subkey}"]``.
-        config: A :class:`RuntimeConfig` or plain dict carrying flat
-            dotted keys.  ``None`` raises :class:`InvalidConfigType` —
-            soft "config not deployed" handling belongs in
-            :func:`try_load_section`, not here.
-        prefix: Key prefix without a trailing dot (e.g. ``"wifi"``).
-            Each required / optional subkey is joined as
-            ``f"{prefix}.{subkey}"``.
-        required: Tuple of subkey names that must be present.
-        optional: Mapping of subkey name → default value used when the
-            full key is absent from *config*.
-
-    Raises:
-        InvalidConfigType: *config* is ``None`` or not a mapping.
-        MissingConfigKey: A required key is absent from *config*.
+    For each name in *required* / *optional*, reads
+    ``config[f"{prefix}.{name}"]`` and passes it as the keyword
+    argument *name* to ``target_class(**kwargs)``.  Missing required
+    keys raise :class:`MissingConfigKey`; a *config* that isn't a
+    :class:`RuntimeConfig` / dict raises :class:`InvalidConfigType`.
+    Soft "config not deployed" handling belongs in
+    :func:`try_load_section`.
     """
     if config is None:
         raise InvalidConfigType(
@@ -209,26 +147,10 @@ def try_load_section(
 ) -> object | None:
     """Soft-load — return ``None`` whenever :func:`load_section` would raise.
 
-    Use this when a caller wants to gate test or app code on
-    "config is configured for this section" without writing a
-    try/except block.  Three short-circuit "skip" paths return
-    ``None``:
-
-    * *config* is ``None`` (no ``/runtime_config.msgpack`` deployed).
-    * *config* is not a RuntimeConfig / dict.
-    * Any required key is missing from *config*.
-
-    Args:
-        target_class: Class to instantiate when the prefix's keys
-            are all present — same role as in :func:`load_section`.
-        config: A :class:`RuntimeConfig`, plain dict, or ``None``.
-        prefix: Key prefix without a trailing dot (e.g. ``"wifi"``).
-        required: Tuple of subkey names that must be present.
-        optional: Mapping of subkey name → default value.
-
-    Returns:
-        Instance of *target_class*, or ``None`` if any short-circuit
-        path fired.
+    Three skip-paths return ``None``: *config* is ``None`` (no
+    runtime config deployed), *config* is the wrong type, or a required
+    key is missing.  Treat the ``None`` return as "this section isn't
+    configured; skip the feature."
     """
     if config is None or not _is_config_like(config):
         return None
@@ -245,5 +167,4 @@ def try_load_section(
 
 
 def _is_config_like(value) -> bool:
-    """True when *value* supports ``key in value`` and ``value[key]``."""
     return isinstance(value, (RuntimeConfig, dict))
