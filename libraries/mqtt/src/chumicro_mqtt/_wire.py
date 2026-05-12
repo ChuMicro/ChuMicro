@@ -267,22 +267,19 @@ def encode_connect(
     if password is not None:
         flags |= 0x40
 
-    variable_header = bytearray(_CONNECT_PROTOCOL_PREFIX)
-    variable_header.append(flags)
-    _append_packed_h(variable_header, keep_alive_seconds)
-
-    payload = bytearray()
-    _append_string(payload, client_id)
+    body = bytearray(_CONNECT_PROTOCOL_PREFIX)
+    body.append(flags)
+    _append_packed_h(body, keep_alive_seconds)
+    _append_string(body, client_id)
     if will_topic is not None:
-        _append_string(payload, will_topic)
-        _append_string(payload, will_message if will_message is not None else b"")
+        _append_string(body, will_topic)
+        _append_string(body, will_message if will_message is not None else b"")
     if username is not None:
-        _append_string(payload, username)
+        _append_string(body, username)
     if password is not None:
-        _append_string(payload, password)
+        _append_string(body, password)
 
-    remaining = bytes(variable_header) + bytes(payload)
-    return _finalize_packet(PACKET_CONNECT, remaining)
+    return _finalize_packet(PACKET_CONNECT, bytes(body))
 
 
 def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
@@ -311,13 +308,13 @@ def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
     if retain:
         fixed_byte_one |= 0x01
 
-    variable_header = bytearray()
-    _append_string(variable_header, topic)
+    body = bytearray()
+    _append_string(body, topic)
     if qos > 0:
-        _append_packed_h(variable_header, packet_id)
+        _append_packed_h(body, packet_id)
+    body.extend(payload)
 
-    remaining = bytes(variable_header) + bytes(payload)
-    return _finalize_packet(fixed_byte_one, remaining)
+    return _finalize_packet(fixed_byte_one, bytes(body))
 
 
 def encode_subscribe(*, packet_id, subscriptions):
@@ -337,16 +334,14 @@ def encode_subscribe(*, packet_id, subscriptions):
                 "subscription qos must be 0 or 1; QoS 2 is reserved-not-implemented",
             )
 
-    variable_header = bytearray()
-    _append_packed_h(variable_header, packet_id)
-    payload = bytearray()
+    body = bytearray()
+    _append_packed_h(body, packet_id)
     for topic, qos in pairs:
-        _append_string(payload, topic)
-        payload.append(qos & 0x03)
+        _append_string(body, topic)
+        body.append(qos & 0x03)
 
-    remaining = bytes(variable_header) + bytes(payload)
     # SUBSCRIBE first byte is 0x82 — the 0x02 low-nibble is required by spec.
-    return _finalize_packet(PACKET_SUBSCRIBE, remaining)
+    return _finalize_packet(PACKET_SUBSCRIBE, bytes(body))
 
 
 def encode_unsubscribe(*, packet_id, topics):
@@ -359,14 +354,12 @@ def encode_unsubscribe(*, packet_id, topics):
     if not pairs:
         raise ValueError("UNSUBSCRIBE requires at least one topic")
 
-    variable_header = bytearray()
-    _append_packed_h(variable_header, packet_id)
-    payload = bytearray()
+    body = bytearray()
+    _append_packed_h(body, packet_id)
     for topic in pairs:
-        _append_string(payload, topic)
+        _append_string(body, topic)
 
-    remaining = bytes(variable_header) + bytes(payload)
-    return _finalize_packet(PACKET_UNSUBSCRIBE, remaining)
+    return _finalize_packet(PACKET_UNSUBSCRIBE, bytes(body))
 
 
 #: Fixed 2-byte PUBACK header — always ``PACKET_PUBACK`` followed by remaining-length 2.
