@@ -441,13 +441,16 @@ class MQTTClient:
                 that case the factory is invoked once at construction
                 time and again on self-heal.
             socket_factory: Optional zero-arg callable returning an
-                object of the same shape as *socket*.  When set the
-                client self-heals after a wifi-drop or socket-death:
-                the next ``handle()`` after entering ``FAILED``
-                rebuilds the socket and re-issues ``connect()``
-                automatically.  Without a factory the client stays
-                ``FAILED`` until the caller manually tears down and
-                reconstructs.
+                object of the same shape as *socket*.  Used in two
+                paths: (1) when *socket* is ``None``, :meth:`connect`
+                invokes the factory to build the initial transport;
+                (2) when the client transitions to ``FAILED`` after a
+                wifi-drop / socket-death, the next ``handle()`` rebuilds
+                the socket and re-issues ``connect()`` automatically.
+                Without a factory, the caller must supply *socket* and
+                manage reconnect themselves.  Construction is always
+                side-effect free — the factory only fires from
+                ``connect()`` / self-heal, never from ``__init__``.
             client_id: MQTT client identifier — must be unique per broker.
                 Doubles as the per-device segment in the topic-prefix
                 scheme when *root_topic* is set.
@@ -528,18 +531,27 @@ class MQTTClient:
                 "will_topic (prefixed) and will_topic_raw (verbatim) are "
                 "mutually exclusive — pass at most one."
             )
-        if socket is None:
-            socket = socket_factory()
+        # Construction is side-effect free.  When a pre-connected
+        # socket is passed, we adopt it (and force non-blocking mode).
+        # When only a ``socket_factory`` is passed, we hold onto it and
+        # let :meth:`connect` invoke it — opening a TCP socket from
+        # ``__init__`` would push network I/O (and the errors it can
+        # raise — ECONNREFUSED, ECONNABORTED, ETIMEDOUT, ENETUNREACH)
+        # into a place callers can't catch via state inspection.  The
+        # runner contract is to call ``connect()`` to start, ``handle()``
+        # to tick, ``state`` to introspect — that's where failures
+        # belong.
         self._socket = socket
         self._socket_factory = socket_factory
-        # The tick-based read path expects EAGAIN on no-data rather than
-        # a blocking recv that stalls the loop.  MicroPython's stdlib
-        # socket constructs in *blocking* mode by default, so consumers
-        # that just pass `tcp_client_socket(...)` to us would otherwise
-        # hang on the first recv with no data and never see CONNACK.
-        # Enforce non-blocking here so the contract belongs to the
-        # client, not every caller.
-        _force_non_blocking(self._socket)
+        if self._socket is not None:
+            # The tick-based read path expects EAGAIN on no-data rather
+            # than a blocking recv that stalls the loop.  MicroPython's
+            # stdlib socket constructs in blocking mode by default, so
+            # consumers that just pass ``tcp_client_socket(...)`` to us
+            # would otherwise hang on the first recv with no data and
+            # never see CONNACK.  Enforce non-blocking here so the
+            # contract belongs to the client, not every caller.
+            _force_non_blocking(self._socket)
         self._user_wants_connected = False
         self._client_id = client_id
         self._root_topic = root_topic
@@ -621,11 +633,21 @@ class MQTTClient:
         return self._last_error
 
     def connect(self):
-        """Queue a CONNECT packet and transition to CONNECTING.
+        """Open the TCP socket (if needed) and queue a CONNECT packet.
 
-        Non-blocking: the actual handshake completes on subsequent
-        :meth:`handle` ticks.  Callers loop ``while client.state in
-        {DISCONNECTED, CONNECTING}: handle()`` or run under a Runner.
+        When the client was constructed with only a ``socket_factory``,
+        the factory is invoked here — this is the first network I/O
+        the client does.  When the factory raises, the client
+        transitions to ``FAILED`` (``last_error`` carries the underlying
+        ``OSError``) instead of letting the exception propagate; the
+        runner contract is to introspect ``state`` / ``last_error``,
+        not to wrap every ``connect()`` call in a try.
+
+        After the socket is in hand, the MQTT CONNECT packet is queued
+        and the state transitions to ``CONNECTING``.  The actual MQTT
+        handshake completes on subsequent :meth:`handle` ticks.  Callers
+        loop ``while client.state in {DISCONNECTED, CONNECTING}: handle()``
+        or run under a Runner.
 
         Raises:
             MQTTError: Called in a non-DISCONNECTED state.
@@ -634,6 +656,22 @@ class MQTTClient:
             raise MQTTError(
                 f"connect() requires DISCONNECTED state, was {self._state}",
             )
+        if self._socket is None:
+            # No pre-built socket — invoke the factory.  Factory errors
+            # land as ``FAILED`` + ``last_error`` rather than propagating
+            # so the runner contract holds; a follow-up tick (or the
+            # caller's reconnect strategy) can retry via self-heal.
+            try:
+                new_socket = self._socket_factory()
+            except OSError as factory_error:
+                self._last_error = MQTTError(
+                    f"socket factory failed: {factory_error}",
+                )
+                self._state = ProtocolState.FAILED
+                self._user_wants_connected = True
+                return
+            self._socket = new_socket
+            _force_non_blocking(self._socket)
         packet = encode_connect(
             client_id=self._client_id,
             keep_alive_seconds=self._keep_alive_seconds,
