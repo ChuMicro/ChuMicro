@@ -418,7 +418,6 @@ class TestDeployerIntegration:
     def test_deployer_ships_app_code_and_msgpack_via_fake_transport(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         project_dir, secrets_toml = _seed_project_dir(tmp_path)
         source = project_directory_source(
@@ -427,10 +426,11 @@ class TestDeployerIntegration:
         )
 
         transport = FakeTransport(execute_output="")
-        device = Device(address="fake://device", transport="micropython")
-        # ``Device`` is a frozen dataclass — patch the method on the
-        # class instead.  ``monkeypatch.setattr`` reverts after the test.
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        device = Device(
+            address="fake://device",
+            transport="micropython",
+            transport_factory=lambda _device: transport,
+        )
 
         result = Deployer(device).deploy(source)
         assert result.success is True

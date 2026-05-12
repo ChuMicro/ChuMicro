@@ -13,9 +13,40 @@ from typing import Any
 
 import pytest
 from chumicro_deploy import Device
+from chumicro_deploy.protocol import TransportProtocol
 from chumicro_deploy.testing import FakeTransport
 from chumicro_workspace import cli
 from msgpack import unpackb
+
+
+def _install_fake_transport(
+    monkeypatch: pytest.MonkeyPatch,
+    transport: TransportProtocol | None = None,
+    *,
+    factory: Any = None,
+) -> None:
+    """Route every ``Device.create_transport()`` to a test fake.
+
+    Workspace tests drive ``cli.main([...])`` end-to-end, so they
+    don't own ``Device`` construction — ``_resolve_device`` builds it
+    from ``devices.yml`` deep inside the dispatch flow.  Install a
+    process-wide hook on :meth:`Device.create_transport` so every
+    constructed ``Device`` yields the supplied fake when its transport
+    is built.  Reverts after the test via ``monkeypatch``.
+
+    Pass either *transport* (one fake for every device) or *factory*
+    (a callable ``factory(device) -> transport`` — for multi-device
+    deploys and recording closures).
+    """
+    if (transport is None) == (factory is None):
+        raise TypeError(
+            "_install_fake_transport requires exactly one of "
+            "*transport* or *factory*",
+        )
+    if factory is None:
+        captured = transport
+        factory = lambda _device: captured  # noqa: E731
+    monkeypatch.setattr(Device, "create_transport", factory)
 
 
 def _seed_workspace(tmp_path: Path) -> Path:
@@ -695,7 +726,7 @@ class TestDeploy:
         _seed_project(root)
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main(
             ["deploy", "--workspace-dir", str(root), "back-porch"],
@@ -733,7 +764,7 @@ class TestDeploy:
                 "RuntimeError: boom\n"
             ),
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
         exit_code = cli.main(
             ["deploy", "--workspace-dir", str(root), "back-porch"],
         )
@@ -751,7 +782,7 @@ class TestDeploy:
         (project_dir / "boot.py").write_text("print('boot')\n")
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -780,7 +811,7 @@ class TestDeploy:
         (project_dir / "app.py").write_text("def run(): print('hi')\n")
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -865,7 +896,7 @@ class TestDeploy:
         )
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -966,7 +997,7 @@ class TestDeployAllDevices:
             addresses_seen.append(device.address)
             return FakeTransport(execute_output="")
 
-        monkeypatch.setattr(Device, "create_transport", factory)
+        _install_fake_transport(monkeypatch, factory=factory)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -1004,7 +1035,7 @@ class TestDeployAllDevices:
                 )
             return FakeTransport(execute_output="")
 
-        monkeypatch.setattr(Device, "create_transport", factory)
+        _install_fake_transport(monkeypatch, factory=factory)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -1089,7 +1120,7 @@ class TestDeployTargetsMapping:
             addresses_seen.append(device.address)
             return FakeTransport(execute_output="")
 
-        monkeypatch.setattr(Device, "create_transport", factory)
+        _install_fake_transport(monkeypatch, factory=factory)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "back-porch",
@@ -1114,10 +1145,10 @@ class TestDeployTargetsMapping:
         _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
-        monkeypatch.setattr(
-            Device, "create_transport",
-            lambda self: (
-                addresses_seen.append(self.address) or FakeTransport()
+        _install_fake_transport(
+            monkeypatch,
+            factory=lambda device: (
+                addresses_seen.append(device.address) or FakeTransport()
             ),
         )
 
@@ -1144,10 +1175,10 @@ class TestDeployTargetsMapping:
         _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
-        monkeypatch.setattr(
-            Device, "create_transport",
-            lambda self: (
-                addresses_seen.append(self.address) or FakeTransport()
+        _install_fake_transport(
+            monkeypatch,
+            factory=lambda device: (
+                addresses_seen.append(device.address) or FakeTransport()
             ),
         )
 
@@ -1177,10 +1208,10 @@ class TestDeployTargetsMapping:
         _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
-        monkeypatch.setattr(
-            Device, "create_transport",
-            lambda self: (
-                addresses_seen.append(self.address) or FakeTransport()
+        _install_fake_transport(
+            monkeypatch,
+            factory=lambda device: (
+                addresses_seen.append(device.address) or FakeTransport()
             ),
         )
 
@@ -1252,10 +1283,10 @@ class TestDeployAllProjects:
         root = self._seed_three_project_workspace(tmp_path)
 
         deploy_calls: list[str] = []
-        monkeypatch.setattr(
-            Device, "create_transport",
-            lambda self: (
-                deploy_calls.append(self.address) or FakeTransport()
+        _install_fake_transport(
+            monkeypatch,
+            factory=lambda device: (
+                deploy_calls.append(device.address) or FakeTransport()
             ),
         )
 
@@ -1366,7 +1397,7 @@ class TestDeployAllProjects:
                 )
             return FakeTransport(execute_output="")
 
-        monkeypatch.setattr(Device, "create_transport", factory)
+        _install_fake_transport(monkeypatch, factory=factory)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "--all-projects",
@@ -1400,7 +1431,7 @@ class TestDeployFailureHints:
                 "KeyError: 'wifi_password'\n"
             ),
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "back-porch",
@@ -1427,7 +1458,7 @@ class TestDeployFailureHints:
                 "ZeroDivisionError: division by zero\n"
             ),
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "back-porch",
@@ -1453,7 +1484,7 @@ class TestDeployFailureHints:
                 "ImportError: no module named 'chumicro_wifi'\n"
             ),
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         # Tail must NOT be reached; stub it to ensure no call.
         import chumicro_repl
@@ -1502,7 +1533,7 @@ class TestDeployDiffCleanup:
                 "/lib/old_project.py": b"old-content",
             },
         )
-        monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "back-porch",
@@ -1527,7 +1558,7 @@ class TestDeployDiffCleanup:
         _seed_project(root, name="back-porch")
 
         transport = FakeTransport(mode="copy", execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         cli.main(["deploy", "--workspace-dir", str(root), "back-porch"])
         out = capsys.readouterr().out
@@ -1561,7 +1592,7 @@ class TestDeployWipeFlag:
                 "/photo.jpg": b"<jpeg>",            # out of scope
             },
         )
-        monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "back-porch", "--wipe",
@@ -1593,7 +1624,7 @@ class TestDeployWipeFlag:
         _seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -1620,7 +1651,7 @@ class TestDeployDryRun:
         _seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -1653,7 +1684,7 @@ class TestDeployDryRun:
         (project_dir / "app.py").write_text("def run(): pass\n")
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -1686,7 +1717,7 @@ class TestDeployDryRun:
         _seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -2065,7 +2096,7 @@ class TestDemo:
         root = _seed_workspace(tmp_path)
 
         transport = FakeTransport(execute_output="Hello from ChuMicro!\n")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main(["demo", "--workspace-dir", str(root)])
         assert exit_code == 0
@@ -2095,7 +2126,7 @@ class TestDemo:
         transport = FakeTransport(
             execute_output="Hello from ChuMicro!\ndemo complete!\n",
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main(["demo", "--workspace-dir", str(root)])
         assert exit_code == 0
@@ -2119,7 +2150,7 @@ class TestDemo:
                 "RuntimeError: boom\n"
             ),
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main(["demo", "--workspace-dir", str(root)])
         assert exit_code == 1
@@ -2627,7 +2658,7 @@ class TestBootstrapWizard:
         transport = FakeTransport(
             execute_output="Hello from ChuMicro!\ndemo complete!\n",
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         # No --with-demo flag — demo is the default behaviour now.
         exit_code = cli.main([
@@ -2671,7 +2702,7 @@ class TestBootstrapWizard:
         def spy_transport(self):  # noqa: ANN001
             constructed.append(True)
             return FakeTransport(execute_output="should not run")
-        monkeypatch.setattr(Device, "create_transport", spy_transport)
+        _install_fake_transport(monkeypatch, factory=spy_transport)
 
         exit_code = cli.main([
             "bootstrap", "--workspace-dir", str(root),
@@ -2757,7 +2788,7 @@ class TestReplWithProject:
         (project_dir / "app.py").write_text("def run(): print('back-porch')\n")
 
         transport = FakeTransport(execute_output="back-porch\n")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
         captured: dict[str, Any] = {}
 
         def fake_tail(device: Device, seconds: float, **kwargs: Any) -> int:
@@ -2798,7 +2829,7 @@ class TestReplWithProject:
         (project_dir / "app.py").write_text("def run(): print('back-porch')\n")
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
         captured: dict[str, Any] = {}
 
         def fake_tail(device: Device, seconds: float, **kwargs: Any) -> int:
@@ -2825,7 +2856,7 @@ class TestReplWithProject:
         (project_dir / "app.py").write_text("def run(): print('door_open')\n")
 
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         import chumicro_repl
         monkeypatch.setattr(
@@ -2866,7 +2897,7 @@ class TestReplWithProject:
                 "RuntimeError: deploy-failed\n"
             ),
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         tail_called = [False]
 
@@ -4807,7 +4838,7 @@ class TestDeployHealthGate:
 
         # Stub the deploy transport so the test doesn't need real hardware.
         transport = FakeTransport(execute_output="ok\n")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -4841,7 +4872,7 @@ class TestDeployHealthGate:
         )
 
         transport = FakeTransport(execute_output="proceeded\n")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -5272,7 +5303,7 @@ class TestResetBoard:
         """Bare ``reset-board`` exits 2 and never touches the transport."""
         root = _seed_workspace(tmp_path)
         transport = FakeTransport(execute_output="", mode="copy")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "reset-board", "--workspace-dir", str(root),
@@ -5290,7 +5321,7 @@ class TestResetBoard:
         """``--yes`` connects, wipes, and disconnects in order."""
         root = _seed_workspace(tmp_path)
         transport = FakeTransport(execute_output="", mode="copy")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "reset-board", "--workspace-dir", str(root),
@@ -5309,7 +5340,7 @@ class TestResetBoard:
         """RAM / mount mode never wrote to flash → reset-board prints + exits 0."""
         root = _seed_workspace(tmp_path)
         transport = FakeTransport(execute_output="", mode="ram")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "reset-board", "--workspace-dir", str(root),
@@ -5553,7 +5584,7 @@ class TestDeployExampleHappyPath:
             example_body="from chumicro_timing import VERSION\nprint(VERSION)\n",
         )
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy-example", "--workspace-dir", str(root),
@@ -5581,7 +5612,7 @@ class TestDeployExampleHappyPath:
         root = _seed_workspace_with_cp_device(tmp_path)
         _seed_example_library(root, "timing")
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy-example", "--workspace-dir", str(root),
@@ -5603,7 +5634,7 @@ class TestDeployExampleHappyPath:
         root = _seed_workspace_with_cp_device(tmp_path)
         _seed_example_library(root, "timing")
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy-example", "--workspace-dir", str(root),
@@ -5626,7 +5657,7 @@ class TestDeployExampleHappyPath:
         root = _seed_workspace_with_cp_device(tmp_path)
         _seed_example_library(root, "timing")
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy-example", "--workspace-dir", str(root),
@@ -5769,7 +5800,7 @@ class TestDeployExampleAdditionalBranches:
             ),
         )
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy-example", "--workspace-dir", str(root),
@@ -5810,7 +5841,7 @@ class TestDeployExampleAdditionalBranches:
 
         monkeypatch.setattr(cli, "_cmd_bootstrap", fake_bootstrap)
         transport = FakeTransport(execute_output="")
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
         # In TTY mode the handler also tries to drop into chumicro-repl
         # after a successful deploy — short-circuit it for the test.
         import chumicro_repl.cli as repl_cli_mod
@@ -5926,7 +5957,7 @@ class TestDeployExampleAdditionalBranches:
                 "RuntimeError: boom\n"
             ),
         )
-        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        _install_fake_transport(monkeypatch, transport)
 
         exit_code = cli.main([
             "deploy-example", "--workspace-dir", str(root),
