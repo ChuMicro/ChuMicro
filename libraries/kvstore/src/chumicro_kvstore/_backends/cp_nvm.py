@@ -83,13 +83,13 @@ class CpNvmBackend(Backend):
         if magic != self.HEADER_MAGIC:
             raise KVStoreCorrupt(f"NVM magic mismatch: got {magic!r}")
 
-        length = int.from_bytes(bytes(self._nvm[4:6]), "little")
+        length = int.from_bytes(self._nvm[4:6], "little")
         if length > self.capacity:
             raise KVStoreCorrupt(
                 f"NVM length field {length} exceeds capacity {self.capacity}"
             )
 
-        stored_crc = int.from_bytes(bytes(self._nvm[6:10]), "little")
+        stored_crc = int.from_bytes(self._nvm[6:10], "little")
         payload = bytes(self._nvm[self.HEADER_SIZE : self.HEADER_SIZE + length])
         actual_crc = binascii.crc32(payload) & 0xFFFFFFFF
         if actual_crc != stored_crc:
