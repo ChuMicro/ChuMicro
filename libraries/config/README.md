@@ -62,7 +62,7 @@ class WifiConfig:
 |---|---|
 | `load_runtime_config(path=…)` | Read + decode `/runtime_config.msgpack` into a flat-key `RuntimeConfig` (dict-shaped) |
 | `load_section(cls, config, *, prefix, required=…, optional=…)` | Standardized `from_config` core every library calls |
-| `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions (also subclass `KeyError` / `TypeError`) |
+| `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions — single-inheritance from `ConfigError` (MicroPython forbids multi-parent layouts) |
 | `DEFAULT_RUNTIME_CONFIG_PATH` | The canonical on-device path (`/runtime_config.msgpack`) |
 
 ## Where this fits

@@ -75,9 +75,3 @@ def __getattr__(name: str):
 
         return config
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-# `chumicro_config.templates` ships separately because `importlib.resources`
-# is CPython-only — workspace tooling on the host imports it, device code
-# never does.  Not re-exported here so a stray `from chumicro_config import
-# templates` on a device fails fast rather than mid-call.

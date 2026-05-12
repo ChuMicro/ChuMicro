@@ -144,10 +144,6 @@ sample_period_ms = 5000
 
 At deploy time the workspace tool flattens nested sections to dotted keys, merges per-library defaults, and msgpack-encodes the result using `msgpack(use_single_float=True)` for wire-compatibility with `chumicro-msgpack` on the device side.
 
-## Templates submodule (host-only)
-
-`chumicro_config.templates` ships separately — workspace tooling on the host imports it via `importlib.resources`, but device code never does.  It's not re-exported from `chumicro_config` at the package surface so a stray `from chumicro_config import templates` on a device fails fast rather than mid-call (`importlib.resources` is CPython-only).
-
 ## Platform notes
 
 Works identically on CPython, MicroPython, and CircuitPython.  Only dependency: `chumicro-msgpack` (for the runtime-config decode path).
