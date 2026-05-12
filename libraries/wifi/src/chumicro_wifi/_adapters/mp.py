@@ -45,10 +45,19 @@ import sys
 
 from chumicro_wifi._adapters.base import WifiAdapter
 
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
+
 #: Magic value disabling CYW43 idle power-save mode.  From CYW43
 #: vendor docs + community measurements; the adapter applies it
 #: when ``WifiConfig.power_save`` is ``False`` (the default).
-CYW43_PM_DISABLE = 0xA11140
+#: Wrapped in ``const(...)`` so MicroPython inlines the literal at
+#: the use site at compile time.  Public name (no leading underscore)
+#: so cross-runtime tests + on-device tests can keep importing it.
+CYW43_PM_DISABLE = const(0xA11140)
 
 #: Known CYW43-based MicroPython board identifiers.
 #: Add new entries as CYW43-bearing boards land in upstream MP — match the

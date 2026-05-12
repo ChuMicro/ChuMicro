@@ -105,7 +105,17 @@ class WifiService:
 
     @property
     def ip(self):
-        """Assigned IPv4 string, or ``None`` when not connected."""
+        """Assigned IPv4 string, or ``None`` when not connected.
+
+        Allocates per access: CircuitPython stringifies its
+        ``IPv4Address`` object, MicroPython's ``ifconfig()`` builds a
+        fresh 4-tuple inside the substrate.  Read once after a
+        connect / on the ``CONNECTED`` callback and stash the result
+        — don't poll inside a ``runner.tick`` loop or repeat in a
+        debug-log path.  The state never updates the IP in place, so
+        re-reading after a transition (or after a DHCP renewal) is
+        correct; the allocation cost is the price of seeing changes.
+        """
         return self._adapter.ip() if self.connected else None
 
     @property
