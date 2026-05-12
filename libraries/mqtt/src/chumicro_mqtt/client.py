@@ -15,7 +15,7 @@ sit in :mod:`chumicro_mqtt._wire`.
 from collections import deque
 
 from chumicro_config import MissingConfigKey
-from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_mqtt._wire import (
     PACKET_CONNACK,
@@ -378,9 +378,7 @@ class MQTTClient:
         when_oversized: WhenOversized = WhenOversized.DROP_WITH_EVENT,
         recv_budget_per_tick: int = 1024,
         max_tx_queue_size: int = 100,
-        ticks_ms_func: object = ticks_ms,
-        ticks_add_func: object = ticks_add,
-        ticks_diff_func: object = ticks_diff,
+        ticks: object | None = None,
     ) -> None:
         """Wire up the client.
 
@@ -436,12 +434,11 @@ class MQTTClient:
                 to drain via :meth:`handle` and retry, rather than
                 silently growing memory.  Set higher for bursty
                 publishers; the limit is per-client.
-            ticks_ms_func: ``ticks_ms()`` callable — inject a fake for
-                tests.  Defaults to ``chumicro_timing.ticks_ms``.
-            ticks_add_func: ``ticks_add()`` callable — inject a fake
-                for tests.  Defaults to ``chumicro_timing.ticks_add``.
-            ticks_diff_func: ``ticks_diff()`` callable — inject a fake
-                for tests.  Defaults to ``chumicro_timing.ticks_diff``.
+            ticks: Optional tick source — any object exposing
+                ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
+                the ``chumicro_timing.ticks`` submodule shape).
+                Defaults to that submodule (real clock); tests pass
+                ``FakeTicks`` from ``chumicro_timing.testing``.
         """
         if socket is None and socket_factory is None:
             raise ValueError(
@@ -477,9 +474,7 @@ class MQTTClient:
         self._recv_budget_per_tick = recv_budget_per_tick
         self._max_tx_queue_size = max_tx_queue_size
 
-        self._ticks_ms = ticks_ms_func
-        self._ticks_add = ticks_add_func
-        self._ticks_diff = ticks_diff_func
+        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
 
         decoder_kwargs = {}
         if rx_buffer_size is not None:
@@ -783,12 +778,12 @@ class MQTTClient:
         *now_ms* is the per-tick timestamp the runner captured once
         and passes to every registered service so they all see the
         same instant — the runner contract.  Callers must source it
-        from ``chumicro_timing.ticks_ms()`` (or whatever the client's
-        injected ``ticks_ms_func`` resolves to) so the value is in
-        the same domain as the deadlines this client computed at
-        ``connect()`` / ``publish()`` time.  ``chumicro-runner.Runner``
-        handles this automatically; tests that roll their own poll
-        loops must do the same.
+        from ``chumicro_timing.ticks_ms()`` (or the matching method on
+        the injected ``ticks`` object) so the value is in the same
+        domain as the deadlines this client computed at ``connect()`` /
+        ``publish()`` time.  ``chumicro-runner.Runner`` handles this
+        automatically; tests that roll their own poll loops must do
+        the same.
         """
         if self._state == ProtocolState.FAILED:
             if self._socket_factory is None or not self._user_wants_connected:
@@ -1089,7 +1084,7 @@ class MQTTClient:
     def _check_deadlines(self, now_ms):
         """Retry / fault on expired in-flight + pending entries."""
         for entry in list(self._in_flight):
-            if self._ticks_diff(entry.deadline_ticks, now_ms) > 0:
+            if self._ticks.ticks_diff(entry.deadline_ticks, now_ms) > 0:
                 continue
             if entry.retry_count >= self._publish_retry_max:
                 self._in_flight.discard(entry.packet_id)
@@ -1107,7 +1102,7 @@ class MQTTClient:
             self._tx_queue.append(bytes(retry_packet))
 
         for pending in list(self._pending_responses):
-            if self._ticks_diff(pending.deadline_ticks, now_ms) > 0:
+            if self._ticks.ticks_diff(pending.deadline_ticks, now_ms) > 0:
                 continue
             self._pending_responses.remove(pending)
             self._last_error = MQTTError(
@@ -1120,7 +1115,7 @@ class MQTTClient:
         """Send a PINGREQ when half the keepalive interval has elapsed."""
         if self._state != ProtocolState.CONNECTED:
             return
-        if self._ticks_diff(self._next_ping_due_ticks, now_ms) > 0:
+        if self._ticks.ticks_diff(self._next_ping_due_ticks, now_ms) > 0:
             return
         # Already awaiting a PINGRESP?  Don't double-send.
         for pending in self._pending_responses:
@@ -1147,5 +1142,5 @@ class MQTTClient:
         so a fresh ``ticks_ms()`` is captured.
         """
         if now_ms is None:
-            now_ms = self._ticks_ms()
-        return self._ticks_add(now_ms, offset_ms)
+            now_ms = self._ticks.ticks_ms()
+        return self._ticks.ticks_add(now_ms, offset_ms)

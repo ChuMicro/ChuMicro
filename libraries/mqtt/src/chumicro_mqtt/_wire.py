@@ -474,7 +474,16 @@ class PacketDecoder:
         # (per-packet hot path on a busy MQTT subscriber).
         self._buffer_view = memoryview(self._buffer)
         self._buffer_size = rx_buffer_size
+        # Read-cursor pattern (mirrors :class:`chumicro_requests._wire.
+        # ResponseParser`): ``_buffer_length`` is the write end, fed by
+        # ``advance()``; ``_read_offset`` is the consume start, advanced
+        # by ``_consume()``.  Each parsed packet bumps the cursor
+        # without memmove.  Compaction (in-place memmove of the live
+        # tail to the buffer head) only triggers when the cursor passes
+        # the halfway mark, amortizing the per-packet allocation cost
+        # of the old "shift after every drain" shape.
         self._buffer_length = 0
+        self._read_offset = 0
         self._max_message_size = max_message_size
         # Degraded path: one-shot buffer for oversize messages whose
         # bodies don't fit in the steady-state buffer.  Drained to
@@ -519,11 +528,10 @@ class PacketDecoder:
         if self._degraded_buffer is not None:
             return self._maybe_finish_degraded()
 
-        if self._buffer_length == 0:
-            return None
-
+        base = self._read_offset
+        live = self._buffer_length - base
         # Need at least the fixed header byte + first remaining-length byte.
-        if self._buffer_length < 2:
+        if live < 2:
             return None
 
         # Use the cached view rather than constructing a fresh one
@@ -531,29 +539,40 @@ class PacketDecoder:
         # and never resized, so the view is stable for the parser's
         # lifetime.
         view = self._buffer_view
-        fixed_byte = view[0]
-        message_length, varlen_consumed = decode_varlen(view, 1)
+        fixed_byte = view[base]
+        message_length, varlen_consumed = decode_varlen(view, base + 1)
         if varlen_consumed == 0:
             return None  # Incomplete varlen — wait for more bytes.
         header_length = 1 + varlen_consumed
         total_length = header_length + message_length
 
         if total_length > self._buffer_size:
-            return self._enter_oversized_path(fixed_byte, message_length, view, header_length)
+            return self._enter_oversized_path(fixed_byte, message_length, base, header_length)
 
-        if self._buffer_length < total_length:
+        if live < total_length:
             return None  # Body still in transit.
 
-        body_start = header_length
-        body_end = total_length
+        body_start = base + header_length
+        body_end = base + total_length
         packet = self._parse_packet(fixed_byte, view, body_start, body_end)
-
-        # Drain the consumed packet from the buffer (memmove the rest).
-        leftover = self._buffer_length - total_length
-        if leftover > 0:
-            self._buffer[:leftover] = self._buffer[total_length:self._buffer_length]
-        self._buffer_length = leftover
+        self._consume(total_length)
         return packet
+
+    def _consume(self, count):
+        """Advance the read cursor by *count*; compact when half-consumed.
+
+        Mirrors the read-cursor pattern in :class:`chumicro_requests._wire.
+        ResponseParser._consume`: the per-packet cost is one integer
+        add; the in-place memmove that frees up tail capacity only fires
+        when the cursor passes the halfway mark.
+        """
+        self._read_offset += count
+        if self._read_offset * 2 >= self._buffer_size:
+            live = self._buffer_length - self._read_offset
+            if live > 0:
+                self._buffer_view[:live] = self._buffer_view[self._read_offset:self._buffer_length]
+            self._buffer_length = live
+            self._read_offset = 0
 
     def _parse_packet(self, fixed_byte, view, body_start, body_end):
         packet_type = fixed_byte & 0xF0
@@ -635,13 +654,16 @@ class PacketDecoder:
             granted_qos=granted_qos,
         )
 
-    def _enter_oversized_path(self, fixed_byte, message_length, view, header_length):
+    def _enter_oversized_path(self, fixed_byte, message_length, base, header_length):
         """Switch to degraded-buffer mode for a too-big message.
 
         For a PUBLISH, the topic + optional packet-id likely fits in
         the steady-state buffer; the payload doesn't.  We pull what we
         have, parse the topic, then read-and-discard the rest to
         recover sync.  Non-PUBLISH oversize is a protocol error.
+
+        *base* is the read cursor at the start of this packet (so
+        absolute = base + relative).
         """
         packet_type = fixed_byte & 0xF0
         if packet_type != PACKET_PUBLISH:
@@ -649,35 +671,34 @@ class PacketDecoder:
                 f"oversized non-PUBLISH packet (type 0x{packet_type:02X}, "
                 f"remaining length {message_length})",
             )
-        body_start = header_length
-        if self._buffer_length < body_start + 2:
+        live = self._buffer_length - base
+        if live < header_length + 2:
             return None  # Need a few more bytes before we can parse the topic.
-        # Use the cached ``_buffer_view`` (zero-copy slice) and skip the
-        # ``bytes()`` wrap on struct.unpack args — memoryview is a
-        # bytes-like object that struct accepts directly.
         view = self._buffer_view
+        body_start = base + header_length
         topic_length = struct.unpack(">H", view[body_start:body_start + 2])[0]
         topic_start = body_start + 2
         topic_end = topic_start + topic_length
         qos = (fixed_byte >> 1) & 0x03
         packet_id_bytes = 2 if qos > 0 else 0
-        prelude_total = topic_end + packet_id_bytes
-        if self._buffer_length < prelude_total:
+        prelude_length = header_length + 2 + topic_length + packet_id_bytes
+        if live < prelude_length:
             return None  # Need a few more bytes before we can parse the prelude.
         topic = str(view[topic_start:topic_end], "utf-8")
         packet_id = None
         if qos > 0:
             packet_id = struct.unpack(">H", view[topic_end:topic_end + 2])[0]
-        payload_remaining = (
-            (header_length + message_length) - prelude_total
-        )
-        body_already_in_steady = self._buffer_length - prelude_total
+        payload_remaining = (header_length + message_length) - prelude_length
+        body_already_in_steady = live - prelude_length
         payload_to_drain = payload_remaining - body_already_in_steady
+        # Reset steady-state buffer either way — we've extracted everything
+        # the oversized handler needs from it.
+        self._buffer_length = 0
+        self._read_offset = 0
         if payload_to_drain <= 0:
             # Whole oversized message already in the steady-state buffer
             # (extreme corner case where buffer is huge but
             # max_message_size is even larger).  Emit immediately.
-            self._buffer_length = 0
             return _OversizedMessage(
                 topic=topic,
                 reported_length=message_length,
@@ -693,8 +714,6 @@ class PacketDecoder:
         self._degraded_topic = topic
         self._degraded_qos = qos
         self._degraded_packet_id = packet_id
-        # Reset steady-state buffer — we've extracted everything we need.
-        self._buffer_length = 0
         return None  # Caller drains via fill_buffer()/advance() until full.
 
     def _maybe_finish_degraded(self):

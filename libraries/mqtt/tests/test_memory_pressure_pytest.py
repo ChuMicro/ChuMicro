@@ -43,9 +43,7 @@ def _new_client(sock: FakeSocket, ticks: FakeTicks) -> MQTTClient:
         sock,
         client_id="perf-test",
         keep_alive_seconds=60,
-        ticks_ms_func=ticks.ticks_ms,
-        ticks_add_func=ticks.ticks_add,
-        ticks_diff_func=ticks.ticks_diff,
+        ticks=ticks,
     )
 
 
