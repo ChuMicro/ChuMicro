@@ -220,7 +220,7 @@ The client actively manages its memory footprint with three caps tunable at cons
 | `max_message_size` | `256 KB` | Largest inbound PUBLISH payload accepted — see [Oversized-message policy](#oversized-message-policy). |
 | `max_tx_queue_size` | `100` packets | Outbound packet queue cap — see [Backpressure](#backpressure). |
 
-The QoS-1 retry table (`InFlightTable`, keyed by `packet_id`) and per-topic subscription list are bounded by your usage — neither has a hard cap.  On memory-tight boards (256 KB MCU RAM), lower `max_message_size` to match your actual broker payload size to avoid heap fragmentation.
+The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) and the registered pattern-handler list grow with your usage — neither has a hard cap.  On memory-tight boards (256 KB MCU RAM), lower `max_message_size` to match your actual broker payload size to avoid heap fragmentation.
 
 ## Platform notes
 
