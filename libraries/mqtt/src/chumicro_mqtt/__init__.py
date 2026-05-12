@@ -7,6 +7,7 @@ pending; :meth:`handle(now_ms)` does one tick of progress.
 
 Public API::
 
+    from chumicro_timing import ticks_ms
     from chumicro_mqtt import MQTTClient, WhenOversized
     from chumicro_mqtt.sockets_factory import chumicro_sockets_factory
 
@@ -19,8 +20,9 @@ Public API::
     client.on_message = lambda topic, payload: print(topic, payload)
     client.connect()
     while True:
-        if client.check(now_ms()):
-            client.handle(now_ms())
+        now = ticks_ms()
+        if client.check(now):
+            client.handle(now)
 
 QoS 0 + QoS 1 are implemented; QoS 2 raises :class:`UnsupportedQoSError`.
 """
