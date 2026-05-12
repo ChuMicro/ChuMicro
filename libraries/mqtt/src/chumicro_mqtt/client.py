@@ -320,9 +320,17 @@ class MQTTClient:
             # Lazy import so users who pass their own socket / socket_factory
             # don't pull chumicro_sockets into the deploy graph.  See
             # ``chumicro_mqtt.sockets_factory`` for the helper itself.
-            from chumicro_mqtt.sockets_factory import (  # noqa: PLC0415 - lazy
-                chumicro_sockets_factory,
-            )
+            try:
+                from chumicro_mqtt.sockets_factory import (  # noqa: PLC0415 - lazy
+                    chumicro_sockets_factory,
+                )
+            except ImportError as exception:
+                raise RuntimeError(
+                    "MQTTClient.from_config() default wiring needs "
+                    "chumicro_mqtt.sockets_factory.  This module was "
+                    "excluded via __chumicro_skip_factories__ — pass "
+                    "socket_factory= or socket= explicitly.",
+                ) from exception
 
             socket_factory = chumicro_sockets_factory(
                 config, radio=radio, ssl_context=ssl_context,
@@ -362,21 +370,38 @@ class MQTTClient:
         """Wire up the client.
 
         Args:
-            socket: An already-connected :class:`TCPClientSocket`
-                (typically from ``chumicro_sockets.tcp_client_socket``
-                or ``tls_client_socket``).  The client takes ownership;
-                :meth:`disconnect` closes it.  May be ``None`` when
-                *socket_factory* is provided — in that case the factory
-                is invoked once at construction time to build the
-                initial socket and again on self-heal.
-            socket_factory: Optional ``callable() -> TCPClientSocket``
-                that builds a fresh connected socket on demand.  When
-                set, the client self-heals after a wifi-drop /
-                socket-death: the next ``handle()`` after entering
-                ``FAILED`` rebuilds the socket and re-issues
-                ``connect()`` automatically.  Without a factory the
-                client stays ``FAILED`` until the caller manually
-                tears down + reconstructs.
+            socket: An already-connected, non-blocking TCP-shaped
+                object.  Must expose:
+
+                * ``recv_into(buffer: memoryview, nbytes: int) -> int``
+                  — raises ``OSError(EAGAIN | EWOULDBLOCK)`` on no
+                  data, returns 0 on peer-close, otherwise bytes
+                  written.
+                * ``send(payload: bytes) -> int`` — raises
+                  ``OSError(EAGAIN | EWOULDBLOCK)`` when the send
+                  buffer is full, otherwise bytes sent (may be
+                  partial).
+                * ``close() -> None``
+                * ``setblocking(flag: bool) -> None`` — best-effort;
+                  absence is tolerated.
+
+                ``chumicro_sockets.tcp_client_socket(...)`` and
+                ``tls_client_socket(...)`` are valid producers, but
+                anything matching the shape works (stdlib
+                ``socket.socket`` after ``setblocking(False)``, an
+                upstream-library wrapper, a test fake).  The client
+                takes ownership; :meth:`disconnect` closes it.  May
+                be ``None`` when *socket_factory* is provided — in
+                that case the factory is invoked once at construction
+                time and again on self-heal.
+            socket_factory: Optional zero-arg callable returning an
+                object of the same shape as *socket*.  When set the
+                client self-heals after a wifi-drop or socket-death:
+                the next ``handle()`` after entering ``FAILED``
+                rebuilds the socket and re-issues ``connect()``
+                automatically.  Without a factory the client stays
+                ``FAILED`` until the caller manually tears down and
+                reconstructs.
             client_id: MQTT client identifier — must be unique per broker.
             keep_alive_seconds: Broker idle timeout.  PINGREQ runs at
                 half this interval client-side.
