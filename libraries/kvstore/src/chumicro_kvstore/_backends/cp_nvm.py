@@ -76,15 +76,13 @@ class CpNvmBackend(Backend):
         """
         from chumicro_kvstore.core import KVStoreCorrupt
 
+        # Blank slab — raw flash typically erases to 0xFF and some chips
+        # init to 0x00; either pattern in the magic position means "never
+        # written" rather than corrupted.
         magic = bytes(self._nvm[0 : len(self.HEADER_MAGIC)])
+        if magic in (b"\xff\xff\xff\xff", b"\x00\x00\x00\x00"):
+            return b""
         if magic != self.HEADER_MAGIC:
-            # Distinguish a blank/unwritten slab from a real corruption.
-            # Raw flash typically erases to 0xFF; some chips initialise
-            # to 0x00.  Either pattern in the magic position means
-            # "this slab has never been written" — report empty rather
-            # than corruption so first boot doesn't log a fake event.
-            if magic in (b"\xff\xff\xff\xff", b"\x00\x00\x00\x00"):
-                return b""
             raise KVStoreCorrupt(f"NVM magic mismatch: got {magic!r}")
 
         length = int.from_bytes(bytes(self._nvm[4:6]), "little")
@@ -95,7 +93,6 @@ class CpNvmBackend(Backend):
 
         stored_crc = int.from_bytes(bytes(self._nvm[6:10]), "little")
         payload = bytes(self._nvm[self.HEADER_SIZE : self.HEADER_SIZE + length])
-
         actual_crc = binascii.crc32(payload) & 0xFFFFFFFF
         if actual_crc != stored_crc:
             raise KVStoreCorrupt(
