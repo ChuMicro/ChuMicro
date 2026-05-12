@@ -7,7 +7,8 @@
 ## Getting started
 
 ```python
-from chumicro_requests import HttpClient, chumicro_sockets_factory
+from chumicro_requests import HttpClient
+from chumicro_requests.sockets_factory import chumicro_sockets_factory
 from chumicro_timing import ticks_ms
 
 client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
@@ -116,9 +117,11 @@ so charset overrides apply to JSON responses too.
 
 The `connection_factory` argument is a callable
 `(host, port, use_tls) -> TCPClientSocket`. The bundled
-`chumicro_sockets_factory(radio=..., ssl_context=...)` returns one wired to
-`chumicro-sockets`. Tests typically pass a hand-rolled factory that returns a
-`chumicro_sockets.testing.FakeSocket`.
+`chumicro_requests.sockets_factory.chumicro_sockets_factory(radio=..., ssl_context=...)`
+returns one wired to `chumicro-sockets`. The helper lives in an opt-in
+submodule so users with a custom transport never trigger the
+`chumicro-sockets` deploy. Tests typically pass a hand-rolled factory
+that returns a `chumicro_sockets.testing.FakeSocket`.
 
 ## Runner pattern
 
@@ -128,7 +131,8 @@ LED-heartbeat task:
 
 ```python
 from chumicro_runner import Runner
-from chumicro_requests import HttpClient, chumicro_sockets_factory
+from chumicro_requests import HttpClient
+from chumicro_requests.sockets_factory import chumicro_sockets_factory
 
 http_client = HttpClient(connection_factory=chumicro_sockets_factory(radio=radio))
 runner = Runner([http_client, blink_task])
@@ -149,7 +153,8 @@ runner tasks (LED blink, control loop) keep getting CPU time even mid-large-body
 Pure Python, no third-party deps beyond `chumicro-sockets` and `chumicro-timing`.
 Works identically on CPython, MicroPython, and CircuitPython once the
 connection factory is wired up. HTTPS uses the same
-`chumicro_sockets_factory(ssl_context=...)` pattern as plain HTTP.
+`chumicro_requests.sockets_factory.chumicro_sockets_factory(ssl_context=...)`
+pattern as plain HTTP.
 
 ### HTTPS heap headroom on minimum-class boards
 
@@ -167,8 +172,9 @@ handshake.
 
 ### TLS context — bring your own CA
 
-`chumicro_sockets_factory(ssl_context=...)` accepts an SSL context built
-via `chumicro_sockets.ssl_context_with_ca(pem)`. CA-pinning is required
+`chumicro_requests.sockets_factory.chumicro_sockets_factory(ssl_context=...)`
+accepts an SSL context built via `chumicro_sockets.ssl_context_with_ca(pem)`.
+CA-pinning is required
 on both supported embedded runtimes — but for different reasons:
 
 - **MicroPython** doesn't have `ssl.create_default_context()` at all;
