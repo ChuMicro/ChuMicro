@@ -437,9 +437,13 @@ def test_unsupported_type_raises() -> None:
         packb(object())
 
 
-def test_unsupported_decode_byte_raises() -> None:
-    """Decoding the never-used 0xc1 byte should raise ValueError."""
-    # 0xc1 is never-used in msgpack spec
+def test_unknown_decode_byte_raises() -> None:
+    """Decoding a tag byte the decoder doesn't recognise should raise ValueError.
+
+    0xc1 is reserved-and-never-used in the msgpack spec, so it has no
+    branch in the decoder; it falls through to the generic
+    "unsupported msgpack type byte" raise.
+    """
     with raises(ValueError):
         unpackb(b"\xc1")
 
