@@ -1041,7 +1041,14 @@ class TestSocketFactorySelfHeal:
         with raises(ValueError, match="socket or a socket_factory"):
             MQTTClient(client_id="x")
 
-    def test_factory_only_constructor_builds_initial_socket(self) -> None:
+    def test_factory_only_constructor_defers_socket_build_to_connect(self) -> None:
+        """Factory is NOT called at construction — only when connect() runs.
+
+        Construction is side-effect free: ``__init__`` must not open
+        sockets, so network errors land in ``state == FAILED`` /
+        ``last_error`` instead of propagating out of the constructor
+        where the runner contract can't see them.
+        """
         ticks = FakeTicks()
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
@@ -1056,13 +1063,37 @@ class TestSocketFactorySelfHeal:
             client_id="x",
             ticks=ticks,
         )
-        # Factory was invoked once at __init__ to build the initial socket.
-        assert len(builds) == 1
+        # No socket built at construction.
+        assert len(builds) == 0
+        assert client.state == ProtocolState.DISCONNECTED
+
         client.connect()
+        # Factory invoked exactly once during connect().
+        assert len(builds) == 1
         _drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
         # Factory not called a second time — the socket is healthy.
         assert len(builds) == 1
+
+    def test_factory_failure_in_connect_marks_failed(self) -> None:
+        """OSError from the factory at connect() time lands as FAILED + last_error."""
+        ticks = FakeTicks()
+
+        def factory():
+            raise OSError(103, "ECONNABORTED")
+
+        client = MQTTClient(
+            socket_factory=factory,
+            client_id="x",
+            ticks=ticks,
+        )
+        # Construction succeeds — no I/O yet.
+        assert client.state == ProtocolState.DISCONNECTED
+        client.connect()
+        # Factory error transitions to FAILED instead of propagating.
+        assert client.state == ProtocolState.FAILED
+        assert client.last_error is not None
+        assert "factory failed" in str(client.last_error)
 
     def test_failed_state_with_factory_self_heals_and_reconnects(self) -> None:
         """Factory is called on FAILED + handle(); a new socket comes up."""
@@ -1459,10 +1490,13 @@ class TestFromConfig:
         original = chumicro_sockets.tcp_client_socket
         chumicro_sockets.tcp_client_socket = fake_tcp_client_socket
         try:
-            MQTTClient.from_config(
+            client = MQTTClient.from_config(
                 {"mqtt.broker.host": "10.0.0.42", "mqtt.broker.port": 8883},
                 radio="fake-radio",
             )
+            # Construction is side-effect free — factory fires on connect().
+            assert captured == {}
+            client.connect()
         finally:
             chumicro_sockets.tcp_client_socket = original
 
@@ -1488,11 +1522,14 @@ class TestFromConfig:
         original = chumicro_sockets.tls_client_socket
         chumicro_sockets.tls_client_socket = fake_tls_client_socket
         try:
-            MQTTClient.from_config(
+            client = MQTTClient.from_config(
                 {"mqtt.broker.host": "broker.example", "mqtt.broker.port": 8883},
                 radio="fake-radio",
                 ssl_context="fake-ctx",
             )
+            # Factory is built but not invoked until connect().
+            assert captured == {}
+            client.connect()
         finally:
             chumicro_sockets.tls_client_socket = original
 
@@ -1514,6 +1551,9 @@ class TestFromConfig:
             socket_factory=self._injected_factory(sock),
             ssl_context="should-be-ignored",
         )
+        # Construction is side-effect free; calling connect() wires the
+        # socket via the injected factory.
+        client.connect()
         assert client._socket is sock  # noqa: SLF001
 
     def test_default_factory_requires_broker_host(self) -> None:
