@@ -1,7 +1,9 @@
-"""Pure-Python msgpack encoder/decoder with native CircuitPython fallback.
+"""Pure-Python msgpack encoder/decoder.
 
-Supports: None, bool, int (32-bit), float (32-bit), str, bytes,
-bytearray, list, tuple, and dict.
+Used by all runtimes when the native ``msgpack`` C module isn't
+available — `__init__.py` handles dispatch.  Supports None, bool,
+int (32-bit), float (32-bit), str, bytes, bytearray, list, tuple,
+and dict.
 """
 
 import struct
@@ -11,12 +13,7 @@ import struct
 # ---------------------------------------------------------------------------
 
 def _encode(obj: object, buffer: bytearray) -> None:
-    """Encode *obj* into msgpack format, appending bytes to *buffer*.
-
-    Args:
-        obj: Python object to serialize.
-        buffer: Target buffer to append encoded bytes to.
-    """
+    """Append the msgpack encoding of *obj* to *buffer*."""
     if obj is True:
         buffer.append(0xc3)
     elif obj is False:
@@ -41,12 +38,7 @@ def _encode(obj: object, buffer: bytearray) -> None:
 
 
 def _encode_int(value: int, buffer: bytearray) -> None:
-    """Encode an integer value.
-
-    Args:
-        value: Integer to encode.
-        buffer: Target buffer to append encoded bytes to.
-    """
+    """Append the msgpack encoding of integer *value* to *buffer*."""
     if 0 <= value <= 0x7f:
         buffer.append(value)
     elif -32 <= value < 0:
@@ -74,12 +66,7 @@ def _encode_int(value: int, buffer: bytearray) -> None:
 
 
 def _encode_str(value: str, buffer: bytearray) -> None:
-    """Encode a string value.
-
-    Args:
-        value: String to encode.
-        buffer: Target buffer to append encoded bytes to.
-    """
+    """Append the msgpack encoding of string *value* to *buffer*."""
     encoded = value.encode("utf-8")
     length = len(encoded)
     if length <= 31:
@@ -96,12 +83,7 @@ def _encode_str(value: str, buffer: bytearray) -> None:
 
 
 def _encode_bin(value: bytes | bytearray, buffer: bytearray) -> None:
-    """Encode a bytes or bytearray value.
-
-    Args:
-        value: Bytes or bytearray to encode.
-        buffer: Target buffer to append encoded bytes to.
-    """
+    """Append the msgpack encoding of bytes/bytearray *value* to *buffer*."""
     length = len(value)
     if length <= 0xff:
         buffer.append(0xc4)
@@ -115,12 +97,7 @@ def _encode_bin(value: bytes | bytearray, buffer: bytearray) -> None:
 
 
 def _encode_array(value: list | tuple, buffer: bytearray) -> None:
-    """Encode a list or tuple as a msgpack array.
-
-    Args:
-        value: List or tuple to encode.
-        buffer: Target buffer to append encoded bytes to.
-    """
+    """Append *value* to *buffer* as a msgpack array."""
     length = len(value)
     if length <= 15:
         buffer.append(0x90 | length)
@@ -134,12 +111,7 @@ def _encode_array(value: list | tuple, buffer: bytearray) -> None:
 
 
 def _encode_map(value: dict, buffer: bytearray) -> None:
-    """Encode a dict as a msgpack map.
-
-    Args:
-        value: Dict to encode.
-        buffer: Target buffer to append encoded bytes to.
-    """
+    """Append *value* to *buffer* as a msgpack map."""
     length = len(value)
     if length <= 15:
         buffer.append(0x80 | length)
@@ -172,15 +144,7 @@ _OUT_OF_SUBSET = {
 
 
 def _decode(data: memoryview, offset: int) -> tuple:
-    """Decode one msgpack value from *data* at *offset*.
-
-    Args:
-        data: Memoryview over the msgpack-encoded bytes.
-        offset: Byte position to start decoding from.
-
-    Returns:
-        ``(value, new_offset)`` tuple.
-    """
+    """Decode one msgpack value from *data* at *offset*; return ``(value, new_offset)``."""
     byte = data[offset]
 
     # positive fixint  (0x00 – 0x7f)
@@ -200,7 +164,7 @@ def _decode(data: memoryview, offset: int) -> tuple:
         length = byte & 0x1f
         start = offset + 1
         end = start + length
-        return bytes(data[start:end]).decode("utf-8"), end
+        return str(data[start:end], "utf-8"), end
 
     # nil
     if byte == 0xc0:
@@ -256,13 +220,13 @@ def _decode(data: memoryview, offset: int) -> tuple:
     if byte == 0xd9:
         length = data[offset + 1]
         start = offset + 2
-        return bytes(data[start:start + length]).decode("utf-8"), start + length
+        return str(data[start:start + length], "utf-8"), start + length
 
     # str16
     if byte == 0xda:
         length = struct.unpack_from(">H", data, offset + 1)[0]
         start = offset + 3
-        return bytes(data[start:start + length]).decode("utf-8"), start + length
+        return str(data[start:start + length], "utf-8"), start + length
 
     # array16
     if byte == 0xdc:
@@ -287,16 +251,7 @@ def _decode(data: memoryview, offset: int) -> tuple:
 
 
 def _decode_array(data: memoryview, offset: int, length: int) -> tuple:
-    """Decode *length* array elements starting at *offset*.
-
-    Args:
-        data: Memoryview over the msgpack-encoded bytes.
-        offset: Byte position to start decoding from.
-        length: Number of elements to decode.
-
-    Returns:
-        ``(list, new_offset)`` tuple.
-    """
+    """Decode *length* array elements starting at *offset*; return ``(list, new_offset)``."""
     result = []
     for _ in range(length):
         value, offset = _decode(data, offset)
@@ -305,16 +260,7 @@ def _decode_array(data: memoryview, offset: int, length: int) -> tuple:
 
 
 def _decode_map(data: memoryview, offset: int, length: int) -> tuple:
-    """Decode *length* map key-value pairs starting at *offset*.
-
-    Args:
-        data: Memoryview over the msgpack-encoded bytes.
-        offset: Byte position to start decoding from.
-        length: Number of key-value pairs to decode.
-
-    Returns:
-        ``(dict, new_offset)`` tuple.
-    """
+    """Decode *length* map key/value pairs starting at *offset*; return ``(dict, new_offset)``."""
     result = {}
     for _ in range(length):
         key, offset = _decode(data, offset)
