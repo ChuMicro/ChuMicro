@@ -1,8 +1,10 @@
 # Slimming your deploy
 
-`chumicro-workspace`'s deployer ships exactly the files your `app.py` imports — the AST walker (`chumicro_deploy.ImportGraphSource`) follows every static `import`, including lazy ones inside function bodies.  Most of the time that's exactly what you want.  But for a custom-transport user who never calls into `chumicro_sockets`, the walker still ships every byte of it because `MQTTClient.from_config` (and its four siblings) lazy-imports `chumicro_<lib>.sockets_factory` at config-driven construction time, and that factory imports `chumicro_sockets` in its closure.
+`chumicro-workspace`'s deployer ships exactly the files your `app.py` imports — the AST walker (`chumicro_deploy.ImportGraphSource`) follows every static `import`, including lazy ones inside function bodies.  Most of the time that's exactly what you want.  But ChuMicro libraries inject their I/O dependencies (sockets, listeners, anything else a future library decides to make pluggable) through a `from_config(...)` constructor that lazy-imports a default factory submodule.  If you supply your own dependency through the constructor's kwargs and never want the default factory's helper library on the device, the walker still ships it — the lazy import inside `from_config` is statically discoverable, so the factory submodule and its closure ride along.
 
-[Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md) introduces an entrypoint-level opt-out for those factory submodules.  Drop a module-level constant into `app.py` (or `code.py` — whichever your project's entrypoint is) and the walker filters the named factories out of the deploy graph before resolution, taking their closure-only dependencies (typically `chumicro_sockets`) with them.
+[Decision 0062](../../plans/decisions/0062-entrypoint-factory-skip.md) introduces an entrypoint-level opt-out for those factory submodules.  Drop a module-level constant into `app.py` (or `code.py` — whichever your project's entrypoint is) and the walker filters the named factories out of the deploy graph before resolution, taking their closure-only dependencies with them.
+
+Today's libraries all happen to inject *transport* dependencies, so `sockets_factory` and `tls_factory` are the names you'll see in the wild — that's a development-path artifact, not a property of the mechanism.  The walker picks up any `chumicro_*/[a-z][a-z0-9_]*_factory.py` under the search paths regardless of what kind of dependency the factory produces.
 
 ## The mechanism in one paragraph
 
@@ -67,8 +69,8 @@ The skip mechanism only fires under the `chumicro-workspace` deploy path (`chumi
 
 You'll feel the difference if and only if:
 
-1. Your project's entrypoint imports a chumicro library that has a `sockets_factory` (or similar) submodule.
-2. You supply your own transport (`socket_factory=` / `connection_factory=` / `listener_factory=` / `socket=`).
+1. Your project's entrypoint imports a chumicro library that has a `<stem>_factory.py` submodule (today that's mqtt, requests, websockets, ntp, http_server — all five inject transports — but the mechanism applies to any future library with the same shape).
+2. You supply your own version of whatever the factory produces through the constructor (currently `socket_factory=` / `connection_factory=` / `listener_factory=` / `socket=`; future libraries will have their own kwargs).
 3. You deploy via `chumicro-workspace`.
 
 If any of those three is false, the skip constant is a no-op and the dead-skip warning will (correctly) point that out.
