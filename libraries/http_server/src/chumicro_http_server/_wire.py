@@ -466,14 +466,14 @@ class RequestParser:
         crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
-        line = bytes(self._live_slice(0, crlf_index))
+        line = self._live_slice(0, crlf_index)
         self._consume(crlf_index + 2)
         try:
-            text = line.decode("ascii")
+            text = str(line, "ascii")
         # HTTP/1.1 §3.1 forbids non-ASCII; defensive only.
         except UnicodeDecodeError as decode_error:  # pragma: no cover
             self._fail(ServerProtocolError(
-                f"non-ASCII request line: {line!r}",
+                f"non-ASCII request line: {bytes(line)!r}",
             ))
             raise self._error from decode_error
         parts = text.split(" ")
@@ -515,14 +515,14 @@ class RequestParser:
             self._consume(2)
             self._enter_body_state()
             return True
-        line = bytes(self._live_slice(0, crlf_index))
+        line = self._live_slice(0, crlf_index)
         self._consume(crlf_index + 2)
         try:
-            text = line.decode("ascii")
+            text = str(line, "ascii")
         # HTTP/1.1 §3.2 forbids non-ASCII; defensive only.
         except UnicodeDecodeError as decode_error:  # pragma: no cover
             self._fail(ServerProtocolError(
-                f"non-ASCII header line: {line!r}",
+                f"non-ASCII header line: {bytes(line)!r}",
             ))
             raise self._error from decode_error
         colon_index = text.find(":")
