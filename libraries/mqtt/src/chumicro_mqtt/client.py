@@ -14,8 +14,7 @@ sit in :mod:`chumicro_mqtt._wire`.
 
 from collections import deque
 
-from chumicro_config import InvalidConfigType, MissingConfigKey, is_config_like
-from chumicro_sockets import tcp_client_socket
+from chumicro_config import InvalidConfigType, is_config_like
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_mqtt._wire import (
@@ -180,12 +179,12 @@ _CONNACK_REJECT_REASON = {
 
 
 class WhenOversized:
-    """Policy for inbound PUBLISH whose payload exceeds ``max_message_size``."""
+    """Policy for inbound PUBLISH whose payload exceeds ``max_message_bytes``."""
 
     #: Drop silently; PUBACK the broker.
     DROP_SILENT = "drop_silent"
 
-    #: Default.  Drop the payload, fire ``on_oversized(topic, reported_length)``,
+    #: Default.  Drop the payload, fire ``on_oversized(reported_length, topic)``,
     #: still PUBACK so the broker doesn't retransmit.
     DROP_WITH_EVENT = "drop_with_event"
 
@@ -233,51 +232,6 @@ def _force_non_blocking(socket):
 # ---------------------------------------------------------------------------
 # MQTTClient
 # ---------------------------------------------------------------------------
-
-
-def _build_default_socket_factory(config, *, radio=None, ssl_context=None):
-    """Return a socket factory that opens a TCP / TLS client socket using
-    config-supplied broker host/port.
-
-    Used by :meth:`MQTTClient.from_config` when the caller doesn't
-    pass a pre-built socket or a custom factory.  Reads
-    ``mqtt.broker.host`` / ``mqtt.broker.port`` from *config* and
-    raises :class:`chumicro_config.MissingConfigKey` if either key
-    is absent — the library refuses to silently dial a third-party
-    broker on the user's behalf.
-
-    When *ssl_context* is supplied the factory uses
-    :func:`chumicro_sockets.tls_client_socket` (lazy-imported so
-    plain-TCP users don't pay the ``ssl`` cost); ``None`` keeps the
-    plain-TCP path.
-
-    Raises:
-        chumicro_config.MissingConfigKey: ``mqtt.broker.host`` or
-            ``mqtt.broker.port`` is absent from *config*.
-    """
-    if "mqtt.broker.host" not in config:
-        raise MissingConfigKey(
-            "required config key 'mqtt.broker.host' is missing",
-        )
-    if "mqtt.broker.port" not in config:
-        raise MissingConfigKey(
-            "required config key 'mqtt.broker.port' is missing",
-        )
-    host = config["mqtt.broker.host"]
-    port = config["mqtt.broker.port"]
-
-    if ssl_context is None:
-        def factory():
-            return tcp_client_socket(host, port, radio=radio)
-
-        return factory
-
-    def factory():
-        from chumicro_sockets import tls_client_socket  # noqa: PLC0415 - lazy
-
-        return tls_client_socket(host, port, context=ssl_context, radio=radio)
-
-    return factory
 
 
 class MQTTClient:
@@ -363,7 +317,14 @@ class MQTTClient:
                 f"dict, got {type(config).__name__}",
             )
         if socket is None and socket_factory is None:
-            socket_factory = _build_default_socket_factory(
+            # Lazy import so users who pass their own socket / socket_factory
+            # don't pull chumicro_sockets into the deploy graph.  See
+            # ``chumicro_mqtt.sockets_factory`` for the helper itself.
+            from chumicro_mqtt.sockets_factory import (  # noqa: PLC0415 - lazy
+                chumicro_sockets_factory,
+            )
+
+            socket_factory = chumicro_sockets_factory(
                 config, radio=radio, ssl_context=ssl_context,
             )
         return cls(
@@ -392,7 +353,7 @@ class MQTTClient:
         will_qos: int = 0,
         will_retain: bool = False,
         rx_buffer_size: int | None = None,
-        max_message_size: int | None = None,
+        max_message_bytes: int | None = None,
         when_oversized: WhenOversized = WhenOversized.DROP_WITH_EVENT,
         recv_budget_per_tick: int = 1024,
         max_tx_queue_size: int = 20,
@@ -434,7 +395,7 @@ class MQTTClient:
             will_qos: QoS for the will message (0 or 1).
             will_retain: ``True`` retains the will on the broker.
             rx_buffer_size: Steady-state RX buffer size (default 256).
-            max_message_size: Cap on a single inbound PUBLISH payload
+            max_message_bytes: Cap on a single inbound PUBLISH payload
                 (default 256 KB).
             when_oversized: Policy for messages above the cap.  See
                 :class:`WhenOversized`.
@@ -499,8 +460,8 @@ class MQTTClient:
         decoder_kwargs = {}
         if rx_buffer_size is not None:
             decoder_kwargs["rx_buffer_size"] = rx_buffer_size
-        if max_message_size is not None:
-            decoder_kwargs["max_message_size"] = max_message_size
+        if max_message_bytes is not None:
+            decoder_kwargs["max_message_bytes"] = max_message_bytes
         self._decoder_kwargs = decoder_kwargs
         self._decoder = PacketDecoder(**decoder_kwargs)
 
@@ -1022,7 +983,7 @@ class MQTTClient:
         if self._when_oversized == WhenOversized.DROP_SILENT:
             pass  # Drop without notification.
         elif self._when_oversized == WhenOversized.DROP_WITH_EVENT:
-            self.on_oversized(packet.topic, packet.reported_length)
+            self.on_oversized(packet.reported_length, packet.topic)
         elif self._when_oversized == WhenOversized.DISCONNECT:
             raise MQTTProtocolError(
                 f"oversized message on topic {packet.topic!r} "

@@ -17,7 +17,6 @@ from chumicro_websockets import (
     CLOSE_INTERNAL_ERROR,
     CLOSE_NORMAL,
     CLOSE_PROTOCOL_ERROR,
-    CLOSE_TOO_BIG,
     OPCODE_BINARY,
     OPCODE_CLOSE,
     OPCODE_CONTINUATION,
@@ -784,7 +783,7 @@ class TestOversize:
             when_oversized=WhenOversized.DROP_SILENT,
         )
         oversized = []
-        client.on_oversized = lambda length: oversized.append(length)
+        client.on_oversized = lambda reported_length: oversized.append(reported_length)
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         # Two-frame fragmented message exceeding cap 10.
@@ -797,13 +796,13 @@ class TestOversize:
         assert oversized == []
         assert client.state == WebSocketState.OPEN
 
-    def test_drop_with_event_fires_callback_and_closes(self):
+    def test_drop_with_event_fires_callback_and_stays_open(self):
         client, socket, clock, _ = _make_client(
             max_message_bytes=10,
             when_oversized=WhenOversized.DROP_WITH_EVENT,
         )
         oversized = []
-        client.on_oversized = lambda length: oversized.append(length)
+        client.on_oversized = lambda reported_length: oversized.append(reported_length)
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.feed_inbound(
@@ -813,13 +812,7 @@ class TestOversize:
         client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
         assert oversized
-        assert client.state == WebSocketState.CLOSING
-        client.handle(clock.ticks_ms())
-        sent = socket.read_outbound()
-        parser = FrameParser()
-        parser.feed(sent)
-        code = struct.unpack("!H", parser.payload[:2])[0]
-        assert code == CLOSE_TOO_BIG
+        assert client.state == WebSocketState.OPEN
 
     def test_disconnect_policy_closes_immediately(self):
         client, socket, clock, _ = _make_client(
@@ -827,7 +820,7 @@ class TestOversize:
             when_oversized=WhenOversized.DISCONNECT,
         )
         oversized = []
-        client.on_oversized = lambda length: oversized.append(length)
+        client.on_oversized = lambda reported_length: oversized.append(reported_length)
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.feed_inbound(

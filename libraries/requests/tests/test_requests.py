@@ -1424,15 +1424,15 @@ class TestHttpClientOversizePolicy:
             when_oversized=WhenOversized.DROP_WITH_EVENT,
         )
         events = []
-        client.on_oversized = lambda url, error: events.append((url, error))
+        client.on_oversized = lambda reported_length, url: events.append((reported_length, url))
 
         handle = client.get("http://example.test/")
         drive_until_done(client, handle, ticks)
 
         assert handle.result.oversized_dropped is True
         assert len(events) == 1
-        assert events[0][0] == "http://example.test/"
-        assert isinstance(events[0][1], HttpOversizedError)
+        assert events[0][0] == 100
+        assert events[0][1] == "http://example.test/"
 
     def test_disconnect_policy_fails_request(self):
         body = b"x" * 100
@@ -1447,6 +1447,7 @@ class TestHttpClientOversizePolicy:
         drive_until_done(client, handle, ticks)
 
         assert isinstance(handle.error, HttpOversizedError)
+        assert handle.error.reported_length == 100
 
 
 # ---------------------------------------------------------------------------

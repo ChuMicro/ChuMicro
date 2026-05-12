@@ -7,11 +7,14 @@ pending; :meth:`handle(now_ms)` does one tick of progress.
 
 Public API::
 
-    from chumicro_sockets import tcp_client_socket
     from chumicro_mqtt import MQTTClient, WhenOversized
+    from chumicro_mqtt.sockets_factory import chumicro_sockets_factory
 
-    sock = tcp_client_socket("broker.example.com", 1883, radio=wifi_radio)
-    client = MQTTClient(sock, client_id="my-thing")
+    factory = chumicro_sockets_factory(
+        {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
+        radio=wifi_radio,
+    )
+    client = MQTTClient(socket_factory=factory, client_id="my-thing")
 
     client.on_message = lambda topic, payload: print(topic, payload)
     client.connect()
@@ -29,6 +32,11 @@ Source layout:
   lifecycle classes (``Awaiting``, ``InFlightPublish``, ``InFlightTable``,
   ``PendingResponse``) — internal to the orchestration; reach into the
   submodule directly if you need them.
+* :mod:`chumicro_mqtt.sockets_factory` — opt-in
+  :func:`chumicro_sockets_factory` convenience helper that wires the
+  default :mod:`chumicro_sockets` transport.  Lives in its own
+  submodule so users with a custom ``socket_factory`` never trigger
+  the :mod:`chumicro_sockets` deploy.
 * :mod:`chumicro_mqtt.testing` — host-only fakes (excluded from device
   bundle).
 """

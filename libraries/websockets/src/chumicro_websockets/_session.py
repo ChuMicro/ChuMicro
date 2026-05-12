@@ -51,8 +51,8 @@ class WhenOversized:
     #: Drop the message silently; stay connected for the next one.
     DROP_SILENT = "drop_silent"
 
-    #: Default.  Fire ``on_oversized(reported_length)`` then close with
-    #: :data:`CLOSE_TOO_BIG`.
+    #: Default.  Drop the message, fire ``on_oversized(reported_length)``,
+    #: and stay connected for the next inbound message.
     DROP_WITH_EVENT = "drop_with_event"
 
     #: Close immediately with :data:`CLOSE_TOO_BIG` — for when oversize
@@ -448,10 +448,6 @@ class _BaseSession:
             return
         if policy == WhenOversized.DROP_WITH_EVENT:
             self.on_oversized(reported_length)
-            self._send_close(
-                CLOSE_TOO_BIG,
-                f"message exceeded max_message_bytes={self._max_message_bytes}",
-            )
             return
         if policy == WhenOversized.DISCONNECT:
             self._send_close(

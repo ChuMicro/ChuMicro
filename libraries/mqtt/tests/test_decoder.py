@@ -184,7 +184,7 @@ class TestOversizedMessage:
         """Oversize PUBLISH emits an _OversizedMessage event after draining."""
         decoder = PacketDecoder(
             rx_buffer_size=64,  # tight cap so the publish overflows
-            max_message_size=8192,
+            max_message_bytes=8192,
         )
         big_payload = b"x" * 200
         packet = canned_publish_bytes("log", big_payload, qos=0)
