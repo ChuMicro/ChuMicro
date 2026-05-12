@@ -28,9 +28,7 @@ def _new_client(sock: FakeSocket, ticks: FakeTicks, **overrides) -> MQTTClient:
         "keep_alive_seconds": 60,
         "ack_timeout_seconds": 5.0,
         "publish_retry_max": 2,
-        "ticks_ms_func": ticks.ticks_ms,
-        "ticks_add_func": ticks.ticks_add,
-        "ticks_diff_func": ticks.ticks_diff,
+        "ticks": ticks,
     }
     kwargs.update(overrides)
     return MQTTClient(sock, **kwargs)
@@ -82,9 +80,7 @@ class TestSocketBlockingMode:
             socket_factory=factory,
             client_id="test-client",
             ack_timeout_seconds=5.0,
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         client.connect()  # marks user-wants-connected
         # Force the client into FAILED so handle() takes the self-heal path.
@@ -655,9 +651,7 @@ class TestSocketFactorySelfHeal:
         client = MQTTClient(
             socket_factory=factory,
             client_id="x",
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         # Factory was invoked once at __init__ to build the initial socket.
         assert len(builds) == 1
@@ -682,9 +676,7 @@ class TestSocketFactorySelfHeal:
         client = MQTTClient(
             socket_factory=factory,
             client_id="heal-test",
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         client.connect()
         _drive(client, ticks, count=2)
@@ -737,9 +729,7 @@ class TestSocketFactorySelfHeal:
         client = MQTTClient(
             socket_factory=factory,
             client_id="retry-test",
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         client.connect()
         _drive(client, ticks, count=2)
@@ -769,9 +759,7 @@ class TestSocketFactorySelfHeal:
         client = MQTTClient(
             socket_factory=factory,
             client_id="disconnect-test",
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         client.connect()
         _drive(client, ticks, count=2)
