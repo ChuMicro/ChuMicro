@@ -107,11 +107,6 @@ class NTPResult:
         self._error: Exception | None = None
 
     @property
-    def ticks_started_ms(self) -> int:
-        """Tick value at which the request was issued."""
-        return self._ticks_started_ms
-
-    @property
     def done(self) -> bool:
         """``True`` once the exchange completes (success or failure)."""
         return self._done
@@ -393,7 +388,7 @@ class NTPClient:
 
     def _check_timeout(self, result: "NTPResult", now_ms: int) -> None:
         """Fail *result* with a timeout ``NTPError`` if the deadline has elapsed."""
-        elapsed_ms = self._ticks.ticks_diff(now_ms, result.ticks_started_ms)
+        elapsed_ms = self._ticks.ticks_diff(now_ms, result._ticks_started_ms)  # noqa: SLF001
         if elapsed_ms >= self._timeout_ms:
             result._fail(
                 NTPError(f"SNTP query timed out after {elapsed_ms} ms"),
