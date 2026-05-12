@@ -14,7 +14,7 @@ Tests inject an ``nvs`` substrate exposing ``set_blob(key, value)``,
 
 __chumicro_runtimes__ = ("micropython",)
 
-from chumicro_kvstore._backends.base import Backend
+from chumicro_kvstore.core import Backend, KVStoreFull
 
 
 class MpNvsBackend(Backend):
@@ -82,8 +82,6 @@ class MpNvsBackend(Backend):
         Raises:
             KVStoreFull: ``payload`` exceeds capacity.
         """
-        from chumicro_kvstore.core import KVStoreFull
-
         if len(payload) > self.capacity:
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds NVS capacity {self.capacity}"

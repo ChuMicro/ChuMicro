@@ -9,7 +9,7 @@ cases without owning a real low-memory board.
 
 import sys
 
-from chumicro_kvstore._backends.base import Backend
+from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
 
 
 class MemoryBackend(Backend):
@@ -37,7 +37,6 @@ class MemoryBackend(Backend):
     def load(self) -> bytes:
         """Return the stored payload bytes (``b""`` if never saved)."""
         if self._corrupt:
-            from chumicro_kvstore.core import KVStoreCorrupt
             raise KVStoreCorrupt("memory backend marked corrupt")
         return self._payload
 
@@ -48,7 +47,6 @@ class MemoryBackend(Backend):
             KVStoreFull: Payload exceeds the configured capacity.
         """
         if len(payload) > self.capacity:
-            from chumicro_kvstore.core import KVStoreFull
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds capacity {self.capacity}"
             )

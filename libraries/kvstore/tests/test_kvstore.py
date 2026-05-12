@@ -483,7 +483,7 @@ def test_base_backend_load_save_raise_notimplementederror() -> None:
     Confirms subclasses can't accidentally inherit a no-op ``load`` or
     ``save`` and silently no-op writes.
     """
-    from chumicro_kvstore._backends.base import Backend
+    from chumicro_kvstore.core import Backend
     backend = Backend()
     with raises(NotImplementedError):
         backend.load()
