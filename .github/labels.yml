@@ -75,10 +75,6 @@
   color: "fbca04"
   description: "Awaiting code review"
 
-- name: "good first issue"
-  color: "7057ff"
-  description: "Good for newcomers"
-
 - name: "board-test"
   color: "1d76db"
   description: "Hardware test report from a real device"
