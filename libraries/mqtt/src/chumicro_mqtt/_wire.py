@@ -164,15 +164,15 @@ def _append_string(buffer, value):
     buffer.extend(value)
 
 
-def topic_matches(topic, pattern):
-    """Return ``True`` when *topic* matches the wildcard *pattern*.
+def _topic_levels_match(topic_levels, pattern_levels):
+    """Match pre-split topic / pattern level sequences.
 
-    ``+`` matches one topic level; ``#`` matches any number of levels
-    and must be the last character of the pattern.
+    Internal hot-path helper for ``MQTTClient._handle_inbound_publish`` —
+    the public :func:`topic_matches` splits both inputs every call; the
+    client caches the pattern split at registration time and the topic
+    split once per inbound message, then matches N stored patterns
+    against the one cached split.
     """
-    topic_levels = topic.split("/")
-    pattern_levels = pattern.split("/")
-
     for index, pattern_level in enumerate(pattern_levels):
         if pattern_level == "#":
             return index == len(pattern_levels) - 1
@@ -184,6 +184,15 @@ def topic_matches(topic, pattern):
             return False
 
     return len(pattern_levels) == len(topic_levels)
+
+
+def topic_matches(topic, pattern):
+    """Return ``True`` when *topic* matches the wildcard *pattern*.
+
+    ``+`` matches one topic level; ``#`` matches any number of levels
+    and must be the last character of the pattern.
+    """
+    return _topic_levels_match(topic.split("/"), pattern.split("/"))
 
 
 # ---------------------------------------------------------------------------
