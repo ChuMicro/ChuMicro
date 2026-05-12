@@ -407,9 +407,10 @@ class HttpClient:
                 (typically ``chumicro_config.config``) or plain
                 flat dict.  Keys read are flat dotted strings
                 (``"requests.default_timeout_ms"``).
-            radio: WiFi radio for the auto-built connection factory —
-                CircuitPython needs this; MicroPython auto-detects.
-                Ignored when *connection_factory* is passed.
+            radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
+                (auto-detected); ignored on MP and CPython.  Pass explicitly
+                for multi-radio prototypes or CP boards without a ``wifi``
+                module.  Ignored when *connection_factory* is passed.
             ssl_context: ``SSLContext`` for the auto-built factory's
                 TLS branch.  ``None`` uses the runtime default.
                 Ignored when *connection_factory* is passed.
