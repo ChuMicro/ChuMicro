@@ -157,6 +157,20 @@ def _encode_map(value: dict, buffer: bytearray) -> None:
 # Decoding
 # ---------------------------------------------------------------------------
 
+# Tag bytes that are valid msgpack but outside the chumicro 32-bit /
+# 16-bit subset.  Decoding one points the producer at the fix instead
+# of saying "unsupported byte".
+_OUT_OF_SUBSET = {
+    0xcb: ("float64", "encode with msgpack.packb(obj, use_single_float=True)"),
+    0xcf: ("uint64", "keep integers in [-2**31, 2**32-1]"),
+    0xd3: ("int64", "keep integers in [-2**31, 2**32-1]"),
+    0xc6: ("bin32", "bytes payloads must be under 65 536 bytes"),
+    0xdb: ("str32", "strings must be under 65 536 bytes"),
+    0xdd: ("array32", "arrays must be under 65 536 elements"),
+    0xdf: ("map32", "maps must be under 65 536 entries"),
+}
+
+
 def _decode(data: memoryview, offset: int) -> tuple:
     """Decode one msgpack value from *data* at *offset*.
 
@@ -264,44 +278,10 @@ def _decode(data: memoryview, offset: int) -> tuple:
     if byte >= 0xe0:
         return byte - 256, offset + 1
 
-    # Tags that are valid msgpack but outside the chumicro 32-bit/16-bit
-    # subset — point the producer at the fix instead of saying
-    # "unsupported byte".
-    if byte == 0xcb:
-        raise ValueError(
-            "float64 (0xcb) not in chumicro msgpack subset; "
-            "encode with msgpack.packb(obj, use_single_float=True)"
-        )
-    if byte == 0xcf:
-        raise ValueError(
-            "uint64 (0xcf) not in chumicro msgpack subset; "
-            "keep integers in [-2**31, 2**32-1]"
-        )
-    if byte == 0xd3:
-        raise ValueError(
-            "int64 (0xd3) not in chumicro msgpack subset; "
-            "keep integers in [-2**31, 2**32-1]"
-        )
-    if byte == 0xc6:
-        raise ValueError(
-            "bin32 (0xc6) not in chumicro msgpack subset; "
-            "bytes payloads must be under 65 536 bytes"
-        )
-    if byte == 0xdb:
-        raise ValueError(
-            "str32 (0xdb) not in chumicro msgpack subset; "
-            "strings must be under 65 536 bytes"
-        )
-    if byte == 0xdd:
-        raise ValueError(
-            "array32 (0xdd) not in chumicro msgpack subset; "
-            "arrays must be under 65 536 elements"
-        )
-    if byte == 0xdf:
-        raise ValueError(
-            "map32 (0xdf) not in chumicro msgpack subset; "
-            "maps must be under 65 536 entries"
-        )
+    out_of_subset = _OUT_OF_SUBSET.get(byte)
+    if out_of_subset is not None:
+        name, fix = out_of_subset
+        raise ValueError(f"{name} (0x{byte:02x}) not in chumicro msgpack subset; {fix}")
 
     raise ValueError(f"unsupported msgpack type byte: 0x{byte:02x}")
 
