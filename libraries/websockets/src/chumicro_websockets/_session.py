@@ -645,13 +645,20 @@ class _BaseSession:
                 return True
         return False
 
-    def _arm_pong_deadline(self) -> None:
-        """Set the pong-overdue watchdog if not already armed."""
+    def _arm_pong_deadline(self, now_ms: int | None = None) -> None:
+        """Set the pong-overdue watchdog if not already armed.
+
+        When called from a ``handle()`` path, pass the runner-supplied
+        *now_ms* so the deadline shares the tick.  User-entry callers
+        (``send_ping``) run outside the tick loop and pass nothing.
+        """
         if self._pong_timeout_ms is None:
             return
         if self._pending_ping_deadline_ticks is not None:
             return  # earlier ping still outstanding — keep its deadline
+        if now_ms is None:
+            now_ms = self._ticks_ms()
         self._pending_ping_deadline_ticks = self._ticks_add(
-            self._ticks_ms(),
+            now_ms,
             self._pong_timeout_ms,
         )

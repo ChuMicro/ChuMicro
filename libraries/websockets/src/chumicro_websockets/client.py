@@ -360,7 +360,7 @@ class WebSocketClient(_BaseSession):
             if self._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
                 self._send_handshake_chunk()
             elif self._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE:
-                self._receive_handshake_chunk()
+                self._receive_handshake_chunk(now_ms)
             return
 
         # OPEN / CLOSING — drain inbound first (peer may have sent
@@ -412,7 +412,7 @@ class WebSocketClient(_BaseSession):
         if self._handshake_send_offset >= len(self._handshake_send_buffer):
             self._connecting_phase = ConnectingPhase.RECEIVING_HANDSHAKE
 
-    def _receive_handshake_chunk(self) -> None:
+    def _receive_handshake_chunk(self, now_ms: int) -> None:
         """Read up to recv_budget bytes and feed the handshake parser."""
         chunk = self._recv_chunk(self._recv_budget_per_tick)
         if chunk is None:
@@ -436,7 +436,7 @@ class WebSocketClient(_BaseSession):
             self._connecting_phase = None
             self._handshake_deadline_ticks = None
             self._state = WebSocketState.OPEN
-            self._arm_auto_ping()
+            self._arm_auto_ping(now_ms)
             self.on_open()
             # The peer may have piggybacked frame bytes after the
             # handshake terminator — drain whatever the parser
@@ -461,12 +461,16 @@ class WebSocketClient(_BaseSession):
                 return True
         return self._check_close_and_pong_timeouts(now_ms)
 
-    def _arm_auto_ping(self) -> None:
-        """Schedule the next auto-ping (if enabled)."""
+    def _arm_auto_ping(self, now_ms: int) -> None:
+        """Schedule the next auto-ping (if enabled).
+
+        *now_ms* must be the runner-supplied tick value — every caller
+        is inside the ``handle()`` path, so we never refetch.
+        """
         if self._ping_interval_ms is None:
             return
         self._next_auto_ping_ticks = self._ticks_add(
-            self._ticks_ms(),
+            now_ms,
             self._ping_interval_ms,
         )
 
@@ -477,7 +481,7 @@ class WebSocketClient(_BaseSession):
         if self._ticks_diff(self._next_auto_ping_ticks, now_ms) > 0:
             return
         self._enqueue_internal_frame(OPCODE_PING, b"")
-        self._arm_pong_deadline()
+        self._arm_pong_deadline(now_ms)
         self._next_auto_ping_ticks = self._ticks_add(
             now_ms,
             self._ping_interval_ms,
