@@ -74,12 +74,10 @@ class TestThirdPartyPortability:
 
         fake = FakeTransport(execute_output="hello, third-party\n")
 
-        class _DeviceWithFake(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = _DeviceWithFake(
-            transport="micropython", address="/dev/third-party",
+        device = Device(
+            transport="micropython",
+            address="/dev/third-party",
+            transport_factory=lambda _device: fake,
         )
         deployer = Deployer(device)
         source = CustomLayoutFileSource(_TEMPLATE_ROOT)
