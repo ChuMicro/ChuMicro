@@ -92,9 +92,7 @@ def make_client(*, socket_or_factory=None, **kwargs):
     socket = socket_or_factory if socket_or_factory is not None else FakeSocket()
     client = HttpClient(
         connection_factory=make_factory(socket),
-        ticks_ms_func=ticks.ticks_ms,
-        ticks_add_func=ticks.ticks_add,
-        ticks_diff_func=ticks.ticks_diff,
+        ticks=ticks,
         **kwargs,
     )
     return client, ticks, socket
@@ -696,9 +694,7 @@ class TestHttpClientGet:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=factory,
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.get("https://example.test/secret")
         drive_until_done(client, handle, ticks)
@@ -719,9 +715,7 @@ class TestHttpClientGet:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=factory,
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.get("https://example.test:8443/")
         drive_until_done(client, handle, ticks)
@@ -1509,9 +1503,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=_factory_for_socket_sequence(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.get("http://example.test/v1/widgets")
         drive_until_done(client, handle, ticks)
@@ -1526,9 +1518,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=_factory_for_socket_sequence(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.get("http://example.test/orig")
         drive_until_done(client, handle, ticks)
@@ -1543,9 +1533,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=_factory_for_socket_sequence(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.post("http://example.test/submit", body=b"payload")
         drive_until_done(client, handle, ticks)
@@ -1562,9 +1550,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=_factory_for_socket_sequence(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.post("http://example.test/orig", body=b"replay-me")
         drive_until_done(client, handle, ticks)
@@ -1579,9 +1565,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=_factory_for_socket_sequence(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.post(
             "http://example.test/orig", json={"key": "value"},
@@ -1614,9 +1598,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=_factory_for_socket_sequence(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.get("http://example.test/orig")  # default budget = 5
         drive_until_done(client, handle, ticks, max_ticks=400)
@@ -1633,9 +1615,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=_factory_for_socket_sequence(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.get("http://example.test/orig", max_redirects=5)
         drive_until_done(client, handle, ticks, max_ticks=400)
@@ -1674,9 +1654,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=_factory_for_socket_sequence(sockets),
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
             default_max_redirects=1,  # default would block the chain
         )
         handle = client.get(
@@ -1704,9 +1682,7 @@ class TestHttpClientRedirects:
         ticks = FakeTicks()
         client = HttpClient(
             connection_factory=factory,
-            ticks_ms_func=ticks.ticks_ms,
-            ticks_add_func=ticks.ticks_add,
-            ticks_diff_func=ticks.ticks_diff,
+            ticks=ticks,
         )
         handle = client.get("http://example.test/orig")
         drive_until_done(client, handle, ticks)

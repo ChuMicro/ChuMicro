@@ -25,7 +25,7 @@ redirects, and chunked encoding are future work.
 
 import json
 
-from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_requests._wire import (
     DEFAULT_BODY_BUFFER_SIZE,
@@ -448,9 +448,7 @@ class HttpClient:
         default_timeout_ms: int = DEFAULT_TIMEOUT_MS,
         default_max_redirects: int = DEFAULT_MAX_REDIRECTS,
         user_agent: str | None = None,
-        ticks_ms_func: object = ticks_ms,
-        ticks_add_func: object = ticks_add,
-        ticks_diff_func: object = ticks_diff,
+        ticks: object | None = None,
     ) -> None:
         """Wire up the client.
 
@@ -478,12 +476,11 @@ class HttpClient:
                 ``0`` returns the 3xx response as-is without
                 following.  Default 5.
             user_agent: Override the default ``User-Agent`` header.
-            ticks_ms_func: Inject a fake ``ticks_ms`` for testing;
-                defaults to :func:`chumicro_timing.ticks_ms`.
-            ticks_add_func: Inject a fake ``ticks_add`` for testing;
-                defaults to :func:`chumicro_timing.ticks_add`.
-            ticks_diff_func: Inject a fake ``ticks_diff`` for testing;
-                defaults to :func:`chumicro_timing.ticks_diff`.
+            ticks: Optional tick source — any object exposing
+                ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
+                the ``chumicro_timing.ticks`` submodule shape).
+                Defaults to that submodule (real clock); tests pass
+                ``FakeTicks`` from ``chumicro_timing.testing``.
         """
         self._connection_factory = connection_factory
         self._recv_budget_per_tick = recv_budget_per_tick
@@ -502,9 +499,7 @@ class HttpClient:
         self._default_timeout_ms = default_timeout_ms
         self._user_agent = user_agent or "chumicro-requests/0.1"
 
-        self._ticks_ms = ticks_ms_func
-        self._ticks_add = ticks_add_func
-        self._ticks_diff = ticks_diff_func
+        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
 
         self._default_max_redirects = default_max_redirects
 
@@ -698,7 +693,7 @@ class HttpClient:
         if self._state == _RequestState.IDLE:
             return
 
-        if self._deadline_ticks is not None and self._ticks_diff(
+        if self._deadline_ticks is not None and self._ticks.ticks_diff(
             self._deadline_ticks, now_ms,
         ) <= 0:
             self._fail(HttpTimeoutError(
@@ -746,7 +741,7 @@ class HttpClient:
             max_redirects if max_redirects is not None else self._default_max_redirects
         )
         timeout = timeout_ms if timeout_ms is not None else self._default_timeout_ms
-        self._deadline_ticks = self._ticks_add(self._ticks_ms(), timeout)
+        self._deadline_ticks = self._ticks.ticks_add(self._ticks.ticks_ms(), timeout)
         self._handle = RequestHandle(url=url)
         self._start_hop(url, method, encoded_body, headers, json_body is not None)
         return self._handle
