@@ -331,6 +331,7 @@ The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1
 | Example | What it shows |
 |---|---|
 | [`examples/telemetry.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Cross-runtime (CP + MP). |
+| [`examples/bench.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench.py) | Self-driving validation bench — deploy + watch serial.  Runs 8 scenarios (tier-1 steady, tier-2 intact, tier-3 oversize, oversize-topic, QoS-1 round-trip, sustained burst, keepalive) against a real broker and prints a pass/fail summary with per-scenario heap deltas + tick latency.  Companion [`examples/bench_host.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/examples/bench_host.py) captures the verdict from the broker and can publish a 64 KB hostile payload for extra tier-3 stress (host-side, needs `pip install paho-mqtt`). |
 
 ---
 
