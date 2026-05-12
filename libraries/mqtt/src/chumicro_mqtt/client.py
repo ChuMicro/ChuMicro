@@ -83,14 +83,6 @@ class InFlightPublish:
     callback that fires once on PUBACK.
     """
 
-    __slots__ = (
-        "callback",
-        "deadline_ticks",
-        "packet_bytes",
-        "packet_id",
-        "retry_count",
-    )
-
     def __init__(self, packet_id, packet_bytes, deadline_ticks, callback=None):
         self.packet_id = packet_id
         self.packet_bytes = packet_bytes
@@ -158,8 +150,6 @@ class PendingResponse:
     Multiple pending responses can coexist — tracking is per-entry
     rather than via a single broad waiting-state lock.
     """
-
-    __slots__ = ("awaiting", "callback", "deadline_ticks", "packet_id")
 
     def __init__(self, awaiting, deadline_ticks, packet_id=None, callback=None):
         self.awaiting = awaiting
@@ -806,7 +796,7 @@ class MQTTClient:
             return
         try:
             self._drain_tx_queue()
-            self._read_inbound()
+            self._read_inbound(now_ms)
             self._check_deadlines(now_ms)
             self._check_keepalive(now_ms)
             self._drain_tx_queue()
@@ -938,7 +928,7 @@ class MQTTClient:
     # Internal — RX path
     # ------------------------------------------------------------------
 
-    def _read_inbound(self):
+    def _read_inbound(self, now_ms):
         """Pull bytes off the socket; process complete packets.
 
         Doesn't short-circuit on "got < capacity" — TCP can fragment
@@ -981,9 +971,9 @@ class MQTTClient:
             packet = self._decoder.read_next()
             if packet is None:
                 break
-            self._dispatch(packet)
+            self._dispatch(packet, now_ms)
 
-    def _dispatch(self, packet):
+    def _dispatch(self, packet, now_ms):
         """Route a parsed packet to the right handler."""
         if isinstance(packet, ParsedPublish):
             self._handle_inbound_publish(packet)
@@ -992,7 +982,7 @@ class MQTTClient:
             self._handle_oversized(packet)
             return
         if isinstance(packet, ParsedAck):
-            self._handle_ack(packet)
+            self._handle_ack(packet, now_ms)
             return
 
     def _handle_inbound_publish(self, packet):
@@ -1021,10 +1011,10 @@ class MQTTClient:
         if packet.qos == 1 and self._when_oversized != WhenOversized.DISCONNECT:
             self._tx_queue.appendleft(encode_puback(packet_id=packet.packet_id))
 
-    def _handle_ack(self, packet):
+    def _handle_ack(self, packet, now_ms):
         """Match an inbound CONNACK / SUBACK / PUBACK / etc. to its pending entry."""
         if packet.packet_type == PACKET_CONNACK:
-            self._handle_connack(packet)
+            self._handle_connack(packet, now_ms)
             return
         if packet.packet_type == PACKET_PINGRESP:
             self._discard_pending(Awaiting.PINGRESP, packet_id=None)
@@ -1051,7 +1041,7 @@ class MQTTClient:
             self._in_flight.discard(packet.packet_id)
             return
 
-    def _handle_connack(self, packet):
+    def _handle_connack(self, packet, now_ms):
         """CONNACK return-code 0 = success, anything else = failure."""
         self._discard_pending(Awaiting.CONNACK, packet_id=None)
         if packet.return_code != 0:
@@ -1067,7 +1057,7 @@ class MQTTClient:
             self._state = ProtocolState.FAILED
             return
         self._state = ProtocolState.CONNECTED
-        self._next_ping_due_ticks = self._deadline(self._ping_interval_ms)
+        self._next_ping_due_ticks = self._deadline(self._ping_interval_ms, now_ms=now_ms)
         self.on_connect()
 
     def _discard_pending(self, awaiting, *, packet_id, callback_arg=None):
@@ -1103,7 +1093,7 @@ class MQTTClient:
                 self._state = ProtocolState.FAILED
                 return
             entry.retry_count += 1
-            entry.deadline_ticks = self._deadline(self._ack_timeout_ms)
+            entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
             # Set the DUP flag (bit 3 of byte 0) per MQTT 3.1.1 §4.3.2.
             retry_packet = bytearray(entry.packet_bytes)
             retry_packet[0] |= 0x08
@@ -1133,11 +1123,22 @@ class MQTTClient:
         self._pending_responses.append(
             PendingResponse(
                 awaiting=Awaiting.PINGRESP,
-                deadline_ticks=self._deadline(self._ack_timeout_ms),
+                deadline_ticks=self._deadline(self._ack_timeout_ms, now_ms=now_ms),
             ),
         )
-        self._next_ping_due_ticks = self._deadline(self._ping_interval_ms)
+        self._next_ping_due_ticks = self._deadline(self._ping_interval_ms, now_ms=now_ms)
 
-    def _deadline(self, offset_ms):
-        """Return a tick value that's *offset_ms* in the future."""
-        return self._ticks_add(self._ticks_ms(), offset_ms)
+    def _deadline(self, offset_ms, *, now_ms=None):
+        """Return a tick value that's *offset_ms* in the future.
+
+        When called from inside a ``handle()`` path, pass the runner-
+        supplied *now_ms* so the deadline is armed against the same
+        tick the surrounding code is comparing against — one ``ticks_ms``
+        per tick, shared across every deadline computed that tick.
+        User-entry callers (``connect``, ``publish``, ``subscribe``,
+        ``unsubscribe``) run outside the tick loop and pass nothing,
+        so a fresh ``ticks_ms()`` is captured.
+        """
+        if now_ms is None:
+            now_ms = self._ticks_ms()
+        return self._ticks_add(now_ms, offset_ms)
