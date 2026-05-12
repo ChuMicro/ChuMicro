@@ -43,6 +43,8 @@ Everything is non-blocking — **no `async` / `await`, no threads**.  A WiFi rec
 
 - **A real project layout when you outgrow examples.**  The [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) gives you a clone-and-go starter with a `projects/` tree, atomic deploys (so the board's FAT filesystem doesn't wear out from save-on-every-keystroke editing), a device registry shared with the deploy tools, workspace-wide config + secrets, and a `pytest` setup that runs tests both on your laptop and on the board.
 
+- **Bring-your-own transport, bring-your-own clock.**  The libraries take their I/O dependencies — sockets, listeners, the tick clock — through the constructor as duck-typed objects.  `chumicro-sockets` is one valid producer; stdlib `socket.socket` after `setblocking(False)` is another; an upstream-library wrapper or a hand-rolled test fake works the same way.  No `isinstance` checks, no inheritance contracts — just a small set of methods (`recv_into` / `send` / `close` for TCP-shaped sockets, `sendto` / `recvfrom` for UDP, `ticks_ms` / `ticks_diff` for the clock).  Custom-transport users can drop the default `chumicro-sockets` from the on-device deploy with a one-line entrypoint constant — see [Slimming Your Deploy](docs/contributing/slimming-your-deploy.md) for the exact-form and family-form syntax.
+
 - **Runs on common Python-capable dev boards.**  Validated on the ESP32 family (S2 / S3 / C3 / C6) and RP2040 / RP2350 (Raspberry Pi Pico and Pico W).  Any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 4 MB of flash should work — STM32 and nRF52840 builds included.
 
 ## From blink to a full IoT loop
