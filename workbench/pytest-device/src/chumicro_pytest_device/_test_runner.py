@@ -196,7 +196,7 @@ def resolve_effective_deploy_mode(
     return deploy_mode_override or device_entry.deploy_mode or DEFAULT_DEPLOY_MODE
 
 
-def create_transport(
+def build_transport_for_entry(
     device_entry: DeviceEntry,
     deploy_mode: str | None = None,
 ) -> TransportProtocol:
@@ -204,7 +204,9 @@ def create_transport(
 
     Thin wrapper around :meth:`chumicro_deploy.Device.create_transport`
     — translates the registry-shaped ``DeviceEntry`` into a
-    ``Device`` and delegates runtime branching.
+    ``Device`` and delegates runtime branching.  Named to disambiguate
+    from ``Device.create_transport`` itself; this one takes the
+    registry record, that one takes the constructed Device.
     """
     effective_mode = resolve_effective_deploy_mode(device_entry, deploy_mode)
     device = Device(

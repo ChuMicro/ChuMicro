@@ -94,7 +94,7 @@ class TestBuildBootstrap:
 
 
 class TestCreateTransport:
-    """Tests for create_transport deploy mode routing."""
+    """Tests for build_transport_for_entry deploy mode routing."""
 
     def _make_device_entry(
         self,
@@ -112,25 +112,25 @@ class TestCreateTransport:
     def test_micropython_ram_uses_mount_mode(self) -> None:
         """RAM deploy mode should map to mount for MicroPython."""
         entry = self._make_device_entry(runtime="micropython")
-        transport = device_testing.create_transport(entry, deploy_mode="ram")
+        transport = device_testing.build_transport_for_entry(entry, deploy_mode="ram")
         assert transport.mode == "mount"
 
     def test_micropython_flash_uses_copy_mode(self) -> None:
         """Flash deploy mode should map to copy for MicroPython."""
         entry = self._make_device_entry(runtime="micropython")
-        transport = device_testing.create_transport(entry, deploy_mode="flash")
+        transport = device_testing.build_transport_for_entry(entry, deploy_mode="flash")
         assert transport.mode == "copy"
 
     def test_circuitpython_ram_mode(self) -> None:
         """RAM deploy mode should pass ram to CircuitPython transport."""
         entry = self._make_device_entry(runtime="circuitpython")
-        transport = device_testing.create_transport(entry, deploy_mode="ram")
+        transport = device_testing.build_transport_for_entry(entry, deploy_mode="ram")
         assert transport.mode == "ram"
 
     def test_circuitpython_flash_mode(self) -> None:
         """Flash deploy mode should pass flash to CircuitPython transport."""
         entry = self._make_device_entry(runtime="circuitpython")
-        transport = device_testing.create_transport(entry, deploy_mode="flash")
+        transport = device_testing.build_transport_for_entry(entry, deploy_mode="flash")
         assert transport.mode == "flash"
 
     def test_unsupported_runtime_raises(self) -> None:
@@ -139,7 +139,7 @@ class TestCreateTransport:
         # Override runtime since DeviceEntry doesn't validate.
         entry.runtime = "unknown"
         with pytest.raises(ValueError, match="Unsupported transport"):
-            device_testing.create_transport(entry)
+            device_testing.build_transport_for_entry(entry)
 
     def test_default_deploy_mode_is_flash(self) -> None:
         """Default deploy mode (from device entry) should be flash → copy.
@@ -148,7 +148,7 @@ class TestCreateTransport:
         available as opt-in via per-device or CLI override.
         """
         entry = self._make_device_entry(runtime="micropython")
-        transport = device_testing.create_transport(entry)
+        transport = device_testing.build_transport_for_entry(entry)
         assert transport.mode == "copy"
 
     def test_device_entry_deploy_mode_flash(self) -> None:
@@ -156,7 +156,7 @@ class TestCreateTransport:
         entry = self._make_device_entry(
             runtime="micropython", deploy_mode="flash",
         )
-        transport = device_testing.create_transport(entry)
+        transport = device_testing.build_transport_for_entry(entry)
         assert transport.mode == "copy"
 
     def test_cli_overrides_device_entry_deploy_mode(self) -> None:
@@ -164,7 +164,7 @@ class TestCreateTransport:
         entry = self._make_device_entry(
             runtime="micropython", deploy_mode="flash",
         )
-        transport = device_testing.create_transport(entry, deploy_mode="ram")
+        transport = device_testing.build_transport_for_entry(entry, deploy_mode="ram")
         assert transport.mode == "mount"
 
     def test_circuitpython_device_entry_flash(self) -> None:
@@ -173,7 +173,7 @@ class TestCreateTransport:
             runtime="circuitpython",
             deploy_mode="flash",
         )
-        transport = device_testing.create_transport(entry)
+        transport = device_testing.build_transport_for_entry(entry)
         assert transport.mode == "flash"
 
 

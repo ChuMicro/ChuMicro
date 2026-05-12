@@ -59,7 +59,7 @@ from chumicro_deploy.runtime_marker import read_runtime_marker
 
 from ._test_runner import (
     build_device_bootstrap,
-    create_transport,
+    build_transport_for_entry,
     execute_device_bootstrap,
     resolve_effective_deploy_mode,
     resolve_library_source_dirs,
@@ -658,7 +658,7 @@ class _TransportCache:
         """
         key = device_entry.identifier
         if key not in self._transports:
-            transport = create_transport(device_entry, deploy_mode=deploy_mode)
+            transport = build_transport_for_entry(device_entry, deploy_mode=deploy_mode)
             transport.connect()
             self._transports[key] = transport
         return self._transports[key]
