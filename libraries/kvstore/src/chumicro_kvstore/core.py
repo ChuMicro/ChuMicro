@@ -257,7 +257,10 @@ class KVStore:
 
     @property
     def is_corrupt(self) -> bool:
-        """``True`` after a failed-integrity load; cleared by the next successful commit or reload."""
+        """``True`` after a failed-integrity load.
+
+        Sticky until the next successful ``commit()`` or ``reload()``.
+        """
         return self._is_corrupt
 
     @property
