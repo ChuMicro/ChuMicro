@@ -17,8 +17,9 @@ Public API::
     handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
     while not handle.done:
-        if client.check(ticks_ms()):
-            client.handle(ticks_ms())
+        now = ticks_ms()
+        if client.check(now):
+            client.handle(now)
 
     response = handle.result    # raises HttpError on failure
     print(response.status_code, response.headers["content-type"], response.body)
