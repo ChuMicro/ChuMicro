@@ -18,6 +18,30 @@ Decision records capture *why* the workspace has its current shape. Create one w
 
 ## Procedure
 
+### 0. Check for conflicts with existing decisions
+
+Before drafting the new ADR's body, grep `plans/decisions/` for any ADR that touches the same primitive — the same cross-library contract, the same shared enum, the same callback signature, the same protocol semantic, the same dimension of an already-decided tradeoff. If one exists, **read it before locking the new design**, and either:
+
+- Make the new decision *consistent* with the existing contract (the common case), and cite the existing ADR in `Related:`; or
+- Acknowledge the conflict and choose between (a) amending the existing ADR in place, (b) marking the existing one `superseded`, or (c) narrowing the new decision's scope so the conflict disappears.
+
+A conflict you don't notice during planning becomes a conflict your design encodes. The fix lands much later, costs more, and often involves a partial reversal of the new decision — exactly what writing the ADR was supposed to prevent.
+
+Field reality (chumicro_mqtt three-tier reshape, 2026-05-12): the user and I aligned on a tier-3 design that would have delivered a truncated payload via `on_oversized(reported_length, topic, truncated_payload)`. Decision 0061 — a cross-library `WhenOversized` contract written **the previous day** — specified `on_oversized(reported_length, topic)` exactly two positional args and "drop the oversized payload" semantics. The conflict surfaced only when I read `plans/decisions/` during the "survey existing tests + ADR template" task at the start of implementation, after the design was supposedly final. Caught in time, but later than it should have been. The 30 seconds of `ls plans/decisions/ | xargs grep -l <primitive>` before drafting would have surfaced it during planning.
+
+Quick conflict-search recipe — adapt to the primitive you're deciding:
+
+```bash
+# By name of the primitive (callback, enum, kwarg, exception class):
+grep -rl "<primitive-name>" plans/decisions/
+
+# By recent ADRs touching the same library or seam:
+ls -t plans/decisions/ | head -20
+
+# Cross-library contracts (anything specifying behavior across two+ libraries):
+grep -l "cross-library\|cross-lib\|shared contract" plans/decisions/
+```
+
 ### 1. Determine the next number
 
 ```bash
