@@ -124,7 +124,7 @@ store.commit_if_changed()
 | Runtime | Backend chosen by `auto` | Capacity (typical) |
 |---|---|---|
 | CircuitPython | `nvm` (with CRC framing) | 256 B – 8 KB depending on chip |
-| MicroPython on ESP32-family | `nvs` (single blob in `chu_kv` namespace) | ~4 KB practical |
+| MicroPython on ESP32-family | `nvs` (single blob in `chu_kv` namespace) | 512 B default; pass `capacity=N` for larger (~24 KB partition headroom) |
 | MicroPython on Pi Pico W (rp2) | `littlefs` (atomic file at `/_chu_kv.msgpack`) | filesystem-bounded (typically MB) |
 | CPython | `memory` (in-process bytes) | unbounded |
 
