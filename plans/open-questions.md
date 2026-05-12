@@ -434,10 +434,10 @@ serving).
 ### What does "contributor-ready" look like beyond docs?
 
 CONTRIBUTING.md, issue templates, and PR templates exist.  But contributor
-experience also includes: good-first-issue labeling, response time
-expectations, mentoring patterns for agent-assisted contributors, and
-community channels.  What's the minimum viable contributor experience
-before actively seeking contributions?
+experience also includes: response time expectations, mentoring patterns
+for agent-assisted contributors, and community channels.  What's the
+minimum viable contributor experience before actively seeking
+contributions?
 
 ### Should we offer a "drive mode toggle" tool for CircuitPython boards?
 
