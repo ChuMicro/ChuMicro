@@ -38,7 +38,7 @@ config = load_runtime_config()                          # reads /runtime_config.
 wifi = WifiService(WifiConfig.from_config(config))      # reads + types the wifi.* keys
 ```
 
-Library-side pattern (inside every consumer library's `<Name>Config.from_config`):
+Library-side pattern (`load_section` builds a typed config from the flat-key payload — used today by `chumicro-wifi`):
 
 ```python
 from chumicro_config import load_section
@@ -61,13 +61,16 @@ class WifiConfig:
 | Symbol | What it does |
 |---|---|
 | `load_runtime_config(path=…)` | Read + decode `/runtime_config.msgpack` into a flat-key `RuntimeConfig` (dict-shaped) |
-| `load_section(cls, config, *, prefix, required=…, optional=…)` | Standardized `from_config` core every library calls |
+| `config` | Lazily-loaded module attribute — the deployed `RuntimeConfig`, or `None` when the file is absent.  First attribute access reads the file once and caches the result |
+| `RuntimeConfig` | Dict-like wrapper over the flat-key payload — `get(key[, default])`, `[key]` / `require(key)`, `in`, iteration, `len`, equality with dicts / other `RuntimeConfig`s |
+| `load_section(cls, config, *, prefix, required=…, optional=…)` | Build `cls(**kwargs)` by reading flat-prefix keys.  Used today by `chumicro-wifi`'s `WifiConfig.from_config`; available to any library whose constructor signature maps 1:1 to its config subkeys |
+| `try_load_section(...)` | Soft variant — returns `None` instead of raising when `config` is `None`, the wrong type, or missing a required key |
 | `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions — single-inheritance from `ConfigError` (MicroPython forbids multi-parent layouts) |
 | `DEFAULT_RUNTIME_CONFIG_PATH` | The canonical on-device path (`/runtime_config.msgpack`) |
 
 ## Where this fits
 
-Depends on [`chumicro-msgpack`](../msgpack/) for decode.  Every ChuMicro library that has a `<Name>Config.from_config()` factory uses this — [`chumicro-wifi`](../wifi/), [`chumicro-mqtt`](../mqtt/), and friends.
+Depends on [`chumicro-msgpack`](../msgpack/) for decode.  Most ChuMicro libraries with a `<Name>Config.from_config()` factory read their slice off the shared `RuntimeConfig` via `config.get(...)`; [`chumicro-wifi`](../wifi/) additionally uses the `load_section` helper here.  Other consumers: [`chumicro-mqtt`](../mqtt/), [`chumicro-ntp`](../ntp/), [`chumicro-requests`](../requests/), [`chumicro-websockets`](../websockets/), [`chumicro-http_server`](../http_server/).
 
 ## Platform support
 
