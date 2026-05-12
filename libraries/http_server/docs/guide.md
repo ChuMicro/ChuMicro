@@ -158,7 +158,7 @@ If you supply your own listener and want `chumicro_sockets` dropped from the dep
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-Family form (the bare stem) or exact path (`"chumicro_http_server.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpServer.from_config(...)` on a deploy that has skipped `chumicro_http_server.sockets_factory` raises `RuntimeError` naming the bypass kwarg.
+Family form (the bare stem) or exact path (`"chumicro_http_server.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpServer.from_config(...)` when `chumicro_http_server.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwarg.
 
 ## TLS server (HTTPS)
 

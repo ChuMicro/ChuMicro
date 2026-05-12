@@ -31,12 +31,12 @@ A silent skip that shipped the unwanted library would be a worse outcome than re
 **Misuse at runtime.**  If you skip a factory but then call the affected library's `from_config(...)` on the device, the lazy import inside `from_config` is wrapped in `try/except ImportError → RuntimeError`:
 
 ```
-RuntimeError: MQTTClient.from_config() default wiring needs
-chumicro_mqtt.sockets_factory.  This module was excluded via
-__chumicro_skip_factories__ — pass socket_factory= or socket= explicitly.
+RuntimeError: chumicro_mqtt.sockets_factory not available
+(excluded via __chumicro_skip_factories__ or not on the board) —
+pass socket_factory= or socket= explicitly.
 ```
 
-The five library `from_config` methods that lazy-import a factory submodule — mqtt, requests, websockets, ntp, http_server — all emit this message with their own bypass-kwarg names.
+The five library `from_config` methods that lazy-import a factory submodule — mqtt, requests, websockets, ntp, http_server — all emit this message with their own bypass-kwarg names.  The "not on the board" half of the message covers manual `circup` / `mip` installs that selected the library but omitted its factory submodule — the failure mode is the same loud `RuntimeError` either way.
 
 ## Two informational warnings via `source.skip_factories_warnings()`
 

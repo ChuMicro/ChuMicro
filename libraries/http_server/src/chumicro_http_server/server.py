@@ -608,11 +608,10 @@ class HttpServer:
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "HttpServer.from_config() default wiring needs "
-                    "chumicro_http_server.sockets_factory.  This "
-                    "module was excluded via "
-                    "__chumicro_skip_factories__ — pass "
-                    "listener_factory= explicitly.",
+                    "chumicro_http_server.sockets_factory not "
+                    "available (excluded via __chumicro_skip_factories__ "
+                    "or not on the board) — pass listener_factory= "
+                    "explicitly.",
                 ) from exception
 
             listener_factory = chumicro_sockets_factory(
