@@ -65,7 +65,7 @@ wifi.last_error    # last exception caught, if any
 wifi.adapter_name  # "cp" / "mp_esp32" / "mp_rp2" / "fake" — useful for logging
 ```
 
-`last_error` is most informative on MicroPython-ESP32, where the wifi driver raises `OSError("Wifi Internal State Error")` on unreachable AP.  On CircuitPython the driver raises `TimeoutError` / `ConnectionError`; on MicroPython-CYW43 (Pi Pico W) the driver silently leaves `isconnected()` False, so `last_error` may be `None` even though the supervisor is in `RECONNECTING` (see Platform notes).
+`last_error` is most informative on MicroPython-ESP32, where the wifi driver raises `OSError("Wifi Internal State Error")` on unreachable AP — the service captures it and surfaces it here.  On CircuitPython, the substrate raises `TimeoutError` / `ConnectionError` (both `OSError` subclasses) but `CpWifiAdapter.connect` catches them and returns `False`, so `last_error` typically stays `None` for unreachable-AP cases — only non-`OSError` failures (e.g. programmer errors) bubble up.  On MicroPython-CYW43 (Pi Pico W) the driver silently leaves `isconnected()` False with no exception, so `last_error` is `None` even though the supervisor is in `RECONNECTING` (see Platform notes).
 
 ## State-change notifications
 
@@ -123,7 +123,7 @@ runner.add(wifi)
 runner.tick()             # advances every registered service one step
 ```
 
-`check` is cheap (state inspection); `handle` performs at most one wifi-driver call per tick (connect attempt, isconnected probe, or backoff sleep update).  No tick is ever blocked — connection failures land in `RECONNECTING`, and the next backoff window resumes naturally.
+`check` is cheap (state inspection); `handle` performs at most one wifi-driver call per tick.  On MicroPython that call is non-blocking — association happens in the background and `handle()` returns immediately, so other services keep their tick budget.  On CircuitPython the substrate-level `wifi.radio.connect()` is itself blocking, so `handle()` stalls for up to `connect_timeout_ms` (default 15 000 ms) while in `CONNECTING` / `RECONNECTING` — other services in the same `Runner` (LED heartbeat, an in-flight HTTP request, MQTT keep-alives) pause for that window.  Once `CONNECTED`, every tick is cheap on both runtimes — and connection failures land in `RECONNECTING`, with the next backoff window resuming naturally.
 
 ## Adapter detection
 
