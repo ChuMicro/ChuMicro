@@ -13,11 +13,17 @@ shift cost of ``list.pop(0)`` on small VMs.
 import sys
 from collections import deque
 
-DEBUG = 10
-INFO = 20
-WARNING = 30
-ERROR = 40
-CRITICAL = 50
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
+
+DEBUG = const(10)
+INFO = const(20)
+WARNING = const(30)
+ERROR = const(40)
+CRITICAL = const(50)
 
 _LEVEL_NAMES = {
     DEBUG: "DEBUG",
@@ -238,7 +244,7 @@ class BufferedHandler:
     """Runner-shaped handler buffering records and flushing on ``handle``.
 
     Drop-in front of any other handler.  ``emit`` is cheap — it appends
-    to a bounded list — so libraries on a hot tick can log freely
+    to a bounded buffer — so libraries on a hot tick can log freely
     without paying for I/O.  ``check(now_ms)`` returns ``True`` when
     the buffer is non-empty; ``handle(now_ms)`` drains it to the
     downstream handler.  Wire the buffered handler into a

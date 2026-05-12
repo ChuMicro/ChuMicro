@@ -50,7 +50,7 @@ handler can never crash the application that uses it.
 
 The hot path on a microcontroller cannot afford to write to the
 serial console synchronously.  `BufferedHandler` decouples emission
-from I/O: `emit` appends to a bounded list and returns immediately;
+from I/O: `emit` appends to a bounded buffer and returns immediately;
 `check(now_ms)` returns `True` when records are pending; `handle(now_ms)`
 drains the buffer to the downstream handler.
 
@@ -81,7 +81,7 @@ contract.
 
 ## Memory notes
 
-`BufferedHandler` keeps a Python list of `(level, name, message)`
+`BufferedHandler` keeps a bounded buffer of `(level, name, message)`
 tuples up to `capacity` deep.  At the default capacity of 32, expect
 roughly `32 × (sizeof tuple + sizeof message)` bytes resident.  Tune
 `capacity` to your environment — small enough to bound the memory
