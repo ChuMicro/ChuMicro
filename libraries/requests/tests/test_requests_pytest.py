@@ -1,4 +1,4 @@
-"""CPython-only tests for chumicro_requests.chumicro_sockets_factory.
+"""CPython-only tests for chumicro_requests.sockets_factory.chumicro_sockets_factory.
 
 These cases use pytest's ``monkeypatch`` fixture to swap the module-
 level ``chumicro_sockets.tcp_client_socket`` / ``tls_client_socket``
@@ -12,7 +12,7 @@ socket on each board" — is exercised end-to-end on real hardware in
 ``functional_tests/test_real_get_tls.py`` (HTTPS).
 """
 
-from chumicro_requests import chumicro_sockets_factory
+from chumicro_requests.sockets_factory import chumicro_sockets_factory
 
 
 class TestChumicroSocketsFactory:

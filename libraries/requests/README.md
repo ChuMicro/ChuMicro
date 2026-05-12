@@ -29,7 +29,8 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 ## Quick example
 
 ```python
-from chumicro_requests import HttpClient, chumicro_sockets_factory
+from chumicro_requests import HttpClient
+from chumicro_requests.sockets_factory import chumicro_sockets_factory
 from chumicro_timing import ticks_ms
 
 client = HttpClient(connection_factory=chumicro_sockets_factory())
@@ -56,7 +57,7 @@ print(response.json())            # parsed JSON when Content-Type is application
 | `Response` | Status code, reason, headers, raw body, URL; `.text`, `.json()`, `.encoding`. |
 | `CaseInsensitiveDict` | Header dict with case-insensitive lookups. |
 | `WhenOversized` | Policy enum for responses past `max_body_bytes`. |
-| `chumicro_sockets_factory(...)` | Convenience connection-factory wired to chumicro-sockets. |
+| `chumicro_requests.sockets_factory.chumicro_sockets_factory(...)` | Opt-in submodule: convenience connection-factory wired to chumicro-sockets. |
 | `parse_url(url)` | URL → `(scheme, host, port, path)`. |
 | `parse_charset(content_type)` | Extract charset from a Content-Type header value. |
 | `encode_request(...)` | Build raw HTTP request bytes. |

@@ -1942,8 +1942,9 @@ class TestFromConfig:
         """When neither *connection_factory* is passed, ``from_config``
         builds one via ``chumicro_sockets_factory(radio=…, ssl_context=…)``.
         Validates the wiring without needing a real socket by replacing
-        the module-level ``chumicro_sockets_factory`` symbol."""
-        import chumicro_requests.client as client_mod  # noqa: PLC0415
+        the symbol on its home module (``chumicro_requests.sockets_factory``);
+        from_config lazy-imports through that path."""
+        import chumicro_requests.sockets_factory as sockets_factory_mod  # noqa: PLC0415
         from chumicro_requests import HttpClient
 
         captured: dict = {}
@@ -1954,14 +1955,14 @@ class TestFromConfig:
             captured["ssl_context"] = ssl_context
             return sentinel_factory
 
-        original = client_mod.chumicro_sockets_factory
-        client_mod.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        original = sockets_factory_mod.chumicro_sockets_factory
+        sockets_factory_mod.chumicro_sockets_factory = fake_chumicro_sockets_factory
         try:
             client = HttpClient.from_config(
                 {}, radio="fake-radio", ssl_context="fake-ctx",
             )
         finally:
-            client_mod.chumicro_sockets_factory = original
+            sockets_factory_mod.chumicro_sockets_factory = original
 
         assert captured == {"radio": "fake-radio", "ssl_context": "fake-ctx"}
         assert client._connection_factory is sentinel_factory  # noqa: SLF001
@@ -1971,7 +1972,7 @@ class TestFromConfig:
         requests default factory reads zero config keys (per-request
         URL carries host/port), so empty config + no override is fine.
         Unlike mqtt, no MissingConfigKey is ever raised."""
-        import chumicro_requests.client as client_mod  # noqa: PLC0415
+        import chumicro_requests.sockets_factory as sockets_factory_mod  # noqa: PLC0415
         from chumicro_requests import HttpClient
 
         sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
@@ -1979,12 +1980,12 @@ class TestFromConfig:
         def fake_chumicro_sockets_factory(*, radio=None, ssl_context=None):
             return sentinel_factory
 
-        original = client_mod.chumicro_sockets_factory
-        client_mod.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        original = sockets_factory_mod.chumicro_sockets_factory
+        sockets_factory_mod.chumicro_sockets_factory = fake_chumicro_sockets_factory
         try:
             # No raise: empty config + no factory override is fine.
             client = HttpClient.from_config({})
         finally:
-            client_mod.chumicro_sockets_factory = original
+            sockets_factory_mod.chumicro_sockets_factory = original
 
         assert client._connection_factory is sentinel_factory  # noqa: SLF001

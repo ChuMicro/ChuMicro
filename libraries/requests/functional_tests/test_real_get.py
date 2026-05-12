@@ -28,7 +28,8 @@ mid-TLS — track via `git log -- libraries/sockets/src/`).
 import time
 
 from chumicro_config import config
-from chumicro_requests import HttpClient, chumicro_sockets_factory
+from chumicro_requests import HttpClient
+from chumicro_requests.sockets_factory import chumicro_sockets_factory
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 

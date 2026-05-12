@@ -348,9 +348,11 @@ class HttpClient:
         connection_factory(host: str, port: int, use_tls: bool) -> TCPClientSocket
 
     For a board with WiFi + chumicro-sockets, use
-    :func:`chumicro_sockets_factory` to wire up the default::
+    :func:`chumicro_requests.sockets_factory.chumicro_sockets_factory`
+    to wire up the default::
 
-        from chumicro_requests import HttpClient, chumicro_sockets_factory
+        from chumicro_requests import HttpClient
+        from chumicro_requests.sockets_factory import chumicro_sockets_factory
         client = HttpClient(connection_factory=chumicro_sockets_factory())
 
     For config-driven construction, see :meth:`from_config` —
@@ -428,6 +430,10 @@ class HttpClient:
                 f"dict, got {type(config).__name__}",
             )
         if connection_factory is None:
+            from chumicro_requests.sockets_factory import (  # noqa: PLC0415 - lazy
+                chumicro_sockets_factory,
+            )
+
             connection_factory = chumicro_sockets_factory(
                 radio=radio, ssl_context=ssl_context,
             )
@@ -987,39 +993,3 @@ class HttpClient:
         self._original_json_body = None
         self._deadline_ticks = None
         self._redirects_remaining = 0
-
-
-# ---------------------------------------------------------------------------
-# chumicro-sockets convenience factory
-# ---------------------------------------------------------------------------
-
-
-def chumicro_sockets_factory(*, radio=None, ssl_context=None):
-    """Return a connection factory wired to :mod:`chumicro_sockets`.
-
-    The returned callable matches the
-    ``connection_factory(host, port, use_tls) -> TCPClientSocket``
-    signature :class:`HttpClient` expects.  Plain TCP routes to
-    :func:`chumicro_sockets.tcp_client_socket`; TLS routes to
-    :func:`chumicro_sockets.tls_client_socket` with the supplied
-    *ssl_context* (or the runtime default when omitted).
-
-    *radio* defaults to ``wifi.radio`` on CircuitPython (auto-detected);
-    ignored on MicroPython and CPython.  Pass explicitly for multi-radio
-    prototypes or boards without a ``wifi`` module.
-
-    Lazy-imports :mod:`chumicro_sockets` so the requests library
-    can be unit-tested with a hand-rolled factory + ``FakeSocket``
-    without pulling the transport into the test path.
-    """
-    def factory(host, port, use_tls):
-        from chumicro_sockets import (  # noqa: PLC0415 — lazy
-            tcp_client_socket,
-            tls_client_socket,
-        )
-
-        if use_tls:
-            return tls_client_socket(host, port, context=ssl_context, radio=radio)
-        return tcp_client_socket(host, port, radio=radio)
-
-    return factory

@@ -9,7 +9,8 @@ flight, in a TLS handshake, or mid-timeout against a stalled peer.
 
 Public API::
 
-    from chumicro_requests import HttpClient, chumicro_sockets_factory
+    from chumicro_requests import HttpClient
+    from chumicro_requests.sockets_factory import chumicro_sockets_factory
     from chumicro_timing import ticks_ms
 
     client = HttpClient(connection_factory=chumicro_sockets_factory())
@@ -29,7 +30,12 @@ Source layout:
   hierarchy, protocol constants.
 * :mod:`chumicro_requests.client` — :class:`HttpClient`,
   :class:`RequestHandle`, :class:`Response`, :class:`WhenOversized`
-  policy enum, :func:`chumicro_sockets_factory` convenience helper.
+  policy enum.
+* :mod:`chumicro_requests.sockets_factory` — opt-in
+  :func:`chumicro_sockets_factory` convenience helper that wires
+  the default :mod:`chumicro_sockets` transport.  Lives in its own
+  submodule so users with a custom ``connection_factory`` never
+  trigger the :mod:`chumicro_sockets` deploy.
 
 v1 scope: plain HTTP GET, body decode, HTTPS via
 :mod:`chumicro_sockets` TLS, POST + JSON helpers, redirects, chunked
@@ -63,7 +69,6 @@ from chumicro_requests.client import (
     RequestHandle,
     Response,
     WhenOversized,
-    chumicro_sockets_factory,
 )
 
 __all__ = [
@@ -86,7 +91,6 @@ __all__ = [
     "Response",
     "ResponseParser",
     "WhenOversized",
-    "chumicro_sockets_factory",
     "encode_request",
     "parse_charset",
     "parse_url",
