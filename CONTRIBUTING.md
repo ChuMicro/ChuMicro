@@ -49,6 +49,7 @@ Browse [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussio
 | **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
+| **Drop the default transport from a deploy** | [Slimming Your Deploy](docs/contributing/slimming-your-deploy.md) — entrypoint factory-skip constant + library-author conventions |
 | **Add a host-only workbench tool** | [Adding a Workbench Package](docs/contributing/workbench.md) |
 | **Understand releases** | [Releases and Promotion](docs/contributing/releases.md) |
 | **Use an AI coding agent** | [Working with Agents](docs/contributing/working-with-agents.md) |
