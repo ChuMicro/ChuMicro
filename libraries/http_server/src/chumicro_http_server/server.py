@@ -947,7 +947,7 @@ class HttpServer:
             return
         client_socket, peer = accept_result
         _force_non_blocking(client_socket)
-        deadline = self._ticks_add(self._ticks_ms(), self._request_timeout_ms)
+        deadline = self._ticks_add(now_ms, self._request_timeout_ms)
         connection = _Connection(
             client_socket,
             peer,
