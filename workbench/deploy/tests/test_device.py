@@ -194,3 +194,40 @@ class TestCreateTransport:
         transport = device.create_transport()
         assert isinstance(transport, CircuitpythonTransport)
         assert transport.baudrate == 230400
+
+
+class TestTransportFactory:
+    """transport_factory overrides the runtime-branch builder."""
+
+    def test_factory_replaces_runtime_branch(self):
+        from chumicro_deploy.testing import FakeTransport
+
+        fake = FakeTransport()
+        device = Device(
+            transport="micropython",
+            address="/dev/ttyACM0",
+            transport_factory=lambda _device: fake,
+        )
+        assert device.create_transport() is fake
+
+    def test_factory_receives_owning_device(self):
+        from chumicro_deploy.testing import FakeTransport
+
+        seen: list[Device] = []
+
+        def factory(device):
+            seen.append(device)
+            return FakeTransport()
+
+        device = Device(
+            transport="circuitpython",
+            address="/dev/cu.x",
+            transport_factory=factory,
+        )
+        device.create_transport()
+        assert seen == [device]
+
+    def test_factory_default_falls_through_to_runtime_branch(self):
+        device = Device(transport="micropython", address="/dev/ttyACM0")
+        assert device.transport_factory is None
+        assert isinstance(device.create_transport(), MicropythonTransport)

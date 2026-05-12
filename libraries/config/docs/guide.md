@@ -24,6 +24,15 @@ wifi = WifiService(WifiConfig.from_config(config))   # reads + types wifi.* keys
 
 ## Writing a `from_config` for your own library
 
+Two shapes, picked by what's being constructed.  The picker rule:
+
+- **Pattern A — value-object** — if every `__init__` kwarg maps 1:1 from a flat-prefix subkey *and* nothing else is injected at construction time, use `load_section`.  This is the WifiConfig shape.
+- **Pattern B — client-with-injection** — if `__init__` mixes config-derived kwargs with **non-config injectables** (sockets, radios, TLS contexts, listeners, factories, event handlers) or has **call-site logic** (mode-conditional sub-key reads, broker-required guards, half-TLS guards, computed defaults), skip `load_section` and read keys directly with `config.get` / `config.require`.  This is the shape used by mqtt, ntp, requests, websockets, http_server.
+
+Reading both `__init__` and the planned `from_config` side-by-side usually settles which shape applies.  When in doubt, start with Pattern A; if you find yourself adding non-config kwargs or call-site `if`s, that's the signal to flip to Pattern B.
+
+### Pattern A — value-object (`load_section`)
+
 When the constructor's keyword arguments line up exactly with a flat-prefix subkey set, `load_section` cuts the boilerplate down to ~10 lines:
 
 ```python
@@ -59,7 +68,34 @@ Unknown keys are **ignored** — that's deliberate forward-compat.  An older lib
 
 There is no type coercion.  `"1883"` stays a string; the `__init__` does any conversion the library wants.
 
-When `from_config` needs to do more than build kwargs and call `cls(**kwargs)` — auto-build a socket factory off radio + broker keys, enforce a "both TLS cert/key present or neither" guard, fall back to a library default constant — skip `load_section` and read keys directly with `config.get("prefix.subkey", default)`.  The other chumicro libraries (mqtt, ntp, requests, websockets, http_server) ship that shape.
+### Pattern B — client-with-injection (direct `config.get`)
+
+When the class being constructed is a runner / client / service that takes both config-derived fields and non-config injectables (or has per-class guards), don't wrap `load_section` — it has no slot for the injectables and no hook for the guards.  Read keys directly and prepend the same input guard `load_section` would have done:
+
+```python
+from chumicro_config import InvalidConfigType, is_config_like
+
+
+class NTPClient:
+    @classmethod
+    def from_config(cls, config, *, socket=None, ticks=None):
+        if not is_config_like(config):
+            raise InvalidConfigType(
+                f"NTPClient.from_config requires a RuntimeConfig or dict, "
+                f"got {type(config).__name__}"
+            )
+        server = config.get("ntp.server", "pool.ntp.org")
+        port = config.get("ntp.port", 123)
+        timeout_ms = config.get("ntp.timeout_ms", 5_000)
+        return cls(
+            server=server, port=port, timeout_ms=timeout_ms,
+            socket=socket, ticks=ticks,
+        )
+```
+
+The `is_config_like` guard is the same shape `load_section` applies internally — call it explicitly at the top of every Pattern B `from_config` so callers get the same `InvalidConfigType` regardless of which pattern the library used.  Without it, `None` / `str` / `int` passed in produce unhelpful `AttributeError` / silent `MissingConfigKey` instead of the clear "you passed the wrong shape" error the value-object path raises.
+
+Pattern B's freedom to mix is exactly its point — `MQTTClient.from_config` reads `mqtt.broker.host` *and* takes an injectable `socket` factory *and* enforces a broker-required guard; trying to express any of that through `load_section`'s `required` / `optional` mapping bends it into a less-readable shape than the inline reads.
 
 ## Soft loading with `try_load_section`
 

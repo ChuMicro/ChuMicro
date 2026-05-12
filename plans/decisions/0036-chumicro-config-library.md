@@ -49,12 +49,17 @@ Surface:
   named-intent version of `[]`.  Membership and iteration work like
   a plain dict.
 - `chumicro_config.load_section(target_class, config, *, prefix, required, optional)`
-  — the standardized factory every library's `from_config` calls.
+  — value-object factory used by libraries whose constructed
+  object is a pure config-derived dataclass (see §3, Pattern A).
   Reads `f"{prefix}.{subkey}"` from the flat config and instantiates
   *target_class*.
 - `chumicro_config.try_load_section(target_class, config, *, prefix, required, optional)`
   — soft-load sibling that returns `None` whenever `load_section`
   would raise (see §4 for the consumer pattern).
+- `chumicro_config.is_config_like(value) -> bool` — input-shape
+  predicate (True for `RuntimeConfig` or any dict-like mapping).
+  The shared input guard for libraries that use Pattern B in §3
+  (direct `config.get` reads without going through `load_section`).
 - `chumicro_config.load_runtime_config(path=...)` — explicit reader;
   raises `OSError` on missing file, `InvalidConfigType` on malformed
   payload.  Returns a `RuntimeConfig` directly so callers don't
@@ -68,7 +73,7 @@ Surface:
   `ConfigError` — exception hierarchy.
 
 Public surface re-exported from the package root so consumers write
-`from chumicro_config import RuntimeConfig, config, load_section, load_runtime_config, try_load_section`.
+`from chumicro_config import RuntimeConfig, config, is_config_like, load_section, load_runtime_config, try_load_section`.
 
 Depends on `chumicro-msgpack` for the decode in `load_runtime_config`.
 
@@ -106,33 +111,24 @@ Behavior locked by this ADR (so libraries can't drift):
   the library's wrapper) does the conversion.  Keeps `load_section`
   predictable.
 
-### 3. Library access pattern: thin `from_config` + `try_from_config` wrappers
+### 3. Library access pattern: two shapes, `from_config` + `try_from_config` on each
 
-Each library declares its required + optional subkeys and exposes
-two classmethods on its `<Name>Config` dataclass.  Both methods
-take the **whole flat runtime config** — the wrappers know the
-section's prefix (e.g. `"wifi"`) and walk into the right keys.
+Every config-consuming library exposes a pair of classmethods —
+`from_config(config)` (raises) and `try_from_config(config)`
+(returns `None` on missing-required / not-dict-like / `config is
+None`).  Both take the **whole flat runtime config**; the
+classmethods know the section's prefix (e.g. `"wifi"`) and walk
+into the right keys.
 
-- `from_config(config)` — wraps `load_section`.  Raises on missing
-  required keys.
-- `try_from_config(config)` — wraps `try_load_section`.  Returns
-  `None` when *config* is `None`, isn't dict-like, or any required
-  key is missing.  The skip-friendly gate for app + test code:
+The methods live on *whichever class is the natural construction
+target* for the library — and that class can take one of two
+shapes.  Pick by the shape of what's being constructed:
 
-  ```python
-  from chumicro_config import config
-  from chumicro_wifi import WifiConfig, WifiService
-
-  wifi_cfg = WifiConfig.try_from_config(config)
-  if wifi_cfg is None:
-      return  # not configured — skip / use defaults
-  service = WifiService(wifi_cfg)
-  ```
-
-The required / optional vocabulary is duplicated in `__init__`'s
-parameter defaults and the two factory calls — on purpose, so both
-construction paths (direct kwargs, runtime-config) agree without a
-metaclass deriving one from the other.
+**Pattern A — value-object (`load_section`-wrapping).**  Use when
+every field of the constructed object maps 1:1 from a config
+subkey, no non-config kwargs.  The methods wrap `load_section` /
+`try_load_section` and the class is a pure dataclass.  Today's
+live example: `chumicro-wifi`'s `WifiConfig`.
 
 ```python
 class WifiConfig:
@@ -158,7 +154,60 @@ class WifiConfig:
         )
 ```
 
+The required / optional vocabulary is duplicated in `__init__`'s
+parameter defaults and the two factory calls — on purpose, so both
+construction paths (direct kwargs, runtime-config) agree without a
+metaclass deriving one from the other.
+
+**Pattern B — client-with-injection (direct `config.get` reads).**
+Use when the constructed object is a runner / client / service
+that mixes config-derived fields with **non-config injectables**
+(sockets, radios, TLS contexts, listeners, factories, event
+handlers) or has **call-site logic** (mode-conditional sub-key
+reads, broker-required guards, half-TLS guards, computed
+defaults).  The methods do direct `config.get(...)` /
+`config.require(...)` reads inside `from_config`; `try_from_config`
+delegates after the dict-like guard.  Today's live examples:
+`chumicro-mqtt`'s `MQTTClient`, `chumicro-ntp`'s `NTPClient`,
+`chumicro-requests`'s `HttpClient`, `chumicro-websockets`'s
+`WebSocketClient` / `WebSocketServer`, `chumicro-http-server`'s
+`HttpServer`.
+
+```python
+class NTPClient:
+    @classmethod
+    def from_config(
+        cls, config, *,
+        socket=None, ticks=None, ...
+    ) -> "NTPClient":
+        if not is_config_like(config):
+            raise InvalidConfigType(
+                f"NTPClient.from_config requires a RuntimeConfig or dict, "
+                f"got {type(config).__name__}"
+            )
+        server = config.get("ntp.server", DEFAULT_SERVER)
+        port = config.get("ntp.port", DEFAULT_PORT)
+        timeout_ms = config.get("ntp.timeout_ms", DEFAULT_TIMEOUT_MS)
+        return cls(server=server, port=port, timeout_ms=timeout_ms,
+                   socket=socket, ticks=ticks, ...)
+```
+
+Pattern B does *not* wrap `load_section` because: (i) `load_section`
+calls `cls(**kwargs)` with config-only kwargs and has no slot for
+non-config injectables, (ii) it has no hook for per-class guards
+(mqtt's broker-required, http_server's listening-mode-conditional
+TLS), and (iii) call-site logic per construction is clearer
+inlined than carried via opaque `optional={}` defaults.
+
+**Both patterns share the same input guard.**  `is_config_like(config)`
+(public predicate exported from `chumicro_config`) — Pattern A
+gets it via `load_section`'s built-in check; Pattern B prepends
+the two-line guard explicitly.  Both raise the same
+`InvalidConfigType` on `None` / `str` / `int` / other-non-mapping.
+
 **Rejected:** a `ConfigBase` mixin that introspects `_REQUIRED` / `_OPTIONAL` class attributes and auto-generates the methods.  The inheritance + class-attribute indirection saves three lines per library and adds magic the next reader has to chase.
+
+**Rejected:** forcing Pattern A across all libraries by extending `load_section` with hooks for injectables + guards + conditional sub-keys.  The result becomes a kitchen-sink factory harder to read than the seven inline `from_config` bodies it would replace.
 
 ### 4. Reading the deployed runtime config — `config` attribute + `load_runtime_config()`
 
