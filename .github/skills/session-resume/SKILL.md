@@ -1,6 +1,6 @@
 ---
 name: session-resume
-description: Resume work from a session handoff in plans/handoffs/. Auto-trigger when the top of plans/next-up.md ## Now matches the handoff-pointer shape; also user-invoked via /session-resume [<slug>] to pick up a named or latest handoff explicitly.
+description: Resume work from a session handoff in plans/handoffs/. User-invoked at session start via /session-resume [<slug>] or by plain-language ask ("pick up where we left off", "resume the handoff"). Do not auto-trigger from the presence of a handoff pointer in next-up.md alone — the user may have boot intentions unrelated to the handoff.
 ---
 
 # Session Resume
@@ -11,18 +11,15 @@ A handoff is no use if the resuming session skips half of it and starts coding f
 
 ## When to use
 
-Auto-trigger conditions (read the handoff before doing anything else):
-
-- The top entry of `plans/next-up.md` `## Now` matches the shape `**Resume <topic> from session handoff** — see [`handoffs/<file>`](handoffs/<file>)` (the shape `session-handoff` writes).
-
-User-invoked:
+Trigger conditions — all require an explicit user signal:
 
 - `/session-resume` with no arg → latest handoff by filename date.
 - `/session-resume <slug>` → specific handoff (e.g. `2026-05-12-implement-0062-factory-skip`).  Match against the slug portion of the filename; partial matches resolve to the unique full filename or fail with a list.
+- User asks in plain language ("pick up where we left off", "resume the handoff", "continue the work from yesterday") — same locate-and-read flow.
 
 ## Don't use when
 
-- `## Now` top entry is not a handoff pointer — that means the work doesn't need handoff context to resume.  Follow the entry's punch list directly via the normal session-start ritual.
+- The user hasn't asked to resume.  A handoff pointer in `## Now` is queue state, not a directive — the user may have boot intentions unrelated to the handoff (a quick bugfix, a question, an audit pass on something else).  Wait for the explicit signal.
 - The user is asking *what's in flight* rather than *resume the work* — show them the handoff, don't auto-execute it.
 - Working tree is dirty with unrelated changes — the resume sequence assumes a clean tree.  Surface the dirty state first and let the user decide.
 
@@ -85,6 +82,6 @@ Once confirmed, follow the punch list from the handoff (or from `## Now`'s detai
 
 When the handoff's punch list is done:
 
-- Migrate the `## Now` handoff-pointer entry to `## Done (recent)` as a one-line "resumed from `<YYYY-MM-DD>-<slug>` handoff" entry — verbose Done detail belongs on the punch-list bullets that pointed at the actual work, not on the pointer.
-- The handoff file itself stays in git history — never delete it.  Future readers may reference it via `git log plans/handoffs/`.
-- If the resume surfaced a fact worth keeping that the original handoff didn't anticipate (e.g. a wrong assumption, a discovered side-quest), capture it in the appropriate canonical home (commit message body, an ADR, `plans/patterns.md`, AGENTS.md) — don't append to the closed handoff file.
+- Migrate the `## Now` handoff-pointer entry to `## Done (recent)` as a one-line "resumed from `<YYYY-MM-DD>-<slug>` handoff" entry — verbose Done detail belongs on the punch-list bullets that pointed at the actual work, not on the pointer.  Drop the oldest `## Done (recent)` entry to stay under the 25 cap.
+- **Delete the handoff file** in the same commit (`git rm plans/handoffs/<file>`).  The handoff has served its purpose; durable signal was already lifted to ADRs / `patterns.md` / commit messages / AGENTS.md by the writer; what's left in the file is session-transition scaffolding that goes stale and clutters discovery once the work lands.  Git history preserves it for anyone who wants to read it later.
+- If the resume surfaced a fact worth keeping that the original handoff didn't anticipate (e.g. a wrong assumption, a discovered side-quest), capture it in the appropriate canonical home (commit message body, an ADR, `plans/patterns.md`, AGENTS.md) **before** deleting the handoff — once the file is gone, anything left in it is gone too.
