@@ -163,14 +163,7 @@ class KVStore:
         Raises:
             KVStoreFull: Encoded payload exceeds ``capacity``.
         """
-        payload = packb(self._data)
-        if len(payload) > self._backend.capacity:
-            raise KVStoreFull(
-                f"payload size {len(payload)} exceeds capacity {self._backend.capacity}"
-            )
-        self._backend.save(payload)
-        self._last_payload = payload
-        self._is_corrupt = False
+        self._persist(packb(self._data))
 
     def commit_if_changed(self) -> bool:
         """Commit only if the encoded payload differs from last persisted.
@@ -181,6 +174,11 @@ class KVStore:
         payload = packb(self._data)
         if payload == self._last_payload:
             return False
+        self._persist(payload)
+        return True
+
+    def _persist(self, payload: bytes) -> None:
+        """Capacity-check + save + state update — shared by both commit paths."""
         if len(payload) > self._backend.capacity:
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds capacity {self._backend.capacity}"
@@ -188,7 +186,6 @@ class KVStore:
         self._backend.save(payload)
         self._last_payload = payload
         self._is_corrupt = False
-        return True
 
     # --- mapping-shaped API ----------------------------------------
 
