@@ -179,8 +179,14 @@ class _BaseSession:
         # don't churn the heap with ~1 KB allocations per handle() call.
         # Live-board MemoryError on Pi Pico W (124 KB free heap) caught
         # the per-call allocation; matches chumicro-mqtt's
-        # PacketDecoder.fill_buffer() pre-allocation pattern.
-        self._recv_buffer = bytearray(recv_budget_per_tick)
+        # PacketDecoder.fill_buffer() pre-allocation pattern.  Capped at
+        # 512 B so a session configured with a large ``recv_budget_per_tick``
+        # doesn't pin a big steady-state buffer; the recv loop calls back
+        # for the next chunk in the same tick if the budget remains.
+        # Mirrors chumicro_requests.HttpClient + chumicro_http_server
+        # connection-state pattern.
+        recv_scratch_size = recv_budget_per_tick if recv_budget_per_tick <= 512 else 512
+        self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
 
         self._state = WebSocketState.CONNECTING
@@ -526,11 +532,18 @@ class _BaseSession:
             budget -= sent
 
     def _recv_chunk(self, max_bytes: int):
-        """Non-blocking recv; ``bytes``, ``b""`` on EOF, or ``None`` on EAGAIN.
+        """Non-blocking recv; ``memoryview``, ``b""`` on EOF, or ``None`` on EAGAIN.
 
-        Reads into the pre-allocated :attr:`_recv_buffer` (sized to
-        ``recv_budget_per_tick`` at construction time) so we don't
-        churn the heap.
+        Reads into the pre-allocated :attr:`_recv_buffer` and returns a
+        ``memoryview`` window over the freshly-received bytes — zero copy
+        on the recv path.  :class:`FrameParser` and the handshake parsers
+        accept memoryview directly (``isinstance(chunk, memoryview)`` fast
+        path in ``FrameParser.feed``) and copy bytes they keep into their
+        own buffers before returning, so the view's lifetime ends with the
+        caller's drain pass.  Returning ``bytes()`` instead would allocate
+        per-recv and defeat the recv_into win.  Mirrors the zero-copy
+        handoff in chumicro_requests.HttpClient._drive_recv +
+        chumicro_http_server connection._drive_recv.
         """
         cap = max_bytes if max_bytes <= len(self._recv_buffer) else len(self._recv_buffer)
         try:
@@ -548,7 +561,7 @@ class _BaseSession:
             return None
         if received == 0:
             return b""
-        return bytes(self._recv_buffer[:received])
+        return self._recv_view[:received]
 
     # -- close + finalize -------------------------------------------------
 
