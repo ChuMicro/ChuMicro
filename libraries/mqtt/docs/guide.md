@@ -13,7 +13,7 @@ from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
 
-# On CircuitPython pass `radio=wifi.adapter.radio` here; on MicroPython / CPython the kwarg is ignored.
+# On CircuitPython pass `radio=wifi.radio` here; on MicroPython / CPython the kwarg is ignored.
 sock = tcp_client_socket("broker.example.com", 1883, radio=None)
 sock.setblocking(False)                     # MP defaults to blocking — enforce non-blocking
 client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)

@@ -437,9 +437,9 @@ class MQTTClient:
                 ``socket.socket`` after ``setblocking(False)``, an
                 upstream-library wrapper, a test fake).  The client
                 takes ownership; :meth:`disconnect` closes it.  May
-                be ``None`` when *socket_factory* is provided — in
-                that case the factory is invoked once at construction
-                time and again on self-heal.
+                be ``None`` when *socket_factory* is provided — the
+                factory fires on :meth:`connect` and self-heal,
+                never from ``__init__``.
             socket_factory: Optional zero-arg callable returning an
                 object of the same shape as *socket*.  Used in two
                 paths: (1) when *socket* is ``None``, :meth:`connect`
@@ -531,26 +531,11 @@ class MQTTClient:
                 "will_topic (prefixed) and will_topic_raw (verbatim) are "
                 "mutually exclusive — pass at most one."
             )
-        # Construction is side-effect free.  When a pre-connected
-        # socket is passed, we adopt it (and force non-blocking mode).
-        # When only a ``socket_factory`` is passed, we hold onto it and
-        # let :meth:`connect` invoke it — opening a TCP socket from
-        # ``__init__`` would push network I/O (and the errors it can
-        # raise — ECONNREFUSED, ECONNABORTED, ETIMEDOUT, ENETUNREACH)
-        # into a place callers can't catch via state inspection.  The
-        # runner contract is to call ``connect()`` to start, ``handle()``
-        # to tick, ``state`` to introspect — that's where failures
-        # belong.
         self._socket = socket
         self._socket_factory = socket_factory
         if self._socket is not None:
-            # The tick-based read path expects EAGAIN on no-data rather
-            # than a blocking recv that stalls the loop.  MicroPython's
-            # stdlib socket constructs in blocking mode by default, so
-            # consumers that just pass ``tcp_client_socket(...)`` to us
-            # would otherwise hang on the first recv with no data and
-            # never see CONNACK.  Enforce non-blocking here so the
-            # contract belongs to the client, not every caller.
+            # MP plain TCP defaults to blocking; the tick-based recv
+            # path requires EAGAIN-on-no-data or it stalls the loop.
             _force_non_blocking(self._socket)
         self._user_wants_connected = False
         self._client_id = client_id
@@ -590,18 +575,12 @@ class MQTTClient:
         self._state = ProtocolState.DISCONNECTED
         self._in_flight = InFlightTable()
         self._pending_responses = []
-        # Outbound queue.  ``deque(maxlen=...)`` for O(1) append /
-        # popleft / appendleft (vs list's O(n) ``pop(0)`` /
-        # ``insert(0, ...)``); ``flags=1`` enables ``appendleft`` on
-        # MicroPython and CircuitPython.  The maxlen has 64-slot
-        # headroom over ``_max_tx_queue_size`` so the QoS 1 retry path
-        # and the PINGREQ path — neither of which guards against
-        # overrun — don't silently lose in-flight packets when the
-        # queue is full; the public ``_enqueue`` ``len() >= max``
-        # check (line below in this file) remains the sole
-        # backpressure-rejection signal.
+        # 64-slot headroom above the user cap so the QoS-1 retry path
+        # and PINGREQ — neither of which checks for overrun — can't
+        # silently lose protocol packets when the queue is at the user
+        # cap.  ``_enqueue_user_tx`` enforces the cap; everything else
+        # goes through ``append`` / ``appendleft`` directly.
         self._tx_queue = _new_tx_queue(max_tx_queue_size + 64)
-        self._tx_queue_overrun_headroom = 64  # for documentation / introspection
         self._partial_send = None  # (bytes, offset) when last send was short.
 
         self._next_ping_due_ticks = 0
@@ -1237,17 +1216,12 @@ class MQTTClient:
             self._tx_queue.appendleft(encode_puback(packet_id=packet.packet_id))
 
     def _handle_ack(self, packet, now_ms):
-        """Match an inbound CONNACK / SUBACK / PUBACK / etc. to its pending entry.
+        """Match an inbound ack to its pending entry; PINGRESP is tolerated.
 
-        PUBACK / SUBACK / UNSUBACK without a matching pending entry
-        fault to FAILED — a broker that ACKs a packet_id we never
-        issued (or already consumed) has a real state-machine bug
-        worth surfacing.
-
-        PINGRESP is the exception: it carries no packet_id and is
-        naturally racy in keepalive-timeout / self-heal corners
-        (timeout cleared the tracker; the broker's response arrives a
-        tick later).  Silently tolerated.
+        An unmatched PUBACK / SUBACK / UNSUBACK faults to FAILED — a
+        broker that ACKs a packet_id we never issued is a real bug.
+        PINGRESP is racy in keepalive-timeout / self-heal corners
+        and silently ignored.
         """
         if packet.packet_type == PACKET_CONNACK:
             self._handle_connack(packet, now_ms)
