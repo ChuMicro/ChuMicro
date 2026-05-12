@@ -20,7 +20,7 @@ request → parse 101), outbound-mask discipline (clients MUST mask),
 and the optional auto-ping keep-alive.
 """
 
-from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_websockets._session import (
     WhenOversized,
@@ -119,8 +119,10 @@ class WebSocketClient(_BaseSession):
       own keep-alive) + ``pong_timeout_ms``.
     * ``handshake_timeout_ms`` / ``close_timeout_ms`` — per-phase
       timeouts.
-    * ``ticks_ms_func`` / ``ticks_add_func`` / ``ticks_diff_func`` —
-      inject fakes for testing; default to :mod:`chumicro_timing`.
+    * ``ticks`` — optional tick source (any object exposing
+      ``ticks_ms`` / ``ticks_diff`` / ``ticks_add``); defaults to the
+      :mod:`chumicro_timing` ``ticks`` submodule.  Tests pass
+      ``FakeTicks`` from :mod:`chumicro_timing.testing`.
     """
 
     _role_label = "server"  # error messages describe what the *peer* sent
@@ -210,9 +212,7 @@ class WebSocketClient(_BaseSession):
         pong_timeout_ms: int = DEFAULT_PONG_TIMEOUT_MS,
         handshake_timeout_ms: int = DEFAULT_HANDSHAKE_TIMEOUT_MS,
         close_timeout_ms: int = DEFAULT_CLOSE_TIMEOUT_MS,
-        ticks_ms_func=ticks_ms,
-        ticks_add_func=ticks_add,
-        ticks_diff_func=ticks_diff,
+        ticks: object | None = None,
     ) -> None:
         # Init shared session state with a None socket — connect() fills it in.
         self._init_session_state(
@@ -224,9 +224,7 @@ class WebSocketClient(_BaseSession):
             when_oversized=when_oversized,
             pong_timeout_ms=pong_timeout_ms,
             close_timeout_ms=close_timeout_ms,
-            ticks_ms_func=ticks_ms_func,
-            ticks_add_func=ticks_add_func,
-            ticks_diff_func=ticks_diff_func,
+            ticks=ticks if ticks is not None else _DEFAULT_TICKS,
         )
 
         self._connection_factory = connection_factory
@@ -311,8 +309,8 @@ class WebSocketClient(_BaseSession):
         )
 
         budget_ms = self._handshake_timeout_ms if timeout_ms is None else timeout_ms
-        self._handshake_deadline_ticks = self._ticks_add(
-            self._ticks_ms(),
+        self._handshake_deadline_ticks = self._ticks.ticks_add(
+            self._ticks.ticks_ms(),
             budget_ms,
         )
 
@@ -452,7 +450,7 @@ class WebSocketClient(_BaseSession):
     def _check_timeouts(self, now_ms: int) -> bool:
         """Trip an expired deadline and return ``True`` if we transitioned."""
         if self._handshake_deadline_ticks is not None:
-            if self._ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0:
+            if self._ticks.ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0:
                 self._fail_with_error(
                     WebSocketTimeoutError(
                         f"handshake exceeded {self._handshake_timeout_ms} ms",
@@ -469,7 +467,7 @@ class WebSocketClient(_BaseSession):
         """
         if self._ping_interval_ms is None:
             return
-        self._next_auto_ping_ticks = self._ticks_add(
+        self._next_auto_ping_ticks = self._ticks.ticks_add(
             now_ms,
             self._ping_interval_ms,
         )
@@ -478,11 +476,11 @@ class WebSocketClient(_BaseSession):
         """Send an auto-ping if the interval has elapsed."""
         if self._next_auto_ping_ticks is None:
             return
-        if self._ticks_diff(self._next_auto_ping_ticks, now_ms) > 0:
+        if self._ticks.ticks_diff(self._next_auto_ping_ticks, now_ms) > 0:
             return
         self._enqueue_internal_frame(OPCODE_PING, b"")
         self._arm_pong_deadline(now_ms)
-        self._next_auto_ping_ticks = self._ticks_add(
+        self._next_auto_ping_ticks = self._ticks.ticks_add(
             now_ms,
             self._ping_interval_ms,
         )

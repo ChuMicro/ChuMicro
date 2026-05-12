@@ -20,6 +20,7 @@ Proves the slice 1/2/3 components fit together:
 * Bidirectional traffic in the same tick survives intact.
 """
 
+from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     CLOSE_GOING_AWAY,
     CLOSE_NORMAL,
@@ -27,7 +28,7 @@ from chumicro_websockets import (
     WebSocketServer,
     WebSocketState,
 )
-from chumicro_websockets.testing import FakeConnection, FakeListener, TickClock
+from chumicro_websockets.testing import FakeConnection, FakeListener
 
 
 def _pump(client_socket: FakeConnection, server_socket: FakeConnection) -> None:
@@ -43,11 +44,11 @@ def _pump(client_socket: FakeConnection, server_socket: FakeConnection) -> None:
 def _build_loopback_pair(*, on_connection):
     """Return ``(client, server, client_socket, server_socket, clock)``.
 
-    Both halves share a TickClock; the client's connection_factory
+    Both halves share a FakeTicks; the client's connection_factory
     returns the client-side FakeConnection; the server's listener
     will hand out the server-side FakeConnection on accept.
     """
-    clock = TickClock()
+    clock = FakeTicks()
     client_socket = FakeConnection()
     server_socket = FakeConnection()
     listener = FakeListener()
@@ -56,15 +57,11 @@ def _build_loopback_pair(*, on_connection):
     server = WebSocketServer(
         listener=listener,
         on_connection=on_connection,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
     )
     client = WebSocketClient(
         connection_factory=lambda *_args, **_kwargs: client_socket,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
     )
     return client, server, client_socket, server_socket, clock
 
@@ -74,15 +71,15 @@ def _drive_both_to_open(
     server: WebSocketServer,
     client_socket: FakeConnection,
     server_socket: FakeConnection,
-    clock: TickClock,
+    clock: FakeTicks,
     *,
     max_ticks: int = 50,
 ) -> None:
     """Pump both sides until the client reaches OPEN.  Asserts handshake completed."""
     client.connect("ws://example.com/")
     for _tick in range(max_ticks):
-        client.handle(clock.now())
-        server.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        server.handle(clock.ticks_ms())
         _pump(client_socket, server_socket)
         if client.state == WebSocketState.OPEN:
             break
@@ -96,15 +93,15 @@ def _drive_until(
     server: WebSocketServer,
     client_socket: FakeConnection,
     server_socket: FakeConnection,
-    clock: TickClock,
+    clock: FakeTicks,
     predicate,
     *,
     max_ticks: int = 50,
 ) -> None:
     """Pump both sides until *predicate()* returns truthy."""
     for _tick in range(max_ticks):
-        client.handle(clock.now())
-        server.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        server.handle(clock.ticks_ms())
         _pump(client_socket, server_socket)
         if predicate():
             return

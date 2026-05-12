@@ -16,6 +16,7 @@ import gc
 import hashlib
 
 from chumicro_test_harness import skip
+from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     OPCODE_TEXT,
     WebSocketClient,
@@ -26,7 +27,7 @@ from chumicro_websockets._wire import (
     encode_frame,
     encode_server_handshake_response,
 )
-from chumicro_websockets.testing import FakeConnection, TickClock
+from chumicro_websockets.testing import FakeConnection
 
 # CircuitPython unix-port's hashlib only exposes sha256 — no sha1, no
 # hashlib.new().  The WebSocket handshake requires SHA-1 (RFC 6455
@@ -116,9 +117,7 @@ def _probe_workload_delta(workload, iterations,
 def _make_client(socket, clock):
     return WebSocketClient(
         connection_factory=lambda *_args, **_kwargs: socket,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
     )
 
 
@@ -126,7 +125,7 @@ def _drive_to_open(client, socket, clock):
     """Drive a fresh client through its handshake to OPEN."""
     client.connect("ws://example.com/")
     while client.state == WebSocketState.CONNECTING:
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         request = socket.read_outbound()
         if not request:
             continue
@@ -155,7 +154,7 @@ def test_inbound_text_no_leak_no_fragmentation():
         # WebSocket handshake (RFC 6455 §1.3) can't complete here.
         skip("requires hashlib.sha1 — CP unix-port omits it")
     socket = FakeConnection()
-    clock = TickClock()
+    clock = FakeTicks()
     client = _make_client(socket, clock)
     _drive_to_open(client, socket, clock)
     client.on_text = lambda _text: None
@@ -165,6 +164,6 @@ def test_inbound_text_no_leak_no_fragmentation():
 
     def workload():
         socket.feed_inbound(frame)
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
 
     _probe_workload_delta(workload, iterations=30)

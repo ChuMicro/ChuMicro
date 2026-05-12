@@ -1,9 +1,8 @@
 """Test helpers for libraries that depend on chumicro-websockets.
 
-Three fakes parallel to the patterns proven in
-:mod:`chumicro_sockets.testing` and :mod:`chumicro_timing.testing` —
-fakes ship in the upstream library so consumers don't write their
-own:
+Two fakes parallel to the patterns proven in
+:mod:`chumicro_sockets.testing` — fakes ship in the upstream library
+so consumers don't write their own:
 
 * :class:`FakeConnection` — bidirectional in-memory pipe satisfying
   the :class:`chumicro_sockets.TCPClientSocket` shape consumed by
@@ -19,15 +18,8 @@ own:
   the next :meth:`accept` call returns; an empty queue surfaces
   EAGAIN exactly like a real non-blocking listener.
 
-* :class:`TickClock` — manually-advanced fake for the
-  :mod:`chumicro_timing` ``ticks_ms`` / ``ticks_add`` / ``ticks_diff``
-  trio.  Wire the three methods through the client's ``ticks_*_func``
-  constructor parameters; :meth:`advance` jumps the simulated time
-  forward to drive timeouts and auto-ping cadences.
-
-Lifted from inline definitions originally in the test suite so
-downstream consumers can reuse the same fakes without duplicating
-them.  All three are also used by the in-process integration tests.
+For ticks-domain fakes use :class:`chumicro_timing.testing.FakeTicks`
+— pass it through the client's / server's ``ticks=`` kwarg.
 """
 
 #: Source bundle / sdist only -- never lands on a device.
@@ -177,43 +169,3 @@ class FakeListener:
     def close(self) -> None:
         """Mark the listener closed (idempotent)."""
         self.closed = True
-
-
-class TickClock:
-    """Manually-advanced fake for :mod:`chumicro_timing`'s tick API.
-
-    Wire the three methods (:meth:`now`, :meth:`add`, :meth:`diff`)
-    into a :class:`WebSocketClient` or :class:`WebSocketServer` via
-    the ``ticks_ms_func`` / ``ticks_add_func`` / ``ticks_diff_func``
-    constructor parameters::
-
-        clock = TickClock()
-        client = WebSocketClient(
-            connection_factory=...,
-            ticks_ms_func=clock.now,
-            ticks_add_func=clock.add,
-            ticks_diff_func=clock.diff,
-        )
-
-    Then :meth:`advance` rolls the simulated clock forward to trip
-    handshake timeouts, auto-ping cadences, and pong-overdue watchdogs.
-    """
-
-    def __init__(self, start: int = 0) -> None:
-        self._now = start
-
-    def now(self) -> int:
-        """Current simulated tick value in milliseconds."""
-        return self._now
-
-    def advance(self, milliseconds: int) -> None:
-        """Roll simulated time forward by *milliseconds*."""
-        self._now += milliseconds
-
-    def add(self, ticks: int, milliseconds: int) -> int:  # noqa: PLR6301 - protocol
-        """Compute a future deadline (matches ``chumicro_timing.ticks_add``)."""
-        return ticks + milliseconds
-
-    def diff(self, deadline: int, now: int) -> int:  # noqa: PLR6301 - protocol
-        """Compute deadline-minus-now (matches ``chumicro_timing.ticks_diff``)."""
-        return deadline - now
