@@ -104,21 +104,22 @@ when the decoration is absent. Today that is `chumicro-logging`,
 2. **No chumicro library `import`s any of them.** Not at module level,
    not inside functions, not behind `try`/`except ImportError`. The
    absence must be invisible at runtime.
-3. Libraries expose hooks where decoration would naturally attach:
-   - `on_state_change=callback` keyword arguments (already the pattern in
-     wifi, mqtt, requests).
-   - An optional `logger=None` constructor parameter accepting any
-     callable with the shape `logger(level: str, message: str) -> None`.
-     Default: a no-op. The application bridges this to whatever logging
-     backend it wants — `chumicro-logging`, stdlib `logging`, `print`.
+3. Libraries expose hooks where decoration would naturally attach.  Two shapes are in use today:
+   - **Registration method** — `wifi.on_state_change(callback)` appends to an internal list; every registered callback fires on every state transition as `callback(old_state, new_state)`.
+   - **Replaceable attribute** — `mqtt.on_connect = callback` (and the rest of the `on_*` family on `MQTTClient`); the service invokes the single slotted callback with the arity that callback's docs specify.
+
+   Plus an optional `logger=None` constructor parameter accepting any
+   callable with the shape `logger(level: str, message: str) -> None`.
+   Default: a no-op. The application bridges this to whatever logging
+   backend it wants — `chumicro-logging`, stdlib `logging`, `print`.
 4. The decoration libraries themselves consume those hooks — the
-   *application* wires them up:
+   *application* wires them up.  `bus.publisher(topic)` returns a `*args`-accepting closure that adapts to either shape without an inline adapter:
 
    ```python
    from chumicro_events import EventBus
    bus = EventBus()
-   wifi.on_state_change = bus.publisher("wifi.state")
-   mqtt.on_state_change = bus.publisher("mqtt.state")
+   wifi.on_state_change(bus.publisher("wifi.state"))    # registration-method
+   mqtt.on_connect = bus.publisher("mqtt.connected")    # replaceable-attribute
    ```
 
    This keeps the dep graph a strict DAG: `presence → events → (nothing

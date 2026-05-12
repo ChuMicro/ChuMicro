@@ -34,8 +34,9 @@ from chumicro_events import EventBus
 bus = EventBus()
 bus.subscribe("wifi.state", lambda topic, payload: print(topic, "=", payload))
 
-# Wire a service callback to a publisher:
-wifi.on_state_change = bus.publisher("wifi.state")
+# Wire a service callback to a publisher (wifi exposes a
+# registration method; mqtt's on_* are replaceable attributes):
+wifi.on_state_change(bus.publisher("wifi.state"))
 
 # Inside the runner tick:
 if bus.check(now_ms):
