@@ -175,6 +175,17 @@ def topic_matches(topic, pattern):
 _CONNECT_PROTOCOL_PREFIX = b"\x00\x04MQTT\x04"
 
 
+def _finalize_packet(packet_type, remaining):
+    """Wrap *remaining* with the MQTT fixed header.
+
+    ``remaining`` is the variable-header + payload bytes.  Returns
+    ``fixed_header || remaining`` as ``bytes``.  ``remaining`` is
+    concatenated rather than slice-assigned into a pre-sized buffer,
+    so the payload is copied exactly once even when it's large.
+    """
+    return bytes(bytearray((packet_type,)) + encode_varlen(len(remaining))) + remaining
+
+
 def encode_connect(
     *,
     client_id: str,
@@ -239,7 +250,7 @@ def encode_connect(
         payload.extend(encode_string(password))
 
     remaining = bytes(variable_header) + bytes(payload)
-    return bytes(bytearray((PACKET_CONNECT,)) + encode_varlen(len(remaining))) + remaining
+    return _finalize_packet(PACKET_CONNECT, remaining)
 
 
 def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
@@ -273,7 +284,7 @@ def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
         variable_header.extend(struct.pack(">H", packet_id))
 
     remaining = bytes(variable_header) + bytes(payload)
-    return bytes(bytearray((fixed_byte_one,)) + encode_varlen(len(remaining))) + remaining
+    return _finalize_packet(fixed_byte_one, remaining)
 
 
 def encode_subscribe(*, packet_id, subscriptions):
@@ -301,7 +312,7 @@ def encode_subscribe(*, packet_id, subscriptions):
 
     remaining = bytes(variable_header) + bytes(payload)
     # SUBSCRIBE first byte is 0x82 — the 0x02 low-nibble is required by spec.
-    return bytes(bytearray((PACKET_SUBSCRIBE,)) + encode_varlen(len(remaining))) + remaining
+    return _finalize_packet(PACKET_SUBSCRIBE, remaining)
 
 
 def encode_unsubscribe(*, packet_id, topics):
@@ -320,7 +331,7 @@ def encode_unsubscribe(*, packet_id, topics):
         payload.extend(encode_string(topic))
 
     remaining = bytes(variable_header) + bytes(payload)
-    return bytes(bytearray((PACKET_UNSUBSCRIBE,)) + encode_varlen(len(remaining))) + remaining
+    return _finalize_packet(PACKET_UNSUBSCRIBE, remaining)
 
 
 def encode_puback(*, packet_id):
