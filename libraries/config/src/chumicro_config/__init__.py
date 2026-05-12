@@ -1,48 +1,16 @@
 """Standardized runtime-config helpers for ChuMicro libraries.
 
-Public API::
+Exposes :data:`config` (the loaded ``/runtime_config.msgpack``, or
+``None`` when no file is deployed), :func:`load_runtime_config` (the
+explicit reader), :func:`load_section` / :func:`try_load_section`
+(strict + soft section builders), :class:`RuntimeConfig` (the
+flat-key dict wrapper), and the :class:`ConfigError` /
+:class:`MissingConfigKey` / :class:`InvalidConfigType` exceptions.
 
-    from chumicro_config import (
-        config,                     # the loaded /runtime_config.msgpack RuntimeConfig (or None)
-        load_runtime_config,        # explicit reader — raises on missing file
-        load_section,               # build a typed Config from flat keys with a shared prefix
-        try_load_section,           # soft-load sibling — returns None on miss
-        RuntimeConfig,              # flat-key dict-like wrapper (see section.py)
-        ConfigError,                # base exception
-        InvalidConfigType,          # payload had the wrong shape
-        MissingConfigKey,           # required key absent
-    )
-
-Typical user-app pattern::
-
-    from chumicro_config import config
-
-    if config is None:
-        return  # no runtime config deployed — skip / use defaults
-
-    wifi = WifiService(WifiConfig.from_config(config))
-
-``config`` is lazy-loaded on first access (PEP 562) and cached for
-the lifetime of the import.  Apps that import :mod:`chumicro_config`
-solely for :class:`InvalidConfigType` / :func:`load_section` pay no
-file-read cost.
-
-Per-key access::
-
-    ssid = config.get("wifi.ssid")            # None on miss
-    hold = config.get("button.hold_ms", 5000)  # default fallback
-    broker = config["mqtt.broker.host"]        # raises MissingConfigKey on miss
-    broker = config.require("mqtt.broker.host")  # same as [], named for intent
-
-Typical library-side pattern (inside ``WifiConfig.from_config``)::
-
-    return load_section(
-        cls,
-        config,
-        prefix="wifi",
-        required=("ssid", "password"),
-        optional={"hostname": None, "connect_timeout_ms": 15_000},
-    )
+:data:`config` is lazy-loaded on first attribute access (PEP 562);
+apps that import this module only for the section helpers or
+exception classes pay no file-read cost.  Usage patterns live in
+``docs/guide.md``.
 """
 
 from chumicro_config.runtime import DEFAULT_RUNTIME_CONFIG_PATH, load_runtime_config
