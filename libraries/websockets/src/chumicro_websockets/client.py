@@ -218,10 +218,10 @@ class WebSocketClient(_BaseSession):
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "WebSocketClient.from_config() default wiring "
-                    "needs chumicro_websockets.sockets_factory.  This "
-                    "module was excluded via __chumicro_skip_factories__ "
-                    "— pass connection_factory= explicitly.",
+                    "chumicro_websockets.sockets_factory not "
+                    "available (excluded via __chumicro_skip_factories__ "
+                    "or not on the board) — pass connection_factory= "
+                    "explicitly.",
                 ) from exception
             connection_factory = chumicro_sockets_factory(
                 radio=radio, ssl_context=ssl_context,

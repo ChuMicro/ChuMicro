@@ -438,10 +438,10 @@ class HttpClient:
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "HttpClient.from_config() default wiring needs "
-                    "chumicro_requests.sockets_factory.  This module "
-                    "was excluded via __chumicro_skip_factories__ — "
-                    "pass connection_factory= explicitly.",
+                    "chumicro_requests.sockets_factory not available "
+                    "(excluded via __chumicro_skip_factories__ or "
+                    "not on the board) — pass connection_factory= "
+                    "explicitly.",
                 ) from exception
 
             connection_factory = chumicro_sockets_factory(

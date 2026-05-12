@@ -256,10 +256,10 @@ class NTPClient:
                     )
                 except ImportError as exception:
                     raise RuntimeError(
-                        "NTPClient.from_config() default wiring needs "
-                        "chumicro_ntp.sockets_factory.  This module was "
-                        "excluded via __chumicro_skip_factories__ — "
-                        "pass socket= or socket_factory= explicitly.",
+                        "chumicro_ntp.sockets_factory not available "
+                        "(excluded via __chumicro_skip_factories__ or "
+                        "not on the board) — pass socket= or "
+                        "socket_factory= explicitly.",
                     ) from exception
 
                 socket = chumicro_sockets_factory(radio=radio)

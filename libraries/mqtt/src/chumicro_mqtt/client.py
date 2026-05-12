@@ -326,10 +326,10 @@ class MQTTClient:
                 )
             except ImportError as exception:
                 raise RuntimeError(
-                    "MQTTClient.from_config() default wiring needs "
-                    "chumicro_mqtt.sockets_factory.  This module was "
-                    "excluded via __chumicro_skip_factories__ — pass "
-                    "socket_factory= or socket= explicitly.",
+                    "chumicro_mqtt.sockets_factory not available "
+                    "(excluded via __chumicro_skip_factories__ or "
+                    "not on the board) — pass socket_factory= or "
+                    "socket= explicitly.",
                 ) from exception
 
             socket_factory = chumicro_sockets_factory(

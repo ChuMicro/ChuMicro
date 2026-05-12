@@ -85,7 +85,7 @@ If you supply your own transport and want `chumicro_sockets` dropped from the de
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-Family form (the bare stem) or exact path (`"chumicro_ntp.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `NTPClient.from_config(...)` on a deploy that has skipped `chumicro_ntp.sockets_factory` raises `RuntimeError` naming the bypass kwargs.
+Family form (the bare stem) or exact path (`"chumicro_ntp.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `NTPClient.from_config(...)` when `chumicro_ntp.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwargs.
 
 ## Runner pattern
 

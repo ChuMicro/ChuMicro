@@ -137,7 +137,7 @@ If you supply your own factory and want `chumicro_sockets` dropped from the depl
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-Family form (`"sockets_factory"`, matches every `chumicro_*.sockets_factory`) or exact path (`"chumicro_websockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `WebSocketClient.from_config(...)` on a deploy that has skipped `chumicro_websockets.sockets_factory` raises `RuntimeError` naming the bypass kwarg.
+Family form (`"sockets_factory"`, matches every `chumicro_*.sockets_factory`) or exact path (`"chumicro_websockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `WebSocketClient.from_config(...)` when `chumicro_websockets.sockets_factory` is missing — either skipped at deploy time or not installed by `circup` / `mip` — raises `RuntimeError` naming the bypass kwarg.
 
 ## Memory notes
 
