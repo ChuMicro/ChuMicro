@@ -1064,6 +1064,54 @@ class TestFromConfig:
 
         assert captured == {"host": "10.0.0.42", "port": 8883, "radio": "fake-radio"}
 
+    def test_ssl_context_routes_through_tls_factory(self) -> None:
+        """``ssl_context=`` supplied → auto-built factory uses
+        :func:`chumicro_sockets.tls_client_socket` and threads the
+        context + radio through.  Matches the TLS shape every other
+        ``from_config`` in the workspace exposes (requests,
+        websockets, http_server)."""
+        captured: dict = {}
+
+        def fake_tls_client_socket(host, port, *, context=None, radio=None):
+            captured["host"] = host
+            captured["port"] = port
+            captured["context"] = context
+            captured["radio"] = radio
+            return FakeSocket()
+
+        import chumicro_sockets  # noqa: PLC0415
+
+        original = chumicro_sockets.tls_client_socket
+        chumicro_sockets.tls_client_socket = fake_tls_client_socket
+        try:
+            MQTTClient.from_config(
+                {"mqtt.broker.host": "broker.example", "mqtt.broker.port": 8883},
+                radio="fake-radio",
+                ssl_context="fake-ctx",
+            )
+        finally:
+            chumicro_sockets.tls_client_socket = original
+
+        assert captured == {
+            "host": "broker.example",
+            "port": 8883,
+            "context": "fake-ctx",
+            "radio": "fake-radio",
+        }
+
+    def test_ssl_context_ignored_when_socket_factory_passed(self) -> None:
+        """``ssl_context=`` is documented as ignored when *socket* or
+        *socket_factory* is supplied — caller-owned factories already
+        encode their own TLS choice.  Confirms the dispatch doesn't
+        accidentally consult ``ssl_context`` once a factory is in hand."""
+        sock = FakeSocket()
+        client = MQTTClient.from_config(
+            {},
+            socket_factory=self._injected_factory(sock),
+            ssl_context="should-be-ignored",
+        )
+        assert client._socket is sock  # noqa: SLF001
+
     def test_default_factory_requires_broker_host(self) -> None:
         """No broker host in config → ``from_config`` refuses to
         construct.  The library does not silently dial a third-party
