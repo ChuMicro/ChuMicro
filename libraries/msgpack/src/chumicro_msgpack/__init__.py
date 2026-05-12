@@ -42,6 +42,7 @@ the producer-side fix.
 import sys
 from io import BytesIO
 
+_native_loaded = False
 if sys.implementation.name == "circuitpython":
     try:
         from msgpack import pack, unpack  # noqa: F401
@@ -74,9 +75,11 @@ if sys.implementation.name == "circuitpython":
             """
             return unpack(BytesIO(data))
 
+        _native_loaded = True
     except ImportError:
-        from chumicro_msgpack._pure import pack, packb, unpack, unpackb  # noqa: F401
-else:
+        pass
+
+if not _native_loaded:
     from chumicro_msgpack._pure import pack, packb, unpack, unpackb  # noqa: F401
 
 __all__ = ["pack", "packb", "unpack", "unpackb"]
