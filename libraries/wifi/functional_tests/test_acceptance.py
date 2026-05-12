@@ -103,7 +103,7 @@ def test_connects_to_real_ap() -> None:
     assert ok, f"Failed to reach CONNECTED state; current={service.state}"
     assert service.connected is True
     assert service.ip is not None
-    assert service.adapter_name in ("cp", "mp_esp32", "mp_rp2")
+    assert service.adapter.name in ("cp", "mp_esp32", "mp_rp2")
 
 
 def test_reconnect_after_deliberate_disconnect() -> None:

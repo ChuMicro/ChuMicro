@@ -62,7 +62,7 @@ After the supervisor reaches `CONNECTED`:
 ```python
 wifi.ip            # "192.168.1.42" or None
 wifi.last_error    # last exception caught, if any
-wifi.adapter_name  # "cp" / "mp_esp32" / "mp_rp2" / "fake" — useful for logging
+wifi.adapter.name  # "cp" / "mp_esp32" / "mp_rp2" / "fake" — useful for logging
 ```
 
 `last_error` is most informative on MicroPython-ESP32, where the wifi driver raises `OSError("Wifi Internal State Error")` on unreachable AP — the service captures it and surfaces it here.  On CircuitPython, the substrate raises `TimeoutError` / `ConnectionError` (both `OSError` subclasses) but `CpWifiAdapter.connect` catches them and returns `False`, so `last_error` typically stays `None` for unreachable-AP cases — only non-`OSError` failures (e.g. programmer errors) bubble up.  On MicroPython-CYW43 (Pi Pico W) the driver silently leaves `isconnected()` False with no exception, so `last_error` is `None` even though the supervisor is in `RECONNECTING` (see Platform notes).

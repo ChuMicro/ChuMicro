@@ -51,4 +51,4 @@ def test_wifi_service_resolves_on_device() -> None:
     config = WifiConfig(ssid="x", password="y")
     service = WifiService(config)
     assert service is not None
-    assert service.adapter_name in ("cp", "mp_esp32", "mp_rp2")
+    assert service.adapter.name in ("cp", "mp_esp32", "mp_rp2")

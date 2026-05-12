@@ -17,8 +17,8 @@ Six methods cover the substrate's lifecycle:
 * :meth:`ip` — return the assigned IPv4 string, or ``None`` when
   not linked.
 * :meth:`name` — stable identifier for the adapter ("cp",
-  "mp_esp32", "mp_rp2", "fake").  Used by
-  :attr:`WifiService.adapter_name`.
+  "mp_esp32", "mp_rp2", "fake").  Read it as ``wifi.adapter.name``
+  for logging.
 """
 
 

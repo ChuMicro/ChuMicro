@@ -34,8 +34,7 @@ Tests inject the stack explicitly via ``stack="espidf"`` /
 ``wlan`` defaults to a fresh ``network.WLAN(network.STA_IF)``;
 tests inject a fake to exercise the adapter contract without
 hardware.  ``name`` is ``"mp_esp32"`` for ESP-IDF or ``"mp_rp2"``
-for CYW43 — the strings users see in ``WifiService.adapter_name``
-remain stable across the unification.
+for CYW43 — the strings users read via ``wifi.adapter.name``.
 """
 
 __chumicro_runtimes__ = ("micropython",)

@@ -405,10 +405,10 @@ def test_no_callback_for_no_op_transition() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_adapter_name_reflects_injected_adapter() -> None:
-    """``adapter_name`` is the stable identifier from the adapter."""
+def test_adapter_name_field_reflects_injected_adapter() -> None:
+    """``wifi.adapter.name`` is the stable identifier from the adapter."""
     service, _, _ = _service()
-    assert service.adapter_name == "fake"
+    assert service.adapter.name == "fake"
 
 
 def test_default_adapter_on_cpython_is_fake() -> None:
@@ -422,7 +422,7 @@ def test_default_adapter_on_cpython_is_fake() -> None:
         skip("CP/MP adapter selection is covered by the functional suites")
     config = WifiConfig(ssid="x", password="y")
     service = WifiService(config)
-    assert service.adapter_name == "fake"
+    assert service.adapter.name == "fake"
 
 
 # ---------------------------------------------------------------------------
