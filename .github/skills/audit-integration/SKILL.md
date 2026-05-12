@@ -17,6 +17,8 @@ Argument: comma-separated library names.  Examples:
 
 This skill does not deeply audit any single library's internals (use `/audit-library` for that) and does not propose architectural changes that span the whole mono-repo (use `/audit-workspace`).  The lens here is: **the interface between these libraries, and only that interface.**
 
+**Duck-typed contracts naturally expand the scope.**  If the "boundary" is a duck-typed protocol — a method shape that multiple libraries implement without a shared ABC / Protocol class — list every implementer in the workspace before starting and treat them as the audit's natural scope.  `/audit-integration mqtt,timing` looks like a pair, but if the real boundary is `check(now_ms) -> bool` / `handle(now_ms)` and seven libraries implement it, the audit is N-way.  The pair-wise framing hides the systemic problem: divergence is *silent* without a shared type to enforce the shape, so all you can do is enumerate consumers and compare.
+
 ## Audit philosophy
 
 Cross-library code reveals integration-level problems that single-library audits miss:
@@ -26,6 +28,7 @@ Cross-library code reveals integration-level problems that single-library audits
 * **Wrong-side work** — library A does work that conceptually belongs to library B, or vice versa.
 * **Handoff churn** — the same value gets reshaped 3× as it crosses 3 libraries.
 * **Coupling without cohesion** — libraries depend on each other but for unrelated reasons; the boundary needs a re-cut.
+* **Same problem, three layers** — when one layer of an integration drifts from the canonical shape, the other two usually drifted too, because they reinforce each other.  A divergent constructor API makes the canonical test fake awkward to use, so a parallel test fake gets built; the divergent shape also encourages a different internal pattern for the same operation.  Finding one is a strong signal to hunt the other two.  Concrete instance from the 2026-05-11 timing/runner audit: five libraries diverged from the documented `ticks: object` DI shape *and* refetched `ticks_ms()` mid-tick *and* (in one case) shipped a parallel `TickClock` fake instead of using `chumicro_timing.testing.FakeTicks`.
 
 The goal isn't to merge libraries (that's `/audit-workspace`'s call); it's to make the boundary **honest** — each side does the work it conceptually owns, with a clean shape flowing across.
 
@@ -37,6 +40,7 @@ The goal isn't to merge libraries (that's `/audit-workspace`'s call); it's to ma
 * **Are simple values being shaped into complex types just to cross the boundary?**  E.g., a function takes a `WifiConfig` dataclass when it really only uses one field.  Pass the field directly.
 * **Are complex types being decomposed at every boundary?**  E.g., wifi returns a `Connection` object that sockets immediately unpacks into `(host, ip, dns)` and discards the object.  Either the object isn't earning its keep, or the unpacking should move into wifi.
 * **Are there Optional[X] + None-checks repeated on both sides?**  Often the producer should validate-or-raise; the consumer shouldn't have to re-handle absent.
+* **Awkward construction in tests = constructor-API smell.**  When every test does `ticks_ms_func=fake.ticks_ms, ticks_add_func=fake.ticks_add, ticks_diff_func=fake.ticks_diff` at the call site (or any other multi-line unpacking that's identical at every site), the production constructor is the wrong shape — the test is paying the cost of the bad API every time, and downstream consumers will too.  Cleaner: a single `ticks` object passed in.  Read each library's `tests/` setup helpers; awkward construction is a high-signal smell because tests are the first place a bad API hurts.
 
 ### 2. Dependency direction
 
@@ -74,10 +78,11 @@ The hardest pattern to spot.  Look for:
 
 These are non-negotiables that *only* surface at the boundary between libraries.
 
-* **Runner contract: one `now_ms` per tick** (Decision [0014](../../../plans/decisions/0014-runner-pattern.md)).  When library B calls into library A's `check(now_ms)` / `handle(now_ms)` method, B must pass the *same* `now_ms` the runner gave it — never call `ticks_ms()` mid-tick to get a "fresh" value.  Mixing tick sources between libraries (e.g., one consumer uses `chumicro_timing.ticks_ms` while another rolls its own `time.monotonic()`-based shim) causes clock-domain misalignment, which manifests as deadlines firing on the wrong tick or never firing.  Audit checklist:
+* **Runner contract: one `now_ms` per tick** (Decision [0014](../../../plans/decisions/0014-runner-pattern.md), enforced by `CHU013`).  When library B calls into library A's `check(now_ms)` / `handle(now_ms)` method, B must pass the *same* `now_ms` the runner gave it — never call `ticks_ms()` mid-tick to get a "fresh" value.  Mixing tick sources between libraries (e.g., one consumer uses `chumicro_timing.ticks_ms` while another rolls its own `time.monotonic()`-based shim) causes clock-domain misalignment, which manifests as deadlines firing on the wrong tick or never firing.  Audit checklist:
   * Does each tick-receiver use the supplied `now_ms` rather than re-fetching?
   * If two libraries share a tick budget, do they get the same `now_ms` value at every dispatch?
   * Are tests rolling their own timer instead of using `chumicro_timing.ticks_ms`?
+  * **Optional-`now_ms` helper pattern** — when a helper is shared between user-entry callers (outside the tick loop, no `now_ms` available) and handle-path callers (inside the tick loop, `now_ms` in scope), it takes an optional `now_ms` kwarg that defaults to `None`: handle-path callers pass it through, user-entry callers leave it out and the helper captures a fresh `ticks_ms()` once.  Existing instances: `MQTTClient._deadline(offset_ms, *, now_ms=None)`, `_BaseSession._arm_pong_deadline(now_ms=None)`.  Don't fight this shape in audits — it's the codified solution to "two callers, two contexts" and `CHU013` recognizes the `if now_ms is None:` guard as the legitimate refetch.
 
 * **chumicro-config manifest declarations** (Decision [0036](../../../plans/decisions/0036-chumicro-config-library.md)).  Every library that calls `chumicro_config.load_section(<name>)` or has a `<X>Config.from_dict()` method should declare `[tool.chumicro.config.sections.<name>]` in its `pyproject.toml` listing required + optional keys.  At deploy time, `chumicro_workspace.config_manifest` aggregates these and validates the merged config before bytes hit the device.  Audit any pair of libraries that consume runtime config; if either is missing a manifest, flag it.
 
@@ -99,13 +104,15 @@ These are non-negotiables that *only* surface at the boundary between libraries.
 ## Process
 
 1. **Read each library's `src/<name>/` top-to-bottom** (lighter than `/audit-library`'s deep read, but enough to know the shapes).
-2. **Map the boundary.**  Every public function each library exposes that the others call.  Capture as a small table:
+2. **Map the boundary — and check for a canonical-shape statement first.**  Before mapping, check `plans/patterns.md` and `plans/decisions/` for an existing statement of the canonical shape this boundary should take.  If one exists, the audit flips from *discovery* (find the right shape) to *conformance* (compare every consumer to the documented shape, flag divergers).  Then map every public function each library exposes that the others call — capture as a small table.  When the audit is duck-typed / N-way, add a `conforms?` column right then:
    ```
-   producer    consumer    function                shape
-   wifi        sockets     get_radio()             radio: Adapter
-   wifi        mqtt        WifiService.is_up       bool
-   sockets     mqtt        connect_tcp(host,port)  Socket
+   producer    consumer    function                shape                   conforms?
+   timing      runner      ticks (object | None)   ticks: object DI        ✓
+   timing      mqtt        ticks_ms / add / diff   3× func kwargs          ✗
+   timing      ntp         ticks_ms / add / diff   3× func kwargs          ✗
+   timing      wifi        ticks (object | None)   ticks: object DI        ✓
    ```
+   Three `✓` next to five `✗` is the entire audit insight in one table — every divergence row becomes a finding, and the divergers usually share the same shape, which collapses the punch-list to one rename per library.
 3. **Run the audit dimensions** through that map.  The map is the reference; deviations from clean shapes get flagged.
 4. **Score by confidence** — same High / Medium / Low / Escalate as `/audit-library`.  Escalate to `/audit-workspace` if the finding implies a cross-cutting infrastructure concern.
 5. **Present the punch-list to the user.**
