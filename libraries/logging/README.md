@@ -62,7 +62,6 @@ if buffered.check(now_ms):
 | `BufferedHandler(downstream, capacity, level)` | Runner-shaped buffer; `check`/`handle` drain to downstream. |
 | `default_formatter(level, name, message)` | Formats as `LEVEL:name:message`. |
 | `level_name(level)` | Integer level → human name (`"INFO"`, `"LEVEL15"`). |
-| `get_logger(name, level, handlers)` | Convenience constructor. No global registry. |
 | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL` | Stdlib-compatible level integers. |
 
 Test helpers in `chumicro_logging.testing`:

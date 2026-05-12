@@ -20,7 +20,6 @@ Public API
 - ``BufferedHandler(downstream, capacity, level)`` — runner-shaped buffer
 - ``default_formatter(level, name, message)`` — ``LEVEL:name:message``
 - ``level_name(level)`` — integer to human name
-- ``get_logger(name, level, handlers)`` — convenience constructor
 """
 
 from chumicro_logging.core import (
@@ -33,7 +32,6 @@ from chumicro_logging.core import (
     Logger,
     StreamHandler,
     default_formatter,
-    get_logger,
     level_name,
 )
 
@@ -47,6 +45,5 @@ __all__ = [
     "StreamHandler",
     "WARNING",
     "default_formatter",
-    "get_logger",
     "level_name",
 ]
