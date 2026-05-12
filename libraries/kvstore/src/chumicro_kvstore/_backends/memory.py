@@ -15,11 +15,9 @@ from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
 class MemoryBackend(Backend):
     """Volatile backend that round-trips ``bytes`` payloads in-process.
 
-    Args:
-        initial: Optional starting payload (msgpack-encoded bytes).
-            Empty / omitted ⇒ blank store.
-        capacity: Override the (effectively unbounded) default size
-            limit.  Useful in tests that need to drive ``KVStoreFull``.
+    ``initial`` seeds the backend with an existing msgpack payload;
+    ``capacity`` overrides the ``sys.maxsize`` default so tests can
+    drive ``KVStoreFull`` without manufacturing a giant payload.
     """
 
     name = "memory"
@@ -56,13 +54,8 @@ class MemoryBackend(Backend):
     # --- test hooks -------------------------------------------------
 
     def force_corrupt(self) -> None:
-        """Mark the backend as corrupt; next ``load`` raises.
-
-        Lets ``FakeKVStore`` and tests exercise the corruption path
-        without touching real flash.
-        """
+        """Mark the backend as corrupt; next ``load`` raises ``KVStoreCorrupt``."""
         self._corrupt = True
 
     def reset_corrupt(self) -> None:
-        """Clear the corrupt flag."""
         self._corrupt = False

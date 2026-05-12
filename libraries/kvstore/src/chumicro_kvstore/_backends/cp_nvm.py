@@ -26,12 +26,9 @@ from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
 class CpNvmBackend(Backend):
     """CircuitPython NVM backend.
 
-    Args:
-        nvm: Optional ``bytearray``-shaped substrate.  When ``None``
-            (default), uses the live ``microcontroller.nvm`` byte slab
-            — only available under CircuitPython.  Tests inject a
-            ``bytearray`` to exercise the framing on a host without
-            hardware.
+    ``nvm`` defaults to the live ``microcontroller.nvm`` byte slab;
+    tests inject a plain ``bytearray`` to exercise the framing on a
+    host without hardware.
     """
 
     HEADER_MAGIC = b"CKVS"

@@ -2,9 +2,11 @@
 
 ## Overview
 
-`chumicro-config` is how ChuMicro libraries read their settings on a device.  Every consumer library (wifi, mqtt, ntp, kvstore, …) ships a typed `<Name>Config` class with a `from_config` classmethod that delegates to `load_section`.  Apps read the deployed `runtime_config.msgpack` once with `load_runtime_config()`, then hand the whole config to each consuming library — each library pulls its own prefix's keys.
+`chumicro-config` is how ChuMicro libraries read their settings on a device.  Apps read the deployed `runtime_config.msgpack` once with `load_runtime_config()`, then hand the whole config to each consuming library — each library pulls its own prefix's keys (`wifi.*`, `mqtt.broker.*`, …) off the shared dict.
 
-Every library reads its keys using the same `<prefix>.<subkey>` dotted-key layout, so config parsing logic lives in one place instead of being reinvented per library.
+Most consumer libraries (mqtt, ntp, requests, websockets, http_server) read their slice with plain `config.get("<prefix>.<key>", <default>)` calls inside their `<Name>Config.from_config` classmethod.  When a library's constructor signature maps 1:1 onto a flat-prefix subkey set, `load_section` packages the boilerplate — `chumicro-wifi` uses it today.
+
+Every library reads its keys using the same `<prefix>.<subkey>` dotted-key layout, so the on-wire shape stays uniform regardless of which API a library uses to parse it.
 
 ## Getting started
 
@@ -22,7 +24,7 @@ wifi = WifiService(WifiConfig.from_config(config))   # reads + types wifi.* keys
 
 ## Writing a `from_config` for your own library
 
-A consumer library's typed config class is ~10 lines:
+When the constructor's keyword arguments line up exactly with a flat-prefix subkey set, `load_section` cuts the boilerplate down to ~10 lines:
 
 ```python
 from chumicro_config import load_section
@@ -56,6 +58,8 @@ class WifiConfig:
 Unknown keys are **ignored** — that's deliberate forward-compat.  An older library version reads a config file that has newer libraries' keys in it without exploding on the unfamiliar prefixes.
 
 There is no type coercion.  `"1883"` stays a string; the `__init__` does any conversion the library wants.
+
+When `from_config` needs to do more than build kwargs and call `cls(**kwargs)` — auto-build a socket factory off radio + broker keys, enforce a "both TLS cert/key present or neither" guard, fall back to a library default constant — skip `load_section` and read keys directly with `config.get("prefix.subkey", default)`.  The other chumicro libraries (mqtt, ntp, requests, websockets, http_server) ship that shape.
 
 ## Soft loading with `try_load_section`
 

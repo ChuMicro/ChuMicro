@@ -39,19 +39,11 @@ class _RuntimeFs:
 class MpLittlefsBackend(Backend):
     """MP LittleFS backend.
 
-    Args:
-        path: Path to the canonical payload file.  Default is
-            ``/_chu_kv.msgpack``.  Override for tests or boards with
-            mounted-elsewhere filesystems.
-        filesystem: Optional filesystem-shaped substrate (must
-            expose ``open``, ``rename(src, dst)``, ``remove(path)``,
-            and ``sync()``).  When ``None`` (default), uses the
-            live ``os`` module and built-in ``open`` — only
-            available where a real filesystem is mounted.
-        capacity: Maximum payload size in bytes.  Defaults to 16 KB
-            — generous for most LittleFS partitions, bounded so a
-            runaway store doesn't fill the whole filesystem.
-            Override on boards with custom layouts.
+    ``path`` defaults to ``/_chu_kv.msgpack``; ``filesystem`` defaults
+    to the module's runtime shim and accepts any object exposing
+    ``open`` / ``rename`` / ``remove`` / ``sync``.  ``capacity``
+    defaults to 16 KB — generous for most partitions, bounded so a
+    runaway store can't fill the whole filesystem.
     """
 
     DEFAULT_PATH = "/_chu_kv.msgpack"

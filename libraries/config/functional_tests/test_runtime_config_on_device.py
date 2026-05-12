@@ -78,6 +78,6 @@ def test_non_dict_payload_raises_invalid_type_on_device() -> None:
         _wipe_runtime_config()
 
 
-def test_default_path_constant_matches_adr_on_device() -> None:
-    """The path constant is the same on every runtime (ADR 0030 §1)."""
+def test_default_path_constant_matches_on_device() -> None:
+    """The path constant resolves to ``/runtime_config.msgpack`` on real flash."""
     assert DEFAULT_RUNTIME_CONFIG_PATH == "/runtime_config.msgpack"

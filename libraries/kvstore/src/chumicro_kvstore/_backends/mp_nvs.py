@@ -20,18 +20,12 @@ from chumicro_kvstore.core import Backend, KVStoreFull
 class MpNvsBackend(Backend):
     """MP ESP32 NVS backend.
 
-    Args:
-        nvs: Optional NVS-shaped substrate (must expose ``set_blob``,
-            ``get_blob(key, buffer) -> length``, ``erase_key``, and
-            ``commit``).  When ``None`` (default), opens
-            ``esp32.NVS("chu_kv")`` — only available under MicroPython
-            ESP32 builds.  Tests inject a fake to exercise the wire
-            format on a host.
-        capacity: Maximum payload size in bytes.  Defaults to 512 —
-            sized for typical small-key state (boot counters,
-            timestamps, short tokens).  Override on boards that store
-            larger payloads; the limit doubles as the size of the
-            transient read buffer allocated at ``load`` time.
+    ``nvs`` defaults to ``esp32.NVS("chu_kv")``; tests inject a fake
+    exposing the same ``set_blob`` / ``get_blob(key, buffer) -> length``
+    / ``erase_key`` / ``commit`` shape.  ``capacity`` defaults to 512 B
+    — sized for small-key state (boot counters, timestamps, short
+    tokens) and doubling as the size of the transient read buffer
+    allocated at ``load`` time.
     """
 
     NAMESPACE = "chu_kv"
@@ -59,15 +53,12 @@ class MpNvsBackend(Backend):
         return esp32.NVS(MpNvsBackend.NAMESPACE)  # pragma: no cover - MP-ESP32 runtime path
 
     def load(self) -> bytes:
-        """Return the stored payload, or ``b""`` if the key is missing.
+        """Return the stored payload, or ``b""`` for a missing key.
 
-        NVS raises ``OSError`` (typically ENOENT) on a missing key —
-        treated as a blank substrate, no corruption event.  The read
-        buffer is allocated fresh per call rather than held for the
-        backend's lifetime: ``load`` runs on construction and on
-        explicit ``reload``, never on the commit hot path, so a
-        long-lived ``bytearray(capacity)`` would pin RAM in exchange
-        for no per-call benefit.
+        The read buffer is allocated fresh per call: ``load`` runs at
+        construction and on explicit ``reload``, never on the commit
+        hot path, so a long-lived ``bytearray(capacity)`` would pin
+        RAM without earning the reuse.
         """
         read_buffer = bytearray(self.capacity)
         try:
