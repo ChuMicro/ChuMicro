@@ -30,6 +30,20 @@ except ImportError:
         return value
 
 
+_ZERO2 = b"\x00\x00"
+_ZERO8 = b"\x00\x00\x00\x00\x00\x00\x00\x00"
+
+
+def _append_packed_h(buffer: bytearray, value: int) -> None:
+    buffer.extend(_ZERO2)
+    struct.pack_into("!H", buffer, len(buffer) - 2, value)
+
+
+def _append_packed_q(buffer: bytearray, value: int) -> None:
+    buffer.extend(_ZERO8)
+    struct.pack_into("!Q", buffer, len(buffer) - 8, value)
+
+
 def _sha1_digest(data: bytes) -> bytes:
     """Return ``sha1(data).digest()`` via whichever hashlib path the
     runtime exposes.
@@ -1170,10 +1184,10 @@ def encode_frame(
         parts.append(mask_bit | payload_length)
     elif payload_length <= 0xFFFF:
         parts.append(mask_bit | 126)
-        parts.extend(struct.pack("!H", payload_length))
+        _append_packed_h(parts, payload_length)
     else:
         parts.append(mask_bit | 127)
-        parts.extend(struct.pack("!Q", payload_length))
+        _append_packed_q(parts, payload_length)
     if mask is not None:
         parts.extend(mask)
         masked = bytearray(payload_length)
@@ -1227,7 +1241,10 @@ def encode_close_payload(code: int | None, reason: str = "") -> bytes:
             f"close payload {2 + len(encoded_reason)} > "
             f"{MAX_CONTROL_PAYLOAD_BYTES}",
         )
-    return struct.pack("!H", code) + encoded_reason
+    body = bytearray()
+    _append_packed_h(body, code)
+    body.extend(encoded_reason)
+    return bytes(body)
 
 
 def parse_close_payload(payload: bytes) -> tuple[int | None, str]:
