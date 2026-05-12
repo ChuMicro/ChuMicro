@@ -198,6 +198,50 @@ def _no_callback(*_args, **_kwargs):
     return None
 
 
+# ---------------------------------------------------------------------------
+# MQTTPublisher — topic-binder convenience helper
+# ---------------------------------------------------------------------------
+
+
+class MQTTPublisher:
+    """A topic-, qos-, retain-bound publisher.
+
+    Construct via :meth:`MQTTClient.publisher` rather than directly —
+    the factory carries the right client reference and respects the
+    client's ``root_topic`` resolution.
+
+    Usage::
+
+        publisher = client.publisher("temperature", qos=1, retain=False)
+        publisher.publish(b"23.4")        # bytes
+        publisher.publish("23.4")          # str auto-encoded
+        publisher.publish(b"23.4", on_publish=callback)
+
+    The bound topic resolves through the client's ``root_topic`` /
+    ``client_id`` prefixing scheme if configured.  For unprefixed
+    publishing, use :meth:`MQTTClient.publish_raw` directly.
+    """
+
+    def __init__(self, client, topic, *, qos=0, retain=False):
+        self._client = client
+        self._topic = topic
+        self._qos = qos
+        self._retain = retain
+
+    def publish(self, payload, *, on_publish=None):
+        """Publish *payload* under the bound topic / qos / retain.
+
+        Delegates to :meth:`MQTTClient.publish` — auto-encoding str
+        payload, prefixing via ``root_topic``, allocating a packet_id
+        for QoS 1.
+        """
+        self._client.publish(
+            self._topic, payload,
+            qos=self._qos, retain=self._retain,
+            on_publish=on_publish,
+        )
+
+
 def _new_tx_queue(maxlen):
     """Return a fresh outbound ``deque`` sized at *maxlen* with ``appendleft``.
 
@@ -350,6 +394,7 @@ class MQTTClient:
         *,
         socket_factory: object | None = None,
         client_id: str,
+        root_topic: str | None = None,
         keep_alive_seconds: int = 60,
         ack_timeout_seconds: float = 5.0,
         publish_retry_max: int = 3,
@@ -357,6 +402,7 @@ class MQTTClient:
         password: str | None = None,
         clean_session: bool = True,
         will_topic: str | None = None,
+        will_topic_raw: str | None = None,
         will_message: bytes | None = None,
         will_qos: int = 0,
         will_retain: bool = False,
@@ -403,6 +449,16 @@ class MQTTClient:
                 ``FAILED`` until the caller manually tears down and
                 reconstructs.
             client_id: MQTT client identifier — must be unique per broker.
+                Doubles as the per-device segment in the topic-prefix
+                scheme when *root_topic* is set.
+            root_topic: Optional prefix applied automatically by
+                :meth:`publish` / :meth:`subscribe` / :meth:`unsubscribe`.
+                When set, every prefixed topic becomes
+                ``<root_topic>/<client_id>/<topic>``.  ``None`` (default)
+                disables prefixing — topics go on the wire as written.
+                Use :meth:`publish_raw` / :meth:`subscribe_raw` /
+                :meth:`unsubscribe_raw` to bypass prefixing on individual
+                calls (system topics, bridge topics, etc.).
             keep_alive_seconds: Broker idle timeout.  PINGREQ runs at
                 half this interval client-side.
             ack_timeout_seconds: Per-PUBACK / SUBACK / etc. deadline.
@@ -414,16 +470,31 @@ class MQTTClient:
             clean_session: ``False`` resumes persistent broker session
                 state for QoS 1+ retransmit-across-reconnects.
             will_topic: Topic for the broker's last-will message —
-                published on uncleanly-dropped connection.  ``None``
-                disables the will.
+                published on uncleanly-dropped connection.  Resolves
+                through the ``root_topic`` / ``client_id`` prefix
+                scheme if set.  ``None`` disables the will.  Mutually
+                exclusive with *will_topic_raw*.
+            will_topic_raw: Last-will topic without prefix resolution.
+                Use when the will needs to land outside the per-device
+                topic hierarchy (system topics, bridges).  Mutually
+                exclusive with *will_topic*.
             will_message: Payload for the broker's last-will message.
             will_qos: QoS for the will message (0 or 1).
             will_retain: ``True`` retains the will on the broker.
             rx_buffer_size: Steady-state RX buffer size (default 256).
-            max_message_bytes: Cap on a single inbound PUBLISH payload
-                (default 256 KB).
-            when_oversized: Policy for messages above the cap.  See
-                :class:`WhenOversized`.
+                Inbound PUBLISHes ≤ this size parse inline with no
+                allocation.  Larger messages route through the tier-2
+                intact-delivery or tier-3 oversized paths — see
+                ``max_message_bytes``.
+            max_message_bytes: Cap on a single inbound PUBLISH for
+                intact delivery (default 8 KB).  Messages at or below
+                this size are delivered to :attr:`on_message` with
+                their full payload (one-shot allocation, freed after
+                delivery).  Above this size the configured
+                :class:`WhenOversized` policy applies — the payload is
+                discarded without a payload-sized heap allocation.
+            when_oversized: Policy for inbound messages above
+                ``max_message_bytes``.  See :class:`WhenOversized`.
             recv_budget_per_tick: Soft cap on bytes drained from the
                 socket in a single :meth:`handle` call.  Default 1024.
                 Bounds tick latency so concurrent runner tasks (LED,
@@ -452,6 +523,11 @@ class MQTTClient:
                 "socket_factory (or both — factory is used for self-heal "
                 "after wifi-drop)."
             )
+        if will_topic is not None and will_topic_raw is not None:
+            raise ValueError(
+                "will_topic (prefixed) and will_topic_raw (verbatim) are "
+                "mutually exclusive — pass at most one."
+            )
         if socket is None:
             socket = socket_factory()
         self._socket = socket
@@ -466,13 +542,22 @@ class MQTTClient:
         _force_non_blocking(self._socket)
         self._user_wants_connected = False
         self._client_id = client_id
+        self._root_topic = root_topic
         self._keep_alive_seconds = keep_alive_seconds
         self._ack_timeout_ms = int(ack_timeout_seconds * 1000)
         self._publish_retry_max = publish_retry_max
         self._username = username
         self._password = password
         self._clean_session = clean_session
-        self._will_topic = will_topic
+        # Resolve the will topic once at construction.  ``will_topic``
+        # gets the root_topic/client_id prefix; ``will_topic_raw`` goes
+        # verbatim.  CONNECT later uses ``self._will_topic`` directly.
+        if will_topic_raw is not None:
+            self._will_topic = will_topic_raw
+        elif will_topic is not None:
+            self._will_topic = self._prefixed_topic(will_topic)
+        else:
+            self._will_topic = None
         self._will_message = will_message
         self._will_qos = will_qos
         self._will_retain = will_retain
@@ -592,6 +677,16 @@ class MQTTClient:
     # Public publish / subscribe / unsubscribe
     # ------------------------------------------------------------------
 
+    def _prefixed_topic(self, topic):
+        """Resolve *topic* through the ``root_topic`` / ``client_id`` prefix scheme.
+
+        ``root_topic=None``: return *topic* unchanged.
+        ``root_topic`` set: return ``<root_topic>/<client_id>/<topic>``.
+        """
+        if self._root_topic is None:
+            return topic
+        return f"{self._root_topic}/{self._client_id}/{topic}"
+
     def publish(
         self,
         topic: str,
@@ -601,7 +696,11 @@ class MQTTClient:
         retain: bool = False,
         on_publish: object | None = None,
     ) -> None:
-        """Queue a PUBLISH packet.
+        """Queue a PUBLISH packet to a prefix-resolved topic.
+
+        *topic* is resolved through ``root_topic`` / ``client_id``
+        before going on the wire — see :meth:`_prefixed_topic`.  Use
+        :meth:`publish_raw` to bypass prefixing.
 
         QoS 0: queued and considered delivered once it reaches the wire
         (the optional *on_publish* fires from the next :meth:`handle`).
@@ -611,7 +710,7 @@ class MQTTClient:
         exactly once.  Retries up to *publish_retry_max* on ack timeout.
 
         Args:
-            topic: Publish topic.
+            topic: Publish topic (will be prefixed).
             payload: ``bytes`` / ``str``.  ``str`` is auto-encoded as UTF-8.
             qos: 0 or 1.  QoS 2 raises :class:`UnsupportedQoSError`.
             retain: True for retained messages.
@@ -620,6 +719,24 @@ class MQTTClient:
 
         Raises:
             MQTTError: Client not in CONNECTED state.
+        """
+        self.publish_raw(
+            self._prefixed_topic(topic), payload,
+            qos=qos, retain=retain, on_publish=on_publish,
+        )
+
+    def publish_raw(
+        self,
+        topic: str,
+        payload: bytes | str,
+        *,
+        qos: int = 0,
+        retain: bool = False,
+        on_publish: object | None = None,
+    ) -> None:
+        """Queue a PUBLISH to *topic* verbatim — no ``root_topic`` prefix.
+
+        See :meth:`publish` for QoS / callback semantics.
         """
         if self._state != ProtocolState.CONNECTED:
             raise MQTTError(
@@ -684,16 +801,34 @@ class MQTTClient:
         *,
         on_subscribe: object | None = None,
     ) -> None:
-        """Queue a SUBSCRIBE for *topic*.
+        """Queue a SUBSCRIBE for *topic*, prefix-resolved.
+
+        *topic* is resolved through ``root_topic`` / ``client_id``
+        before going on the wire.  Use :meth:`subscribe_raw` for
+        topics outside the per-device hierarchy (system topics,
+        bridges, wildcard pattern subscriptions).
 
         Args:
             topic: Topic filter (may include ``+`` / ``#`` wildcards).
+                Will be prefixed.
             qos: 0 or 1.
             on_subscribe: Callback ``(topic, granted_qos)`` fired on SUBACK.
 
         Raises:
             MQTTError: Client not in CONNECTED state.
         """
+        self.subscribe_raw(
+            self._prefixed_topic(topic), qos=qos, on_subscribe=on_subscribe,
+        )
+
+    def subscribe_raw(
+        self,
+        topic: str,
+        qos: int = 0,
+        *,
+        on_subscribe: object | None = None,
+    ) -> None:
+        """Queue a SUBSCRIBE for *topic* verbatim — no ``root_topic`` prefix."""
         if self._state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"subscribe() requires CONNECTED state, was {self._state}",
@@ -719,7 +854,17 @@ class MQTTClient:
         )
 
     def unsubscribe(self, topic, *, on_unsubscribe=None):
-        """Queue an UNSUBSCRIBE for *topic*."""
+        """Queue an UNSUBSCRIBE for *topic*, prefix-resolved.
+
+        Mirror of :meth:`subscribe` — use :meth:`unsubscribe_raw` to
+        bypass prefixing.
+        """
+        self.unsubscribe_raw(
+            self._prefixed_topic(topic), on_unsubscribe=on_unsubscribe,
+        )
+
+    def unsubscribe_raw(self, topic, *, on_unsubscribe=None):
+        """Queue an UNSUBSCRIBE for *topic* verbatim — no ``root_topic`` prefix."""
         if self._state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"unsubscribe() requires CONNECTED state, was {self._state}",
@@ -742,13 +887,47 @@ class MQTTClient:
             ),
         )
 
+    def publisher(self, topic, *, qos=0, retain=False):
+        """Return an :class:`MQTTPublisher` bound to *topic* / *qos* / *retain*.
+
+        The bound topic resolves through :meth:`_prefixed_topic` on
+        each publish — the same as :meth:`publish` itself.  For
+        unprefixed publishing, call :meth:`publish_raw` directly.
+        """
+        return MQTTPublisher(self, topic, qos=qos, retain=retain)
+
     def add_pattern_handler(self, pattern, handler):
         """Register *handler* ``(topic, payload_bytes)`` for inbound messages matching *pattern*.
 
         Splits the pattern once at registration so the per-inbound-
         message dispatch only splits the topic, not the pattern.
+
+        Inbound topics are matched against patterns verbatim — patterns
+        are **not** ``root_topic``-prefixed.  Pass the prefixed pattern
+        directly if you want per-device-only routing.
         """
         self._pattern_handlers.append((tuple(pattern.split("/")), handler))
+
+    def remove_pattern_handler(self, handler, pattern=None):
+        """Remove *handler* from the pattern-handler list.
+
+        ``pattern=None`` (default) removes every registration of
+        *handler* across all patterns.  Pass *pattern* to remove only
+        the registration matching that pattern.
+        """
+        if pattern is None:
+            self._pattern_handlers = [
+                (registered_pattern, registered_handler)
+                for registered_pattern, registered_handler in self._pattern_handlers
+                if registered_handler is not handler
+            ]
+            return
+        pattern_levels = tuple(pattern.split("/"))
+        self._pattern_handlers = [
+            (registered_pattern, registered_handler)
+            for registered_pattern, registered_handler in self._pattern_handlers
+            if not (registered_pattern == pattern_levels and registered_handler is handler)
+        ]
 
     # ------------------------------------------------------------------
     # Runner contract
@@ -1020,7 +1199,18 @@ class MQTTClient:
             self._tx_queue.appendleft(encode_puback(packet_id=packet.packet_id))
 
     def _handle_ack(self, packet, now_ms):
-        """Match an inbound CONNACK / SUBACK / PUBACK / etc. to its pending entry."""
+        """Match an inbound CONNACK / SUBACK / PUBACK / etc. to its pending entry.
+
+        PUBACK / SUBACK / UNSUBACK without a matching pending entry
+        fault to FAILED — a broker that ACKs a packet_id we never
+        issued (or already consumed) has a real state-machine bug
+        worth surfacing.
+
+        PINGRESP is the exception: it carries no packet_id and is
+        naturally racy in keepalive-timeout / self-heal corners
+        (timeout cleared the tracker; the broker's response arrives a
+        tick later).  Silently tolerated.
+        """
         if packet.packet_type == PACKET_CONNACK:
             self._handle_connack(packet, now_ms)
             return
@@ -1037,16 +1227,38 @@ class MQTTClient:
                 in_flight.callback()
             return
         if packet.packet_type == PACKET_SUBACK:
-            self._discard_pending(
+            # MQTT 3.1.1 §3.9.3: granted_qos byte 0x80 (== 128)
+            # signals "Failure" — broker rejected the subscription
+            # (ACL deny, topic-not-permitted, etc.).  Surface as a
+            # protocol error so the application sees the failure
+            # instead of silently inheriting a never-matched
+            # subscription.
+            if packet.granted_qos and 0x80 in packet.granted_qos:
+                raise MQTTProtocolError(
+                    f"SUBACK rejection (packet_id {packet.packet_id}, "
+                    f"granted_qos {packet.granted_qos}) — broker refused "
+                    "one or more subscription filters"
+                )
+            matched = self._discard_pending(
                 Awaiting.SUBACK,
                 packet_id=packet.packet_id,
                 callback_arg=packet.granted_qos,
             )
             self._in_flight.discard(packet.packet_id)  # Free the id.
+            if not matched:
+                raise MQTTProtocolError(
+                    f"SUBACK for unknown packet_id {packet.packet_id}",
+                )
             return
         if packet.packet_type == PACKET_UNSUBACK:
-            self._discard_pending(Awaiting.UNSUBACK, packet_id=packet.packet_id, callback_arg=None)
+            matched = self._discard_pending(
+                Awaiting.UNSUBACK, packet_id=packet.packet_id, callback_arg=None,
+            )
             self._in_flight.discard(packet.packet_id)
+            if not matched:
+                raise MQTTProtocolError(
+                    f"UNSUBACK for unknown packet_id {packet.packet_id}",
+                )
             return
 
     def _handle_connack(self, packet, now_ms):
@@ -1069,7 +1281,12 @@ class MQTTClient:
         self.on_connect()
 
     def _discard_pending(self, awaiting, *, packet_id, callback_arg=None):
-        """Find + remove the matching :class:`PendingResponse`; fire callback."""
+        """Find + remove the matching :class:`PendingResponse`; fire callback.
+
+        Returns ``True`` when a match was found and removed; ``False``
+        when no matching pending entry exists (caller decides whether
+        that's a protocol fault or a tolerated late arrival).
+        """
         for index, pending in enumerate(self._pending_responses):
             if pending.awaiting != awaiting:
                 continue
@@ -1081,7 +1298,8 @@ class MQTTClient:
                     pending.callback(callback_arg)
                 else:
                     pending.callback()
-            return
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # Internal — deadlines + keepalive

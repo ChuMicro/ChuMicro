@@ -1,0 +1,131 @@
+# Decision 0064: `chumicro-mqtt` three-tier inbound size handling + topic-prefix sugar + ack-fault policy
+
+Status: `accepted`
+Date: `2026-05-12`
+Related: [Decision 0061](0061-whenoversized-cross-library-contract.md) (`WhenOversized` cross-library contract), [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0014](0014-runner-pattern.md) (tick-based runner).
+
+## Context
+
+A `chumicro-mqtt` audit comparing the current decoder against a reference implementation found one real bug, one dead public-API parameter, and a behavioral regression versus the reference:
+
+1. **`max_message_bytes` constructor kwarg is dead.**  The value flows from `MQTTClient.__init__` into `PacketDecoder.__init__`, gets stored on `self._max_message_bytes` at `_wire.py:487`, and is never read anywhere else in the decoder.  The README, the user guide, and the docstring all describe it as the load-bearing cap on inbound payload size; the code ignores it.
+2. **The "degraded" path allocates a payload-sized buffer.**  When an inbound PUBLISH exceeds `rx_buffer_size` (default 256 B), `_enter_oversized_path` allocates `bytearray(payload_to_drain)` — a one-shot buffer sized to the full remaining payload — drains the entire payload into it, then discards the buffer and emits an `_OversizedMessage` event.  A hostile or misconfigured 1 MB PUBLISH on a 256 KB-RAM board allocates 1 MB on the heap to throw it away.
+3. **The decoder has no "valid but bigger than steady state" tier.**  Every PUBLISH whose total length exceeds `rx_buffer_size` becomes an `_OversizedMessage` event with no payload delivery, even when it's a normal 4 KB JSON sensor reading.  The reference implementation distinguishes three tiers and delivers mid-sized messages intact through a one-shot temporary buffer.
+
+The audit also surfaced four missing-or-regressed pieces relative to the reference: no removal API for pattern handlers, silent acceptance of SUBACK failure codes, no topic-prefix sugar (`root_topic` + per-device prefixing), and no topic-binder convenience class.  And one latent deadlock: a PUBLISH whose topic alone exceeds `rx_buffer_size` causes `_enter_oversized_path` to wait forever for "more bytes to parse the prelude" while the buffer is full.
+
+The fixes touch enough public API that a single ADR is the right place to nail the design.
+
+## Decision
+
+### 1. Three-tier inbound size handling
+
+The decoder dispatches inbound PUBLISH into three tiers by `total_length` (fixed header + remaining length + payload):
+
+| Tier | Condition | Behavior |
+|------|-----------|----------|
+| **Steady** | `total_length ≤ rx_buffer_size` (default 256 B) | Parse inline from the steady-state buffer. No allocation. Deliver via `on_message(topic, payload)`. |
+| **Intact** | `rx_buffer_size < total_length ≤ max_message_bytes` (default 8 KB) | Allocate `bytearray(message_length)` one-shot, drain payload through the steady-state buffer into it, deliver via `on_message(topic, payload)`. Buffer drops out of scope after delivery; heap returns to the steady-state baseline. |
+| **Oversized** | `total_length > max_message_bytes` | Apply the `WhenOversized` policy — see §2. |
+
+The intact tier is what was missing.  A 4 KB sensor reading or a 2 KB JSON configuration packet is normal MQTT traffic; the user shouldn't have to size `rx_buffer_size` to the largest expected payload to receive it intact.  The default `max_message_bytes` of 8 KB covers typical embedded-board payload sizes (sensor readings, control messages, small JSON blobs) while keeping the heap-burst cap predictable on the 256 KB-RAM minimum-tier board ([Decision 0015](0015-board-architecture-support.md)).
+
+### 2. Oversized-tier policy honors Decision 0061 verbatim
+
+`WhenOversized` keeps its three-policy shape per the cross-library contract.  In the oversized tier:
+
+| Policy | Behavior |
+|--------|----------|
+| `DROP_SILENT` | Drain the payload through the steady-state buffer in rolling fashion (no allocation beyond the existing rx buffer). No callback. Stay connected. |
+| `DROP_WITH_EVENT` (default) | Drain through the rolling steady-state buffer. Fire `on_oversized(reported_length, topic)`. Stay connected. PUBACK on QoS 1. No truncated payload delivery. |
+| `DISCONNECT` | Raise `MQTTProtocolError`. Skip the drain — the socket is being torn down anyway. |
+
+The "drop the payload entirely; do not truncate" semantic matches `chumicro-requests` and `chumicro-websockets` per Decision 0061 §4.  Diagnostic information (`reported_length` + `topic`) is enough for application-side reaction; the actual payload bytes go in the bit bucket without a corresponding heap allocation.
+
+No new buffer allocation happens in the oversized tier at all.  The rolling-drain pattern reuses the steady-state `rx_buffer`: each pass fills it from the socket, advances a "bytes still to drain" counter, then discards the filled buffer for the next pass.  Heap cost is constant regardless of the inbound message size.
+
+### 3. Oversize-topic case folds into the oversized tier
+
+A PUBLISH whose topic alone exceeds `rx_buffer_size` minus the small fixed-header overhead is treated as oversized under the same `WhenOversized` policy.  `topic=None` in the `on_oversized(reported_length, topic)` callback signals "the topic itself didn't fit in the steady-state buffer."  Under `DISCONNECT` the raised `MQTTProtocolError` names `rx_buffer_size` so the user can either shrink their topic strings or raise the cap.
+
+This fixes a latent deadlock where the decoder kept returning `None` waiting for a prelude that would never fit.
+
+### 4. Topic-prefix sugar: `root_topic` + `*_raw` escape hatches
+
+`MQTTClient` gains a `root_topic: str | None = None` constructor kwarg.  When set, every `publish` / `subscribe` / `unsubscribe` call automatically prefixes the topic:
+
+| `root_topic` | Outbound topic | Example |
+|--------------|----------------|---------|
+| `None` | `<topic>` | `publish("temperature", v)` → `temperature` |
+| Set | `<root_topic>/<client_id>/<topic>` | `MQTTClient(client_id="mainLightSwitch", root_topic="livingRoom")` + `publish("switchState", v)` → `livingRoom/mainLightSwitch/switchState` |
+
+The escape hatches `publish_raw`, `subscribe_raw`, `unsubscribe_raw` skip the prefix entirely — useful for system topics (`$SYS/...`), bridge topics, or anything outside the per-device hierarchy.
+
+The will message has the same split: `will_topic` (prefixed) and `will_topic_raw` (verbatim) are mutually exclusive constructor kwargs.  The resolved bytes are computed once in `__init__`.
+
+Pattern handlers (`add_pattern_handler`) and the inbound topic delivered to `on_message` are **not** prefix-aware: patterns are intentional, and inbound topics from the wire are delivered exactly as received.  If the user wants per-device routing on receipt, they pass the prefixed pattern to `add_pattern_handler` directly.
+
+No `include_client_id` flag.  The "include client_id or not" decision is a property of the topic, not a property of every call site — the `*_raw` methods carry the same intent more cleanly.  Three method pairs vs. four boolean kwargs scattered through publish/subscribe/unsubscribe/will signatures.
+
+### 5. `MQTTPublisher` topic-binder helper
+
+A small `MQTTPublisher` class on top of `MQTTClient.publish` provides ergonomic binding for repeat-publish patterns:
+
+```python
+publisher = client.publisher("temperature", qos=1, retain=False)
+publisher.publish(b"23.4")
+publisher.publish("23.4")  # str auto-encoded
+publisher.publish(b"23.4", on_publish=callback)
+```
+
+The publisher holds `(client, topic, qos, retain)` and delegates to `client.publish`.  `topic` resolves through `root_topic` because `client.publish` does.  No `publish_bytes` separate method — the single `publish` auto-detects `str` vs `bytes`, matching `MQTTClient.publish` shape.
+
+### 6. Per-ack-type unexpected-packet policy
+
+Unexpected acks (no matching pending entry) are handled per packet type:
+
+| Packet | Policy | Reason |
+|--------|--------|--------|
+| **PUBACK** | Fault (`MQTTProtocolError`) | Packet ID was either never allocated or already consumed. Real state-machine bug. |
+| **SUBACK** | Fault | Same; SUBACK carries a packet ID we must have issued. |
+| **UNSUBACK** | Fault | Same. |
+| **PINGRESP** | Silently ignore | No packet ID; naturally racy in keepalive timeout / self-heal corners. |
+
+The PINGRESP exception accommodates the case where a PINGREQ timeout fires (clearing the pending tracker, transitioning toward FAILED / self-heal) but the broker's PINGRESP arrives a tick later — re-faulting through a healthy connection would be a false positive.
+
+Additionally, SUBACK with any `granted_qos` byte equal to `0x80` (subscription rejected by broker, per MQTT 3.1.1 §3.9.3) raises `MQTTProtocolError`.  Silently passing the rejection to the user callback was easy to miss; faulting transitions to FAILED + self-heal where the application can react.
+
+### 7. Pattern-handler removal
+
+`remove_pattern_handler(handler, pattern=None)` removes either every registration of `handler` (when `pattern=None`) or only the registration matching the `(pattern, handler)` pair.  Mirrors `add_pattern_handler`.  Long-running applications need to tear down subscriptions without holding closures forever.
+
+## Rejected
+
+**Tier-3 truncated-payload delivery.**  Earlier in the design pass we considered tier 3 allocating `bytearray(max_message_bytes)`, filling it with the first chunk of payload, and firing `on_oversized(reported_length, topic, truncated_payload)`.  Rejected: conflicts with Decision 0061 §4's "drop the oversized payload" semantic shared across `chumicro-mqtt` / `chumicro-requests` / `chumicro-websockets`.  Diagnostic value of the first 8 KB is real but recoverable other ways (broker logs, wireshark) when needed; the cost of re-diverging the cross-library contract for it isn't worth paying.  If a future use case needs it, add it as a separate policy value (`TRUNCATE_WITH_EVENT`) or an opt-in kwarg without disturbing the existing three.
+
+**`include_client_id` boolean kwarg on publish / subscribe / unsubscribe.**  The reference implementation we audited has this; we considered copying it.  Rejected in favor of `publish_raw` / `subscribe_raw` / `unsubscribe_raw`.  A per-call flag scatters the prefix-vs-raw decision across every callsite; a separate method names the intent at the API surface.
+
+**Required `client_id` floor for `rx_buffer_size`.**  Considered enforcing `rx_buffer_size ≥ 64` at construction.  Rejected: anyone setting it lower will get a clear `MQTTProtocolError` on the first inbound packet whose fixed-header + varlen exceeds their cap.  A constructor-time floor over-engineers a self-correcting failure mode.
+
+**Shared `chumicro-policies` micro-library or shared `Policy` base class.**  Same reasoning as Decision 0061 §Rejected: not worth a fourth library three libraries depend on.
+
+## Consequences
+
+- **Public API:**
+  - `MQTTClient(root_topic=...)` — new optional constructor kwarg.
+  - `MQTTClient(will_topic=...)` — semantic change: now prefixed when `root_topic` is set.  `MQTTClient(will_topic_raw=...)` is the new bypass.  Mutually exclusive with `will_topic`.
+  - `MQTTClient.publish_raw / subscribe_raw / unsubscribe_raw` — new methods.
+  - `MQTTClient.publisher(topic, qos=0, retain=False) -> MQTTPublisher` — new factory method.
+  - `MQTTClient.remove_pattern_handler(handler, pattern=None)` — new method.
+  - `MQTTPublisher` — new class exported from the package.
+  - `WhenOversized` enum + `on_oversized(reported_length, topic)` signature unchanged (Decision 0061 contract).
+  - `max_message_bytes` now functional with default 8192.  Previously defaulted to 256 KB and was ignored.
+- **Behavior changes that may surprise existing users:**
+  - Inbound PUBLISHes between `rx_buffer_size + 1` and `max_message_bytes` now arrive on `on_message` with their full payload, where they previously fired `on_oversized` with `reported_length` and no payload.
+  - Inbound PUBLISHes above 8 KB now hit the oversized tier where they previously hit the (incorrectly named) oversized path at 256 B.  Apps that were quietly relying on the bug to receive 5 KB messages via `on_oversized` need to either raise `max_message_bytes` or wire `on_message`.  Apps with `on_message` already wired (the common case) become more functional, not less.
+  - SUBACK with rejection code `0x80` now faults to FAILED instead of silently passing the rejection to the user callback.  Apps that were silently ignoring failed subscriptions will start surfacing them.
+- **No backwards-compatibility shims.**  Pre-1.0 (current VERSION 0.9.0 → 0.10.0, minor).  Edit forward.
+- **Decision 0061 contract preserved.**  `on_oversized(reported_length, topic)` signature unchanged; `WhenOversized.DROP_WITH_EVENT` semantic ("drop the payload, stay connected") matches the shared cross-library contract.
+- **Tests:** `test_decoder.py` gains intact-tier coverage + per-policy oversized-tier coverage + oversize-topic coverage.  `test_client.py` gains coverage for prefix resolution, `*_raw` methods, `MQTTPublisher`, `remove_pattern_handler`, SUBACK 0x80 fault, unexpected-PUBACK/SUBACK/UNSUBACK fault, unexpected-PINGRESP toleration.
+- **Docs:** README's "What's included" table + `docs/guide.md`'s Oversized-message policy section + Memory-notes section + Tuning section are rewritten for the three-tier model and the new defaults.  The 256 KB number in those docs is wrong everywhere; this pass corrects it.
+- **Version bump:** `chumicro-mqtt` `0.9.0` → `0.10.0`.  Minor bump — three public-method additions, one constructor-kwarg addition (`root_topic`), one will-kwarg rename (`will_topic` semantic change + new `will_topic_raw`), one behavior change in the steady-state-vs-oversized boundary.  All within the pre-1.0 SemVer policy.

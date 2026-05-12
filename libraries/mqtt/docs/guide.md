@@ -195,9 +195,21 @@ client = MQTTClient(
 
 Without `recv_budget_per_tick`, a "drain until EAGAIN" loop on a fat kernel recv buffer can blow tick latency past tens of milliseconds while it works through the backlog — long enough to skip a heartbeat on the same loop.
 
+## Three-tier inbound size model
+
+`chumicro-mqtt` distinguishes three tiers for inbound PUBLISH handling so a 4 KB sensor reading and a hostile 1 MB blob both stay heap-bounded on a 256 KB-RAM board:
+
+| Tier | Condition | What happens |
+|---|---|---|
+| **Steady** | `total_length ≤ rx_buffer_size` (default 256 B) | Parsed inline from the pre-allocated RX buffer; no allocation.  `on_message` fires with the full payload. |
+| **Intact** | `rx_buffer_size < total_length ≤ max_message_bytes` (default 8 KB) | One-shot `bytearray(payload_length)` allocated for this message; payload drains into it across multiple ticks; `on_message` fires with the full payload; buffer drops out of scope after delivery. |
+| **Oversized** | `total_length > max_message_bytes` | `WhenOversized` policy applies (see below).  Payload drains via rolling discard through the RX buffer — no payload-sized heap allocation. |
+
+In practice you tune `max_message_bytes` to your actual broker payload size (a few hundred bytes for sensor readings, a few KB for JSON config blobs, larger for OTA-image flows) and let the rest of the model take care of itself.
+
 ## Oversized-message policy
 
-`max_message_bytes` caps a single inbound PUBLISH payload (default 256 KB).  When a payload exceeds the cap, `when_oversized` selects the policy:
+`max_message_bytes` is the cap for *intact* delivery (default 8 KB).  Messages larger than this trigger `when_oversized`:
 
 ```python
 from chumicro_mqtt import MQTTClient, WhenOversized
@@ -205,7 +217,7 @@ from chumicro_mqtt import MQTTClient, WhenOversized
 client = MQTTClient(
     sock,
     client_id="my-thing",
-    max_message_bytes=8192,                          # 8 KB cap
+    max_message_bytes=4096,                          # accept up to 4 KB intact
     when_oversized=WhenOversized.DROP_WITH_EVENT,   # default
 )
 ```
@@ -214,9 +226,53 @@ Three policies:
 
 | `WhenOversized` | Behavior |
 |---|---|
-| `DROP_SILENT` | Skip the message, no event. |
-| `DROP_WITH_EVENT` (default) | Skip the message, fire `on_oversized(reported_length, topic)` for telemetry. |
-| `DISCONNECT` | Cleanly disconnect from the broker — appropriate when oversized inputs indicate a misconfiguration. |
+| `DROP_SILENT` | Drain via rolling discard, no event, stay connected. |
+| `DROP_WITH_EVENT` (default) | Drain via rolling discard, fire `on_oversized(reported_length, topic)` for telemetry, stay connected.  `topic` is `None` when the topic itself was too long to parse from the RX buffer. |
+| `DISCONNECT` | Raise `MQTTProtocolError`, transition to `FAILED` — appropriate when oversized inputs indicate a misconfiguration.  Socket-factory self-heal kicks in if configured. |
+
+No payload bytes survive the oversized tier — the bytes drain through the RX buffer without any payload-sized allocation.  Diagnostic information (`reported_length` + `topic`) is enough for application-side reaction; if you need the actual bytes, raise `max_message_bytes` so the message routes through the intact tier instead.
+
+## Per-device topic prefixing
+
+Set `root_topic` to enable automatic per-device prefixing — `publish` / `subscribe` / `unsubscribe` will prepend `<root_topic>/<client_id>/` to every topic:
+
+```python
+client = MQTTClient(
+    sock,
+    client_id="mainLightSwitch",
+    root_topic="livingRoom",
+)
+client.connect()
+
+client.publish("switchState", b"on")
+# → publishes to "livingRoom/mainLightSwitch/switchState"
+
+client.subscribe("commands/+")
+# → subscribes to "livingRoom/mainLightSwitch/commands/+"
+```
+
+Use `publish_raw` / `subscribe_raw` / `unsubscribe_raw` for topics outside the per-device hierarchy (system topics, bridges):
+
+```python
+client.publish_raw("$SYS/broker/dead", b"true")
+# → publishes verbatim to "$SYS/broker/dead", no prefix
+```
+
+The last-will follows the same pattern: `will_topic="online"` is prefixed; `will_topic_raw="$SYS/x/y"` is verbatim.  Pass at most one of them.
+
+Inbound topics in `on_message` and pattern handlers (`add_pattern_handler`) are **not** prefix-stripped — what the broker put on the wire is what your callback gets.  Pattern handlers are also not auto-prefixed; pass the prefixed pattern if you want per-device-only routing.
+
+## Repeated publishes — `MQTTPublisher`
+
+For a topic you publish to repeatedly with the same QoS / retain settings, bind once:
+
+```python
+temperature = client.publisher("sensors/temperature", qos=1, retain=False)
+temperature.publish(b"21.5")
+temperature.publish("22.1")  # str auto-encoded as UTF-8
+```
+
+The bound topic resolves through `root_topic` exactly like `client.publish` — for raw publishing use `client.publish_raw` directly.
 
 ## Backpressure
 
@@ -249,15 +305,16 @@ Four states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `FAILED`.  `disconnect()
 
 ## Memory notes
 
-The client actively manages its memory footprint with three caps tunable at construction time:
+The client actively manages its memory footprint with four caps tunable at construction time:
 
 | Cap | Default | What it bounds |
 |---|---|---|
 | `recv_budget_per_tick` | `1024` bytes | Per-tick read ceiling — see [Tuning](#tuning-for-tick-latency-vs-throughput). |
-| `max_message_bytes` | `256 KB` | Largest inbound PUBLISH payload accepted — see [Oversized-message policy](#oversized-message-policy). |
+| `rx_buffer_size` | `256` bytes | Pre-allocated steady-state RX buffer.  Inbound PUBLISHes at or below this size parse inline with no further allocation. |
+| `max_message_bytes` | `8 KB` | Intact-delivery cap.  Inbound PUBLISHes between `rx_buffer_size + 1` and this size allocate a one-shot buffer for the payload; above this size the [`WhenOversized` policy](#oversized-message-policy) applies and the payload drains without allocation. |
 | `max_tx_queue_size` | `20` packets | Outbound packet queue cap — see [Backpressure](#backpressure). |
 
-The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) and the registered pattern-handler list grow with your usage — neither has a hard cap.  On memory-tight boards (256 KB MCU RAM), lower `max_message_bytes` to match your actual broker payload size to avoid heap fragmentation.
+The QoS-1 in-flight table (keyed by `packet_id`, one entry per outstanding QoS-1 PUBLISH waiting for PUBACK) and the registered pattern-handler list grow with your usage — neither has a hard cap.  On memory-tight boards, set `max_message_bytes` to your actual largest expected broker payload — anything bigger routes through the oversized tier where it can't blow the heap.
 
 ## Platform notes
 

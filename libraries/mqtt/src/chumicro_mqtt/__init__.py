@@ -57,10 +57,11 @@ from chumicro_mqtt._wire import (
     encode_varlen,
     topic_matches,
 )
-from chumicro_mqtt.client import MQTTClient, ProtocolState, WhenOversized
+from chumicro_mqtt.client import MQTTClient, MQTTPublisher, ProtocolState, WhenOversized
 
 __all__ = [
     "MQTTClient",
+    "MQTTPublisher",
     "MQTTBackpressureError",
     "MQTTConnectError",
     "MQTTError",

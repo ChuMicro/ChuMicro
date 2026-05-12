@@ -384,12 +384,20 @@ def encode_puback(*, packet_id):
 # Inbound-packet parser
 # ---------------------------------------------------------------------------
 
-#: Default pre-allocated steady-state buffer size (bytes).
+#: Default pre-allocated steady-state buffer size (bytes).  Inbound PUBLISHes
+#: that fit within this size parse inline without any allocation; larger
+#: messages either get a one-shot intact buffer (tier 2) or drain via
+#: rolling discard (tier 3) — see :class:`PacketDecoder`.
 DEFAULT_RX_BUFFER_SIZE = const(256)
 
-#: Default cap on a single inbound message.  Anything bigger triggers
-#: the user-configured ``WhenOversized`` policy.
-DEFAULT_MAX_MESSAGE_BYTES = const(256 * 1024)
+#: Default cap on intact-delivery for a single inbound PUBLISH.  Messages
+#: at or below this size are delivered to ``on_message`` with their full
+#: payload (allocated one-shot, freed after delivery).  Above this size
+#: the configured ``WhenOversized`` policy applies — payload is dropped
+#: via rolling discard, no heap allocation beyond the steady-state buffer.
+#: Default sized for typical embedded-board payloads on the 256 KB-RAM
+#: minimum-tier board; raise for legitimately larger inbound messages.
+DEFAULT_MAX_MESSAGE_BYTES = const(8 * 1024)
 
 
 class ParsedPublish:
@@ -426,11 +434,14 @@ class ParsedAck:
 
 
 class _OversizedMessage:
-    """Signal that the next message exceeds ``max_message_bytes``.
+    """Signal that an inbound PUBLISH exceeded ``max_message_bytes``.
 
-    Carries topic + reported length so DROP_WITH_EVENT can fire
-    ``on_oversized(reported_length, topic)`` after the payload is
-    discarded.
+    The payload itself is gone — the decoder drained it through a
+    rolling steady-state sink without allocating a payload-sized
+    buffer.  ``topic`` is ``None`` when the topic itself exceeded
+    ``rx_buffer_size`` and couldn't be parsed.  ``reported_length`` is
+    the MQTT remaining-length value (topic prelude + payload),
+    diagnostic only — no payload bytes are recoverable.
     """
 
     def __init__(self, *, topic, reported_length, qos, packet_id):
@@ -440,16 +451,37 @@ class _OversizedMessage:
         self.packet_id = packet_id
 
 
-class PacketDecoder:
-    """Incremental MQTT packet parser with a pre-allocated RX buffer.
+# Drain modes used by PacketDecoder for an in-progress inbound PUBLISH
+# that exceeded ``rx_buffer_size``.  ``_DRAIN_INTACT`` fills a one-shot
+# payload-sized buffer (tier 2); ``_DRAIN_OVERSIZED`` rolls the payload
+# through the steady-state buffer without keeping any of it (tier 3).
+_DRAIN_NONE = const(0)
+_DRAIN_INTACT = const(1)
+_DRAIN_OVERSIZED = const(2)
 
-    Two-buffer pattern: the steady-state buffer is reused tick-after-
-    tick; oversized messages allocate a one-shot "degraded" buffer of
-    the right size + drain into it.
+
+class PacketDecoder:
+    """Incremental MQTT packet parser with a three-tier inbound size model.
+
+    Tier 1 (steady): packets ≤ ``rx_buffer_size`` parse inline from the
+    pre-allocated steady-state buffer.  No allocation.
+
+    Tier 2 (intact): packets > ``rx_buffer_size`` but ≤ ``max_message_bytes``.
+    A one-shot ``bytearray(payload_length)`` is allocated for this
+    message; payload drains through the steady-state buffer into it;
+    :class:`ParsedPublish` is delivered with the full payload.  The
+    intact buffer drops out of scope after delivery.
+
+    Tier 3 (oversized): packets > ``max_message_bytes``.  No allocation
+    beyond the steady-state buffer.  Payload drains via rolling
+    discard — each pass refills the steady-state buffer from the
+    socket, advances a "still to drain" counter, then resets for the
+    next pass.  Emits :class:`_OversizedMessage` once drained; the
+    payload bytes are gone.
 
     Usage::
 
-        decoder = PacketDecoder()
+        decoder = PacketDecoder(max_message_bytes=8192)
         # Each tick:
         nbytes = sock.recv_into(decoder.fill_buffer(), decoder.fill_capacity())
         decoder.advance(nbytes)
@@ -485,38 +517,58 @@ class PacketDecoder:
         self._buffer_length = 0
         self._read_offset = 0
         self._max_message_bytes = max_message_bytes
-        # Degraded path: one-shot buffer for oversize messages whose
-        # bodies don't fit in the steady-state buffer.  Drained to
-        # recover sync, then released.  ``_degraded_view`` mirrors the
-        # cached-view pattern when the path activates.
-        self._degraded_buffer = None
-        self._degraded_view = None
-        self._degraded_total = 0
-        self._degraded_consumed = 0
-        self._degraded_topic = None
-        self._degraded_qos = 0
-        self._degraded_packet_id = None
+        # In-flight oversized-PUBLISH drain state.  ``_DRAIN_NONE`` while
+        # the steady-state parse path is active; ``_DRAIN_INTACT`` while
+        # filling a tier-2 payload buffer; ``_DRAIN_OVERSIZED`` while
+        # rolling-discarding a tier-3 payload through the steady-state
+        # buffer.
+        self._drain_mode = _DRAIN_NONE
+        self._drain_payload_buffer = None
+        self._drain_payload_view = None
+        self._drain_payload_filled = 0
+        self._drain_payload_length = 0
+        self._drain_remaining = 0          # tier-3 bytes still to consume from the socket
+        self._drain_topic = None
+        self._drain_qos = 0
+        self._drain_retain = False
+        self._drain_packet_id = None
+        self._drain_message_length = 0     # MQTT remaining-length, reported back on oversize
 
     def fill_buffer(self):
         """Return the bytearray slice the next ``recv_into`` should write into."""
-        if self._degraded_buffer is not None:
-            return self._degraded_view[self._degraded_consumed:]
+        if self._drain_mode == _DRAIN_INTACT:
+            return self._drain_payload_view[self._drain_payload_filled:]
+        # Oversized mode reuses the steady-state buffer as a rolling
+        # sink — bytes are written, counted, and discarded.  Steady
+        # mode appends to the cursor.
         return self._buffer_view[self._buffer_length:]
 
     def fill_capacity(self):
         """Bytes the parser is willing to receive on the next ``recv_into``."""
-        if self._degraded_buffer is not None:
-            return self._degraded_total - self._degraded_consumed
+        if self._drain_mode == _DRAIN_INTACT:
+            return self._drain_payload_length - self._drain_payload_filled
+        if self._drain_mode == _DRAIN_OVERSIZED:
+            # Each pass caps at the smaller of remaining-to-drain and
+            # steady-state buffer space.  When the buffer fills,
+            # ``advance`` resets it for the next pass.
+            available = self._buffer_size - self._buffer_length
+            return min(self._drain_remaining, available)
         return self._buffer_size - self._buffer_length
 
     def advance(self, nbytes):
         """Tell the parser *nbytes* were just written into the fill region."""
         if nbytes <= 0:
             return
-        if self._degraded_buffer is not None:
-            self._degraded_consumed += nbytes
-        else:
-            self._buffer_length += nbytes
+        if self._drain_mode == _DRAIN_INTACT:
+            self._drain_payload_filled += nbytes
+            return
+        if self._drain_mode == _DRAIN_OVERSIZED:
+            self._drain_remaining -= nbytes
+            # The bytes are being discarded — reset the rolling sink
+            # for the next pass.  We never read them back.
+            self._buffer_length = 0
+            return
+        self._buffer_length += nbytes
 
     def read_next(self):
         """Return the next complete packet, or ``None`` if more bytes needed.
@@ -525,8 +577,10 @@ class PacketDecoder:
         :class:`_OversizedMessage`, or ``None``.  Raises
         :class:`MQTTProtocolError` on malformed input.
         """
-        if self._degraded_buffer is not None:
-            return self._maybe_finish_degraded()
+        if self._drain_mode == _DRAIN_INTACT:
+            return self._maybe_finish_intact()
+        if self._drain_mode == _DRAIN_OVERSIZED:
+            return self._maybe_finish_oversized()
 
         base = self._read_offset
         live = self._buffer_length - base
@@ -547,7 +601,13 @@ class PacketDecoder:
         total_length = header_length + message_length
 
         if total_length > self._buffer_size:
-            return self._enter_oversized_path(fixed_byte, message_length, base, header_length)
+            return self._enter_drain_path(
+                fixed_byte=fixed_byte,
+                message_length=message_length,
+                base=base,
+                header_length=header_length,
+                total_length=total_length,
+            )
 
         if live < total_length:
             return None  # Body still in transit.
@@ -654,16 +714,23 @@ class PacketDecoder:
             granted_qos=granted_qos,
         )
 
-    def _enter_oversized_path(self, fixed_byte, message_length, base, header_length):
-        """Switch to degraded-buffer mode for a too-big message.
+    def _enter_drain_path(self, *, fixed_byte, message_length, base, header_length, total_length):
+        """Switch into drain mode for a packet that overflows the steady buffer.
 
-        For a PUBLISH, the topic + optional packet-id likely fits in
-        the steady-state buffer; the payload doesn't.  We pull what we
-        have, parse the topic, then read-and-discard the rest to
-        recover sync.  Non-PUBLISH oversize is a protocol error.
+        For a PUBLISH, the fixed header + varlen + topic-prelude
+        (length-prefix + topic + optional packet_id) generally fits in
+        the steady-state buffer; the payload doesn't.  Parse the
+        prelude, then route into tier 2 (intact delivery, one-shot
+        payload-sized buffer) or tier 3 (rolling discard, no extra
+        allocation) based on ``total_length`` vs ``max_message_bytes``.
 
-        *base* is the read cursor at the start of this packet (so
-        absolute = base + relative).
+        Non-PUBLISH oversize is a protocol error — broker shouldn't be
+        sending a 300-byte SUBACK.
+
+        Topic-too-long case: when the prelude itself doesn't fit in
+        the steady-state buffer (oversize topic + small rx buffer),
+        fall through to tier 3 with ``topic=None``.  The caller can
+        distinguish this case in its ``on_oversized`` handler.
         """
         packet_type = fixed_byte & 0xF0
         if packet_type != PACKET_PUBLISH:
@@ -673,63 +740,162 @@ class PacketDecoder:
             )
         live = self._buffer_length - base
         if live < header_length + 2:
-            return None  # Need a few more bytes before we can parse the topic.
+            return None  # Need 2 more bytes for the topic-length field.
+
         view = self._buffer_view
         body_start = base + header_length
         topic_length = struct.unpack(">H", view[body_start:body_start + 2])[0]
-        topic_start = body_start + 2
-        topic_end = topic_start + topic_length
         qos = (fixed_byte >> 1) & 0x03
+        retain = bool(fixed_byte & 0x01)
         packet_id_bytes = 2 if qos > 0 else 0
         prelude_length = header_length + 2 + topic_length + packet_id_bytes
+
+        if prelude_length > self._buffer_size:
+            # Oversize-topic: the topic itself doesn't fit in the
+            # steady-state buffer, so we can't parse it (or the
+            # packet_id, which sits after the topic).  Drain
+            # everything that's still on the wire and emit an event
+            # with topic=None.  The bytes already sitting in the
+            # steady-state buffer (header + partial topic) get
+            # discarded along with the rest.
+            self._enter_oversized_drain(
+                bytes_still_on_wire=total_length - live,
+                topic=None,
+                qos=qos,
+                retain=retain,
+                packet_id=None,
+                message_length=message_length,
+            )
+            return self._maybe_finish_oversized()
+
         if live < prelude_length:
-            return None  # Need a few more bytes before we can parse the prelude.
+            return None  # Need more bytes before the prelude is complete.
+
+        topic_start = body_start + 2
+        topic_end = topic_start + topic_length
         topic = str(view[topic_start:topic_end], "utf-8")
         packet_id = None
         if qos > 0:
             packet_id = struct.unpack(">H", view[topic_end:topic_end + 2])[0]
-        payload_remaining = (header_length + message_length) - prelude_length
-        body_already_in_steady = live - prelude_length
-        payload_to_drain = payload_remaining - body_already_in_steady
-        # Reset steady-state buffer either way — we've extracted everything
-        # the oversized handler needs from it.
+
+        payload_length = message_length - 2 - topic_length - packet_id_bytes
+        payload_already_in_steady = live - prelude_length
+
+        if total_length <= self._max_message_bytes:
+            # Tier 2: intact delivery.  Allocate a payload-sized
+            # buffer, copy whatever's already in the steady-state
+            # buffer into the head, drain the rest via the next
+            # ``fill_buffer`` / ``advance`` calls.
+            #
+            # Buffer-absolute offset for the start of the carried-over
+            # payload bytes: the packet starts at ``base`` in the
+            # steady-state buffer, the prelude ends at
+            # ``base + prelude_length``, so payload starts there.
+            self._enter_intact_drain(
+                topic=topic,
+                qos=qos,
+                retain=retain,
+                packet_id=packet_id,
+                payload_length=payload_length,
+                payload_already_in_steady=payload_already_in_steady,
+                payload_start_in_buffer=base + prelude_length,
+                view=view,
+            )
+            return self._maybe_finish_intact()
+
+        # Tier 3: oversized.  Discard the payload via rolling drain;
+        # no extra allocation beyond the steady-state buffer.
+        self._enter_oversized_drain(
+            bytes_still_on_wire=total_length - live,
+            topic=topic,
+            qos=qos,
+            retain=retain,
+            packet_id=packet_id,
+            message_length=message_length,
+        )
+        return self._maybe_finish_oversized()
+
+    def _enter_intact_drain(
+        self, *, topic, qos, retain, packet_id,
+        payload_length, payload_already_in_steady, payload_start_in_buffer, view,
+    ):
+        """Allocate the tier-2 buffer and seed it with bytes already in steady."""
+        # ``bytearray(0)`` is valid — empty-payload PUBLISH on a
+        # too-small buffer enters tier 2 with payload_length=0 and
+        # finishes immediately.
+        self._drain_payload_buffer = bytearray(payload_length)
+        self._drain_payload_view = memoryview(self._drain_payload_buffer)
+        if payload_already_in_steady > 0:
+            self._drain_payload_view[:payload_already_in_steady] = (
+                view[payload_start_in_buffer:payload_start_in_buffer + payload_already_in_steady]
+            )
+        self._drain_payload_filled = payload_already_in_steady
+        self._drain_payload_length = payload_length
+        self._drain_topic = topic
+        self._drain_qos = qos
+        self._drain_retain = retain
+        self._drain_packet_id = packet_id
+        # Reset steady-state buffer — prelude + carried-over payload
+        # bytes have been consumed.
         self._buffer_length = 0
         self._read_offset = 0
-        if payload_to_drain <= 0:
-            # Whole oversized message already in the steady-state buffer
-            # (extreme corner case where buffer is huge but
-            # max_message_bytes is even larger).  Emit immediately.
-            return _OversizedMessage(
-                topic=topic,
-                reported_length=message_length,
-                qos=qos,
-                packet_id=packet_id,
-            )
-        # Normal path: drain into a degraded buffer.  Cache its view
-        # so ``fill_buffer`` doesn't construct a fresh one per recv.
-        self._degraded_buffer = bytearray(payload_to_drain)
-        self._degraded_view = memoryview(self._degraded_buffer)
-        self._degraded_total = payload_to_drain
-        self._degraded_consumed = 0
-        self._degraded_topic = topic
-        self._degraded_qos = qos
-        self._degraded_packet_id = packet_id
-        return None  # Caller drains via fill_buffer()/advance() until full.
+        self._drain_mode = _DRAIN_INTACT
 
-    def _maybe_finish_degraded(self):
-        if self._degraded_consumed < self._degraded_total:
+    def _enter_oversized_drain(
+        self, *, bytes_still_on_wire, topic, qos, retain, packet_id, message_length,
+    ):
+        """Set up tier-3 drain state.  Reuses the steady-state buffer as a rolling sink."""
+        self._drain_remaining = max(0, bytes_still_on_wire)
+        self._drain_topic = topic
+        self._drain_qos = qos
+        self._drain_retain = retain
+        self._drain_packet_id = packet_id
+        self._drain_message_length = message_length
+        # Discard anything still in the steady-state buffer — we've
+        # extracted everything we need (prelude already parsed; tier-3
+        # payload bytes aren't kept).
+        self._buffer_length = 0
+        self._read_offset = 0
+        self._drain_mode = _DRAIN_OVERSIZED
+
+    def _maybe_finish_intact(self):
+        """Return a ParsedPublish if the intact buffer is full, else None."""
+        if self._drain_payload_filled < self._drain_payload_length:
+            return None
+        payload = bytes(self._drain_payload_view[:self._drain_payload_length])
+        packet = ParsedPublish(
+            topic=self._drain_topic,
+            payload=payload,
+            qos=self._drain_qos,
+            retain=self._drain_retain,
+            packet_id=self._drain_packet_id,
+        )
+        self._reset_drain_state()
+        return packet
+
+    def _maybe_finish_oversized(self):
+        """Return an _OversizedMessage if drain is complete, else None."""
+        if self._drain_remaining > 0:
             return None
         event = _OversizedMessage(
-            topic=self._degraded_topic,
-            reported_length=self._degraded_total,
-            qos=self._degraded_qos,
-            packet_id=self._degraded_packet_id,
+            topic=self._drain_topic,
+            reported_length=self._drain_message_length,
+            qos=self._drain_qos,
+            packet_id=self._drain_packet_id,
         )
-        self._degraded_buffer = None
-        self._degraded_view = None
-        self._degraded_total = 0
-        self._degraded_consumed = 0
-        self._degraded_topic = None
-        self._degraded_qos = 0
-        self._degraded_packet_id = None
+        self._reset_drain_state()
         return event
+
+    def _reset_drain_state(self):
+        """Clear all in-flight drain state after a tier-2 or tier-3 message finishes."""
+        self._drain_mode = _DRAIN_NONE
+        self._drain_payload_buffer = None
+        self._drain_payload_view = None
+        self._drain_payload_filled = 0
+        self._drain_payload_length = 0
+        self._drain_remaining = 0
+        self._drain_topic = None
+        self._drain_qos = 0
+        self._drain_retain = False
+        self._drain_packet_id = None
+        self._drain_message_length = 0
