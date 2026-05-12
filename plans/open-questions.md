@@ -492,48 +492,42 @@ Currently scripts use `print()` for warnings and status.  A unified
 filtering — but only makes sense if applied across all scripts, not
 piecemeal.  Parked for a rainy day.
 
-### Shared `FakeTime` / fake-clock home for workbench packages
-
-`chumicro_deploy.testing` ships `FakeTime` (seconds-domain, host-side,
-satisfies the `TimeSource` protocol the transport accepts via
-constructor injection).  The 2026-04-24 audit moved it from the
-internal-only `chumicro_abstractions` package — co-locating fakes with
-the package they test, per Decision 0010.
-
-**Current state (2026-05-12):** two workbench packages now ship a
-`FakeTime`:
-
-1. `chumicro_deploy.testing.FakeTime` — original.
-2. `chumicro_repl.testing.FakeTime` — duplicate, marked
-   *"Mirrors :class:`chumicro_deploy.testing.FakeTime`"* in its
-   docstring.
-
-Three options when a third consumer arrives:
-
-1. **Duplicate again** into the third workbench package's `testing.py`
-   (the Decision 0010 default).  Cheap for one or two consumers;
-   starts feeling silly past three.
-2. **Have the new package depend on `chumicro-deploy`** just to import
-   `FakeTime`.  Wrong direction — taking a hard dependency on a sibling
-   workbench package solely to share a test fake is exactly the
-   coupling Decision 0010's co-located-fakes rule exists to avoid.
-   Reject.
-3. **Hoist into a shared workbench-fakes package** — e.g. a published
-   `chumicro-workbench-fakes` (or similar name) that every workbench
-   package depends on for shared host-side test fakes.  Adds a new
-   PyPI surface and a release lifecycle, but solves the recurrence
-   cleanly.
-
-Resolution criterion: with two consumers today the duplicate-pattern is
-explicitly endorsed — duplicating ~80 lines is cheaper than the
-abstraction tax of an extra published package, *especially* when
-hoisting would force a new dependency requirement on every workbench
-package.  When a **third** workbench package needs `FakeTime`, do
-option 3.
 
 ---
 
 ## Resolved
+
+
+### Shared `FakeTime` / fake-clock home for workbench packages
+
+Closed 2026-05-12 — **policy: never hoist; each workbench package keeps its own
+fake.**  Re-evaluated the original "duplicate at 2, hoist at 3" criterion and
+reversed it.  Reasons hoisting doesn't pay off even at N consumers:
+
+- **Tiny and stable.**  `FakeTime` is ~80 lines implementing a `monotonic()`-shaped
+  protocol that doesn't churn.  Duplication scales as `N × 80 lines` with zero
+  maintenance burden.
+- **Test fakes are internal, not API.**  A library's public API has compatibility
+  consequences; its test fakes don't.  If two workbench packages' fakes diverge to
+  serve different test needs, no user is affected.  Divergence is fine.
+- **Self-contained workbench packages match Decision 0052's spirit.**  That ADR
+  forbids cross-library imports for libraries — the same instinct applies to
+  workbench packages.  A shared test-fake package would be the one thing every
+  workbench package has to depend on for no real upside.
+- **A shipped test-dependency has bad shapes either way.**  As a normal PyPI dep
+  it's always installed (waste — users don't run our tests).  As a `[test]` extra
+  it creates version-skew across consumers (deploy pins one version, repl pins
+  another, release coordination headache).  Neither shape beats three copies of
+  80 lines.
+- **If the protocol ever moves, the type lives in `support/`, not the fake.**
+  Decision 0010 already co-locates fakes; this just confirms that doesn't change
+  at workbench scale.
+
+Current state: `chumicro_deploy.testing.FakeTime` (original) and
+`chumicro_repl.testing.FakeTime` (mirror — its docstring already says
+*"Mirrors :class:`chumicro_deploy.testing.FakeTime`"*).  Future workbench
+packages that need a seconds-domain time fake follow the same pattern:
+re-define in `testing.py`, no shared package.
 
 
 ### How much test boilerplate can be reduced?
