@@ -28,6 +28,7 @@ budgets are future work.
 
 import json
 
+from chumicro_config import InvalidConfigType, is_config_like
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_http_server._wire import (
@@ -633,6 +634,11 @@ class HttpServer:
             A configured ``HttpServer`` ready for ``check()`` /
             ``handle()``.
         """
+        if not is_config_like(config):
+            raise InvalidConfigType(
+                f"HttpServer.from_config requires a RuntimeConfig or "
+                f"dict, got {type(config).__name__}",
+            )
         if listener_factory is None:
             listener_factory = _build_default_listener_factory(
                 config, radio=radio, ssl_context=ssl_context,

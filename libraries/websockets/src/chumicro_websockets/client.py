@@ -20,6 +20,7 @@ request → parse 101), outbound-mask discipline (clients MUST mask),
 and the optional auto-ping keep-alive.
 """
 
+from chumicro_config import InvalidConfigType, is_config_like
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_websockets._session import (
@@ -184,6 +185,11 @@ class WebSocketClient(_BaseSession):
         Returns:
             A configured ``WebSocketClient`` ready for ``connect()``.
         """
+        if not is_config_like(config):
+            raise InvalidConfigType(
+                f"WebSocketClient.from_config requires a RuntimeConfig "
+                f"or dict, got {type(config).__name__}",
+            )
         if connection_factory is None:
             from chumicro_websockets.sockets_factory import (  # noqa: PLC0415
                 chumicro_sockets_factory,

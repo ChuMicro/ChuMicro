@@ -1268,3 +1268,15 @@ class TestFromConfig:
         finally:
             sockets_mod.tcp_listening_socket = original
         assert server._max_connections > 0  # noqa: SLF001 — sanity
+
+    def test_non_configlike_input_raises_invalid_config_type(self) -> None:
+        """``HttpServer.from_config(None)`` /
+        ``from_config("not-a-dict")`` / ``from_config(42)`` raise
+        :class:`chumicro_config.InvalidConfigType` instead of leaking
+        ``AttributeError`` / ``TypeError`` — mirrors the
+        ``load_section`` shape used by ``WifiConfig.from_config``."""
+        from chumicro_config import InvalidConfigType
+
+        for bad_input in (None, "not-a-dict", 42, ["not", "a", "dict"]):
+            with raises(InvalidConfigType):
+                HttpServer.from_config(bad_input)

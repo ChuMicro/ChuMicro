@@ -110,7 +110,7 @@ def load_section(
         raise InvalidConfigType(
             "load_section requires a runtime config; got None",
         )
-    if not _is_config_like(config):
+    if not is_config_like(config):
         raise InvalidConfigType(
             f"load_section requires a RuntimeConfig or dict, "
             f"got {type(config).__name__}",
@@ -152,7 +152,7 @@ def try_load_section(
     key is missing.  Treat the ``None`` return as "this section isn't
     configured; skip the feature."
     """
-    if config is None or not _is_config_like(config):
+    if config is None or not is_config_like(config):
         return None
     try:
         return load_section(
@@ -166,5 +166,25 @@ def try_load_section(
         return None
 
 
-def _is_config_like(value) -> bool:
+def is_config_like(value) -> bool:
+    """Return ``True`` when *value* is acceptable input to ``load_section`` /
+    ``<X>Config.from_config`` / a consumer library's ``from_config(...)``.
+
+    Accepts :class:`RuntimeConfig` instances and plain ``dict``.  Callers
+    that build a client-with-injection ``from_config(...)`` (where
+    ``load_section`` doesn't fit because non-config kwargs flow through —
+    ``radio``, ``socket``, ``ssl_context``, ``listener``, etc.) should
+    gate input with this predicate and raise :class:`InvalidConfigType`
+    on a miss, mirroring ``load_section``'s shape::
+
+        if not is_config_like(config):
+            raise InvalidConfigType(
+                f"MQTTClient.from_config requires a RuntimeConfig or dict, "
+                f"got {type(config).__name__}",
+            )
+
+    Without that guard, passing ``None`` / a string / an int into a
+    consumer ``from_config`` leaks Python-shape errors (``AttributeError``,
+    ``TypeError``) instead of the library-shaped :class:`InvalidConfigType`.
+    """
     return isinstance(value, (RuntimeConfig, dict))

@@ -19,6 +19,7 @@ from chumicro_config.section import (
     InvalidConfigType,
     MissingConfigKey,
     RuntimeConfig,
+    is_config_like,
     load_section,
     try_load_section,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "MissingConfigKey",
     "RuntimeConfig",
     "config",  # pyright: ignore[reportUnsupportedDunderAll]  # PEP-562 lazy via __getattr__ below.
+    "is_config_like",
     "load_runtime_config",
     "load_section",
     "try_load_section",
