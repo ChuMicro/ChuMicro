@@ -1024,11 +1024,11 @@ class FrameParser:
             if state == FrameParseState.READING_HEADER:
                 self._dispatch_header()
             elif state == FrameParseState.READING_LEN16:
-                self._payload_length = struct.unpack("!H", bytes(self._buffer))[0]
+                self._payload_length = struct.unpack("!H", self._buffer)[0]
                 self._buffer = bytearray()
                 self._after_length()
             elif state == FrameParseState.READING_LEN64:
-                self._payload_length = struct.unpack("!Q", bytes(self._buffer))[0]
+                self._payload_length = struct.unpack("!Q", self._buffer)[0]
                 self._buffer = bytearray()
                 self._after_length()
             else:  # READING_MASK
@@ -1253,13 +1253,13 @@ def parse_close_payload(payload: bytes) -> tuple[int | None, str]:
         raise WebSocketProtocolError(
             "close payload of exactly 1 byte is forbidden by RFC 6455 §5.5.1",
         )
-    code = struct.unpack("!H", bytes(payload[:2]))[0]
+    code = struct.unpack("!H", payload[:2])[0]
     if code in RESERVED_CLOSE_CODES:
         raise WebSocketProtocolError(
             f"peer sent reserved close code {code}",
         )
     try:
-        reason = bytes(payload[2:]).decode("utf-8")
+        reason = str(payload[2:], "utf-8")
     except UnicodeError as decode_error:
         raise WebSocketProtocolError(
             f"close reason is not valid UTF-8: {decode_error}",
@@ -1284,7 +1284,7 @@ def validate_text_payload(payload: bytes) -> str:
         WebSocketProtocolError: Bytes are not valid UTF-8.
     """
     try:
-        return bytes(payload).decode("utf-8")
+        return str(payload, "utf-8")
     except UnicodeError as decode_error:
         raise WebSocketProtocolError(
             f"text payload is not valid UTF-8: {decode_error}",
