@@ -1,16 +1,16 @@
 # Open Questions
 
 Unresolved questions that need thought but aren't blocking active work.
-When a question is resolved, move it to the **Resolved** section with a
-one-line answer and link to the decision or commit that settled it.
+When a question is resolved, **delete** it from this file — the ADR
+(or the commit that settled it) is the durable record, and `git log` on
+this file preserves the question text for anyone who needs to recover
+the historical context.
 
 Questions that become blocking should move to `next-up.md` (Blocked section).
 Questions that lead to structural tradeoffs should become decisions in
 `plans/decisions/`.
 
 ---
-
-## Active
 
 ### `chumicro-presence` design from Decision 0042 §167-168 — re-audit before anything rides on its shape
 
@@ -491,89 +491,3 @@ Currently scripts use `print()` for warnings and status.  A unified
 `logging` setup would allow log levels, consistent formatting, and
 filtering — but only makes sense if applied across all scripts, not
 piecemeal.  Parked for a rainy day.
-
-
----
-
-## Resolved
-
-
-### Shared `FakeTime` / fake-clock home for workbench packages
-
-Closed 2026-05-12 — **policy: never hoist; each workbench package keeps its own
-fake.**  Re-evaluated the original "duplicate at 2, hoist at 3" criterion and
-reversed it.  Reasons hoisting doesn't pay off even at N consumers:
-
-- **Tiny and stable.**  `FakeTime` is ~80 lines implementing a `monotonic()`-shaped
-  protocol that doesn't churn.  Duplication scales as `N × 80 lines` with zero
-  maintenance burden.
-- **Test fakes are internal, not API.**  A library's public API has compatibility
-  consequences; its test fakes don't.  If two workbench packages' fakes diverge to
-  serve different test needs, no user is affected.  Divergence is fine.
-- **Self-contained workbench packages match Decision 0052's spirit.**  That ADR
-  forbids cross-library imports for libraries — the same instinct applies to
-  workbench packages.  A shared test-fake package would be the one thing every
-  workbench package has to depend on for no real upside.
-- **A shipped test-dependency has bad shapes either way.**  As a normal PyPI dep
-  it's always installed (waste — users don't run our tests).  As a `[test]` extra
-  it creates version-skew across consumers (deploy pins one version, repl pins
-  another, release coordination headache).  Neither shape beats three copies of
-  80 lines.
-- **If the protocol ever moves, the type lives in `support/`, not the fake.**
-  Decision 0010 already co-locates fakes; this just confirms that doesn't change
-  at workbench scale.
-
-Current state: `chumicro_deploy.testing.FakeTime` (original) and
-`chumicro_repl.testing.FakeTime` (mirror — its docstring already says
-*"Mirrors :class:`chumicro_deploy.testing.FakeTime`"*).  Future workbench
-packages that need a seconds-domain time fake follow the same pattern:
-re-define in `testing.py`, no shared package.
-
-
-### How much test boilerplate can be reduced?
-
-Closed 2026-05-12 — duplicate of the next-up `Explore test ergonomics — reduce
-repeated boilerplate across test files` entry, which is the canonical surface.
-Pick that bullet up when a forcing function arrives (e.g. enough test files share
-a setup that the duplication is measurable).
-
-
-### Library dependency policy (hard-injection vs. lazy default vs. hard dep)
-
-Resolved as [Decision 0042](decisions/0042-library-dependency-policy.md) (`accepted`):
-**hard-dep + factory helper** for *core infrastructure* (sockets, runner, timing)
-so libraries work on a single `pip install`; **optional callback** for
-*decoration / observability* (events, logging, presence) so they can never
-become required deps.  Each new library starts under this contract.
-`chumicro-requests` (Decision 0040) was the worked example that established the
-shape.
-
-### Is `test-everything` the right name for an opt-in-device sweep?
-
-Resolved by the 2026-04-24 `run.py` command audit: dropped
-`test-everything` entirely.  The CI-mirror sweep is `preflight`
-(append `--with-functional` to also run hardware-gated suites);
-hardware-only runs are `test-functional` (libraries + workbench)
-or the individual `test-libraries-functional` /
-`test-workbench-functional` commands.  The unit-only deep sweep
-that prompted the original question is `test-all-runtimes`.
-
-### Should the coverage gate be higher?
-
-Resolved by Decision 0025: dual thresholds — 85 % baseline for humans
-(in `pyproject.toml`), 94 % for agents (via `--coverage-threshold 94`).
-
-### Lolin S2 CP flash deploys occasionally surface `OSError: [Errno 5]`
-
-Resolved by [`75dfdaf` "Fix one-cycle-delayed capture on slow CP flash
-deploy"](https://github.com/ChuMicro/ChuMicro/commit/75dfdaf) and
-[`2163927` "Add post-visible settle delay after board sees new
-entrypoint"](https://github.com/ChuMicro/ChuMicro/commit/2163927).
-`CircuitpythonTransport._wait_for_board_to_see_entrypoint` polls
-`os.stat` over raw REPL until the board reports the just-written
-entrypoint at its new length, then sleeps
-`_BOARD_FILE_VISIBLE_POST_SETTLE` (0.5 s) to let in-flight flash /
-FAT bookkeeping quiesce before `Ctrl-D` triggers the soft-reboot.
-Paired with the UID-based drive verification from the sibling branch,
-`demo_recovery_hand_holding.py` "all / 1,2" is now 5/5 green across
-both CP boards (40/40 scenarios, zero EIOs, zero stale captures).
