@@ -1,6 +1,6 @@
 # Workstream: Workspace library curation — chumicro-workspace as library host
 
-Status: `proposed` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Not yet started.
+Status: `proposed` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Design fully resolved 2026-05-12; Phase 1 unblocked, implementation pending.
 
 ## Purpose
 
@@ -14,47 +14,30 @@ Direction: chumicro-workspace becomes the library host for chumicro libraries.  
 
 ## Scope
 
-### Phase 1 — Snapshot distribution channel
+### Phase 1 — PyPI sdist as the source channel
 
-Decide the source-of-truth shape for "full library content" (src + tests + examples + docs), then ship the publish pipeline.
+Make the existing PyPI sdists carry full library content, then ship a fetch path that pulls one into `libraries/<name>/` and walks the dep graph.
 
-Three options surveyed:
+Implementation:
 
-- **A. New `ChuMicro/ChuMicro-Library-Snapshots` repo** — per-version archives.  Highest maintenance overhead, cleanest archival semantics.
-- **B. Pull from `ChuMicro/ChuMicro` main repo at tag / commit** — zero new infrastructure, agile, GitHub-rate-limit-bound.
-- **C. Full subtree alongside `mpy6/` in the existing Bundle repos** — single repo, single publish step; mixes runtime artifacts with development assets but keeps one channel discovery surface.
-
-User leans **C** ("full subtree makes more sense").  Implementation:
-
-- Extend `bundle_manager.py` to stage a `full/<lib>/` tree per library with src + tests + examples + docs.
-- Bundle repos gain three top-level dirs per release: `<lib>/` (the existing `.py` source), `mpy6/<lib>/` (existing .mpy), `full/<lib>/` (new — the snapshot).
-- Stable channel: `ChuMicro-Bundle`.  Experimental: `ChuMicro-Bundle-Experimental`.  Channel-switch is a chumicro-workspace command, not a repo change.
+- **Each library's `pyproject.toml`**: extend `[tool.hatch.build.targets.sdist].include` from `["src/", "VERSION", "README.md"]` to `["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]`.  Fifteen one-line edits.
+- **Build-time regression test**: `scripts/run.py build` fails if the produced sdist for any library is missing `tests/`, `examples/`, or `docs/`.  Prevents a future contributor accidentally dropping them.
+- **`chumicro_workspace.library` module**: PyPI fetch backend.  `pip download --no-deps --no-binary :all: chumicro-<lib>==<version> -d <staging>`, unpack the tarball, copy `src/`, `tests/`, `examples/`, `docs/`, `pyproject.toml`, `VERSION`, `README.md` into `libraries/<name>/`.
+- **No `bundle_manager.py` change**, no new bundle-repo subtree.  Bundle repos stay focused on deployment artifacts (circup zips + `mpy6/` for the `mip`/`circup` happy path).
 
 ### Phase 2 — `chumicro-workspace library` CLI surface
 
 ```
-chumicro-workspace library list                      # available + installed + version + channel
-chumicro-workspace library add <name> [--channel main|stable|experimental] [--version <pin>]
-chumicro-workspace library update [<name>]           # respects pin if set
-chumicro-workspace library remove <name>             # warns if other libs depend on it
+chumicro-workspace library list                               # available + installed + version + channel
+chumicro-workspace library add <name> [--channel stable|experimental] [--version <pin>] [--floating]
+chumicro-workspace library update [<name>]                    # respects pin if set
+chumicro-workspace library remove <name>                      # warns if other libs depend on it
 chumicro-workspace library switch-channel <name> <channel>
 ```
 
 Dependency resolution: `library add` reads the target library's `pyproject.toml` and recursively pulls `chumicro-*` deps.  Before pulling the transitive set, prompts the user with the dep tree so they can deselect (e.g. omit `chumicro-sockets` because they're injecting a custom transport — paired with `__chumicro_skip_factories__` in the entrypoint per Decision 0062).
 
-Pin state lives in `workspace.yml` under a new `libraries:` table:
-
-```yaml
-libraries:
-  chumicro_mqtt:
-    channel: stable
-    version: "0.8.0"
-  chumicro_sockets:
-    channel: stable
-    version: "0.4.0"
-```
-
-`main` channel pins to a commit SHA (reproducibility); `stable` and `experimental` pin to VERSION tags.
+Pin state lives in `workspace.yml` under a new `libraries:` table — see Q2 below for the schema.
 
 ### Phase 3 — Non-chumicro upstreams (Adafruit, micropython-lib)
 
@@ -73,12 +56,135 @@ chumicro-workspace library test <lib> [--on-device <id>]
 
 Both extend existing chumicro-workspace machinery (`deploy` + `pytest-device`).  Small scope; defer until Phases 1-2 land.
 
-## Open design questions
+## Resolved design decisions
 
-1. **Snapshot channel: A vs B vs C?** User-confirmed lean: C.  Confirm by sketching the `bundle_manager.py` change and a sample `ChuMicro-Bundle/full/chumicro_mqtt/` tree before committing.
-2. **Pin-state location?** Recommend `workspace.yml` `libraries:` table.  Confirm before writing the CLI.  Alternative: separate `libraries.yml` if `workspace.yml` gets crowded.
-3. **Default channel for `library add`?** Recommend `stable` for workspace-template users (they're typically beginners); `main` for developers tracking HEAD.  Switch via flag.
-4. **Deny-list behavior on transitive deps.** When the user declines a transitive dep at `library add` time, do we (a) refuse the install and tell them what to do, (b) install with the dep marked as "user-declined" in workspace.yml so future updates respect it, or (c) just trust the user and install without the dep, letting runtime errors surface?  Recommendation: (b) — explicit state, no surprises, plays well with Decision 0062's skip mechanism.
+Decided 2026-05-12 during workstream resolution pass.  All four open questions answered; Phase 1 unblocked.
+
+### 1. Source channel — PyPI sdist for both channels
+
+Both channels fetch from PyPI as plain HTTPS sdist downloads.  Per-channel package mapping (already implemented by `bundle_manager.py`'s `patch_experimental()`):
+
+| Channel | PyPI package |
+|---|---|
+| `stable` | `chumicro-<lib>` |
+| `experimental` | `chumicro-<lib>-experimental` |
+
+Fetch path: `pip download --no-deps --no-binary :all: chumicro-<lib>==<version>` → unpack the `.tar.gz` → copy contents into `libraries/<name>/`.
+
+The only gating change is sdist content — today each library's `pyproject.toml` ships only `src/` + `VERSION` + `README.md` (10 files, 32 KB for mqtt-0.10.2).  Extending the include list to also ship `tests/` + `examples/` + `docs/` is a one-line edit per library; estimated post-change sdist size is 80-150 KB per library.
+
+**Why not a `full/<lib>/` subtree in the bundle repos:** would create a second source of truth duplicating the PyPI sdist (drift risk), and would conflate the bundle repos' purpose (deployment artifacts for `mip`/`circup`) with source distribution.
+
+**Why not a GitHub tarball backend for a `main` channel:** `release.yml` triggers on `push: main` when any `libraries/*/VERSION` file changes and publishes to `chumicro-<lib>-experimental` on PyPI.  Tracking main HEAD and tracking experimental latest produce identical bytes (modulo unpublished WIP commits a curated user wouldn't want).  An additional fetch backend would add complexity without surfacing useful state — the only thing it could uniquely fetch is unpublished WIP commits, and a developer wanting those is by definition working on chumicro itself and should be in dev mode (sibling checkout) anyway.
+
+### 2. Pin-state location — new `libraries:` table in `workspace.yml`
+
+Sibling to the existing `library_sources:` table:
+
+```yaml
+library_sources:                # existing — "where is the code on disk?"
+  chumicro_mqtt: libraries/chumicro_mqtt/src
+  chumicro_sockets: libraries/chumicro_sockets/src
+
+libraries:                      # NEW — "where did I get it from + at what version?"
+  chumicro_mqtt:
+    channel: stable
+    version: "0.10.2"
+  chumicro_sockets:
+    channel: stable
+    version: "0.4.0"
+```
+
+The two tables are complementary, not duplicative.  `library_sources:` is the disk-path pointer the deploy walker reads (chumicro-dev mode points at a sibling checkout, curated mode points at `libraries/<name>/src/` in the workspace itself — same schema, different value, regenerated by `chumicro-workspace setup`).  `libraries:` is the channel/version manifest the curated-mode CLI maintains.
+
+Defer the `libraries.yml` split until the table crosses ~30 entries.
+
+### 3. Default channel `stable`; `--channel experimental` per-add; `--floating` opt-in for `version: HEAD`
+
+A fresh template-cloned workspace defaults to `stable`.  `--channel experimental` overrides per-add and persists per-library — adding `chumicro_mqtt --channel experimental` does *not* leak the channel to its transitive deps unless explicitly named.
+
+Pin format is a PyPI-resolvable semver string for both channels (uniform — no SHA path):
+
+```yaml
+libraries:
+  chumicro_mqtt:
+    channel: stable
+    version: "0.10.2"             # default — semver pin from PyPI, frozen until `library update`
+  chumicro_sockets:
+    channel: experimental
+    version: "0.4.1.dev3"         # default — dev-tag pin from PyPI experimental
+  chumicro_msgpack:
+    channel: experimental
+    version: HEAD                 # --floating opt-in — resolver pulls latest of channel's package on every op
+```
+
+Reproducibility wins by default — same `workspace.yml` = same library bytes on every machine.  `--floating` (recorded as `version: HEAD`) is the explicit always-fresh escape hatch; two machines on the same `workspace.yml` with `version: HEAD` may land different bytes, which is the documented tradeoff.
+
+A workspace-level default override (`defaults.library_channel: experimental`) is deferred until someone asks.
+
+### 4. Declined transitive deps — record `declined: true` in `workspace.yml`
+
+Option (b) — explicit state in `workspace.yml`, future updates respect the decline:
+
+```yaml
+libraries:
+  chumicro_mqtt:
+    channel: stable
+    version: "0.10.2"
+  chumicro_sockets:
+    channel: stable
+    version: "0.4.0"
+    declined: true                # user declined at add-time; updates silently skip; record kept for audit
+```
+
+CLI behavior:
+
+- `library add chumicro_mqtt` — user declines `chumicro_sockets` at the transitive prompt; entry lands with `declined: true` (audit trail, not silent omission).
+- `library update` — declined entries are silently skipped.
+- `library add chumicro_sockets` later — flips `declined: true` off (real install).
+- `library remove chumicro_sockets` on a declined entry — sets `declined: true` and warns "kept in workspace.yml to track decline; use `library forget` to fully remove."
+
+The library-side ImportError contract from Decision 0062 keeps runtime failures loud: if the user forgot to also add `__chumicro_skip_factories__` to their entrypoint, the deploy still ships and runtime raises `RuntimeError` naming the skipped module and the kwarg to pass instead.
+
+Rejected: (a) refuse-install — hits a friction wall on the common case (user injecting custom transport).  (c) silent install with no record — loses audit trail, every subsequent `library update` re-asks the same question.
+
+## Dev-mode interaction (per-library override, not blanket)
+
+`chumicro-dev.toml` activates dev mode on a **per-library** basis — only for chumicro libraries that exist in the sibling chumicro checkout.  `chumicro-workspace setup` walks libraries individually when regenerating `library_sources:`:
+
+```
+For each library named in workspace.yml's `libraries:` table:
+  if sibling chumicro checkout has libraries/<name>/ →
+      library_sources: <name>: ../chumicro/libraries/<name>/src
+  else →
+      library_sources: <name>: libraries/<name>/src
+
+For each libraries/<name>/ on disk that is NOT in `libraries:` (user libs, third-party):
+  library_sources: <name>: libraries/<name>/src
+  (always workspace-local — dev mode never touches)
+```
+
+Two consequences worth naming:
+
+- **Partial sibling checkouts work cleanly.** A developer with only `chumicro_mqtt` + `chumicro_sockets` checked out alongside their workspace gets sibling-source resolution for those two and workspace-local resolution for any other curated chumicro libs in the same `libraries:` table.  No manual config, no all-or-nothing.
+- **User and third-party libraries are never redirected.** A user's own `libraries/my_helper/` and a curated third-party `libraries/adafruit_thing/` always resolve to themselves regardless of dev-mode state.  Only `chumicro_*` libs that have a sibling source flip.
+
+### Mode toggle UX
+
+- **Switch ON dev mode** (drop in `chumicro-dev.toml`, run `setup`) — `library_sources:` regenerates per-library per the rule above.  `libraries:` table is preserved verbatim; pin state survives the toggle.  Workspace-local `libraries/<name>/` directories for chumicro libs that have a sibling stay on disk dormant (cheap, instant switch-back).
+- **Switch OFF dev mode** (delete `chumicro-dev.toml`, run `setup`) — every chumicro library in `libraries:` gets workspace-local resolution.  If `libraries/<name>/` is missing on disk for a pinned entry, `setup` re-fetches per the pin.
+
+### `library add` while in dev mode
+
+`library add chumicro_mqtt` quietly persists to `libraries:` even when `chumicro-dev.toml` is present, so the pin activates the next time dev mode is off.  No warning — the pin is configuration that survives a mode flip; dev mode is just a temporary override.
+
+## Remaining open items
+
+These are now Phase-1 implementation details, not design questions:
+
+- **Walker integration** — when curated mode writes to `libraries/<name>/src/`, the deploy walker's search-path order must put `libraries/` ahead of any sibling chumicro checkout for libraries not in dev-mode override.  Verify against `chumicro_deploy.sources._resolve_module` semantics during Phase 1.
+- **`workspace.yml` schema bump** — does adding the `libraries:` table need a `schema_version` field in `workspace.yml`, or can the CLI tolerate its absence (legacy workspaces) by treating it as `{}`?  Latter is cheaper; pick during Phase 2 CLI scaffolding.
+- **sdist regression-test placement** — build-time check inside `scripts/run.py build`, or publish-time check inside `release.yml`?  Recommend build-time so a contributor sees the failure before push; publish-time stays as a backstop.
 
 ## Out of scope
 
@@ -88,7 +194,7 @@ Both extend existing chumicro-workspace machinery (`deploy` + `pytest-device`). 
 
 ## Acceptance
 
-Phase 1: bundle generator emits `full/<lib>/` trees; one end-to-end test pulls from the staged bundle into a workspace `libraries/<lib>/` and the result runs.
+Phase 1: every library's sdist contains `tests/`, `examples/`, `docs/`; the build-time regression test catches accidental drops; one end-to-end test pulls `chumicro-mqtt` from a PyPI staging index into a workspace's `libraries/` and the result runs unchanged.
 
 Phase 2: `chumicro-workspace library add chumicro_mqtt` works from a fresh workspace, resolves deps, prompts for transitive set, lands all four files (mqtt + sockets + timing + config) in `libraries/`, and `chumicro-workspace deploy` ships the right subset per Decision 0062's skip mechanism.
 
