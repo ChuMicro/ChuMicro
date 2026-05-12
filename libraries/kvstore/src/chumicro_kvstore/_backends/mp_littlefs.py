@@ -15,7 +15,25 @@ Tests inject a filesystem substrate exposing ``open``, ``rename``,
 
 __chumicro_runtimes__ = ("micropython",)
 
+import builtins
+import os
+
 from chumicro_kvstore.core import Backend, KVStoreFull
+
+
+class _RuntimeFs:
+    """Default filesystem shim — wraps ``builtins.open`` + ``os.{rename,remove,sync}``.
+
+    Defined at module scope so the class object is allocated once at
+    import rather than once per default-arg backend construction.
+    ``getattr(os, "sync", lambda: None)`` keeps the rp2 MP port (no
+    ``os.sync``) working — the rename itself is atomic on LittleFS.
+    """
+
+    open = staticmethod(builtins.open)
+    rename = staticmethod(os.rename)
+    remove = staticmethod(os.remove)
+    sync = staticmethod(getattr(os, "sync", lambda: None))
 
 
 class MpLittlefsBackend(Backend):
@@ -50,22 +68,7 @@ class MpLittlefsBackend(Backend):
 
     @staticmethod
     def _acquire_runtime_fs():
-        """Build a default filesystem substrate using the runtime.
-
-        Wraps ``builtins.open`` + ``os.rename`` + ``os.remove`` +
-        ``os.sync`` (or a noop) into a tiny shim object that the
-        backend's load / save methods talk to.  Lets host tests
-        replace just this shim instead of monkey-patching globals.
-        """
-        import builtins
-        import os
-
-        class _RuntimeFs:
-            open = staticmethod(builtins.open)
-            rename = staticmethod(os.rename)
-            remove = staticmethod(os.remove)
-            sync = staticmethod(getattr(os, "sync", lambda: None))
-
+        """Return the module-level runtime filesystem shim."""
         return _RuntimeFs
 
     def load(self) -> bytes:
