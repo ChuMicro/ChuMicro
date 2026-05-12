@@ -488,13 +488,9 @@ class MQTTClient:
                 mid-flight so concurrent runner tasks keep getting
                 CPU time.
             max_tx_queue_size: Maximum number of pending outbound
-                packets.  Default 20 — sized for the runner-shaped
-                sensor profile (publish every N seconds, queue stays
-                near zero).  Appending past the cap raises
-                :class:`MQTTBackpressureError` — the caller's signal
-                to drain via :meth:`handle` and retry, rather than
-                silently growing memory.  Raise for bursty publishers;
-                each slot pins ~8 bytes long-lived on MP / CP.
+                packets (default 20).  Appending past the cap raises
+                :class:`MQTTBackpressureError`; raise the cap for
+                bursty publishers.
             ticks: Optional tick source — any object exposing
                 ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
                 the ``chumicro_timing.ticks`` submodule shape).
