@@ -84,8 +84,9 @@ def _resolve_ticks_ms():
     ``time.monotonic_ns`` > ``time.monotonic`` (final fallback).
     Reimplemented inline so example helpers don't depend on
     ``chumicro_timing`` (examples can only import their owning
-    library + its declared deps; ``chumicro_timing`` isn't always
-    declared, e.g. ``chumicro-ntp`` only depends on chumicro-sockets).
+    library + its declared deps; not every library declares
+    ``chumicro_timing`` — ``chumicro-sockets`` doesn't, and its
+    ``udp_echo_client.py`` example still needs ``ticks_ms``).
     """
     try:
         import supervisor  # type: ignore[import-not-found]
