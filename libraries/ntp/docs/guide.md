@@ -57,18 +57,35 @@ sock.close()
 to Unix-epoch seconds — feed it into `time.gmtime` (CPython) /
 `utime.localtime` (MP/CP) for date components.
 
-## Custom transport
+## Bring your own transport
 
-Skip the helper and pass your own UDP socket — anything quack-typed
-to `chumicro_sockets.UDPSocket` works:
+`NTPClient` doesn't care which library produces its UDP socket.  The `socket=` (or `socket_factory=`) you pass returns any object exposing the four-method UDP contract:
+
+| Method | Contract |
+|---|---|
+| `sendto(payload, address) -> int` | Sends `payload` (a `bytes`) to `address` (a `(host, port)` tuple).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full. |
+| `recvfrom(nbytes) -> (bytes, address)` | Reads up to `nbytes`.  Raises `OSError(EAGAIN \| EWOULDBLOCK)` on no data. |
+| `close() -> None` | Releases the socket. |
+| `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
+
+`chumicro_sockets.udp_socket` is one valid producer.  Stdlib `socket.socket(AF_INET, SOCK_DGRAM)` after `setblocking(False)` is another.  Tests inject `chumicro_sockets.testing.FakeUDPSocket`:
 
 ```python
-from chumicro_ntp import NTPClient
+import socket as stdlib_socket
 
-client = NTPClient(socket=my_custom_udp_socket, server="my.lan.ntp")
+sock = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_DGRAM)
+sock.setblocking(False)
+client = NTPClient(socket=sock, server="my.lan.ntp")
 ```
 
-An app that supplies its own UDP socket never imports `chumicro_ntp.sockets_factory`, so `chumicro-sockets` doesn't get deployed to the device — the on-device cost drops to just `chumicro-ntp` itself.
+If you supply your own transport and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
+
+```python
+# code.py / app.py
+__chumicro_skip_factories__ = ("sockets_factory",)
+```
+
+Family form (the bare stem) or exact path (`"chumicro_ntp.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `NTPClient.from_config(...)` on a deploy that has skipped `chumicro_ntp.sockets_factory` raises `RuntimeError` naming the bypass kwargs.
 
 ## Runner pattern
 

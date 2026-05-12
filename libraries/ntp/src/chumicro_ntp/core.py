@@ -162,8 +162,23 @@ class NTPClient:
     ``runtime_config.msgpack`` with sensible fall-back defaults.
 
     Args:
-        socket: Any UDP socket satisfying ``UDPSocket``.  In tests
-            inject ``FakeUDPSocket`` from ``chumicro_sockets.testing``.
+        socket: A non-blocking UDP-shaped object.  Must expose:
+
+            * ``sendto(payload: bytes, address) -> int`` — sends the
+              packet to *address* (a ``(host, port)`` tuple).
+              Raises ``OSError(EAGAIN | EWOULDBLOCK)`` when the send
+              buffer is full.
+            * ``recvfrom(nbytes: int) -> (bytes, address)`` — reads
+              up to *nbytes*.  Raises
+              ``OSError(EAGAIN | EWOULDBLOCK)`` on no data.
+            * ``close() -> None``
+            * ``setblocking(flag: bool) -> None`` — best-effort;
+              absence is tolerated.
+
+            :func:`chumicro_sockets.udp_socket` is one valid
+            producer; stdlib ``socket.socket(SOCK_DGRAM)`` after
+            ``setblocking(False)`` is another.  Tests inject
+            :class:`chumicro_sockets.testing.FakeUDPSocket`.
         server: NTP server hostname.  Defaults to ``"pool.ntp.org"``.
             Resolution is delegated to the runtime's name resolver.
         port: NTP server UDP port.  Defaults to ``123``.
@@ -235,9 +250,17 @@ class NTPClient:
             )
         if socket is None:
             if socket_factory is None:
-                from chumicro_ntp.sockets_factory import (  # noqa: PLC0415
-                    chumicro_sockets_factory,
-                )
+                try:
+                    from chumicro_ntp.sockets_factory import (  # noqa: PLC0415
+                        chumicro_sockets_factory,
+                    )
+                except ImportError as exception:
+                    raise RuntimeError(
+                        "NTPClient.from_config() default wiring needs "
+                        "chumicro_ntp.sockets_factory.  This module was "
+                        "excluded via __chumicro_skip_factories__ — "
+                        "pass socket= or socket_factory= explicitly.",
+                    ) from exception
 
                 socket = chumicro_sockets_factory(radio=radio)
                 # Runner-shaped clients require non-blocking recv.  Guarded so
