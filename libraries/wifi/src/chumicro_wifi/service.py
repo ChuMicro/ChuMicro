@@ -138,11 +138,6 @@ class WifiService:
         return self._last_error
 
     @property
-    def adapter_name(self):
-        """Stable identifier for the active adapter."""
-        return self._adapter.name
-
-    @property
     def adapter(self):
         """The active :class:`~chumicro_wifi._adapters.base.WifiAdapter`.
 
@@ -151,6 +146,9 @@ class WifiService:
         ``radio=wifi.adapter.radio`` uniformly across every runtime.
         On MP / CPython the base class supplies ``radio = None`` so
         the same line is well-defined and harmless.
+
+        ``wifi.adapter.name`` is the stable string identifier ("cp",
+        "mp_esp32", "mp_rp2", "fake") — useful for logging.
         """
         return self._adapter
 
