@@ -1149,19 +1149,12 @@ class MQTTClient:
             packet = self._decoder.read_next()
             if packet is None:
                 break
-            self._dispatch(packet, now_ms)
-
-    def _dispatch(self, packet, now_ms):
-        """Route a parsed packet to the right handler."""
-        if isinstance(packet, ParsedPublish):
-            self._handle_inbound_publish(packet)
-            return
-        if isinstance(packet, _OversizedMessage):
-            self._handle_oversized(packet)
-            return
-        if isinstance(packet, ParsedAck):
-            self._handle_ack(packet, now_ms)
-            return
+            if isinstance(packet, ParsedPublish):
+                self._handle_inbound_publish(packet)
+            elif isinstance(packet, _OversizedMessage):
+                self._handle_oversized(packet)
+            elif isinstance(packet, ParsedAck):
+                self._handle_ack(packet, now_ms)
 
     def _handle_inbound_publish(self, packet):
         """Fire callbacks + (for QoS 1) send PUBACK."""
