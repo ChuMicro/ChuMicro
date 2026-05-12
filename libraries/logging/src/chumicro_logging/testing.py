@@ -2,18 +2,10 @@
 
 The library itself doesn't need fakes — its handlers are already
 trivial to substitute (any object exposing ``emit(level, name,
-message)`` works).  This module ships two helpers that are useful
-when *downstream* libraries want to assert against logger output
-without writing one-off mocks.
-
-Usage::
-
-    from chumicro_logging.testing import RecordingHandler
-
-    handler = RecordingHandler()
-    logger = chumicro_logging.Logger("test", handlers=[handler])
-    logger.info("hello")
-    assert handler.records == [(20, "test", "hello")]
+message)`` works).  This module ships two helpers — ``RecordingHandler``
+and ``FailingHandler`` — that are useful when *downstream* libraries
+want to assert against logger output without writing one-off mocks.
+See ``docs/testing.md`` for worked examples.
 
 The helpers are not bundled to devices — the
 ``__chumicro_runtimes__ = ("cpython",)`` marker below keeps this file
