@@ -47,7 +47,7 @@ print("unix seconds:", request.unix_seconds)
 
 | Symbol | Purpose |
 |---|---|
-| `NTPClient(socket, *, server="pool.ntp.org", port=123, timeout_ms=5000, ticks_ms=None)` | Runner-shaped SNTP client.  Single in-flight query at a time; mirrors `HttpClient.busy`. |
+| `NTPClient(socket, *, server="pool.ntp.org", port=123, timeout_ms=5000, ticks=None)` | Runner-shaped SNTP client.  Single in-flight query at a time; mirrors `HttpClient.busy`. |
 | `NTPClient.query()` | Send a request; returns a `NTPResult` to poll. |
 | `NTPClient.check(now_ms)` / `handle(now_ms)` | Runner contract — handle drains the recv socket and detects timeouts. |
 | `NTPClient.cancel()` | Abort an in-flight query. |

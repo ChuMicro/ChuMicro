@@ -31,6 +31,12 @@ _CLIENT_FIRST_BYTE = 0x23
 #: byte because some servers echo VN!=4.
 _SERVER_MODE = 4
 
+#: The complete 48-byte SNTP client request — first byte is
+#: ``_CLIENT_FIRST_BYTE`` (LI=0, VN=4, Mode=3), the rest zero.
+#: Identical for every query, so we send the same object instead of
+#: rebuilding a fresh packet each call.
+_CLIENT_REQUEST = bytes([_CLIENT_FIRST_BYTE]) + b"\x00" * (_PACKET_SIZE - 1)
+
 
 class NTPError(OSError):
     """SNTP exchange failed.
@@ -42,15 +48,7 @@ class NTPError(OSError):
     """
 
 
-def _build_request() -> bytes:
-    """Render an SNTP client request — 48 zero bytes with the first
-    byte set to ``_CLIENT_FIRST_BYTE`` (LI=0, VN=4, Mode=3)."""
-    packet = bytearray(_PACKET_SIZE)
-    packet[0] = _CLIENT_FIRST_BYTE
-    return bytes(packet)
-
-
-def _parse_response(packet: bytes) -> int:
+def _parse_response(packet: bytes | memoryview) -> int:
     """Parse an SNTP server response into Unix-epoch seconds.
 
     Args:
@@ -337,9 +335,8 @@ class NTPClient:
             )
         now_ms = self._ticks.ticks_ms()
         result = NTPResult(ticks_started_ms=now_ms)
-        request = _build_request()
         try:
-            self._socket.sendto(request, self._server, self._port)
+            self._socket.sendto(_CLIENT_REQUEST, self._server, self._port)
         except OSError as send_error:
             result._fail(send_error)
             self._result = result
@@ -380,38 +377,31 @@ class NTPClient:
             if errno in (11, 35, 10035):
                 # EAGAIN / EWOULDBLOCK / WSAEWOULDBLOCK — no data
                 # this tick.  Check the timeout instead.
-                elapsed_ms = self._ticks.ticks_diff(now_ms, result.ticks_started_ms)
-                if elapsed_ms >= self._timeout_ms:
-                    result._fail(
-                        NTPError(
-                            f"SNTP query timed out after {elapsed_ms} ms",
-                        ),
-                    )
+                self._check_timeout(result, now_ms)
                 return
             # Any other socket error — fail the exchange.
             result._fail(recv_error)
             return
         if received_count == 0:
             # No data and no error — treat as "still waiting".
-            elapsed_ms = self._ticks.ticks_diff(now_ms, result.ticks_started_ms)
-            if elapsed_ms >= self._timeout_ms:
-                result._fail(
-                    NTPError(
-                        f"SNTP query timed out after {elapsed_ms} ms",
-                    ),
-                )
+            self._check_timeout(result, now_ms)
             return
         try:
-            # ``bytes(memoryview(buf)[:n])`` is one copy; the prior
-            # ``bytes(buf[:n])`` was two (slice creates a new bytearray,
-            # bytes() copies that).
             unix_seconds = _parse_response(
-                bytes(memoryview(self._recv_buffer)[:received_count]),
+                memoryview(self._recv_buffer)[:received_count],
             )
         except NTPError as parse_error:
             result._fail(parse_error)
             return
         result._complete(unix_seconds)
+
+    def _check_timeout(self, result: "NTPResult", now_ms: int) -> None:
+        """Fail *result* with a timeout ``NTPError`` if the deadline has elapsed."""
+        elapsed_ms = self._ticks.ticks_diff(now_ms, result.ticks_started_ms)
+        if elapsed_ms >= self._timeout_ms:
+            result._fail(
+                NTPError(f"SNTP query timed out after {elapsed_ms} ms"),
+            )
 
     def cancel(self) -> bool:
         """Abort an in-flight query.

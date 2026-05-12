@@ -11,7 +11,7 @@ server is contacted.
 
 import chumicro_ntp
 from chumicro_ntp import NTPClient, NTPError, NTPResult
-from chumicro_ntp.core import _NTP_TO_UNIX, _build_request, _parse_response
+from chumicro_ntp.core import _CLIENT_REQUEST, _NTP_TO_UNIX, _parse_response
 from chumicro_sockets.testing import FakeUDPSocket
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
@@ -60,13 +60,12 @@ def test_ntp_error_is_oserror_subclass() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_build_request_packet_shape() -> None:
-    packet = _build_request()
-    assert len(packet) == 48
+def test_client_request_packet_shape() -> None:
+    assert len(_CLIENT_REQUEST) == 48
     # First byte: LI=0 (00), VN=4 (100), Mode=3 (011) → 0b00100011 = 0x23
-    assert packet[0] == 0x23
+    assert _CLIENT_REQUEST[0] == 0x23
     # All other bytes zero.
-    assert packet[1:] == b"\x00" * 47
+    assert _CLIENT_REQUEST[1:] == b"\x00" * 47
 
 
 def test_parse_response_extracts_unix_seconds() -> None:
