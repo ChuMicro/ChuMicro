@@ -84,7 +84,7 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 
 **Cross-repo isolation**
 
-- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI, CircuitPython-bundle (`circup`), and MicroPython-bundle (`mip`) consumers without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006` in the [`chumicro-checks`](workbench/checks/) package. Suppress with `# noqa: CHU006` (Markdown: `<!-- noqa: CHU006 -->`) only when the reference is genuinely the only useful pointer.
+- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI, CircuitPython-bundle (`circup`), and MicroPython-bundle (`mip`) consumers without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN` or `ADR NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006` in the [`chumicro-checks`](workbench/checks/) package. Suppress with `# noqa: CHU006` (Markdown: `<!-- noqa: CHU006 -->`) only when the reference is genuinely the only useful pointer.
 
 **Plans-doc brevity**
 

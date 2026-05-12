@@ -154,8 +154,8 @@ def _publishable_package_dirs(repo_root: Path) -> list[Path]:
 
 _PATTERNS: tuple[LeakPattern, ...] = (
     (
-        re.compile(r"\bDecision\s*0\d{3}\b"),
-        "Decision NNNN ref — ADRs live in plans/decisions/, not shipped to consumers",
+        re.compile(r"\b(?:Decision|ADR)\s*0\d{3}\b"),
+        "Decision/ADR NNNN ref — ADRs live in plans/decisions/, not shipped to consumers",
         everywhere,
     ),
     (

@@ -4,8 +4,8 @@ Targets the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-W
 starter repo and downstream user workspaces cloned from it.  Flags
 prose / config / docstrings that frame the user's workspace as a
 derivative of an upstream chumicro mono-repo — leftover ``Decision NNNN``
-pointers, ``plans/...md`` paths, ``scripts/run.py`` references, the
-"chumicro mono-repo" framing.  Those references are coherent inside
+/ ``ADR NNNN`` pointers, ``plans/...md`` paths, ``scripts/run.py``
+references, the "chumicro mono-repo" framing.  Those references are coherent inside
 the chumicro mono-repo (where ADRs are co-located) but meaningless in
 a workspace cloned from the template.
 
@@ -84,8 +84,8 @@ def _template_repo_scan_roots(repo_root: Path) -> list[Path]:
 
 _PATTERNS: tuple[LeakPattern, ...] = (
     (
-        re.compile(r"\bDecision\s*0\d{3}\b"),
-        "Decision NNNN ref — ADRs live in the chumicro mono-repo, not in a "
+        re.compile(r"\b(?:Decision|ADR)\s*0\d{3}\b"),
+        "Decision/ADR NNNN ref — ADRs live in the chumicro mono-repo, not in a "
         "user workspace.  Inline the relevant rationale instead of pointing "
         "at the ADR number",
         everywhere,

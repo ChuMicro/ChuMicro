@@ -31,7 +31,7 @@ class TestMergeConfigs:
         }
 
     def test_overlapping_section_merges_key_by_key(self) -> None:
-        """Per ADR 0035 §5: deep, key-level within sections."""
+        """Overlap merges deep, key-level within each section."""
         workspace = {"wifi": {"hostname_prefix": "chu-", "timeout_ms": 15000}}
         project = {"wifi": {"ssid": "HomeNet", "timeout_ms": 5000}}
         result = merge_configs(workspace, project)
@@ -48,7 +48,7 @@ class TestMergeConfigs:
         assert result["wifi"]["timeout_ms"] == 5000
 
     def test_lists_replace_wholesale(self) -> None:
-        """ADR 0035 §5: merge is key-level, not element-level."""
+        """Merge is key-level, not element-level — lists replace wholesale."""
         workspace = {"app": {"sources": ["a", "b"]}}
         project = {"app": {"sources": ["c"]}}
         result = merge_configs(workspace, project)

@@ -322,7 +322,7 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 
 **`CHU006`** (same package) catches mono-repo references that have leaked into publishable `src/` trees (`libraries/*/src/`, `workbench/*/src/`, `support/*/src/`).  Those trees ship to PyPI / CircuitPython-bundle consumers who have no `plans/` directory and no `scripts/run.py`.  Flagged shapes:
 
-- `Decision NNNN` — ADR pointers; ADRs live in `plans/decisions/` and aren't shipped.
+- `Decision NNNN` / `ADR NNNN` — ADR pointers; ADRs live in `plans/decisions/` and aren't shipped.
 - `plans/...md` paths — the mono-repo planning tree.
 - `scripts/run.py` — the mono-repo's developer command runner.
 - Bare `run.py` (without the `scripts/` prefix) — the workspace-template's command-runner shim.  Only `chumicro_workspace` legitimately knows about it (the package generates the shim); everywhere else, name the installable CLI (`chumicro-deploy`, `chumicro-workspace`, etc.) instead.

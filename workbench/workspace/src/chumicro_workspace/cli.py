@@ -1761,8 +1761,8 @@ def _list_examples(libraries_root: Path, library_name: str | None) -> int:
 def _resolve_deploy_example_modes(args: argparse.Namespace) -> tuple[bool, bool]:
     """Resolve the ``(non_interactive, tail)`` mode pair for deploy-example.
 
-    Per ADR 0059 §4: TTY auto-detection sets the default; explicit
-    ``--non-interactive`` / ``--no-tail`` flags override.
+    TTY auto-detection sets the default; explicit ``--non-interactive``
+    / ``--no-tail`` flags override.
 
     Returns:
         ``(non_interactive, should_tail)``.  ``should_tail`` is
@@ -1783,9 +1783,9 @@ def _resolve_deploy_example_modes(args: argparse.Namespace) -> tuple[bool, bool]
 def _print_no_device_hint(runtime_required: str | None) -> None:
     """Print the structured stderr hint for the no-device-registered case.
 
-    Per ADR 0059 §3 state (1) non-interactive branch.  An agent / CI
-    runner reads exit code 3 and follows the hint to register a
-    device explicitly.
+    Non-interactive shape: emit a deterministic stderr hint and let the
+    caller (agent / CI runner) read exit code 3 to follow the hint and
+    register a device explicitly.
     """
     runtime = runtime_required or "circuitpython"
     print(

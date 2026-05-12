@@ -39,10 +39,24 @@ class TestDecisionPattern:
     def test_decision_ref_flagged(self, tmp_path: Path) -> None:
         _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", "# See Decision 0042\n")  # noqa: CHU006  fixture string for the rule under test
         findings = CHU006.check(tmp_path)
-        assert any("Decision NNNN" in finding.message for finding in findings)
+        assert any("Decision/ADR NNNN" in finding.message for finding in findings)
+
+    def test_adr_ref_flagged(self, tmp_path: Path) -> None:
+        # The ADR-NNNN shape is the same concept as Decision-NNNN — both
+        # point a PyPI consumer at plans/decisions/ they don't have.
+        body = "# See " + "ADR " + "0030 §1\n"  # noqa: CHU006  fixture string built so CHU006 doesn't self-flag this test source
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("Decision/ADR NNNN" in finding.message for finding in findings)
 
     def test_three_digit_decision_not_matched(self, tmp_path: Path) -> None:
         _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", "Decision 99 historic\n")
+        assert CHU006.check(tmp_path) == []
+
+    def test_three_digit_adr_not_matched(self, tmp_path: Path) -> None:
+        # Bare "ADR 30" without leading zero is too lossy a match —
+        # would catch lots of unrelated three-digit prose.
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", "ADR 30 historic\n")
         assert CHU006.check(tmp_path) == []
 
 
@@ -175,7 +189,7 @@ class TestTemplateShapeFires:
         target.parent.mkdir(parents=True)
         target.write_text("# See Decision 0042\n")  # noqa: CHU006  fixture string
         findings = CHU006.check(tmp_path)
-        assert any("Decision NNNN" in finding.message for finding in findings)
+        assert any("Decision/ADR NNNN" in finding.message for finding in findings)
 
     def test_plans_path_in_projects(self, tmp_path: Path) -> None:
         target = tmp_path / "projects" / "wifi" / "app.py"
