@@ -34,12 +34,12 @@ from chumicro_mqtt._wire import (
     ParsedPublish,
     UnsupportedQoSError,
     _OversizedMessage,
+    _topic_levels_match,
     encode_connect,
     encode_puback,
     encode_publish,
     encode_subscribe,
     encode_unsubscribe,
-    topic_matches,
 )
 
 # ---------------------------------------------------------------------------
@@ -742,8 +742,12 @@ class MQTTClient:
         )
 
     def add_pattern_handler(self, pattern, handler):
-        """Register *handler* ``(topic, payload_bytes)`` for inbound messages matching *pattern*."""
-        self._pattern_handlers.append((pattern, handler))
+        """Register *handler* ``(topic, payload_bytes)`` for inbound messages matching *pattern*.
+
+        Splits the pattern once at registration so the per-inbound-
+        message dispatch only splits the topic, not the pattern.
+        """
+        self._pattern_handlers.append((tuple(pattern.split("/")), handler))
 
     # ------------------------------------------------------------------
     # Runner contract
@@ -987,10 +991,13 @@ class MQTTClient:
 
     def _handle_inbound_publish(self, packet):
         """Fire callbacks + (for QoS 1) send PUBACK."""
-        # Pattern handlers fire before the global on_message.
-        for pattern, handler in self._pattern_handlers:
-            if topic_matches(packet.topic, pattern):
-                handler(packet.topic, packet.payload)
+        # Pattern handlers fire before the global on_message.  Split
+        # the topic once and reuse for every registered pattern.
+        if self._pattern_handlers:
+            topic_levels = packet.topic.split("/")
+            for pattern_levels, handler in self._pattern_handlers:
+                if _topic_levels_match(topic_levels, pattern_levels):
+                    handler(packet.topic, packet.payload)
         self.on_message(packet.topic, packet.payload)
         if packet.qos == 1:
             self._tx_queue.appendleft(encode_puback(packet_id=packet.packet_id))
