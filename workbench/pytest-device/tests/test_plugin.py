@@ -435,16 +435,16 @@ class TestTransportCache:
             address="/dev/ttyUSB0",
         )
 
-        # Monkey-patch create_transport to avoid real hardware.
-        original = pytest_device.create_transport
-        pytest_device.create_transport = fake_create
+        # Monkey-patch build_transport_for_entry to avoid real hardware.
+        original = pytest_device.build_transport_for_entry
+        pytest_device.build_transport_for_entry = fake_create
         try:
             transport_a = cache.get_transport(device, None)
             transport_b = cache.get_transport(device, None)
             assert transport_a is transport_b
             assert len(calls) == 1
         finally:
-            pytest_device.create_transport = original
+            pytest_device.build_transport_for_entry = original
 
     def test_current_staged_library_not_set_initially(self) -> None:
         """A fresh cache should report no library staged on any device."""
@@ -480,8 +480,8 @@ class TestTransportCache:
             runtime="micropython",
             address="/dev/ttyUSB0",
         )
-        original = pytest_device.create_transport
-        pytest_device.create_transport = lambda device_entry, deploy_mode=None: FakeTransport()
+        original = pytest_device.build_transport_for_entry
+        pytest_device.build_transport_for_entry = lambda device_entry, deploy_mode=None: FakeTransport()
         try:
             transport = cache.get_transport(device, None)
             cache.mark_staged(("dev1", "timing", "test_ticks.py"))
@@ -498,7 +498,7 @@ class TestTransportCache:
             # Disconnect was called on the transport.
             assert transport.calls[-1] == ("disconnect", ())
         finally:
-            pytest_device.create_transport = original
+            pytest_device.build_transport_for_entry = original
 
     def test_invalidate_device_keeps_batch_results(self) -> None:
         """Cached batch results survive invalidate_device.
@@ -993,7 +993,7 @@ def _prime_cache_with_transport(
     device_entry: DeviceEntry,
     transport: _HotPathTransport,
 ) -> None:
-    """Install *transport* in *cache* without hitting create_transport."""
+    """Install *transport* in *cache* without hitting build_transport_for_entry."""
     cache._transports[device_entry.identifier] = transport
 
 
@@ -1163,7 +1163,7 @@ class TestEnsurePrepared:
         def raise_on_create(device_entry, deploy_mode=None):
             raise RuntimeError("device not reachable")
 
-        monkeypatch.setattr(pytest_device, "create_transport", raise_on_create)
+        monkeypatch.setattr(pytest_device, "build_transport_for_entry", raise_on_create)
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
         item = _make_prepare_item(hot_path_session, device, test_file)
