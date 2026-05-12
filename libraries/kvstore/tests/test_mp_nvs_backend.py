@@ -50,9 +50,10 @@ class _FakeNvs:
 # ---------------------------------------------------------------------------
 
 
-def test_default_capacity_is_16k() -> None:
+def test_default_capacity_matches_class_constant() -> None:
+    """Default capacity is sized for small-key state; users override for larger."""
     backend = MpNvsBackend(nvs=_FakeNvs())
-    assert backend.capacity == MpNvsBackend.DEFAULT_CAPACITY == 16384
+    assert backend.capacity == MpNvsBackend.DEFAULT_CAPACITY == 512
 
 
 def test_capacity_override_accepted() -> None:

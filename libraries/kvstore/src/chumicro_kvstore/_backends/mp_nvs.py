@@ -27,15 +27,16 @@ class MpNvsBackend(Backend):
             ``esp32.NVS("chu_kv")`` — only available under MicroPython
             ESP32 builds.  Tests inject a fake to exercise the wire
             format on a host.
-        capacity: Maximum payload size in bytes.  Defaults to 16 KB
-            — conservative for the typical ~24 KB NVS partition once
-            ESP-IDF metadata overhead is accounted for.  Override on
-            boards with custom partition layouts.
+        capacity: Maximum payload size in bytes.  Defaults to 512 —
+            sized for typical small-key state (boot counters,
+            timestamps, short tokens).  Override on boards that store
+            larger payloads; the limit doubles as the size of the
+            transient read buffer allocated at ``load`` time.
     """
 
     NAMESPACE = "chu_kv"
     PAYLOAD_KEY = "payload"
-    DEFAULT_CAPACITY = 16384
+    DEFAULT_CAPACITY = 512
 
     name = "nvs"
 
@@ -44,9 +45,6 @@ class MpNvsBackend(Backend):
             nvs = self._acquire_runtime_nvs()
         self._nvs = nvs
         self.capacity = capacity if capacity is not None else self.DEFAULT_CAPACITY
-        # Reusable read buffer — sized to capacity so any committed
-        # payload fits in one go.
-        self._read_buffer = bytearray(self.capacity)
 
     @staticmethod
     def _acquire_runtime_nvs():
@@ -64,16 +62,19 @@ class MpNvsBackend(Backend):
         """Return the stored payload, or ``b""`` if the key is missing.
 
         NVS raises ``OSError`` (typically ENOENT) on a missing key —
-        treated as a blank substrate, no corruption event.
+        treated as a blank substrate, no corruption event.  The read
+        buffer is allocated fresh per call rather than held for the
+        backend's lifetime: ``load`` runs on construction and on
+        explicit ``reload``, never on the commit hot path, so a
+        long-lived ``bytearray(capacity)`` would pin RAM in exchange
+        for no per-call benefit.
         """
+        read_buffer = bytearray(self.capacity)
         try:
-            length = self._nvs.get_blob(self.PAYLOAD_KEY, self._read_buffer)
+            length = self._nvs.get_blob(self.PAYLOAD_KEY, read_buffer)
         except OSError:
             return b""
-        # ``bytes(memoryview(buf)[:n])`` is one copy; the prior
-        # ``bytes(buf[:n])`` was two (slice creates a new bytearray,
-        # bytes() copies that).
-        return bytes(memoryview(self._read_buffer)[:length])
+        return bytes(memoryview(read_buffer)[:length])
 
     def save(self, payload: bytes) -> None:
         """Write ``payload`` and commit.
