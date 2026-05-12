@@ -216,17 +216,33 @@ class CaseInsensitiveDict:
     HTTP/1.1 §3.2 requires header names to be case-insensitive on
     receipt — the websocket opening handshake is HTTP/1.1.  We store
     the original-cased name (so callers see ``Upgrade`` not
-    ``upgrade``) keyed off the lowercased form.  Inlined from
-    :class:`chumicro_requests._wire.CaseInsensitiveDict` per the
-    copy-don't-couple rule until a third HTTP/1.1-aware consumer
-    triggers extracting a shared ``chumicro-http`` package.
+    ``upgrade``) keyed off the lowercased form.  ``items()`` yields
+    in insertion order on every runtime — MicroPython and CircuitPython
+    dicts do not preserve insertion order unlike CPython 3.7+, so a
+    paired ``_order`` list of lowercase keys drives iteration.  Mirrors
+    the order-preserving shape in
+    :class:`chumicro_requests._wire.CaseInsensitiveDict` so the WS
+    opening handshake emits headers in the same order it accepted them
+    on every runtime; without ``_order`` the handshake on MP / CP
+    randomized header order vs. CPython tests.
+
+    Slim subset (no ``__iter__`` / ``__len__`` / ``__eq__`` / ``__repr__``
+    / ``add()``) since the WS encoders + parsers only need the methods
+    below.  Inlined from chumicro-requests per the copy-don't-couple
+    rule until a third HTTP/1.1-aware consumer (http_server is the
+    third — re-evaluate at next workspace audit) triggers extracting
+    a shared ``chumicro-http`` package.
     """
 
     def __init__(self):
         self._entries = {}
+        self._order = []
 
     def __setitem__(self, name, value):
-        self._entries[name.lower()] = (name, value)
+        lower = name.lower()
+        if lower not in self._entries:
+            self._order.append(lower)
+        self._entries[lower] = (name, value)
 
     def __getitem__(self, name):
         return self._entries[name.lower()][1]
@@ -242,8 +258,9 @@ class CaseInsensitiveDict:
         return entry[1]
 
     def items(self):
-        """Yield ``(original_name, value)`` pairs."""
-        yield from self._entries.values()
+        """Yield ``(original_name, value)`` pairs in insertion order."""
+        for lower in self._order:
+            yield self._entries[lower]
 
 
 # ---------------------------------------------------------------------------

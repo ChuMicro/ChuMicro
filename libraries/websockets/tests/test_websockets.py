@@ -129,6 +129,27 @@ class TestCaseInsensitiveDict:
         items = list(headers.items())
         assert items == [("Upgrade", "websocket")]
 
+    def test_items_preserves_insertion_order(self):
+        headers = CaseInsensitiveDict()
+        headers["Host"] = "example.com"
+        headers["Upgrade"] = "websocket"
+        headers["Connection"] = "Upgrade"
+        headers["Sec-WebSocket-Key"] = "dGhlIHNhbXBsZSBub25jZQ=="
+        headers["Sec-WebSocket-Version"] = "13"
+        names = [name for name, _ in headers.items()]
+        assert names == [
+            "Host", "Upgrade", "Connection",
+            "Sec-WebSocket-Key", "Sec-WebSocket-Version",
+        ]
+
+    def test_overwrite_preserves_original_position(self):
+        headers = CaseInsensitiveDict()
+        headers["Host"] = "first.com"
+        headers["Upgrade"] = "websocket"
+        headers["host"] = "second.com"
+        items = list(headers.items())
+        assert items == [("host", "second.com"), ("Upgrade", "websocket")]
+
     def test_getitem_raises_keyerror_on_missing(self):
         headers = CaseInsensitiveDict()
         with raises(KeyError):
