@@ -25,6 +25,7 @@ redirects, and chunked encoding are future work.
 
 import json
 
+from chumicro_config import InvalidConfigType, is_config_like
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_requests._wire import (
@@ -420,6 +421,11 @@ class HttpClient:
         Returns:
             A configured ``HttpClient`` ready for ``get()`` / ``post()``.
         """
+        if not is_config_like(config):
+            raise InvalidConfigType(
+                f"HttpClient.from_config requires a RuntimeConfig or "
+                f"dict, got {type(config).__name__}",
+            )
         if connection_factory is None:
             connection_factory = chumicro_sockets_factory(
                 radio=radio, ssl_context=ssl_context,

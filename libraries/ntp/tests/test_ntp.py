@@ -448,6 +448,20 @@ class TestFromConfig:
         assert client.timeout_ms == 999
         assert client.port == 123  # default
 
+    def test_non_configlike_input_raises_invalid_config_type(self) -> None:
+        """``NTPClient.from_config(None)`` /
+        ``from_config("not-a-dict")`` / ``from_config(42)`` raise
+        :class:`chumicro_config.InvalidConfigType` instead of leaking
+        ``AttributeError`` — mirrors the ``load_section`` shape."""
+        from chumicro_config import InvalidConfigType  # noqa: PLC0415
+
+        sock = FakeUDPSocket()
+        for bad_input in (None, "not-a-dict", 42, ["not", "a", "dict"]):
+            with raises(InvalidConfigType):
+                NTPClient.from_config(
+                    bad_input, socket_factory=self._injected_factory(sock),
+                )
+
     def test_default_factory_invokes_chumicro_sockets_factory(self) -> None:
         """When neither *socket* nor *socket_factory* is passed,
         ``from_config`` builds a factory that calls

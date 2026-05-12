@@ -1066,6 +1066,19 @@ class TestClientFromConfig:
         client = WebSocketClient.from_config({}, connection_factory=factory)
         assert client._connection_factory is factory  # noqa: SLF001
 
+    def test_non_configlike_input_raises_invalid_config_type(self) -> None:
+        """``WebSocketClient.from_config(None)`` /
+        ``from_config("not-a-dict")`` / ``from_config(42)`` raise
+        :class:`chumicro_config.InvalidConfigType` instead of leaking
+        ``AttributeError`` — mirrors the ``load_section`` shape."""
+        from chumicro_config import InvalidConfigType
+
+        sock = FakeSocket()
+        factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
+        for bad_input in (None, "not-a-dict", 42, ["not", "a", "dict"]):
+            with raises(InvalidConfigType):
+                WebSocketClient.from_config(bad_input, connection_factory=factory)
+
     def test_default_factory_threads_radio_and_ssl_context(self) -> None:
         """When no connection_factory is passed, ``from_config`` builds
         one via ``chumicro_websockets.sockets_factory.chumicro_sockets_factory``

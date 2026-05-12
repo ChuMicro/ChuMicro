@@ -14,7 +14,7 @@ sit in :mod:`chumicro_mqtt._wire`.
 
 from collections import deque
 
-from chumicro_config import MissingConfigKey
+from chumicro_config import InvalidConfigType, MissingConfigKey, is_config_like
 from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
@@ -336,6 +336,11 @@ class MQTTClient:
             manifest — they're application config the example /
             project reads directly via ``config["…"]``.
         """
+        if not is_config_like(config):
+            raise InvalidConfigType(
+                f"MQTTClient.from_config requires a RuntimeConfig or "
+                f"dict, got {type(config).__name__}",
+            )
         if socket is None and socket_factory is None:
             socket_factory = _build_default_socket_factory(config, radio=radio)
         return cls(

@@ -1080,3 +1080,19 @@ class TestFromConfig:
 
         with raises(MissingConfigKey):
             MQTTClient.from_config({"mqtt.broker.host": "10.0.0.42"})
+
+    def test_non_configlike_input_raises_invalid_config_type(self) -> None:
+        """``MQTTClient.from_config(None)`` /
+        ``from_config("not-a-dict")`` / ``from_config(42)`` raise
+        :class:`chumicro_config.InvalidConfigType` instead of leaking
+        ``AttributeError`` / ``TypeError`` or silently classifying a
+        non-mapping as a missing-key config (the regression this
+        guard fixes: ``MQTTClient.from_config("not-a-dict")`` used
+        to raise ``MissingConfigKey: 'mqtt.broker.host' is missing``
+        because the ``"mqtt.broker.host" not in "not-a-dict"`` check
+        returned True for a string)."""
+        from chumicro_config import InvalidConfigType  # noqa: PLC0415
+
+        for bad_input in (None, "not-a-dict", 42, ["not", "a", "dict"]):
+            with raises(InvalidConfigType):
+                MQTTClient.from_config(bad_input)
