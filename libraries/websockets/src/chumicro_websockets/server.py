@@ -22,7 +22,7 @@ owns only the server-specific bits: opening-handshake direction
 NOT mask), and the accept-loop in :class:`WebSocketServer`.
 """
 
-from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_websockets._session import (
     WhenOversized,
@@ -100,9 +100,7 @@ class Connection(_BaseSession):
         pong_timeout_ms: int,
         handshake_timeout_ms: int,
         close_timeout_ms: int,
-        ticks_ms_func,
-        ticks_add_func,
-        ticks_diff_func,
+        ticks,
         on_connection_callback,
     ) -> None:
         _force_non_blocking(socket)
@@ -115,9 +113,7 @@ class Connection(_BaseSession):
             when_oversized=when_oversized,
             pong_timeout_ms=pong_timeout_ms,
             close_timeout_ms=close_timeout_ms,
-            ticks_ms_func=ticks_ms_func,
-            ticks_add_func=ticks_add_func,
-            ticks_diff_func=ticks_diff_func,
+            ticks=ticks,
         )
 
         self._accept_path = accept_path
@@ -127,8 +123,8 @@ class Connection(_BaseSession):
         self._handshake_request_parser = HandshakeRequestParser()
         self._handshake_response_buffer = None
         self._handshake_response_offset = 0
-        self._handshake_deadline_ticks = self._ticks_add(
-            self._ticks_ms(),
+        self._handshake_deadline_ticks = self._ticks.ticks_add(
+            self._ticks.ticks_ms(),
             handshake_timeout_ms,
         )
 
@@ -319,7 +315,7 @@ class Connection(_BaseSession):
 
     def _check_timeouts(self, now_ms: int) -> bool:
         if self._handshake_deadline_ticks is not None:
-            if self._ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0:
+            if self._ticks.ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0:
                 self._fail_with_error(
                     WebSocketTimeoutError(
                         "handshake exceeded budget",
@@ -359,8 +355,10 @@ class WebSocketServer:
     ``pong_timeout_ms`` / ``handshake_timeout_ms`` /
     ``close_timeout_ms`` — same semantics as
     :class:`WebSocketClient`, applied per-connection;
-    ``ticks_ms_func`` / ``ticks_add_func`` / ``ticks_diff_func`` —
-    inject fakes for testing.
+    ``ticks`` — optional tick source (any object exposing
+    ``ticks_ms`` / ``ticks_diff`` / ``ticks_add``); defaults to
+    :mod:`chumicro_timing`'s ``ticks`` submodule.  Tests pass
+    ``FakeTicks`` from :mod:`chumicro_timing.testing`.
     """
 
     @classmethod
@@ -450,9 +448,7 @@ class WebSocketServer:
         pong_timeout_ms: int = DEFAULT_PONG_TIMEOUT_MS,
         handshake_timeout_ms: int = DEFAULT_HANDSHAKE_TIMEOUT_MS,
         close_timeout_ms: int = DEFAULT_CLOSE_TIMEOUT_MS,
-        ticks_ms_func=ticks_ms,
-        ticks_add_func=ticks_add,
-        ticks_diff_func=ticks_diff,
+        ticks: object | None = None,
     ) -> None:
         self._listener = listener
         self._on_connection = on_connection
@@ -467,9 +463,7 @@ class WebSocketServer:
         self._handshake_timeout_ms = handshake_timeout_ms
         self._close_timeout_ms = close_timeout_ms
 
-        self._ticks_ms = ticks_ms_func
-        self._ticks_add = ticks_add_func
-        self._ticks_diff = ticks_diff_func
+        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
 
         self._connections: list[Connection] = []
         self._closed = False
@@ -579,9 +573,7 @@ class WebSocketServer:
                 pong_timeout_ms=self._pong_timeout_ms,
                 handshake_timeout_ms=self._handshake_timeout_ms,
                 close_timeout_ms=self._close_timeout_ms,
-                ticks_ms_func=self._ticks_ms,
-                ticks_add_func=self._ticks_add,
-                ticks_diff_func=self._ticks_diff,
+                ticks=self._ticks,
                 on_connection_callback=self._on_connection,
             )
             self._connections.append(connection)

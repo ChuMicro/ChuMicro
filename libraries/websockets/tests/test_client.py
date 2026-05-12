@@ -10,6 +10,7 @@ exercised without a real TCP/TLS stack.
 import struct
 
 from chumicro_test_harness.assertions import raises
+from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     CLOSE_BAD_DATA,
     CLOSE_GOING_AWAY,
@@ -41,7 +42,7 @@ from chumicro_websockets._wire import (
     encode_frame,
 )
 from chumicro_websockets.client import ConnectingPhase
-from chumicro_websockets.testing import FakeConnection, TickClock
+from chumicro_websockets.testing import FakeConnection
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -69,7 +70,7 @@ def _make_factory(socket: FakeConnection, *, expected_use_tls: bool | None = Non
 def _drive_handshake(
     client: WebSocketClient,
     socket: FakeSocket,
-    clock: TickClock,
+    clock: FakeTicks,
 ) -> bytes:
     """Push ticks until SENDING_HANDSHAKE finishes, then craft + feed a 101.
 
@@ -80,7 +81,7 @@ def _drive_handshake(
     while client.state == WebSocketState.CONNECTING and (
         client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
     ):
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
     request_bytes = socket.read_outbound()
     # Parse the request to get the client's key.
     parser = HandshakeRequestParser()
@@ -95,27 +96,25 @@ def _drive_handshake(
     )
     socket.feed_inbound(response)
     # Drive once to consume + transition to OPEN.
-    client.handle(clock.now())
+    client.handle(clock.ticks_ms())
     return request_bytes
 
 
 def _make_client(
     *,
     socket: FakeSocket | None = None,
-    clock: TickClock | None = None,
+    clock: FakeTicks | None = None,
     **kwargs,
 ):
     """Construct a client wired to a fresh fake socket + clock."""
     if socket is None:
         socket = FakeSocket()
     if clock is None:
-        clock = TickClock()
+        clock = FakeTicks()
     factory, record = _make_factory(socket)
     client = WebSocketClient(
         connection_factory=factory,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
         **kwargs,
     )
     return client, socket, clock, record
@@ -145,11 +144,11 @@ class TestConstructor:
 
     def test_check_pre_connect_returns_false(self):
         client, _socket, clock, _ = _make_client()
-        assert client.check(clock.now()) is False
+        assert client.check(clock.ticks_ms()) is False
 
     def test_handle_pre_connect_is_noop(self):
         client, socket, clock, _ = _make_client()
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert socket.read_outbound() == b""
 
 
@@ -167,13 +166,11 @@ class TestConnect:
 
     def test_wss_passes_use_tls_true(self):
         socket = FakeSocket()
-        clock = TickClock()
+        clock = FakeTicks()
         factory, record = _make_factory(socket, expected_use_tls=True)
         client = WebSocketClient(
             connection_factory=factory,
-            ticks_ms_func=clock.now,
-            ticks_add_func=clock.add,
-            ticks_diff_func=clock.diff,
+            ticks=clock,
         )
         client.connect("wss://secure.example.com/")
         assert record["calls"] == [("secure.example.com", 443, True)]
@@ -197,7 +194,7 @@ class TestConnect:
     def test_check_after_connect_returns_true(self):
         client, _socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
-        assert client.check(clock.now()) is True
+        assert client.check(clock.ticks_ms()) is True
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +206,7 @@ class TestHandshakeSend:
     def test_handle_pushes_request_bytes(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         outbound = socket.peek_outbound()
         assert outbound.startswith(b"GET / HTTP/1.1\r\n")
         assert b"Upgrade: websocket\r\n" in outbound
@@ -226,7 +223,7 @@ class TestHandshakeSend:
             seen_phases.append(client._connecting_phase)
             if client._connecting_phase != ConnectingPhase.SENDING_HANDSHAKE:
                 break
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
         assert client._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE
 
     def test_eagain_during_send_keeps_state(self):
@@ -234,7 +231,7 @@ class TestHandshakeSend:
         socket.raise_on_send = OSError(11, "would block")
         client, _socket, clock, _ = _make_client(socket=socket)
         client.connect("ws://example.com/")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         # State unchanged; no bytes were consumed.
         assert client.state == WebSocketState.CONNECTING
         assert client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
@@ -246,7 +243,7 @@ class TestHandshakeSend:
         closes = []
         client.on_close = lambda code, reason: closes.append((code, reason))
         client.connect("ws://example.com/")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert isinstance(client.last_error, WebSocketHandshakeError)
         assert closes == [(CLOSE_INTERNAL_ERROR, str(client.last_error))]
@@ -272,12 +269,12 @@ class TestHandshakeReceive:
         client.connect("ws://example.com/")
         # Drain SEND phase first.
         while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
         socket.read_outbound()
         socket.feed_inbound(
             b"HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n",
         )
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert isinstance(client.last_error, WebSocketHandshakeError)
 
@@ -285,9 +282,9 @@ class TestHandshakeReceive:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
         socket.close_inbound()
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert isinstance(client.last_error, WebSocketHandshakeError)
         assert "mid-handshake" in str(client.last_error)
@@ -296,9 +293,9 @@ class TestHandshakeReceive:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
         # No inbound bytes, no EOF — recv_into raises EAGAIN.
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CONNECTING
 
     def test_leftover_bytes_flow_into_frame_parser(self):
@@ -310,7 +307,7 @@ class TestHandshakeReceive:
         client.connect("ws://example.com/")
         # Drive handshake send.
         while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
         request = socket.read_outbound()
         parser = HandshakeRequestParser()
         parser.feed(request)
@@ -322,7 +319,7 @@ class TestHandshakeReceive:
             b"Sec-WebSocket-Accept: " + accept.encode("ascii") + b"\r\n\r\n"
             + _client_frame(OPCODE_TEXT, b"hello"),
         )
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.OPEN
         assert opens == ["open"]
         assert texts == ["hello"]
@@ -333,7 +330,7 @@ class TestHandshakeReceive:
             "ws://example.com/",
             extra_headers={"Origin": "https://app.example.com"},
         )
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         outbound = socket.peek_outbound()
         assert b"Origin: https://app.example.com\r\n" in outbound
 
@@ -351,10 +348,10 @@ class TestHandshakeTimeout:
         client.connect("ws://example.com/")
         # Drain SEND phase, then sit in RECEIVING with no inbound.
         while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
         socket.read_outbound()
         clock.advance(1500)
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert isinstance(client.last_error, WebSocketTimeoutError)
         assert closes and closes[0][0] == CLOSE_INTERNAL_ERROR
@@ -401,7 +398,7 @@ class TestSendOpenStateGate:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_binary(bytearray(b"hello"))
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         outbound = socket.read_outbound()
         # Outbound is masked client frame; verify by parsing via FrameParser
         # with no mask validation (FrameParser strips the mask).
@@ -415,7 +412,7 @@ class TestSendOpenStateGate:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_binary(memoryview(b"abcdef"))
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         outbound = socket.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -428,7 +425,7 @@ class TestSendQueuesAndDrains:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_text("hello")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         outbound = socket.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -457,7 +454,7 @@ class TestSendQueuesAndDrains:
         client.send_text("hello world")
         # Drain over multiple handles; each capped at 4 bytes.
         for _tick in range(20):
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
             if client._tx_partial is None and not client._tx_queue:
                 break
         assert client._tx_partial is None
@@ -473,7 +470,7 @@ class TestSendQueuesAndDrains:
         _drive_handshake(client, socket, clock)
         client.send_text("hi")
         socket.raise_on_send = OSError(99, "send dead")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert client.last_error is not None
 
@@ -491,7 +488,7 @@ class TestInboundData:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.feed_inbound(_client_frame(OPCODE_TEXT, b"hello"))
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert texts == ["hello"]
 
     def test_single_binary_frame_fires_on_binary(self):
@@ -501,7 +498,7 @@ class TestInboundData:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.feed_inbound(_client_frame(OPCODE_BINARY, b"\x00\x01\x02"))
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert data == [b"\x00\x01\x02"]
 
     def test_invalid_utf8_text_closes_with_bad_data(self):
@@ -509,10 +506,10 @@ class TestInboundData:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.feed_inbound(_client_frame(OPCODE_TEXT, b"\xff\xfe"))
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
         # The CLOSE frame we queued is still in tx_queue; verify by draining.
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
         parser.feed(sent)
@@ -525,9 +522,9 @@ class TestInboundData:
         _drive_handshake(client, socket, clock)
         # Servers MUST NOT mask outbound; injecting mask is a violation.
         socket.feed_inbound(encode_frame(OPCODE_TEXT, b"hi", mask=b"mask"))
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
         parser.feed(sent)
@@ -540,9 +537,9 @@ class TestInboundData:
         _drive_handshake(client, socket, clock)
         # Reserved opcode 0x3
         socket.feed_inbound(b"\x83\x00")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
         parser.feed(sent)
@@ -554,7 +551,7 @@ class TestInboundData:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.close_inbound()
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert "without sending a CLOSE frame" in str(client.last_error)
 
@@ -576,8 +573,8 @@ class TestFragmentation:
             + encode_frame(OPCODE_CONTINUATION, b"lo!", fin=True, mask=None),
         )
         # Two ticks — one per frame the parser consumes.
-        client.handle(clock.now())
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         assert texts == ["hello!"]
 
     def test_continuation_with_no_in_progress_closes(self):
@@ -587,9 +584,9 @@ class TestFragmentation:
         socket.feed_inbound(
             encode_frame(OPCODE_CONTINUATION, b"orphan", fin=True, mask=None),
         )
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
         parser.feed(sent)
@@ -604,8 +601,8 @@ class TestFragmentation:
             encode_frame(OPCODE_TEXT, b"part1", fin=False, mask=None)
             + encode_frame(OPCODE_TEXT, b"second", fin=True, mask=None),
         )
-        client.handle(clock.now())
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
 
 
@@ -622,7 +619,7 @@ class TestControlFrames:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.feed_inbound(_client_frame(OPCODE_PING, b"pingdata"))
-        client.handle(clock.now())  # processes inbound + drains pong
+        client.handle(clock.ticks_ms())  # processes inbound + drains pong
         assert pings == [b"pingdata"]
         outbound = socket.read_outbound()
         parser = FrameParser()
@@ -637,11 +634,11 @@ class TestControlFrames:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_ping(b"heartbeat")
-        client.handle(clock.now())  # drain outbound ping
+        client.handle(clock.ticks_ms())  # drain outbound ping
         assert client._pending_ping_deadline_ticks is not None
         socket.read_outbound()
         socket.feed_inbound(_client_frame(OPCODE_PONG, b"heartbeat"))
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert pongs == [b"heartbeat"]
         assert client._pending_ping_deadline_ticks is None
 
@@ -666,7 +663,7 @@ class TestCloseHandshake:
         _drive_handshake(client, socket, clock)
         client.close(CLOSE_GOING_AWAY, "bye")
         assert client.state == WebSocketState.CLOSING
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
         parser.feed(sent)
@@ -682,13 +679,13 @@ class TestCloseHandshake:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.close(CLOSE_NORMAL, "bye")
-        client.handle(clock.now())  # drain our close frame
+        client.handle(clock.ticks_ms())  # drain our close frame
         socket.read_outbound()
         # Peer's close echo.
         socket.feed_inbound(
             _client_frame(OPCODE_CLOSE, encode_close_payload(CLOSE_NORMAL, "ok")),
         )
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert client.last_close_code == CLOSE_NORMAL
         assert closes == [(CLOSE_NORMAL, "bye")]
@@ -706,9 +703,9 @@ class TestCloseHandshake:
                 encode_close_payload(CLOSE_GOING_AWAY, "server going down"),
             ),
         )
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         # Echo close was queued; one more handle drains it.
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert client.last_close_code == CLOSE_GOING_AWAY
         assert client.last_close_reason == "server going down"
@@ -723,8 +720,8 @@ class TestCloseHandshake:
         socket.feed_inbound(
             _client_frame(OPCODE_CLOSE, encode_close_payload(CLOSE_NORMAL, "")),
         )
-        client.handle(clock.now())
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         with raises(WebSocketStateError):
             client.close()
@@ -736,9 +733,9 @@ class TestCloseHandshake:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.close(CLOSE_NORMAL, "bye")
-        client.handle(clock.now())  # drain close
+        client.handle(clock.ticks_ms())  # drain close
         clock.advance(1500)
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert isinstance(client.last_error, WebSocketTimeoutError)
         assert closes  # on_close still fired
@@ -751,7 +748,7 @@ class TestCloseHandshake:
         # CLOSE_ABNORMAL (1006) is reserved — encode_close_payload raises.
         # The client falls back to empty body so the close still proceeds.
         client.close(CLOSE_ABNORMAL, "")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
         parser.feed(sent)
@@ -764,10 +761,10 @@ class TestCloseHandshake:
         _drive_handshake(client, socket, clock)
         # Invalid: 1-byte close payload (RFC §5.5.1 forbids).
         socket.feed_inbound(b"\x88\x01\x03")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         # Client closes with PROTOCOL_ERROR.
         assert client.state == WebSocketState.CLOSING
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
         parser.feed(sent)
@@ -795,8 +792,8 @@ class TestOversize:
             encode_frame(OPCODE_TEXT, b"01234", fin=False, mask=None)
             + encode_frame(OPCODE_CONTINUATION, b"567890123", fin=True, mask=None),
         )
-        client.handle(clock.now())
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         assert oversized == []
         assert client.state == WebSocketState.OPEN
 
@@ -813,11 +810,11 @@ class TestOversize:
             encode_frame(OPCODE_TEXT, b"01234", fin=False, mask=None)
             + encode_frame(OPCODE_CONTINUATION, b"5678901234", fin=True, mask=None),
         )
-        client.handle(clock.now())
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         assert oversized
         assert client.state == WebSocketState.CLOSING
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
         parser.feed(sent)
@@ -837,8 +834,8 @@ class TestOversize:
             encode_frame(OPCODE_TEXT, b"01234", fin=False, mask=None)
             + encode_frame(OPCODE_CONTINUATION, b"5678901234", fin=True, mask=None),
         )
-        client.handle(clock.now())
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         assert oversized == []  # DISCONNECT does not fire on_oversized
         assert client.state == WebSocketState.CLOSING
 
@@ -859,12 +856,12 @@ class TestAutoPing:
         socket.read_outbound()
         # Below the interval — no ping.
         clock.advance(500)
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert socket.peek_outbound() == b""
         # Above the interval — ping enqueues this tick, drains the next.
         clock.advance(700)
-        client.handle(clock.now())
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         outbound = socket.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -880,11 +877,11 @@ class TestAutoPing:
         socket.read_outbound()
         # First auto-ping.
         clock.advance(1500)
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         socket.read_outbound()
         # No pong — wait past pong_timeout.
         clock.advance(3000)
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert isinstance(client.last_error, WebSocketTimeoutError)
 
@@ -900,7 +897,7 @@ class TestRecvErrors:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.raise_on_recv = OSError(99, "recv dead")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert client.last_error is not None
 
@@ -909,7 +906,7 @@ class TestRecvErrors:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         # No inbound bytes; recv_into raises EAGAIN.  Client stays OPEN.
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.OPEN
 
 
@@ -929,10 +926,10 @@ class TestClientEdges:
         socket.feed_inbound(
             _client_frame(OPCODE_CLOSE, encode_close_payload(CLOSE_NORMAL, "")),
         )
-        client.handle(clock.now())
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
-        assert client.check(clock.now()) is False
+        assert client.check(clock.ticks_ms()) is False
 
     def test_check_returns_true_when_tx_partial_set(self):
         socket = FakeSocket()
@@ -945,9 +942,9 @@ class TestClientEdges:
         _drive_handshake(client, socket, clock)
         client.send_text("hello world")
         # First tick partially sends; client._tx_partial is now non-None.
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client._tx_partial is not None
-        assert client.check(clock.now()) is True
+        assert client.check(clock.ticks_ms()) is True
 
     def test_drain_outbound_eagain_keeps_open(self):
         client, socket, clock, _ = _make_client()
@@ -955,7 +952,7 @@ class TestClientEdges:
         _drive_handshake(client, socket, clock)
         client.send_text("hi")
         socket.raise_on_send = OSError(11, "would block")
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.OPEN
         # Frame still queued.
         assert client._tx_queue or client._tx_partial is not None
@@ -967,7 +964,7 @@ class TestClientEdges:
         client.send_text("hi")
         original_send = socket.send
         socket.send = lambda _data: 0
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.OPEN
         socket.send = original_send
 
@@ -975,7 +972,7 @@ class TestClientEdges:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         socket.send = lambda _data: 0
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CONNECTING
         assert client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
 

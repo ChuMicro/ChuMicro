@@ -1,6 +1,8 @@
 # Testing Helpers
 
-`chumicro_websockets.testing` ships three in-memory fakes so libraries that depend on `chumicro-websockets` (and the library's own test suite) can drive `WebSocketClient` and `WebSocketServer` end-to-end without real sockets.
+`chumicro_websockets.testing` ships two in-memory fakes so libraries that depend on `chumicro-websockets` (and the library's own test suite) can drive `WebSocketClient` and `WebSocketServer` end-to-end without real sockets.
+
+For the ticks domain, use `chumicro_timing.testing.FakeTicks` — pass it through the client's / server's `ticks=` kwarg.
 
 ## Usage
 
@@ -9,20 +11,19 @@
 Bidirectional in-memory pipe satisfying the `TCPClientSocket` shape:
 
 ```python
+from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import WebSocketClient
-from chumicro_websockets.testing import FakeConnection, TickClock
+from chumicro_websockets.testing import FakeConnection
 
 def test_client_handshake():
     socket = FakeConnection()
-    clock = TickClock()
+    clock = FakeTicks()
     client = WebSocketClient(
         connection_factory=lambda *_args, **_kwargs: socket,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
     )
     client.connect("ws://example.com/")
-    client.handle(clock.now())
+    client.handle(clock.ticks_ms())
     # Inspect what the client wrote.
     assert b"GET / HTTP/1.1\r\n" in socket.peek_outbound()
 ```
@@ -53,41 +54,42 @@ socket.close_inbound()
 Stand-in for `chumicro_sockets.tcp_listening_socket`:
 
 ```python
+from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import WebSocketServer
-from chumicro_websockets.testing import FakeConnection, FakeListener, TickClock
+from chumicro_websockets.testing import FakeConnection, FakeListener
 
 def test_server_accepts():
     listener = FakeListener()
     peer = FakeConnection()
     listener.queue_accept(peer)
-    clock = TickClock()
+    clock = FakeTicks()
     server = WebSocketServer(
         listener=listener,
         on_connection=lambda conn: None,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
     )
-    server.handle(clock.now())  # accepts the queued peer
+    server.handle(clock.ticks_ms())  # accepts the queued peer
     assert server.connection_count == 1
 ```
 
-### `TickClock`
+### Ticks domain
 
-Manually-advanced fake for the `chumicro_timing` `ticks_ms` / `ticks_add` / `ticks_diff` trio.  Wire the three methods through the client's / server's `ticks_*_func` constructor parameters; `clock.advance(ms)` jumps the simulated clock forward to drive timeouts, auto-ping cadences, and pong-overdue watchdogs:
+For ticks-domain fakes use `chumicro_timing.testing.FakeTicks`.  `clock.advance(ms)` jumps the simulated clock forward to drive timeouts, auto-ping cadences, and pong-overdue watchdogs:
 
 ```python
-clock = TickClock()
+from chumicro_timing.testing import FakeTicks
+from chumicro_websockets import WebSocketClient
+from chumicro_websockets.testing import FakeConnection
+
+clock = FakeTicks()
 client = WebSocketClient(
-    connection_factory=...,
+    connection_factory=lambda *_args, **_kwargs: FakeConnection(),
     handshake_timeout_ms=1000,
-    ticks_ms_func=clock.now,
-    ticks_add_func=clock.add,
-    ticks_diff_func=clock.diff,
+    ticks=clock,
 )
 client.connect("ws://example.com/")
 clock.advance(2000)  # past the handshake deadline
-client.handle(clock.now())
+client.handle(clock.ticks_ms())
 # Client now CLOSED with WebSocketTimeoutError.
 ```
 
@@ -96,7 +98,8 @@ client.handle(clock.now())
 Libraries that depend on `chumicro-websockets` can import the fakes directly:
 
 ```python
-from chumicro_websockets.testing import FakeConnection, FakeListener, TickClock
+from chumicro_timing.testing import FakeTicks
+from chumicro_websockets.testing import FakeConnection, FakeListener
 ```
 
 Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.

@@ -17,6 +17,7 @@ slice 4).  Exercises:
 import struct
 
 from chumicro_test_harness.assertions import raises
+from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     CLOSE_BAD_DATA,
     CLOSE_GOING_AWAY,
@@ -47,7 +48,7 @@ from chumicro_websockets._wire import (
     make_mask_key,
 )
 from chumicro_websockets.server import ServerHandshakePhase
-from chumicro_websockets.testing import FakeConnection, FakeListener, TickClock
+from chumicro_websockets.testing import FakeConnection, FakeListener
 
 # Backwards-compatible alias for in-test references.
 FakeSocket = FakeConnection
@@ -59,15 +60,13 @@ def _noop_connection(_conn):
 
 def _make_server(*, on_connection=None, **kwargs):
     listener = FakeListener()
-    clock = TickClock()
+    clock = FakeTicks()
     if on_connection is None:
         on_connection = _noop_connection
     server = WebSocketServer(
         listener=listener,
         on_connection=on_connection,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
         **kwargs,
     )
     return server, listener, clock
@@ -83,7 +82,7 @@ def _client_handshake_bytes(path="/", host="example.com", *, key=None) -> bytes:
 def _drive_server_handshake(
     server: WebSocketServer,
     listener: FakeListener,
-    clock: TickClock,
+    clock: FakeTicks,
     *,
     path: str = "/",
 ) -> tuple[FakeSocket, str, bytes]:
@@ -97,7 +96,7 @@ def _drive_server_handshake(
     request = _client_handshake_bytes(path=path, key=key)
     peer.feed_inbound(request)
     # Tick: accept + read request + reach SENDING_RESPONSE.
-    server.handle(clock.now())
+    server.handle(clock.ticks_ms())
     # Tick: send the 101 response, transition to OPEN.
     while True:
         connection = server.connections[0]
@@ -105,7 +104,7 @@ def _drive_server_handshake(
             break
         if connection.state == WebSocketState.CLOSED:
             break
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
     response = peer.read_outbound()
     return peer, key, response
 
@@ -130,19 +129,19 @@ class TestServerConstructor:
     def test_check_returns_true_when_idle(self):
         server, _listener, clock = _make_server()
         # Conservative — always True until close().
-        assert server.check(clock.now()) is True
+        assert server.check(clock.ticks_ms()) is True
 
     def test_check_after_close_returns_false(self):
         server, _listener, clock = _make_server()
         server.close()
-        assert server.check(clock.now()) is False
+        assert server.check(clock.ticks_ms()) is False
 
     def test_handle_after_close_is_noop(self):
         server, listener, clock = _make_server()
         server.close()
         peer = FakeSocket()
         listener.queue_accept(peer)
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert server.connection_count == 0
 
 
@@ -154,21 +153,21 @@ class TestServerConstructor:
 class TestAccept:
     def test_no_pending_connection_keeps_count_zero(self):
         server, _listener, clock = _make_server()
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert server.connection_count == 0
 
     def test_pending_connection_creates_connection_object(self):
         server, listener, clock = _make_server()
         peer = FakeSocket()
         listener.queue_accept(peer)
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert server.connection_count == 1
 
     def test_max_connections_limit_respected(self):
         server, listener, clock = _make_server(max_connections=2)
         for _index in range(5):
             listener.queue_accept(FakeSocket())
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert server.connection_count == 2
 
     def test_listener_error_does_not_raise(self):
@@ -179,7 +178,7 @@ class TestAccept:
             raise OSError(99, "listener dead")
 
         listener.accept = _raise
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert server.connection_count == 0
         listener.accept = original_accept
 
@@ -234,7 +233,7 @@ class TestHandshakeRejection:
         peer = FakeSocket()
         listener.queue_accept(peer)
         peer.feed_inbound(b"POST / HTTP/1.1\r\n\r\n")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         # Inspect the bytes the server pushed back.
         response = peer.read_outbound()
         assert response.startswith(b"HTTP/1.1 400 Bad Request\r\n")
@@ -250,7 +249,7 @@ class TestHandshakeRejection:
         listener.queue_accept(peer)
         request = _client_handshake_bytes(path="/other")
         peer.feed_inbound(request)
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         response = peer.read_outbound()
         assert response.startswith(b"HTTP/1.1 404 Not Found\r\n")
         assert peer.closed is True
@@ -271,9 +270,9 @@ class TestHandshakeRejection:
         listener.queue_accept(peer)
         # Send a partial request that never completes.
         peer.feed_inbound(b"GET / HTTP/1.1\r\nHost: x\r\n")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         clock.advance(1500)
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         # Connection finalized; removed from the active list.
         assert server.connection_count == 0
         assert peer.closed is True
@@ -283,7 +282,7 @@ class TestHandshakeRejection:
         peer = FakeSocket()
         listener.queue_accept(peer)
         peer.close_inbound()
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert server.connection_count == 0
 
     def test_on_connection_raise_kills_connection(self):
@@ -294,12 +293,12 @@ class TestHandshakeRejection:
         peer = FakeSocket()
         listener.queue_accept(peer)
         peer.feed_inbound(_client_handshake_bytes())
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         # Drive sending the 101 + entering OPEN (which fires callback that raises).
         for _tick in range(5):
             if server.connection_count == 0:
                 break
-            server.handle(clock.now())
+            server.handle(clock.ticks_ms())
         assert server.connection_count == 0
         assert peer.closed is True
 
@@ -319,7 +318,7 @@ class TestSendReceive:
         server, listener, clock = _make_server(on_connection=on_open)
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         peer.feed_inbound(_server_frame(OPCODE_TEXT, b"hello"))
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert observed == [("text", "hello")]
 
     def test_inbound_binary_fires_callback(self):
@@ -331,7 +330,7 @@ class TestSendReceive:
         server, listener, clock = _make_server(on_connection=on_open)
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         peer.feed_inbound(_server_frame(OPCODE_BINARY, b"\x00\x01\x02"))
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert observed == [("bin", b"\x00\x01\x02")]
 
     def test_unmasked_inbound_frame_closes_with_protocol_error(self):
@@ -340,12 +339,12 @@ class TestSendReceive:
         # Server expects MASK bit set on inbound; sending a server-style frame
         # (no mask) is a protocol violation.
         peer.feed_inbound(encode_frame(OPCODE_TEXT, b"hi", mask=None))
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         # Connection finalizes after draining the close.
         for _tick in range(3):
             if server.connection_count == 0:
                 break
-            server.handle(clock.now())
+            server.handle(clock.ticks_ms())
         # Server's outbound close frame was sent before tear-down.
         outbound = peer.read_outbound()
         parser = FrameParser()
@@ -356,7 +355,7 @@ class TestSendReceive:
 
     def test_send_text_pre_open_raises(self):
         # Build a Connection in CONNECTING state via direct construction.
-        clock = TickClock()
+        clock = FakeTicks()
         peer = FakeSocket()
         connection = Connection(
             peer,
@@ -369,9 +368,7 @@ class TestSendReceive:
             pong_timeout_ms=5000,
             handshake_timeout_ms=5000,
             close_timeout_ms=5000,
-            ticks_ms_func=clock.now,
-            ticks_add_func=clock.add,
-            ticks_diff_func=clock.diff,
+            ticks=clock,
             on_connection_callback=lambda _c: None,
         )
         with raises(WebSocketStateError, match="OPEN"):
@@ -397,7 +394,7 @@ class TestSendReceive:
         )
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         observed[0].send_text("hello")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -412,7 +409,7 @@ class TestSendReceive:
         )
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         observed[0].send_binary(bytearray(b"abc"))
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -437,12 +434,12 @@ class TestSendReceive:
         )
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         peer.feed_inbound(_server_frame(OPCODE_TEXT, b"\xff\xfe"))
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         # Drain close.
         for _tick in range(3):
             if server.connection_count == 0:
                 break
-            server.handle(clock.now())
+            server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -468,19 +465,19 @@ class TestFragmentation:
             encode_frame(OPCODE_TEXT, b"hel", fin=False, mask=make_mask_key())
             + encode_frame(OPCODE_CONTINUATION, b"lo!", fin=True, mask=make_mask_key()),
         )
-        server.handle(clock.now())
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
+        server.handle(clock.ticks_ms())
         assert observed == ["hello!"]
 
     def test_continuation_with_no_in_progress_closes(self):
         server, listener, clock = _make_server()
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         peer.feed_inbound(_server_frame(OPCODE_CONTINUATION, b"orphan"))
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         for _tick in range(3):
             if server.connection_count == 0:
                 break
-            server.handle(clock.now())
+            server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -503,7 +500,7 @@ class TestControlFrames:
         server, listener, clock = _make_server(on_connection=on_open)
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         peer.feed_inbound(_server_frame(OPCODE_PING, b"pingdata"))
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -519,11 +516,11 @@ class TestControlFrames:
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         connection = observed[0]
         connection.send_ping(b"hb")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         peer.read_outbound()
         assert connection._pending_ping_deadline_ticks is not None
         peer.feed_inbound(_server_frame(OPCODE_PONG, b"hb"))
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert connection._pending_ping_deadline_ticks is None
 
 
@@ -547,7 +544,7 @@ class TestCloseHandshake:
         connection = observed[0]
         connection.close(CLOSE_GOING_AWAY, "going down")
         # Drain server-side close frame.
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -558,7 +555,7 @@ class TestCloseHandshake:
         peer.feed_inbound(
             _server_frame(OPCODE_CLOSE, encode_close_payload(CLOSE_GOING_AWAY, "ok")),
         )
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert connection.state == WebSocketState.CLOSED
         assert closes == [(CLOSE_GOING_AWAY, "going down")]
 
@@ -575,9 +572,9 @@ class TestCloseHandshake:
         peer.feed_inbound(
             _server_frame(OPCODE_CLOSE, encode_close_payload(CLOSE_GOING_AWAY, "client gone")),
         )
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         # Drain echo.
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         connection = observed[0]
         assert connection.state == WebSocketState.CLOSED
         assert connection.last_close_code == CLOSE_GOING_AWAY
@@ -604,9 +601,9 @@ class TestCloseHandshake:
         _drive_server_handshake(server, listener, clock)
         connection = observed[0]
         connection.close()
-        server.handle(clock.now())  # drain close frame
+        server.handle(clock.ticks_ms())  # drain close frame
         clock.advance(1500)
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert connection.state == WebSocketState.CLOSED
 
     def test_close_with_invalid_payload_falls_back_to_empty(self):
@@ -617,7 +614,7 @@ class TestCloseHandshake:
         )
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         observed[0].close(CLOSE_ABNORMAL, "")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -628,11 +625,11 @@ class TestCloseHandshake:
         server, listener, clock = _make_server()
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         peer.feed_inbound(_server_frame(OPCODE_CLOSE, b"\x03"))  # 1-byte forbidden
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         for _tick in range(3):
             if server.connection_count == 0:
                 break
-            server.handle(clock.now())
+            server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -646,7 +643,7 @@ class TestCloseHandshake:
         )
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         peer.close_inbound()
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         connection = observed[0]
         assert connection.state == WebSocketState.CLOSED
         assert "without sending a CLOSE frame" in str(connection.last_error)
@@ -675,14 +672,14 @@ class TestOversize:
             encode_frame(OPCODE_TEXT, b"01234", fin=False, mask=make_mask_key())
             + encode_frame(OPCODE_CONTINUATION, b"5678901234", fin=True, mask=make_mask_key()),
         )
-        server.handle(clock.now())
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
+        server.handle(clock.ticks_ms())
         assert oversized
         # Drain close.
         for _tick in range(3):
             if server.connection_count == 0:
                 break
-            server.handle(clock.now())
+            server.handle(clock.ticks_ms())
         outbound = peer.read_outbound()
         parser = FrameParser()
         parser.feed(outbound)
@@ -705,8 +702,8 @@ class TestOversize:
             encode_frame(OPCODE_TEXT, b"01234", fin=False, mask=make_mask_key())
             + encode_frame(OPCODE_CONTINUATION, b"5678901234", fin=True, mask=make_mask_key()),
         )
-        server.handle(clock.now())
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
+        server.handle(clock.ticks_ms())
         assert oversized == []
         # Connection still OPEN.
         assert server.connections[0].state == WebSocketState.OPEN
@@ -729,8 +726,8 @@ class TestOversize:
             encode_frame(OPCODE_TEXT, b"01234", fin=False, mask=make_mask_key())
             + encode_frame(OPCODE_CONTINUATION, b"5678901234", fin=True, mask=make_mask_key()),
         )
-        server.handle(clock.now())
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
+        server.handle(clock.ticks_ms())
         assert oversized == []  # DISCONNECT does NOT fire on_oversized
         # Connection transitioned to CLOSING; peer echoes close to finalize.
         assert observed[0].state in (WebSocketState.CLOSING, WebSocketState.CLOSED)
@@ -779,9 +776,9 @@ class TestConnectionEdges:
         peer = FakeSocket()
         listener.queue_accept(peer)
         peer.feed_inbound(_client_handshake_bytes())
-        server.handle(clock.now())  # accepts + reads request + transitions to SENDING_RESPONSE
+        server.handle(clock.ticks_ms())  # accepts + reads request + transitions to SENDING_RESPONSE
         peer.raise_on_send = OSError(11, "would block")
-        server.handle(clock.now())  # send EAGAIN — state unchanged
+        server.handle(clock.ticks_ms())  # send EAGAIN — state unchanged
         connection = server.connections[0]
         assert connection.state == WebSocketState.CONNECTING
         assert connection._handshake_phase == ServerHandshakePhase.SENDING_RESPONSE
@@ -794,9 +791,9 @@ class TestConnectionEdges:
         peer = FakeSocket()
         listener.queue_accept(peer)
         peer.feed_inbound(_client_handshake_bytes())
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         peer.raise_on_send = OSError(99, "send dead")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         # Server removes the dead connection on the same tick as the failure.
         assert server.connection_count == 0
         assert observed == []  # never reached OPEN, so on_connection was never called
@@ -809,7 +806,7 @@ class TestConnectionEdges:
         )
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         peer.raise_on_recv = OSError(99, "recv dead")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert observed[0].state == WebSocketState.CLOSED
 
     def test_send_error_in_open_finalizes(self):
@@ -820,7 +817,7 @@ class TestConnectionEdges:
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
         observed[0].send_text("hello")
         peer.raise_on_send = OSError(99, "send dead")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert observed[0].state == WebSocketState.CLOSED
 
     def test_send_ping_oversize_payload_raises(self):
@@ -840,7 +837,7 @@ class TestConnectionEdges:
         )
         _drive_server_handshake(server, listener, clock)
         observed[0]._state = WebSocketState.CLOSED
-        assert observed[0].check(clock.now()) is False
+        assert observed[0].check(clock.ticks_ms()) is False
 
     def test_pong_overdue_finalizes(self):
         observed = []
@@ -850,9 +847,9 @@ class TestConnectionEdges:
         )
         _drive_server_handshake(server, listener, clock)
         observed[0].send_ping(b"hb")
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         clock.advance(1500)
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         assert observed[0].state == WebSocketState.CLOSED
         assert isinstance(observed[0].last_error, WebSocketTimeoutError)
 
@@ -867,7 +864,7 @@ class TestConnectionEdges:
         listener.queue_accept(peer)
         peer.feed_inbound(_client_handshake_bytes())
         for _tick in range(60):
-            server.handle(clock.now())
+            server.handle(clock.ticks_ms())
             if server.connections and server.connections[0].state == WebSocketState.OPEN:
                 break
         assert observed
@@ -881,11 +878,11 @@ class TestConnectionEdges:
         peer = FakeSocket()
         listener.queue_accept(peer)
         peer.feed_inbound(_client_handshake_bytes())
-        server.handle(clock.now())  # reach SENDING_RESPONSE
+        server.handle(clock.ticks_ms())  # reach SENDING_RESPONSE
         # Patch send to return 0 transiently.
         original_send = peer.send
         peer.send = lambda _data: 0
-        server.handle(clock.now())
+        server.handle(clock.ticks_ms())
         connection = server.connections[0]
         assert connection.state == WebSocketState.CONNECTING
         peer.send = original_send

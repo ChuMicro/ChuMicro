@@ -32,6 +32,7 @@ import gc
 import struct
 import tracemalloc
 
+from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     OPCODE_BINARY,
     OPCODE_PONG,
@@ -41,30 +42,28 @@ from chumicro_websockets import (
     WebSocketState,
 )
 from chumicro_websockets._wire import encode_frame
-from chumicro_websockets.testing import FakeConnection, FakeListener, TickClock
+from chumicro_websockets.testing import FakeConnection, FakeListener
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_client(socket: FakeConnection, clock: TickClock) -> WebSocketClient:
+def _make_client(socket: FakeConnection, clock: FakeTicks) -> WebSocketClient:
     return WebSocketClient(
         connection_factory=lambda *_args, **_kwargs: socket,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
     )
 
 
 def _drive_client_to_open(client: WebSocketClient, socket: FakeConnection,
-                          clock: TickClock) -> None:
+                          clock: FakeTicks) -> None:
     """Drive a client through its handshake until OPEN, using the same
     canned 101 the rest of the test suite uses."""
     client.connect("ws://example.com/")
     # Send handshake (drain in one or two ticks).
     while client.state == WebSocketState.CONNECTING:
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         request = socket.read_outbound()
         if not request:
             continue
@@ -145,14 +144,14 @@ class TestSendTextNoLeak:
         ``_tx_partial``, callback closures not garbage-collected.
         """
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         client = _make_client(socket, clock)
         _drive_client_to_open(client, socket, clock)
 
         def operation() -> None:
             socket.outbound = bytearray()  # discard the wire bytes
             client.send_text("hello")
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
 
         growth_bytes, _current_kib, _peak_kib = _measure_growth(
             operation, warmup_iterations=50, sample_iterations=500,
@@ -172,7 +171,7 @@ class TestSendBinaryNoLeak:
     def test_send_binary_no_growth(self) -> None:
         """500 binary sends with a 256-byte payload should not leak."""
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         client = _make_client(socket, clock)
         _drive_client_to_open(client, socket, clock)
 
@@ -181,7 +180,7 @@ class TestSendBinaryNoLeak:
         def operation() -> None:
             socket.outbound = bytearray()
             client.send_binary(payload)
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
 
         growth_bytes, _current_kib, _peak_kib = _measure_growth(
             operation, warmup_iterations=50, sample_iterations=500,
@@ -206,7 +205,7 @@ class TestInboundTextNoLeak:
         without bound.
         """
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         client = _make_client(socket, clock)
         _drive_client_to_open(client, socket, clock)
         # Sink for the inbound text — drop reference immediately so
@@ -222,7 +221,7 @@ class TestInboundTextNoLeak:
 
         def operation() -> None:
             socket.feed_inbound(frame)
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
 
         growth_bytes, _current_kib, _peak_kib = _measure_growth(
             operation, warmup_iterations=50, sample_iterations=500,
@@ -241,7 +240,7 @@ class TestInboundBinaryNoLeak:
     def test_inbound_binary_no_growth(self) -> None:
         """500 inbound binary frames with a 256-byte payload should not leak."""
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         client = _make_client(socket, clock)
         _drive_client_to_open(client, socket, clock)
         client.on_binary = lambda _data: None
@@ -250,7 +249,7 @@ class TestInboundBinaryNoLeak:
 
         def operation() -> None:
             socket.feed_inbound(frame)
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
 
         growth_bytes, _current_kib, _peak_kib = _measure_growth(
             operation, warmup_iterations=50, sample_iterations=500,
@@ -273,7 +272,7 @@ class TestPingPongNoLeak:
         retained beyond pong, control-frame buffers not released.
         """
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         client = _make_client(socket, clock)
         _drive_client_to_open(client, socket, clock)
         client.on_pong = lambda _data: None
@@ -284,9 +283,9 @@ class TestPingPongNoLeak:
         def operation() -> None:
             socket.outbound = bytearray()
             client.send_ping(b"")
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
             socket.feed_inbound(pong_frame)
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
 
         growth_bytes, _current_kib, _peak_kib = _measure_growth(
             operation, warmup_iterations=20, sample_iterations=300,
@@ -313,7 +312,7 @@ class TestRecvBufferReuse:
         ``_BaseSession`` now).
         """
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         client = _make_client(socket, clock)
         _drive_client_to_open(client, socket, clock)
         client.on_text = lambda _text: None
@@ -323,7 +322,7 @@ class TestRecvBufferReuse:
         buffer_ids = set()
         for _ in range(100):
             socket.feed_inbound(frame)
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
             buffer_ids.add(id(client._recv_buffer))
         assert len(buffer_ids) == 1, "session reallocated its recv buffer mid-flight"
 
@@ -335,7 +334,7 @@ class TestRecvBufferReuse:
         write cursor is back to zero — no across-frame retention.
         """
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         client = _make_client(socket, clock)
         _drive_client_to_open(client, socket, clock)
         client.on_text = lambda _text: None
@@ -343,7 +342,7 @@ class TestRecvBufferReuse:
         frame = encode_frame(OPCODE_TEXT, b"hello", fin=True, mask=None)
         for _ in range(50):
             socket.feed_inbound(frame)
-            client.handle(clock.now())
+            client.handle(clock.ticks_ms())
 
         # Frame parser should be in READING_HEADER with the buffer
         # empty; the steady-state payload buffer is reused (len stays
@@ -369,7 +368,7 @@ class TestHandleBoundedWork:
         the handle() returns without churning.
         """
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         client = _make_client(socket, clock)
         _drive_client_to_open(client, socket, clock)
 
@@ -381,7 +380,7 @@ class TestHandleBoundedWork:
             return original_recv_into(buffer, nbytes)
 
         socket.recv_into = counting_recv_into  # type: ignore[assignment]
-        client.handle(clock.now())
+        client.handle(clock.ticks_ms())
         # One recv_into call to discover EAGAIN, then exit.
         assert len(recv_calls) == 1
 
@@ -391,19 +390,17 @@ class TestHandleBoundedWork:
 # ---------------------------------------------------------------------------
 
 
-def _make_server(listener: FakeListener, clock: TickClock,
+def _make_server(listener: FakeListener, clock: FakeTicks,
                  *, on_connection) -> WebSocketServer:
     return WebSocketServer(
         listener=listener,
         on_connection=on_connection,
-        ticks_ms_func=clock.now,
-        ticks_add_func=clock.add,
-        ticks_diff_func=clock.diff,
+        ticks=clock,
     )
 
 
 def _drive_server_to_open(socket: FakeConnection, server: WebSocketServer,
-                          listener: FakeListener, clock: TickClock):
+                          listener: FakeListener, clock: FakeTicks):
     """Accept a connection and drive its handshake to OPEN."""
     from chumicro_websockets._wire import (
         encode_client_handshake,
@@ -411,7 +408,7 @@ def _drive_server_to_open(socket: FakeConnection, server: WebSocketServer,
     )
 
     listener.queue_accept(socket)
-    server.handle(clock.now())  # accept
+    server.handle(clock.ticks_ms())  # accept
     assert server.connection_count == 1
     connection = server.connections[0]
 
@@ -419,7 +416,7 @@ def _drive_server_to_open(socket: FakeConnection, server: WebSocketServer,
     request = encode_client_handshake("example.com", 80, "/", key)
     socket.feed_inbound(request)
     while connection.state == WebSocketState.CONNECTING:
-        connection.handle(clock.now())
+        connection.handle(clock.ticks_ms())
     return connection
 
 
@@ -427,7 +424,7 @@ class TestServerInboundNoLeak:
     def test_server_inbound_text_no_growth(self) -> None:
         """500 inbound text frames into a server Connection should not leak."""
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         observed = []
         server = _make_server(
             FakeListener(),
@@ -442,7 +439,7 @@ class TestServerInboundNoLeak:
 
         def operation() -> None:
             socket.feed_inbound(frame)
-            connection.handle(clock.now())
+            connection.handle(clock.ticks_ms())
 
         growth_bytes, _current_kib, _peak_kib = _measure_growth(
             operation, warmup_iterations=50, sample_iterations=500,
@@ -454,7 +451,7 @@ class TestServerInboundNoLeak:
     def test_server_send_text_no_growth(self) -> None:
         """500 outbound text frames from a server Connection should not leak."""
         socket = FakeConnection()
-        clock = TickClock()
+        clock = FakeTicks()
         observed = []
         server = _make_server(
             FakeListener(),
@@ -466,7 +463,7 @@ class TestServerInboundNoLeak:
         def operation() -> None:
             socket.outbound = bytearray()
             connection.send_text("ack")
-            connection.handle(clock.now())
+            connection.handle(clock.ticks_ms())
 
         growth_bytes, _current_kib, _peak_kib = _measure_growth(
             operation, warmup_iterations=50, sample_iterations=500,

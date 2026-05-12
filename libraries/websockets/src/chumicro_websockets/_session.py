@@ -162,9 +162,7 @@ class _BaseSession:
         when_oversized: str,
         pong_timeout_ms: int,
         close_timeout_ms: int,
-        ticks_ms_func,
-        ticks_add_func,
-        ticks_diff_func,
+        ticks,
     ) -> None:
         self._socket = socket
         self._max_message_bytes = max_message_bytes
@@ -175,9 +173,7 @@ class _BaseSession:
         self._pong_timeout_ms = pong_timeout_ms
         self._close_timeout_ms = close_timeout_ms
 
-        self._ticks_ms = ticks_ms_func
-        self._ticks_add = ticks_add_func
-        self._ticks_diff = ticks_diff_func
+        self._ticks = ticks
 
         # Pre-allocated recv scratch buffer — reused on every tick so we
         # don't churn the heap with ~1 KB allocations per handle() call.
@@ -579,8 +575,8 @@ class _BaseSession:
             self._last_close_code = code
             self._last_close_reason = reason
         self._state = WebSocketState.CLOSING
-        self._close_deadline_ticks = self._ticks_add(
-            self._ticks_ms(),
+        self._close_deadline_ticks = self._ticks.ticks_add(
+            self._ticks.ticks_ms(),
             self._close_timeout_ms,
         )
 
@@ -628,7 +624,7 @@ class _BaseSession:
         ``True`` if a deadline tripped (caller should yield the tick).
         """
         if self._close_deadline_ticks is not None:
-            if self._ticks_diff(self._close_deadline_ticks, now_ms) <= 0:
+            if self._ticks.ticks_diff(self._close_deadline_ticks, now_ms) <= 0:
                 # Force closed even though peer didn't echo CLOSE.
                 self._last_error = WebSocketTimeoutError(
                     f"peer did not send CLOSE within {self._close_timeout_ms} ms",
@@ -636,7 +632,7 @@ class _BaseSession:
                 self._finalize_closed()
                 return True
         if self._pending_ping_deadline_ticks is not None:
-            if self._ticks_diff(self._pending_ping_deadline_ticks, now_ms) <= 0:
+            if self._ticks.ticks_diff(self._pending_ping_deadline_ticks, now_ms) <= 0:
                 self._fail_with_error(
                     WebSocketTimeoutError(
                         f"no PONG within {self._pong_timeout_ms} ms of last PING",
@@ -657,8 +653,8 @@ class _BaseSession:
         if self._pending_ping_deadline_ticks is not None:
             return  # earlier ping still outstanding — keep its deadline
         if now_ms is None:
-            now_ms = self._ticks_ms()
-        self._pending_ping_deadline_ticks = self._ticks_add(
+            now_ms = self._ticks.ticks_ms()
+        self._pending_ping_deadline_ticks = self._ticks.ticks_add(
             now_ms,
             self._pong_timeout_ms,
         )
