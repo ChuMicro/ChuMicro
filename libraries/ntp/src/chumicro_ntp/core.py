@@ -144,27 +144,6 @@ class NTPResult:
         self._done = True
 
 
-def _build_default_socket_factory(*, radio=None):
-    """Return a socket factory that opens a non-blocking UDP socket via
-    ``chumicro_ntp.sockets_factory.chumicro_sockets_factory``.
-
-    Used by :meth:`NTPClient.from_config` when the caller doesn't pass
-    a pre-built socket or a custom factory.  Reads no config keys —
-    the SNTP server hostname/port live on the ``NTPClient`` itself,
-    not on the socket — so the factory never raises ``MissingConfigKey``.
-    """
-    def factory():
-        from chumicro_ntp.sockets_factory import chumicro_sockets_factory  # noqa: PLC0415
-        sock = chumicro_sockets_factory(radio=radio)
-        # Runner-shaped clients require non-blocking recv.  Guarded so
-        # test fakes without setblocking() still work.
-        if hasattr(sock, "setblocking"):
-            sock.setblocking(False)
-        return sock
-
-    return factory
-
-
 class NTPClient:
     """Runner-shaped SNTP client over an injected UDP socket.
 
@@ -254,10 +233,19 @@ class NTPClient:
                 f"NTPClient.from_config requires a RuntimeConfig or "
                 f"dict, got {type(config).__name__}",
             )
-        if socket is None and socket_factory is None:
-            socket_factory = _build_default_socket_factory(radio=radio)
         if socket is None:
-            socket = socket_factory()
+            if socket_factory is None:
+                from chumicro_ntp.sockets_factory import (  # noqa: PLC0415
+                    chumicro_sockets_factory,
+                )
+
+                socket = chumicro_sockets_factory(radio=radio)
+                # Runner-shaped clients require non-blocking recv.  Guarded so
+                # test fakes without setblocking() still work.
+                if hasattr(socket, "setblocking"):
+                    socket.setblocking(False)
+            else:
+                socket = socket_factory()
         return cls(
             socket=socket,
             server=config.get("ntp.server", "pool.ntp.org"),
