@@ -15,6 +15,7 @@ sit in :mod:`chumicro_mqtt._wire`.
 from collections import deque
 
 from chumicro_config import MissingConfigKey
+from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_mqtt._wire import (
@@ -261,7 +262,6 @@ def _build_default_socket_factory(config, *, radio=None):
     port = config["mqtt.broker.port"]
 
     def factory():
-        from chumicro_sockets import tcp_client_socket  # noqa: PLC0415
         return tcp_client_socket(host, port, radio=radio)
 
     return factory
