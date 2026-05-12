@@ -179,47 +179,99 @@ class TestProtocolErrors:
             decoder.read_next()
 
 
-class TestOversizedMessage:
-    def test_publish_larger_than_buffer_routes_through_degraded_path(self) -> None:
-        """Oversize PUBLISH emits an _OversizedMessage event after draining."""
+def _drive_until_done(decoder: PacketDecoder, packet: bytes, chunk_size: int = 32) -> list:
+    """Feed *packet* through *decoder* in chunks, collecting parsed events."""
+    events: list = []
+    offset = 0
+    while offset < len(packet):
+        chunk = packet[offset:offset + chunk_size]
+        offset += chunk_size
+        room = decoder.fill_capacity()
+        if room == 0:
+            event = decoder.read_next()
+            if event is not None:
+                events.append(event)
+            continue
+        write = chunk[:room]
+        decoder.fill_buffer()[:len(write)] = write
+        decoder.advance(len(write))
+        event = decoder.read_next()
+        if event is not None:
+            events.append(event)
+    while True:
+        event = decoder.read_next()
+        if event is None:
+            break
+        events.append(event)
+    return events
+
+
+class TestIntactTier:
+    """Tier 2: PUBLISH > rx_buffer_size, ≤ max_message_bytes → ParsedPublish (intact)."""
+
+    def test_publish_between_steady_and_cap_delivers_intact(self) -> None:
+        """A 200-byte payload on a 64-byte rx + 8192 cap routes through tier 2."""
         decoder = PacketDecoder(
-            rx_buffer_size=64,  # tight cap so the publish overflows
+            rx_buffer_size=64,
             max_message_bytes=8192,
         )
         big_payload = b"x" * 200
         packet = canned_publish_bytes("log", big_payload, qos=0)
-        # Feed in chunks small enough that we exercise the degraded
-        # buffer path properly.
-        chunk_size = 32
-        offset = 0
-        events: list = []
-        while offset < len(packet):
-            chunk = packet[offset:offset + chunk_size]
-            offset += chunk_size
-            room = decoder.fill_capacity()
-            if room == 0:
-                event = decoder.read_next()
-                if event is not None:
-                    events.append(event)
-                continue
-            write = chunk[:room]
-            decoder.fill_buffer()[:len(write)] = write
-            decoder.advance(len(write))
-            event = decoder.read_next()
-            if event is not None:
-                events.append(event)
-        # Drain any remaining state.
-        while True:
-            event = decoder.read_next()
-            if event is None:
-                break
-            events.append(event)
-        # Should have produced exactly one oversize event.
+        events = _drive_until_done(decoder, packet, chunk_size=32)
+        publishes = [event for event in events if isinstance(event, ParsedPublish)]
+        assert len(publishes) == 1
+        assert publishes[0].topic == "log"
+        assert publishes[0].payload == big_payload
+        # No oversize event for a tier-2 message.
+        assert not any(isinstance(event, _OversizedMessage) for event in events)
+
+    def test_intact_qos1_carries_packet_id(self) -> None:
+        decoder = PacketDecoder(rx_buffer_size=64, max_message_bytes=8192)
+        payload = b"y" * 300
+        packet = canned_publish_bytes("data", payload, qos=1, packet_id=1234)
+        events = _drive_until_done(decoder, packet, chunk_size=24)
+        publishes = [event for event in events if isinstance(event, ParsedPublish)]
+        assert len(publishes) == 1
+        assert publishes[0].qos == 1
+        assert publishes[0].packet_id == 1234
+        assert publishes[0].payload == payload
+
+
+class TestOversizedTier:
+    """Tier 3: PUBLISH > max_message_bytes → _OversizedMessage (payload dropped)."""
+
+    def test_publish_above_cap_drains_and_reports_length(self) -> None:
+        decoder = PacketDecoder(
+            rx_buffer_size=64,
+            max_message_bytes=100,  # 200-byte payload exceeds this
+        )
+        big_payload = b"x" * 200
+        packet = canned_publish_bytes("log", big_payload, qos=0)
+        events = _drive_until_done(decoder, packet, chunk_size=32)
         oversized = [event for event in events if isinstance(event, _OversizedMessage)]
         assert len(oversized) == 1
         assert oversized[0].topic == "log"
-        # reported_length is the count of payload bytes routed through
-        # the degraded buffer (the payload that didn't fit in steady-
-        # state); not the total wire size.  Just assert it's nonzero
-        # — the exact number depends on chunking.
-        assert oversized[0].reported_length > 0
+        # reported_length is the MQTT remaining-length value
+        # (topic prelude + payload).
+        # topic_length_field (2) + "log" (3) + payload (200) = 205.
+        assert oversized[0].reported_length == 205
+
+    def test_oversize_topic_emits_none_topic(self) -> None:
+        """Topic alone exceeds rx_buffer_size → event with topic=None (deadlock fix)."""
+        decoder = PacketDecoder(
+            rx_buffer_size=16,        # tiny — even modest topics overflow
+            max_message_bytes=32,
+        )
+        long_topic = "a" * 50
+        packet = canned_publish_bytes(long_topic, b"x", qos=0)
+        events = _drive_until_done(decoder, packet, chunk_size=8)
+        oversized = [event for event in events if isinstance(event, _OversizedMessage)]
+        assert len(oversized) == 1
+        assert oversized[0].topic is None
+        # Decoder should be back to steady state — feed a normal small
+        # packet and verify it parses cleanly.
+        small_packet = canned_publish_bytes("a", b"b", qos=0)
+        events2 = _drive_until_done(decoder, small_packet, chunk_size=8)
+        publishes = [event for event in events2 if isinstance(event, ParsedPublish)]
+        assert len(publishes) == 1
+        assert publishes[0].topic == "a"

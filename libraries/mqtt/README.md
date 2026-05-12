@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A non-blocking MQTT 3.1.1 client (QoS 0 + 1) that fits inside your runner tick.**
 
-QoS 0 + QoS 1, last-will, retain, pattern-routed handlers, and a structured oversized-message policy — runner-shaped, no threads, no async.  A configurable per-tick recv budget keeps a 100 KB inbound blob from monopolising the loop, and failed QoS-1 publishes roll back the packet-id allocation cleanly on backpressure.  Built on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) (ticks).
+QoS 0 + QoS 1, last-will, retain, pattern-routed handlers, automatic per-device topic prefixing, and a three-tier inbound size model that keeps heap usage bounded on memory-tight boards — runner-shaped, no threads, no async.  A configurable per-tick recv budget keeps a large inbound blob from monopolising the loop, and failed QoS-1 publishes roll back the packet-id allocation cleanly on backpressure.  Built on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) (ticks).
 
 <br clear="left">
 
@@ -54,11 +54,13 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 
 | Symbol | Purpose |
 |---|---|
-| `MQTTClient(socket, *, client_id, ...)` | Main client.  Runner-shaped (`check(now_ms)`/`handle(now_ms)`). |
-| `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None)` | QoS 0 or 1. |
-| `client.subscribe(topic, qos=0, *, on_subscribe=None)` | Single-topic subscribe. |
-| `client.unsubscribe(topic, *, on_unsubscribe=None)` | |
-| `client.add_pattern_handler(pattern, handler)` | Route inbound messages by topic pattern. |
+| `MQTTClient(socket, *, client_id, root_topic=None, ...)` | Main client.  Runner-shaped (`check(now_ms)`/`handle(now_ms)`).  Set `root_topic` to enable automatic per-device prefixing. |
+| `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None)` | QoS 0 or 1.  Topic resolves through `root_topic`/`client_id` prefix scheme. |
+| `client.publish_raw(topic, payload, ...)` | Publish to *topic* verbatim — bypasses `root_topic` prefixing. |
+| `client.subscribe(topic, qos=0, *, on_subscribe=None)` / `client.subscribe_raw(...)` | Single-topic subscribe.  Same prefix-vs-raw split as `publish`. |
+| `client.unsubscribe(topic, ...)` / `client.unsubscribe_raw(...)` | Same prefix-vs-raw split. |
+| `client.publisher(topic, *, qos=0, retain=False)` | Return an `MQTTPublisher` bound to that topic — `publisher.publish(payload)` reuses the binding for repeated publishes. |
+| `client.add_pattern_handler(pattern, handler)` / `client.remove_pattern_handler(handler, pattern=None)` | Route inbound messages by topic pattern. |
 | `client.connect() / .disconnect()` | Lifecycle. |
 | `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound payloads above `max_message_bytes`. |
 | `ProtocolState.{DISCONNECTED,CONNECTING,CONNECTED,FAILED}` | Lifecycle states. |

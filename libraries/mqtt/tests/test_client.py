@@ -401,6 +401,242 @@ class TestInboundPublish:
         _drive(client, ticks, count=1)
         assert captured == ["sensors/back-porch/temperature"]
 
+    def test_remove_pattern_handler_by_handler_only(self) -> None:
+        """``remove_pattern_handler(handler)`` strips every registration of *handler*."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+
+        fires: list[str] = []
+        def handler(topic, _payload):
+            fires.append(topic)
+
+        client.add_pattern_handler("a/+", handler)
+        client.add_pattern_handler("b/#", handler)
+        client.remove_pattern_handler(handler)
+
+        sock.enqueue_recv(canned_publish_bytes("a/x", b"", qos=0))
+        sock.enqueue_recv(canned_publish_bytes("b/y/z", b"", qos=0))
+        _drive(client, ticks, count=1)
+        assert fires == []
+
+    def test_remove_pattern_handler_by_handler_and_pattern(self) -> None:
+        """``remove_pattern_handler(handler, pattern=...)`` removes one registration."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+
+        fires: list[str] = []
+        def handler(topic, _payload):
+            fires.append(topic)
+
+        client.add_pattern_handler("a/+", handler)
+        client.add_pattern_handler("b/#", handler)
+        client.remove_pattern_handler(handler, pattern="a/+")
+
+        sock.enqueue_recv(canned_publish_bytes("a/x", b"", qos=0))
+        sock.enqueue_recv(canned_publish_bytes("b/y/z", b"", qos=0))
+        _drive(client, ticks, count=1)
+        # Only the b/# registration survived.
+        assert fires == ["b/y/z"]
+
+
+# ---------------------------------------------------------------------------
+# Topic-prefix sugar (root_topic + publish_raw / subscribe_raw / unsubscribe_raw)
+# ---------------------------------------------------------------------------
+
+
+class TestTopicPrefixSugar:
+    def test_publish_prefixes_with_root_topic_and_client_id(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(
+            sock, ticks,
+            client_id="mainLightSwitch",
+            root_topic="livingRoom",
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()
+        client.publish("switchState", b"on", qos=0)
+        _drive(client, ticks, count=1)
+        assert b"livingRoom/mainLightSwitch/switchState" in bytes(sock.sent)
+
+    def test_publish_without_root_topic_is_verbatim(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)  # default root_topic=None
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()
+        client.publish("temp", b"42", qos=0)
+        _drive(client, ticks, count=1)
+        wire = bytes(sock.sent)
+        assert b"temp" in wire
+        # No prefix was injected.
+        assert b"test-client/temp" not in wire
+
+    def test_publish_raw_bypasses_prefix(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(
+            sock, ticks,
+            client_id="mainLightSwitch",
+            root_topic="livingRoom",
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()
+        client.publish_raw("$SYS/bridge/status", b"online", qos=0)
+        _drive(client, ticks, count=1)
+        wire = bytes(sock.sent)
+        assert b"$SYS/bridge/status" in wire
+        assert b"livingRoom" not in wire
+
+    def test_subscribe_prefixes_topic(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(
+            sock, ticks,
+            client_id="thing-42",
+            root_topic="myapp",
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()
+        client.subscribe("commands/+")
+        _drive(client, ticks, count=1)
+        assert b"myapp/thing-42/commands/+" in bytes(sock.sent)
+
+    def test_subscribe_raw_bypasses_prefix(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(
+            sock, ticks,
+            client_id="thing-42",
+            root_topic="myapp",
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()
+        client.subscribe_raw("$SYS/broker/uptime")
+        _drive(client, ticks, count=1)
+        wire = bytes(sock.sent)
+        assert b"$SYS/broker/uptime" in wire
+        assert b"myapp" not in wire
+
+    def test_unsubscribe_prefixes_topic(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(
+            sock, ticks,
+            client_id="thing-42",
+            root_topic="myapp",
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()
+        client.unsubscribe("commands/+")
+        _drive(client, ticks, count=1)
+        assert b"myapp/thing-42/commands/+" in bytes(sock.sent)
+
+
+class TestMQTTPublisher:
+    def test_publisher_publishes_under_bound_topic(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()
+        pub = client.publisher("temperature", qos=0)
+        pub.publish(b"21")
+        _drive(client, ticks, count=1)
+        wire = bytes(sock.sent)
+        assert b"temperature" in wire
+        assert wire.endswith(b"21")
+
+    def test_publisher_respects_root_topic_prefix(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(
+            sock, ticks,
+            client_id="mainLightSwitch",
+            root_topic="livingRoom",
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()
+        pub = client.publisher("switchState", qos=0)
+        pub.publish("on")  # str auto-encoded
+        _drive(client, ticks, count=1)
+        wire = bytes(sock.sent)
+        assert b"livingRoom/mainLightSwitch/switchState" in wire
+        assert wire.endswith(b"on")
+
+
+class TestLastWillPrefix:
+    def test_will_topic_is_prefixed_in_connect_packet(self) -> None:
+        sock = FakeSocket()
+        ticks = FakeTicks()
+        client = MQTTClient(
+            sock,
+            client_id="mainLightSwitch",
+            root_topic="livingRoom",
+            will_topic="online",
+            will_message=b"false",
+            ticks=ticks,
+        )
+        client.connect()
+        _drive(client, ticks, count=1)
+        # CONNECT packet starts with 0x10.  Look for the prefixed will topic.
+        wire = bytes(sock.sent)
+        assert b"livingRoom/mainLightSwitch/online" in wire
+
+    def test_will_topic_raw_skips_prefix(self) -> None:
+        sock = FakeSocket()
+        ticks = FakeTicks()
+        client = MQTTClient(
+            sock,
+            client_id="mainLightSwitch",
+            root_topic="livingRoom",
+            will_topic_raw="$SYS/bridge/dead",
+            will_message=b"true",
+            ticks=ticks,
+        )
+        client.connect()
+        _drive(client, ticks, count=1)
+        wire = bytes(sock.sent)
+        assert b"$SYS/bridge/dead" in wire
+        # Prefix should NOT have been applied.
+        assert b"livingRoom/mainLightSwitch/$SYS" not in wire
+
+    def test_will_topic_and_will_topic_raw_mutually_exclusive(self) -> None:
+        sock = FakeSocket()
+        ticks = FakeTicks()
+        with raises(ValueError):
+            MQTTClient(
+                sock,
+                client_id="thing",
+                will_topic="online",
+                will_topic_raw="$SYS/x",
+                ticks=ticks,
+            )
+
 
 # ---------------------------------------------------------------------------
 # Keepalive
@@ -451,7 +687,7 @@ class TestWhenOversized:
         client = _new_client(
             sock, ticks,
             rx_buffer_size=64,
-            max_message_bytes=8192,
+            max_message_bytes=100,  # tier 3: 200-byte payload exceeds cap
             when_oversized=WhenOversized.DROP_WITH_EVENT,
         )
         client.connect()
@@ -464,10 +700,13 @@ class TestWhenOversized:
 
         client.on_oversized = _record
         sock.enqueue_recv(canned_publish_bytes("log", b"x" * 200, qos=0))
-        # Drive enough ticks for the decoder's degraded path to drain.
+        # Drive enough ticks for the decoder's rolling drain to complete.
         _drive(client, ticks, count=10)
         assert len(captured) == 1
         assert captured[0][1] == "log"
+        # Still CONNECTED — DROP_WITH_EVENT drops the payload and
+        # stays connected.
+        assert client.state == ProtocolState.CONNECTED
 
     def test_disconnect_policy_marks_failed(self) -> None:
         sock = FakeSocket()
@@ -476,7 +715,7 @@ class TestWhenOversized:
         client = _new_client(
             sock, ticks,
             rx_buffer_size=64,
-            max_message_bytes=8192,
+            max_message_bytes=100,  # tier 3 forces the policy to apply
             when_oversized=WhenOversized.DISCONNECT,
         )
         client.connect()
@@ -485,6 +724,59 @@ class TestWhenOversized:
         sock.enqueue_recv(canned_publish_bytes("log", b"x" * 200, qos=0))
         _drive(client, ticks, count=10)
         assert client.state == ProtocolState.FAILED
+
+
+class TestIntactTier:
+    """Tier 2: PUBLISH > rx_buffer_size but ≤ max_message_bytes."""
+
+    def test_intact_publish_delivers_full_payload(self) -> None:
+        """A 1 KB payload on a 64 B rx buffer + 8 KB max routes through tier 2."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(
+            sock, ticks,
+            rx_buffer_size=64,        # forces tier-1 boundary low
+            max_message_bytes=8192,   # tier-2 ceiling well above payload size
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+
+        received: list[tuple[str, bytes]] = []
+
+        def _on_message(topic: str, payload: bytes) -> None:
+            received.append((topic, payload))
+
+        client.on_message = _on_message
+        big_payload = b"x" * 1024
+        sock.enqueue_recv(canned_publish_bytes("data", big_payload, qos=0))
+        _drive(client, ticks, count=30)  # several ticks to drain across rx_buffer fills
+
+        assert len(received) == 1
+        assert received[0][0] == "data"
+        assert received[0][1] == big_payload
+        assert client.state == ProtocolState.CONNECTED
+
+    def test_intact_qos1_sends_puback(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(
+            sock, ticks,
+            rx_buffer_size=64,
+            max_message_bytes=8192,
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()  # reset to observe just the PUBACK
+
+        big_payload = b"y" * 512
+        sock.enqueue_recv(
+            canned_publish_bytes("data", big_payload, qos=1, packet_id=4242),
+        )
+        _drive(client, ticks, count=20)
+        # PUBACK = 0x40 0x02 packet_id_hi packet_id_lo.  4242 = 0x1092.
+        assert b"\x40\x02\x10\x92" in bytes(sock.sent)
 
 
 # ---------------------------------------------------------------------------
@@ -596,7 +888,7 @@ class TestDecoderEdgeCases:
         client = _new_client(
             sock, ticks,
             rx_buffer_size=64,
-            max_message_bytes=8192,
+            max_message_bytes=100,  # tier 3 forces DISCONNECT
             when_oversized=WhenOversized.DISCONNECT,
         )
         client.connect()
@@ -612,7 +904,7 @@ class TestDecoderEdgeCases:
         client = _new_client(
             sock, ticks,
             rx_buffer_size=64,
-            max_message_bytes=8192,
+            max_message_bytes=100,  # tier 3 forces the silent-drop path
             when_oversized=WhenOversized.DROP_SILENT,
         )
         client.connect()
@@ -627,6 +919,108 @@ class TestDecoderEdgeCases:
         _drive(client, ticks, count=10)
         assert captured == []
         assert client.state == ProtocolState.CONNECTED  # silent drop, still connected
+
+    def test_oversize_topic_with_drop_with_event_emits_none_topic(self) -> None:
+        """Topic > rx_buffer_size fires on_oversized with topic=None (deadlock-bug fix)."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        # Tiny rx buffer so a normal-length topic blows the prelude;
+        # max_message_bytes low so the rest also routes through tier 3.
+        client = _new_client(
+            sock, ticks,
+            rx_buffer_size=16,
+            max_message_bytes=32,
+            when_oversized=WhenOversized.DROP_WITH_EVENT,
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+
+        captured: list[tuple[int, object]] = []
+
+        def _record(reported_length: int, topic) -> None:
+            captured.append((reported_length, topic))
+
+        client.on_oversized = _record
+        # 50-byte topic — much bigger than the 16-byte rx buffer.
+        long_topic = "a" * 50
+        sock.enqueue_recv(canned_publish_bytes(long_topic, b"small", qos=0))
+        _drive(client, ticks, count=20)
+        assert len(captured) == 1
+        assert captured[0][1] is None  # topic unparseable
+        assert client.state == ProtocolState.CONNECTED
+
+
+class TestSubackRejection:
+    def test_suback_with_0x80_byte_marks_failed(self) -> None:
+        """granted_qos == 0x80 means the broker rejected the subscription."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+
+        client.subscribe("forbidden")
+        _drive(client, ticks, count=1)
+        # Broker rejects with 0x80.  packet_id == 1 (first allocation).
+        sock.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=0x80))
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.FAILED
+
+
+class TestUnexpectedAcks:
+    def test_unexpected_puback_marks_failed(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        # PUBACK with no matching in-flight entry.
+        sock.enqueue_recv(canned_puback_bytes(packet_id=999))
+        _drive(client, ticks, count=1)
+        assert client.state == ProtocolState.FAILED
+
+    def test_unexpected_suback_marks_failed(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.enqueue_recv(canned_suback_bytes(packet_id=999, granted_qos=0))
+        _drive(client, ticks, count=1)
+        assert client.state == ProtocolState.FAILED
+
+    def test_unexpected_unsuback_marks_failed(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.enqueue_recv(canned_unsuback_bytes(packet_id=999))
+        _drive(client, ticks, count=1)
+        assert client.state == ProtocolState.FAILED
+
+    def test_unexpected_pingresp_silently_tolerated(self) -> None:
+        """PINGRESP with no pending tracker keeps the connection alive.
+
+        Reason: PINGREQ timeout fires (clearing the tracker), the
+        broker's PINGRESP arrives a tick later — re-faulting through a
+        healthy connection would be a false positive.
+        """
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        # PINGRESP with no pending tracker.
+        sock.enqueue_recv(canned_pingresp_bytes())
+        _drive(client, ticks, count=1)
+        assert client.state == ProtocolState.CONNECTED
 
 
 # ---------------------------------------------------------------------------
