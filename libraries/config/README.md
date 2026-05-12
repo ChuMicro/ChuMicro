@@ -62,7 +62,7 @@ class WifiConfig:
 |---|---|
 | `load_runtime_config(path=…)` | Read + decode `/runtime_config.msgpack` into a flat-key `RuntimeConfig` (dict-shaped) |
 | `config` | Lazily-loaded module attribute — the deployed `RuntimeConfig`, or `None` when the file is absent.  First attribute access reads the file once and caches the result |
-| `RuntimeConfig` | Dict-like wrapper over the flat-key payload — `get(key[, default])`, `[key]` / `require(key)`, `in`, iteration, `len`, equality with dicts / other `RuntimeConfig`s |
+| `RuntimeConfig` | Lookup wrapper over the flat-key payload — `get(key[, default])`, `[key]` / `require(key)`, `in` check |
 | `load_section(cls, config, *, prefix, required=…, optional=…)` | Build `cls(**kwargs)` by reading flat-prefix keys.  Used today by `chumicro-wifi`'s `WifiConfig.from_config`; available to any library whose constructor signature maps 1:1 to its config subkeys |
 | `try_load_section(...)` | Soft variant — returns `None` instead of raising when `config` is `None`, the wrong type, or missing a required key |
 | `MissingConfigKey` / `InvalidConfigType` / `ConfigError` | Targeted exceptions — single-inheritance from `ConfigError` (MicroPython forbids multi-parent layouts) |

@@ -3,7 +3,7 @@
 The on-device runtime config is a flat dict with dotted keys
 (``"wifi.ssid"``, ``"mqtt.broker.host"``) — compose-time flattening on
 the host turns nested TOML tables into this shape before the msgpack
-encode.  :class:`RuntimeConfig` wraps that dict for dict-like access;
+encode.  :class:`RuntimeConfig` wraps that dict for keyed access;
 :func:`load_section` / :func:`try_load_section` build typed
 ``<Name>Config`` instances from it.
 """
@@ -28,12 +28,11 @@ class InvalidConfigType(ConfigError):
 
 
 class RuntimeConfig:
-    """Flat-key dict-like view over the deployed runtime config.
+    """Flat-key lookup wrapper over the deployed runtime config.
 
     Supports ``config.get(key[, default])``, ``config[key]`` /
     ``config.require(key)`` (raises :class:`MissingConfigKey` on miss),
-    ``key in config``, iteration, ``len()``, and equality against
-    another ``RuntimeConfig`` or a plain dict.
+    and ``key in config``.
     """
 
     def __init__(self, data: dict | None = None) -> None:
@@ -43,9 +42,6 @@ class RuntimeConfig:
         return self._data.get(key, default)
 
     def require(self, key):
-        # `require()` exists separately from `__getitem__` so downstream
-        # validators (e.g. deploy-time manifest checks) have a hook to
-        # wrap the error with declared-by context.
         if key not in self._data:
             raise MissingConfigKey(
                 f"required config key {key!r} is missing",
@@ -58,34 +54,16 @@ class RuntimeConfig:
     def __contains__(self, key):
         return key in self._data
 
-    def __iter__(self):
-        return iter(self._data)
 
-    def __len__(self):
-        return len(self._data)
+def is_config_like(value) -> bool:
+    """Return ``True`` when *value* is a :class:`RuntimeConfig` or plain dict.
 
-    def __eq__(self, other):
-        if isinstance(other, RuntimeConfig):
-            return self._data == other._data
-        if isinstance(other, dict):
-            return self._data == other
-        return NotImplemented
-
-    def __repr__(self):
-        return f"RuntimeConfig({self._data!r})"
-
-    def keys(self):
-        return self._data.keys()
-
-    def items(self):
-        return self._data.items()
-
-    def values(self):
-        return self._data.values()
-
-    def to_dict(self) -> dict:
-        """Return a shallow copy of the underlying flat dict."""
-        return dict(self._data)
+    The input gate :func:`load_section` applies internally — call it
+    explicitly at the top of any consumer ``from_config`` that bypasses
+    ``load_section`` (the client-with-injection pattern in the user
+    guide), raising :class:`InvalidConfigType` on the failing branch.
+    """
+    return isinstance(value, (RuntimeConfig, dict))
 
 
 def load_section(
@@ -164,27 +142,3 @@ def try_load_section(
         )
     except (MissingConfigKey, InvalidConfigType):
         return None
-
-
-def is_config_like(value) -> bool:
-    """Return ``True`` when *value* is acceptable input to ``load_section`` /
-    ``<X>Config.from_config`` / a consumer library's ``from_config(...)``.
-
-    Accepts :class:`RuntimeConfig` instances and plain ``dict``.  Callers
-    that build a client-with-injection ``from_config(...)`` (where
-    ``load_section`` doesn't fit because non-config kwargs flow through —
-    ``radio``, ``socket``, ``ssl_context``, ``listener``, etc.) should
-    gate input with this predicate and raise :class:`InvalidConfigType`
-    on a miss, mirroring ``load_section``'s shape::
-
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"MQTTClient.from_config requires a RuntimeConfig or dict, "
-                f"got {type(config).__name__}",
-            )
-
-    Without that guard, passing ``None`` / a string / an int into a
-    consumer ``from_config`` leaks Python-shape errors (``AttributeError``,
-    ``TypeError``) instead of the library-shaped :class:`InvalidConfigType`.
-    """
-    return isinstance(value, (RuntimeConfig, dict))
