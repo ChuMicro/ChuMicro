@@ -64,7 +64,15 @@ class TestPatterns:
         _make_template_repo(tmp_path)
         _stage(tmp_path, "projects/wifi/project_config.toml", f"# {_DECISION_REF}\n")
         findings = CHU008.check(tmp_path)
-        assert any("Decision NNNN" in finding.message for finding in findings)
+        assert any("Decision/ADR NNNN" in finding.message for finding in findings)
+
+    def test_adr_reference_in_project_config(self, tmp_path: Path) -> None:
+        # Symmetric with the Decision case: the ADR-NNNN shape is the same concept.
+        adr_reference = "ADR " + "0042"
+        _make_template_repo(tmp_path)
+        _stage(tmp_path, "projects/wifi/project_config.toml", f"# {adr_reference}\n")
+        findings = CHU008.check(tmp_path)
+        assert any("Decision/ADR NNNN" in finding.message for finding in findings)
 
     def test_plans_md_ref_in_examples(self, tmp_path: Path) -> None:
         _make_template_repo(tmp_path)

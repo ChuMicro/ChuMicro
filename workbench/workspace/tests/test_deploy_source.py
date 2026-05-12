@@ -130,7 +130,7 @@ class TestWithRuntimeConfig:
         assert decorated.entrypoint() == "/main.py"
 
     def test_default_output_path_lands_in_generated_dir(self, tmp_path: Path) -> None:
-        """Convention from ADR 0035 §5: generated artifact under _generated/."""
+        """Generated artifacts default to landing under ``_generated/``."""
         secrets_toml, project_config = _seed_paths(tmp_path)
         inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
         decorated = WithRuntimeConfig(

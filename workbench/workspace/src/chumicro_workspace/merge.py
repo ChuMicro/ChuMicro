@@ -21,8 +21,8 @@ def merge_configs(*sources: dict) -> dict:
     Later sources override earlier ones key-by-key.  Nested dicts
     merge recursively; non-dict leaf values are replaced wholesale.
     Lists do **not** merge — a later source's list replaces the
-    earlier source's list entirely (per ADR 0035 §5: merge is
-    key-level, not element-level).
+    earlier source's list entirely.  Merge is key-level, not
+    element-level.
 
     Args:
         *sources: Two or more dicts to merge.  The leftmost is the
