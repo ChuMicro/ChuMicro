@@ -5,7 +5,6 @@ bytearray, list, tuple, and dict.
 """
 
 import struct
-import sys
 
 # ---------------------------------------------------------------------------
 # Encoding
@@ -383,39 +382,29 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
 
 
 # ---------------------------------------------------------------------------
-# Public API — stream-based (native CircuitPython when available)
+# Public API — stream-based
 # ---------------------------------------------------------------------------
+# On CircuitPython with the native ``msgpack`` C module, ``__init__.py``
+# imports ``pack`` / ``unpack`` from it directly and never reaches this
+# file — so the definitions below are always the pure-Python ones.
 
-if sys.implementation.name == "circuitpython":
-    try:
-        from msgpack import pack, unpack  # CircuitPython C built-in
-        _HAS_NATIVE_STREAM = True
-    except ImportError:
-        _HAS_NATIVE_STREAM = False
-else:
-    # On CPython / MicroPython the upstream PyPI ``msgpack`` package
-    # implements the full spec, not the chumicro subset — keep the
-    # pure-Python stream API to preserve contract parity with packb /
-    # unpackb above (which is also gated to native-on-CP only).
-    _HAS_NATIVE_STREAM = False
+def pack(obj: object, stream: object) -> None:
+    """Pack *obj* to *stream* in msgpack format.
 
-if not _HAS_NATIVE_STREAM:
-    def pack(obj: object, stream: object) -> None:
-        """Pack *obj* to *stream* in msgpack format.
+    Args:
+        obj: Python object to serialize.
+        stream: Writable stream with a ``write()`` method.
+    """
+    stream.write(packb(obj))
 
-        Args:
-            obj: Python object to serialize.
-            stream: Writable stream with a ``write()`` method.
-        """
-        stream.write(packb(obj))
 
-    def unpack(stream: object) -> object:
-        """Unpack one object from *stream*.
+def unpack(stream: object) -> object:
+    """Unpack one object from *stream*.
 
-        Args:
-            stream: Readable stream with a ``read()`` method.
+    Args:
+        stream: Readable stream with a ``read()`` method.
 
-        Returns:
-            Deserialized Python object.
-        """
-        return unpackb(stream.read())
+    Returns:
+        Deserialized Python object.
+    """
+    return unpackb(stream.read())
