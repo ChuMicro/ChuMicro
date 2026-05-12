@@ -345,17 +345,15 @@ def encode_puback(*, packet_id):
 # ---------------------------------------------------------------------------
 
 #: Default pre-allocated steady-state buffer size (bytes).
-DEFAULT_RX_BUFFER_SIZE = 256
+DEFAULT_RX_BUFFER_SIZE = const(256)
 
 #: Default cap on a single inbound message.  Anything bigger triggers
 #: the user-configured ``WhenOversized`` policy.
-DEFAULT_MAX_MESSAGE_SIZE = 256 * 1024
+DEFAULT_MAX_MESSAGE_SIZE = const(256 * 1024)
 
 
 class ParsedPublish:
     """Inbound PUBLISH parsed off the wire."""
-
-    __slots__ = ("packet_id", "payload", "qos", "retain", "topic")
 
     def __init__(self, *, topic, payload, qos, retain, packet_id):
         self.topic = topic
@@ -372,8 +370,6 @@ class ParsedAck:
     CONNACK; ``granted_qos`` only on SUBACK; ``packet_id`` is None
     for CONNACK / PINGRESP.
     """
-
-    __slots__ = ("granted_qos", "packet_id", "packet_type", "return_code")
 
     def __init__(
         self,
@@ -396,8 +392,6 @@ class _OversizedMessage:
     ``on_oversized(topic, reported_length)`` after the payload is
     discarded.
     """
-
-    __slots__ = ("packet_id", "qos", "reported_length", "topic")
 
     def __init__(self, *, topic, reported_length, qos, packet_id):
         self.topic = topic
@@ -551,8 +545,9 @@ class PacketDecoder:
         topic_end = topic_start + topic_length
         if topic_end > body_end:
             raise MQTTProtocolError("PUBLISH topic length exceeds remaining bytes")
-        # ``bytes(view[a:b]).decode()`` stays — memoryview lacks decode().
-        topic = bytes(view[topic_start:topic_end]).decode("utf-8")
+        # 3-arg str() accepts a memoryview directly — skips the
+        # bytes() copy that ``bytes(view[a:b]).decode()`` would do.
+        topic = str(view[topic_start:topic_end], "utf-8")
         cursor = topic_end
         packet_id = None
         if qos > 0:
@@ -629,7 +624,7 @@ class PacketDecoder:
         prelude_total = topic_end + packet_id_bytes
         if self._buffer_length < prelude_total:
             return None  # Need a few more bytes before we can parse the prelude.
-        topic = bytes(view[topic_start:topic_end]).decode("utf-8")
+        topic = str(view[topic_start:topic_end], "utf-8")
         packet_id = None
         if qos > 0:
             packet_id = struct.unpack(">H", view[topic_end:topic_end + 2])[0]
