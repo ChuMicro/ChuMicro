@@ -96,7 +96,7 @@ class Logger:
     ) -> None:
         self._name = name
         self._level = level
-        self._handlers: list = list(handlers) if handlers else []
+        self._handlers: list = list(handlers) if handlers is not None else []
         self._handler_errors = 0
 
     @property
@@ -216,6 +216,7 @@ class StreamHandler:
         self._stream = stream if stream is not None else sys.stdout
         self._level = level
         self._formatter = formatter if formatter is not None else default_formatter
+        self._flush = getattr(self._stream, "flush", None)
 
     @property
     def level(self) -> int:
@@ -233,11 +234,10 @@ class StreamHandler:
         """
         if level < self._level:
             return
-        line = self._formatter(level, name, message)
-        self._stream.write(f"{line}\n")
-        flush = getattr(self._stream, "flush", None)
-        if flush is not None:
-            flush()
+        self._stream.write(self._formatter(level, name, message))
+        self._stream.write("\n")
+        if self._flush is not None:
+            self._flush()
 
 
 class BufferedHandler:
@@ -322,18 +322,17 @@ class BufferedHandler:
         return len(self._buffer) > 0
 
     def handle(self, now_ms: int) -> int:
-        """Drain the buffer to the downstream handler.
+        """Drain the buffer to the downstream handler.  Returns flushed count.
 
         Args:
             now_ms: Current tick value (unused; required by the
                 runner contract).
-
-        Returns:
-            The number of records flushed.
         """
+        buffer = self._buffer
+        emit = self._downstream.emit
         flushed = 0
-        while self._buffer:
-            record = self._buffer.popleft()
-            self._downstream.emit(record[0], record[1], record[2])
+        while buffer:
+            level, name, message = buffer.popleft()
+            emit(level, name, message)
             flushed += 1
         return flushed
