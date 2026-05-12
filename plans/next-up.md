@@ -4,7 +4,7 @@
 
 ## Now
 
-(empty)
+- [ ] **Resume workspace-library-curation Phase 1 from session handoff** — see [`handoffs/2026-05-12-workspace-library-curation-design-resolved.md`](handoffs/2026-05-12-workspace-library-curation-design-resolved.md).
 
 ## Next
 
