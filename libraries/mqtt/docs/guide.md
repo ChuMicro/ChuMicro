@@ -208,7 +208,7 @@ elif client.state == ProtocolState.FAILED:
     log.warning("mqtt failed; reconnecting in 30 s")
 ```
 
-Five states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `DISCONNECTING`, `FAILED`.
+Four states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `FAILED`.  `disconnect()` is synchronous (DISCONNECT packet + close), so there is no intermediate "disconnecting" state to observe.
 
 ## Memory notes
 
