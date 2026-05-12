@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Standalone, stdlib-shaped levels, ChuMicro-shaped I/O.**
 
-Stdlib-compatible level constants (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`) and per-logger thresholds with parent-name resolution — drop-in for code that already speaks `logging`.  The runner-friendly bit lives in `BufferedHandler`, which splits formatting (hot path) from I/O (drained on the runner tick) so log lines never stall your control loop.
+Stdlib-compatible level constants (`DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`) and per-logger thresholds — familiar shape for code that already speaks `logging`.  The runner-friendly bit lives in `BufferedHandler`, which splits formatting (hot path) from I/O (drained on the runner tick) so log lines never stall your control loop.
 
 <br clear="left">
 
