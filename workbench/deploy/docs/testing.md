@@ -99,7 +99,7 @@ fake = FakeTime(start=1_000_000.0)
 
 ## Why these fakes ship with the package
 
-`chumicro-deploy` is a published workbench tool — third parties install it via `pip install chumicro-deploy` and write their own host-side tests against the public API.  Without published fakes, every consumer would either roll their own (~80 lines for `FakeTime`, more for the transport contract) or pull in heavier deps like `freezegun`.  Co-locating the fakes with the production code makes downstream testing the obvious path — the same pattern every library in the ChuMicro workspace follows (`chumicro_timing.testing.FakeTicks`, `chumicro_msgpack.testing`, etc.).
+`chumicro-deploy` is a published workbench tool — third parties install it via `pip install chumicro-deploy` and write their own host-side tests against the public API.  Without published fakes, every consumer would either roll their own (~80 lines for `FakeTime`, more for the transport contract) or pull in heavier deps like `freezegun`.  Co-locating the fakes with the production code makes downstream testing the obvious path — the same pattern every library in the ChuMicro workspace that owns time, I/O, or callback shape follows (`chumicro_timing.testing.FakeTicks`, `chumicro_runner.testing.CallRecorder`, `chumicro_events.testing.RecordingSubscriber`, etc.).
 
 ## Companion fakes in chumicro-repl
 
