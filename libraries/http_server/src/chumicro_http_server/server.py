@@ -611,9 +611,10 @@ class HttpServer:
             handler: Optional fallback callable
                 ``(Request) -> Response`` for paths that don't match
                 any route.  Forwarded verbatim to ``__init__``.
-            radio: WiFi radio for the auto-built listener.
-                CircuitPython needs this; MicroPython auto-detects.
-                Ignored when *listener_factory* is passed.
+            radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
+                (auto-detected); ignored on MP and CPython.  Pass explicitly
+                for multi-radio prototypes or CP boards without a ``wifi``
+                module.  Ignored when *listener_factory* is passed.
             ssl_context: Pre-built ``ssl.SSLContext`` for TLS — when
                 supplied, the auto-built factory uses it (and the
                 config TLS paths are ignored).  Ignored when
