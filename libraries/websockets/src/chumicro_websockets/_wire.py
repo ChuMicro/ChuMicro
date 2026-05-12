@@ -1190,10 +1190,10 @@ def encode_frame(
         _append_packed_q(parts, payload_length)
     if mask is not None:
         parts.extend(mask)
-        masked = bytearray(payload_length)
+        payload_offset = len(parts)
+        parts.extend(payload)
         for index in range(payload_length):
-            masked[index] = payload[index] ^ mask[index & 3]
-        parts.extend(masked)
+            parts[payload_offset + index] ^= mask[index & 3]
     else:
         parts.extend(payload)
     return bytes(parts)
