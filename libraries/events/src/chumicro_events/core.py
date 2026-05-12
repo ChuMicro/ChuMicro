@@ -51,9 +51,9 @@ class EventBus:
     runner tick when ``handle`` runs; subscribers always observe a
     consistent snapshot of the event stream.
 
-    When the queue is full, the **oldest** record is dropped and
-    ``dropped`` is incremented — newest data wins, on the assumption
-    that recent events are more actionable than ancient backlog.
+    When the queue is full, ``deque(maxlen)`` drops the **oldest**
+    record on append and ``dropped`` is incremented; see ``publish``
+    for the rationale.
 
     Subscriber exceptions never escape ``handle`` — they increment
     ``handler_errors`` and are otherwise swallowed.  A misbehaving
@@ -142,6 +142,13 @@ class EventBus:
         registration produces a distinct ``Subscription`` and a
         distinct dispatch.
 
+        Topics are matched **literally** — no wildcards, no hierarchy
+        matching.  A subscription to ``"wifi.state"`` does not see
+        records published to ``"wifi.connected"``.  This keeps
+        dispatch O(1) per record and avoids the cost of pattern
+        compilation; consumers wanting MQTT-style topic filters wire
+        them at the publish site instead.
+
         Args:
             topic: Exact topic string.
             handler: Callable accepting ``(topic, payload)``.
@@ -190,8 +197,10 @@ class EventBus:
 
         The record is **not** dispatched immediately.  Subscribers see
         it the next time ``handle`` runs.  When the queue is full,
-        ``deque(maxlen)`` drops the oldest record on append; we count
-        it via ``_dropped`` rather than popping ourselves.
+        ``deque(maxlen)`` drops the **oldest** record on append and
+        ``_dropped`` is incremented — newest data wins, on the
+        assumption that aged-out records are stale and recent events
+        are more actionable than ancient backlog.
 
         The payload is normalised so subscribers see a single
         ``(topic, payload)`` shape regardless of how many positional

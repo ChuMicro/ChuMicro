@@ -12,6 +12,27 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
+### `chumicro-presence` design from Decision 0042 §167-168 — re-audit before anything rides on its shape
+
+**Surfaced 2026-05-12** during the `/audit-integration` pass on `chumicro-events ↔ wifi + mqtt`.  Decision 0042 names a future `chumicro-presence` library as the centralized binder for wifi/mqtt state into the events bus: *"`chumicro-presence` ships a one-line `presence.bind(wifi=..., mqtt=...)` that does the callback wiring centrally"* (§167-168).  Library doesn't exist yet (`ls libraries/` confirms — no presence directory).  The `presence.bind(wifi=..., mqtt=...)` shape was sketched long ago — the user flagged it as possibly stale or wrong, and the binding method it promises should be considered suspect until re-audited.
+
+**Why this matters now:**
+- `chumicro-events` deliberately supports two producer shapes (wifi's registration-method `on_state_change(cb)` and mqtt's replaceable-attribute `on_connect = cb` etc.), bridged by `publisher(topic)` returning a `*args` closure.  That divergence is coherent today.  But the future `presence.bind` would have to bridge them too, paying the bridging cost in a central place.
+- The 2026-05-12 audit-integration pass explicitly deferred the "should wifi and mqtt converge on one callback shape?" question to a workspace-level pass — but a workspace decision driven by an *outdated presence design* would be twice wrong.  Any convergence work needs to verify presence's actual planned shape first, not the §167-168 sketch.
+
+**Audit before:**
+- Any structural decision that argues "we should converge wifi/mqtt callback shapes because presence will need it."
+- Any work that starts implementing `chumicro-presence` from the §167-168 description.
+- Any ADR amendment to Decision 0042 that ratifies §167-168 as the binding contract.
+
+**Audit shape (when triggered):**
+1. Read every `presence` reference across `plans/` (Decision 0042, workstreams, archive) — collect the original design intent.
+2. Re-evaluate against today's wifi + mqtt callback surfaces — does `presence.bind(wifi=..., mqtt=...)` still make sense, or has the seam shifted?
+3. If the design is salvageable, propose a new ADR (`chumicro-presence` library charter) that supersedes Decision 0042's §167-168 sketch and codifies the actual binding shape.
+4. If not, retire the reference from Decision 0042 and surface the gap as a separate open question (what *does* central wifi+mqtt event binding look like?).
+
+Not blocking anything today — but a "fix two-shape divergence" workstream proposal would block on this.
+
 ### Next CP hard fault on stale socketpool state — investigate
 
 **Surfaced 2026-05-09** during the 4-board example sweep on Lolin S2 CP.  After a

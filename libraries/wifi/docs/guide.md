@@ -69,7 +69,7 @@ wifi.adapter.name  # "cp" / "mp_esp32" / "mp_rp2" / "fake" — useful for loggin
 
 ## State-change notifications
 
-`on_state_change(callback)` registers a one-shot or replaceable callback that fires on every transition:
+`on_state_change(callback)` appends *callback* to the transition-listener list — every registered callback fires on every transition, in registration order:
 
 ```python
 def log_transition(old_state, new_state):
