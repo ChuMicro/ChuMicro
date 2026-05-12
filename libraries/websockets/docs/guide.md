@@ -105,6 +105,40 @@ def on_connection(connection):
 
 Same shape as the client's callbacks; semantically identical.
 
+## Bring your own transport
+
+`WebSocketClient` and `WebSocketServer` don't care which library produces their sockets.  The factory you pass — `connection_factory` on the client, the listener-and-connection factories on the server — returns any object exposing the four-method TCP contract:
+
+| Method | Contract |
+|---|---|
+| `recv_into(buffer, nbytes) -> int` | Reads up to `nbytes` into `buffer` (a `memoryview`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` on no data, returns 0 on peer-close, otherwise returns bytes written. |
+| `send(payload) -> int` | Sends `payload` (a `bytes`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full, otherwise returns bytes sent (may be partial). |
+| `close() -> None` | Releases the connection. |
+| `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
+
+`chumicro_sockets.tcp_client_socket` / `tls_client_socket` is one valid producer.  Stdlib `socket.socket` after `setblocking(False)` is another:
+
+```python
+import socket as stdlib_socket
+
+def make_connection(host, port, use_tls):
+    sock = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_STREAM)
+    sock.connect((host, port))
+    sock.setblocking(False)
+    return sock
+
+client = WebSocketClient(connection_factory=make_connection)
+```
+
+If you supply your own factory and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
+
+```python
+# code.py / app.py
+__chumicro_skip_factories__ = ("sockets_factory",)
+```
+
+Family form (`"sockets_factory"`, matches every `chumicro_*.sockets_factory`) or exact path (`"chumicro_websockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `WebSocketClient.from_config(...)` on a deploy that has skipped `chumicro_websockets.sockets_factory` raises `RuntimeError` naming the bypass kwarg.
+
 ## Memory notes
 
 The library is sized for the minimum supported board class (256 KB

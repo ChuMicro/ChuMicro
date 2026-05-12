@@ -1072,6 +1072,37 @@ class TestClientFromConfig:
             with raises(InvalidConfigType):
                 WebSocketClient.from_config(bad_input, connection_factory=factory)
 
+    def test_skipped_factory_module_raises_runtime_error(self) -> None:
+        """When ``chumicro_websockets.sockets_factory`` is excluded via
+        ``__chumicro_skip_factories__``, the default branch of
+        ``from_config`` raises ``RuntimeError`` naming the bypass
+        kwarg instead of leaking ``ImportError``.  CPython-only —
+        sys.modules None-sentinel is CPython-specific; the
+        translation behavior itself is runtime-agnostic.
+        """
+        import sys  # noqa: PLC0415
+
+        from chumicro_test_harness import skip  # noqa: PLC0415
+
+        if sys.implementation.name != "cpython":
+            skip("sys.modules None-sentinel is CPython-specific")
+
+        original = sys.modules.get("chumicro_websockets.sockets_factory")
+        sys.modules["chumicro_websockets.sockets_factory"] = None
+        try:
+            try:
+                WebSocketClient.from_config({})
+            except RuntimeError as exception:
+                assert "connection_factory=" in str(exception)
+                assert "__chumicro_skip_factories__" in str(exception)
+            else:
+                raise AssertionError("expected RuntimeError")
+        finally:
+            if original is None:
+                sys.modules.pop("chumicro_websockets.sockets_factory", None)
+            else:
+                sys.modules["chumicro_websockets.sockets_factory"] = original
+
     def test_default_factory_threads_radio_and_ssl_context(self) -> None:
         """When no connection_factory is passed, ``from_config`` builds
         one via ``chumicro_websockets.sockets_factory.chumicro_sockets_factory``

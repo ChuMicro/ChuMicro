@@ -94,11 +94,13 @@ class ConnectingPhase:
 class WebSocketClient(_BaseSession):
     """Non-blocking RFC 6455 WebSocket client.
 
-    Construct with a *connection_factory* (``callable(host, port,
-    use_tls) -> socket`` matching
-    :func:`chumicro_sockets.tcp_client_socket` /
-    :func:`tls_client_socket`) + user knobs, configure callbacks, then
-    call :meth:`connect`.  Drive via :meth:`check` / :meth:`handle`
+    Construct with a *connection_factory* — a ``(host: str, port: int,
+    use_tls: bool) -> socket`` callable that returns any object
+    matching the four-method TCP contract (``recv_into`` / ``send`` /
+    ``close`` / ``setblocking``; full shape documented on the
+    *connection_factory* parameter below).  ``chumicro_sockets``-based
+    factories work; so does anything else of the same shape.  Configure
+    callbacks, then call :meth:`connect`.  Drive via :meth:`check` / :meth:`handle`
     from a runner tick or hand-rolled loop.  Callbacks fire from
     :meth:`handle` — never from a thread or interrupt.
 
@@ -178,10 +180,28 @@ class WebSocketClient(_BaseSession):
             ssl_context: ``SSLContext`` for ``wss://`` connections;
                 ``None`` uses the runtime default.  Ignored when
                 *connection_factory* is passed.
-            connection_factory: Custom ``(host, port, use_tls) ->
-                TCPClientSocket`` callable.  When supplied, the
-                auto-built factory is skipped — caller owns the
-                connection-opening behaviour.
+            connection_factory: Custom ``(host: str, port: int,
+                use_tls: bool) -> socket`` callable.  The returned
+                object must expose:
+
+                * ``recv_into(buffer: memoryview, nbytes: int) -> int``
+                  — raises ``OSError(EAGAIN | EWOULDBLOCK)`` on no
+                  data, returns 0 on peer-close, otherwise bytes
+                  written.
+                * ``send(payload: bytes) -> int`` — raises
+                  ``OSError(EAGAIN | EWOULDBLOCK)`` when the send
+                  buffer is full, otherwise bytes sent (may be
+                  partial).
+                * ``close() -> None``
+                * ``setblocking(flag: bool) -> None`` — best-effort;
+                  absence is tolerated.
+
+                :func:`chumicro_sockets_factory` is one valid
+                producer.  Anything matching the shape works (stdlib
+                ``socket.socket`` after ``setblocking(False)``, an
+                upstream-library wrapper, a test fake).  When
+                supplied, the auto-built factory is skipped — caller
+                owns the connection-opening behaviour.
 
         Returns:
             A configured ``WebSocketClient`` ready for ``connect()``.
@@ -192,9 +212,17 @@ class WebSocketClient(_BaseSession):
                 f"or dict, got {type(config).__name__}",
             )
         if connection_factory is None:
-            from chumicro_websockets.sockets_factory import (  # noqa: PLC0415
-                chumicro_sockets_factory,
-            )
+            try:
+                from chumicro_websockets.sockets_factory import (  # noqa: PLC0415
+                    chumicro_sockets_factory,
+                )
+            except ImportError as exception:
+                raise RuntimeError(
+                    "WebSocketClient.from_config() default wiring "
+                    "needs chumicro_websockets.sockets_factory.  This "
+                    "module was excluded via __chumicro_skip_factories__ "
+                    "— pass connection_factory= explicitly.",
+                ) from exception
             connection_factory = chumicro_sockets_factory(
                 radio=radio, ssl_context=ssl_context,
             )
