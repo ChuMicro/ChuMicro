@@ -12,6 +12,7 @@ The "boot counter that survives reboot" pattern in five lines:
 
 ```python
 from chumicro_kvstore import KVStore
+from chumicro_timing import ticks_ms
 
 store = KVStore(backend="auto")
 store["boot_count"] = store.get("boot_count", 0) + 1
@@ -75,7 +76,7 @@ runner.add_periodic(store.commit_if_changed, period_ms=1000)
 
 Each backend exposes a `capacity` (bytes-of-encoded-payload).  `KVStore.bytes_used` reports the current encoded size; `KVStore.capacity` reports the backend's limit.
 
-CP NVM is the smallest — typically 256 bytes on SAMD51 boards and 8 KB on RP2040 / ESP32 boards (it's per-chip; check your board's `microcontroller.nvm`).  After CRC framing overhead (10 bytes), you have your usable budget.  `commit()` raises `KVStoreFull` if the encoded payload won't fit; the in-memory dict is unchanged so you can drop a key and retry:
+CP NVM is the smallest — typically 256 bytes on SAMD21 boards and 8 KB on SAMD51 / RP2040 / ESP32 boards (it's per-chip; check your board's `microcontroller.nvm`).  After CRC framing overhead (10 bytes), you have your usable budget.  `commit()` raises `KVStoreFull` if the encoded payload won't fit; the in-memory dict is unchanged so you can drop a key and retry:
 
 ```python
 try:
