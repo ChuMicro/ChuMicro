@@ -208,7 +208,7 @@ elif client.state == ProtocolState.FAILED:
     log.warning("mqtt failed; reconnecting in 30 s")
 ```
 
-Five states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `DISCONNECTING`, `FAILED`.  `client.connected` is a shortcut for `state == CONNECTED`.
+Five states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `DISCONNECTING`, `FAILED`.
 
 ## Memory notes
 
