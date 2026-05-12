@@ -1,4 +1,4 @@
-"""Core ``KVStore`` class + exception hierarchy.
+"""Core ``KVStore`` class, exception hierarchy, and ``Backend`` ABC.
 
 Mapping-shaped (``store[key]`` / ``store["k"] = v`` / ``del
 store["k"]`` / ``"k" in store`` / iter) plus three explicit lifecycle
@@ -9,17 +9,16 @@ overrides accepted.
 
 ``MemoryBackend`` is lazy-imported (only the CPython fall-through and
 ``backend="memory"`` paths touch it) — saves ~600-800 B of heap on
-device imports.  ``msgpack`` and ``Backend`` stay at module top:
-msgpack runs on every commit/load (lazy overhead would dominate);
-``Backend`` is needed for the parameter type hint MP evaluates at
-function-def time.
+device imports.  ``msgpack`` stays at module top: it runs on every
+commit/load and lazy overhead would dominate.  ``Backend`` lives in
+this module too so backends import their ABC + exception classes
+from one place, breaking the prior cycle where the ABC sat under
+``_backends/`` and the backends lazy-imported the exceptions back.
 """
 
 import sys
 
 from chumicro_msgpack import packb, unpackb
-
-from chumicro_kvstore._backends.base import Backend
 
 
 class KVStoreError(Exception):
@@ -41,6 +40,37 @@ class KVStoreCorrupt(KVStoreError):
     surfaces corruption via the ``is_corrupt`` property and resets the
     store to empty so the app can keep running.
     """
+
+
+class Backend:
+    """Backend protocol every concrete backend implements.
+
+    A backend is a thin shim around the substrate-specific persistence
+    mechanism (CP NVM byte slab, MP NVS namespace, MP LittleFS file,
+    in-memory dict).  It deals in ``bytes`` payloads — the msgpack
+    codec lives in ``KVStore``, so backends never decode.
+
+    ``load()`` returns the persisted bytes (``b""`` for a blank
+    substrate) and raises ``KVStoreCorrupt`` on integrity-check failure
+    (CP NVM's CRC mismatch is the canonical case).  ``save(payload)``
+    overwrites the persisted state and raises ``KVStoreFull`` if the
+    substrate can't accept that many bytes.
+
+    ``capacity`` is honored by ``KVStore`` *before* ``save`` is called,
+    so backends only need to enforce it as a defensive last line.
+    ``name`` is the stable identifier surfaced by
+    ``KVStore.backend_name``.  Kept as a class rather than a
+    ``Protocol`` because MicroPython has no ``typing`` module.
+    """
+
+    name: str = "base"
+    capacity: int = 0
+
+    def load(self) -> bytes:
+        raise NotImplementedError
+
+    def save(self, payload: bytes) -> None:
+        raise NotImplementedError
 
 
 def _select_backend() -> Backend:

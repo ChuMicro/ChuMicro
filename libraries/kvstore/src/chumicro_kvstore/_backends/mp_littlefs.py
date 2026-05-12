@@ -15,7 +15,7 @@ Tests inject a filesystem substrate exposing ``open``, ``rename``,
 
 __chumicro_runtimes__ = ("micropython",)
 
-from chumicro_kvstore._backends.base import Backend
+from chumicro_kvstore.core import Backend, KVStoreFull
 
 
 class MpLittlefsBackend(Backend):
@@ -89,8 +89,6 @@ class MpLittlefsBackend(Backend):
         Raises:
             KVStoreFull: ``payload`` exceeds capacity.
         """
-        from chumicro_kvstore.core import KVStoreFull
-
         if len(payload) > self.capacity:
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds LittleFS capacity {self.capacity}"

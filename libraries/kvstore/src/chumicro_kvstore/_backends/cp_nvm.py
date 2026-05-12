@@ -20,7 +20,7 @@ __chumicro_runtimes__ = ("circuitpython",)
 
 import binascii
 
-from chumicro_kvstore._backends.base import Backend
+from chumicro_kvstore.core import Backend, KVStoreCorrupt, KVStoreFull
 
 
 class CpNvmBackend(Backend):
@@ -74,8 +74,6 @@ class CpNvmBackend(Backend):
         Raises:
             KVStoreCorrupt: Magic, length, or CRC failed validation.
         """
-        from chumicro_kvstore.core import KVStoreCorrupt
-
         # Blank slab — raw flash typically erases to 0xFF and some chips
         # init to 0x00; either pattern in the magic position means "never
         # written" rather than corrupted.
@@ -106,8 +104,6 @@ class CpNvmBackend(Backend):
         Raises:
             KVStoreFull: Payload exceeds capacity.
         """
-        from chumicro_kvstore.core import KVStoreFull
-
         if len(payload) > self.capacity:
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds NVM capacity {self.capacity}"
