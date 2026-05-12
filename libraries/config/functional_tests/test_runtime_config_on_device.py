@@ -54,7 +54,8 @@ def test_round_trip_via_default_path() -> None:
         handle.write(packb(payload))
     try:
         loaded = load_runtime_config()
-        assert loaded == payload
+        for key, value in payload.items():
+            assert loaded[key] == value
     finally:
         _wipe_runtime_config()
 

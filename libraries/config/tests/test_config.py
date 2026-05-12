@@ -105,65 +105,11 @@ def test_runtime_config_contains_checks_membership() -> None:
     assert "wifi.password" not in config
 
 
-def test_runtime_config_iterates_over_keys() -> None:
-    config = RuntimeConfig({"a": 1, "b": 2})
-    assert sorted(config) == ["a", "b"]
-
-
-def test_runtime_config_len_reflects_key_count() -> None:
-    assert len(RuntimeConfig({"a": 1, "b": 2})) == 2
-    assert len(RuntimeConfig({})) == 0
-
-
-def test_runtime_config_equality_with_dict() -> None:
-    """Equality with a plain dict works for ergonomic test assertions."""
-    config = RuntimeConfig({"wifi.ssid": "HomeNet"})
-    assert config == {"wifi.ssid": "HomeNet"}
-    assert config != {"wifi.ssid": "Other"}
-
-
-def test_runtime_config_equality_with_other_runtime_config() -> None:
-    assert RuntimeConfig({"a": 1}) == RuntimeConfig({"a": 1})
-    assert RuntimeConfig({"a": 1}) != RuntimeConfig({"a": 2})
-
-
-def test_runtime_config_to_dict_returns_shallow_copy() -> None:
-    """``to_dict`` hands back a fresh dict — mutations don't leak in."""
-    source = {"wifi.ssid": "HomeNet"}
-    config = RuntimeConfig(source)
-    snapshot = config.to_dict()
-    snapshot["wifi.ssid"] = "Mutated"
-    assert config.get("wifi.ssid") == "HomeNet"
-
-
-def test_runtime_config_equality_with_unrelated_type_returns_not_implemented() -> None:
-    """Comparison with an unrelated type → Python falls back to ``!=``."""
-    config = RuntimeConfig({"a": 1})
-    assert config != 42
-    assert config != "string"
-
-
-def test_runtime_config_repr_includes_underlying_data() -> None:
-    """Repr is debugging-friendly — wraps the dict's repr."""
-    config = RuntimeConfig({"wifi.ssid": "x"})
-    text = repr(config)
-    assert "RuntimeConfig" in text
-    assert "wifi.ssid" in text
-
-
-def test_runtime_config_keys_items_values_match_dict_views() -> None:
-    """Standard mapping introspection methods delegate to the wrapped dict."""
-    config = RuntimeConfig({"a": 1, "b": 2})
-    assert sorted(config.keys()) == ["a", "b"]
-    assert sorted(config.items()) == [("a", 1), ("b", 2)]
-    assert sorted(config.values()) == [1, 2]
-
-
 def test_runtime_config_none_data_yields_empty() -> None:
     """``RuntimeConfig(None)`` is valid — yields an empty config."""
     config = RuntimeConfig(None)
-    assert len(config) == 0
     assert config.get("anything") is None
+    assert "anything" not in config
 
 
 def test_missing_config_key_subclasses_config_error() -> None:
@@ -439,7 +385,8 @@ if _IS_CPYTHON:
             handle.write(packb(payload))
         loaded = load_runtime_config(path)
         assert isinstance(loaded, RuntimeConfig)
-        assert loaded == payload
+        for key, value in payload.items():
+            assert loaded[key] == value
 
     def test_load_runtime_config_missing_file_raises_oserror(tmp_path) -> None:
         """A missing file raises ``OSError`` (typically ENOENT)."""

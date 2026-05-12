@@ -1,16 +1,10 @@
-"""Standardized runtime-config helpers for ChuMicro libraries.
+"""Runtime-config helpers — section loader + on-device reader.
 
-Exposes :data:`config` (the loaded ``/runtime_config.msgpack``, or
-``None`` when no file is deployed), :func:`load_runtime_config` (the
-explicit reader), :func:`load_section` / :func:`try_load_section`
-(strict + soft section builders), :class:`RuntimeConfig` (the
-flat-key dict wrapper), and the :class:`ConfigError` /
-:class:`MissingConfigKey` / :class:`InvalidConfigType` exceptions.
-
-:data:`config` is lazy-loaded on first attribute access (PEP 562);
-apps that import this module only for the section helpers or
-exception classes pay no file-read cost.  Usage patterns live in
-``docs/guide.md``.
+Apps import :data:`config` (lazy-loaded ``/runtime_config.msgpack``,
+or ``None`` when absent) or :func:`load_runtime_config` for the
+explicit read.  Library authors use :func:`load_section` /
+:func:`try_load_section` to build typed ``<Name>Config`` instances.
+Patterns and exceptions live in ``docs/guide.md``.
 """
 
 from chumicro_config.runtime import DEFAULT_RUNTIME_CONFIG_PATH, load_runtime_config
