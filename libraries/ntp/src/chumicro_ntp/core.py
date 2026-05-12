@@ -11,32 +11,38 @@ them should use a full NTP implementation (out of scope for embedded).
 Wire format reference: RFC 4330 §4.
 """
 
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
+
 from chumicro_config import InvalidConfigType, is_config_like
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 #: Seconds between the NTP epoch (1900-01-01T00:00:00Z) and the
 #: Unix epoch (1970-01-01T00:00:00Z).  Constant since both epochs
 #: are fixed.
-_NTP_TO_UNIX = 2208988800
+NTP_TO_UNIX = const(2208988800)
 
 #: SNTP packet length in bytes.  Fixed by the protocol — every
 #: request and every response is exactly 48 bytes.
-_PACKET_SIZE = 48
+PACKET_SIZE = const(48)
 
 #: First byte of an SNTP **request**: LI=0 (no warning), VN=4
 #: (NTPv4), Mode=3 (client).
-_CLIENT_FIRST_BYTE = 0x23
+CLIENT_FIRST_BYTE = const(0x23)
 
 #: First byte of an SNTP **response** has Mode=4 (server) in the
 #: low three bits.  Tests check the mode rather than the whole
 #: byte because some servers echo VN!=4.
-_SERVER_MODE = 4
+SERVER_MODE = const(4)
 
 #: The complete 48-byte SNTP client request — first byte is
-#: ``_CLIENT_FIRST_BYTE`` (LI=0, VN=4, Mode=3), the rest zero.
+#: ``CLIENT_FIRST_BYTE`` (LI=0, VN=4, Mode=3), the rest zero.
 #: Identical for every query, so we send the same object instead of
 #: rebuilding a fresh packet each call.
-_CLIENT_REQUEST = bytes([_CLIENT_FIRST_BYTE]) + b"\x00" * (_PACKET_SIZE - 1)
+_CLIENT_REQUEST = bytes([CLIENT_FIRST_BYTE]) + b"\x00" * (PACKET_SIZE - 1)
 
 
 class NTPError(OSError):
@@ -54,7 +60,7 @@ def _parse_response(packet: bytes | memoryview) -> int:
 
     Args:
         packet: The bytes returned by ``recvfrom_into``.  Must be
-            exactly :data:`_PACKET_SIZE` bytes long.
+            exactly :data:`PACKET_SIZE` bytes long.
 
     Returns:
         Integer Unix-epoch seconds (UTC) read from the server's
@@ -66,11 +72,11 @@ def _parse_response(packet: bytes | memoryview) -> int:
         NTPError: Packet too short, mode not "server", or stratum
             kiss-of-death (stratum=0).
     """
-    if len(packet) < _PACKET_SIZE:
+    if len(packet) < PACKET_SIZE:
         raise NTPError(f"short SNTP response ({len(packet)} bytes)")
     mode = packet[0] & 0b111
-    if mode != _SERVER_MODE:
-        raise NTPError(f"unexpected SNTP mode {mode} (want {_SERVER_MODE})")
+    if mode != SERVER_MODE:
+        raise NTPError(f"unexpected SNTP mode {mode} (want {SERVER_MODE})")
     stratum = packet[1]
     if stratum == 0:
         # RFC 4330 §5: stratum=0 is a "kiss-of-death" — don't trust
@@ -85,7 +91,7 @@ def _parse_response(packet: bytes | memoryview) -> int:
         | (packet[42] << 8)
         | packet[43]
     )
-    return seconds_1900 - _NTP_TO_UNIX
+    return seconds_1900 - NTP_TO_UNIX
 
 
 class NTPResult:
@@ -278,7 +284,7 @@ class NTPClient:
         # Pre-allocate the receive buffer so the hot path doesn't
         # allocate.  48 bytes is the SNTP packet size; larger buffers
         # would just hold tail bytes nobody wants.
-        self._recv_buffer = bytearray(_PACKET_SIZE)
+        self._recv_buffer = bytearray(PACKET_SIZE)
 
     @property
     def server(self) -> str:

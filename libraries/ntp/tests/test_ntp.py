@@ -11,7 +11,7 @@ server is contacted.
 
 import chumicro_ntp
 from chumicro_ntp import NTPClient, NTPError, NTPResult
-from chumicro_ntp.core import _CLIENT_REQUEST, _NTP_TO_UNIX, _parse_response
+from chumicro_ntp.core import _CLIENT_REQUEST, NTP_TO_UNIX, _parse_response
 from chumicro_sockets.testing import FakeUDPSocket
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
@@ -28,7 +28,7 @@ def _server_response(unix_seconds: int) -> bytes:
     reference") so the parser doesn't reject as kiss-of-death.  All
     other fields zero except the transmit timestamp (bytes 40-47).
     """
-    seconds_1900 = unix_seconds + _NTP_TO_UNIX
+    seconds_1900 = unix_seconds + NTP_TO_UNIX
     packet = bytearray(48)
     packet[0] = 0x24  # LI=0, VN=4, Mode=4
     packet[1] = 1     # stratum 1
