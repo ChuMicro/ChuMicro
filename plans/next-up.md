@@ -4,11 +4,22 @@
 
 ## Now
 
-_idle — pickup candidates live in `## Next`._
+- [ ] **Implement [Decision 0062](decisions/0062-entrypoint-factory-skip.md) — entrypoint factory-skip mechanism** — proposed-status ADR landed 2026-05-12; promotion to `accepted` is gated on a working implementation.  Punch list:
+  - Walker change in `workbench/deploy/src/chumicro_deploy/sources.py` — AST-scan entrypoint for `__chumicro_skip_factories__`, filter the discovered-imports queue, three diagnostic paths (typo / direct-import override / dead-skip).
+  - Per-library `try`/`except ImportError → RuntimeError` wraps in `from_config` for mqtt + requests + websockets + ntp + http_server (five libs).
+  - Bench-validate against the same `.scratch/ast-walker-check/app_custom.py` / `app_default.py` fixtures used to discover the 0042 sub-rule failure — `app_custom.py` with the skip constant must NOT ship `chumicro_sockets`.
+  - Docs: new "Slimming your deploy" page under `docs/contributing/` (or workspace-template) showing exact + family skip syntax.
+
+- [ ] **Implement [Decision 0063](decisions/0063-duck-typed-factory-contract.md) — duck-typed factory contract docs** — proposed-status ADR landed 2026-05-12; documentation-only follow-up to 0062, can land in parallel.  Punch list:
+  - Per-library docstring rewrite on the `socket=` / `socket_factory=` / `connection_factory=` / `listener_factory=` parameters across mqtt + requests + websockets + ntp + http_server — replace `"TCPClientSocket"`-style type names with the structural contract (`.recv_into` / `.send` / `.close` shape).
+  - New `## Bring your own transport` section in each library's `docs/guide.md` with a stdlib-`socket` or hand-rolled example.
+  - No source-code logic changes; the duck-typing already exists.  Bench-validate against existing test suites — should be no behavior change.
 
 ## Next
 
 Independent items.  Most have either shipped phases (status in the linked workstream) or are unscoped placeholders waiting on a forcing function.
+
+- [ ] **Workspace library curation — chumicro-workspace as library host** (proposed 2026-05-12 alongside Decision 0062) — Tier 2 follow-up to the DI audit: chumicro-workspace becomes the on-device library host for chumicro libs, replacing `mip`/`circup` for the workspace-template happy path.  Drivers: mip/circup recursive install with no `--no-deps`, FAT-stability concerns with host-driven file writes (Decision 0033), and the deploy-time opt-out per Decision 0062 only working under the chumicro-workspace deploy path.  Four phases: (1) bundle `full/<lib>/` subtree (src + tests + examples + docs) — user-leaned shape, confirmed; (2) `chumicro-workspace library {list,add,update,remove,switch-channel}` CLI with pyproject-driven transitive resolution + interactive dep deselection; (3) non-chumicro upstreams (Adafruit / micropython-lib) — deferred until real demand; (4) `library run-example` / `library test` — deferred until Phase 2 is in anger.  `mip`/`circup` remain supported.  Detail: [`workstreams/workspace-library-curation.md`](workstreams/workspace-library-curation.md).
 
 - [ ] **Multi-board CP deploy + FSKit follow-ups — Item 5 deferred to next natural wedge** — Items 1, 2, 3, 4 + the doctor wrapper shipped 2026-05-09; Item 6 considered and rejected.  Item 5 (end-to-end recovery-command bench proof) needs a real FSKit wedge.  A 2026-05-09 attempt at deliberate triggers (alternating-board deploys, repeated wipe-test, full functional suite, host-side write+delete loops, concurrent diskutil probes) didn't reproduce — the wedge is intermittent enough that try-on-demand isn't reliable.  Validation rides on the next natural occurrence; checklist in the workstream's Item 5 section ("when doctor reports MACOS FSKIT ✗, run through these five steps").  Detail: [`workstreams/deploy-multi-board-and-fskit-followups.md`](workstreams/deploy-multi-board-and-fskit-followups.md).
 

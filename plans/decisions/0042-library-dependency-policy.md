@@ -71,25 +71,20 @@ release-prep cycle to confirm.
 
 #### Sub-rule — factory helpers live in a separate submodule
 
-The hard dep is unavoidable at install-time (`pip install chumicro-mqtt`
-brings `chumicro-sockets` into the host venv whether or not the user
-calls the helper).  The dep **is** avoidable at *deploy-time* — what
-ships to the board — if the helper is structured so the AST-walking
-import-graph deploy (Decision 0029) doesn't follow it.
+The `chumicro_<infra>_factory(...)` helper lives in its own submodule (e.g. `chumicro_requests/sockets_factory.py`).  The library's `__init__.py` and core implementation modules **must not import the helper at module load time**.  `from_config` may lazy-import the helper inside its body to preserve the friendly auto-default API.
 
-**Rule:** the `chumicro_<infra>_factory(...)` helper lives in its own submodule (e.g. `chumicro_requests/sockets_factory.py`).  The library's `__init__.py` and core implementation modules **must not import the helper**.  Users opt in to the default wiring by importing the submodule explicitly (`from chumicro_requests.sockets_factory import chumicro_sockets_factory`); users supplying a custom transport never reference the submodule.
+This placement provides two things:
 
-The AST-walking import-graph deploy (Decision 0029) starts from the user's app.  If the app never imports `chumicro_requests.sockets_factory`, the walker never enters that module, so the `import chumicro_sockets` inside it is never observed, and `chumicro_sockets` is never shipped to the device.  Lazy imports inside `client.py` (or anything `__init__.py` pulls in) do NOT give the user this opt-out — the walker still sees them when it analyzes `client.py`.
+1. **Host import isolation** — the helper is not loaded until something asks for it, so users with a custom transport don't pay the `chumicro_sockets` import cost on the host venv when they construct the library directly.
+2. **A named, walker-recognizable opt-out target** — the deploy walker (Decision 0029) skips factory submodules named via the entrypoint constant `__chumicro_skip_factories__`, per [Decision 0062](0062-entrypoint-factory-skip.md).
+
+The earlier reading of this sub-rule — that placing the helper in its own submodule was sufficient by itself to give a deploy-time opt-out — was bench-disproven 2026-05-12.  The walker's `ast.walk` traverses function bodies, so `from_config`'s lazy import of the factory submodule is discovered statically and followed.  Without an explicit signal from the entrypoint, the walker conservatively ships everything reachable; Decision 0062 provides that signal.
 
 #### What the rule does not solve
 
-`pip install chumicro-mqtt` still installs `chumicro-sockets` into the
-host venv as a transitive dep.  That is install-time, not deploy-time.
-For users who want to fully avoid the dep on disk too (rare — chumicro
-libraries are tiny), the escape hatch is `pip install --no-deps
-chumicro-mqtt`, which we deliberately do not document.  The
-deploy-time opt-out covers the only audience that actually cares
-(memory-constrained boards).
+`pip install chumicro-mqtt` still installs `chumicro-sockets` into the host venv as a transitive dep.  That is install-time, not deploy-time.  For users who want to fully avoid the dep on disk too (rare — chumicro libraries are tiny), the escape hatch is `pip install --no-deps chumicro-mqtt`, which we deliberately do not document.
+
+`mip install` and `circup install` install package.json deps recursively with no `--no-deps` flag.  Our bundle generator (`scripts/bundle_manager.py`) emits chumicro deps into the manifests, so standalone consumers cannot opt out of the chumicro stack at install time — only at deploy time via [Decision 0062](0062-entrypoint-factory-skip.md), and only when using the chumicro-workspace deploy path that runs the AST walker.
 
 ### Class 2 — decoration / observability: callbacks only, never imported
 
