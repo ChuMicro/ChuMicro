@@ -4,6 +4,8 @@
 
 ## Now
 
+- [ ] **Resume DI Tier 2/3 implementation from session handoff** — see [`handoffs/2026-05-12-implement-0062-factory-skip.md`](handoffs/2026-05-12-implement-0062-factory-skip.md).  Punch lists for 0062 + 0063 below; the handoff has the bench-fixture recreation steps, dead-end log, and context-rebuild pointers.
+
 - [ ] **Implement [Decision 0062](decisions/0062-entrypoint-factory-skip.md) — entrypoint factory-skip mechanism** — proposed-status ADR landed 2026-05-12; promotion to `accepted` is gated on a working implementation.  Punch list:
   - Walker change in `workbench/deploy/src/chumicro_deploy/sources.py` — AST-scan entrypoint for `__chumicro_skip_factories__`, filter the discovered-imports queue, three diagnostic paths (typo / direct-import override / dead-skip).
   - Per-library `try`/`except ImportError → RuntimeError` wraps in `from_config` for mqtt + requests + websockets + ntp + http_server (five libs).
