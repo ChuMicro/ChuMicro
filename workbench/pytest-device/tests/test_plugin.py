@@ -481,7 +481,9 @@ class TestTransportCache:
             address="/dev/ttyUSB0",
         )
         original = pytest_device.build_transport_for_entry
-        pytest_device.build_transport_for_entry = lambda device_entry, deploy_mode=None: FakeTransport()
+        pytest_device.build_transport_for_entry = (
+            lambda device_entry, deploy_mode=None: FakeTransport()
+        )
         try:
             transport = cache.get_transport(device, None)
             cache.mark_staged(("dev1", "timing", "test_ticks.py"))
