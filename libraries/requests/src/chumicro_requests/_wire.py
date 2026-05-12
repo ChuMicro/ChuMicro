@@ -776,14 +776,14 @@ class ResponseParser:
         crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
-        line = bytes(self._live_slice(0, crlf_index))
+        line = self._live_slice(0, crlf_index)
         self._consume(crlf_index + 2)
         # Status-Line per RFC 7230 §3.1.2: HTTP-version SP status-code SP reason-phrase
         try:
-            text = line.decode("ascii")
+            text = str(line, "ascii")
         except UnicodeError as decode_error:
             self._fail(HttpProtocolError(
-                f"non-ASCII status line: {line!r}",
+                f"non-ASCII status line: {bytes(line)!r}",
             ))
             raise self._error from decode_error
         parts = text.split(" ", 2)
@@ -819,13 +819,13 @@ class ResponseParser:
             self._consume(2)
             self._enter_body_state()
             return True
-        line = bytes(self._live_slice(0, crlf_index))
+        line = self._live_slice(0, crlf_index)
         self._consume(crlf_index + 2)
         try:
-            text = line.decode("ascii")
+            text = str(line, "ascii")
         except UnicodeError as decode_error:
             self._fail(HttpProtocolError(
-                f"non-ASCII header line: {line!r}",
+                f"non-ASCII header line: {bytes(line)!r}",
             ))
             raise self._error from decode_error
         colon_index = text.find(":")
@@ -928,13 +928,13 @@ class ResponseParser:
         crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
-        line = bytes(self._live_slice(0, crlf_index))
+        line = self._live_slice(0, crlf_index)
         self._consume(crlf_index + 2)
         try:
-            text = line.decode("ascii")
+            text = str(line, "ascii")
         except UnicodeError as decode_error:
             self._fail(HttpProtocolError(
-                f"non-ASCII chunk-size line: {line!r}",
+                f"non-ASCII chunk-size line: {bytes(line)!r}",
             ))
             raise self._error from decode_error
         # Strip chunk-extensions (everything after the first ';').
