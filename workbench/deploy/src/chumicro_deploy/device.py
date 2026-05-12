@@ -15,8 +15,8 @@ single ``Device`` instance through the deploy pipeline.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from typing import Any
 
 from .protocol import DeployMode, Runtime, TransportProtocol
@@ -64,6 +64,16 @@ class Device:
             ``None`` to use the runtime default.
         resource_prefix: On-device directory where library files land
             at deploy time.
+        transport_factory: Override hook for :meth:`create_transport`.
+            When set, :meth:`create_transport` returns
+            ``transport_factory(self)`` instead of building the
+            runtime-specific transport.  Production constructs Device
+            without this kwarg; tests pass a factory that returns a
+            :class:`~chumicro_deploy.testing.FakeTransport` (or another
+            implementation of :class:`TransportProtocol`) so the deploy
+            flow runs against an in-memory recorder.  Per-instance, so
+            multiple Devices in one test can carry different
+            transports.
 
     The CIRCUITPY drive (CP flash-mode deploys) is auto-resolved at
     deploy time by scanning the host's mount points and matching the
@@ -77,6 +87,9 @@ class Device:
     deploy_mode: str = DEFAULT_DEPLOY_MODE
     entrypoint_name: str | None = None
     resource_prefix: str = DEFAULT_RESOURCE_PREFIX
+    transport_factory: Callable[[Device], TransportProtocol] | None = field(
+        default=None, repr=False, compare=False,
+    )
 
     def __post_init__(self) -> None:
         if self.transport not in Runtime._value2member_map_:
@@ -147,7 +160,13 @@ class Device:
         or :class:`~chumicro_deploy.circuitpython_transport.CircuitpythonTransport`
         depending on :attr:`transport`.  Deploy-mode translation
         (``ram``/``flash`` to the transport's native label) happens here.
+
+        When :attr:`transport_factory` is set, returns its result
+        instead — the test-injection seam that lets host-side tests
+        run the deploy flow without real hardware.
         """
+        if self.transport_factory is not None:
+            return self.transport_factory(self)
         if self.transport == Runtime.MICROPYTHON:
             from .micropython_transport import MicropythonTransport
 
