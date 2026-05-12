@@ -95,20 +95,14 @@ class TestFakeTransportPrimitives:
 # ---------------------------------------------------------------------------
 
 
-def _build_device(deploy_mode: str = "flash") -> Device:
+def _build_device(
+    transport: FakeTransport, *, deploy_mode: str = "flash",
+) -> Device:
     return Device(
         transport="micropython",
         address="/dev/cu.fake",
         deploy_mode=deploy_mode,
-    )
-
-
-def _patch_factory(
-    monkeypatch: pytest.MonkeyPatch, transport: FakeTransport,
-) -> None:
-    """Make every Device.create_transport call return *transport*."""
-    monkeypatch.setattr(
-        Device, "create_transport", lambda _self: transport,
+        transport_factory=lambda _device: transport,
     )
 
 
@@ -123,8 +117,7 @@ class TestDeployerDeployDiff:
                 "/lib/shared.py": b"shared v1",
             },
         )
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         new_payload = {
             "/code.py": b"# new deploy",
             "/lib/shared.py": b"shared v2",
@@ -155,8 +148,7 @@ class TestDeployerDeployDiff:
                 "/lib/foo.py": b"old foo",
             },
         )
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         deployer.deploy_diff(
             FileMapSource(
                 {"/code.py": b"# new"},
@@ -176,8 +168,7 @@ class TestDeployerDeployDiff:
             mode="copy",
             device_files={"/code.py": b"# v1"},
         )
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         deployer.deploy_diff(
             FileMapSource(
                 {
@@ -196,8 +187,7 @@ class TestDeployerDeployDiff:
     def test_first_deploy_to_empty_device(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """No prior deploy → no stale files, normal write flow."""
         transport = FakeTransport(mode="copy", device_files={})
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         result = deployer.deploy_diff(
             FileMapSource(
                 {"/code.py": b"# first deploy"},
@@ -215,8 +205,7 @@ class TestDeployerDeployDiff:
         mode never wrote anything to flash."
         """
         transport = FakeTransport(mode="ram", device_files={})
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         result = deployer.deploy_diff(
             FileMapSource(
                 {"/main.py": b"print('hi')"},
@@ -245,8 +234,7 @@ class TestDeployerDeployDiff:
                 "RuntimeError: boom\n"
             ),
         )
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         result = deployer.deploy_diff(
             FileMapSource(
                 {"/code.py": b"# crashy"},
@@ -261,8 +249,7 @@ class TestDeployerDeployDiff:
             mode="copy",
             device_files={"/lib/old.py": b"x"},
         )
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         progress: list[tuple[float, str]] = []
         deployer.deploy_diff(
             FileMapSource(
@@ -290,8 +277,7 @@ class TestDeployerDeployDiff:
             device_files={},
             execute_output="Traceback (most recent call last):\nValueError: x",
         )
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         deployer.deploy_diff(
             FileMapSource(
                 {"/code.py": b"# x"},
@@ -317,8 +303,7 @@ class TestDeployerWipeFlag:
                 "/photo.jpg": b"<jpeg>",
             },
         )
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         deleted: list[str] = []
         result = deployer.deploy_diff(
             FileMapSource(
@@ -350,8 +335,7 @@ class TestDeployerWipeFlag:
         transport = FakeTransport(
             mode="copy", device_files={"/code.py": b"# v1"},
         )
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         progress: list[tuple[float, str]] = []
         deployer.deploy_diff(
             FileMapSource({"/code.py": b"# v2"}, entrypoint="/code.py"),
@@ -379,8 +363,7 @@ class TestDeployerWipeFlag:
     ) -> None:
         """RAM-mode FakeTransport.wipe_filesystem() leaves device_files alone."""
         transport = FakeTransport(mode="ram", device_files={})
-        _patch_factory(monkeypatch, transport)
-        deployer = Deployer(_build_device("flash"))
+        deployer = Deployer(_build_device(transport))
         result = deployer.deploy_diff(
             FileMapSource({"/main.py": b"# hi"}, entrypoint="/main.py"),
             wipe=True,

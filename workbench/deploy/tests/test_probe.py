@@ -15,11 +15,11 @@ from chumicro_deploy import (
 
 
 def _device_returning(fake: FakeTransport) -> Device:
-    class DeviceForTest(Device):
-        def create_transport(self):  # type: ignore[override]
-            return fake
-
-    return DeviceForTest(transport="micropython", address="/dev/fake")
+    return Device(
+        transport="micropython",
+        address="/dev/fake",
+        transport_factory=lambda _device: fake,
+    )
 
 
 class TestProbeDevice:

@@ -17,22 +17,13 @@ from chumicro_deploy import (
 )
 
 
-class _DeviceWithFake(Device):
-    """Device subclass that returns a configured FakeTransport.
-
-    Frozen dataclass doesn't allow attribute injection, so we subclass
-    and override create_transport with a method on the subclass.
-    """
-
-
 def _make_deployer_with_fake(**fake_kwargs: Any) -> tuple[Deployer, FakeTransport]:
     fake = FakeTransport(**fake_kwargs)
-
-    class DeviceForTest(Device):
-        def create_transport(self):  # type: ignore[override]
-            return fake
-
-    device = DeviceForTest(transport="micropython", address="/dev/fake")
+    device = Device(
+        transport="micropython",
+        address="/dev/fake",
+        transport_factory=lambda _device: fake,
+    )
     return Deployer(device), fake
 
 
@@ -75,11 +66,11 @@ class TestDeployerBasic:
 
         fake = BoomTransport()
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        deployer = Deployer(DeviceForTest(transport="micropython", address="/dev/x"))
+        deployer = Deployer(Device(
+            transport="micropython",
+            address="/dev/x",
+            transport_factory=lambda _device: fake,
+        ))
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
         with pytest.raises(RuntimeError, match="kaboom"):
             deployer.deploy(source)
@@ -183,14 +174,11 @@ class TestFlashModeRsyncGuard:
     ) -> None:
         fake = FakeTransport()
 
-        class CpFlashDevice(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = CpFlashDevice(
+        device = Device(
             transport="circuitpython",
             address="/dev/fake",
             deploy_mode="flash",
+            transport_factory=lambda _device: fake,
         )
         deployer = Deployer(device)
         # Block rsync globally for this test.
@@ -208,14 +196,11 @@ class TestFlashModeRsyncGuard:
     ) -> None:
         fake = FakeTransport(execute_output="ok\n")
 
-        class CpRamDevice(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = CpRamDevice(
+        device = Device(
             transport="circuitpython",
             address="/dev/fake",
             deploy_mode="ram",
+            transport_factory=lambda _device: fake,
         )
         deployer = Deployer(device)
         monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
@@ -230,14 +215,11 @@ class TestFlashModeRsyncGuard:
     ) -> None:
         fake = FakeTransport(execute_output="ok\n")
 
-        class MpFlashDevice(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = MpFlashDevice(
+        device = Device(
             transport="micropython",
             address="/dev/fake",
             deploy_mode="flash",
+            transport_factory=lambda _device: fake,
         )
         deployer = Deployer(device)
         monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
@@ -268,14 +250,11 @@ class TestDeployerFollowKwargRouting:
     ) -> tuple[Deployer, FakeTransport]:
         fake = FakeTransport(execute_output="ok\n", mode=deploy_mode)
 
-        class _Device(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = _Device(
+        device = Device(
             transport=runtime,
             address="/dev/fake",
             deploy_mode=deploy_mode,
+            transport_factory=lambda _device: fake,
         )
         monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
         return Deployer(device), fake
@@ -395,15 +374,12 @@ class TestPreflightAutoSwitch:
         source = ImportGraphSource(entry, search_paths=[src_dir.parent])
 
         deployer, fake = _make_deployer_with_fake(execute_output="ok\n")
-        # Set the device into RAM mode by re-binding through the dataclass.
-        ram_device = deployer.device.__class__(
+        ram_device = Device(
             transport=deployer.device.transport,
             address=deployer.device.address,
             deploy_mode="ram",
+            transport_factory=lambda _device: fake,
         )
-        # The fake transport-creation closure captures `fake`; rebind a fresh
-        # Deployer over it.
-        ram_device.create_transport = lambda: fake  # type: ignore[method-assign]
         deployer = Deployer(ram_device)
 
         messages: list[str] = []
@@ -433,14 +409,11 @@ class TestPreflightAutoSwitch:
 
         fake = FakeTransport(execute_output="ok\n")
 
-        class RamDevice(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = RamDevice(
+        device = Device(
             transport="micropython",
             address="/dev/fake",
             deploy_mode="ram",
+            transport_factory=lambda _device: fake,
         )
         deployer = Deployer(device)
         messages: list[str] = []
@@ -466,14 +439,11 @@ class TestPreflightAutoSwitch:
 
         fake = FakeTransport(execute_output="ok\n")
 
-        class RamDevice(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = RamDevice(
+        device = Device(
             transport="micropython",
             address="/dev/fake",
             deploy_mode="ram",
+            transport_factory=lambda _device: fake,
         )
         deployer = Deployer(device)
         messages: list[str] = []
@@ -502,14 +472,11 @@ class TestPreflightAutoSwitch:
 
         fake = FakeTransport(execute_output="ok\n")
 
-        class RamDevice(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = RamDevice(
+        device = Device(
             transport="micropython",
             address="/dev/fake",
             deploy_mode="ram",
+            transport_factory=lambda _device: fake,
         )
         deployer = Deployer(device)
         deployer.deploy(source)

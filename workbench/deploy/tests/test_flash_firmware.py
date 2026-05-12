@@ -239,11 +239,11 @@ class TestBootloaderEntry:
 
         fake = PublicFakeTransport(bootloader_reset_result=True)
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = DeviceForTest(transport="circuitpython", address="/dev/x")
+        device = Device(
+            transport="circuitpython",
+            address="/dev/x",
+            transport_factory=lambda _device: fake,
+        )
         assert _dispatch_bootloader_reset(device) is True
         method_order = [call[0] for call in fake.calls]
         assert method_order == ["connect", "reset_into_bootloader", "disconnect"]
@@ -253,11 +253,11 @@ class TestBootloaderEntry:
 
         fake = PublicFakeTransport(bootloader_reset_result=False)
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = DeviceForTest(transport="micropython", address="/dev/x")
+        device = Device(
+            transport="micropython",
+            address="/dev/x",
+            transport_factory=lambda _device: fake,
+        )
         assert _dispatch_bootloader_reset(device) is False
 
     def test_connect_failure_returns_false(self) -> None:
@@ -294,11 +294,11 @@ class TestBootloaderEntry:
             def deploy_files(self, *args: Any, **kwargs: Any) -> str:
                 return ""
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                return FailingTransport()
-
-        device = DeviceForTest(transport="circuitpython", address="/dev/x")
+        device = Device(
+            transport="circuitpython",
+            address="/dev/x",
+            transport_factory=lambda _device: FailingTransport(),
+        )
         assert _dispatch_bootloader_reset(device) is False
 
 
@@ -488,12 +488,10 @@ class TestEnterEsp32RomBootloader:
 
         fake = PublicFakeTransport(bootloader_reset_result=True)
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = DeviceForTest(
-            transport="circuitpython", address="/dev/cu.usbmodem12345",
+        device = Device(
+            transport="circuitpython",
+            address="/dev/cu.usbmodem12345",
+            transport_factory=lambda _device: fake,
         )
 
         port_sequence = [
@@ -527,12 +525,10 @@ class TestEnterEsp32RomBootloader:
 
         fake = PublicFakeTransport(bootloader_reset_result=False)
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = DeviceForTest(
-            transport="micropython", address="/dev/cu.usbmodem211101",
+        device = Device(
+            transport="micropython",
+            address="/dev/cu.usbmodem211101",
+            transport_factory=lambda _device: fake,
         )
 
         # Port list never changes — programmatic entry never produces a
@@ -567,12 +563,10 @@ class TestEnterEsp32RomBootloader:
 
         fake = PublicFakeTransport(bootloader_reset_result=False)
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                return fake
-
-        device = DeviceForTest(
-            transport="micropython", address="/dev/cu.usbmodem211101",
+        device = Device(
+            transport="micropython",
+            address="/dev/cu.usbmodem211101",
+            transport_factory=lambda _device: fake,
         )
 
         prompt_fired = [False]
@@ -650,44 +644,44 @@ class TestFlashFirmwareUf2End2End:
         drive.mkdir()
         (drive / "INFO_UF2.TXT").write_text("marker")
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                class NeverUsedTransport:
-                    mode = "ram"
+        class NeverUsedTransport:
+            mode = "ram"
 
-                    def connect(self):
-                        return
+            def connect(self):
+                return
 
-                    def execute(self, script):
-                        return ""
+            def execute(self, script):
+                return ""
 
-                    def disconnect(self):
-                        return
+            def disconnect(self):
+                return
 
-                    def stage(self, *args, **kwargs):
-                        return
+            def stage(self, *args, **kwargs):
+                return
 
-                    def soft_reset(self):
-                        return
+            def soft_reset(self):
+                return
 
-                    def reset(self):
-                        return
+            def reset(self):
+                return
 
-                    def recover(self):
-                        return
+            def recover(self):
+                return
 
-                    def probe_implementation(self):
-                        return None
+            def probe_implementation(self):
+                return None
 
-                    def reset_into_bootloader(self) -> bool:
-                        return True
+            def reset_into_bootloader(self) -> bool:
+                return True
 
-                    def deploy_files(self, *args, **kwargs):
-                        return ""
+            def deploy_files(self, *args, **kwargs):
+                return ""
 
-                return NeverUsedTransport()
-
-        device = DeviceForTest(transport="circuitpython", address="/dev/x")
+        device = Device(
+            transport="circuitpython",
+            address="/dev/x",
+            transport_factory=lambda _device: NeverUsedTransport(),
+        )
 
         clock = _FakeClock()
 
@@ -716,41 +710,41 @@ class TestFlashFirmwareUf2End2End:
         firmware_path = tmp_path / "fw.uf2"
         firmware_path.write_bytes(b"x")
 
-        class DeviceForTest(Device):
-            def create_transport(self):  # type: ignore[override]
-                class FailConnectTransport:
-                    mode = "ram"
+        class FailConnectTransport:
+            mode = "ram"
 
-                    def connect(self):
-                        raise RuntimeError("no serial")
+            def connect(self):
+                raise RuntimeError("no serial")
 
-                    def execute(self, script):
-                        return ""
+            def execute(self, script):
+                return ""
 
-                    def disconnect(self):
-                        return
+            def disconnect(self):
+                return
 
-                    def stage(self, *args, **kwargs):
-                        return
+            def stage(self, *args, **kwargs):
+                return
 
-                    def soft_reset(self):
-                        return
+            def soft_reset(self):
+                return
 
-                    def reset(self):
-                        return
+            def reset(self):
+                return
 
-                    def recover(self):
-                        return
+            def recover(self):
+                return
 
-                    def probe_implementation(self):
-                        return None
+            def probe_implementation(self):
+                return None
 
-                    def deploy_files(self, *args, **kwargs):
-                        return ""
+            def deploy_files(self, *args, **kwargs):
+                return ""
 
-                return FailConnectTransport()
-
-        device = DeviceForTest(transport="circuitpython", address="/dev/x")
+        device = Device(
+            transport="circuitpython",
+            address="/dev/x",
+            transport_factory=lambda _device: FailConnectTransport(),
+        )
         empty_parent = tmp_path / "empty"
         empty_parent.mkdir()
         clock = _FakeClock()
