@@ -244,16 +244,18 @@ Open-question stub: should the auto-emitted block include *every* chumicro libra
 
 ---
 
-## 8. Two different bootstrap patterns for the same chicken-and-egg — P2
+## 8. Two different bootstrap patterns for the same chicken-and-egg — kept as-is
 
-Both the mono-repo and the workspace template have to solve "run a script on a fresh clone with no third-party deps yet, then re-exec into the venv":
+Both the mono-repo and the workspace template solve "run a script on a fresh clone with no third-party deps yet, then re-exec into the venv":
 
-- **Mono-repo:** `scripts/prepare_workspace.py` (cold-start safe) + `scripts/run.py` (third-party-heavy). Two files. `scripts/run.py` blows up with `ModuleNotFoundError` if invoked before `prepare_workspace.py`.
-- **Workspace template:** `run.py` does both jobs in one file by deferring the `from chumicro_workspace.cli import main` to inside `main()`, after the venv is built and we re-exec. Cleaner single-file pattern.
+- **Mono-repo:** `scripts/prepare_workspace.py` (stdlib-only, Python 3.7+ compatible, 340 lines) + `scripts/run.py` (third-party-heavy, ~2500 lines). Two files. Cold-start path is `python scripts/prepare_workspace.py`.
+- **Workspace template:** single `run.py` that defers `from chumicro_workspace.cli import main` until inside `main()`, after the venv is built and an `os.execv` re-execs into the venv interpreter.
 
-The template's pattern strictly subsumes the mono-repo's. Worth converging on the single-file approach in the mono-repo too — pulls one less file out of `scripts/` and removes the foot-gun where running `python3 scripts/run.py --help` on a fresh clone produces a confusing import error instead of a "run prepare_workspace first" message.
+The single-file pattern was originally proposed as the convergence target. Re-evaluated 2026-05-12 and reversed: folding the two in the mono-repo would force one of (a) deferring all of `run.py`'s hot-path imports — cascading refactor across ~2500 lines for tasks that already use lazy-loading on their heavy bits, (b) wrapping every import in try/except — code bloat with no upside, or (c) propagating the `os.execv` re-exec dance the user explicitly dislikes as *"running python through python like that."*
 
-**Fix surface:** mono-repo `scripts/run.py` — fold the `prepare_workspace.py` bootstrap into the top of `run.py`, then delete `prepare_workspace.py`. Update `CONTRIBUTING.md` and `AGENTS.md` references.
+If anything moves, the deeper direction is the reverse: have the workspace template adopt the mono-repo's separate-file shape. Tracked in `plans/open-questions.md` under "Workspace-template `run.py` self-bootstrap pattern" — not blocking anything.
+
+**Fix surface:** none in the mono-repo.
 
 ---
 
