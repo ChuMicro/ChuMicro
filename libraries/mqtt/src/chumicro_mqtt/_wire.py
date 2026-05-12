@@ -762,7 +762,6 @@ class PacketDecoder:
                 bytes_still_on_wire=total_length - live,
                 topic=None,
                 qos=qos,
-                retain=retain,
                 packet_id=None,
                 message_length=message_length,
             )
@@ -809,7 +808,6 @@ class PacketDecoder:
             bytes_still_on_wire=total_length - live,
             topic=topic,
             qos=qos,
-            retain=retain,
             packet_id=packet_id,
             message_length=message_length,
         )
@@ -842,13 +840,12 @@ class PacketDecoder:
         self._drain_mode = _DRAIN_INTACT
 
     def _enter_oversized_drain(
-        self, *, bytes_still_on_wire, topic, qos, retain, packet_id, message_length,
+        self, *, bytes_still_on_wire, topic, qos, packet_id, message_length,
     ):
         """Set up tier-3 drain state.  Reuses the steady-state buffer as a rolling sink."""
         self._drain_remaining = max(0, bytes_still_on_wire)
         self._drain_topic = topic
         self._drain_qos = qos
-        self._drain_retain = retain
         self._drain_packet_id = packet_id
         self._drain_message_length = message_length
         # Discard anything still in the steady-state buffer — we've
