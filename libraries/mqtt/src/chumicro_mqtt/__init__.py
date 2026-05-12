@@ -25,24 +25,15 @@ Source layout:
 
 * :mod:`chumicro_mqtt._wire` — wire-format primitives, packet
   encoders/decoder, and protocol exceptions.
-* :mod:`chumicro_mqtt.client` — :class:`MQTTClient` plus connection-
-  lifecycle classes (:class:`ProtocolState`, :class:`InFlightTable`,
-  etc.) — they're tightly coupled to the orchestration.
+* :mod:`chumicro_mqtt.client` — :class:`MQTTClient` plus its connection-
+  lifecycle classes (``Awaiting``, ``InFlightPublish``, ``InFlightTable``,
+  ``PendingResponse``) — internal to the orchestration; reach into the
+  submodule directly if you need them.
 * :mod:`chumicro_mqtt.testing` — host-only fakes (excluded from device
   bundle).
 """
 
 from chumicro_mqtt._wire import (
-    PACKET_CONNACK,
-    PACKET_CONNECT,
-    PACKET_PINGREQ,
-    PACKET_PINGRESP,
-    PACKET_PUBACK,
-    PACKET_PUBLISH,
-    PACKET_SUBACK,
-    PACKET_SUBSCRIBE,
-    PACKET_UNSUBACK,
-    PACKET_UNSUBSCRIBE,
     MQTTBackpressureError,
     MQTTConnectError,
     MQTTError,
@@ -58,36 +49,14 @@ from chumicro_mqtt._wire import (
     encode_varlen,
     topic_matches,
 )
-from chumicro_mqtt.client import (
-    Awaiting,
-    InFlightPublish,
-    InFlightTable,
-    MQTTClient,
-    PendingResponse,
-    ProtocolState,
-    WhenOversized,
-)
+from chumicro_mqtt.client import MQTTClient, ProtocolState, WhenOversized
 
 __all__ = [
-    "Awaiting",
-    "InFlightPublish",
-    "InFlightTable",
     "MQTTClient",
     "MQTTBackpressureError",
     "MQTTConnectError",
     "MQTTError",
     "MQTTProtocolError",
-    "PACKET_CONNACK",
-    "PACKET_CONNECT",
-    "PACKET_PINGREQ",
-    "PACKET_PINGRESP",
-    "PACKET_PUBACK",
-    "PACKET_PUBLISH",
-    "PACKET_SUBACK",
-    "PACKET_SUBSCRIBE",
-    "PACKET_UNSUBACK",
-    "PACKET_UNSUBSCRIBE",
-    "PendingResponse",
     "ProtocolState",
     "UnsupportedQoSError",
     "WhenOversized",

@@ -1,14 +1,12 @@
 """Tests for the streaming inbound packet decoder."""
 
-from chumicro_mqtt import (
+from chumicro_mqtt import MQTTProtocolError
+from chumicro_mqtt._wire import (
     PACKET_CONNACK,
     PACKET_PINGRESP,
     PACKET_PUBACK,
     PACKET_SUBACK,
     PACKET_UNSUBACK,
-    MQTTProtocolError,
-)
-from chumicro_mqtt._wire import (
     PacketDecoder,
     ParsedAck,
     ParsedPublish,
