@@ -216,20 +216,10 @@ def _new_tx_queue(maxlen):
 
 
 def _force_non_blocking(socket):
-    """Best-effort ``setblocking(False)`` on a chumicro-sockets socket.
-
-    The MQTT client's tick-based RX path expects ``recv_into`` to
-    raise EAGAIN (or return 0) when no data is available, never to
-    block.  MicroPython's stdlib socket starts in blocking mode and
-    chumicro_sockets' MP adapter doesn't override that — without
-    this enforcement, the device's first ``recv`` after sending
-    CONNECT blocks on a Pi Pico W, the CONNACK never gets parsed,
-    and the ack-timeout fires after 5 s.
-
-    Some adapters (MP TLS via SSLSocket) drop ``setblocking`` and
-    fall back to a no-op stub; calling it there is harmless but
-    might raise AttributeError in older builds, so we wrap.
-    """
+    """Best-effort ``setblocking(False)``.  The tick-based RX path requires
+    non-blocking recv; MP plain TCP defaults to blocking.  Some MP TLS
+    adapters lack ``setblocking`` entirely — the ``getattr`` + ``try``
+    handles both shapes."""
     setblocking = getattr(socket, "setblocking", None)
     if setblocking is None:
         return
