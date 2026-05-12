@@ -416,30 +416,14 @@ class MQTTClient:
         """Wire up the client.
 
         Args:
-            socket: An already-connected, non-blocking TCP-shaped
-                object.  Must expose:
-
-                * ``recv_into(buffer: memoryview, nbytes: int) -> int``
-                  — raises ``OSError(EAGAIN | EWOULDBLOCK)`` on no
-                  data, returns 0 on peer-close, otherwise bytes
-                  written.
-                * ``send(payload: bytes) -> int`` — raises
-                  ``OSError(EAGAIN | EWOULDBLOCK)`` when the send
-                  buffer is full, otherwise bytes sent (may be
-                  partial).
-                * ``close() -> None``
-                * ``setblocking(flag: bool) -> None`` — best-effort;
-                  absence is tolerated.
-
-                ``chumicro_sockets.tcp_client_socket(...)`` and
-                ``tls_client_socket(...)`` are valid producers, but
-                anything matching the shape works (stdlib
-                ``socket.socket`` after ``setblocking(False)``, an
-                upstream-library wrapper, a test fake).  The client
-                takes ownership; :meth:`disconnect` closes it.  May
-                be ``None`` when *socket_factory* is provided — the
-                factory fires on :meth:`connect` and self-heal,
-                never from ``__init__``.
+            socket: An already-connected, non-blocking object exposing
+                ``recv_into`` / ``send`` / ``close`` / ``setblocking``
+                — see the user guide's "Bring your own transport" table
+                for the per-method contract.  The client takes
+                ownership; :meth:`disconnect` closes it.  May be
+                ``None`` when *socket_factory* is provided — the
+                factory fires on :meth:`connect` and self-heal, never
+                from ``__init__``.
             socket_factory: Optional zero-arg callable returning an
                 object of the same shape as *socket*.  Used in two
                 paths: (1) when *socket* is ``None``, :meth:`connect`
