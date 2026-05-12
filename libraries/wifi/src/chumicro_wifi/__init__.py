@@ -32,8 +32,7 @@ CircuitPython's RAM-mode class-as-module stub (PEP 562 module-level
 """
 
 from chumicro_wifi.config import WifiConfig
-from chumicro_wifi.service import WifiService
-from chumicro_wifi.state import WifiState
+from chumicro_wifi.service import WifiService, WifiState
 
 __all__ = [
     "WifiConfig",

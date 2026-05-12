@@ -25,7 +25,21 @@ import sys
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_wifi.config import WifiConfig
-from chumicro_wifi.state import WifiState
+
+
+class WifiState:
+    """String-sentinel state names for :class:`WifiService`.
+
+    Plain strings — :mod:`enum` is unavailable on some MicroPython
+    boards.  Compare via ``state == WifiState.CONNECTED``.  Do not
+    instantiate.
+    """
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+    FAILED = "failed"
 
 
 def _select_adapter():
