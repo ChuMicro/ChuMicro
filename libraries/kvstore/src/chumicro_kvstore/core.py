@@ -1,19 +1,12 @@
 """Core ``KVStore`` class, exception hierarchy, and ``Backend`` ABC.
 
-Mapping-shaped (``store[key]`` / ``store["k"] = v`` / ``del
-store["k"]`` / ``"k" in store`` / iter) plus three explicit lifecycle
-methods (``commit``, ``commit_if_changed``, ``reload``).
-
-Backend selection is per-runtime via ``backend="auto"`` with explicit
-overrides accepted.
-
 ``MemoryBackend`` is lazy-imported (only the CPython fall-through and
 ``backend="memory"`` paths touch it) — saves ~600-800 B of heap on
 device imports.  ``msgpack`` stays at module top: it runs on every
-commit/load and lazy overhead would dominate.  ``Backend`` lives in
-this module too so backends import their ABC + exception classes
-from one place, breaking the prior cycle where the ABC sat under
-``_backends/`` and the backends lazy-imported the exceptions back.
+commit/load and lazy overhead would dominate.  ``Backend`` lives
+alongside the exceptions so backends import their ABC + exception
+classes from one place, breaking the cycle that would otherwise
+require per-method lazy imports.
 """
 
 import sys
@@ -238,28 +231,23 @@ class KVStore:
         return len(self._data)
 
     def get(self, key: str, default: object = None) -> object:
-        """Return ``self[key]`` if present else *default*."""
         return self._data.get(key, default)
 
     def keys(self):
-        """Return a view of the current keys."""
         return self._data.keys()
 
     def items(self):
-        """Return a view of the current ``(key, value)`` pairs."""
         return self._data.items()
 
     def values(self):
-        """Return a view of the current values."""
         return self._data.values()
 
     def pop(self, key: str, *default: object) -> object:
-        """Remove *key* and return its value; fall back to *default*.
+        """Remove *key* and return its value; fall back to *default* if given.
 
-        Args:
-            key: Key to remove.
-            default: Returned when *key* is absent.  When omitted,
-                ``KeyError`` is raised on missing keys (dict semantics).
+        The variadic *default lets the caller distinguish "no default
+        supplied" (raise ``KeyError`` on missing) from "default is
+        ``None``" — same idiom as ``dict.pop``.
         """
         if default:
             return self._data.pop(key, default[0])
@@ -277,12 +265,11 @@ class KVStore:
 
     @property
     def capacity(self) -> int:
-        """Bytes available on this backend for the encoded payload."""
         return self._backend.capacity
 
     @property
     def bytes_used(self) -> int:
-        """Encoded size of the *current* in-memory dict."""
+        """Encoded size of the *current* in-memory dict (not the persisted payload)."""
         return len(packb(self._data))
 
     @property
