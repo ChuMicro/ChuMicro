@@ -1289,33 +1289,39 @@ class MQTTClient:
 
     def _check_deadlines(self, now_ms):
         """Retry / fault on expired in-flight + pending entries."""
-        for entry in list(self._in_flight):
-            if self._ticks.ticks_diff(entry.deadline_ticks, now_ms) > 0:
-                continue
-            if entry.retry_count >= self._publish_retry_max:
-                self._in_flight.discard(entry.packet_id)
+        # ``list()`` wraps are needed only to allow safe mutation inside
+        # the loop body (``discard`` / ``remove``); skip allocating the
+        # copy when the underlying collection is empty — the common
+        # steady-state on a sensor-profile publisher.
+        if self._in_flight:
+            for entry in list(self._in_flight):
+                if self._ticks.ticks_diff(entry.deadline_ticks, now_ms) > 0:
+                    continue
+                if entry.retry_count >= self._publish_retry_max:
+                    self._in_flight.discard(entry.packet_id)
+                    self._last_error = MQTTError(
+                        f"PUBLISH packet_id {entry.packet_id} exceeded "
+                        f"retry limit {self._publish_retry_max}",
+                    )
+                    self._state = ProtocolState.FAILED
+                    return
+                entry.retry_count += 1
+                entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
+                # Set the DUP flag (bit 3 of byte 0) per MQTT 3.1.1 §4.3.2.
+                retry_packet = bytearray(entry.packet_bytes)
+                retry_packet[0] |= 0x08
+                self._tx_queue.append(bytes(retry_packet))
+
+        if self._pending_responses:
+            for pending in list(self._pending_responses):
+                if self._ticks.ticks_diff(pending.deadline_ticks, now_ms) > 0:
+                    continue
+                self._pending_responses.remove(pending)
                 self._last_error = MQTTError(
-                    f"PUBLISH packet_id {entry.packet_id} exceeded "
-                    f"retry limit {self._publish_retry_max}",
+                    f"timed out awaiting {pending.awaiting}",
                 )
                 self._state = ProtocolState.FAILED
                 return
-            entry.retry_count += 1
-            entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
-            # Set the DUP flag (bit 3 of byte 0) per MQTT 3.1.1 §4.3.2.
-            retry_packet = bytearray(entry.packet_bytes)
-            retry_packet[0] |= 0x08
-            self._tx_queue.append(bytes(retry_packet))
-
-        for pending in list(self._pending_responses):
-            if self._ticks.ticks_diff(pending.deadline_ticks, now_ms) > 0:
-                continue
-            self._pending_responses.remove(pending)
-            self._last_error = MQTTError(
-                f"timed out awaiting {pending.awaiting}",
-            )
-            self._state = ProtocolState.FAILED
-            return
 
     def _check_keepalive(self, now_ms):
         """Send a PINGREQ when half the keepalive interval has elapsed."""
