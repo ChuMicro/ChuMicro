@@ -102,12 +102,25 @@ Unsupported types raise `TypeError`.  Integers outside the 32-bit range raise `O
 
 ## Memory notes
 
-The two API shapes have different allocation behavior:
+`unpackb` accepts `bytes`, `bytearray`, and `memoryview`, so you can decode directly from a pre-allocated buffer without copying.  Internally the decoder treats the input as a `memoryview` end-to-end — slices stay as views; only the final `bytes` / `str` results are heap allocations.
 
-* **Stream-based (`pack` / `unpack`)** writes incrementally to your file-like and reads incrementally from it, so there's no intermediate buffer.  Preferred on memory-tight boards.
-* **Bytes-based (`packb` / `unpackb`)** builds a `bytearray`, grows it as encoding proceeds, then copies it to `bytes`.  Convenient for small payloads (typical settings dicts) — for large payloads or tight loops, switch to the stream-based path to avoid the temporary copy.
+`packb` builds a `bytearray` that grows as encoding proceeds, then copies to `bytes` once at the end.  MicroPython's bytearray uses capacity-doubling, so a typical settings dict (~50 bytes encoded) goes through ~5 reallocations during the build.
 
-`unpackb` accepts `bytes`, `bytearray`, and `memoryview`, so you can decode directly from a pre-allocated buffer without copying.
+`pack` and `unpack` (stream-based) match the signatures CircuitPython's native C `msgpack` module exposes and delegate to it on hardware that ships it.  On every other runtime — MicroPython, CPython, CircuitPython unix-port — `pack` calls `packb` and writes the result to the stream in one shot; it does **not** stream incrementally.  If you need true streaming on those runtimes, write your own loop around `packb` per element.
+
+### Allocation profile (MicroPython 1.26 unix-port, GC disabled)
+
+Useful when budgeting heap for a tick.  Measured by wrapping each call in `gc.collect(); gc.disable(); base = gc.mem_alloc()` and reading the delta after 100 iterations.
+
+| Operation | Payload | Heap alloc per call |
+|---|---|---:|
+| `packb` settings dict | 47 B (small ints + bools + short strings) | ~544 B |
+| `packb` sensor dict | 59 B (5 floats + small int) | ~609 B |
+| `packb` long-string config | 263 B (3 strings &gt; 31 bytes each) | ~1 024 B |
+| `unpackb` settings dict | 47 B input, 4 string fields | ~609 B |
+| `import chumicro_msgpack` (one-time) | — | ~15.4 KB |
+
+The numbers shift across firmware versions and payload shapes — they're a sanity baseline, not a contract.
 
 ## Platform notes
 
