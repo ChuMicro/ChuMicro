@@ -19,7 +19,6 @@ from chumicro_logging import (
     Logger,
     StreamHandler,
     default_formatter,
-    get_logger,
     level_name,
 )
 from chumicro_logging.testing import FailingHandler, RecordingHandler
@@ -42,7 +41,6 @@ def test_public_exports_present() -> None:
         "StreamHandler",
         "WARNING",
         "default_formatter",
-        "get_logger",
         "level_name",
     ):
         assert hasattr(chumicro_logging, name), f"missing export: {name}"
@@ -397,25 +395,6 @@ def test_buffered_handler_runner_shape_via_logger() -> None:
         (INFO, "root", "a"),
         (WARNING, "root", "b"),
     ]
-
-
-# ---------------------------------------------------------------------------
-# get_logger
-# ---------------------------------------------------------------------------
-
-
-def test_get_logger_returns_distinct_instances() -> None:
-    one = get_logger("foo")
-    two = get_logger("foo")
-    assert one is not two
-
-
-def test_get_logger_passes_through_arguments() -> None:
-    handler = RecordingHandler()
-    logger = get_logger("alpha", level=DEBUG, handlers=[handler])
-    assert logger.name == "alpha"
-    assert logger.level == DEBUG
-    assert logger.handlers == (handler,)
 
 
 # ---------------------------------------------------------------------------

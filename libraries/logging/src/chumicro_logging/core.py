@@ -337,25 +337,3 @@ class BufferedHandler:
             self._downstream.emit(record[0], record[1], record[2])
             flushed += 1
         return flushed
-
-
-def get_logger(
-    name: str,
-    level: int = INFO,
-    handlers: list | None = None,
-) -> Logger:
-    """Construct a logger with the given name, level, and handlers.
-
-    No global registry — ``get_logger("foo")`` and a second
-    ``get_logger("foo")`` return *different* logger instances.  The
-    caller owns and stores them.
-
-    Args:
-        name: Logger name.
-        level: Minimum level.  Defaults to ``INFO``.
-        handlers: Initial handlers.
-
-    Returns:
-        A new ``Logger``.
-    """
-    return Logger(name=name, level=level, handlers=handlers)

@@ -29,9 +29,8 @@ logger.debug("invisible")  # below threshold; dropped silently
 ```
 
 `Logger` is *not* registered globally.  Every call to `Logger("foo")`
-or `get_logger("foo")` returns a fresh instance — the caller owns and
-stores the reference.  This avoids import-order surprises and keeps
-the library stateless.
+returns a fresh instance — the caller owns and stores the reference.
+This avoids import-order surprises and keeps the library stateless.
 
 Switch threshold at runtime by assigning to `logger.level`:
 
