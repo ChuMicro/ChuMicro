@@ -512,6 +512,38 @@ class TestFromConfig:
 
         assert client.server == "pool.ntp.org"
 
+    def test_skipped_factory_module_raises_runtime_error(self) -> None:
+        """When ``chumicro_ntp.sockets_factory`` is excluded via
+        ``__chumicro_skip_factories__``, the default branch of
+        ``from_config`` raises ``RuntimeError`` naming the bypass
+        kwargs instead of leaking ``ImportError``.  CPython-only —
+        sys.modules None-sentinel is CPython-specific; the
+        translation behavior itself is runtime-agnostic.
+        """
+        import sys  # noqa: PLC0415
+
+        from chumicro_test_harness import skip  # noqa: PLC0415
+
+        if sys.implementation.name != "cpython":
+            skip("sys.modules None-sentinel is CPython-specific")
+
+        original = sys.modules.get("chumicro_ntp.sockets_factory")
+        sys.modules["chumicro_ntp.sockets_factory"] = None
+        try:
+            try:
+                NTPClient.from_config({})
+            except RuntimeError as exception:
+                assert "socket_factory=" in str(exception)
+                assert "socket=" in str(exception)
+                assert "__chumicro_skip_factories__" in str(exception)
+            else:
+                raise AssertionError("expected RuntimeError")
+        finally:
+            if original is None:
+                sys.modules.pop("chumicro_ntp.sockets_factory", None)
+            else:
+                sys.modules["chumicro_ntp.sockets_factory"] = original
+
 
 # sockets_factory submodule lives in test_ntp_pytest.py — those tests
 # poke CPython-internal stdlib socket state and the CP unix-port factory
