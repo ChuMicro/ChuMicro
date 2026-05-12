@@ -7,10 +7,10 @@
 - [ ] **Resume DI Tier 2/3 implementation from session handoff** — see [`handoffs/2026-05-12-implement-0062-factory-skip.md`](handoffs/2026-05-12-implement-0062-factory-skip.md).  Punch lists for 0062 + 0063 below; the handoff has the bench-fixture recreation steps, dead-end log, and context-rebuild pointers.
 
 - [ ] **Implement [Decision 0062](decisions/0062-entrypoint-factory-skip.md) — entrypoint factory-skip mechanism** — proposed-status ADR landed 2026-05-12; promotion to `accepted` is gated on a working implementation.  Punch list:
-  - Walker change in `workbench/deploy/src/chumicro_deploy/sources.py` — AST-scan entrypoint for `__chumicro_skip_factories__`, filter the discovered-imports queue, three diagnostic paths (typo / direct-import override / dead-skip).
-  - Per-library `try`/`except ImportError → RuntimeError` wraps in `from_config` for mqtt + requests + websockets + ntp + http_server (five libs).
-  - Bench-validate against the same `.scratch/ast-walker-check/app_custom.py` / `app_default.py` fixtures used to discover the 0042 sub-rule failure — `app_custom.py` with the skip constant must NOT ship `chumicro_sockets`.
-  - Docs: new "Slimming your deploy" page under `docs/contributing/` (or workspace-template) showing exact + family skip syntax.
+  - DONE — walker change shipped in `chumicro_deploy.skip_factories` + `ImportGraphSource`; 28 new tests at 100 % coverage; typo / direct-import override / dead-skip diagnostics surface through `source.skip_factories_warnings()`.
+  - Per-library `try`/`except ImportError → RuntimeError` wraps in `from_config` for mqtt + requests + websockets + ntp + http_server (five libs).  All five also pick up minor VERSION bumps (new `RuntimeError` surface).
+  - Bench-validate against `.scratch/ast-walker-check/app_custom.py` / `app_default.py` fixtures — `app_custom.py` with the skip constant must NOT ship `chumicro_sockets`.
+  - Docs: new "Slimming your deploy" page in `docs/contributing/` (full prose) + short pointer in the workspace-template repo.
 
 - [ ] **Implement [Decision 0063](decisions/0063-duck-typed-factory-contract.md) — duck-typed factory contract docs** — proposed-status ADR landed 2026-05-12; documentation-only follow-up to 0062, can land in parallel.  Punch list:
   - Per-library docstring rewrite on the `socket=` / `socket_factory=` / `connection_factory=` / `listener_factory=` parameters across mqtt + requests + websockets + ntp + http_server — replace `"TCPClientSocket"`-style type names with the structural contract (`.recv_into` / `.send` / `.close` shape).
