@@ -20,7 +20,7 @@ Keep decisions brief.  They exist to preserve reasoning, not to become design do
 
 Decisions can start as `proposed` — written up for review but not yet committed to.  Promote to `accepted` once the tradeoff is confirmed.
 
-If a decision resolves an open question from `plans/open-questions.md`, update that file — move the question to Resolved with a one-line answer and link to the decision.
+If a decision resolves an open question from `plans/open-questions.md`, delete the question from that file — the ADR (and `git log` of `open-questions.md` for context) is the durable record.
 
 ## Edit the body in place
 
