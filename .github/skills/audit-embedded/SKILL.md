@@ -122,7 +122,8 @@ Audit each of these patterns honestly against the actual MicroPython / CircuitPy
 * **`micropython.const()` use.**
   * `_FOO = const(7)` — underscore-prefixed constants are *hidden* by the MicroPython parser; not stored as module globals, "does not take up any memory during execution" ([MicroPython `micropython` module docs](https://docs.micropython.org/en/latest/library/micropython.html)). Implemented in CircuitPython too (gated on `MICROPY_COMP_CONST`; see [circuitpython/tests/micropython/const.py](https://github.com/adafruit/circuitpython/blob/main/tests/micropython/const.py)). The CPython fallback (`def const(v): return v`) makes the pattern safe everywhere.
   * **Audit checks:**
-    * Module-level uppercase int literals that look like constants — `MAX_RETRY = 5` — should be wrapped in `const(...)` so MP can inline at compile time. The leading-underscore form (`_MAX_RETRY = const(5)`) ALSO strips the module-level binding, which is the right call only when no other module — including `testing.py` and cross-runtime test files — needs to import the value. When in doubt, public + `const()` keeps both wins: inlining at use sites *and* a real importable module attribute. See `/audit-library §7` for the same heuristic and the explicit trap (importing leading-underscore `const()` names from a sibling module on MP/CP raises `ImportError`).
+    * Module-level uppercase int literals that look like constants — `MAX_RETRY = 5` — should be wrapped in `const(...)` so MP can inline at compile time. The leading-underscore form (`_MAX_RETRY = const(5)`) ALSO strips the module-level binding on MP/CP at compile time, which is the right call only when no other module — including `testing.py` and cross-runtime test files — needs to import the value.
+    * **Default action when the candidate is currently `_NAME = N` (leading-underscore bare int) and tests OR other modules import the name: drop the underscore AND wrap.**  `NAME = const(N)` (public-but-not-in-`__all__`) keeps both wins — inlining at use sites *and* the importable name.  This is a redirection, not a blocker.  Skip the const() wrap only when the constant is genuinely internal-only *and* not referenced from tests / siblings / examples.  Field reality: the chumicro_ntp embedded audit (2026-05-11) initially classified four module-level int constants (`_NTP_TO_UNIX`, `_PACKET_SIZE`, `_CLIENT_FIRST_BYTE`, `_SERVER_MODE`) as "blocked, skip" because tests imported `_NTP_TO_UNIX`; user correction was to drop the underscore on all four — `NTP_TO_UNIX = const(2208988800)`, `PACKET_SIZE = const(48)`, etc — and update the test import.  See `/audit-library §7` for the same heuristic and the explicit trap (importing leading-underscore `const()` names from a sibling module on MP/CP raises `ImportError`).
     * `const(some_func())` or `const(other_constant + 1)` where the argument isn't a compile-time-foldable literal — defeats folding silently. Inline the literal or compute once at module top without `const()`.
 * **`memoryview` use.**
   * Verified gotchas: `bytes(mv)` copies; `mv.decode()` doesn't exist on MP; cached views over a bytearray must be released before the bytearray resizes (see [`patterns.md` "_buf + cached _buf_view"](../../../plans/patterns.md)).
@@ -212,15 +213,16 @@ Worked example: the kvstore embedded audit needed to know whether `MpNvsBackend`
 8. **Present the punch-list to the user.** Group by dimension. Flag taste calls separately.
 9. **Execute high-confidence items as one cohesive commit.** Run the library's tests + every sibling package that imports from it after each batch. Hardware-verify if the change touches a deploy / probe / transport path (Pi Pico W CP / MP boards from `devices.yml` defaults).
 10. **Execute medium-confidence items as separate commits, one per finding.** Per the user's preference: small reversible commits beat one big merge.
-11. **For doc-vs-code drift:**
+11. **Inspect the staged diff before every audit commit.** Run `git --no-pager diff --cached` and confirm every staged hunk is one you made.  Audits run iteratively, and concurrent edits (linter hooks, parallel agent sessions, the user's own in-flight work) can land in the same files between your Edit and your `git add`; staging "the file" with `git add libraries/<name>/...` then picks up everything in the working tree.  Either stage with `git add -p` for surgical commits when foreign hunks are present, or always inspect `--cached` before `commit`.  Field reality:  the chumicro_ntp embedded audit (2026-05-11) staged + committed `core.py` after a docstring-trim Edit; the commit ended up containing 8 extra lines (a `from chumicro_config import ...` + a validation block) added by a concurrent process between the Edit and the commit.  The commit message described only the docstring trim — the diff had a surprise that no review caught.  Same failure mode as `/audit-library` step 8; cached-diff check costs ~2 seconds.
+12. **For doc-vs-code drift:**
     * If the code is clearly right and the doc is stale — fix the doc, no question to user.
     * If the doc encodes intent the code lost (a feature that regressed silently) — surface as a separate finding for user decision, don't auto-resolve.
-12. **For instrumentation findings — three commits:**
+13. **For instrumentation findings — three commits:**
     * Commit 1: instrumentation added (so the validation is reproducible).
     * Commit 2: the fix justified by the instrumentation.
     * Commit 3: instrumentation removed.
     Or, equivalent: instrumentation lives only in a stash that the audit log references in the commit message of the fix.
-13. **Pre-existing lint / test failures: confirm and flag, don't sneak fixes.** Same rule as `/audit-library`.
+14. **Pre-existing lint / test failures: confirm and flag, don't sneak fixes.** Same rule as `/audit-library`.
 
 ## Anti-patterns
 
