@@ -192,20 +192,17 @@ edge cases without having a SAMD21 plugged in.
 class KVStoreError(Exception): ...
 class KVStoreFull(KVStoreError): ...
 class KVStoreCorrupt(KVStoreError): ...
-class KVStoreReadOnly(KVStoreError): ...   # CP filesystem read-only on USB-mount
 ```
 
 `KVStoreError` is the base.  Catch it to handle every kvstore-specific
-failure uniformly.  Catch `KVStoreFull` / `KVStoreCorrupt` /
-`KVStoreReadOnly` for the specific recoveries — typically logging or
-state-reset.
+failure uniformly.  Catch `KVStoreFull` or `KVStoreCorrupt` for the
+specific recoveries — typically state-reset or logging.
 
-`KVStoreReadOnly` is raised by the LittleFS backend when CP's
-`storage.remount` would fail because USB MSC is active.  Surfaces a
-distinct case from `KVStoreFull` — the data fits, the filesystem just
-won't take a write right now.  Callers that don't care can handle it
-as "not-this-tick-but-maybe-next-tick"; the recovery is identical
-(buffer the change in memory, retry on a future commit).
+The CP backend writes to `microcontroller.nvm` rather than the FAT
+filesystem, so it is unaffected by the USB-MSC read-only window.  No
+"backend refused the write" exception is part of the current surface;
+if a filesystem-backed CP backend lands later, a `KVStoreReadOnly`-
+shaped class can be added then alongside it.
 
 ### 10. Values round-trip via `chumicro-msgpack`
 

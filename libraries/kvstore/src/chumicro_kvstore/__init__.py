@@ -7,6 +7,7 @@ not a database.
 Public API::
 
     from chumicro_kvstore import KVStore, KVStoreFull, KVStoreCorrupt
+    # KVStoreError is the shared base — catch it for any kvstore failure.
 
     store = KVStore(backend="auto")
     store["boot_count"] = store.get("boot_count", 0) + 1
@@ -25,7 +26,6 @@ from chumicro_kvstore.core import (
     KVStoreCorrupt,
     KVStoreError,
     KVStoreFull,
-    KVStoreReadOnly,
 )
 
 __all__ = [
@@ -33,5 +33,4 @@ __all__ = [
     "KVStoreCorrupt",
     "KVStoreError",
     "KVStoreFull",
-    "KVStoreReadOnly",
 ]
