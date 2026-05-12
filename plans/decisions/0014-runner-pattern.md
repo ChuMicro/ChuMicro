@@ -38,6 +38,14 @@ This is a duck-typed contract — components do not need to import or subclass a
 
 Any free-form monotonic value (raw `time.monotonic_ns() // 1_000_000`, `int(time.monotonic() * 1000)`, etc.) is **wrong** — even though it looks plausible.  Mixing time bases breaks `ticks_diff` because the wrap-aware signed-difference math returns nonsense when comparing a wrapping value against a non-wrapping one.  A request whose deadline computes against `chumicro_timing.ticks_ms` but is checked against `time.monotonic_ns // 1_000_000` will appear "expired" immediately on a board that has been up for more than a few seconds (the two clocks share a starting epoch on fresh boot but diverge as the non-wrapping side accumulates beyond the wrap window).
 
+### One `ticks_ms` per tick — service-side rule
+
+Runner-shaped services **MUST** use the supplied `now_ms` inside `check(now_ms)`, `handle(now_ms)`, and any helper reachable from them.  Never re-fetch `ticks_ms()` (or call the injected ticks object's `.ticks_ms()`) mid-tick — re-fetching produces a second timestamp microseconds later, breaking the "one shared instant per tick" guarantee that lets every service compare deadlines coherently.
+
+The corollary: a helper that schedules a deadline must accept `now_ms` from its caller.  When the same helper is reachable from both a user-entry path (outside the tick loop, no `now_ms` available) and a `handle()` path (inside the tick loop, `now_ms` in scope), give it an optional `now_ms` kwarg that defaults to `None` — pass it from handle paths, leave it out of user-entry paths so the helper captures a fresh tick.  The two existing patterns in the codebase that follow this shape: `MQTTClient._deadline(offset_ms, *, now_ms=None)` and `_BaseSession._arm_pong_deadline(now_ms=None)`.
+
+Fresh `ticks_ms()` is fine — and required — in user-entry methods (`connect`, `publish`, `subscribe`, etc.) that run outside any tick loop.
+
 Drivers — application code or examples that own the `tick()` loop — pull the timestamp from one of two sources:
 
 - `chumicro_timing.ticks_ms()` directly, when the driver's owning library declares `chumicro-timing` as a dependency.
