@@ -367,7 +367,7 @@ class MQTTClient:
         max_message_size: int | None = None,
         when_oversized: WhenOversized = WhenOversized.DROP_WITH_EVENT,
         recv_budget_per_tick: int = 1024,
-        max_tx_queue_size: int = 100,
+        max_tx_queue_size: int = 20,
         ticks: object | None = None,
     ) -> None:
         """Wire up the client.
@@ -419,11 +419,13 @@ class MQTTClient:
                 the tick until the buffer drains.  Configurable for
                 things that genuinely want fast big-blob ingestion.
             max_tx_queue_size: Maximum number of pending outbound
-                packets.  Default 100.  Appending past the cap raises
+                packets.  Default 20 — sized for the runner-shaped
+                sensor profile (publish every N seconds, queue stays
+                near zero).  Appending past the cap raises
                 :class:`MQTTBackpressureError` — the caller's signal
                 to drain via :meth:`handle` and retry, rather than
-                silently growing memory.  Set higher for bursty
-                publishers; the limit is per-client.
+                silently growing memory.  Raise for bursty publishers;
+                each slot pins ~8 bytes long-lived on MP / CP.
             ticks: Optional tick source — any object exposing
                 ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
                 the ``chumicro_timing.ticks`` submodule shape).
