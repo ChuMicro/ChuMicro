@@ -579,10 +579,16 @@ class _HandshakeLineParser:
         return self._buffer[absolute_start:absolute_start + end]
 
     def _consume(self, count):
-        """Advance the cursor; compact when past the halfway mark."""
+        """Advance the cursor; compact when past the halfway mark.
+
+        Slice-assign-empty (``self._buffer[:offset] = b""``) does an
+        in-place memmove on every runtime — no allocation.  See
+        :meth:`chumicro_requests._wire.ResponseParser._consume` for the
+        original allocating shape this replaces.
+        """
         self._read_offset += count
         if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
-            self._buffer = bytearray(self._buffer[self._read_offset:])
+            self._buffer[:self._read_offset] = b""
             self._read_offset = 0
 
     def _parse_header_line(self, line: bytes) -> None:

@@ -342,13 +342,15 @@ class RequestParser:
     def _consume(self, count):
         """Advance the cursor; compact when past the halfway mark.
 
-        Replaces the per-call ``self._buffer = bytearray(self._buffer[n:])``
-        idiom.  See :meth:`chumicro_requests._wire.ResponseParser._consume`
-        for the fragmentation rationale.
+        Slice-assign-empty (``self._buffer[:offset] = b""``) does an
+        in-place memmove on CPython / MicroPython / CircuitPython — no
+        allocation.  See :meth:`chumicro_requests._wire.ResponseParser._consume`
+        for the fragmentation rationale and the original allocating shape
+        this replaces.
         """
         self._read_offset += count
         if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
-            self._buffer = bytearray(self._buffer[self._read_offset:])
+            self._buffer[:self._read_offset] = b""
             self._read_offset = 0
 
     def _reset_buffer(self):

@@ -613,15 +613,18 @@ class ResponseParser:
         """Advance the read cursor by *count* bytes; compact when the cursor
         passes the halfway mark.
 
-        Replaces the per-call ``self._buffer = bytearray(self._buffer[n:])``
-        idiom.  In the worst case (50-header response) this cuts allocator
-        churn from one ``bytearray`` per consumed segment to roughly one
-        every two — drops the 1024-byte-tier fragmentation seen on Lolin S2
-        from 12 blocks-per-test to within tolerance.
+        Compaction uses slice-assign-empty (``self._buffer[:offset] = b""``)
+        — in-place memmove on CPython, MicroPython, and CircuitPython
+        (``mp_seq_replace_slice_no_grow``).  No allocation, no realloc.
+        The earlier shape ``self._buffer = bytearray(self._buffer[offset:])``
+        allocated a fresh bytearray per compaction; benchmarks on Lolin S2
+        traced the 1024-byte-tier fragmentation it caused to that path.
+        Mirrors the in-place compact pattern in
+        ``chumicro_mqtt._wire.PacketDecoder._consume``.
         """
         self._read_offset += count
         if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
-            self._buffer = bytearray(self._buffer[self._read_offset:])
+            self._buffer[:self._read_offset] = b""
             self._read_offset = 0
 
     def _reset_buffer(self):
@@ -985,6 +988,12 @@ class ResponseParser:
                 self._read_offset:self._read_offset + available
             ]
             self._absorb_body_chunk(source)
+            # Drop the memoryview before _consume's in-place compaction.
+            # CPython refuses to resize a bytearray with active exports
+            # (BufferError); releasing the view here lets _consume's
+            # slice-assign-empty memmove run.  MicroPython / CircuitPython
+            # don't track exports, so this is defensive on those runtimes.
+            source = None
             self._consume(available)
             self._chunk_remaining -= available
             if self._chunk_remaining > 0:
