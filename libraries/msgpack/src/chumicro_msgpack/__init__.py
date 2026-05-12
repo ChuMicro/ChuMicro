@@ -45,8 +45,9 @@ import sys
 _native_loaded = False
 if sys.implementation.name == "circuitpython":
     try:
-        from msgpack import pack, unpack  # noqa: F401
         from io import BytesIO
+
+        from msgpack import pack, unpack  # noqa: F401
 
         def packb(obj: object) -> bytes:  # pragma: no cover
             """Pack *obj* to msgpack bytes using the native encoder.
