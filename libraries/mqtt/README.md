@@ -61,7 +61,7 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 | `client.add_pattern_handler(pattern, handler)` | Route inbound messages by topic pattern. |
 | `client.connect() / .disconnect()` | Lifecycle. |
 | `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound payloads above `max_message_size`. |
-| `ProtocolState.{DISCONNECTED,CONNECTING,CONNECTED,DISCONNECTING,FAILED}` | Lifecycle states. |
+| `ProtocolState.{DISCONNECTED,CONNECTING,CONNECTED,FAILED}` | Lifecycle states. |
 | `MQTTBackpressureError` | Raised when an outbound publish/subscribe overflows `max_tx_queue_size` — caller's signal to drain via `handle()` and retry. |
 | `MQTTError` / `MQTTConnectError` / `MQTTProtocolError` / `UnsupportedQoSError` | Exceptions. |
 | Encoder + decoder primitives (`encode_publish`, `encode_varlen`, `decode_varlen`, `encode_string`, `topic_matches`) | Public for downstream tooling. |

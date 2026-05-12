@@ -52,14 +52,16 @@ class ProtocolState:
 
     Transitions monotonically forward except after a fault::
 
-      DISCONNECTED -> CONNECTING -> CONNECTED -> DISCONNECTING -> DISCONNECTED
-                                              \\-> FAILED        -> DISCONNECTED
+      DISCONNECTED -> CONNECTING -> CONNECTED -> DISCONNECTED
+                                              \\-> FAILED   -> DISCONNECTED
+
+    ``disconnect()`` is synchronous (DISCONNECT packet + close), so there
+    is no intermediate "disconnecting" state to observe.
     """
 
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     CONNECTED = "connected"
-    DISCONNECTING = "disconnecting"
     FAILED = "failed"
 
 

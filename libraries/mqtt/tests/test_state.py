@@ -12,12 +12,11 @@ from chumicro_test_harness.assertions import raises
 
 class TestProtocolState:
     def test_canonical_values(self) -> None:
-        # The five spec'd values; tests pin them in case a future
+        # The four spec'd values; tests pin them in case a future
         # refactor renames silently.
         assert ProtocolState.DISCONNECTED == "disconnected"
         assert ProtocolState.CONNECTING == "connecting"
         assert ProtocolState.CONNECTED == "connected"
-        assert ProtocolState.DISCONNECTING == "disconnecting"
         assert ProtocolState.FAILED == "failed"
 
 
