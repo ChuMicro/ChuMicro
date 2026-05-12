@@ -217,6 +217,22 @@ The pattern under question lives in
 the workspace tooling editable, then `os.execv`'s into the new venv's
 interpreter to dispatch to `chumicro_workspace.cli.main()`.
 
+**Half resolved 2026-05-12:** the converse direction (fold mono-repo's
+`prepare_workspace.py` into `scripts/run.py` to match the template's
+single-file shape — old `workspace-template-gaps` gap #8) was rejected.
+Folding would force one of: (a) defer ~2500 lines of `run.py`'s
+hot-path imports — cascading refactor for marginal benefit, (b) wrap
+every import in try/except — code bloat with no upside, or (c) propagate
+the `os.execv` re-exec dance the user explicitly dislikes.  The mono-repo
+keeps its two-file pattern (stdlib-only `prepare_workspace.py` for cold
+start, third-party-heavy `run.py` for everyday tasks).
+
+**Still open:** should the workspace template *adopt* the mono-repo's
+two-file pattern — separate `prepare_workspace.py` (stdlib-only,
+creates and activates `.venv`, installs `chumicro_workspace`) + thin
+`run.py` (imports `chumicro_workspace.cli` and dispatches) — replacing
+the current `os.execv` self-bootstrap?
+
 #### Why the current shape exists
 
 `os.execv` is in there because **a Python interpreter that's already
@@ -237,76 +253,25 @@ constraints:
 running process image with the venv's Python and re-run the script.
 There's no in-process equivalent.
 
-#### What the user's pushback implicitly proposes
-
-"It should be importing and calling modules and methods" suggests
-splitting bootstrap from dispatch:
-
-* `run.py` becomes a thin dispatcher that imports
-  `chumicro_workspace.cli` and calls its main.  Only runs after the
-  venv exists and is on the user's `PYTHONPATH`.
-* Bootstrap becomes a separate step the user does explicitly —
-  either standard Python tool conventions (`python -m venv .venv`,
-  `.venv/bin/pip install -e .`, `.venv/bin/python run.py setup`)
-  or a separate one-shot script (the mono-repo's
-  `prepare_workspace.py` pattern).
-
-This is what the chumicro mono-repo already does:
-`scripts/prepare_workspace.py` for fresh-clone bootstrap (302 lines,
-stdlib + subprocess only at top), `scripts/run.py setup` for the
-idempotent everyday refresh (heavy imports at top).
-
-#### Honest evaluation (Claude, 2026-05-02)
-
-The user's instinct that "running python through python feels off"
-is aesthetically fair, but the technical claim "import and call
-modules" can't directly replace the `os.execv` step — the running
-interpreter genuinely can't switch to a different Python's
-site-packages mid-execution.  However, the user's *deeper* point is
-valid: the workspace template chose "self-bootstrap in one
-invocation" as the UX, and that choice forces the exec-dance.  An
-alternative UX ("user creates the venv themselves, then runs
-`run.py`") sidesteps the dance entirely and matches every other
-Python project's bootstrap convention.
-
-So the open question is **whether the convenience of one-command
-self-bootstrap is worth the architectural quirk of the exec-dance**,
-or whether the workspace template should align with conventional
-Python project bootstrap (mono-repo's pattern: separate
-`prepare_workspace.py`).
-
 #### Research questions for a future agent
 
-1. Is `os.execv` truly the only way to self-bootstrap in a single
-   Python invocation, or is there a mechanism (interpreter-swap
-   library, `importlib` reload tricks) that avoids it?  (My read:
-   no, but a focused research pass should confirm.)
-2. What do other Python projects with self-bootstrapping entry
-   points (e.g. poetry's `poetry install`, hatch's `hatch env`,
-   Django's `django-admin startproject`) actually do?  Do any of
-   them avoid the exec-dance?
-3. If we keep the self-bootstrap UX, can the exec-dance be made
-   less visible (e.g. wrapped in a single helper that hides the
-   `subprocess.run` + `os.execv` chain)?
-4. If we drop the self-bootstrap and align with mono-repo's
-   pattern (separate `prepare_workspace.py` + `run.py setup`),
-   what does the workspace-template README's quickstart look like?
-   Three commands instead of one?  Is that acceptable for the
-   beginner audience the workspace template is aimed at?
-5. Is the user's concern partly about *audibility* — the
-   subprocess output ("creating .venv at ...", "upgrading pip",
-   "installing workspace ...") being noisy vs. an import-and-call
-   shape that runs silently?  If so, suppressing or restructuring
-   the bootstrap output might address the surface concern without
-   restructuring the architecture.
+1. What do other Python projects with self-bootstrapping entry points
+   (poetry, hatch, Django's `django-admin startproject`) actually do?
+   Do any of them avoid the exec-dance?
+2. If we drop the self-bootstrap and align with the mono-repo's
+   two-file pattern, what does the workspace-template README's
+   quickstart look like?  Three commands instead of one?  Is that
+   acceptable for the beginner audience the workspace template is
+   aimed at?
+3. Is the user's concern partly about *audibility* — the subprocess
+   output ("creating .venv at ...", "upgrading pip", "installing
+   workspace ...") being noisy vs. an import-and-call shape that runs
+   silently?  If so, suppressing or restructuring the bootstrap output
+   might address the surface concern without restructuring the
+   architecture.
 
 #### Constraints any future change must respect
 
-* Mono-repo `scripts/run.py` — the chicken-and-egg that
-  `prepare_workspace.py` solves there is the same problem the
-  workspace template's `run.py` solves with `os.execv`.  Any
-  change should pick a shape that works for both, or document
-  why they need to differ.
 * Decision 0046 left the workspace template's `run.py` as
   "tool-owned, rewritten by `update`" — changes to its shape
   flow to every existing workspace via `update`.  The change
@@ -374,13 +339,6 @@ The settings library design (next-up.md) defers an NVS backend because NVS
 has per-key semantics rather than blob storage.  Worth investigating whether
 a thin NVS adapter could present the same `read`/`write` protocol, or whether
 NVS is different enough to warrant a separate storage abstraction entirely.
-
-### How much test boilerplate can be reduced?
-
-`next-up.md` mentions "explore test ergonomics."  Common patterns across test
-files (importing fakes, constructing services with FakeTicks, asserting on
-check/handle cycles) might benefit from shared fixtures or a small test DSL.
-Risk: test-only abstractions that obscure what's being tested.
 
 ### Should examples be runnable on CPython by default?
 
@@ -540,32 +498,50 @@ piecemeal.  Parked for a rainy day.
 satisfies the `TimeSource` protocol the transport accepts via
 constructor injection).  The 2026-04-24 audit moved it from the
 internal-only `chumicro_abstractions` package — co-locating fakes with
-the package they test, per Decision 0010 — and as a one-consumer fake
-this is the right shape.
+the package they test, per Decision 0010.
 
-But the planned `chumicro-repl` workbench package (and likely future
-ones) will probably need the same seconds-domain time fake to test
-their own retry / polling loops.  At that point we have three options:
+**Current state (2026-05-12):** two workbench packages now ship a
+`FakeTime`:
 
-1. **Duplicate the ~80 lines** of `FakeTime` into each new workbench
-   package's `testing.py` (the Decision 0010 default).  Cheap for one
-   or two consumers; starts feeling silly past three.
-2. **Have `chumicro-repl` depend on `chumicro-deploy`** just to import
-   `FakeTime`.  Wrong direction — repl shouldn't need deploy.  Reject.
+1. `chumicro_deploy.testing.FakeTime` — original.
+2. `chumicro_repl.testing.FakeTime` — duplicate, marked
+   *"Mirrors :class:`chumicro_deploy.testing.FakeTime`"* in its
+   docstring.
+
+Three options when a third consumer arrives:
+
+1. **Duplicate again** into the third workbench package's `testing.py`
+   (the Decision 0010 default).  Cheap for one or two consumers;
+   starts feeling silly past three.
+2. **Have the new package depend on `chumicro-deploy`** just to import
+   `FakeTime`.  Wrong direction — taking a hard dependency on a sibling
+   workbench package solely to share a test fake is exactly the
+   coupling Decision 0010's co-located-fakes rule exists to avoid.
+   Reject.
 3. **Hoist into a shared workbench-fakes package** — e.g. a published
    `chumicro-workbench-fakes` (or similar name) that every workbench
    package depends on for shared host-side test fakes.  Adds a new
    PyPI surface and a release lifecycle, but solves the recurrence
    cleanly.
 
-Resolution criterion: when the **second** workbench package needs
-`FakeTime`, duplicate.  When the **third** does, do option 3.  Until
-then, the per-package pattern wins — duplication of 80 lines is
-cheaper than the abstraction tax of an extra published package.
+Resolution criterion: with two consumers today the duplicate-pattern is
+explicitly endorsed — duplicating ~80 lines is cheaper than the
+abstraction tax of an extra published package, *especially* when
+hoisting would force a new dependency requirement on every workbench
+package.  When a **third** workbench package needs `FakeTime`, do
+option 3.
 
 ---
 
 ## Resolved
+
+
+### How much test boilerplate can be reduced?
+
+Closed 2026-05-12 — duplicate of the next-up `Explore test ergonomics — reduce
+repeated boilerplate across test files` entry, which is the canonical surface.
+Pick that bullet up when a forcing function arrives (e.g. enough test files share
+a setup that the duplication is measurable).
 
 
 ### Library dependency policy (hard-injection vs. lazy default vs. hard dep)
