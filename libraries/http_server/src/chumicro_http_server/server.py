@@ -561,10 +561,26 @@ class HttpServer:
                 supplied, the auto-built factory uses it (and the
                 config TLS paths are ignored).  Ignored when
                 *listener_factory* is passed.
-            listener_factory: Custom ``() -> ListeningSocket`` callable.
-                When supplied, the auto-built factory is skipped —
-                caller owns the bind / listen behaviour, including
-                TLS context.
+            listener_factory: Custom ``() -> listening_socket`` callable.
+                The returned object must expose:
+
+                * ``accept() -> (socket, address)`` — returns the next
+                  accepted client (a TCP-shaped object with
+                  ``recv_into`` / ``send`` / ``close`` /
+                  ``setblocking``) plus the peer's address.  Raises
+                  ``OSError(EAGAIN | EWOULDBLOCK)`` when no
+                  connection is pending.
+                * ``close() -> None``
+                * ``setblocking(flag: bool) -> None`` — best-effort;
+                  absence is tolerated.
+
+                :func:`chumicro_sockets_factory` is one valid
+                producer.  Anything matching the shape works —
+                stdlib ``socket.socket`` bound + listening after
+                ``setblocking(False)``, an upstream-library
+                wrapper, a test fake.  When supplied, the
+                auto-built factory is skipped — caller owns the
+                bind / listen behaviour, including TLS context.
 
         Raises:
             chumicro_config.MissingConfigKey: Exactly one of
@@ -586,9 +602,18 @@ class HttpServer:
             # Lazy import so users who pass their own listener_factory
             # don't pull chumicro_sockets into the deploy graph.  See
             # ``chumicro_http_server.sockets_factory`` for the helper itself.
-            from chumicro_http_server.sockets_factory import (  # noqa: PLC0415 - lazy
-                chumicro_sockets_factory,
-            )
+            try:
+                from chumicro_http_server.sockets_factory import (  # noqa: PLC0415 - lazy
+                    chumicro_sockets_factory,
+                )
+            except ImportError as exception:
+                raise RuntimeError(
+                    "HttpServer.from_config() default wiring needs "
+                    "chumicro_http_server.sockets_factory.  This "
+                    "module was excluded via "
+                    "__chumicro_skip_factories__ — pass "
+                    "listener_factory= explicitly.",
+                ) from exception
 
             listener_factory = chumicro_sockets_factory(
                 config, radio=radio, ssl_context=ssl_context,
