@@ -194,6 +194,27 @@ class TestPublishQos0:
         _drive(client, ticks, count=1)
         assert captured == [("temp", b"42")]
 
+    def test_qos0_fires_global_on_publish_without_per_call_callback(self) -> None:
+        """`client.on_publish = ...` must fire for QoS 0 too.
+
+        Pre-fix: the per-call ``on_publish=`` kwarg was the only path
+        that enqueued the post-send callback marker, so a user who set
+        the global ``client.on_publish`` (the way the QoS 1 path
+        already worked) saw QoS 1 events but not QoS 0 events.
+        """
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+
+        captured: list[tuple[str, bytes]] = []
+        client.on_publish = lambda topic, payload: captured.append((topic, payload))
+        client.publish("temp", b"42", qos=0)
+        _drive(client, ticks, count=1)
+        assert captured == [("temp", b"42")]
+
 
 class TestPublishQos1:
     def test_qos1_publish_then_puback_fires_callback(self) -> None:
