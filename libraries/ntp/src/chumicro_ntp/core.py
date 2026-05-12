@@ -136,11 +136,6 @@ class NTPResult:
         """The exception that ended the exchange, or ``None`` on success."""
         return self._error
 
-    def _complete(self, unix_seconds: int) -> None:
-        """Mark the request done with a successful timestamp."""
-        self._unix_seconds = unix_seconds
-        self._done = True
-
     def _fail(self, exception: Exception) -> None:
         """Mark the request done with an error."""
         self._error = exception
@@ -393,7 +388,8 @@ class NTPClient:
         except NTPError as parse_error:
             result._fail(parse_error)
             return
-        result._complete(unix_seconds)
+        result._unix_seconds = unix_seconds  # noqa: SLF001
+        result._done = True  # noqa: SLF001
 
     def _check_timeout(self, result: "NTPResult", now_ms: int) -> None:
         """Fail *result* with a timeout ``NTPError`` if the deadline has elapsed."""
