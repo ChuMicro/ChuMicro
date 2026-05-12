@@ -21,7 +21,8 @@ Cross-runtime compatibility
 ---------------------------
 On CircuitPython boards that include the native ``msgpack`` module,
 all four functions delegate to the C implementation.  The pure-Python
-encoder in ``_pure`` is never imported, saving ~700 bytes of heap RAM.
+encoder in ``_pure`` is never imported, keeping heap usage lower on
+memory-tight boards.
 
 On CPython and MicroPython, the implementation is always the pure
 Python ``_pure`` encoder.  Note that PyPI's ``msgpack`` package
