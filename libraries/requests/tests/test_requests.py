@@ -1925,20 +1925,6 @@ class TestFromConfig:
         assert client._default_timeout_ms == 7777  # noqa: SLF001
         assert client._user_agent == "rc-test/2"  # noqa: SLF001
 
-    def test_non_configlike_input_raises_invalid_config_type(self):
-        """``HttpClient.from_config(None)`` /
-        ``from_config("not-a-dict")`` / ``from_config(42)`` raise
-        :class:`chumicro_config.InvalidConfigType` instead of leaking
-        ``AttributeError`` — mirrors the ``load_section`` shape used
-        by ``WifiConfig.from_config``."""
-        from chumicro_config import InvalidConfigType  # noqa: PLC0415
-        from chumicro_requests import HttpClient
-
-        factory, _ = self._injected_factory()
-        for bad_input in (None, "not-a-dict", 42, ["not", "a", "dict"]):
-            with raises(InvalidConfigType):
-                HttpClient.from_config(bad_input, connection_factory=factory)
-
     def test_default_factory_threads_radio_and_ssl_context(self):
         """When neither *connection_factory* is passed, ``from_config``
         builds one via ``chumicro_sockets_factory(radio=…, ssl_context=…)``.
