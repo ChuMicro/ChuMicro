@@ -704,8 +704,8 @@ class HttpServer:
         * ``"/users/<id>"`` — single trailing parameter.  The matched
           segment populates ``request.path_params["id"]``.
 
-        Multi-parameter routes (``"/users/<uid>/posts/<pid>"``) are a
-        v2 ask — file an issue if you hit the limit.
+        Multi-parameter routes (``"/users/<uid>/posts/<pid>"``) are
+        not supported — file an issue if you hit the limit.
 
         Args:
             path: Route path, optionally containing a single ``<name>``
