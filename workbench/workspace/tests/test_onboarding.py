@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from chumicro_deploy import Device, DeviceImplementation
+from chumicro_deploy import Device
 from chumicro_workspace.onboarding import (
     BoardState,
     OnboardingDiagnosis,
@@ -12,6 +12,7 @@ from chumicro_workspace.onboarding import (
     find_uf2_drive,
     probe_with_runtime_inference,
 )
+from chumicro_workspace.testing import fake_probe_info
 
 # ---------------------------------------------------------------------------
 # find_uf2_drive
@@ -78,25 +79,16 @@ def _device() -> Device:
 
 
 def _info_with_implementation(name: str = "micropython") -> Any:
-    """Mimic the shape chumicro_deploy.probe_device returns."""
-
-    class _Info:
-        implementation = DeviceImplementation(
-            name=name, version="1.26.0", machine="Pi Pico W", uid="ABCD",
-        )
-        board_id = "raspberry_pi_pico_w"
-        uid = "ABCD"
-
-    return _Info()
+    """Probe info with a Pi Pico W default — what most onboarding tests want."""
+    return fake_probe_info(
+        runtime=name, version="1.26.0",
+        machine="Pi Pico W", uid="ABCD",
+        board_id="raspberry_pi_pico_w",
+    )
 
 
 def _info_without_implementation() -> Any:
-    class _Info:
-        implementation = None
-        board_id = ""
-        uid = ""
-
-    return _Info()
+    return fake_probe_info(with_implementation=False)
 
 
 class TestReplReachable:

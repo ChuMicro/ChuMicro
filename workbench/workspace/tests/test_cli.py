@@ -16,6 +16,13 @@ from chumicro_deploy import Device
 from chumicro_deploy.protocol import TransportProtocol
 from chumicro_deploy.testing import FakeTransport
 from chumicro_workspace import cli
+from chumicro_workspace.testing import (
+    FakePort,
+    FakeSubprocessRunner,
+    fake_probe_info,
+    seed_project,
+    seed_workspace,
+)
 from msgpack import unpackb
 
 
@@ -47,44 +54,6 @@ def _install_fake_transport(
         captured = transport
         factory = lambda _device: captured  # noqa: E731
     monkeypatch.setattr(Device, "create_transport", factory)
-
-
-def _seed_workspace(tmp_path: Path) -> Path:
-    """Create a minimal workspace at *tmp_path* and return the root."""
-    (tmp_path / "workspace.yml").write_text("# machinery only\n")
-    (tmp_path / "secrets.toml").write_text(
-        "[wifi]\nhostname_prefix = 'chu-'\npassword = 'shh'\n",
-    )
-    (tmp_path / "devices.yml").write_text(
-        "defaults:\n"
-        "  micropython: lolin-s2\n"
-        "devices:\n"
-        "  - id: lolin-s2\n"
-        "    runtime: micropython\n"
-        "    address: /dev/cu.fake\n"
-    )
-    return tmp_path
-
-
-def _seed_project(workspace_root: Path, name: str = "back-porch") -> Path:
-    """Add a project under *workspace_root*/projects/<name>/ and return its dir.
-
-    Carries both ``code.py`` (CircuitPython convention) and ``main.py``
-    (MicroPython convention) so the deploy command's runtime-derived
-    entrypoint resolves cleanly regardless of the test fixture's chosen
-    transport.
-
-    *name* may be slash-form (``"upstairs/bedroom_sensor"``) — the
-    intermediate parent directories are created automatically.
-    """
-    project_dir = workspace_root / "projects" / name
-    project_dir.mkdir(parents=True)
-    (project_dir / "project_config.toml").write_text(
-        "[wifi]\nssid = 'HomeNet'\n"
-    )
-    (project_dir / "code.py").write_text("print('hello from project')\n")
-    (project_dir / "main.py").write_text("print('hello from project')\n")
-    return project_dir
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +105,7 @@ class TestSetup:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        _seed_workspace(tmp_path)
+        seed_workspace(tmp_path)
         exit_code = cli.main(["setup", "--workspace-dir", str(tmp_path)])
         assert exit_code == 0
         assert "skipping editable install" in capsys.readouterr().out
@@ -146,19 +115,14 @@ class TestSetup:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         (root / "pyproject.toml").write_text("[project]\nname = 'demo'\n")
 
-        recorded: list[list[str]] = []
-
-        def fake_run(args: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
-            recorded.append(args)
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main(["setup", "--workspace-dir", str(root)])
         assert exit_code == 0
-        assert recorded == [
+        assert [call.args for call in runner.calls] == [
             [sys.executable, "-m", "pip", "install", "-e", str(root)],
         ]
 
@@ -272,7 +236,7 @@ class TestUpdateCommand:
             return template_apply.ApplyReport()
 
         monkeypatch.setattr(template_apply, "update", fake_update)
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         exit_code = cli.main([
             "update", "--workspace-dir", str(root),
             "--from", "https://example.com/fork",
@@ -286,7 +250,7 @@ class TestUpdateCommand:
 
 class TestNew:
     def test_copies_template_to_named_dir(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         template = root / "projects" / "_template"
         template.mkdir(parents=True)
         (template / "code.py").write_text("# template\n")
@@ -302,13 +266,13 @@ class TestNew:
         assert (target / "config.toml").read_text() == "[app]\n"
 
     def test_missing_template_raises(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main(["new", "--workspace-dir", str(root), "anything"])
         assert "template" in str(caught.value)
 
     def test_existing_target_raises(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         template = root / "projects" / "_template"
         template.mkdir(parents=True)
         (template / "code.py").write_text("\n")
@@ -345,7 +309,7 @@ class TestNew:
         # Validation runs before the template lookup, so we deliberately
         # don't pre-create projects/_template — that lets us verify the
         # filesystem is untouched on rejection.
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main(["new", "--workspace-dir", str(root), bad_name])
         assert match in str(caught.value)
@@ -370,7 +334,7 @@ class TestNew:
         exist, so we only assert the validator doesn't bail before the
         template lookup raises its own (more specific) ``SystemExit``.
         """
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main(["new", "--workspace-dir", str(root), good_name])
         # Past validation → template-missing message, not identifier message.
@@ -379,7 +343,7 @@ class TestNew:
         assert "leading" not in message
 
     def test_rejects_empty_project_name(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main(["new", "--workspace-dir", str(root), ""])
         assert "empty" in str(caught.value)
@@ -398,7 +362,7 @@ class TestNewNested:
     def test_creates_nested_project_with_intermediate_dirs(
         self, tmp_path: Path,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         self._seed_template(root)
 
         exit_code = cli.main([
@@ -419,7 +383,7 @@ class TestNewNested:
         Lets host-side tests do ``from projects.garage.sensors.door_open.app
         import run`` without PEP 420 namespace-package surprises.
         """
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         self._seed_template(root)
 
         exit_code = cli.main([
@@ -438,7 +402,7 @@ class TestNewNested:
     def test_dotted_form_creates_same_layout_as_slash_form(
         self, tmp_path: Path,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         self._seed_template(root)
 
         exit_code = cli.main([
@@ -456,7 +420,7 @@ class TestNewNested:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """A pre-existing ``projects/garage/`` is left in place."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         self._seed_template(root)
         # Pre-create the namespace (e.g. user previously created
         # garage/heater) — the second `new garage/door_open` reuses it.
@@ -483,7 +447,7 @@ class TestNewNested:
         self, tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         self._seed_template(root)
 
         cli.main([
@@ -500,7 +464,7 @@ class TestNewLibrary:
     def test_default_target_is_workspace_libraries_dir(
         self, tmp_path: Path,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         exit_code = cli.main([
             "new", "--workspace-dir", str(root),
             "--library", "gpio",
@@ -514,7 +478,7 @@ class TestNewLibrary:
     def test_into_overrides_target(
         self, tmp_path: Path,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         custom_target = tmp_path / "elsewhere"
         exit_code = cli.main([
             "new", "--workspace-dir", str(root),
@@ -527,7 +491,7 @@ class TestNewLibrary:
     def test_existing_target_returns_systemexit(
         self, tmp_path: Path,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # First call succeeds.
         cli.main([
             "new", "--workspace-dir", str(root),
@@ -545,7 +509,7 @@ class TestNewLibrary:
         self, tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         exit_code = cli.main([
             "new", "--workspace-dir", str(root),
             "--library", "gpio", "--from", "examples/wifi_only",
@@ -559,7 +523,7 @@ class TestNewFromFlag:
     """`new --from <example-path>` copies an alternate source."""
 
     def _seed_workspace_with_example(self, tmp_path: Path) -> Path:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Seed a fake examples/ tree.
         example_root = root / "examples" / "two_projects" / "server"
         example_root.mkdir(parents=True)
@@ -588,7 +552,7 @@ class TestNewFromFlag:
     def test_rejects_source_without_entry_point(
         self, tmp_path: Path,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Make a directory that's not a project — README only.
         notes_dir = root / "examples" / "design_notes"
         notes_dir.mkdir(parents=True)
@@ -603,7 +567,7 @@ class TestNewFromFlag:
         assert not (root / "projects" / "kitchen").exists()
 
     def test_rejects_missing_source_dir(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "new", "--workspace-dir", str(root),
@@ -615,7 +579,7 @@ class TestNewFromFlag:
         self, tmp_path: Path,
     ) -> None:
         """Defence against ``--from ../../etc/passwd``-style escapes."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "new", "--workspace-dir", str(root),
@@ -629,14 +593,6 @@ class TestNewFromFlag:
 # ---------------------------------------------------------------------------
 
 
-class _FakePort:
-    """Minimal stand-in for ``serial.tools.list_ports_common.ListPortInfo``."""
-
-    def __init__(self, device: str, description: str = "") -> None:
-        self.device = device
-        self.description = description
-
-
 class TestDiscover:
     def test_lists_ports(
         self,
@@ -648,7 +604,7 @@ class TestDiscover:
         monkeypatch.setattr(
             list_ports,
             "comports",
-            lambda: [_FakePort("/dev/cu.b", "Board B"), _FakePort("/dev/cu.a", "Board A")],
+            lambda: [FakePort("/dev/cu.b", "Board B"), FakePort("/dev/cu.a", "Board A")],
         )
         exit_code = cli.main(["discover"])
         assert exit_code == 0
@@ -679,7 +635,7 @@ class TestDevices:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         exit_code = cli.main(["devices", "--workspace-dir", str(root)])
         assert exit_code == 0
         out = capsys.readouterr().out
@@ -722,8 +678,8 @@ class TestDeploy:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
 
         transport = FakeTransport(execute_output="")
         _install_fake_transport(monkeypatch, transport)
@@ -741,7 +697,7 @@ class TestDeploy:
         assert decoded["wifi.password"] == "shh"
 
     def test_missing_project_raises(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main(["deploy", "--workspace-dir", str(root), "ghost"])
         assert "ghost" in str(caught.value)
@@ -752,8 +708,8 @@ class TestDeploy:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         # FakeTransport returns whatever ``execute_output`` it's
         # carrying — supply a synthetic traceback so the deployer's
         # success heuristic flips to False.
@@ -777,8 +733,8 @@ class TestDeploy:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root)
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root)
         (project_dir / "boot.py").write_text("print('boot')\n")
 
         transport = FakeTransport(execute_output="")
@@ -802,7 +758,7 @@ class TestDeploy:
         runtime-matching path, project files at the device root,
         no ``active.py`` / ``workspace_runtime`` / ``lib/projects``.
         """
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text(
@@ -840,7 +796,7 @@ class TestDeploy:
         entrypoint shim, project files at the device root, AND a library
         the project imports from ``shared/`` at ``/lib/<name>.py``.
         """
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Library the project will import — must reach the device under /lib/.
         shared = root / "shared"
         shared.mkdir()
@@ -878,7 +834,7 @@ class TestDeploy:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """--import-graph routes through project_import_graph_source."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Stage a shared/ module alongside the project's main.py.
         shared = root / "shared"
         shared.mkdir()
@@ -917,9 +873,9 @@ class TestProjects:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="weather")
-        _seed_project(root, name="heater")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="weather")
+        seed_project(root, name="heater")
         exit_code = cli.main([
             "projects", "--workspace-dir", str(root), "--flat",
         ])
@@ -932,7 +888,7 @@ class TestProjects:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # projects/ exists if any project was seeded; without seeding it doesn't.
         # Either way list_projects() returns [].
         exit_code = cli.main([
@@ -947,8 +903,8 @@ class TestProjects:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """_template / leading-underscore dirs aren't shown as projects."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
         (root / "projects" / "_template").mkdir()
         (root / "projects" / "_template" / "config.toml").write_text("\n")
         exit_code = cli.main([
@@ -989,7 +945,7 @@ class TestDeployAllDevices:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = self._seed_two_device_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
 
@@ -1020,7 +976,7 @@ class TestDeployAllDevices:
     ) -> None:
         """One bad device doesn't short-circuit the loop; exit code is 1."""
         root = self._seed_two_device_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
 
@@ -1051,7 +1007,7 @@ class TestDeployAllDevices:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = self._seed_two_device_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
             "back-porch", "--all-devices", "--device", "lolin-s2",
@@ -1060,10 +1016,10 @@ class TestDeployAllDevices:
         assert "mutually exclusive" in capsys.readouterr().err
 
     def test_no_devices_registered_errors(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Overwrite the seeded devices.yml with an empty list.
         (root / "devices.yml").write_text("devices: []\n")
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "deploy", "--workspace-dir", str(root),
@@ -1112,7 +1068,7 @@ class TestDeployTargetsMapping:
                 "  back-porch: pico-w\n"
             ),
         )
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
 
@@ -1142,7 +1098,7 @@ class TestDeployTargetsMapping:
                 "  other-project: pico-w\n"
             ),
         )
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
         _install_fake_transport(
@@ -1172,7 +1128,7 @@ class TestDeployTargetsMapping:
                 "  back-porch: pico-w\n"
             ),
         )
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
         _install_fake_transport(
@@ -1205,7 +1161,7 @@ class TestDeployTargetsMapping:
                 "    - lolin-s2\n"
             ),
         )
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
         _install_fake_transport(
@@ -1233,7 +1189,7 @@ class TestDeployTargetsMapping:
                 "  back-porch: ghost-board\n"
             ),
         )
-        _seed_project(root, name="back-porch")
+        seed_project(root, name="back-porch")
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "back-porch",
         ])
@@ -1271,7 +1227,7 @@ class TestDeployAllProjects:
             "    address: /dev/cu.fake-cp\n",
         )
         for name in ("back-porch", "garage/door", "garage/window"):
-            _seed_project(tmp_path, name=name)
+            seed_project(tmp_path, name=name)
         return tmp_path
 
     def test_walks_each_mapped_project(
@@ -1340,8 +1296,8 @@ class TestDeployAllProjects:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """No deploy_targets at all → exit 2 with a hint."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "--all-projects",
         ])
@@ -1422,8 +1378,8 @@ class TestDeployFailureHints:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """A KeyError on a config section flags the missing key with workspace context."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         transport = FakeTransport(
             execute_output=(
                 "Traceback (most recent call last):\n"
@@ -1449,8 +1405,8 @@ class TestDeployFailureHints:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Generic ZeroDivisionError carries no hint — no empty section."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         transport = FakeTransport(
             execute_output=(
                 "Traceback (most recent call last):\n"
@@ -1474,8 +1430,8 @@ class TestDeployFailureHints:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """`repl <project>` deploy failures route through the same hint pass."""
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text("def run(): pass\n")
         transport = FakeTransport(
             execute_output=(
@@ -1520,8 +1476,8 @@ class TestDeployDiffCleanup:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
 
         # Pre-populate the fake device's flash with a stale file the
         # new payload won't include — the diff routine should remove it.
@@ -1554,8 +1510,8 @@ class TestDeployDiffCleanup:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Empty stale set → no `removed stale` lines in CLI output."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
 
         transport = FakeTransport(mode="copy", execute_output="")
         _install_fake_transport(monkeypatch, transport)
@@ -1579,8 +1535,8 @@ class TestDeployWipeFlag:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
 
         transport = FakeTransport(
             mode="copy",
@@ -1620,8 +1576,8 @@ class TestDeployWipeFlag:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """`deploy --wipe --dry-run` surfaces the wipe in the dry-run summary."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
         _install_fake_transport(monkeypatch, transport)
@@ -1647,8 +1603,8 @@ class TestDeployDryRun:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
         _install_fake_transport(monkeypatch, transport)
@@ -1677,7 +1633,7 @@ class TestDeployDryRun:
         matching path, project files at root, no ``/lib/projects/<name>/``
         nesting.
         """
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
@@ -1713,8 +1669,8 @@ class TestDeployDryRun:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Flat layout (no --boot-shim) ships at the device root."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
         _install_fake_transport(monkeypatch, transport)
@@ -1736,7 +1692,7 @@ class TestStatus:
     def test_prints_workspace_path_first(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         exit_code = cli.main(["status", "--workspace-dir", str(root)])
         assert exit_code == 0
         out = capsys.readouterr().out
@@ -1746,8 +1702,8 @@ class TestStatus:
     def test_ok_findings_render_with_check_glyph(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="back-porch")
         exit_code = cli.main(["status", "--workspace-dir", str(root)])
         assert exit_code == 0
         out = capsys.readouterr().out
@@ -1760,7 +1716,7 @@ class TestStatus:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         """A devices.yml warning (no devices registered) carries a remediation hint."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Overwrite the seeded devices.yml with an empty registry to trigger the warn.
         (root / "devices.yml").write_text("devices: []\n")
         exit_code = cli.main(["status", "--workspace-dir", str(root)])
@@ -1808,8 +1764,8 @@ class TestDoctor:
     def test_includes_python_and_project_run_labels(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text("def run(): pass\n")
         exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
         assert exit_code == 0
@@ -1827,8 +1783,8 @@ class TestDoctor:
     def test_missing_run_function_flips_exit_to_one(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text(
             "def something_else(): pass\n",
         )
@@ -1849,8 +1805,8 @@ class TestDoctor:
         # 1, and tell the user about --fix-fskit-wedge.
         from chumicro_workspace import health
         monkeypatch.setattr(health, "detect_fskit_wedge", lambda: True)
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text("def run(): pass\n")
         exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
         assert exit_code == 1
@@ -2030,11 +1986,11 @@ class TestProjectsTreeView:
     def test_default_renders_tree_with_namespaces(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="thermostat")
-        _seed_project(root, name="upstairs/bedroom_sensor")
-        _seed_project(root, name="upstairs/nightstand_lamp")
-        _seed_project(root, name="garage/sensors/door_open")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="thermostat")
+        seed_project(root, name="upstairs/bedroom_sensor")
+        seed_project(root, name="upstairs/nightstand_lamp")
+        seed_project(root, name="garage/sensors/door_open")
 
         exit_code = cli.main(["projects", "--workspace-dir", str(root)])
         assert exit_code == 0
@@ -2054,10 +2010,10 @@ class TestProjectsTreeView:
     def test_flat_one_line_per_project(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="thermostat")
-        _seed_project(root, name="upstairs/bedroom_sensor")
-        _seed_project(root, name="garage/sensors/door_open")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="thermostat")
+        seed_project(root, name="upstairs/bedroom_sensor")
+        seed_project(root, name="garage/sensors/door_open")
         exit_code = cli.main([
             "projects", "--workspace-dir", str(root), "--flat",
         ])
@@ -2074,7 +2030,7 @@ class TestProjectsTreeView:
     def test_default_on_empty_workspace_shows_marker(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         exit_code = cli.main(["projects", "--workspace-dir", str(root)])
         assert exit_code == 0
         assert "no projects" in capsys.readouterr().out
@@ -2093,7 +2049,7 @@ class TestDemo:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
 
         transport = FakeTransport(execute_output="Hello from ChuMicro!\n")
         _install_fake_transport(monkeypatch, transport)
@@ -2121,7 +2077,7 @@ class TestDemo:
     ) -> None:
         """The captured execute output reaches stdout so the user
         sees the demo's prints."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
 
         transport = FakeTransport(
             execute_output="Hello from ChuMicro!\ndemo complete!\n",
@@ -2141,7 +2097,7 @@ class TestDemo:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Same failure-surfacing shape as `deploy`."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
 
         transport = FakeTransport(
             execute_output=(
@@ -2261,11 +2217,11 @@ class TestBootstrapHelpers:
         from chumicro_workspace.cli import _resolve_bootstrap_port
         from serial.tools import list_ports
 
-        class _FakePort:
-            device = "/dev/cu.only"
-            description = "Pi Pico W"
-
-        monkeypatch.setattr(list_ports, "comports", lambda: [_FakePort()])
+        monkeypatch.setattr(
+            list_ports,
+            "comports",
+            lambda: [FakePort("/dev/cu.only", "Pi Pico W")],
+        )
         result = _resolve_bootstrap_port(None)
         assert result == "/dev/cu.only"
 
@@ -2275,15 +2231,10 @@ class TestBootstrapHelpers:
         from chumicro_workspace.cli import _resolve_bootstrap_port
         from serial.tools import list_ports
 
-        class _Port:
-            def __init__(self, device: str) -> None:
-                self.device = device
-                self.description = ""
-
         monkeypatch.setattr(
             list_ports,
             "comports",
-            lambda: [_Port("/dev/cu.a"), _Port("/dev/cu.b")],
+            lambda: [FakePort("/dev/cu.a"), FakePort("/dev/cu.b")],
         )
         result = _resolve_bootstrap_port(None, prompt_func=lambda _: "2")
         assert result == "/dev/cu.b"
@@ -2294,15 +2245,10 @@ class TestBootstrapHelpers:
         from chumicro_workspace.cli import _resolve_bootstrap_port
         from serial.tools import list_ports
 
-        class _Port:
-            def __init__(self, device: str) -> None:
-                self.device = device
-                self.description = ""
-
         monkeypatch.setattr(
             list_ports,
             "comports",
-            lambda: [_Port("/dev/cu.a"), _Port("/dev/cu.b")],
+            lambda: [FakePort("/dev/cu.a"), FakePort("/dev/cu.b")],
         )
         # Out-of-range numeric choice.
         result = _resolve_bootstrap_port(
@@ -2453,7 +2399,7 @@ class TestBootstrapWizard:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(
+                info=fake_probe_info(
                     runtime="micropython",
                     machine="Raspberry Pi Pico W with rp2040",
                     version="1.27.0",
@@ -2549,7 +2495,7 @@ class TestBootstrapWizard:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(
+                info=fake_probe_info(
                     runtime="micropython", version="1.26.0",
                 ),
                 runtime="micropython",
@@ -2600,7 +2546,7 @@ class TestBootstrapWizard:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(version="1.27.0"),
+                info=fake_probe_info(version="1.27.0"),
                 runtime="micropython",
                 transport_used="micropython",
             )
@@ -2641,7 +2587,7 @@ class TestBootstrapWizard:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(version="1.27.0"),
+                info=fake_probe_info(version="1.27.0"),
                 runtime="micropython",
                 transport_used="micropython",
             )
@@ -2685,7 +2631,7 @@ class TestBootstrapWizard:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(version="1.27.0"),
+                info=fake_probe_info(version="1.27.0"),
                 runtime="micropython",
                 transport_used="micropython",
             )
@@ -2730,19 +2676,15 @@ class TestProbe:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
 
         import chumicro_deploy
-        from chumicro_deploy import DeviceImplementation
 
-        class _Info:
-            implementation = DeviceImplementation(
-                name="micropython", version="1.26.0", machine="Lolin S2", uid="ABCD",
-            )
-            board_id = "lolin_s2"
-            uid = "ABCD"
-
-        monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _device: _Info())
+        info = fake_probe_info(
+            runtime="micropython", version="1.26.0",
+            machine="Lolin S2", uid="ABCD", board_id="lolin_s2",
+        )
+        monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _device: info)
         exit_code = cli.main(["probe", "--workspace-dir", str(root)])
         assert exit_code == 0
         out = capsys.readouterr().out
@@ -2756,15 +2698,11 @@ class TestProbe:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         import chumicro_deploy
 
-        class _Info:
-            implementation = None
-            board_id = ""
-            uid = ""
-
-        monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _device: _Info())
+        info = fake_probe_info(with_implementation=False)
+        monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _device: info)
         exit_code = cli.main(["probe", "--workspace-dir", str(root)])
         assert exit_code == 1
         assert "no implementation marker" in capsys.readouterr().err
@@ -2783,8 +2721,8 @@ class TestReplWithProject:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text("def run(): print('back-porch')\n")
 
         transport = FakeTransport(execute_output="back-porch\n")
@@ -2824,8 +2762,8 @@ class TestReplWithProject:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """`--tail SECONDS <project>` overrides the 30s default."""
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text("def run(): print('back-porch')\n")
 
         transport = FakeTransport(execute_output="")
@@ -2851,8 +2789,8 @@ class TestReplWithProject:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="garage/sensors/door_open")
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="garage/sensors/door_open")
         (project_dir / "app.py").write_text("def run(): print('door_open')\n")
 
         transport = FakeTransport(execute_output="")
@@ -2886,8 +2824,8 @@ class TestReplWithProject:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Tail is skipped when the deploy traceback marks failure."""
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="back-porch")
+        root = seed_workspace(tmp_path)
+        project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text("def run(): pass\n")
 
         transport = FakeTransport(
@@ -2916,7 +2854,7 @@ class TestReplWithProject:
         assert "deploy-failed" in capsys.readouterr().err
 
     def test_missing_project_raises(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "repl", "--workspace-dir", str(root), "ghost",
@@ -2931,7 +2869,7 @@ class TestRepl:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """`repl --mode passthrough` forwards keystrokes byte-by-byte."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         captured: dict[str, Any] = {}
 
         def fake_interactive(device: Device) -> int:
@@ -2952,7 +2890,7 @@ class TestRepl:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """`repl --mode line` opens the host-side line editor (default for TTYs)."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         captured: dict[str, Any] = {}
 
         def fake_interactive_line(device: Device) -> int:
@@ -2974,7 +2912,7 @@ class TestRepl:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         captured: dict[str, Any] = {}
 
         def fake_tail(device: Device, seconds: float, **kwargs: Any) -> int:
@@ -3000,7 +2938,7 @@ class TestRepl:
         """Port-not-found on `repl` enters the coaching loop, not a bare traceback."""
         import errno
 
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         attempts: list[int] = []
 
         def fake_interactive_line(_device: Device) -> int:
@@ -3042,7 +2980,7 @@ class TestRepl:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """`--non-interactive` bypasses the coaching wrapper entirely."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         coached_called: list[bool] = []
 
         def fake_interactive_line(_device: Device) -> int:
@@ -3126,7 +3064,7 @@ class TestInstallFirmware:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         captured: dict[str, Any] = {}
 
         def fake_flash(url: str, device: Device, **kwargs: Any) -> None:
@@ -3150,7 +3088,7 @@ class TestInstallFirmware:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """upgrade-firmware aliases install-firmware — same flash flow."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         called: list[str] = []
 
         def fake_flash(url: str, _device: Device, **_kwargs: Any) -> None:
@@ -3206,7 +3144,7 @@ class TestInstallFirmware:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """No --url + no --device id → can't derive, exit 2."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Default-resolution lands on lolin-s2, which has no
         # hardware block → derive raises UnresolvedFirmwareError.
         exit_code = cli.main([
@@ -3250,23 +3188,17 @@ class TestTestCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        recorded: dict[str, Any] = {}
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            recorded["args"] = args
-            recorded["cwd"] = kwargs.get("cwd")
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        root = seed_workspace(tmp_path)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main([
             "test", "--workspace-dir", str(root), "--", "-k", "sanity",
         ])
         assert exit_code == 0
-        assert recorded["args"] == [
+        assert runner.calls[0].args == [
             sys.executable, "-m", "pytest", "--", "-k", "sanity",
         ]
-        assert recorded["cwd"] == root
+        assert runner.calls[0].cwd == root
 
 
 class TestLintCommand:
@@ -3275,47 +3207,37 @@ class TestLintCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        calls: list[dict[str, Any]] = []
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            calls.append({"args": args, "cwd": kwargs.get("cwd")})
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        root = seed_workspace(tmp_path)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main([
             "lint", "--workspace-dir", str(root),
         ])
         assert exit_code == 0
         # First call: ruff.
-        assert calls[0]["args"] == [
+        assert runner.calls[0].args == [
             sys.executable, "-m", "ruff", "check", ".",
         ]
-        assert calls[0]["cwd"] == root
+        assert runner.calls[0].cwd == root
         # Second call: chumicro-checks.
-        assert calls[1]["args"] == [
+        assert runner.calls[1].args == [
             sys.executable, "-m", "chumicro_checks", "--root", str(root),
         ]
-        assert calls[1]["cwd"] == root
+        assert runner.calls[1].cwd == root
 
     def test_forwards_extra_args_to_ruff(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        calls: list[list[str]] = []
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            calls.append(args)
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        root = seed_workspace(tmp_path)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main([
             "lint", "--workspace-dir", str(root), "--", "--fix",
         ])
         assert exit_code == 0
-        ruff_args = calls[0]
+        ruff_args = runner.calls[0].args
         assert "--fix" in ruff_args
         # The trailing "." anchors ruff to the workspace root regardless
         # of any extra args the user passed.
@@ -3326,20 +3248,15 @@ class TestLintCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        calls: list[list[str]] = []
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            calls.append(args)
-            # Ruff fails — chumicro-checks should not be invoked.
-            return subprocess.CompletedProcess(args, 1)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        root = seed_workspace(tmp_path)
+        # Ruff fails — chumicro-checks should not be invoked.
+        runner = FakeSubprocessRunner(returncode=1)
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main(["lint", "--workspace-dir", str(root)])
         assert exit_code == 1
         # Only ruff ran; chumicro-checks didn't get a turn.
-        assert len(calls) == 1
-        assert calls[0][2] == "ruff"
+        assert len(runner.calls) == 1
+        assert runner.calls[0].args[2] == "ruff"
 
     def test_skips_chumicro_checks_with_hint_when_missing(
         self,
@@ -3348,14 +3265,9 @@ class TestLintCommand:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """When chumicro-checks isn't installed, ruff still runs; user gets a hint."""
-        root = _seed_workspace(tmp_path)
-        calls: list[list[str]] = []
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            calls.append(args)
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        root = seed_workspace(tmp_path)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
 
         import builtins
         original_import = builtins.__import__
@@ -3369,7 +3281,7 @@ class TestLintCommand:
         exit_code = cli.main(["lint", "--workspace-dir", str(root)])
         assert exit_code == 0
         # Ruff ran; chumicro-checks didn't.
-        assert len(calls) == 1
+        assert len(runner.calls) == 1
         out = capsys.readouterr().out
         assert "chumicro-checks is not installed" in out
 
@@ -3380,7 +3292,7 @@ class TestLintCommand:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """When ruff isn't installed, exit 0 with a discoverable hint."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
 
         # Force the import probe inside _cmd_lint to fail.
         import builtins
@@ -3411,23 +3323,18 @@ class TestQualityKnobsLint:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Append a quality block disabling lint.
         (root / "workspace.yml").write_text(
             (root / "workspace.yml").read_text()
             + "quality:\n  lint:\n    enabled: false\n",
         )
 
-        called = [False]
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            called[0] = True
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main(["lint", "--workspace-dir", str(root)])
         assert exit_code == 0
-        assert called[0] is False
+        assert runner.calls == []
         assert "disabled" in capsys.readouterr().out
 
     def test_select_prepended_before_user_args(
@@ -3435,26 +3342,21 @@ class TestQualityKnobsLint:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
             (root / "workspace.yml").read_text()
             + 'quality:\n  lint:\n    select: ["E", "F", "I"]\n',
         )
 
-        calls: list[list[str]] = []
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            calls.append(args)
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main([
             "lint", "--workspace-dir", str(root), "--", "--fix",
         ])
         assert exit_code == 0
         # Workspace --select goes BEFORE user passthrough so the user's
         # later --select (if any) wins.  Inspect the ruff call (first).
-        ruff_args = calls[0]
+        ruff_args = runner.calls[0].args
         select_index = ruff_args.index("--select")
         fix_index = ruff_args.index("--fix")
         assert select_index < fix_index
@@ -3465,47 +3367,37 @@ class TestQualityKnobsLint:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
             (root / "workspace.yml").read_text()
             + 'quality:\n  lint:\n    tools: ["ruff"]\n',
         )
 
-        calls: list[list[str]] = []
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            calls.append(args)
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main(["lint", "--workspace-dir", str(root)])
         assert exit_code == 0
-        assert len(calls) == 1
-        assert calls[0][2] == "ruff"
+        assert len(runner.calls) == 1
+        assert runner.calls[0].args[2] == "ruff"
 
     def test_tools_chumicro_checks_only_skips_ruff(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
             (root / "workspace.yml").read_text()
             + 'quality:\n  lint:\n    tools: ["chumicro-checks"]\n',
         )
 
-        calls: list[list[str]] = []
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            calls.append(args)
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main(["lint", "--workspace-dir", str(root)])
         assert exit_code == 0
-        assert len(calls) == 1
-        assert calls[0][1] == "-m"
-        assert calls[0][2] == "chumicro_checks"
+        assert len(runner.calls) == 1
+        assert runner.calls[0].args[1] == "-m"
+        assert runner.calls[0].args[2] == "chumicro_checks"
 
     def test_tools_empty_list_skips_phase(
         self,
@@ -3513,22 +3405,17 @@ class TestQualityKnobsLint:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
             (root / "workspace.yml").read_text()
             + "quality:\n  lint:\n    tools: []\n",
         )
 
-        called = [False]
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            called[0] = True
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main(["lint", "--workspace-dir", str(root)])
         assert exit_code == 0
-        assert called[0] is False
+        assert runner.calls == []
         assert "no tools selected" in capsys.readouterr().out
 
     def test_tools_chumicro_checks_failure_returned(
@@ -3537,16 +3424,15 @@ class TestQualityKnobsLint:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """A failing chumicro-checks run propagates its exit code."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
             (root / "workspace.yml").read_text()
             + 'quality:\n  lint:\n    tools: ["chumicro-checks"]\n',
         )
 
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            return subprocess.CompletedProcess(args, 7)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            cli.subprocess, "run", FakeSubprocessRunner(returncode=7),
+        )
         exit_code = cli.main(["lint", "--workspace-dir", str(root)])
         assert exit_code == 7
 
@@ -3559,28 +3445,24 @@ class TestQualityKnobsTest:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
             (root / "workspace.yml").read_text()
             + "quality:\n  coverage_threshold: 90\n",
         )
 
-        recorded: dict[str, Any] = {}
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            recorded["args"] = args
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main([
             "test", "--workspace-dir", str(root), "--", "-x",
         ])
         assert exit_code == 0
-        assert "--cov-fail-under=90" in recorded["args"]
+        last_args = runner.calls[-1].args
+        assert "--cov-fail-under=90" in last_args
         # Workspace flag comes before user passthrough; pytest's
         # last-occurrence-wins lets the user override.
-        gate_index = recorded["args"].index("--cov-fail-under=90")
-        x_index = recorded["args"].index("-x")
+        gate_index = last_args.index("--cov-fail-under=90")
+        x_index = last_args.index("-x")
         assert gate_index < x_index
 
     def test_no_threshold_no_extra_flags(
@@ -3588,19 +3470,14 @@ class TestQualityKnobsTest:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
 
-        recorded: dict[str, Any] = {}
-
-        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-            recorded["args"] = args
-            return subprocess.CompletedProcess(args, 0)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        runner = FakeSubprocessRunner()
+        monkeypatch.setattr(cli.subprocess, "run", runner)
         exit_code = cli.main(["test", "--workspace-dir", str(root)])
         assert exit_code == 0
         assert not any(
-            arg.startswith("--cov-fail-under") for arg in recorded["args"]
+            arg.startswith("--cov-fail-under") for arg in runner.calls[-1].args
         )
 
 
@@ -3638,7 +3515,7 @@ def test_stub_commands_exit_two_with_message(
     slice_marker: str,
 ) -> None:
     """Each stubbed command must report its planned slice and exit 2."""
-    _seed_workspace(tmp_path)
+    seed_workspace(tmp_path)
     exit_code = cli.main([command, "--workspace-dir", str(tmp_path)])
     assert exit_code == 2
     captured_stderr = capsys.readouterr().err
@@ -3649,33 +3526,6 @@ def test_stub_commands_exit_two_with_message(
 # ---------------------------------------------------------------------------
 # add-device — three-zone YAML writer wired in
 # ---------------------------------------------------------------------------
-
-
-def _fake_probe_info(
-    runtime: str = "micropython",
-    machine: str = "Lolin S2",
-    uid: str = "ABCD1234",
-    board_id: str = "lolin_s2",
-    version: str = "1.27.0",
-):
-    """Return an object that mimics chumicro_deploy.probe_device's return.
-
-    Default version is at the supported floor for ``micropython`` so
-    tests that don't care about firmware support don't trip the
-    firmware-floor warning path.  Tests that exercise the floor pass
-    a lower or runtime-specific *version*.
-    """
-    from chumicro_deploy import DeviceImplementation
-
-    class _Info:
-        implementation = DeviceImplementation(
-            name=runtime, version=version, machine=machine, uid=uid,
-        )
-
-    info = _Info()
-    info.board_id = board_id
-    info.uid = uid
-    return info
 
 
 class TestAddDevice:
@@ -3690,7 +3540,7 @@ class TestAddDevice:
         (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         monkeypatch.setattr(
-            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+            chumicro_deploy, "probe_device", lambda _device: fake_probe_info(),
         )
         exit_code = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -3716,7 +3566,7 @@ class TestAddDevice:
         (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         monkeypatch.setattr(
-            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+            chumicro_deploy, "probe_device", lambda _device: fake_probe_info(),
         )
 
         first = cli.main([
@@ -3742,7 +3592,7 @@ class TestAddDevice:
         (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         monkeypatch.setattr(
-            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+            chumicro_deploy, "probe_device", lambda _device: fake_probe_info(),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -3769,14 +3619,14 @@ class TestAddDevice:
         (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
 
-        first_info = _fake_probe_info(uid="ORIGINAL")
+        first_info = fake_probe_info(uid="ORIGINAL")
         monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: first_info)
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
             "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
         ])
 
-        second_info = _fake_probe_info(uid="DIFFERENT")
+        second_info = fake_probe_info(uid="DIFFERENT")
         monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: second_info)
         result = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -3903,7 +3753,7 @@ class TestAddDevice:
 
         import chumicro_deploy
         monkeypatch.setattr(
-            chumicro_deploy, "probe_device", lambda _d: _fake_probe_info(),
+            chumicro_deploy, "probe_device", lambda _d: fake_probe_info(),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -3933,7 +3783,7 @@ class TestAddDeviceAutoDefaults:
         (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         monkeypatch.setattr(
-            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+            chumicro_deploy, "probe_device", lambda _device: fake_probe_info(),
         )
         exit_code = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -3968,7 +3818,7 @@ class TestAddDeviceAutoDefaults:
         )
         import chumicro_deploy
         monkeypatch.setattr(
-            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+            chumicro_deploy, "probe_device", lambda _device: fake_probe_info(),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -3990,7 +3840,7 @@ class TestAddDeviceAutoDefaults:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _device: _fake_probe_info(uid="UID-A"),
+            lambda _device: fake_probe_info(uid="UID-A"),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4000,7 +3850,7 @@ class TestAddDeviceAutoDefaults:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _device: _fake_probe_info(uid="UID-B"),
+            lambda _device: fake_probe_info(uid="UID-B"),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4024,7 +3874,7 @@ class TestAddDeviceAutoDefaults:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _device: _fake_probe_info(runtime="micropython"),
+            lambda _device: fake_probe_info(runtime="micropython"),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4034,7 +3884,7 @@ class TestAddDeviceAutoDefaults:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _device: _fake_probe_info(
+            lambda _device: fake_probe_info(
                 runtime="circuitpython", uid="CP-UID", version="9.2.0",
             ),
         )
@@ -4067,7 +3917,7 @@ class TestAddDeviceAutoDefaults:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _device: _fake_probe_info(uid="NEW-UID"),
+            lambda _device: fake_probe_info(uid="NEW-UID"),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4099,7 +3949,7 @@ class TestAddDeviceAutoDefaults:
         )
         import chumicro_deploy
         monkeypatch.setattr(
-            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+            chumicro_deploy, "probe_device", lambda _device: fake_probe_info(),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4133,7 +3983,7 @@ class TestAddDeviceFirmwareFloor:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _d: _fake_probe_info(version="1.27.0"),
+            lambda _d: fake_probe_info(version="1.27.0"),
         )
         exit_code = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4156,7 +4006,7 @@ class TestAddDeviceFirmwareFloor:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _d: _fake_probe_info(version="1.26.0"),
+            lambda _d: fake_probe_info(version="1.26.0"),
         )
         exit_code = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4180,7 +4030,7 @@ class TestAddDeviceFirmwareFloor:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _d: _fake_probe_info(runtime="cpython", version="3.13.0"),
+            lambda _d: fake_probe_info(runtime="cpython", version="3.13.0"),
         )
         exit_code = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4202,7 +4052,7 @@ class TestAddDeviceFirmwareFloor:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _d: _fake_probe_info(version="1.27.0"),
+            lambda _d: fake_probe_info(version="1.27.0"),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4223,7 +4073,7 @@ class TestAddDeviceFirmwareFloor:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _d: _fake_probe_info(version="1.26.0"),
+            lambda _d: fake_probe_info(version="1.26.0"),
         )
         cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4235,7 +4085,7 @@ class TestAddDeviceFirmwareFloor:
         monkeypatch.setattr(
             chumicro_deploy,
             "probe_device",
-            lambda _d: _fake_probe_info(version="1.27.0"),
+            lambda _d: fake_probe_info(version="1.27.0"),
         )
         result = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4272,7 +4122,7 @@ class TestAddDeviceRuntimeInference:
         # Fake the inference helper to return a CP probe.
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(
+                info=fake_probe_info(
                     runtime="circuitpython", version="10.1.4",
                 ),
                 runtime="circuitpython",
@@ -4321,7 +4171,7 @@ class TestAddDeviceRuntimeInference:
 
         def fake_probe(_device):
             called["probe"] = True
-            return _fake_probe_info(version="1.27.0")
+            return fake_probe_info(version="1.27.0")
 
         monkeypatch.setattr(chumicro_deploy, "probe_device", fake_probe)
 
@@ -4448,7 +4298,7 @@ class TestAddDeviceOmittedId:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(
+                info=fake_probe_info(
                     runtime="circuitpython",
                     machine="Raspberry Pi Pico W with rp2040",
                     version="10.1.4",
@@ -4485,7 +4335,7 @@ class TestAddDeviceOmittedId:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(
+                info=fake_probe_info(
                     runtime="circuitpython",
                     machine="Raspberry Pi Pico W with rp2040",
                     version="10.1.4",
@@ -4513,7 +4363,7 @@ class TestAddDeviceOmittedId:
         # existing id set.
         def fake_inference_second(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(
+                info=fake_probe_info(
                     runtime="circuitpython",
                     machine="Raspberry Pi Pico W with rp2040",
                     version="10.1.4",
@@ -4555,7 +4405,7 @@ class TestAddDeviceOmittedId:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=_fake_probe_info(
+                info=fake_probe_info(
                     runtime="circuitpython",
                     machine="Raspberry Pi Pico W with rp2040",
                     version="10.1.4",
@@ -4587,8 +4437,8 @@ class TestAddDeviceOmittedId:
 
 class TestRename:
     def test_project_renames_directory(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "old_name")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "old_name")
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
             "--project", "old_name", "new_name",
@@ -4602,7 +4452,7 @@ class TestRename:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
             "--project", "ghost", "spook",
@@ -4615,9 +4465,9 @@ class TestRename:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "alpha")
-        _seed_project(root, "beta")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "alpha")
+        seed_project(root, "beta")
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
             "--project", "alpha", "beta",
@@ -4629,8 +4479,8 @@ class TestRename:
         self, tmp_path: Path,
     ) -> None:
         """``_validate_project_name`` runs on both sides of the rename."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "alpha")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "alpha")
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "rename", "--workspace-dir", str(root),
@@ -4645,8 +4495,8 @@ class TestRenameNested:
     def test_moves_into_new_namespace(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "bedroom_sensor")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "bedroom_sensor")
 
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
@@ -4665,8 +4515,8 @@ class TestRenameNested:
     def test_moves_between_namespaces(
         self, tmp_path: Path,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "garage/door_open")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "garage/door_open")
 
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
@@ -4681,8 +4531,8 @@ class TestRenameNested:
         ).is_file()
 
     def test_dotted_form_normalises(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "garage/door_open")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "garage/door_open")
 
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
@@ -4697,9 +4547,9 @@ class TestRenameNested:
         self, tmp_path: Path,
     ) -> None:
         """Bare old-name resolves uniquely when only one path matches."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "garage/door_open")
-        _seed_project(root, "thermostat")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "garage/door_open")
+        seed_project(root, "thermostat")
 
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
@@ -4713,9 +4563,9 @@ class TestRenameNested:
     def test_bare_name_ambiguous_lists_candidates(
         self, tmp_path: Path,
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "upstairs/sensor")
-        _seed_project(root, "garage/sensor")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "upstairs/sensor")
+        seed_project(root, "garage/sensor")
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "rename", "--workspace-dir", str(root),
@@ -4724,7 +4574,7 @@ class TestRenameNested:
         assert "ambiguous" in str(caught.value)
 
     def test_device_rename_rewrites_id_and_default(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # Seed devices.yml has 'lolin-s2' as default.
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
@@ -4740,7 +4590,7 @@ class TestRenameNested:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
             "--device", "ghost", "spook",
@@ -4776,7 +4626,7 @@ class TestRenameNested:
         tmp_path: Path,
     ) -> None:
         """Argparse's mutually-exclusive group raises SystemExit on missing input."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit):
             cli.main(["rename", "--workspace-dir", str(root)])
 
@@ -4790,8 +4640,8 @@ class TestDeployHealthGate:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Malformed workspace.yml is an ERROR; deploy aborts with exit 2."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         # Corrupt workspace.yml to trigger an ERROR-level finding.
         (root / "workspace.yml").write_text("not: valid: yaml: ::\n")
 
@@ -4819,8 +4669,8 @@ class TestDeployHealthGate:
         the gate's *abort* is what gets bypassed, not the deeper
         config-file reads.
         """
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
 
         from chumicro_workspace import cli as workspace_cli
         from chumicro_workspace.health import HealthFinding, HealthLevel
@@ -4859,8 +4709,8 @@ class TestDeployHealthGate:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """A devices.yml warn (no entries) prints but doesn't block deploy."""
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         # Wipe devices.yml's entries so check_devices_yaml emits a WARN —
         # deploy itself still picks up the device-id we pass explicitly.
         (root / "devices.yml").write_text(
@@ -4895,7 +4745,7 @@ class TestCommandPreflight:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         calls: list[str] = []
 
         def fake_lint(args):  # noqa: ANN001
@@ -4918,7 +4768,7 @@ class TestCommandPreflight:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         calls: list[str] = []
         monkeypatch.setattr(
             cli, "_cmd_lint", lambda args: calls.append("lint") or 0,  # noqa: ARG005
@@ -4937,7 +4787,7 @@ class TestCommandPreflight:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         monkeypatch.setattr(cli, "_cmd_lint", lambda args: 0)  # noqa: ARG005
         monkeypatch.setattr(cli, "_cmd_test", lambda args: 5)  # noqa: ARG005
         exit_code = cli.main(["preflight", "--workspace-dir", str(root)])
@@ -4952,8 +4802,8 @@ class TestCommandDumpConfig:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, "back-porch")
+        root = seed_workspace(tmp_path)
+        seed_project(root, "back-porch")
 
         exit_code = cli.main([
             "dump-config", "--workspace-dir", str(root), "back-porch",
@@ -4972,8 +4822,8 @@ class TestCommandDumpConfig:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         exit_code = cli.main([
             "dump-config", "--workspace-dir", str(root), "back-porch", "--repr",
         ])
@@ -4984,7 +4834,7 @@ class TestCommandDumpConfig:
         assert "'wifi.ssid'" in out
 
     def test_missing_project_raises(self, tmp_path: Path) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit, match="not found"):
             cli.main([
                 "dump-config", "--workspace-dir", str(root), "ghost-project",
@@ -5008,8 +4858,8 @@ class TestConfigValidate:
     def test_passes_when_required_keys_present(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         self._seed_with_wifi_lib(root)
         # secrets.toml from _seed_workspace already carries
         # wifi.password; the project's wifi.ssid covers the
@@ -5028,8 +4878,8 @@ class TestConfigValidate:
     def test_fails_when_required_key_missing(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         self._seed_with_wifi_lib(root)
         # secrets.toml from _seed_workspace has no wifi.ssid; the
         # project_config.toml override is empty too.
@@ -5047,9 +4897,9 @@ class TestConfigValidate:
     def test_validates_every_project_when_no_args(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
-        _seed_project(root, name="alpha")
-        _seed_project(root, name="beta")
+        root = seed_workspace(tmp_path)
+        seed_project(root, name="alpha")
+        seed_project(root, name="beta")
         self._seed_with_wifi_lib(root)
         (root / "projects" / "alpha" / "project_config.toml").write_text(
             "[wifi]\nssid = 'A'\n",
@@ -5070,8 +4920,8 @@ class TestConfigValidate:
     ) -> None:
         # No libraries/ tree at all — no manifests to validate against.
         # Validator short-circuits with a clear message and exit 0.
-        root = _seed_workspace(tmp_path)
-        _seed_project(root)
+        root = seed_workspace(tmp_path)
+        seed_project(root)
         exit_code = cli.main([
             "config-validate", "--workspace-dir", str(root), "back-porch",
         ])
@@ -5082,7 +4932,7 @@ class TestConfigValidate:
     def test_no_op_when_no_projects(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         # No projects/ directory at all.
         exit_code = cli.main([
             "config-validate", "--workspace-dir", str(root),
@@ -5301,7 +5151,7 @@ class TestResetBoard:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Bare ``reset-board`` exits 2 and never touches the transport."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         transport = FakeTransport(execute_output="", mode="copy")
         _install_fake_transport(monkeypatch, transport)
 
@@ -5319,7 +5169,7 @@ class TestResetBoard:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """``--yes`` connects, wipes, and disconnects in order."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         transport = FakeTransport(execute_output="", mode="copy")
         _install_fake_transport(monkeypatch, transport)
 
@@ -5338,7 +5188,7 @@ class TestResetBoard:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """RAM / mount mode never wrote to flash → reset-board prints + exits 0."""
-        root = _seed_workspace(tmp_path)
+        root = seed_workspace(tmp_path)
         transport = FakeTransport(execute_output="", mode="ram")
         _install_fake_transport(monkeypatch, transport)
 
@@ -5397,21 +5247,11 @@ def body_to_pythony(text: str) -> str:
 
 
 def _seed_workspace_with_cp_device(tmp_path: Path) -> Path:
-    """Same as ``_seed_workspace`` but registers a CircuitPython device
-    by default (matches the deploy-example examples we seed below)."""
-    (tmp_path / "workspace.yml").write_text("# machinery only\n")
-    (tmp_path / "secrets.toml").write_text(
-        "[wifi]\nssid = 'home'\npassword = 'shh'\n",
-    )
-    (tmp_path / "devices.yml").write_text(
-        "defaults:\n"
-        "  circuitpython: pico-w-cp\n"
-        "devices:\n"
-        "  - id: pico-w-cp\n"
-        "    runtime: circuitpython\n"
-        "    address: /dev/cu.fake\n",
-    )
-    return tmp_path
+    """``seed_workspace`` with a CircuitPython device registered by default.
+
+    Matches the runtime of the deploy-example examples seeded below.
+    """
+    return seed_workspace(tmp_path, runtime="circuitpython")
 
 
 class TestDeployExampleListing:
