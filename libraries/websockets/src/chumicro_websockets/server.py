@@ -123,8 +123,6 @@ class Connection(_BaseSession):
 
         self._handshake_phase = ServerHandshakePhase.READING_REQUEST
         self._handshake_request_parser = HandshakeRequestParser()
-        self._handshake_response_buffer = None
-        self._handshake_response_offset = 0
         self._handshake_deadline_ticks = self._ticks.ticks_add(
             now_ms,
             handshake_timeout_ms,
@@ -220,44 +218,23 @@ class Connection(_BaseSession):
             )
             return
         # Build 101 response.
-        self._handshake_response_buffer = encode_server_handshake_response(
+        self._handshake_send_buffer = encode_server_handshake_response(
             self._handshake_request_parser.client_key,
         )
-        self._handshake_response_offset = 0
+        self._handshake_send_offset = 0
         self._request_path = self._handshake_request_parser.path
         self._request_headers = self._handshake_request_parser.headers
         self._post_handshake_carry = self._handshake_request_parser.leftover
         self._handshake_phase = ServerHandshakePhase.SENDING_RESPONSE
 
-    def _send_handshake_chunk(self, now_ms: int) -> None:
-        remaining = self._handshake_response_buffer[
-            self._handshake_response_offset:
-        ]
-        if not remaining:
-            self._enter_open(now_ms)
-            return
-        chunk = remaining[: self._send_budget_per_tick]
-        try:
-            sent = self._socket.send(chunk)
-        except Exception as send_error:  # noqa: BLE001 - narrow below
-            if _is_eagain(send_error):
-                return
-            self._fail_with_error(
-                WebSocketHandshakeError(
-                    f"socket error during handshake send: {send_error!r}",
-                ),
-            )
-            return
-        if sent is None or sent == 0:
-            return
-        self._handshake_response_offset += sent
-        if self._handshake_response_offset >= len(self._handshake_response_buffer):
-            self._enter_open(now_ms)
+    def _on_handshake_send_complete(self, now_ms: int) -> None:
+        """101 response fully sent — fire on_connection and enter OPEN."""
+        self._enter_open(now_ms)
 
     def _enter_open(self, now_ms: int) -> None:
         """Transition from sending-response to OPEN; fire user callback."""
         self._handshake_request_parser = None
-        self._handshake_response_buffer = None
+        self._handshake_send_buffer = None
         self._handshake_phase = None
         self._handshake_deadline_ticks = None
         self._state = WebSocketState.OPEN
