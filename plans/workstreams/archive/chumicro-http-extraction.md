@@ -1,8 +1,21 @@
 # Workstream: Extract `chumicro-http` (shared HTTP/1.1 primitives)
 
-Status: `proposed` — surfaced by `/audit-workspace` on 2026-05-11 (Claim E2); not yet started.  Trigger condition documented in three ADRs is met; deferral text is now stale.
+Status: **archived — not planned (2026-05-12).**  Surfaced by `/audit-workspace` on 2026-05-11 (Claim E2) and re-flagged on 2026-05-12 by `/audit-integration`.  Re-evaluated 2026-05-12 against actual cost/benefit and the standing position reversed: the duplication is small (~150 LOC, ~5 % of the three `_wire.py` files), most boards deploy only one of the three consumers, the only primitive-level divergence to date (commit `63774d72`) was caught by `/audit-integration` ~13 days after it landed with no user-visible impact, and the RFCs the primitives encode (RFC 7230 §3.2, RFC 7231 §3.1.1.5) are stable.  Audit-integration is the working safety net; a new package adds version coupling + bundle surface + a new dep-graph node for benefit that already exists.
 
-## Purpose
+## Outcome — why not planned
+
+- **Duplication is bounded.**  ~150 LOC of byte-equivalent code across three `_wire.py` files totalling ~3,110 LOC.  The other ~95 % (`RequestParser` / `ResponseParser` / `FrameParser` / encoders / state machines) is genuinely per-protocol and doesn't share.
+- **Deployment overlap is rare.**  256 KB / 4 MB-class boards typically run one of {`chumicro-requests`, `chumicro-http-server`, `chumicro-websockets`} at a time.  When two land together, the redundant ~80 LOC compiles to ~1.5 KB of `.mpy`.  Trivial.
+- **Trigger evidence was a near-miss, not a defect.**  The `_order` insertion-order tracking divergence on websockets (`4115e2d4` slimmed the dict, `bcc3219e` added the fix to the other two, `63774d72` backfilled WS) was caught by the next `/audit-integration` pass, ~13 days after the divergence landed.  Nobody shipped against the bad state — the audit caught it.  That's the safety net working, not failing.
+- **Primitive churn is low.**  In the library's lifetime (since `chumicro-requests` shipped) we've seen one primitive-level change that needed propagation across the three consumers.  RFCs are stable, the docstrings already say "matches requests's implementation," and audit-integration runs as a periodic pass against this exact boundary.
+- **Extraction cost is real and standing.**  New package on PyPI + circup + mip; version-coupling (bump `chumicro-http` → re-validate three consumers); one more node future contributors have to learn about + reach for when touching HTTP primitives.  These are mild individually and compounding over time.
+- **The `CaseInsensitiveDict` shape question doesn't bite in practice.**  Each library imports its own copy; `isinstance(headers, CaseInsensitiveDict)` resolves against the local class.  Shape only goes wrong if two consumers tried to pass headers *between each other* (e.g. a websocket handler receiving a `requests.Response` and inspecting headers) — not in any current code path.
+
+## Follow-ups arising from this decision
+
+- ADR language in [Decision 0041](../../decisions/0041-chumicro-http-server.md) §118 / §210 / §5 and [Decision 0045](../../decisions/0045-chumicro-websockets.md) §117 currently frames the deferral around a "third HTTP/1.1 consumer" trigger that has since fired without extraction.  Left as-is, the next `/audit-workspace` pass will re-propose this workstream.  Those paragraphs need rewriting so the standing position reads: "duplicated by design — `/audit-integration` keeps the three copies in sync; revisit if primitives start changing faster than the audit cadence catches, or if a fourth HTTP/1.1 consumer arrives."
+
+## Purpose (original framing — preserved for context)
 
 Three libraries each ship a private copy of the same four HTTP/1.1 primitives.  Extract them into a small shared library so future fixes land once and stay in sync.
 
