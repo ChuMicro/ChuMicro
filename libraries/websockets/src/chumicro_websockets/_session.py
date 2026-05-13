@@ -188,7 +188,7 @@ class _BaseSession:
         # for the next chunk in the same tick if the budget remains.
         # Mirrors chumicro_requests.HttpClient + chumicro_http_server
         # connection-state pattern.
-        recv_scratch_size = recv_budget_per_tick if recv_budget_per_tick <= 512 else 512
+        recv_scratch_size = min(recv_budget_per_tick, 512)
         self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
 
@@ -586,7 +586,7 @@ class _BaseSession:
         handoff in chumicro_requests.HttpClient._drive_recv +
         chumicro_http_server connection._drive_recv.
         """
-        cap = max_bytes if max_bytes <= len(self._recv_buffer) else len(self._recv_buffer)
+        cap = min(max_bytes, len(self._recv_buffer))
         try:
             received = self._socket.recv_into(self._recv_view[:cap], cap)
         except Exception as recv_error:  # noqa: BLE001 - narrow below
@@ -683,36 +683,42 @@ class _BaseSession:
         """Trip an expired handshake / close / pong deadline.  Returns
         ``True`` if a deadline tripped (caller should yield the tick).
         """
-        if self._handshake_deadline_ticks is not None:
-            if self._ticks.ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0:
-                self._fail_with_error(
-                    WebSocketTimeoutError(
-                        f"handshake exceeded {self._handshake_timeout_ms} ms",
-                    ),
-                )
-                return True
+        if (
+            self._handshake_deadline_ticks is not None
+            and self._ticks.ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0
+        ):
+            self._fail_with_error(
+                WebSocketTimeoutError(
+                    f"handshake exceeded {self._handshake_timeout_ms} ms",
+                ),
+            )
+            return True
         return self._check_close_and_pong_timeouts(now_ms)
 
     def _check_close_and_pong_timeouts(self, now_ms: int) -> bool:
         """Trip an expired close-deadline or pong-deadline.  Returns
         ``True`` if a deadline tripped (caller should yield the tick).
         """
-        if self._close_deadline_ticks is not None:
-            if self._ticks.ticks_diff(self._close_deadline_ticks, now_ms) <= 0:
-                # Force closed even though peer didn't echo CLOSE.
-                self._last_error = WebSocketTimeoutError(
-                    f"peer did not send CLOSE within {self._close_timeout_ms} ms",
-                )
-                self._finalize_closed()
-                return True
-        if self._pending_ping_deadline_ticks is not None:
-            if self._ticks.ticks_diff(self._pending_ping_deadline_ticks, now_ms) <= 0:
-                self._fail_with_error(
-                    WebSocketTimeoutError(
-                        f"no PONG within {self._pong_timeout_ms} ms of last PING",
-                    ),
-                )
-                return True
+        if (
+            self._close_deadline_ticks is not None
+            and self._ticks.ticks_diff(self._close_deadline_ticks, now_ms) <= 0
+        ):
+            # Force closed even though peer didn't echo CLOSE.
+            self._last_error = WebSocketTimeoutError(
+                f"peer did not send CLOSE within {self._close_timeout_ms} ms",
+            )
+            self._finalize_closed()
+            return True
+        if (
+            self._pending_ping_deadline_ticks is not None
+            and self._ticks.ticks_diff(self._pending_ping_deadline_ticks, now_ms) <= 0
+        ):
+            self._fail_with_error(
+                WebSocketTimeoutError(
+                    f"no PONG within {self._pong_timeout_ms} ms of last PING",
+                ),
+            )
+            return True
         return False
 
     def _arm_pong_deadline(self, now_ms: int | None = None) -> None:
