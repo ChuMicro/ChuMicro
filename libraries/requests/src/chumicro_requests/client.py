@@ -78,11 +78,6 @@ class WhenOversized:
     DISCONNECT = "disconnect"
 
 
-def _no_callback(*_args, **_kwargs):
-    """Default no-op callback so handlers can be stored unconditionally."""
-    return None
-
-
 def _encode_body(body, json_body):
     """Convert *body* / *json_body* into ``bytes`` (or ``None``).
 
@@ -574,7 +569,7 @@ class HttpClient:
         self._original_json_body = None
 
         # Optional event hooks.
-        self.on_oversized = _no_callback
+        self.on_oversized = lambda *_args, **_kwargs: None
 
     # ------------------------------------------------------------------
     # Public observation
@@ -832,20 +827,16 @@ class HttpClient:
         """Push queued request bytes onto the socket; transition on completion."""
         while self._tx_offset < len(self._tx_buffer):
             view = memoryview(self._tx_buffer)[self._tx_offset:]
-            sent = self._send_raw(view)
+            try:
+                sent = self._socket.send(view)
+            except OSError as socket_error:
+                if is_eagain(socket_error):
+                    return
+                raise
             if sent <= 0:
                 return  # Socket would block — wait for next tick.
             self._tx_offset += sent
         self._state = _RequestState.RECEIVING
-
-    def _send_raw(self, payload):
-        """Send *payload*; return bytes sent (may be 0 on EAGAIN)."""
-        try:
-            return self._socket.send(payload)
-        except OSError as socket_error:
-            if is_eagain(socket_error):
-                return 0
-            raise
 
     def _drive_recv(self):
         """Drain the socket up to ``recv_budget_per_tick``; feed the parser.
@@ -883,38 +874,32 @@ class HttpClient:
             self._complete()
 
     def _complete(self):
-        """Build the :class:`Response`; either follow a redirect or attach to handle."""
-        body = self._parser.body
-        oversized_dropped = False
-        # The DROP_SILENT / DROP_WITH_EVENT branches don't use
-        # HttpOversizedError; they would have arrived here only if
-        # the parser stayed under the cap.  Keep the hook for the
-        # next slice that makes oversize a runtime-not-parse decision.
+        """Follow a redirect or hand the response to the handle.
+
+        Checks the redirect path against the parser directly so the
+        body-snapshot (``bytes(memoryview)`` inside ``parser.body``)
+        only fires when we're about to return the response.
+        """
+        parser = self._parser
+        status_code = parser.status_code
+        if self._redirects_remaining > 0 and status_code in REDIRECT_STATUS_CODES:
+            location = parser.headers.get("Location")
+            if location is not None:
+                self._follow_redirect(status_code, location)
+                return
         response = Response(
-            status_code=self._parser.status_code,
-            reason=self._parser.reason,
-            http_version=self._parser.http_version,
-            headers=self._parser.headers,
-            body=body,
+            status_code=status_code,
+            reason=parser.reason,
+            http_version=parser.http_version,
+            headers=parser.headers,
+            body=parser.body,
             url=self._url,
-            oversized_dropped=oversized_dropped,
+            oversized_dropped=False,
         )
-        if self._should_follow_redirect(response):
-            self._follow_redirect(response)
-            return
         self._handle._set_response(response)  # noqa: SLF001 — internal handoff
         self._reset_socket()
 
-    def _should_follow_redirect(self, response):
-        """Return True iff the response is a 3xx with a Location header
-        and the per-request redirect budget is non-zero."""
-        if self._redirects_remaining <= 0:
-            return False
-        if response.status_code not in REDIRECT_STATUS_CODES:
-            return False
-        return response.headers.get("Location") is not None
-
-    def _follow_redirect(self, response):
+    def _follow_redirect(self, status_code, location):
         """Resolve the next URL, swap state, and re-issue the request.
 
         For 301 / 302 / 303 the next hop is always GET with no body —
@@ -922,14 +907,12 @@ class HttpClient:
         307 / 308 the original method + body are preserved.
         """
         try:
-            new_url = resolve_redirect_url(
-                self._url, response.headers["Location"],
-            )
+            new_url = resolve_redirect_url(self._url, location)
         except HttpError as redirect_error:
             self._handle._set_error(redirect_error)  # noqa: SLF001
             self._reset_socket()
             return
-        if response.status_code in METHOD_PRESERVING_REDIRECT_STATUS_CODES:
+        if status_code in METHOD_PRESERVING_REDIRECT_STATUS_CODES:
             next_method = self._original_method
             next_body = self._original_body
             next_json_default_content_type = self._original_json_body is not None

@@ -45,12 +45,7 @@ streaming uploads, multi-in-flight requests.
 """
 
 from chumicro_requests._wire import (
-    DEFAULT_MAX_BODY_BYTES,
-    DEFAULT_MAX_REDIRECTS,
     DEFAULT_RECV_BUDGET_PER_TICK,
-    DEFAULT_TIMEOUT_MS,
-    METHOD_PRESERVING_REDIRECT_STATUS_CODES,
-    REDIRECT_STATUS_CODES,
     CaseInsensitiveDict,
     HttpBusyError,
     HttpError,
@@ -73,12 +68,7 @@ from chumicro_requests.client import (
 )
 
 __all__ = [
-    "DEFAULT_MAX_BODY_BYTES",
-    "DEFAULT_MAX_REDIRECTS",
     "DEFAULT_RECV_BUDGET_PER_TICK",
-    "DEFAULT_TIMEOUT_MS",
-    "METHOD_PRESERVING_REDIRECT_STATUS_CODES",
-    "REDIRECT_STATUS_CODES",
     "CaseInsensitiveDict",
     "HttpBusyError",
     "HttpClient",
