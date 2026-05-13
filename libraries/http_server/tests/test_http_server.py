@@ -22,6 +22,7 @@ from chumicro_http_server import (
     parse_query,
     split_target,
 )
+from chumicro_http_server.testing import FakeListener, request_bytes
 from chumicro_sockets.testing import FakeSocket
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
@@ -31,41 +32,8 @@ from chumicro_timing.testing import FakeTicks
 # ---------------------------------------------------------------------------
 
 
-class _FakeListener:
-    """Listener stub that hands out queued FakeSockets on accept()."""
-
-    def __init__(self, connections):
-        self._queue = list(connections)
-        self._closed = False
-
-    def accept(self):
-        if not self._queue:
-            raise OSError(11, "would block")
-        return self._queue.pop(0)
-
-    def close(self):
-        self._closed = True
-
-    def setblocking(self, _flag):
-        pass
-
-
-def _request_bytes(method="GET", path="/", *, headers=None, body=b""):
-    """Build a raw HTTP/1.1 request byte-string."""
-    lines = [f"{method} {path} HTTP/1.1\r\n".encode("ascii")]
-    if body:
-        lines.append(f"Content-Length: {len(body)}\r\n".encode("ascii"))
-    if headers:
-        for name, value in headers:
-            lines.append(f"{name}: {value}\r\n".encode("ascii"))
-    lines.append(b"\r\n")
-    if body:
-        lines.append(body)
-    return b"".join(lines)
-
-
 def _make_server(*, sockets, handler=None, **kwargs):
-    """Construct an HttpServer wired to a FakeTicks + a _FakeListener."""
+    """Construct an HttpServer wired to a FakeTicks + a FakeListener."""
     ticks = FakeTicks()
     if handler is None:
         handler = lambda request: build_response(200, text="ok")  # noqa: E731
@@ -74,7 +42,7 @@ def _make_server(*, sockets, handler=None, **kwargs):
 
     def listener_factory():
         listener_called["count"] += 1
-        return _FakeListener(sockets)
+        return FakeListener(sockets)
 
     server = HttpServer(
         listener_factory=listener_factory,
@@ -168,7 +136,7 @@ class TestParseQuery:
 class TestRequestParser:
     def test_simple_get(self):
         parser = RequestParser()
-        parser.feed(_request_bytes(method="GET", path="/api"))
+        parser.feed(request_bytes(method="GET", path="/api"))
         assert parser.state == RequestParseState.DONE
         assert parser.method == "GET"
         assert parser.target == "/api"
@@ -176,13 +144,13 @@ class TestRequestParser:
 
     def test_request_with_body(self):
         parser = RequestParser()
-        parser.feed(_request_bytes(method="POST", path="/", body=b"hello"))
+        parser.feed(request_bytes(method="POST", path="/", body=b"hello"))
         assert parser.state == RequestParseState.DONE
         assert parser.body == b"hello"
 
     def test_request_split_across_feeds(self):
         parser = RequestParser()
-        full = _request_bytes(method="POST", path="/", body=b"world")
+        full = request_bytes(method="POST", path="/", body=b"world")
         for byte_index in range(len(full)):
             parser.feed(full[byte_index:byte_index + 1])
         assert parser.state == RequestParseState.DONE
@@ -190,7 +158,7 @@ class TestRequestParser:
 
     def test_headers_preserved_case_insensitive(self):
         parser = RequestParser()
-        parser.feed(_request_bytes(
+        parser.feed(request_bytes(
             headers=[("Host", "example.test"), ("X-Custom", "value")],
         ))
         assert parser.headers["host"] == "example.test"
@@ -374,7 +342,7 @@ def _connection(request_bytes):
 
 class TestHttpServerEndToEnd:
     def test_simple_get_returns_canned_response(self):
-        sock, peer = _connection(_request_bytes())
+        sock, peer = _connection(request_bytes())
         server, ticks, _ = _make_server(sockets=[(sock, peer)])
         _drive_until_idle(server, ticks)
         assert sock.sent.startswith(b"HTTP/1.1 200 OK\r\n")
@@ -392,7 +360,7 @@ class TestHttpServerEndToEnd:
             captured["peer"] = request.peer
             return build_response(200, text="captured")
 
-        sock, peer = _connection(_request_bytes(
+        sock, peer = _connection(request_bytes(
             method="POST", path="/api?page=2&size=10",
             headers=[("Host", "device.local"), ("X-Custom", "v")],
             body=b"payload",
@@ -412,7 +380,7 @@ class TestHttpServerEndToEnd:
             payload = request.json()
             return build_response(201, json={"received": payload})
 
-        sock, peer = _connection(_request_bytes(
+        sock, peer = _connection(request_bytes(
             method="POST", path="/data", body=b'{"k": "v"}',
         ))
         server, ticks, _ = _make_server(sockets=[(sock, peer)], handler=handler)
@@ -425,7 +393,7 @@ class TestHttpServerEndToEnd:
         def handler(request):
             return build_response(200, html="<h1>hi</h1>")
 
-        sock, peer = _connection(_request_bytes())
+        sock, peer = _connection(request_bytes())
         server, ticks, _ = _make_server(sockets=[(sock, peer)], handler=handler)
         _drive_until_idle(server, ticks)
         assert b"Content-Type: text/html; charset=utf-8\r\n" in sock.sent
@@ -435,7 +403,7 @@ class TestHttpServerEndToEnd:
         def handler(_request):
             raise RuntimeError("kaboom")
 
-        sock, peer = _connection(_request_bytes())
+        sock, peer = _connection(request_bytes())
         server, ticks, _ = _make_server(sockets=[(sock, peer)], handler=handler)
         _drive_until_idle(server, ticks)
         assert sock.sent.startswith(b"HTTP/1.1 500 Internal Server Error\r\n")
@@ -445,14 +413,14 @@ class TestHttpServerEndToEnd:
         def handler(_request):
             return "this is a string, not a Response"
 
-        sock, peer = _connection(_request_bytes())
+        sock, peer = _connection(request_bytes())
         server, ticks, _ = _make_server(sockets=[(sock, peer)], handler=handler)
         _drive_until_idle(server, ticks)
         assert sock.sent.startswith(b"HTTP/1.1 500 Internal Server Error\r\n")
         assert b"expected Response" in sock.sent
 
     def test_listener_lazy_open(self):
-        sock, peer = _connection(_request_bytes())
+        sock, peer = _connection(request_bytes())
         server, ticks, listener_called = _make_server(sockets=[(sock, peer)])
         assert not server.listening
         assert listener_called["count"] == 0
@@ -461,7 +429,7 @@ class TestHttpServerEndToEnd:
         assert listener_called["count"] == 1
 
     def test_socket_closed_after_response(self):
-        sock, peer = _connection(_request_bytes())
+        sock, peer = _connection(request_bytes())
         server, ticks, _ = _make_server(sockets=[(sock, peer)])
         _drive_until_idle(server, ticks)
         assert sock.closed is True
@@ -470,7 +438,7 @@ class TestHttpServerEndToEnd:
     def test_check_returns_true_while_listener_unopened(self):
         """Lazy-open semantics — server reports work pending so the
         runner's first call to handle() opens the listener."""
-        sock, peer = _connection(_request_bytes())
+        sock, peer = _connection(request_bytes())
         server, ticks, _ = _make_server(sockets=[(sock, peer)])
         assert server.check(ticks.ticks_ms()) is True
 
@@ -497,7 +465,7 @@ class TestHttpServerProtocolError:
                 raise OSError(99, "boom")
 
         sock = BrokenSocket()
-        sock.enqueue_recv(_request_bytes())
+        sock.enqueue_recv(request_bytes())
         server, ticks, _ = _make_server(sockets=[(sock, ("127.0.0.1", 1))])
         _drive_until_idle(server, ticks)
         assert server.in_flight == 0
@@ -536,7 +504,7 @@ class TestHttpServerEagainPaths:
 
     def test_send_eagain_resumes_next_tick(self):
         sock = FakeSocket()
-        sock.enqueue_recv(_request_bytes())
+        sock.enqueue_recv(request_bytes())
         sock.enqueue_eagain_for_send(2)  # first two sends EAGAIN
         server, ticks, _ = _make_server(sockets=[(sock, ("127.0.0.1", 1))])
         _drive_until_idle(server, ticks)
@@ -545,7 +513,7 @@ class TestHttpServerEagainPaths:
     def test_recv_eagain_during_request_resumes(self):
         sock = FakeSocket()
         sock.enqueue_eagain_for_recv(2)
-        sock.enqueue_recv(_request_bytes())
+        sock.enqueue_recv(request_bytes())
         server, ticks, _ = _make_server(sockets=[(sock, ("127.0.0.1", 1))])
         _drive_until_idle(server, ticks)
         assert sock.sent.startswith(b"HTTP/1.1 200 OK\r\n")
@@ -654,14 +622,14 @@ class TestHttpServerRouting:
     def _route_server(self, sockets, **kwargs):
         ticks = FakeTicks()
         server = HttpServer(
-            listener_factory=lambda: _FakeListener(sockets),
+            listener_factory=lambda: FakeListener(sockets),
             ticks=ticks,
             **kwargs,
         )
         return server, ticks
 
     def test_route_decorator_registers_handler(self):
-        sock, peer = _connection(_request_bytes(method="GET", path="/api"))
+        sock, peer = _connection(request_bytes(method="GET", path="/api"))
         server, ticks = self._route_server([(sock, peer)])
 
         @server.route("/api")
@@ -673,8 +641,8 @@ class TestHttpServerRouting:
         assert sock.sent.endswith(b"\r\n\r\nhello-GET")
 
     def test_route_default_method_is_get(self):
-        sock_get, peer_get = _connection(_request_bytes(method="GET", path="/x"))
-        sock_post, peer_post = _connection(_request_bytes(method="POST", path="/x"))
+        sock_get, peer_get = _connection(request_bytes(method="GET", path="/x"))
+        sock_post, peer_post = _connection(request_bytes(method="POST", path="/x"))
         server, ticks = self._route_server([
             (sock_get, peer_get), (sock_post, peer_post),
         ])
@@ -691,8 +659,8 @@ class TestHttpServerRouting:
         assert b"Allow: GET\r\n" in sock_post.sent
 
     def test_route_multi_method(self):
-        sock_get, peer_get = _connection(_request_bytes(method="GET", path="/api"))
-        sock_post, peer_post = _connection(_request_bytes(method="POST", path="/api"))
+        sock_get, peer_get = _connection(request_bytes(method="GET", path="/api"))
+        sock_post, peer_post = _connection(request_bytes(method="POST", path="/api"))
         server, ticks = self._route_server([
             (sock_get, peer_get), (sock_post, peer_post),
         ])
@@ -706,7 +674,7 @@ class TestHttpServerRouting:
         assert sock_post.sent.endswith(b"\r\n\r\nPOST")
 
     def test_path_param_extraction(self):
-        sock, peer = _connection(_request_bytes(method="GET", path="/widgets/42"))
+        sock, peer = _connection(request_bytes(method="GET", path="/widgets/42"))
         server, ticks = self._route_server([(sock, peer)])
 
         @server.route("/widgets/<id>")
@@ -718,7 +686,7 @@ class TestHttpServerRouting:
 
     def test_path_param_with_query_string(self):
         sock, peer = _connection(
-            _request_bytes(method="GET", path="/widgets/abc?fields=name"),
+            request_bytes(method="GET", path="/widgets/abc?fields=name"),
         )
         server, ticks = self._route_server([(sock, peer)])
 
@@ -731,7 +699,7 @@ class TestHttpServerRouting:
         assert sock.sent.endswith(b"\r\n\r\nabc")
 
     def test_unrouted_path_returns_404(self):
-        sock, peer = _connection(_request_bytes(method="GET", path="/nope"))
+        sock, peer = _connection(request_bytes(method="GET", path="/nope"))
         server, ticks = self._route_server([(sock, peer)])
 
         @server.route("/api")
@@ -742,7 +710,7 @@ class TestHttpServerRouting:
         assert sock.sent.startswith(b"HTTP/1.1 404 Not Found\r\n")
 
     def test_method_not_allowed_returns_405_with_allow_header(self):
-        sock, peer = _connection(_request_bytes(method="DELETE", path="/api"))
+        sock, peer = _connection(request_bytes(method="DELETE", path="/api"))
         server, ticks = self._route_server([(sock, peer)])
 
         @server.route("/api", methods=["GET", "POST"])
@@ -755,7 +723,7 @@ class TestHttpServerRouting:
         assert b"Allow: GET, POST\r\n" in sock.sent
 
     def test_method_not_allowed_for_pattern_route(self):
-        sock, peer = _connection(_request_bytes(method="DELETE", path="/widgets/42"))
+        sock, peer = _connection(request_bytes(method="DELETE", path="/widgets/42"))
         server, ticks = self._route_server([(sock, peer)])
 
         @server.route("/widgets/<id>", methods=["GET"])
@@ -767,7 +735,7 @@ class TestHttpServerRouting:
         assert b"Allow: GET\r\n" in sock.sent
 
     def test_fallback_handler_used_when_no_route_matches(self):
-        sock, peer = _connection(_request_bytes(method="GET", path="/anywhere"))
+        sock, peer = _connection(request_bytes(method="GET", path="/anywhere"))
         server, ticks = self._route_server(
             [(sock, peer)],
             handler=lambda request: build_response(
@@ -783,7 +751,7 @@ class TestHttpServerRouting:
         assert sock.sent.endswith(b"\r\n\r\nfallback-/anywhere")
 
     def test_explicit_route_takes_precedence_over_fallback(self):
-        sock, peer = _connection(_request_bytes(method="GET", path="/api"))
+        sock, peer = _connection(request_bytes(method="GET", path="/api"))
         server, ticks = self._route_server(
             [(sock, peer)],
             handler=lambda _r: build_response(200, text="fallback"),
@@ -797,14 +765,14 @@ class TestHttpServerRouting:
         assert sock.sent.endswith(b"\r\n\r\nexplicit")
 
     def test_no_handler_no_routes_returns_404(self):
-        sock, peer = _connection(_request_bytes())
+        sock, peer = _connection(request_bytes())
         server, ticks = self._route_server([(sock, peer)])
         # No @route, no fallback handler.
         _drive_until_idle(server, ticks)
         assert sock.sent.startswith(b"HTTP/1.1 404 Not Found\r\n")
 
     def test_re_register_overrides_previous_handler(self):
-        sock, peer = _connection(_request_bytes(method="GET", path="/x"))
+        sock, peer = _connection(request_bytes(method="GET", path="/x"))
         server, ticks = self._route_server([(sock, peer)])
 
         @server.route("/x")
@@ -819,7 +787,7 @@ class TestHttpServerRouting:
         assert sock.sent.endswith(b"\r\n\r\nsecond")
 
     def test_re_register_pattern_route_overrides(self):
-        sock, peer = _connection(_request_bytes(method="GET", path="/items/x"))
+        sock, peer = _connection(request_bytes(method="GET", path="/items/x"))
         server, ticks = self._route_server([(sock, peer)])
 
         @server.route("/items/<id>")
@@ -834,7 +802,7 @@ class TestHttpServerRouting:
         assert sock.sent.endswith(b"\r\n\r\nsecond")
 
     def test_method_uppercase_normalized(self):
-        sock, peer = _connection(_request_bytes(method="POST", path="/api"))
+        sock, peer = _connection(request_bytes(method="POST", path="/api"))
         server, ticks = self._route_server([(sock, peer)])
 
         @server.route("/api", methods=["post"])  # lowercase
@@ -896,7 +864,7 @@ class TestRequestParserBodyStateTransition:
 
         ticks = FakeTicks()
         server = HttpServer(
-            listener_factory=lambda: _FakeListener([(sock, ("127.0.0.1", 1))]),
+            listener_factory=lambda: FakeListener([(sock, ("127.0.0.1", 1))]),
             handler=lambda request: build_response(200),
             request_timeout_ms=1_000_000,  # don't time out
             ticks=ticks,
@@ -1078,7 +1046,7 @@ class TestFromConfig:
         # so we can assert the constructor knobs without touching
         # chumicro_sockets.
         server = HttpServer.from_config(
-            config, listener_factory=lambda: _FakeListener([]),
+            config, listener_factory=lambda: FakeListener([]),
         )
         assert server._max_connections == 8  # noqa: SLF001
         assert server._request_timeout_ms == 30_000  # noqa: SLF001
@@ -1098,7 +1066,7 @@ class TestFromConfig:
         )
 
         server = HttpServer.from_config(
-            {}, listener_factory=lambda: _FakeListener([]),
+            {}, listener_factory=lambda: FakeListener([]),
         )
         assert server._max_connections == DEFAULT_MAX_CONNECTIONS  # noqa: SLF001
         assert server._request_timeout_ms == DEFAULT_REQUEST_TIMEOUT_MS  # noqa: SLF001
@@ -1110,7 +1078,7 @@ class TestFromConfig:
 
         server = HttpServer.from_config(
             {"http_server.max_connections": 16},
-            listener_factory=lambda: _FakeListener([]),
+            listener_factory=lambda: FakeListener([]),
         )
         assert server._max_connections == 16  # noqa: SLF001
         assert server._request_timeout_ms == DEFAULT_REQUEST_TIMEOUT_MS  # noqa: SLF001
@@ -1120,7 +1088,7 @@ class TestFromConfig:
         my_handler = lambda request: build_response(200, text="hi")  # noqa: E731
         server = HttpServer.from_config(
             {}, handler=my_handler,
-            listener_factory=lambda: _FakeListener([]),
+            listener_factory=lambda: FakeListener([]),
         )
         assert server._fallback_handler is my_handler  # noqa: SLF001
 
@@ -1130,14 +1098,14 @@ class TestFromConfig:
 
         config = RuntimeConfig({"http_server.max_connections": 12})
         server = HttpServer.from_config(
-            config, listener_factory=lambda: _FakeListener([]),
+            config, listener_factory=lambda: FakeListener([]),
         )
         assert server._max_connections == 12  # noqa: SLF001
 
     def test_explicit_listener_factory_bypasses_auto_build(self) -> None:
         """Passing listener_factory= skips the chumicro_sockets path
         — caller owns the bind / TLS behaviour."""
-        listener = _FakeListener([])
+        listener = FakeListener([])
         custom_factory = lambda: listener  # noqa: E731
         server = HttpServer.from_config(
             {"http_server.bind_host": "ignored"},
@@ -1151,7 +1119,7 @@ class TestFromConfig:
         import chumicro_sockets as sockets_mod
 
         captured: dict = {}
-        sentinel_listener = _FakeListener([])
+        sentinel_listener = FakeListener([])
 
         def fake_tcp(host, port, *, radio=None):
             captured["host"] = host
@@ -1178,7 +1146,7 @@ class TestFromConfig:
 
         captured: dict = {}
         sentinel_context = object()
-        sentinel_listener = _FakeListener([])
+        sentinel_listener = FakeListener([])
 
         def fake_ssl_paths(*, cert_path, key_path):
             captured["cert_path"] = cert_path
@@ -1225,7 +1193,7 @@ class TestFromConfig:
 
         def fake_tls(host, port, *, context, radio=None):
             captured["context"] = context
-            return _FakeListener([])
+            return FakeListener([])
 
         original_tls = sockets_mod.tls_listening_socket
         sockets_mod.tls_listening_socket = fake_tls
@@ -1261,7 +1229,7 @@ class TestFromConfig:
 
         original = sockets_mod.tcp_listening_socket
         sockets_mod.tcp_listening_socket = (
-            lambda host, port, *, radio=None: _FakeListener([])
+            lambda host, port, *, radio=None: FakeListener([])
         )
         try:
             server = HttpServer.from_config({})
