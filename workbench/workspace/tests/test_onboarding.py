@@ -271,19 +271,14 @@ class TestDefaultArgs:
     def test_default_drive_scanner_uses_find_uf2_drive(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace import onboarding
-
-        # No UF2 drives on dev box — point default search at empty tmp_path.
-        monkeypatch.setattr(
-            onboarding,
-            "_UF2_MOUNT_SEARCH_PATHS",
-            {"darwin": [tmp_path], "linux": [tmp_path], "win32": [tmp_path]},
-        )
+        # No UF2 drives on dev box — point search at an empty tmp_path
+        # so find_uf2_drive walks a real-but-empty mount root and
+        # returns None, exercising the default-scanner branch.
         diagnosis = detect_board_state(
             _device(),
             probe_function=lambda _device: _info_without_implementation(),
+            uf2_search_paths=[tmp_path],
         )
         assert diagnosis.state is BoardState.NO_PROBE_RESPONSE
 

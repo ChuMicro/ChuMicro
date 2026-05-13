@@ -273,7 +273,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     pyproject = workspace.root / "pyproject.toml"
     if pyproject.is_file():
         print(f"setup: installing {workspace.root} (editable)")
-        completed = subprocess.run(  # noqa: S603 — args fully controlled
+        completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
             [sys.executable, "-m", "pip", "install", "-e", str(workspace.root)],
             check=False,
         )
@@ -1535,7 +1535,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     primitive that can run without blocking the static checks.
     """
     if getattr(args, "fix_fskit_wedge", False):
-        return _fix_fskit_wedge()
+        return _fix_fskit_wedge(args._env.subprocess_runner)
     workspace = _resolve_workspace(args)
     return _print_health_findings(workspace, collect_doctor_findings(workspace))
 
@@ -1551,7 +1551,9 @@ _FSKIT_FIX_EXIT_NO_SUDO = 5
 _FSKIT_FIX_EXIT_PERSISTS = 6
 
 
-def _fix_fskit_wedge() -> int:
+def _fix_fskit_wedge(
+    subprocess_runner: Callable[..., subprocess.CompletedProcess],
+) -> int:
     """Opt-in sudo wrapper around :data:`MACOS_FSKIT_RECOVERY_COMMAND`.
 
     Refuses on non-macOS, when no wedge is detected (running the
@@ -1607,7 +1609,7 @@ def _fix_fskit_wedge() -> int:
     # MACOS_FSKIT_RECOVERY_COMMAND is the literal "sudo killall -9
     # <daemon> <daemon> ..." line; whitespace-split is safe — the
     # constant has no quoting / shell metacharacters.
-    completed = subprocess.run(  # noqa: S603 — argv from a vetted constant
+    completed = subprocess_runner(  # noqa: S603 — argv from a vetted constant
         MACOS_FSKIT_RECOVERY_COMMAND.split(),
         check=False,
     )
@@ -2195,6 +2197,7 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
 
         diagnosis = detect_board_state(
             Device(transport="micropython", address=port),
+            uf2_search_paths=args._env.uf2_search_paths,
         )
         if inference.last_exception is not None:
             exception = inference.last_exception
@@ -2312,7 +2315,7 @@ def _cmd_test(args: argparse.Namespace) -> int:
     quality_flags: list[str] = []
     if quality.coverage_threshold is not None:
         quality_flags.append(f"--cov-fail-under={quality.coverage_threshold}")
-    completed = subprocess.run(  # noqa: S603 — args fully controlled
+    completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
         [sys.executable, "-m", "pytest", *quality_flags, *args.pytest_args],
         cwd=workspace.root,
         check=False,
@@ -2540,7 +2543,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         quality_flags: list[str] = []
         if quality.lint.select:
             quality_flags.extend(["--select", ",".join(quality.lint.select)])
-        ruff_completed = subprocess.run(  # noqa: S603 — args fully controlled
+        ruff_completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
             [
                 sys.executable, "-m", "ruff", "check",
                 *quality_flags, *args.ruff_args, ".",
@@ -2561,7 +2564,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
                 "or add it to your workspace's pyproject.toml dev deps.",
             )
             return 0
-        checks_completed = subprocess.run(  # noqa: S603 — args fully controlled
+        checks_completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
             [sys.executable, "-m", "chumicro_checks", "--root", str(workspace.root)],
             cwd=workspace.root,
             check=False,
@@ -2723,9 +2726,12 @@ def _cmd_install_firmware(args: argparse.Namespace) -> int:
             return 2
         print(f"install-firmware: resolved {firmware_url}")
 
-    from chumicro_deploy import flash_firmware  # noqa: PLC0415
+    flash_fn = args._env.flash_firmware_fn
+    if flash_fn is None:
+        from chumicro_deploy import flash_firmware  # noqa: PLC0415
+        flash_fn = flash_firmware
 
-    flash_firmware(
+    flash_fn(
         firmware_url,
         device,
         reflash_method=args.method,
@@ -2888,7 +2894,7 @@ def _cmd_install_libraries(args: argparse.Namespace) -> int:
         print(f"  $ {' '.join(command)}")
         if args.dry_run:
             continue
-        completed = subprocess.run(command, check=False)  # noqa: S603 — args fully controlled
+        completed = args._env.subprocess_runner(command, check=False)  # noqa: S603 — args fully controlled
         if completed.returncode != 0:
             print(
                 f"install-libraries: command failed (exit {completed.returncode}); "
@@ -2942,7 +2948,10 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
             probe_device_obj = Device(
                 transport="micropython", address=args.address,
             )
-            diagnosis = detect_board_state(probe_device_obj)
+            diagnosis = detect_board_state(
+                probe_device_obj,
+                uf2_search_paths=args._env.uf2_search_paths,
+            )
             if inference.last_exception is not None:
                 exception = inference.last_exception
                 print(
@@ -2968,7 +2977,10 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
         try:
             info = probe_device(probe_device_obj)
         except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
-            diagnosis = detect_board_state(probe_device_obj)
+            diagnosis = detect_board_state(
+                probe_device_obj,
+                uf2_search_paths=args._env.uf2_search_paths,
+            )
             print(
                 f"add-device: probe failed "
                 f"({type(exception).__name__}: {exception}).",
@@ -2978,7 +2990,10 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
                 print(f"  {line}", file=sys.stderr)
             return 1
         if info.implementation is None:
-            diagnosis = detect_board_state(probe_device_obj)
+            diagnosis = detect_board_state(
+                probe_device_obj,
+                uf2_search_paths=args._env.uf2_search_paths,
+            )
             if diagnosis.state is BoardState.UF2_BOOTLOADER:
                 print(
                     "add-device: board is in UF2 bootloader, not REPL — "
@@ -4091,12 +4106,62 @@ def _add_firmware_args(parser: argparse.ArgumentParser) -> None:
 # ---------------------------------------------------------------------------
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+@dataclass(frozen=True)
+class CliEnv:
+    """Test-injectable seams for :func:`main`.
+
+    Every field defaults to a real-production callable / ``None`` for
+    "use platform default".  Tests pass a custom ``CliEnv`` to
+    :func:`main` to swap one seam for the duration of the call
+    without monkeypatching module internals.  Production code reads
+    the values off the env via ``args._env`` inside CLI sub-commands.
+
+    Attributes:
+        uf2_search_paths: Override the UF2 mount-root list that
+            :func:`~chumicro_workspace.onboarding.detect_board_state`
+            forwards to :func:`~chumicro_workspace.onboarding.find_uf2_drive`.
+            ``None`` means use the platform default from
+            ``onboarding._UF2_MOUNT_SEARCH_PATHS``.  Tests pass ``[]``
+            to force "no UF2 drive found" or ``[tmp_path]`` to point
+            at a fixture layout.
+        subprocess_runner: Callable used for every external-process
+            invocation in CLI sub-commands (``pip install -e``,
+            ``ruff check``, ``pytest``, ``mpremote mip install``,
+            etc.).  Must satisfy :func:`subprocess.run`'s signature
+            and return a :class:`subprocess.CompletedProcess`.  Tests
+            pass :class:`chumicro_workspace.testing.FakeSubprocessRunner`.
+    """
+
+    uf2_search_paths: list[Path] | None = None
+    subprocess_runner: Callable[..., subprocess.CompletedProcess] = (
+        subprocess.run
+    )
+    #: Override the firmware-flash callable.  ``None`` means use
+    #: :func:`chumicro_deploy.flash_firmware`.  Tests pass a recording
+    #: stub to assert on the URL / device / kwargs the CLI forwards.
+    flash_firmware_fn: Callable[..., None] | None = None
+
+
+_DEFAULT_ENV = CliEnv()
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    env: CliEnv | None = None,
+) -> int:
     """Parse *argv* and dispatch to the selected command.
 
     Returns the process exit code.  Stub commands return 2 so CI /
     scripts can distinguish "not implemented yet" from runtime errors.
+
+    Args:
+        argv: Command-line arguments (``None`` reads from ``sys.argv``).
+        env: Test-injectable seams.  Defaults to a no-override
+            :class:`CliEnv` that uses production behavior everywhere.
+            Stashed on ``args._env`` so sub-commands can read it.
     """
     parser = build_parser()
     args = parser.parse_args(argv)
+    args._env = env if env is not None else _DEFAULT_ENV
     return args.func(args)

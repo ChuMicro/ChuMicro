@@ -119,8 +119,10 @@ class TestSetup:
         (root / "pyproject.toml").write_text("[project]\nname = 'demo'\n")
 
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main(["setup", "--workspace-dir", str(root)])
+        exit_code = cli.main(
+            ["setup", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         assert [call.args for call in runner.calls] == [
             [sys.executable, "-m", "pip", "install", "-e", str(root)],
@@ -1833,13 +1835,15 @@ class TestDoctorFixFskitWedge:
         stdin_tty: bool = True,
         stderr_tty: bool = True,
         run_returncode: int = 0,
-    ) -> tuple[list[list[str]], list[bool]]:
+    ) -> tuple[FakeSubprocessRunner, list[bool]]:
         """Stub everything the wrapper touches.
 
-        Returns ``(recorded_argv, detect_calls)`` so tests can assert
-        the killall was invoked with the expected argv and the detector
-        was polled the expected number of times (refuse paths poll once;
-        the happy path polls twice — pre + post killall).
+        Returns ``(subprocess_runner, detect_calls)`` so tests can
+        assert the killall was invoked with the expected argv (via
+        ``runner.calls[i].args``) and the detector was polled the
+        expected number of times (refuse paths poll once; the happy
+        path polls twice — pre + post killall).  Pass the returned
+        runner to :func:`cli.main` via ``env=cli.CliEnv(subprocess_runner=...)``.
         """
         monkeypatch.setattr(cli.sys, "platform", platform)
         states = list(wedge_states) if wedge_states is not None else [False]
@@ -1863,26 +1867,23 @@ class TestDoctorFixFskitWedge:
         monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: stdin_tty)
         monkeypatch.setattr(cli.sys.stderr, "isatty", lambda: stderr_tty)
 
-        recorded: list[list[str]] = []
-
-        def fake_run(args: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
-            recorded.append(args)
-            return subprocess.CompletedProcess(args, run_returncode)
-
-        monkeypatch.setattr(cli.subprocess, "run", fake_run)
         # Skip the 2-second settle.
         monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
-        return recorded, detect_calls
+
+        return FakeSubprocessRunner(returncode=run_returncode), detect_calls
 
     def test_refuses_on_non_darwin(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        recorded, detect_calls = self._patch_environment(
+        runner, detect_calls = self._patch_environment(
             monkeypatch, platform="linux",
         )
-        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        exit_code = cli.main(
+            ["doctor", "--fix-fskit-wedge"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 2
-        assert recorded == []  # no killall on non-mac
+        assert runner.calls == []  # no killall on non-mac
         assert detect_calls == []  # detector never even queried
         assert "macOS-only" in capsys.readouterr().err
 
@@ -1891,12 +1892,15 @@ class TestDoctorFixFskitWedge:
     ) -> None:
         # Wedge detector returns False — running the recovery on a
         # healthy system damages mounted volumes.
-        recorded, detect_calls = self._patch_environment(
+        runner, detect_calls = self._patch_environment(
             monkeypatch, wedge_states=[False],
         )
-        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        exit_code = cli.main(
+            ["doctor", "--fix-fskit-wedge"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 3
-        assert recorded == []
+        assert runner.calls == []
         assert detect_calls == [False]
         stderr_text = capsys.readouterr().err
         assert "No FSKit wedge detected" in stderr_text
@@ -1905,12 +1909,15 @@ class TestDoctorFixFskitWedge:
     def test_refuses_when_stdin_not_tty(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        recorded, _ = self._patch_environment(
+        runner, _ = self._patch_environment(
             monkeypatch, wedge_states=[True], stdin_tty=False,
         )
-        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        exit_code = cli.main(
+            ["doctor", "--fix-fskit-wedge"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 4
-        assert recorded == []
+        assert runner.calls == []
         stderr_text = capsys.readouterr().err
         assert "non-interactive" in stderr_text
         # The paste fallback must surface the literal recovery
@@ -1920,29 +1927,35 @@ class TestDoctorFixFskitWedge:
     def test_refuses_when_sudo_not_on_path(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        recorded, _ = self._patch_environment(
+        runner, _ = self._patch_environment(
             monkeypatch, wedge_states=[True], sudo_on_path=False,
         )
-        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        exit_code = cli.main(
+            ["doctor", "--fix-fskit-wedge"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 5
-        assert recorded == []
+        assert runner.calls == []
         assert "`sudo` is not on PATH" in capsys.readouterr().err
 
     def test_happy_path_runs_killall_and_clears(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
     ) -> None:
         # Wedge detected first call (gate), cleared on second (post-killall).
-        recorded, detect_calls = self._patch_environment(
+        runner, detect_calls = self._patch_environment(
             monkeypatch, wedge_states=[True, False],
         )
-        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        exit_code = cli.main(
+            ["doctor", "--fix-fskit-wedge"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         # killall invoked with the literal constant's argv form.
-        assert len(recorded) == 1
-        assert recorded[0][0] == "sudo"
-        assert recorded[0][1] == "killall"
-        assert "diskarbitrationd" in recorded[0]
-        assert "DiskArbitrationAgent" in recorded[0]
+        assert len(runner.calls) == 1
+        assert runner.calls[0].args[0] == "sudo"
+        assert runner.calls[0].args[1] == "killall"
+        assert "diskarbitrationd" in runner.calls[0].args
+        assert "DiskArbitrationAgent" in runner.calls[0].args
         assert detect_calls == [True, False]
         out = capsys.readouterr().out
         assert "FSKit wedge detected" in out
@@ -1952,12 +1965,15 @@ class TestDoctorFixFskitWedge:
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
     ) -> None:
         # Wedge stays True both before and after the killall.
-        recorded, detect_calls = self._patch_environment(
+        runner, detect_calls = self._patch_environment(
             monkeypatch, wedge_states=[True, True],
         )
-        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        exit_code = cli.main(
+            ["doctor", "--fix-fskit-wedge"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 6
-        assert len(recorded) == 1  # killall did run
+        assert len(runner.calls) == 1  # killall did run
         assert detect_calls == [True, True]
         stderr_text = capsys.readouterr().err
         assert "persists" in stderr_text
@@ -1968,12 +1984,15 @@ class TestDoctorFixFskitWedge:
     ) -> None:
         # subprocess.run returns 130 (sudo password cancel) — propagate
         # without claiming the wedge cleared.
-        recorded, detect_calls = self._patch_environment(
+        runner, detect_calls = self._patch_environment(
             monkeypatch, wedge_states=[True], run_returncode=130,
         )
-        exit_code = cli.main(["doctor", "--fix-fskit-wedge"])
+        exit_code = cli.main(
+            ["doctor", "--fix-fskit-wedge"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 130
-        assert len(recorded) == 1
+        assert len(runner.calls) == 1
         # Detector polled once (the gate).  Failed killall short-
         # circuits before the post-settle re-check.
         assert detect_calls == [True]
@@ -2459,7 +2478,6 @@ class TestBootstrapWizard:
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
-        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
 
         # detect_board_state runs its own probe — stub it.
         import chumicro_deploy
@@ -2471,11 +2489,14 @@ class TestBootstrapWizard:
             ),
         )
 
-        exit_code = cli.main([
-            "bootstrap", "--workspace-dir", str(root),
-            "--port", "/dev/cu.x",
-            "--device-id", "pico",
-        ])
+        exit_code = cli.main(
+            [
+                "bootstrap", "--workspace-dir", str(root),
+                "--port", "/dev/cu.x",
+                "--device-id", "pico",
+            ],
+            env=cli.CliEnv(uf2_search_paths=[]),
+        )
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "auto-detect failed" in captured.err
@@ -3062,7 +3083,6 @@ class TestInstallFirmware:
     def test_invokes_flash_firmware(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         captured: dict[str, Any] = {}
@@ -3072,12 +3092,13 @@ class TestInstallFirmware:
             captured["device_address"] = device.address
             captured["method"] = kwargs["reflash_method"]
 
-        import chumicro_deploy
-        monkeypatch.setattr(chumicro_deploy, "flash_firmware", fake_flash)
-        exit_code = cli.main([
-            "install-firmware", "--workspace-dir", str(root),
-            "--url", "https://example.com/fw.uf2", "--method", "uf2",
-        ])
+        exit_code = cli.main(
+            [
+                "install-firmware", "--workspace-dir", str(root),
+                "--url", "https://example.com/fw.uf2", "--method", "uf2",
+            ],
+            env=cli.CliEnv(flash_firmware_fn=fake_flash),
+        )
         assert exit_code == 0
         assert captured["url"] == "https://example.com/fw.uf2"
         assert captured["method"] == "uf2"
@@ -3085,7 +3106,6 @@ class TestInstallFirmware:
     def test_upgrade_firmware_uses_same_handler(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """upgrade-firmware aliases install-firmware — same flash flow."""
         root = seed_workspace(tmp_path)
@@ -3094,12 +3114,13 @@ class TestInstallFirmware:
         def fake_flash(url: str, _device: Device, **_kwargs: Any) -> None:
             called.append(url)
 
-        import chumicro_deploy
-        monkeypatch.setattr(chumicro_deploy, "flash_firmware", fake_flash)
-        exit_code = cli.main([
-            "upgrade-firmware", "--workspace-dir", str(root),
-            "--url", "https://example.com/fw.bin", "--method", "esptool",
-        ])
+        exit_code = cli.main(
+            [
+                "upgrade-firmware", "--workspace-dir", str(root),
+                "--url", "https://example.com/fw.bin", "--method", "esptool",
+            ],
+            env=cli.CliEnv(flash_firmware_fn=fake_flash),
+        )
         assert exit_code == 0
         assert called == ["https://example.com/fw.bin"]
 
@@ -3128,12 +3149,13 @@ class TestInstallFirmware:
         def fake_flash(url: str, _device: Device, **_kwargs: Any) -> None:
             captured.append(url)
 
-        import chumicro_deploy
-        monkeypatch.setattr(chumicro_deploy, "flash_firmware", fake_flash)
-        exit_code = cli.main([
-            "install-firmware", "--workspace-dir", str(tmp_path),
-            "--method", "esptool",
-        ])
+        exit_code = cli.main(
+            [
+                "install-firmware", "--workspace-dir", str(tmp_path),
+                "--method", "esptool",
+            ],
+            env=cli.CliEnv(flash_firmware_fn=fake_flash),
+        )
         assert exit_code == 0
         assert captured == ["https://my-mirror/firmware.bin"]
         assert "resolved https://my-mirror/firmware.bin" in capsys.readouterr().out
@@ -3186,14 +3208,13 @@ class TestTestCommand:
     def test_shells_out_to_pytest(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main([
-            "test", "--workspace-dir", str(root), "--", "-k", "sanity",
-        ])
+        exit_code = cli.main(
+            ["test", "--workspace-dir", str(root), "--", "-k", "sanity"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         assert runner.calls[0].args == [
             sys.executable, "-m", "pytest", "--", "-k", "sanity",
@@ -3205,14 +3226,13 @@ class TestLintCommand:
     def test_shells_out_to_ruff_then_chumicro_checks(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main([
-            "lint", "--workspace-dir", str(root),
-        ])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         # First call: ruff.
         assert runner.calls[0].args == [
@@ -3228,14 +3248,13 @@ class TestLintCommand:
     def test_forwards_extra_args_to_ruff(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main([
-            "lint", "--workspace-dir", str(root), "--", "--fix",
-        ])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root), "--", "--fix"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         ruff_args = runner.calls[0].args
         assert "--fix" in ruff_args
@@ -3246,13 +3265,14 @@ class TestLintCommand:
     def test_ruff_failure_short_circuits_chumicro_checks(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         # Ruff fails — chumicro-checks should not be invoked.
         runner = FakeSubprocessRunner(returncode=1)
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 1
         # Only ruff ran; chumicro-checks didn't get a turn.
         assert len(runner.calls) == 1
@@ -3267,7 +3287,6 @@ class TestLintCommand:
         """When chumicro-checks isn't installed, ruff still runs; user gets a hint."""
         root = seed_workspace(tmp_path)
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
 
         import builtins
         original_import = builtins.__import__
@@ -3278,7 +3297,10 @@ class TestLintCommand:
             return original_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
-        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         # Ruff ran; chumicro-checks didn't.
         assert len(runner.calls) == 1
@@ -3320,7 +3342,6 @@ class TestQualityKnobsLint:
     def test_disabled_skips_ruff(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = seed_workspace(tmp_path)
@@ -3331,8 +3352,10 @@ class TestQualityKnobsLint:
         )
 
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         assert runner.calls == []
         assert "disabled" in capsys.readouterr().out
@@ -3340,7 +3363,6 @@ class TestQualityKnobsLint:
     def test_select_prepended_before_user_args(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
@@ -3349,10 +3371,10 @@ class TestQualityKnobsLint:
         )
 
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main([
-            "lint", "--workspace-dir", str(root), "--", "--fix",
-        ])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root), "--", "--fix"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         # Workspace --select goes BEFORE user passthrough so the user's
         # later --select (if any) wins.  Inspect the ruff call (first).
@@ -3365,7 +3387,6 @@ class TestQualityKnobsLint:
     def test_tools_ruff_only_skips_chumicro_checks(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
@@ -3374,8 +3395,10 @@ class TestQualityKnobsLint:
         )
 
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         assert len(runner.calls) == 1
         assert runner.calls[0].args[2] == "ruff"
@@ -3383,7 +3406,6 @@ class TestQualityKnobsLint:
     def test_tools_chumicro_checks_only_skips_ruff(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
@@ -3392,8 +3414,10 @@ class TestQualityKnobsLint:
         )
 
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         assert len(runner.calls) == 1
         assert runner.calls[0].args[1] == "-m"
@@ -3402,7 +3426,6 @@ class TestQualityKnobsLint:
     def test_tools_empty_list_skips_phase(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = seed_workspace(tmp_path)
@@ -3412,8 +3435,10 @@ class TestQualityKnobsLint:
         )
 
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         assert runner.calls == []
         assert "no tools selected" in capsys.readouterr().out
@@ -3421,7 +3446,6 @@ class TestQualityKnobsLint:
     def test_tools_chumicro_checks_failure_returned(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """A failing chumicro-checks run propagates its exit code."""
         root = seed_workspace(tmp_path)
@@ -3430,10 +3454,10 @@ class TestQualityKnobsLint:
             + 'quality:\n  lint:\n    tools: ["chumicro-checks"]\n',
         )
 
-        monkeypatch.setattr(
-            cli.subprocess, "run", FakeSubprocessRunner(returncode=7),
+        exit_code = cli.main(
+            ["lint", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=FakeSubprocessRunner(returncode=7)),
         )
-        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
         assert exit_code == 7
 
 
@@ -3443,7 +3467,6 @@ class TestQualityKnobsTest:
     def test_threshold_prepended_to_pytest(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
         (root / "workspace.yml").write_text(
@@ -3452,10 +3475,10 @@ class TestQualityKnobsTest:
         )
 
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main([
-            "test", "--workspace-dir", str(root), "--", "-x",
-        ])
+        exit_code = cli.main(
+            ["test", "--workspace-dir", str(root), "--", "-x"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         last_args = runner.calls[-1].args
         assert "--cov-fail-under=90" in last_args
@@ -3468,13 +3491,14 @@ class TestQualityKnobsTest:
     def test_no_threshold_no_extra_flags(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
 
         runner = FakeSubprocessRunner()
-        monkeypatch.setattr(cli.subprocess, "run", runner)
-        exit_code = cli.main(["test", "--workspace-dir", str(root)])
+        exit_code = cli.main(
+            ["test", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         assert not any(
             arg.startswith("--cov-fail-under") for arg in runner.calls[-1].args
@@ -3651,16 +3675,17 @@ class TestAddDevice:
             uid = ""
 
         import chumicro_deploy
-        from chumicro_workspace import onboarding
 
         monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: _NoMarker())
         # Force "no UF2 drive on the dev box" so the diagnosis lands on
         # NO_PROBE_RESPONSE (the esptool branch) rather than UF2_BOOTLOADER.
-        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
-        exit_code = cli.main([
-            "add-device", "--workspace-dir", str(tmp_path),
-            "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
-        ])
+        exit_code = cli.main(
+            [
+                "add-device", "--workspace-dir", str(tmp_path),
+                "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
+            ],
+            env=cli.CliEnv(uf2_search_paths=[]),
+        )
         assert exit_code == 1
         captured_stderr = capsys.readouterr().err
         assert "did not return implementation" in captured_stderr
@@ -3681,14 +3706,15 @@ class TestAddDevice:
             raise OSError("could not open port /dev/cu.absent")
 
         import chumicro_deploy
-        from chumicro_workspace import onboarding
 
         monkeypatch.setattr(chumicro_deploy, "probe_device", raising_probe)
-        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
-        exit_code = cli.main([
-            "add-device", "--workspace-dir", str(tmp_path),
-            "--address", "/dev/cu.absent", "--runtime", "micropython", "lolin",
-        ])
+        exit_code = cli.main(
+            [
+                "add-device", "--workspace-dir", str(tmp_path),
+                "--address", "/dev/cu.absent", "--runtime", "micropython", "lolin",
+            ],
+            env=cli.CliEnv(uf2_search_paths=[]),
+        )
         assert exit_code == 1
         captured_stderr = capsys.readouterr().err
         assert "probe failed" in captured_stderr
@@ -3716,18 +3742,15 @@ class TestAddDevice:
             uid = ""
 
         import chumicro_deploy
-        from chumicro_workspace import onboarding
 
         monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: _NoMarker())
-        monkeypatch.setattr(
-            onboarding,
-            "_UF2_MOUNT_SEARCH_PATHS",
-            {"darwin": [uf2_mount_root], "linux": [uf2_mount_root], "win32": [uf2_mount_root]},
+        exit_code = cli.main(
+            [
+                "add-device", "--workspace-dir", str(tmp_path),
+                "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
+            ],
+            env=cli.CliEnv(uf2_search_paths=[uf2_mount_root]),
         )
-        exit_code = cli.main([
-            "add-device", "--workspace-dir", str(tmp_path),
-            "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
-        ])
         assert exit_code == 1
         captured_stderr = capsys.readouterr().err
         assert "UF2 bootloader" in captured_stderr
@@ -4205,8 +4228,6 @@ class TestAddDeviceRuntimeInference:
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
-        # Force the diagnosis branch onto SERIAL_UNREACHABLE — no UF2 drive.
-        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
 
         # detect_board_state will run its own probe — stub it so we don't
         # actually try to open the port.
@@ -4219,10 +4240,14 @@ class TestAddDeviceRuntimeInference:
             ),
         )
 
-        exit_code = cli.main([
-            "add-device", "--workspace-dir", str(tmp_path),
-            "--address", "/dev/cu.x", "feather",
-        ])
+        # Force the diagnosis branch onto SERIAL_UNREACHABLE — no UF2 drive.
+        exit_code = cli.main(
+            [
+                "add-device", "--workspace-dir", str(tmp_path),
+                "--address", "/dev/cu.x", "feather",
+            ],
+            env=cli.CliEnv(uf2_search_paths=[]),
+        )
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "auto-detect failed" in captured.err
@@ -4255,7 +4280,6 @@ class TestAddDeviceRuntimeInference:
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
-        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
 
         import chumicro_deploy
 
@@ -4268,10 +4292,13 @@ class TestAddDeviceRuntimeInference:
             chumicro_deploy, "probe_device", lambda _d: _NoMarker(),
         )
 
-        exit_code = cli.main([
-            "add-device", "--workspace-dir", str(tmp_path),
-            "--address", "/dev/cu.x", "feather",
-        ])
+        exit_code = cli.main(
+            [
+                "add-device", "--workspace-dir", str(tmp_path),
+                "--address", "/dev/cu.x", "feather",
+            ],
+            env=cli.CliEnv(uf2_search_paths=[]),
+        )
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "no runtime returned a probe marker" in captured.err
@@ -4958,12 +4985,12 @@ class TestInstallLibrariesCommand:
     def _seed_workspace_and_project(
         self, tmp_path: Path, *, runtime: str = "micropython",
         app_source: str = "import chumicro_wifi\nimport chumicro_mqtt\n",
-    ) -> tuple[Path, list[list[str]]]:
-        """Stage a workspace + project + return (root, captured_commands).
+    ) -> Path:
+        """Stage a workspace + project and return the workspace root.
 
-        The returned ``captured_commands`` list is mutated by the
-        monkey-patched ``subprocess.run`` — caller asserts on its
-        contents after invoking the CLI.
+        Tests pair this with a freshly-constructed
+        :class:`FakeSubprocessRunner` passed to ``cli.main`` via
+        ``env=cli.CliEnv(subprocess_runner=...)``.
         """
         (tmp_path / "workspace.yml").write_text('# machinery only\n')
         (tmp_path / "secrets.toml").write_text('')
@@ -4979,49 +5006,32 @@ class TestInstallLibrariesCommand:
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
         (project_dir / "app.py").write_text(app_source)
-        return tmp_path, []
-
-    def _install_capturing_subprocess(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        captured_commands: list[list[str]],
-        *,
-        return_code: int = 0,
-    ) -> None:
-        """Replace ``subprocess.run`` in cli with a capture-and-return fake."""
-        from chumicro_workspace import cli as cli_module
-
-        def fake_run(command, **_kwargs):  # noqa: ANN001, ANN003
-            captured_commands.append(list(command))
-            return subprocess.CompletedProcess(command, return_code)
-
-        monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+        return tmp_path
 
     def test_micropython_runs_one_mip_install_per_chumicro_import(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root, captured = self._seed_workspace_and_project(
-            tmp_path, runtime="micropython",
-        )
-        self._install_capturing_subprocess(monkeypatch, captured)
+        root = self._seed_workspace_and_project(tmp_path, runtime="micropython")
+        runner = FakeSubprocessRunner()
 
-        exit_code = cli.main([
-            "install-libraries", "--workspace-dir", str(root), "back-porch",
-        ])
+        exit_code = cli.main(
+            ["install-libraries", "--workspace-dir", str(root), "back-porch"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         # Two chumicro imports → two mip install commands.
-        assert len(captured) == 2
-        for command in captured:
+        assert len(runner.calls) == 2
+        for call in runner.calls:
+            command = call.args
             assert command[0] == "mpremote"
             assert "mip" in command and "install" in command
             assert "/dev/cu.fake" in command
             assert "github:ChuMicro/ChuMicro-Bundle/" in command[-1]
         # Sorted: chumicro_mqtt < chumicro_wifi alphabetically.
-        assert "chumicro_mqtt" in captured[0][-1]
-        assert "chumicro_wifi" in captured[1][-1]
+        assert "chumicro_mqtt" in runner.calls[0].args[-1]
+        assert "chumicro_wifi" in runner.calls[1].args[-1]
         out = capsys.readouterr().out
         assert "chumicro-mqtt" in out
         assert "chumicro-wifi" in out
@@ -5030,20 +5040,18 @@ class TestInstallLibrariesCommand:
     def test_circuitpython_runs_one_circup_invocation(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root, captured = self._seed_workspace_and_project(
-            tmp_path, runtime="circuitpython",
-        )
-        self._install_capturing_subprocess(monkeypatch, captured)
+        root = self._seed_workspace_and_project(tmp_path, runtime="circuitpython")
+        runner = FakeSubprocessRunner()
 
-        exit_code = cli.main([
-            "install-libraries", "--workspace-dir", str(root), "back-porch",
-        ])
+        exit_code = cli.main(
+            ["install-libraries", "--workspace-dir", str(root), "back-porch"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
         # circup takes a list — one invocation total.
-        assert len(captured) == 1
-        command = captured[0]
+        assert len(runner.calls) == 1
+        command = runner.calls[0].args
         assert command[0] == "circup"
         assert "install" in command
         # Both packages on the same circup install line.
@@ -5053,18 +5061,20 @@ class TestInstallLibrariesCommand:
     def test_dry_run_prints_commands_without_executing(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root, captured = self._seed_workspace_and_project(tmp_path)
-        self._install_capturing_subprocess(monkeypatch, captured)
+        root = self._seed_workspace_and_project(tmp_path)
+        runner = FakeSubprocessRunner()
 
-        exit_code = cli.main([
-            "install-libraries", "--workspace-dir", str(root),
-            "--dry-run", "back-porch",
-        ])
+        exit_code = cli.main(
+            [
+                "install-libraries", "--workspace-dir", str(root),
+                "--dry-run", "back-porch",
+            ],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
-        assert captured == []  # subprocess.run NOT called under --dry-run
+        assert runner.calls == []  # subprocess.run NOT called under --dry-run
         out = capsys.readouterr().out
         assert "--dry-run" in out
         assert "mpremote" in out  # commands still printed
@@ -5073,34 +5083,36 @@ class TestInstallLibrariesCommand:
     def test_experimental_swaps_bundle_repo_on_micropython(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root, captured = self._seed_workspace_and_project(tmp_path)
-        self._install_capturing_subprocess(monkeypatch, captured)
+        root = self._seed_workspace_and_project(tmp_path)
+        runner = FakeSubprocessRunner()
 
-        cli.main([
-            "install-libraries", "--workspace-dir", str(root),
-            "--experimental", "back-porch",
-        ])
-        for command in captured:
-            assert "ChuMicro-Bundle-Experimental" in command[-1]
-            assert "ChuMicro-Bundle/" not in command[-1]
+        cli.main(
+            [
+                "install-libraries", "--workspace-dir", str(root),
+                "--experimental", "back-porch",
+            ],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
+        for call in runner.calls:
+            assert "ChuMicro-Bundle-Experimental" in call.args[-1]
+            assert "ChuMicro-Bundle/" not in call.args[-1]
 
     def test_drive_path_forwarded_to_circup(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        root, captured = self._seed_workspace_and_project(
-            tmp_path, runtime="circuitpython",
-        )
-        self._install_capturing_subprocess(monkeypatch, captured)
+        root = self._seed_workspace_and_project(tmp_path, runtime="circuitpython")
+        runner = FakeSubprocessRunner()
 
-        cli.main([
-            "install-libraries", "--workspace-dir", str(root),
-            "--drive-path", "/Volumes/CIRCUITPY", "back-porch",
-        ])
-        assert captured[0] == [
+        cli.main(
+            [
+                "install-libraries", "--workspace-dir", str(root),
+                "--drive-path", "/Volumes/CIRCUITPY", "back-porch",
+            ],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
+        assert runner.calls[0].args == [
             "circup", "--path", "/Volumes/CIRCUITPY",
             "install", "chumicro-mqtt", "chumicro-wifi",
         ]
@@ -5108,35 +5120,33 @@ class TestInstallLibrariesCommand:
     def test_no_chumicro_imports_returns_zero_without_subprocess(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root, captured = self._seed_workspace_and_project(
+        root = self._seed_workspace_and_project(
             tmp_path, app_source="import os\ndef run(): pass\n",
         )
-        self._install_capturing_subprocess(monkeypatch, captured)
+        runner = FakeSubprocessRunner()
 
-        exit_code = cli.main([
-            "install-libraries", "--workspace-dir", str(root), "back-porch",
-        ])
+        exit_code = cli.main(
+            ["install-libraries", "--workspace-dir", str(root), "back-porch"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 0
-        assert captured == []
+        assert runner.calls == []
         assert "no chumicro imports found" in capsys.readouterr().out
 
     def test_subprocess_failure_propagates_exit_code(
         self,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root, captured = self._seed_workspace_and_project(tmp_path)
-        self._install_capturing_subprocess(
-            monkeypatch, captured, return_code=42,
-        )
+        root = self._seed_workspace_and_project(tmp_path)
+        runner = FakeSubprocessRunner(returncode=42)
 
-        exit_code = cli.main([
-            "install-libraries", "--workspace-dir", str(root), "back-porch",
-        ])
+        exit_code = cli.main(
+            ["install-libraries", "--workspace-dir", str(root), "back-porch"],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
         assert exit_code == 42
         assert "command failed" in capsys.readouterr().err
 
