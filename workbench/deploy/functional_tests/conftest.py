@@ -24,9 +24,7 @@ from chumicro_deploy import (
     DeviceEntry,
     load_device_registry,
 )
-from chumicro_deploy.circuitpython_transport import (
-    _circuitpy_volume_candidates,
-)
+from chumicro_deploy.circuitpy_drive import _circuitpy_volume_candidates
 from chumicro_deploy.macos_fskit import (
     MACOS_FSKIT_RECOVERY_COMMAND,
     detect_fskit_wedge,

@@ -216,10 +216,22 @@ class _QuietDispatcher(_Dispatcher):
         self._results[label] = (exit_code, captured)
 
     def finish(self) -> None:
+        has_failure = any(
+            self._results.get(label, (0, ""))[0] != 0
+            for label in self._labels
+        )
         first_failure: str | None = None
         for label in self._labels:
             exit_code, captured = self._results.get(label, (0, ""))
-            print(f"== {label} ==")
+            # When any phase failed, suppress passing-phase transcripts —
+            # otherwise the user has to scroll past N successful phases
+            # to find the actual error.  Header-only line keeps the
+            # phase visible in the log without burying the failure.
+            if has_failure and exit_code == 0:
+                print(f"== {label} (passed) ==")
+                continue
+            marker = " (failed)" if exit_code != 0 else ""
+            print(f"== {label}{marker} ==")
             if captured:
                 print(captured, end="" if captured.endswith("\n") else "\n")
             if exit_code != 0 and first_failure is None:

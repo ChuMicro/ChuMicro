@@ -1255,6 +1255,58 @@ class TestRunParallelPhases:
         assert exit_code == 1
         assert failing_label == "crashy"
 
+    def test_quiet_dispatcher_collapses_passing_phases_on_failure(self, capsys):
+        """When any phase fails, passing phases collapse to header-only.
+
+        Otherwise the user has to scroll past N successful phase transcripts
+        to find the actual error.  Each passing phase becomes a single
+        ``== <label> (passed) ==`` line; only failing phases get the full
+        transcript dump.
+        """
+        def passing(sink) -> int:
+            sink.line("noise from a passing phase that nobody wants to read")
+            return 0
+
+        def failing(sink) -> int:
+            sink.line("actual error: the thing the user needs to see")
+            return 1
+
+        run._run_parallel_phases(
+            (
+                ("phase_a", passing),
+                ("phase_b", failing),
+                ("phase_c", passing),
+            ),
+            dispatcher=run._QuietDispatcher(),
+        )
+        out = capsys.readouterr().out
+        # Failing phase shows full output + (failed) marker.
+        assert "== phase_b (failed) ==" in out
+        assert "actual error: the thing the user needs to see" in out
+        # Passing phases show only the header — their captured output is
+        # suppressed so the failing-phase transcript stays visible.
+        assert "== phase_a (passed) ==" in out
+        assert "== phase_c (passed) ==" in out
+        assert "noise from a passing phase" not in out
+
+    def test_quiet_dispatcher_keeps_full_output_when_all_pass(self, capsys):
+        """No suppression when every phase passes — the transcripts remain."""
+        def chatty(sink) -> int:
+            sink.line("useful log line")
+            return 0
+
+        run._run_parallel_phases(
+            (
+                ("phase_a", chatty),
+                ("phase_b", chatty),
+            ),
+            dispatcher=run._QuietDispatcher(),
+        )
+        out = capsys.readouterr().out
+        assert "== phase_a ==" in out
+        assert "== phase_b ==" in out
+        assert out.count("useful log line") == 2
+
 
 class TestPickDispatcher:
     """Tests for the TTY + env-var-based dispatcher selection."""
