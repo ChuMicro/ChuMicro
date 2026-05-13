@@ -258,8 +258,6 @@ class WebSocketClient(_BaseSession):
         self._url = ""
 
         self._handshake_response_parser = None
-        self._handshake_send_buffer = None
-        self._handshake_send_offset = 0
 
         self._next_auto_ping_ticks = None
 
@@ -374,7 +372,7 @@ class WebSocketClient(_BaseSession):
 
         if self._state == WebSocketState.CONNECTING:
             if self._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
-                self._send_handshake_chunk()
+                self._send_handshake_chunk(now_ms)
             elif self._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE:
                 self._receive_handshake_chunk(now_ms)
             return
@@ -395,6 +393,10 @@ class WebSocketClient(_BaseSession):
         """Clients MUST mask outbound frames (RFC 6455 §5.1)."""
         return make_mask_key()
 
+    def _on_handshake_send_complete(self, now_ms: int) -> None:  # noqa: ARG002 - hook signature
+        """Move from sending the upgrade request to reading the 101 response."""
+        self._connecting_phase = ConnectingPhase.RECEIVING_HANDSHAKE
+
     def _on_finalized(self) -> None:
         """Clear handshake + auto-ping state when transitioning to CLOSED."""
         self._handshake_deadline_ticks = None
@@ -403,30 +405,6 @@ class WebSocketClient(_BaseSession):
     # ------------------------------------------------------------------
     # Internal: handshake
     # ------------------------------------------------------------------
-
-    def _send_handshake_chunk(self) -> None:
-        """Push as much of the pending handshake bytes as the budget allows."""
-        remaining = self._handshake_send_buffer[self._handshake_send_offset:]
-        if not remaining:
-            self._connecting_phase = ConnectingPhase.RECEIVING_HANDSHAKE
-            return
-        chunk = remaining[: self._send_budget_per_tick]
-        try:
-            sent = self._socket.send(chunk)
-        except Exception as send_error:  # noqa: BLE001 — narrow below
-            if _is_eagain(send_error):
-                return
-            self._fail_with_error(
-                WebSocketHandshakeError(
-                    f"socket error during handshake send: {send_error!r}",
-                ),
-            )
-            return
-        if sent is None or sent == 0:
-            return
-        self._handshake_send_offset += sent
-        if self._handshake_send_offset >= len(self._handshake_send_buffer):
-            self._connecting_phase = ConnectingPhase.RECEIVING_HANDSHAKE
 
     def _receive_handshake_chunk(self, now_ms: int) -> None:
         """Read up to recv_budget bytes and feed the handshake parser."""

@@ -27,6 +27,7 @@ from chumicro_websockets._wire import (
     FrameParser,
     FrameParseState,
     WebSocketBackpressureError,
+    WebSocketHandshakeError,
     WebSocketProtocolError,
     WebSocketState,
     WebSocketStateError,
@@ -205,6 +206,9 @@ class _BaseSession:
         self._inbound_message_opcode = None  # TEXT or BINARY when fragmented
         self._inbound_oversized = False
 
+        self._handshake_send_buffer = None
+        self._handshake_send_offset = 0
+
         self._handshake_deadline_ticks = None
         self._close_deadline_ticks = None
         self._pending_ping_deadline_ticks = None
@@ -300,6 +304,41 @@ class _BaseSession:
 
     def _outbound_mask(self):  # pragma: no cover - abstract
         """Return the mask key for an outbound frame (or ``None``)."""
+        raise NotImplementedError
+
+    # -- handshake send (post-direction-specific setup) ------------------
+
+    def _send_handshake_chunk(self, now_ms: int) -> None:
+        """Push as much of the pending handshake bytes as the budget allows.
+
+        On completion, defers to :meth:`_on_handshake_send_complete` which
+        each subclass overrides to either advance to receiving (client) or
+        transition to OPEN (server).
+        """
+        remaining = self._handshake_send_buffer[self._handshake_send_offset:]
+        if not remaining:
+            self._on_handshake_send_complete(now_ms)
+            return
+        chunk = remaining[: self._send_budget_per_tick]
+        try:
+            sent = self._socket.send(chunk)
+        except Exception as send_error:  # noqa: BLE001 - narrow below
+            if _is_eagain(send_error):
+                return
+            self._fail_with_error(
+                WebSocketHandshakeError(
+                    f"socket error during handshake send: {send_error!r}",
+                ),
+            )
+            return
+        if sent is None or sent == 0:
+            return
+        self._handshake_send_offset += sent
+        if self._handshake_send_offset >= len(self._handshake_send_buffer):
+            self._on_handshake_send_complete(now_ms)
+
+    def _on_handshake_send_complete(self, now_ms: int) -> None:  # pragma: no cover - abstract
+        """Called once the handshake send buffer drains."""
         raise NotImplementedError
 
     # -- enqueue ----------------------------------------------------------
