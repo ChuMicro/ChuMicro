@@ -291,6 +291,7 @@ class CircuitpythonTransport:
         mode: str = "ram",
         serial_port_factory: Callable[..., object] | None = None,
         time: TimeSource | None = None,
+        drive_scanner: Callable[[], list[Path]] | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
@@ -300,6 +301,17 @@ class CircuitpythonTransport:
             serial_port_factory or self._default_serial_factory
         )
         self._time: TimeSource = time or cast(TimeSource, _time_module)
+        #: Callable returning candidate CIRCUITPY mount paths.  Defaults
+        #: to :func:`circuitpy_drive._circuitpy_volume_candidates`.
+        #: Tests inject a fake scanner to avoid touching real OS mount
+        #: tables; the chumicro_deploy.testing.isolate_from_host_filesystem
+        #: helper continues to work as a module-level fallback for tests
+        #: that don't construct their own transport.
+        self._drive_scanner: Callable[[], list[Path]] = (
+            drive_scanner
+            if drive_scanner is not None
+            else circuitpy_drive._circuitpy_volume_candidates
+        )
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
         #: True once ``stage()`` or the RAM-mode ``deploy_files`` path
@@ -572,7 +584,7 @@ class CircuitpythonTransport:
             )
         candidate_identities = [
             (candidate, *circuitpy_drive._read_boot_out_identity(candidate))
-            for candidate in circuitpy_drive._circuitpy_volume_candidates()
+            for candidate in self._drive_scanner()
         ]
         if probe.uid:
             target = probe.uid.upper()
@@ -655,7 +667,7 @@ class CircuitpythonTransport:
         surfaces the OS error in its stderr and ``flash_drive.rsync``
         wraps it as :class:`FlashDriveError`.
         """
-        candidates = circuitpy_drive._circuitpy_volume_candidates()
+        candidates = self._drive_scanner()
         if not candidates:
             raise CircuitpythonTransportError(
                 "CIRCUITPY drive not found.  Connect the board's USB "
