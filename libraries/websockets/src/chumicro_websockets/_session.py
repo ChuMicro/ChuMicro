@@ -291,7 +291,7 @@ class _BaseSession:
             raise WebSocketStateError(
                 f"close() not allowed in state {self._state}",
             )
-        self._send_close(code, reason)
+        self._send_close(code, reason, None)
 
     # -- subclass-customizable mask ---------------------------------------
 
@@ -323,7 +323,7 @@ class _BaseSession:
 
     # -- inbound drain (post-handshake) -----------------------------------
 
-    def _drain_inbound(self) -> None:
+    def _drain_inbound(self, now_ms: int) -> None:
         """Read up to recv_budget bytes and feed the frame parser."""
         chunk = self._recv_chunk(self._recv_budget_per_tick)
         if chunk is None:
@@ -335,26 +335,26 @@ class _BaseSession:
                 ),
             )
             return
-        self._feed_frame_bytes(chunk)
+        self._feed_frame_bytes(chunk, now_ms)
 
-    def _feed_frame_bytes(self, chunk: bytes) -> None:
+    def _feed_frame_bytes(self, chunk: bytes, now_ms: int) -> None:
         """Push *chunk* through :class:`FrameParser`, handling completed frames."""
         offset = 0
         while offset < len(chunk):
             try:
                 consumed = self._frame_parser.feed(chunk[offset:])
             except WebSocketProtocolError as protocol_error:
-                self._send_close(CLOSE_PROTOCOL_ERROR, str(protocol_error))
+                self._send_close(CLOSE_PROTOCOL_ERROR, str(protocol_error), now_ms)
                 self._last_error = protocol_error
                 return
             offset += consumed
             if self._frame_parser.state == FrameParseState.FRAME_READY:
-                self._dispatch_frame()
+                self._dispatch_frame(now_ms)
                 if self._state == WebSocketState.CLOSED:
                     return
                 self._frame_parser.reset()
 
-    def _dispatch_frame(self) -> None:
+    def _dispatch_frame(self, now_ms: int) -> None:
         """Route a just-completed frame through the message-level state
         machine.  Mask direction enforced per RFC 6455 §5.1.
         """
@@ -368,11 +368,11 @@ class _BaseSession:
                 message = f"{self._role_label} frame must be masked"
             else:
                 message = f"{self._role_label} frame must not be masked"
-            self._send_close(CLOSE_PROTOCOL_ERROR, message)
+            self._send_close(CLOSE_PROTOCOL_ERROR, message, now_ms)
             return
 
         if opcode == OPCODE_CLOSE:
-            self._handle_close_frame(payload)
+            self._handle_close_frame(payload, now_ms)
             return
         if opcode == OPCODE_PING:
             self._handle_ping_frame(payload)
@@ -382,15 +382,16 @@ class _BaseSession:
             return
         # Reserved opcodes (0xB-0xF) are caught upstream by FrameParser.
         # Anything that gets here is a data opcode (TEXT, BINARY, or CONT).
-        self._handle_data_frame(opcode, fin, payload)
+        self._handle_data_frame(opcode, fin, payload, now_ms)
 
-    def _handle_data_frame(self, opcode: int, fin: bool, payload: bytes) -> None:
+    def _handle_data_frame(self, opcode: int, fin: bool, payload: bytes, now_ms: int) -> None:
         """Reassemble fragmented messages, applying oversize policy."""
         if opcode == OPCODE_CONTINUATION:
             if self._inbound_message_opcode is None:
                 self._send_close(
                     CLOSE_PROTOCOL_ERROR,
                     "CONTINUATION frame with no in-progress message",
+                    now_ms,
                 )
                 return
             self._extend_inbound_buffer(payload)
@@ -400,6 +401,7 @@ class _BaseSession:
                 self._send_close(
                     CLOSE_PROTOCOL_ERROR,
                     f"new {opcode:#x} frame in the middle of a fragmented message",
+                    now_ms,
                 )
                 return
             self._inbound_message_opcode = opcode
@@ -409,7 +411,7 @@ class _BaseSession:
             return
 
         if self._inbound_oversized:
-            self._finish_oversized_message()
+            self._finish_oversized_message(now_ms)
             return
 
         message_opcode = self._inbound_message_opcode
@@ -420,7 +422,7 @@ class _BaseSession:
             try:
                 text = validate_text_payload(message_payload)
             except WebSocketProtocolError as utf8_error:
-                self._send_close(CLOSE_BAD_DATA, str(utf8_error))
+                self._send_close(CLOSE_BAD_DATA, str(utf8_error), now_ms)
                 self._last_error = utf8_error
                 return
             self.on_text(text)
@@ -437,7 +439,7 @@ class _BaseSession:
             return
         self._inbound_message_buffer.extend(payload)
 
-    def _finish_oversized_message(self) -> None:
+    def _finish_oversized_message(self, now_ms: int) -> None:
         """Apply the WhenOversized policy at message-FIN time."""
         reported_length = len(self._inbound_message_buffer)
         # The buffer is incomplete — we stopped extending once we
@@ -453,6 +455,7 @@ class _BaseSession:
             self._send_close(
                 CLOSE_TOO_BIG,
                 f"message exceeded max_message_bytes={self._max_message_bytes}",
+                now_ms,
             )
 
     def _reset_inbound_state(self) -> None:
@@ -461,13 +464,13 @@ class _BaseSession:
         self._inbound_message_opcode = None
         self._inbound_oversized = False
 
-    def _handle_close_frame(self, payload: bytes) -> None:
+    def _handle_close_frame(self, payload: bytes, now_ms: int) -> None:
         """Process inbound CLOSE — record + reciprocate or finalize."""
         try:
             code, reason = parse_close_payload(payload)
         except WebSocketProtocolError as parse_error:
             # Even close frames must be valid; respond with protocol error.
-            self._send_close(CLOSE_PROTOCOL_ERROR, str(parse_error))
+            self._send_close(CLOSE_PROTOCOL_ERROR, str(parse_error), now_ms)
             self._last_error = parse_error
             return
 
@@ -482,7 +485,7 @@ class _BaseSession:
         # Peer initiated.  Echo their close code back per RFC 6455 §5.5.1.
         self._last_close_code = code
         self._last_close_reason = reason
-        self._send_close(code if code is not None else CLOSE_NORMAL, "")
+        self._send_close(code if code is not None else CLOSE_NORMAL, "", now_ms)
         self._finalize_closed()
 
     def _handle_ping_frame(self, payload: bytes) -> None:
@@ -561,8 +564,12 @@ class _BaseSession:
 
     # -- close + finalize -------------------------------------------------
 
-    def _send_close(self, code: int, reason: str) -> None:
+    def _send_close(self, code: int, reason: str, now_ms: int | None) -> None:
         """Queue a CLOSE frame and transition to CLOSING.
+
+        *now_ms* is the runner-supplied tick when this is reached from a
+        ``handle()`` path; pass ``None`` from user-entry callers
+        (``close()``) so the deadline gets a freshly-fetched base.
 
         Idempotent — a second :meth:`_send_close` while already CLOSING
         is a no-op (peer's CLOSE may arrive after we sent ours).
@@ -584,8 +591,10 @@ class _BaseSession:
             self._last_close_code = code
             self._last_close_reason = reason
         self._state = WebSocketState.CLOSING
+        if now_ms is None:
+            now_ms = self._ticks.ticks_ms()
         self._close_deadline_ticks = self._ticks.ticks_add(
-            self._ticks.ticks_ms(),
+            now_ms,
             self._close_timeout_ms,
         )
 

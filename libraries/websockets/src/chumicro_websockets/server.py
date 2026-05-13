@@ -166,13 +166,13 @@ class Connection(_BaseSession):
 
         if self._state == WebSocketState.CONNECTING:
             if self._handshake_phase == ServerHandshakePhase.READING_REQUEST:
-                self._receive_handshake_chunk()
+                self._receive_handshake_chunk(now_ms)
             elif self._handshake_phase == ServerHandshakePhase.SENDING_RESPONSE:
-                self._send_handshake_chunk()
+                self._send_handshake_chunk(now_ms)
             return
 
         # OPEN / CLOSING — drain inbound first, then outbound.
-        self._drain_inbound()
+        self._drain_inbound(now_ms)
         self._drain_outbound()
 
     # ------------------------------------------------------------------
@@ -191,7 +191,7 @@ class Connection(_BaseSession):
     # Internal: handshake — server reads first, then sends 101
     # ------------------------------------------------------------------
 
-    def _receive_handshake_chunk(self) -> None:
+    def _receive_handshake_chunk(self, now_ms: int) -> None:  # noqa: ARG002 - now_ms reserved for handshake-deadline parity
         chunk = self._recv_chunk(self._recv_budget_per_tick)
         if chunk is None:
             return
@@ -228,12 +228,12 @@ class Connection(_BaseSession):
         self._post_handshake_carry = self._handshake_request_parser.leftover
         self._handshake_phase = ServerHandshakePhase.SENDING_RESPONSE
 
-    def _send_handshake_chunk(self) -> None:
+    def _send_handshake_chunk(self, now_ms: int) -> None:
         remaining = self._handshake_response_buffer[
             self._handshake_response_offset:
         ]
         if not remaining:
-            self._enter_open()
+            self._enter_open(now_ms)
             return
         chunk = remaining[: self._send_budget_per_tick]
         try:
@@ -251,9 +251,9 @@ class Connection(_BaseSession):
             return
         self._handshake_response_offset += sent
         if self._handshake_response_offset >= len(self._handshake_response_buffer):
-            self._enter_open()
+            self._enter_open(now_ms)
 
-    def _enter_open(self) -> None:
+    def _enter_open(self, now_ms: int) -> None:
         """Transition from sending-response to OPEN; fire user callback."""
         self._handshake_request_parser = None
         self._handshake_response_buffer = None
@@ -277,7 +277,7 @@ class Connection(_BaseSession):
         # the client may have piggybacked frame bytes after the
         # request terminator.
         if self._post_handshake_carry:
-            self._feed_frame_bytes(self._post_handshake_carry)
+            self._feed_frame_bytes(self._post_handshake_carry, now_ms)
             self._post_handshake_carry = b""
 
     def _reject_with_400(self, message: str) -> None:
