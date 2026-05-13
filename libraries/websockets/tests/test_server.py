@@ -1005,16 +1005,3 @@ class TestServerFromConfig:
         )
         assert server._accept_path == "/echo"  # noqa: SLF001
 
-    def test_non_configlike_input_raises_invalid_config_type(self) -> None:
-        """``WebSocketServer.from_config(None, ...)`` /
-        ``from_config("not-a-dict", ...)`` / ``from_config(42, ...)``
-        raise :class:`chumicro_config.InvalidConfigType` instead of
-        leaking ``AttributeError`` — mirrors the ``load_section`` shape."""
-        from chumicro_config import InvalidConfigType
-
-        listener = FakeListener()
-        for bad_input in (None, "not-a-dict", 42, ["not", "a", "dict"]):
-            with raises(InvalidConfigType):
-                WebSocketServer.from_config(
-                    bad_input, _noop_connection, listener=listener,
-                )

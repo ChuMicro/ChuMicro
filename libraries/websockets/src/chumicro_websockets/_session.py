@@ -12,8 +12,6 @@ modulo two policies:
 
 from collections import deque
 
-from chumicro_sockets import is_eagain
-
 from chumicro_websockets._wire import (
     CLOSE_BAD_DATA,
     CLOSE_INTERNAL_ERROR,
@@ -39,6 +37,11 @@ from chumicro_websockets._wire import (
     parse_close_payload,
     validate_text_payload,
 )
+
+
+def _is_eagain(error):
+    return getattr(error, "errno", None) in (11, 35)
+
 
 # ---------------------------------------------------------------------------
 # WhenOversized policy (lifted from client.py — used by both halves)
@@ -301,7 +304,7 @@ class _BaseSession:
         try:
             sent = self._socket.send(chunk)
         except Exception as send_error:  # noqa: BLE001 - narrow below
-            if is_eagain(send_error):
+            if _is_eagain(send_error):
                 return
             self._fail_with_error(
                 WebSocketHandshakeError(
@@ -533,7 +536,7 @@ class _BaseSession:
             try:
                 sent = self._socket.send(chunk)
             except Exception as send_error:  # noqa: BLE001 - narrow below
-                if is_eagain(send_error):
+                if _is_eagain(send_error):
                     return
                 self._fail_with_error(
                     WebSocketProtocolError(
@@ -568,7 +571,7 @@ class _BaseSession:
         try:
             received = self._socket.recv_into(self._recv_view[:cap], cap)
         except Exception as recv_error:  # noqa: BLE001 - narrow below
-            if is_eagain(recv_error):
+            if _is_eagain(recv_error):
                 return None
             self._fail_with_error(
                 WebSocketProtocolError(

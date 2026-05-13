@@ -22,14 +22,11 @@ owns only the server-specific bits: opening-handshake direction
 NOT mask), and the accept-loop in :class:`WebSocketServer`.
 """
 
-from chumicro_config import InvalidConfigType, is_config_like
-from chumicro_sockets import is_eagain
-from chumicro_timing import ticks as _DEFAULT_TICKS
-
 from chumicro_websockets._session import (
     WhenOversized,
     _BaseSession,
     _force_non_blocking,
+    _is_eagain,
 )
 from chumicro_websockets._wire import (
     CLOSE_NORMAL,
@@ -380,11 +377,6 @@ class WebSocketServer:
             A configured ``WebSocketServer`` ready for ``check()`` /
             ``handle()``.
         """
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"WebSocketServer.from_config requires a RuntimeConfig "
-                f"or dict, got {type(config).__name__}",
-            )
         if listener is None:
             from chumicro_sockets import tcp_listening_socket  # noqa: PLC0415
             host = config.get("websockets.server.host", "0.0.0.0")
@@ -431,7 +423,9 @@ class WebSocketServer:
         self._handshake_timeout_ms = handshake_timeout_ms
         self._close_timeout_ms = close_timeout_ms
 
-        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        if ticks is None:
+            from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
+        self._ticks = ticks
 
         self._connections: list[Connection] = []
         self._closed = False
@@ -522,7 +516,7 @@ class WebSocketServer:
             try:
                 accepted = self._listener.accept()
             except Exception as accept_error:  # noqa: BLE001 - narrow below
-                if is_eagain(accept_error):
+                if _is_eagain(accept_error):
                     return
                 # Listener errors are fatal-ish; record + close.
                 # Caller decides whether to rebuild the listener.

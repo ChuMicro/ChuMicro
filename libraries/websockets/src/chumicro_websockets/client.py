@@ -20,9 +20,6 @@ request → parse 101), outbound-mask discipline (clients MUST mask),
 and the optional auto-ping keep-alive.
 """
 
-from chumicro_config import InvalidConfigType, is_config_like
-from chumicro_timing import ticks as _DEFAULT_TICKS
-
 from chumicro_websockets._session import (
     WhenOversized,
     _BaseSession,
@@ -188,11 +185,6 @@ class WebSocketClient(_BaseSession):
         Returns:
             A configured ``WebSocketClient`` ready for ``connect()``.
         """
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"WebSocketClient.from_config requires a RuntimeConfig "
-                f"or dict, got {type(config).__name__}",
-            )
         if connection_factory is None:
             try:
                 from chumicro_websockets.sockets_factory import (  # noqa: PLC0415
@@ -231,6 +223,8 @@ class WebSocketClient(_BaseSession):
         close_timeout_ms: int = DEFAULT_CLOSE_TIMEOUT_MS,
         ticks: object | None = None,
     ) -> None:
+        if ticks is None:
+            from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
         # Init shared session state with a None socket — connect() fills it in.
         self._init_session_state(
             socket=None,
@@ -242,7 +236,7 @@ class WebSocketClient(_BaseSession):
             pong_timeout_ms=pong_timeout_ms,
             handshake_timeout_ms=handshake_timeout_ms,
             close_timeout_ms=close_timeout_ms,
-            ticks=ticks if ticks is not None else _DEFAULT_TICKS,
+            ticks=ticks,
         )
 
         self._connection_factory = connection_factory
