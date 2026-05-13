@@ -19,6 +19,7 @@ import sys
 import chumicro_sockets
 from chumicro_sockets import (
     UnsupportedSSLConfigError,
+    is_eagain,
     ssl_context_with_ca,
     ssl_context_with_cert_and_key,
     ssl_context_with_cert_and_key_paths,
@@ -563,6 +564,30 @@ class TestUnsupportedSSLConfigErrorIsAvailable:
     def test_class_is_raisable(self) -> None:
         with raises(UnsupportedSSLConfigError):
             raise UnsupportedSSLConfigError("placeholder")
+
+
+class TestIsEagain:
+    def test_errno_11_returns_true(self) -> None:
+        assert is_eagain(OSError(11, "EAGAIN")) is True
+
+    def test_errno_35_returns_true(self) -> None:
+        # macOS-host CPython on a non-blocking socket.
+        assert is_eagain(OSError(35, "EAGAIN")) is True
+
+    def test_errno_9_returns_false(self) -> None:
+        # EBADF — closed fd is a real error; consumers must re-raise.
+        assert is_eagain(OSError(9, "bad fd")) is False
+
+    def test_errno_10035_returns_false(self) -> None:
+        # Windows WSAEWOULDBLOCK — not in scope for the chumicro target set.
+        assert is_eagain(OSError(10035, "WSAEWOULDBLOCK")) is False
+
+    def test_unrelated_oserror_returns_false(self) -> None:
+        assert is_eagain(OSError(104, "ECONNRESET")) is False
+
+    def test_non_oserror_returns_false(self) -> None:
+        # Defensive: any exception missing ``errno`` falls through to False.
+        assert is_eagain(RuntimeError("not a socket error")) is False
 
 
 # TestCpListenTlsRefusesOnRp2 lives in test_factories_pytest.py — the
