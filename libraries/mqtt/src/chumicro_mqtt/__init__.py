@@ -1,30 +1,11 @@
 """Non-blocking MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython.
 
 Built on :mod:`chumicro_sockets` (TCP + TLS) and :mod:`chumicro_timing`
-(ticks).  No async, no threads — a tick-based runner contract:
-:meth:`MQTTClient.check(now_ms) -> bool` reports whether work is
-pending; :meth:`handle(now_ms)` does one tick of progress.
+(ticks).  Tick-based runner contract — :meth:`MQTTClient.check(now_ms)`
+reports whether work is pending and :meth:`handle(now_ms)` does one
+slice of progress per call.
 
-Public API::
-
-    from chumicro_timing import ticks_ms
-    from chumicro_mqtt import MQTTClient, WhenOversized
-    from chumicro_mqtt.sockets_factory import chumicro_sockets_factory
-
-    factory = chumicro_sockets_factory(
-        {"mqtt.broker.host": "broker.example.com", "mqtt.broker.port": 1883},
-        radio=wifi_radio,
-    )
-    client = MQTTClient(socket_factory=factory, client_id="my-thing")
-
-    client.on_message = lambda topic, payload: print(topic, payload)
-    client.connect()
-    while True:
-        now = ticks_ms()
-        if client.check(now):
-            client.handle(now)
-
-QoS 0 + QoS 1 are implemented; QoS 2 raises :class:`UnsupportedQoSError`.
+QoS 0 + QoS 1 supported; QoS 2 raises :class:`UnsupportedQoSError`.
 """
 
 from chumicro_mqtt._wire import (
