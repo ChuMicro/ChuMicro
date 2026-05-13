@@ -206,43 +206,11 @@ class NTPClient:
     ) -> "NTPClient":
         """Build an :class:`NTPClient` from runtime config.
 
-        Reads the ``[tool.chumicro.config]`` keys declared in
-        ``libraries/ntp/pyproject.toml`` — **all optional** with
-        sensible defaults:
-
-        * ``ntp.server`` → ``"pool.ntp.org"`` (the public NTP pool
-          maintained for unkeyed client use).
-        * ``ntp.port`` → 123 (NTP standard).
-        * ``ntp.timeout_ms`` → 5000.
-
-        No key is required, so an empty ``config`` dict is valid
-        input — the public pool is the documented fallback.
-
-        When *socket* or *socket_factory* is supplied, the caller
-        owns the connection.  When neither is supplied, an auto-built
-        factory creates a UDP socket via
-        ``chumicro_ntp.sockets_factory.chumicro_sockets_factory(radio=radio)``
-        and sets it non-blocking before passing it to the client.
-
-        Args:
-            config: A :class:`chumicro_config.RuntimeConfig` (typically
-                ``chumicro_config.config``) or plain flat dict.  Keys
-                read are flat dotted strings (``"ntp.server"``).
-            radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
-                (auto-detected); ignored on MP and CPython.  Pass explicitly
-                for multi-radio prototypes or CP boards without a ``wifi``
-                module.  Ignored when *socket* or *socket_factory* is passed
-                directly.
-            socket: Pre-built UDP socket.  When supplied, the
-                auto-built factory is skipped — caller owns the
-                connection.
-            socket_factory: Custom ``callable() -> UDPSocket``.  When
-                supplied, called once during ``from_config`` to
-                produce the socket.  Useful for custom socket options
-                or non-default radio wiring.
-
-        Returns:
-            A configured ``NTPClient`` ready for ``query()``.
+        Reads optional ``ntp.server`` / ``ntp.port`` / ``ntp.timeout_ms``
+        — empty ``config`` is valid input (defaults to ``pool.ntp.org``
+        on port 123).  A *socket* or *socket_factory* override bypasses
+        the auto-built UDP factory; the auto path sets the socket
+        non-blocking before passing it to the client.
         """
         if socket is None:
             if socket_factory is None:
