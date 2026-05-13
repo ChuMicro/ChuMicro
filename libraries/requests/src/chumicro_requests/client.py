@@ -25,10 +25,6 @@ redirects, and chunked encoding are future work.
 
 import json
 
-from chumicro_config import InvalidConfigType, is_config_like
-from chumicro_sockets import is_eagain
-from chumicro_timing import ticks as _DEFAULT_TICKS
-
 from chumicro_requests._wire import (
     DEFAULT_BODY_BUFFER_SIZE,
     DEFAULT_MAX_BODY_BYTES,
@@ -49,6 +45,11 @@ from chumicro_requests._wire import (
     parse_url,
     resolve_redirect_url,
 )
+
+
+def _is_eagain(error):
+    return getattr(error, "errno", None) in (11, 35)
+
 
 # ---------------------------------------------------------------------------
 # WhenOversized policy
@@ -422,11 +423,6 @@ class HttpClient:
         Returns:
             A configured ``HttpClient`` ready for ``get()`` / ``post()``.
         """
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"HttpClient.from_config requires a RuntimeConfig or "
-                f"dict, got {type(config).__name__}",
-            )
         if connection_factory is None:
             try:
                 from chumicro_requests.sockets_factory import (  # noqa: PLC0415 - lazy
@@ -535,7 +531,9 @@ class HttpClient:
         self._default_timeout_ms = default_timeout_ms
         self._user_agent = user_agent or "chumicro-requests/0.1"
 
-        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        if ticks is None:
+            from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
+        self._ticks = ticks
 
         self._default_max_redirects = default_max_redirects
 
@@ -830,7 +828,7 @@ class HttpClient:
             try:
                 sent = self._socket.send(view)
             except OSError as socket_error:
-                if is_eagain(socket_error):
+                if _is_eagain(socket_error):
                     return
                 raise
             if sent <= 0:
@@ -857,7 +855,7 @@ class HttpClient:
             try:
                 got = self._socket.recv_into(self._recv_view[:capacity], capacity)
             except OSError as socket_error:
-                if is_eagain(socket_error):
+                if _is_eagain(socket_error):
                     return
                 raise
             if got == 0:
