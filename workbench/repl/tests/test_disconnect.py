@@ -57,7 +57,7 @@ class TestTailDisconnect:
             seconds=10.0,
             output=output,
             time=FakeTime(),
-            port_factory=lambda *_args, **_kwargs: port,
+            port_factory=port,
             reconnect_seconds=0.0,
         )
         assert result is ExitCode.DISCONNECTED
@@ -164,7 +164,7 @@ class TestReplSessionDisconnect:
         session = ReplSession(
             "/dev/cu.fake",
             time=FakeTime(),
-            port_factory=lambda *_args, **_kwargs: port,
+            port_factory=port,
         )
         with pytest.raises(ReplSessionDisconnected) as excinfo:
             with session:
@@ -183,7 +183,7 @@ class TestReplSessionDisconnect:
         session = ReplSession(
             "/dev/cu.fake",
             time=FakeTime(),
-            port_factory=lambda *_args, **_kwargs: port,
+            port_factory=port,
         )
         with session:
             with pytest.raises(ReplSessionDisconnected):
@@ -199,7 +199,7 @@ class TestReplSessionDisconnect:
         session = ReplSession(
             "/dev/cu.fake",
             time=FakeTime(),
-            port_factory=lambda *_args, **_kwargs: port,
+            port_factory=port,
         )
         with session:
             with pytest.raises(ReplSessionDisconnected):
@@ -215,7 +215,7 @@ class TestReplSessionDisconnect:
         session = ReplSession(
             "/dev/cu.fake",
             time=FakeTime(),
-            port_factory=lambda *_args, **_kwargs: port,
+            port_factory=port,
         )
         with pytest.raises(ReplSessionDisconnected):
             with session:
@@ -396,7 +396,7 @@ class TestInteractiveReconnectDefaults:
             input_stream=scripted,
             output=output,
             time=FakeTime(),
-            port_factory=lambda *_args, **_kwargs: first_port,
+            port_factory=first_port,
             reconnect_seconds=0.0,
         )
         assert result == DISCONNECTED_EXIT_CODE
