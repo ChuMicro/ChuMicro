@@ -27,7 +27,6 @@ from chumicro_websockets._session import (
     WhenOversized,
     _BaseSession,
     _force_non_blocking,
-    _is_eagain,
     _no_callback,
 )
 from chumicro_websockets._wire import (
@@ -44,7 +43,6 @@ from chumicro_websockets._wire import (
     WebSocketHandshakeError,
     WebSocketState,
     WebSocketStateError,
-    WebSocketTimeoutError,
     derive_accept_key,
     encode_client_handshake,
     make_mask_key,
