@@ -407,13 +407,7 @@ def encode_response(response: Response) -> bytes:
     headers = CaseInsensitiveDict()
     headers["Content-Length"] = str(len(response.body))
     headers["Connection"] = "close"
-    if response.headers is not None:
-        if isinstance(response.headers, (dict, CaseInsensitiveDict)):
-            iterable = response.headers.items()
-        else:
-            iterable = response.headers
-        for name, value in iterable:
-            headers[name] = value
+    _merge_headers(headers, response.headers)
     parts = [
         f"HTTP/1.1 {response.status_code} {response.reason}\r\n".encode("ascii"),
     ]
@@ -970,13 +964,7 @@ def build_response(
     merged_headers = CaseInsensitiveDict()
     if default_content_type is not None:
         merged_headers["Content-Type"] = default_content_type
-    if headers is not None:
-        if isinstance(headers, (dict, CaseInsensitiveDict)):
-            iterable = headers.items()
-        else:
-            iterable = headers
-        for name, value in iterable:
-            merged_headers[name] = value
+    _merge_headers(merged_headers, headers)
     reason = _REASONS.get(status, "Unknown")
     return Response(
         status_code=status,
@@ -984,6 +972,21 @@ def build_response(
         headers=merged_headers,
         body=encoded_body,
     )
+
+
+def _merge_headers(target, source):
+    """Copy *source* header pairs into *target* :class:`CaseInsensitiveDict`.
+
+    *source* may be ``None``, a ``dict``, a :class:`CaseInsensitiveDict`,
+    or any iterable of ``(name, value)`` pairs.  Existing keys on
+    *target* are overwritten.
+    """
+    if source is None:
+        return
+    if isinstance(source, (dict, CaseInsensitiveDict)):
+        source = source.items()
+    for name, value in source:
+        target[name] = value
 
 
 def _encode_response_body(body, json_body, text, html):
