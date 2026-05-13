@@ -289,7 +289,11 @@ def _extract_port_path_from_error(error: BaseException) -> str | None:
     return match.group(0) if match else None
 
 
-def _full_command_for_pid(pid: int) -> str | None:
+def _full_command_for_pid(
+    pid: int,
+    *,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+) -> str | None:
     """Return the full command line for *pid* via ``ps``, or ``None``.
 
     ``ps -p <pid> -o command=`` is portable across macOS and Linux.
@@ -297,7 +301,7 @@ def _full_command_for_pid(pid: int) -> str | None:
     and ps), unsupported platforms, and missing ``ps`` binary.
     """
     try:
-        result = subprocess.run(  # noqa: S603 — args fully controlled
+        result = runner(  # noqa: S603 — args fully controlled
             ["ps", "-p", str(pid), "-o", "command="],
             capture_output=True, text=True, check=False, timeout=2,
         )
@@ -308,7 +312,11 @@ def _full_command_for_pid(pid: int) -> str | None:
     return result.stdout.strip() or None
 
 
-def diagnose_port_holders(port_path: str) -> list[PortHolder]:
+def diagnose_port_holders(
+    port_path: str,
+    *,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+) -> list[PortHolder]:
     """Return processes currently holding *port_path* open.
 
     Uses ``lsof -F pcn <port>`` on POSIX — output format is one
@@ -332,7 +340,7 @@ def diagnose_port_holders(port_path: str) -> list[PortHolder]:
     if sys.platform.startswith("win"):
         return []
     try:
-        result = subprocess.run(  # noqa: S603 — args fully controlled
+        result = runner(  # noqa: S603 — args fully controlled
             ["lsof", "-F", "pcn", port_path],
             capture_output=True, text=True, check=False, timeout=2,
         )
@@ -350,7 +358,7 @@ def diagnose_port_holders(port_path: str) -> list[PortHolder]:
             except ValueError:
                 current_pid = None
         elif tag == "c" and current_pid is not None:
-            full_command = _full_command_for_pid(current_pid)
+            full_command = _full_command_for_pid(current_pid, runner=runner)
             holders.append(
                 PortHolder(
                     pid=current_pid,

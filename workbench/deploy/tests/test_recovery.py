@@ -1190,20 +1190,17 @@ class TestDiagnosePortHolders:
         monkeypatch.setattr(recovery.sys, "platform", "win32")
         assert recovery.diagnose_port_holders("/dev/cu.fake") == []
 
-    def test_returns_empty_when_lsof_missing(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_returns_empty_when_lsof_missing(self) -> None:
         from chumicro_deploy import recovery  # noqa: PLC0415
 
         def fake_run(*_args, **_kwargs):
             raise FileNotFoundError("lsof: command not found")
 
-        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
-        assert recovery.diagnose_port_holders("/dev/cu.fake") == []
+        assert recovery.diagnose_port_holders(
+            "/dev/cu.fake", runner=fake_run,
+        ) == []
 
-    def test_returns_empty_when_lsof_returns_nothing(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_returns_empty_when_lsof_returns_nothing(self) -> None:
         """Free port → lsof exits non-zero with empty stdout."""
         from chumicro_deploy import recovery  # noqa: PLC0415
 
@@ -1214,12 +1211,11 @@ class TestDiagnosePortHolders:
                 stderr = ""
             return _Result()
 
-        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
-        assert recovery.diagnose_port_holders("/dev/cu.fake") == []
+        assert recovery.diagnose_port_holders(
+            "/dev/cu.fake", runner=fake_run,
+        ) == []
 
-    def test_parses_single_holder(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_parses_single_holder(self) -> None:
         """Realistic single-holder output gets parsed into a PortHolder."""
         from chumicro_deploy import recovery  # noqa: PLC0415
 
@@ -1236,16 +1232,15 @@ class TestDiagnosePortHolders:
             result.stdout = stdout  # type: ignore[attr-defined]
             return result
 
-        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
-        holders = recovery.diagnose_port_holders("/dev/cu.usbmodem112401")
+        holders = recovery.diagnose_port_holders(
+            "/dev/cu.usbmodem112401", runner=fake_run,
+        )
         assert len(holders) == 1
         assert holders[0].pid == 11421
         # ps fallout — full command line preferred over lsof's short ``c``.
         assert "run.py deploy" in holders[0].command  # noqa: CHU006 — assertion against the workspace shim command name as data
 
-    def test_parses_multiple_holders(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_parses_multiple_holders(self) -> None:
         """Multiple processes on the same port (rare but possible)."""
         from chumicro_deploy import recovery  # noqa: PLC0415
 
@@ -1270,15 +1265,12 @@ class TestDiagnosePortHolders:
                 _Result.stdout = ps_responses.get(pid, "") + "\n"
             return _Result()
 
-        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
-        holders = recovery.diagnose_port_holders("/dev/cu.x")
+        holders = recovery.diagnose_port_holders("/dev/cu.x", runner=fake_run)
         assert {holder.pid for holder in holders} == {111, 222}
         assert any("Mu" in holder.command for holder in holders)
         assert any("mpremote" in holder.command for holder in holders)
 
-    def test_falls_back_to_lsof_command_when_ps_fails(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_falls_back_to_lsof_command_when_ps_fails(self) -> None:
         """When ``ps`` returns non-zero, use lsof's short ``c`` field."""
         from chumicro_deploy import recovery  # noqa: PLC0415
 
@@ -1294,8 +1286,7 @@ class TestDiagnosePortHolders:
                 _Result.stdout = ""
             return _Result()
 
-        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
-        holders = recovery.diagnose_port_holders("/dev/cu.x")
+        holders = recovery.diagnose_port_holders("/dev/cu.x", runner=fake_run)
         assert len(holders) == 1
         assert holders[0].pid == 999
         assert holders[0].command == "Python"  # lsof short field
