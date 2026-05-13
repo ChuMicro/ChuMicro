@@ -15,6 +15,15 @@ from chumicro_deploy import DeviceEntry
 from chumicro_pytest_device import backends
 from chumicro_pytest_device import plugin as pytest_device
 from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
+from chumicro_pytest_device.testing import (
+    FakeSession,
+    HotPathTransport,
+    hot_path_device,
+    make_prepare_item,
+    make_run_file_item,
+    make_test_item,
+    prime_transport_cache,
+)
 
 
 class TestParseTestFunctions:
@@ -528,7 +537,7 @@ class TestLoadFallbackDevice:
         """Should skip with setup instructions when devices.yml is missing."""
         with pytest.raises(pytest.skip.Exception, match="No devices.yml found"):
             pytest_device._load_fallback_device(
-                _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
+                FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
             )
 
     def test_skips_when_no_devices_configured(self, tmp_path) -> None:
@@ -544,7 +553,7 @@ class TestLoadFallbackDevice:
         )
         with pytest.raises(pytest.skip.Exception, match="No devices registered"):
             pytest_device._load_fallback_device(
-                _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
+                FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
             )
 
     def test_returns_target_device(self, tmp_path) -> None:
@@ -563,7 +572,7 @@ class TestLoadFallbackDevice:
             "    address: /dev/ttyUSB1\n"
         )
         device = pytest_device._load_fallback_device(
-            _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
+            FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
         )
         assert device.identifier == "board2"
 
@@ -873,132 +882,6 @@ _TWO_TESTS_OUTPUT = (
 )
 
 
-class _HotPathTransport:
-    """Focused FakeTransport for the pytest_device hot path.
-
-    Supports deploy modes the pytest plugin cares about (``ram``,
-    ``mount``, ``flash``) plus execute_scripts for chunked RAM-mode
-    execution, recover(), and soft_reset().
-    """
-
-    def __init__(
-        self,
-        *,
-        mode: str = "ram",
-        outputs: list[str] | None = None,
-        connect_raises: Exception | None = None,
-        execute_raises: Exception | None = None,
-        recover_raises: Exception | None = None,
-    ) -> None:
-        self.mode = mode
-        self._outputs = list(outputs or [])
-        self._connect_raises = connect_raises
-        self._execute_raises = execute_raises
-        self._recover_raises = recover_raises
-        self.calls: list[tuple[str, tuple]] = []
-        self.staged_sources: list[tuple[str, str]] = []
-
-    def connect(self) -> None:
-        self.calls.append(("connect", ()))
-        if self._connect_raises is not None:
-            raise self._connect_raises
-
-    def stage(
-        self,
-        source_dirs,
-        test_files,
-        harness_source,
-        *,
-        extra_modules=None,
-        extra_files=None,
-    ) -> None:
-        self.calls.append(
-            (
-                "stage",
-                (source_dirs, test_files, harness_source, extra_modules, extra_files),
-            ),
-        )
-
-    def execute(self, bootstrap_script: str) -> str:
-        self.calls.append(("execute", (bootstrap_script,)))
-        if self._execute_raises is not None:
-            raise self._execute_raises
-        return self._outputs.pop(0) if self._outputs else ""
-
-    def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
-        self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
-        if self._execute_raises is not None:
-            raise self._execute_raises
-        return self._outputs.pop(0) if self._outputs else ""
-
-    def inline_script_budget_bytes(self) -> int:
-        return 32 * 1024
-
-    def soft_reset(self) -> None:
-        self.calls.append(("soft_reset", ()))
-
-    def reset(self) -> None:
-        self.calls.append(("reset", ()))
-
-    def recover(self) -> None:
-        self.calls.append(("recover", ()))
-        if self._recover_raises is not None:
-            raise self._recover_raises
-
-    def disconnect(self) -> None:
-        self.calls.append(("disconnect", ()))
-
-
-class _FakeConfig:
-    """Minimal pytest.Config stand-in that returns None for every option."""
-
-    def __init__(self, rootpath: Path) -> None:
-        # ``pytest.Config.rootpath`` is what the plugin uses to derive
-        # ``support/test_harness/src`` and ``libraries/`` paths.  Always
-        # required — pinning a default to a hard-coded workspace root
-        # silently couples tests to live filesystem state.
-        self.rootpath = rootpath
-        # ``Config.stash`` is the canonical place for plugin data.
-        # ``set_runtime_config`` writes to it; the plugin reads from it
-        # at stage time to encode the runtime-config payload.  Real
-        # pytest provides a ``Stash`` instance here; a plain dict
-        # exposes the same ``__setitem__`` / ``.get(...)`` surface the
-        # plugin uses.
-        self.stash: dict = {}
-
-    def getoption(self, name: str, default=None):  # noqa: D401, ANN001
-        return default
-
-
-class _FakeSession:
-    """Minimal pytest.Session stand-in that hosts a _TransportCache."""
-
-    def __init__(
-        self, cache: pytest_device._TransportCache, *, rootpath: Path,
-    ) -> None:
-        self._device_transport_cache = cache
-        self._backend = pytest_device.DeviceBackend()
-        self.config = _FakeConfig(rootpath=rootpath)
-
-
-def _hot_path_device(runtime: str = "circuitpython") -> DeviceEntry:
-    return DeviceEntry(
-        identifier=f"{runtime}-1",
-        runtime=runtime,
-        address=f"/dev/ttyUSB-{runtime}",
-        deploy_mode="ram",
-    )
-
-
-def _prime_cache_with_transport(
-    cache: pytest_device._TransportCache,
-    device_entry: DeviceEntry,
-    transport: _HotPathTransport,
-) -> None:
-    """Install *transport* in *cache* without hitting build_transport_for_entry."""
-    cache._transports[device_entry.identifier] = transport
-
-
 @pytest.fixture
 def hot_path_cache():
     """Return a fresh _TransportCache for hot-path tests."""
@@ -1013,50 +896,7 @@ def hot_path_session(hot_path_cache, tmp_path):
     reads ``session.config.rootpath`` resolves to a synthetic dir
     rather than the contributor's real workspace.
     """
-    return _FakeSession(hot_path_cache, rootpath=tmp_path)
-
-
-def _make_prepare_item(session, device_entry, test_file) -> pytest_device.DevicePrepareItem:
-    """Instantiate a DevicePrepareItem bypassing pytest's collect machinery."""
-    # DevicePrepareItem extends pytest.Item; Item.__init__ needs a parent.
-    # Using Item.from_parent is brittle in-unit-test; construct via
-    # __new__ and set the attributes DeviceRuntimeItem.__init__ sets.
-    item = pytest_device.DevicePrepareItem.__new__(pytest_device.DevicePrepareItem)
-    item.session = session
-    item.test_file = test_file
-    item.target_device = device_entry
-    item.library_dir = test_file.parent.parent
-    item._library_name = item.library_dir.name
-    item._reported_duration = None
-    item._reported_test_total_duration = None
-    return item
-
-
-def _make_run_file_item(session, device_entry, test_file) -> pytest_device.DeviceRunFileItem:
-    item = pytest_device.DeviceRunFileItem.__new__(pytest_device.DeviceRunFileItem)
-    item.session = session
-    item.test_file = test_file
-    item.target_device = device_entry
-    item.library_dir = test_file.parent.parent
-    item._library_name = item.library_dir.name
-    item._reported_duration = None
-    item._reported_test_total_duration = None
-    return item
-
-
-def _make_test_item(
-    session, device_entry, test_file, function_name: str,
-) -> pytest_device.DeviceTestItem:
-    item = pytest_device.DeviceTestItem.__new__(pytest_device.DeviceTestItem)
-    item.session = session
-    item.test_file = test_file
-    item.target_device = device_entry
-    item.library_dir = test_file.parent.parent
-    item._library_name = item.library_dir.name
-    item._function_name = function_name
-    item._reported_duration = None
-    item._reported_test_total_duration = None
-    return item
+    return FakeSession(hot_path_cache, rootpath=tmp_path)
 
 
 def _make_functional_test_file(tmp_path: Path, library: str) -> Path:
@@ -1078,9 +918,9 @@ class TestEnsurePrepared:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """Flash mode bulk-stages on first use per library; same-library re-entry is a no-op."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="flash")
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="flash")
+        prime_transport_cache(hot_path_cache, device, transport)
 
         bulk_calls: list[tuple] = []
         monkeypatch.setattr(
@@ -1091,7 +931,7 @@ class TestEnsurePrepared:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_prepare_item(hot_path_session, device, test_file)
+        item = make_prepare_item(hot_path_session, device, test_file)
         item._ensure_prepared(device)
         item._ensure_prepared(device)  # second call should not re-stage.
 
@@ -1103,9 +943,9 @@ class TestEnsurePrepared:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """Flash mode re-stages when the next test belongs to a different library."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="flash")
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="flash")
+        prime_transport_cache(hot_path_cache, device, transport)
 
         bulk_calls: list[tuple] = []
         monkeypatch.setattr(
@@ -1117,8 +957,8 @@ class TestEnsurePrepared:
 
         alpha_test = _make_functional_test_file(tmp_path, "alpha")
         beta_test = _make_functional_test_file(tmp_path, "beta")
-        alpha_item = _make_prepare_item(hot_path_session, device, alpha_test)
-        beta_item = _make_prepare_item(hot_path_session, device, beta_test)
+        alpha_item = make_prepare_item(hot_path_session, device, alpha_test)
+        beta_item = make_prepare_item(hot_path_session, device, beta_test)
 
         alpha_item._ensure_prepared(device)
         beta_item._ensure_prepared(device)
@@ -1133,9 +973,9 @@ class TestEnsurePrepared:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """RAM mode stages per (device, library, file); changing file triggers re-stage."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="ram")
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="ram")
+        prime_transport_cache(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1146,11 +986,11 @@ class TestEnsurePrepared:
         test_file_b = tmp_path / "alpha" / "functional_tests" / "test_y.py"
         test_file_b.write_text("def test_other(): pass\n")
 
-        item_a = _make_prepare_item(hot_path_session, device, test_file_a)
+        item_a = make_prepare_item(hot_path_session, device, test_file_a)
         item_a._ensure_prepared(device)
         item_a._ensure_prepared(device)  # same file — no re-stage.
 
-        item_b = _make_prepare_item(hot_path_session, device, test_file_b)
+        item_b = make_prepare_item(hot_path_session, device, test_file_b)
         item_b._ensure_prepared(device)  # different file — re-stages.
 
         stage_calls = [call for call in transport.calls if call[0] == "stage"]
@@ -1160,7 +1000,7 @@ class TestEnsurePrepared:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """A failed get_transport fails the item and caches the error."""
-        device = _hot_path_device()
+        device = hot_path_device()
 
         def raise_on_create(device_entry, deploy_mode=None):
             raise RuntimeError("device not reachable")
@@ -1168,7 +1008,7 @@ class TestEnsurePrepared:
         monkeypatch.setattr(pytest_device, "build_transport_for_entry", raise_on_create)
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_prepare_item(hot_path_session, device, test_file)
+        item = make_prepare_item(hot_path_session, device, test_file)
 
         with pytest.raises(pytest.fail.Exception, match="Transport connection failed"):
             item._ensure_prepared(device)
@@ -1189,9 +1029,9 @@ class TestEnsureBatchResult:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """First call runs the batch, parses output, and caches the result."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        prime_transport_cache(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1199,7 +1039,7 @@ class TestEnsureBatchResult:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_run_file_item(hot_path_session, device, test_file)
+        item = make_run_file_item(hot_path_session, device, test_file)
         result, raw = item._ensure_batch_result(device)
 
         assert raw == _PASS_OUTPUT
@@ -1217,9 +1057,9 @@ class TestEnsureBatchResult:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """Second call looks up the cached result instead of re-running."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        prime_transport_cache(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1227,7 +1067,7 @@ class TestEnsureBatchResult:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_run_file_item(hot_path_session, device, test_file)
+        item = make_run_file_item(hot_path_session, device, test_file)
         item._ensure_batch_result(device)
 
         # Transport had one outputs entry — second call must NOT pop again.
@@ -1244,12 +1084,12 @@ class TestEnsureBatchResult:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """Execute failures trigger recover() and cache the error message."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(
+        device = hot_path_device()
+        transport = HotPathTransport(
             mode="ram",
             execute_raises=RuntimeError("timeout"),
         )
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        prime_transport_cache(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1257,7 +1097,7 @@ class TestEnsureBatchResult:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_run_file_item(hot_path_session, device, test_file)
+        item = make_run_file_item(hot_path_session, device, test_file)
 
         with pytest.raises(pytest.fail.Exception, match="Device execution failed"):
             item._ensure_batch_result(device)
@@ -1281,13 +1121,13 @@ class TestEnsureBatchResult:
         The next file's _ensure_prepared will reconnect from scratch
         instead of hitting a cached transport stuck mid-raw-REPL.
         """
-        device = _hot_path_device()
-        transport = _HotPathTransport(
+        device = hot_path_device()
+        transport = HotPathTransport(
             mode="ram",
             execute_raises=RuntimeError("timeout"),
             recover_raises=RuntimeError("board wedged"),
         )
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        prime_transport_cache(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1295,7 +1135,7 @@ class TestEnsureBatchResult:
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_run_file_item(hot_path_session, device, test_file)
+        item = make_run_file_item(hot_path_session, device, test_file)
 
         with pytest.raises(pytest.fail.Exception, match="Device execution failed"):
             item._ensure_batch_result(device)
@@ -1317,16 +1157,16 @@ class TestDevicePrepareItemRuntest:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """Prepare item succeeds after staging."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="flash")
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="flash")
+        prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "_bulk_stage_for_device",
             lambda session, device_entry, transport, *, library_filter=None: None,
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_prepare_item(hot_path_session, device, test_file)
+        item = make_prepare_item(hot_path_session, device, test_file)
         item.runtest()  # must not raise
 
 
@@ -1337,16 +1177,16 @@ class TestDeviceRunFileItemRuntest:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """A successful batch with tests lets the run-file item pass."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_run_file_item(hot_path_session, device, test_file)
+        item = make_run_file_item(hot_path_session, device, test_file)
         item.runtest()
 
         # The reported total duration is set from parsed test durations.
@@ -1356,14 +1196,14 @@ class TestDeviceRunFileItemRuntest:
         self, tmp_path, hot_path_session, hot_path_cache,
     ) -> None:
         """A pre-cached (None, error) batch result fails the item with the error."""
-        device = _hot_path_device()
+        device = hot_path_device()
         test_file = _make_functional_test_file(tmp_path, "alpha")
         hot_path_cache.cache_batch_result(
             (device.identifier, "alpha", test_file.name),
             None, "Previous boot failure",
         )
 
-        item = _make_run_file_item(hot_path_session, device, test_file)
+        item = make_run_file_item(hot_path_session, device, test_file)
         with pytest.raises(pytest.fail.Exception, match="Previous boot failure"):
             item.runtest()
 
@@ -1375,16 +1215,16 @@ class TestDeviceTestItemRuntest:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """test_one in a passing batch → item passes."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_test_item(
+        item = make_test_item(
             hot_path_session, device, test_file, "test_one",
         )
         item.runtest()  # must not raise.
@@ -1394,16 +1234,16 @@ class TestDeviceTestItemRuntest:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """test_two failed in the harness output → item fails with the raw output."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
+        prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_test_item(
+        item = make_test_item(
             hot_path_session, device, test_file, "test_two",
         )
         with pytest.raises(pytest.fail.Exception, match="Device test FAIL"):
@@ -1413,16 +1253,16 @@ class TestDeviceTestItemRuntest:
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
         """If the function name isn't in the parsed output, fail with a clear error."""
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item = _make_test_item(
+        item = make_test_item(
             hot_path_session, device, test_file, "test_nonexistent",
         )
         with pytest.raises(pytest.fail.Exception, match="not found in device output"):
@@ -1436,22 +1276,22 @@ class TestDeviceTestItemRuntest:
         The batched-execution optimization: 7 tests from the same file
         run as ONE on-device invocation, not 7.
         """
-        device = _hot_path_device()
-        transport = _HotPathTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
-        _prime_cache_with_transport(hot_path_cache, device, transport)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
+        prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
-        item_one = _make_test_item(
+        item_one = make_test_item(
             hot_path_session, device, test_file, "test_one",
         )
         item_one.runtest()  # pass
 
         # Second test item reuses the cached result.
-        item_two = _make_test_item(
+        item_two = make_test_item(
             hot_path_session, device, test_file, "test_two",
         )
         with pytest.raises(pytest.fail.Exception):
