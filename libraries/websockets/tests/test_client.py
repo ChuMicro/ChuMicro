@@ -814,6 +814,80 @@ class TestOversize:
         assert oversized
         assert client.state == WebSocketState.OPEN
 
+    def test_drop_with_event_next_message_arrives_intact(self):
+        """After an oversized message is dropped, the framing stream stays
+        aligned and the very next message is delivered to ``on_text``.
+
+        Drains a 3-frame oversized assembly followed immediately by a
+        single normal frame — all queued on the socket at once so any
+        leftover byte misalignment in the parser would corrupt the next
+        message's header.
+        """
+        client, socket, clock, _ = _make_client(
+            max_message_bytes=10,
+            when_oversized=WhenOversized.DROP_WITH_EVENT,
+        )
+        received = []
+        oversized = []
+        client.on_text = lambda text: received.append(text)
+        client.on_oversized = lambda reported_length: oversized.append(reported_length)
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        socket.feed_inbound(
+            # Oversized assembly: 5 + 5 + 5 = 15 bytes, cap is 10.
+            encode_frame(OPCODE_TEXT, b"AAAAA", fin=False, mask=None)
+            + encode_frame(OPCODE_CONTINUATION, b"BBBBB", fin=False, mask=None)
+            + encode_frame(OPCODE_CONTINUATION, b"CCCCC", fin=True, mask=None)
+            # Next message — should arrive intact if drain + framing held.
+            + encode_frame(OPCODE_TEXT, b"hello", fin=True, mask=None),
+        )
+        for _index in range(6):
+            client.handle(clock.ticks_ms())
+        assert oversized, "on_oversized never fired"
+        assert client.state == WebSocketState.OPEN, (
+            f"expected OPEN, got {client.state}"
+        )
+        assert received == ["hello"], (
+            f"next message lost or corrupted; got {received!r}"
+        )
+
+    def test_drop_with_event_drain_across_recv_chunk_boundaries(self):
+        """Force the oversize payload + next message to span multiple
+        ``recv_into`` calls by overrunning the 512-byte recv buffer.
+
+        Real TCP delivers bytes in arbitrary chunks; the parser must
+        hold state correctly across recvs so that draining a partial
+        frame and starting the next one falls on the right header byte.
+        """
+        client, socket, clock, _ = _make_client(
+            max_message_bytes=400,
+            when_oversized=WhenOversized.DROP_WITH_EVENT,
+        )
+        received = []
+        oversized = []
+        client.on_text = lambda text: received.append(text)
+        client.on_oversized = lambda reported_length: oversized.append(reported_length)
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        # 3 × 200 B fragmented payload = 600 B assembled (> 400 B cap),
+        # plus a 50 B normal message.  Wire bytes total > 660 B which
+        # exceeds the 512 B recv buffer → split across ≥ 2 recvs.
+        socket.feed_inbound(
+            encode_frame(OPCODE_TEXT, b"A" * 200, fin=False, mask=None)
+            + encode_frame(OPCODE_CONTINUATION, b"B" * 200, fin=False, mask=None)
+            + encode_frame(OPCODE_CONTINUATION, b"C" * 200, fin=True, mask=None)
+            + encode_frame(OPCODE_TEXT, b"after-oversize", fin=True, mask=None),
+        )
+        for _index in range(8):
+            client.handle(clock.ticks_ms())
+        assert oversized, "on_oversized never fired"
+        assert client.state == WebSocketState.OPEN, (
+            f"expected OPEN, got {client.state}"
+        )
+        assert received == ["after-oversize"], (
+            f"next message lost or corrupted; got {received!r}"
+        )
+
     def test_disconnect_policy_closes_immediately(self):
         client, socket, clock, _ = _make_client(
             max_message_bytes=10,
