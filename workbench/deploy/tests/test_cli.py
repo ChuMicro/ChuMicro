@@ -154,7 +154,6 @@ class TestDevicesFileWiring:
 
     def test_probe_reads_device_from_devices_file(
         self,
-        monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
@@ -170,12 +169,14 @@ class TestDevicesFileWiring:
                 ),
             )
 
-        monkeypatch.setattr("chumicro_deploy.cli.probe_device", fake_probe)
-        exit_code = main([
-            "probe",
-            "--devices-file", str(yaml_path),
-            "--device", "mp-board",
-        ])
+        exit_code = main(
+            [
+                "probe",
+                "--devices-file", str(yaml_path),
+                "--device", "mp-board",
+            ],
+            env=CliEnv(probe_device_fn=fake_probe),
+        )
         assert exit_code == 0
         device = captured["device"]
         assert device.transport == "micropython"
@@ -183,23 +184,22 @@ class TestDevicesFileWiring:
 
     def test_probe_with_single_runtime_default_omits_device_id(
         self,
-        monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
         yaml_path = self._write_devices_yml(tmp_path)
 
-        monkeypatch.setattr(
-            "chumicro_deploy.cli.probe_device",
-            lambda device: DeviceInfo(
+        def fake_probe(device):  # noqa: ANN001
+            return DeviceInfo(
                 implementation=DeviceImplementation(
                     name="micropython", version="1.28", machine="x",
                 ),
-            ),
-        )
+            )
+
         # No --device flag — defaults.micropython is the sole default.
-        exit_code = main([
-            "probe", "--devices-file", str(yaml_path),
-        ])
+        exit_code = main(
+            ["probe", "--devices-file", str(yaml_path)],
+            env=CliEnv(probe_device_fn=fake_probe),
+        )
         assert exit_code == 0
 
 
