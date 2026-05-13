@@ -290,57 +290,12 @@ class MQTTClient:
     ) -> "MQTTClient":
         """Build an :class:`MQTTClient` from runtime config.
 
-        Reads the ``[tool.chumicro.config]`` keys declared in
-        ``libraries/mqtt/pyproject.toml``:
-
-        * **Required** (when the auto-built socket factory is used):
-          ``mqtt.broker.host``, ``mqtt.broker.port``.  No fallback —
-          the library refuses to silently dial a third-party broker
-          on the user's behalf.
-        * **Optional** with sensible defaults: ``mqtt.client_id``
-          (``"chumicro-mqtt"``), ``mqtt.keep_alive_seconds`` (60 s),
-          ``mqtt.username`` / ``mqtt.password`` (anonymous CONNECT).
-
-        When *socket* or *socket_factory* is supplied, the broker
-        host/port keys are not consulted — the caller owns the
-        connection.
-
-        Args:
-            config: A :class:`chumicro_config.RuntimeConfig` (typically
-                ``chumicro_config.config``) or plain flat dict.  Keys
-                read are flat dotted strings (``"mqtt.broker.host"``).
-            radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
-                (auto-detected); ignored on MP and CPython.  Pass explicitly
-                for multi-radio prototypes or CP boards without a ``wifi``
-                module.  Ignored when *socket* or *socket_factory* is passed.
-            ssl_context: Pre-built ``ssl.SSLContext`` for ``mqtts://`` brokers
-                (typically port 8883).  When supplied, the auto-built factory
-                opens the connection via ``chumicro_sockets.tls_client_socket``
-                instead of ``tcp_client_socket``.  Build via
-                ``chumicro_sockets.ssl_context_with_ca`` for the CA-pinned
-                shape production brokers (AWS IoT, HiveMQ Cloud) require.
-                Ignored when *socket* or *socket_factory* is passed.
-            socket: Pre-built :class:`TCPClientSocket`.  When supplied,
-                the auto-built factory is skipped — caller owns the
-                connection.
-            socket_factory: Custom ``callable() -> TCPClientSocket``.
-                When supplied, the auto-built factory is skipped.
-                Useful for non-default radio wiring or hand-built TLS
-                contexts the *ssl_context* shortcut doesn't cover.
-
-        Raises:
-            chumicro_config.MissingConfigKey: Neither *socket* nor
-                *socket_factory* was supplied and ``mqtt.broker.host``
-                or ``mqtt.broker.port`` is absent from *config*.
-
-        Returns:
-            A configured ``MQTTClient`` ready for ``connect()``.
-
-        Notes:
-            App-level concerns (publish topics, subscription topics,
-            sensor identifiers, etc.) are not part of the library
-            manifest — they're application config the example /
-            project reads directly via ``config["…"]``.
+        Reads ``mqtt.broker.host`` / ``mqtt.broker.port`` (required when
+        no *socket* / *socket_factory* override), plus optional
+        ``mqtt.client_id`` / ``mqtt.keep_alive_seconds`` / ``mqtt.username``
+        / ``mqtt.password``.  A *socket* or *socket_factory* override
+        bypasses the auto-built factory entirely.  Missing broker keys
+        raise :class:`chumicro_config.MissingConfigKey`.
         """
         if socket is None and socket_factory is None:
             # Lazy import so users who pass their own socket / socket_factory
