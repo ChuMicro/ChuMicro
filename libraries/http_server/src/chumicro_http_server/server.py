@@ -289,7 +289,7 @@ class _Connection:
         ):
             capacity = min(scratch_size, budget - consumed)
             try:
-                got = self._socket.recv_into(self._recv_view[:capacity], capacity)
+                got = self._socket.recv_into(self._recv_view, capacity)
             except OSError as socket_error:
                 if _is_eagain(socket_error):
                     return
@@ -465,91 +465,14 @@ class HttpServer:
     ) -> "HttpServer":
         """Build an :class:`HttpServer` from runtime config.
 
-        Reads the ``[tool.chumicro.config]`` keys declared in
-        ``libraries/http_server/pyproject.toml`` — **all optional**
-        with sensible defaults:
-
-        * ``http_server.bind_host`` → ``"0.0.0.0"`` (listen on all
-          interfaces).
-        * ``http_server.bind_port`` → 8080.
-        * ``http_server.max_connections`` →
-          :data:`DEFAULT_MAX_CONNECTIONS`.
-        * ``http_server.request_timeout_ms`` →
-          :data:`DEFAULT_REQUEST_TIMEOUT_MS`.
-        * ``http_server.max_request_body_bytes`` →
-          :data:`DEFAULT_MAX_REQUEST_BODY_BYTES`.
-        * ``http_server.tls.cert_path`` → ``None`` (plain TCP listener).
-        * ``http_server.tls.key_path`` → ``None``.
-
-        TLS resolution (in priority order):
-
-        1. *listener_factory* passed explicitly → caller owns the
-           listener; TLS / non-TLS is whatever they built.
-        2. *ssl_context* passed explicitly → routes through
-           ``chumicro_sockets.tls_listening_socket(host, port,
-           context=ssl_context, radio=radio)``.  Config TLS paths
-           ignored.
-        3. Both ``http_server.tls.cert_path`` and
-           ``http_server.tls.key_path`` set in config → builds an
-           ``ssl.SSLContext`` via
-           ``chumicro_sockets.ssl_context_with_cert_and_key_paths(...)``
-           and uses ``tls_listening_socket``.
-        4. Otherwise → plain ``tcp_listening_socket(host, port,
-           radio=radio)``.
-
-        Like ntp / requests / websockets ``from_config``, no key is
-        required: the auto-built listener_factory falls back to
-        ``0.0.0.0:8080`` when nothing is configured.  TLS is opt-in
-        and requires *both* cert + key paths — a single half tells
-        the factory the user intended TLS but mis-configured it,
-        which surfaces as ``MissingConfigKey``.
-
-        Args:
-            config: A :class:`chumicro_config.RuntimeConfig` (typically
-                ``chumicro_config.config``) or plain flat dict.  Keys
-                read are flat dotted strings.
-            handler: Optional fallback callable
-                ``(Request) -> Response`` for paths that don't match
-                any route.  Forwarded verbatim to ``__init__``.
-            radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
-                (auto-detected); ignored on MP and CPython.  Pass explicitly
-                for multi-radio prototypes or CP boards without a ``wifi``
-                module.  Ignored when *listener_factory* is passed.
-            ssl_context: Pre-built ``ssl.SSLContext`` for TLS — when
-                supplied, the auto-built factory uses it (and the
-                config TLS paths are ignored).  Ignored when
-                *listener_factory* is passed.
-            listener_factory: Custom ``() -> listening_socket`` callable.
-                The returned object must expose:
-
-                * ``accept() -> (socket, address)`` — returns the next
-                  accepted client (a TCP-shaped object with
-                  ``recv_into`` / ``send`` / ``close`` /
-                  ``setblocking``) plus the peer's address.  Raises
-                  ``OSError(EAGAIN | EWOULDBLOCK)`` when no
-                  connection is pending.
-                * ``close() -> None``
-                * ``setblocking(flag: bool) -> None`` — best-effort;
-                  absence is tolerated.
-
-                :func:`chumicro_sockets_factory` is one valid
-                producer.  Anything matching the shape works —
-                stdlib ``socket.socket`` bound + listening after
-                ``setblocking(False)``, an upstream-library
-                wrapper, a test fake.  When supplied, the
-                auto-built factory is skipped — caller owns the
-                bind / listen behaviour, including TLS context.
-
-        Raises:
-            chumicro_config.MissingConfigKey: Exactly one of
-                ``http_server.tls.cert_path`` /
-                ``http_server.tls.key_path`` is set (the other is
-                missing).  Both-or-neither is the only valid TLS
-                config shape.
-
-        Returns:
-            A configured ``HttpServer`` ready for ``check()`` /
-            ``handle()``.
+        Reads optional ``http_server.*`` keys (``bind_host`` /
+        ``bind_port`` / ``max_connections`` / ``request_timeout_ms`` /
+        ``max_request_body_bytes`` / ``tls.cert_path`` /
+        ``tls.key_path``) from *config*.  All defaults apply when
+        absent; a custom *listener_factory* bypasses the auto-build
+        entirely, *ssl_context* opts into TLS without config paths,
+        and exactly one half of the TLS pair raises
+        :class:`chumicro_config.MissingConfigKey`.
         """
         if listener_factory is None:
             # Lazy import so users who pass their own listener_factory
