@@ -1,6 +1,6 @@
 # Workstream: Test Ecosystem Ergonomics
 
-Status: **open** — audited 2026-05-12, Phase 1 shipped 2026-05-12 (commit `115510e6`).  Phases 2-5 pending.
+Status: **open** — audited 2026-05-12, Phases 1-2 shipped 2026-05-12 (commits `115510e6`, `b472f976`).  Phases 3-5 pending.
 
 ## Purpose
 
@@ -99,16 +99,22 @@ Result: 740 test LOC removed, 218 LOC added in `testing.py`, net -168 LOC.  `chu
 
 The structural win is centralized fakes and a visible public surface for downstream workspace-template authors — LOC reduction is a side effect, not the headline.
 
-### Phase 2 — `workbench/pytest-device/src/chumicro_pytest_device/testing.py`
+### Phase 2 — `workbench/pytest-device/src/chumicro_pytest_device/testing.py` (shipped 2026-05-12)
 
-Create the missing module.  Park:
+Public module created at `workbench/pytest-device/src/chumicro_pytest_device/testing.py` exporting:
 
-- `FakePrepareItem`, `FakeRunFileItem`, `FakeTestItem` — pytest-item builders.
-- `make_test_item(name, **overrides)` — factory.
-- `FakeDiagnosticSession` — replaces inline `_stub_session`.
-- `stub_config(**overrides)` — replaces `_stub_config`.
+- `HotPathTransport` — focused FakeTransport for the plugin hot path (`connect` / `stage` / `execute` / `execute_scripts` / `recover` / `soft_reset` / `inline_script_budget_bytes` / `disconnect` with per-method raise hooks).
+- `FakeConfig` — `pytest.Config` stand-in with `rootpath` + `stash` + `getoption`.
+- `FakeSession` — `pytest.Session` stand-in carrying `_TransportCache` + `DeviceBackend` + `FakeConfig`.
+- `hot_path_device(runtime)` — `DeviceEntry` builder with sensible defaults.
+- `prime_transport_cache(cache, device, transport)` — install a pre-built transport bypassing `build_transport_for_entry`.
+- `make_prepare_item` / `make_run_file_item` / `make_test_item` — pytest-item builders via `__new__` + attribute assignment (bypasses `Item.from_parent`'s parent-required brittleness in unit tests).
 
-Adopt across `workbench/pytest-device/tests/`.  Bump `chumicro-pytest-device` VERSION.  Estimated reclamation: ~300–500 test LOC.
+Adoption in `tests/test_plugin.py`: 15+ `HotPathTransport` sites, 15+ `hot_path_device` sites, 12+ `prime_transport_cache` sites, 18+ `make_*_item` sites, 3 `FakeSession` sites.
+
+Skipped on scope: the two `_stub_config` inline class methods inside `TestPytestCollectionModifyItems` / `TestPytestCollectionModifyItemsFeatures`, and the `_stub_session` helper specific to feature-marker tests.  These are class-internal helpers tightly coupled to `runtime_config` plumbing — a future Phase 2.5 cleanup, not core Phase 2 scope.
+
+Result: 159 test LOC removed, 261 LOC added in `testing.py`.  `chumicro_pytest_device.testing` at 86 % isolated coverage (matches `chumicro_deploy.testing`'s pattern — testing.py modules aren't gated by overall package coverage).  `chumicro-pytest-device` VERSION 0.8.0 → 0.9.0 (minor, new public surface).  Full 188-test pytest-device suite passes; ruff + chumicro-checks clean.
 
 ### Phase 3 — Production-code injection refactor (largest monkeypatch reduction)
 
