@@ -18,6 +18,7 @@ except ImportError:
         return value
 
 from chumicro_config import InvalidConfigType, is_config_like
+from chumicro_sockets import is_eagain
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 #: Seconds between the NTP epoch (1900-01-01T00:00:00Z) and the
@@ -381,10 +382,8 @@ class NTPClient:
                 self._recv_buffer,
             )
         except OSError as recv_error:
-            errno = recv_error.args[0] if recv_error.args else None
-            if errno in (11, 35, 10035):
-                # EAGAIN / EWOULDBLOCK / WSAEWOULDBLOCK — no data
-                # this tick.  Check the timeout instead.
+            if is_eagain(recv_error):
+                # No data this tick.  Check the timeout instead.
                 self._check_timeout(result, now_ms)
                 return
             # Any other socket error — fail the exchange.
