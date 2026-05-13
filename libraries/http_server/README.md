@@ -67,6 +67,8 @@ while True:
 | `parse_query` / `split_target` | URL helpers. |
 | `ServerError` + subclasses | Typed exception hierarchy, independent of `chumicro_requests` so the server can ship without the client library. |
 
+Each request is served on a fresh accepted socket and `Connection: close` is added to every response — HTTP/1.1 keep-alive and connection pooling are not supported.  Chunked request bodies are not supported either; use `Content-Length`.
+
 ## Where this fits
 
 Depends on [`chumicro-sockets`](../sockets/) (TCP listener) and [`chumicro-timing`](../timing/) (ticks).  Pairs with [`chumicro-websockets`](../websockets/) for combined HTTP + WS deployments.  Self-contained otherwise — the shared HTTP/1.1 primitives (case-insensitive header dict, charset parsing) are inlined locally, so a server-only board never ships [`chumicro-requests`](../requests/).

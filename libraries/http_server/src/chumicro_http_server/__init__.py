@@ -59,8 +59,11 @@ where ``chumicro_sockets.tls_listening_socket`` refuses up-front
 with ``UnsupportedSSLConfigError`` (use ESP32-family or
 MicroPython on the same Pi Pico W for HTTPS).
 
-v1 non-goals: WebSockets, sessions / cookies / auth helpers,
-multipart upload, sub-app mounting, async handlers.
+Not supported: HTTP/1.1 keep-alive or connection pooling (each
+request is served on a fresh accepted socket and ``Connection: close``
+is added to every response); chunked request bodies (use
+``Content-Length`` instead); WebSockets, sessions / cookies / auth
+helpers, multipart upload, sub-app mounting, async handlers.
 """
 
 from chumicro_http_server._wire import (

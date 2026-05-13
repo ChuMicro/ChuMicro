@@ -399,10 +399,10 @@ class _Connection:
 def encode_response(response: Response) -> bytes:
     """Serialise a :class:`Response` into wire bytes.
 
-    Adds ``Content-Length`` (if the caller didn't), defaults
-    ``Connection: close`` (no keep-alive in v1, mirrors
-    chumicro-requests' policy), and emits the status line + headers
-    + body in one bytes blob.
+    Adds ``Content-Length`` (if the caller didn't) and ``Connection:
+    close`` — keep-alive is not supported, so every response closes
+    its connection — then emits the status line + headers + body in
+    one bytes blob.
     """
     headers = CaseInsensitiveDict()
     headers["Content-Length"] = str(len(response.body))
