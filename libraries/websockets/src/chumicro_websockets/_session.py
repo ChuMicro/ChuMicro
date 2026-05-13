@@ -363,9 +363,10 @@ class _BaseSession:
     def _feed_frame_bytes(self, chunk: bytes, now_ms: int) -> None:
         """Push *chunk* through :class:`FrameParser`, handling completed frames."""
         offset = 0
-        while offset < len(chunk):
+        chunk_length = len(chunk)
+        while offset < chunk_length:
             try:
-                consumed = self._frame_parser.feed(chunk[offset:])
+                consumed = self._frame_parser.feed(chunk, offset)
             except WebSocketProtocolError as protocol_error:
                 self._send_close(CLOSE_PROTOCOL_ERROR, str(protocol_error), now_ms)
                 self._last_error = protocol_error
