@@ -799,10 +799,10 @@ class HttpServer:
                     request.path_params[param_name] = param_value
                     return handler_func(request)
 
-        # 3. 405: path matches but method doesn't.
-        if self._path_matches_any_method(path):
-            allowed = sorted(self._allowed_methods_for(path))
-            return _build_method_not_allowed_response(allowed)
+        # 3. 405: path matches at least one route on a different method.
+        allowed = self._allowed_methods_for(path)
+        if allowed:
+            return _build_method_not_allowed_response(sorted(allowed))
 
         # 4. Fallback handler.
         if self._fallback_handler is not None:
@@ -811,22 +811,8 @@ class HttpServer:
         # 5. 404.
         return _build_error_response(404, "not found")
 
-    def _path_matches_any_method(self, path: str) -> bool:
-        if any(route_path == path for _, route_path in self._explicit_routes):
-            return True
-        last_slash = path.rfind("/")
-        if last_slash == -1:
-            return False
-        prefix = path[:last_slash + 1]
-        param_value = path[last_slash + 1:]
-        if not param_value:
-            return False
-        return any(
-            entry_prefix == prefix
-            for _, entry_prefix, _, _ in self._pattern_routes
-        )
-
     def _allowed_methods_for(self, path: str) -> set:
+        """Return every method registered for *path*, across both tables."""
         allowed = set()
         for entry_method, entry_path in self._explicit_routes:
             if entry_path == path:
