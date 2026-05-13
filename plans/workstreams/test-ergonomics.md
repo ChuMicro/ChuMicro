@@ -1,6 +1,6 @@
 # Workstream: Test Ecosystem Ergonomics
 
-Status: **open** — audited 2026-05-12, Phases 1-2 shipped 2026-05-12 (commits `115510e6`, `b472f976`).  Phases 3-5 pending.
+Status: **open** — audited 2026-05-12, Phases 1-3 shipped 2026-05-12 (commits `115510e6`, `b472f976`, `6d66ae1c`, `6111acd0`).  Phases 4-5 pending.
 
 ## Purpose
 
@@ -116,16 +116,19 @@ Skipped on scope: the two `_stub_config` inline class methods inside `TestPytest
 
 Result: 159 test LOC removed, 261 LOC added in `testing.py`.  `chumicro_pytest_device.testing` at 86 % isolated coverage (matches `chumicro_deploy.testing`'s pattern — testing.py modules aren't gated by overall package coverage).  `chumicro-pytest-device` VERSION 0.8.0 → 0.9.0 (minor, new public surface).  Full 188-test pytest-device suite passes; ruff + chumicro-checks clean.
 
-### Phase 3 — Production-code injection refactor (largest monkeypatch reduction)
+### Phase 3 — CLI env-dataclass injection seam (shipped 2026-05-12)
 
-Convert `monkeypatch.setattr` targets to constructor-injected callables on production code:
+The workstream's original framing — "Deployer.subprocess_runner / drive_scanner / flash_firmware_fn + OnboardingConfig.uf2_search_paths" — assumed missing injection seams that mostly already exist (`detect_board_state` already accepts `uf2_search_paths` / `probe_function` / `drive_scanner`; `CircuitpythonTransport` already accepts `serial_port_factory` / `time`; there's no `Deployer` class to add fields to).  The actual gap was that tests reach production code via `cli.main([...])` end-to-end paths, and `argparse`-style dispatch can't easily thread kwargs.  Real monkeypatch site count: ~45, not 250-350.
 
-- `Deployer.subprocess_runner: Callable[..., CompletedProcess] | None = None` — defaults to `subprocess.run`.  Removes 15+ patches.
-- `Deployer.drive_scanner: Callable[[], list[Path]] | None = None` — defaults to `_circuitpy_volume_candidates`.  Removes 13 patches.  Already fake-exposed in `chumicro_deploy.testing.isolate_from_host_filesystem`; the missing piece is production-code accepting the injection.
-- `CLI.flash_firmware_fn` — same shape, removes 4 patches.
-- `OnboardingConfig.uf2_search_paths: tuple[Path, ...]` — move module-level `_UF2_MOUNT_SEARCH_PATHS` constant to an injectable config dataclass.  Removes 22 patches.
+Shipped shape:
 
-Each lands as its own commit with VERSION bump on the touched workbench package.  Estimated monkeypatch reduction: ~250–350 (one-third of total).
+- **`chumicro_workspace.cli.CliEnv`** (`6d66ae1c`, workspace 0.25.0 → 0.26.0) — frozen dataclass with `uf2_search_paths`, `subprocess_runner`, `flash_firmware_fn`.  `cli.main(argv, *, env=None)` stashes env on `args._env`; sub-commands read it.  Dropped 22 monkeypatches across 22 test sites — 5 `_UF2_MOUNT_SEARCH_PATHS`, 14 `cli.subprocess.run`, 3 `chumicro_deploy.flash_firmware`.  The `TestDoctorFixFskitWedge._patch_environment` helper now returns a `FakeSubprocessRunner` directly; `TestInstallLibraries._install_capturing_subprocess` deleted entirely (callers construct their own runner).  `_fix_fskit_wedge()` gains a `subprocess_runner` param so the CLI threads env through.
+
+- **`chumicro_deploy.cli.CliEnv`** (`6111acd0`, deploy 0.16.0 → 0.17.0) — mirrors the workspace shape: `flash_firmware_fn`, same `main(argv, *, env=None)` + `args._env` pattern.  Dropped 4 monkeypatches on `chumicro_deploy.cli.flash_firmware`.
+
+Drive-scanner injection deferred: the workstream framed it as "Deployer.drive_scanner" with 13 patches; only 1 direct `monkeypatch.setattr` site remained after Phase 1 + the existing `chumicro_deploy.testing.isolate_from_host_filesystem` adoption.  Not worth the API surface today.
+
+Result: 26 monkeypatches dropped (~half of the realistic-scope target after recounting; 6× lower than the workstream's original 250-350 estimate).  Both CLIs gain a public, discoverable injection seam — a small step toward "explicit injection" over "monkeypatch on private module surface."  Full 752 workspace + 894 deploy tests pass.
 
 ### Phase 4 — `RunnerHarness` in `libraries/runner/src/chumicro_runner/testing.py`
 
