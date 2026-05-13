@@ -382,7 +382,7 @@ class WebSocketClient(_BaseSession):
 
         # OPEN / CLOSING — drain inbound first (peer may have sent
         # CLOSE we need to acknowledge), then outbound, then auto-ping.
-        self._drain_inbound()
+        self._drain_inbound(now_ms)
         self._drain_outbound()
 
         if self._state == WebSocketState.OPEN:
@@ -459,7 +459,7 @@ class WebSocketClient(_BaseSession):
             # handshake terminator — drain whatever the parser
             # carried over before yielding the tick.
             if self._post_handshake_carry:
-                self._feed_frame_bytes(self._post_handshake_carry)
+                self._feed_frame_bytes(self._post_handshake_carry, now_ms)
                 self._post_handshake_carry = b""
 
     # ------------------------------------------------------------------
