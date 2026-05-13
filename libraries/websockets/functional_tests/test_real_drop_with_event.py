@@ -79,8 +79,8 @@ def _push_raw_to_client(connection, frame_bytes: bytes) -> None:
     """Send pre-encoded frame bytes through the server-side socket.
 
     Bypasses ``send_text`` / ``send_binary`` so the test can emit a
-    fragmented sequence — the public outbound API is always
-    ``fin=True`` single-frame per Decision 0045.
+    fragmented sequence — the public outbound API always sends
+    ``fin=True`` single frames.
     """
     offset = 0
     while offset < len(frame_bytes):
