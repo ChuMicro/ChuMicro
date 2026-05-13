@@ -16,6 +16,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from .circuitpython_transport import CircuitpythonTransportError
@@ -183,7 +185,8 @@ def _cmd_probe(args: argparse.Namespace) -> int:
 
 def _cmd_flash_firmware(args: argparse.Namespace) -> int:
     """Download + apply firmware to a connected board."""
-    flash_firmware(
+    flash_fn = args._env.flash_firmware_fn or flash_firmware
+    flash_fn(
         args.url,
         _device_from_args(args),
         reflash_method=args.method,
@@ -450,7 +453,36 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+@dataclass(frozen=True)
+class CliEnv:
+    """Test-injectable seams for :func:`main`.
+
+    Production callers don't need to construct this — :func:`main`
+    defaults to a no-override :class:`CliEnv` that uses production
+    behavior everywhere.  Tests pass a custom env to swap one seam
+    for the duration of the call without monkeypatching module
+    internals; production code reads the values off ``args._env``
+    inside CLI sub-commands.
+
+    Attributes:
+        flash_firmware_fn: Override the firmware-flash callable.
+            ``None`` means use the module-level
+            :func:`chumicro_deploy.firmware.flash_firmware`.  Tests
+            pass a recording stub to assert on the URL / device /
+            kwargs the CLI forwards.
+    """
+
+    flash_firmware_fn: Callable[..., None] | None = None
+
+
+_DEFAULT_ENV = CliEnv()
+
+
+def main(
+    argv: list[str] | None = None,
+    *,
+    env: CliEnv | None = None,
+) -> int:
     """CLI entry point.  Returns the process exit code.
 
     Wraps the subcommand dispatch in a friendly-error catch so users
@@ -459,9 +491,16 @@ def main(argv: list[str] | None = None) -> int:
     coaching block from :class:`NonInteractiveDeployer`) still prints
     before the catch fires.  Unrecognized exceptions propagate — a
     traceback there is a bug, not a UX defect.
+
+    Args:
+        argv: Command-line arguments (``None`` reads from ``sys.argv``).
+        env: Test-injectable seams.  Defaults to a no-override
+            :class:`CliEnv` that uses production behavior everywhere.
+            Stashed on ``args._env`` so sub-commands can read it.
     """
     parser = build_parser()
     args = parser.parse_args(argv)
+    args._env = env if env is not None else _DEFAULT_ENV
     try:
         return args.func(args)
     except _FRIENDLY_ERRORS as error:

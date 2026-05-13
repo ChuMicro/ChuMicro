@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from chumicro_deploy import DeviceImplementation, DeviceInfo
-from chumicro_deploy.cli import build_parser, main
+from chumicro_deploy.cli import CliEnv, build_parser, main
 
 
 class TestParser:
@@ -204,9 +204,7 @@ class TestDevicesFileWiring:
 
 
 class TestCommandFlashFirmware:
-    def test_forwards_flags_to_flash_firmware(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_forwards_flags_to_flash_firmware(self) -> None:
         captured: dict[str, Any] = {}
 
         def fake_flash(url, device, **kwargs):  # noqa: ANN001
@@ -214,17 +212,18 @@ class TestCommandFlashFirmware:
             captured["device"] = device
             captured.update(kwargs)
 
-        monkeypatch.setattr("chumicro_deploy.cli.flash_firmware", fake_flash)
-
-        exit_code = main([
-            "flash-firmware",
-            "--transport", "micropython",
-            "--address", "/dev/cu.usbmodem01",
-            "--url", "https://example/fw.bin",
-            "--method", "esptool",
-            "--offset", "0x1000",
-            "--non-interactive",
-        ])
+        exit_code = main(
+            [
+                "flash-firmware",
+                "--transport", "micropython",
+                "--address", "/dev/cu.usbmodem01",
+                "--url", "https://example/fw.bin",
+                "--method", "esptool",
+                "--offset", "0x1000",
+                "--non-interactive",
+            ],
+            env=CliEnv(flash_firmware_fn=fake_flash),
+        )
         assert exit_code == 0
         assert captured["url"] == "https://example/fw.bin"
         assert captured["reflash_method"] == "esptool"
@@ -232,31 +231,28 @@ class TestCommandFlashFirmware:
         assert captured["flash_offset"] == "0x1000"
         assert captured["interactive"] is False
 
-    def test_no_erase_forwards_false(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_no_erase_forwards_false(self) -> None:
         captured: dict[str, Any] = {}
 
         def fake_flash(url, device, **kwargs):  # noqa: ANN001
             captured.update(kwargs)
 
-        monkeypatch.setattr("chumicro_deploy.cli.flash_firmware", fake_flash)
-
-        exit_code = main([
-            "flash-firmware",
-            "--transport", "micropython",
-            "--address", "/dev/cu.usbmodem01",
-            "--url", "https://example/fw.bin",
-            "--method", "esptool",
-            "--no-erase",
-            "--non-interactive",
-        ])
+        exit_code = main(
+            [
+                "flash-firmware",
+                "--transport", "micropython",
+                "--address", "/dev/cu.usbmodem01",
+                "--url", "https://example/fw.bin",
+                "--method", "esptool",
+                "--no-erase",
+                "--non-interactive",
+            ],
+            env=CliEnv(flash_firmware_fn=fake_flash),
+        )
         assert exit_code == 0
         assert captured["erase_flash"] is False
 
-    def test_method_auto_inferred_from_url(
-        self, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_method_auto_inferred_from_url(self) -> None:
         # No --method passed; flash_firmware() does the inference
         # internally.  The CLI just forwards reflash_method=None.
         captured: dict[str, Any] = {}
@@ -264,15 +260,16 @@ class TestCommandFlashFirmware:
         def fake_flash(url, device, **kwargs):  # noqa: ANN001
             captured.update(kwargs)
 
-        monkeypatch.setattr("chumicro_deploy.cli.flash_firmware", fake_flash)
-
-        exit_code = main([
-            "flash-firmware",
-            "--transport", "circuitpython",
-            "--address", "/dev/cu.usbmodem01",
-            "--url", "https://example/fw.uf2",
-            "--non-interactive",
-        ])
+        exit_code = main(
+            [
+                "flash-firmware",
+                "--transport", "circuitpython",
+                "--address", "/dev/cu.usbmodem01",
+                "--url", "https://example/fw.uf2",
+                "--non-interactive",
+            ],
+            env=CliEnv(flash_firmware_fn=fake_flash),
+        )
         assert exit_code == 0
         assert captured["reflash_method"] is None
 
@@ -619,7 +616,6 @@ class TestFriendlyErrors:
 
     def test_flash_firmware_error_surfaces_cleanly(
         self,
-        monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         from chumicro_deploy import FlashFirmwareError
@@ -627,15 +623,17 @@ class TestFriendlyErrors:
         def fake_flash(*_args, **_kwargs):  # noqa: ANN002, ANN003
             raise FlashFirmwareError("download failed: 404")
 
-        monkeypatch.setattr("chumicro_deploy.cli.flash_firmware", fake_flash)
-        exit_code = main([
-            "flash-firmware",
-            "--transport", "circuitpython",
-            "--address", "/dev/x",
-            "--url", "http://example/none.uf2",
-            "--method", "uf2",
-            "--non-interactive",
-        ])
+        exit_code = main(
+            [
+                "flash-firmware",
+                "--transport", "circuitpython",
+                "--address", "/dev/x",
+                "--url", "http://example/none.uf2",
+                "--method", "uf2",
+                "--non-interactive",
+            ],
+            env=CliEnv(flash_firmware_fn=fake_flash),
+        )
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "error: download failed: 404" in captured.err
