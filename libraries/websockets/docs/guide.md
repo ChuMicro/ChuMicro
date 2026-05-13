@@ -107,7 +107,7 @@ Same shape as the client's callbacks; semantically identical.
 
 ## Bring your own transport
 
-`WebSocketClient` and `WebSocketServer` don't care which library produces their sockets.  The factory you pass — `connection_factory` on the client, the listener-and-connection factories on the server — returns any object exposing the four-method TCP contract:
+`WebSocketClient` and `WebSocketServer` don't care which library produces their sockets.  The `connection_factory` you pass to the client (and the `listener` you hand to the server) return any object exposing the four-method TCP contract:
 
 | Method | Contract |
 |---|---|

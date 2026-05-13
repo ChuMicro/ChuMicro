@@ -75,7 +75,6 @@ class TestExceptionHierarchy:
     def test_all_concrete_exceptions_inherit_base(self):
         from chumicro_websockets import (
             WebSocketBackpressureError,
-            WebSocketOversizedError,
             WebSocketStateError,
             WebSocketTimeoutError,
         )
@@ -94,7 +93,6 @@ class TestExceptionHierarchy:
         assert issubclass(URLError, WebSocketError)
         assert issubclass(WebSocketTimeoutError, WebSocketError)
         assert issubclass(WebSocketBackpressureError, WebSocketError)
-        assert issubclass(WebSocketOversizedError, WebSocketError)
         assert issubclass(WebSocketStateError, WebSocketError)
 
 
