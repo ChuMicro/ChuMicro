@@ -172,17 +172,6 @@ class Response:
     * :meth:`json` — body parsed as JSON into Python objects.
     """
 
-    __slots__ = (
-        "_encoding_override",
-        "body",
-        "headers",
-        "http_version",
-        "oversized_dropped",
-        "reason",
-        "status_code",
-        "url",
-    )
-
     def __init__(
         self,
         *,
@@ -260,8 +249,6 @@ class RequestHandle:
     instead of raised — useful when the caller wants to branch
     rather than catch.
     """
-
-    __slots__ = ("_done", "_error", "_response", "_url")
 
     def __init__(self, *, url):
         self._url = url
