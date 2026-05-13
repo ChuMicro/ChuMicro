@@ -1,6 +1,6 @@
 """Test fakes for the device transport layer.
 
-Provides three fakes for host-side tests of ``chumicro-deploy``:
+Provides fakes for host-side tests of ``chumicro-deploy``:
 
 - :class:`FakeTransport` — a transport implementation that records
   all calls and returns configurable output.  Drop-in replacement for
@@ -19,6 +19,13 @@ Provides three fakes for host-side tests of ``chumicro-deploy``:
         port_factory=lambda *_args, **_kwargs: FakeSerialPort(...),
         time=FakeTime(),
     )
+
+- :func:`isolate_from_host_filesystem` — keep tests hermetic on a dev
+  machine with real CIRCUITPY boards plugged in.  ``flash_drive``
+  shells out to macOS ``sync`` / ``xattr`` / ``dot_clean`` and probes
+  ``/Volumes/CIRCUITPY*`` for real mounts; without this stub, tests
+  block on real USB latency and scribble probe files onto whichever
+  board happens to be connected.
 """
 
 from __future__ import annotations
@@ -26,10 +33,76 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .protocol import DeviceImplementation
 
-__all__ = ["FakeSerialPort", "FakeTime", "FakeTransport"]
+if TYPE_CHECKING:
+    import pytest
+
+__all__ = [
+    "FakeSerialPort",
+    "FakeTime",
+    "FakeTransport",
+    "isolate_from_host_filesystem",
+]
+
+
+def isolate_from_host_filesystem(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    circuitpy_drives: list[Path] | None = None,
+) -> None:
+    """Sever ``flash_drive``'s links to the real macOS host filesystem.
+
+    Two cleanups in one, both load-bearing for hermetic tests:
+
+    1. **macOS shell helpers → instant fakes.**  ``flash_drive`` calls
+       ``subprocess.run(["sync"])`` / ``["xattr", ...]`` / ``["dot_clean",
+       ...]`` / ``["mdutil", ...]`` on macOS.  Each blocks for seconds
+       on a busy host (concurrent test workers, IDE indexing, git
+       activity).  Real ``rsync`` is left intact — tests rely on its
+       file-copy side effect.
+    2. **CIRCUITPY drive scanning → controllable.**  Production calls
+       :func:`chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates`
+       to find ``/Volumes/CIRCUITPY*`` mounts.  On a dev box with a real
+       board plugged in, an unstubbed test will write+unlink probe files
+       onto the real device's filesystem.  Pass *circuitpy_drives* to
+       point at a test-controlled directory; pass ``None`` (default)
+       to make scans return empty so tests don't depend on host state.
+
+    Per-test monkeypatches override these — calling
+    ``monkeypatch.setattr("chumicro_deploy.circuitpy_drive
+    ._circuitpy_volume_candidates", ...)`` again later in the same test
+    replaces the stub for that test only.
+
+    Typical usage as a module-level autouse fixture::
+
+        @pytest.fixture(autouse=True)
+        def _isolate(monkeypatch):
+            isolate_from_host_filesystem(monkeypatch)
+    """
+    import subprocess as _subprocess
+
+    real_run = _subprocess.run
+    skip = {"sync", "xattr", "dot_clean", "mdutil"}
+    ok_result = _subprocess.CompletedProcess(
+        args=[], returncode=0, stdout=b"", stderr=b"",
+    )
+
+    def fake_run(command, **kwargs):
+        if command and str(command[0]) in skip:
+            return ok_result
+        return real_run(command, **kwargs)
+
+    monkeypatch.setattr(
+        "chumicro_deploy.flash_drive.subprocess.run", fake_run,
+    )
+    drives = list(circuitpy_drives) if circuitpy_drives is not None else []
+    monkeypatch.setattr(
+        "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
+        lambda: drives,
+    )
 
 
 class FakeTime:

@@ -23,6 +23,7 @@ from chumicro_deploy.circuitpython_transport import (
 from chumicro_deploy.testing import (
     FakeSerialPort,
     FakeTime,
+    isolate_from_host_filesystem,
 )
 
 #: Shorthand for the standard autoreload REPL acknowledgement.
@@ -32,6 +33,25 @@ _OK_RESPONSE = b"OK\x04\x04>"
 #: keeps the boot_out.txt content and the probe-response bytes in sync.
 _TEST_BOOT_MACHINE = "TestBoard with rp2040"
 _TEST_BOOT_UID = "DEADBEEF"
+
+
+@pytest.fixture(autouse=True)
+def _isolate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep every test in this file hermetic from the macOS host.
+
+    Without this: on a dev box with a real CIRCUITPY board plugged in,
+    tests that don't explicitly pass ``drive_path`` + ``monkeypatch``
+    will (a) probe-write+unlink files onto the real device's filesystem
+    and (b) block on real macOS ``sync`` / ``xattr`` / ``dot_clean``
+    subprocess calls.  Together these tests accumulated ~80s of preflight
+    time before the fixture landed.  See
+    :func:`chumicro_deploy.testing.isolate_from_host_filesystem`.
+
+    Tests that need ``_circuitpy_volume_candidates`` to return a specific
+    path can still call ``monkeypatch.setattr`` with their own value —
+    function-scoped monkeypatches override earlier ones.
+    """
+    isolate_from_host_filesystem(monkeypatch)
 
 
 def _repl_response(stdout: bytes = b"", stderr: bytes = b"") -> bytes:
@@ -2114,6 +2134,7 @@ class TestDeployFiles:
         ]
         transport, _ = self._connect(
             drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         with pytest.raises(
             CircuitpythonTransportError,
@@ -2266,7 +2287,7 @@ class TestDeployFiles:
         assert "ZeroDivisionError" not in output
 
     def test_waits_for_board_to_see_new_entrypoint(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """USB-MSC write visibility to CP is polled, not assumed.
 
@@ -2289,7 +2310,8 @@ class TestDeployFiles:
             _RAW_REPL_PROMPT,
         ]
         transport, _ = self._connect(
-            drive_path=str(drive), extra_responses=extra
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
         )
         output = transport.deploy_files(
             {"/code.py": new_contents}, "/code.py",
@@ -3059,12 +3081,20 @@ class TestWipeFilesystem:
         with pytest.raises(CircuitpythonTransportError, match="connect"):
             transport.wipe_filesystem()
 
-    def test_flash_mode_drives_erase_and_reconnects(self) -> None:
+    def test_flash_mode_drives_erase_and_reconnects(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Sends erase_filesystem, swallows the dropped REPL, re-opens port."""
         # First port: serves connect() then dies during the wipe REPL call
         # (no further read responses → _send_repl_command raises, which we
         # swallow as expected behavior).  Second port: serves the post-wipe
         # reconnect.
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
+            lambda: [drive],
+        )
         first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         ports = [first_port, second_port]
@@ -3089,8 +3119,17 @@ class TestWipeFilesystem:
         assert first_port.closed
         assert ports == []  # both ports consumed by the factory
 
-    def test_flash_mode_close_failure_is_tolerated(self) -> None:
+    def test_flash_mode_close_failure_is_tolerated(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """A failure tearing the dropped port down doesn't block re-connect."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
+            lambda: [drive],
+        )
+
         class _UncloseablePort(FakeSerialPort):
             def close(self) -> None:
                 raise OSError("simulated close failure")
@@ -3111,11 +3150,15 @@ class TestWipeFilesystem:
         assert ports == []
 
     def test_flash_mode_waits_for_drive_already_mounted(
-        self, tmp_path: Path,
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Drive mounted at the moment serial reconnects: no extra waits."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
+            lambda: [drive],
+        )
 
         first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
@@ -3209,6 +3252,10 @@ class TestWipeFilesystem:
         """Drive directory exists but probe writes EACCES until macOS settles."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
+            lambda: [drive],
+        )
         # First two probe writes hit EACCES (drive mounted but not yet
         # writable post-remount); third succeeds.
         original_write_bytes = Path.write_bytes

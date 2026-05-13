@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -196,6 +197,16 @@ class _Dispatcher:
     def finish(self) -> None:
         """Called once after all phases complete.  Render finals."""
 
+    def captured_outputs(self) -> dict[str, str]:
+        """Return per-phase captured output keyed by label.
+
+        Empty for dispatchers that don't buffer (the live ``Interleave``
+        mode prints every line and keeps nothing).  Used by preflight
+        to aggregate pytest result counts across phases for the
+        end-of-run summary.
+        """
+        return {}
+
 
 class _QuietDispatcher(_Dispatcher):
     """Buffer everything, replay at finish() in submission order.
@@ -214,6 +225,9 @@ class _QuietDispatcher(_Dispatcher):
 
     def phase_done(self, label: str, exit_code: int, captured: str) -> None:
         self._results[label] = (exit_code, captured)
+
+    def captured_outputs(self) -> dict[str, str]:
+        return {label: captured for label, (_, captured) in self._results.items()}
 
     def finish(self) -> None:
         has_failure = any(
@@ -304,6 +318,9 @@ class _StatusDispatcher(_Dispatcher):
             self._results[label] = (exit_code, captured)
             marker = "OK  " if exit_code == 0 else "FAIL"
             print(f"  [{marker}] {label} ({elapsed:.1f}s)", flush=True)
+
+    def captured_outputs(self) -> dict[str, str]:
+        return {label: captured for label, (_, captured) in self._results.items()}
 
     def finish(self) -> None:
         first_failure: str | None = None
@@ -1283,10 +1300,11 @@ def preflight(
         print(f"== {label} ==")
         print(f"  SKIP: {base_reference} not reachable (fetch or set --base).")
 
+    dispatcher = _pick_dispatcher(quiet=quiet)
     parallel_result, failing_label = _preflight_run_parallel_phases(
         parallel_phases,
         max_workers=phase_workers,
-        dispatcher=_pick_dispatcher(quiet=quiet),
+        dispatcher=dispatcher,
     )
     if parallel_result != 0:
         # The dispatcher already printed phase events and (in status /
@@ -1316,7 +1334,14 @@ def preflight(
                 print(f"Preflight failed at: {step_name}")
                 return result
 
-    print("Preflight passed — required CI checks should pass.")
+    total_tests = _tally_pytest_counts(dispatcher.captured_outputs())
+    if total_tests > 0:
+        print(
+            f"Preflight passed — required CI checks should pass.  "
+            f"{total_tests} tests ran across all phases.",
+        )
+    else:
+        print("Preflight passed — required CI checks should pass.")
     return 0
 
 
@@ -1622,6 +1647,33 @@ def _subcommand_phase_factory(
 
 # Backward-compatible alias kept for tests that monkeypatch this seam.
 _preflight_phase_subprocess_factory = _subcommand_phase_factory
+
+
+_PYTEST_RESULT_LINE = re.compile(
+    r"^=+\s*(?P<passed>\d+)\s+passed"
+    r"(?:,\s+\d+\s+(?:skipped|deselected|warnings?))*\s+in\s",
+    re.MULTILINE,
+)
+
+
+def _tally_pytest_counts(captured_outputs: dict[str, str]) -> int:
+    """Sum every ``=== N passed ... in Xs ===`` line across all phase outputs.
+
+    Each preflight test phase produces one or more pytest summary lines
+    (the test phase itself fans out per-package and emits one per
+    package; test-micropython / test-circuitpython each emit one).
+    Counts every match so the end-of-run total reflects all tests
+    actually executed — host CPython + MicroPython unix-port +
+    CircuitPython unix-port.
+
+    Returns ``0`` when no pytest result lines are found (e.g. the
+    dispatcher doesn't buffer output, like the live interleave mode).
+    """
+    total = 0
+    for captured in captured_outputs.values():
+        for match in _PYTEST_RESULT_LINE.finditer(captured):
+            total += int(match.group("passed"))
+    return total
 
 
 def _preflight_run_parallel_phases(
