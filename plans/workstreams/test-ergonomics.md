@@ -1,6 +1,6 @@
 # Workstream: Test Ecosystem Ergonomics
 
-Status: **open** — audited 2026-05-12, Phases 1-3 shipped 2026-05-12 (commits `115510e6`, `b472f976`, `6d66ae1c`, `6111acd0`).  Phases 4-5 pending.
+Status: **closed** — audited 2026-05-12, Phases 1-3+5 shipped 2026-05-12; Phase 4 declined after deeper inspection.  Commits: `115510e6` (1), `b472f976` (2), `6d66ae1c` + `6111acd0` (3), `6256ce90` (5).
 
 ## Purpose
 
@@ -130,37 +130,43 @@ Drive-scanner injection deferred: the workstream framed it as "Deployer.drive_sc
 
 Result: 26 monkeypatches dropped (~half of the realistic-scope target after recounting; 6× lower than the workstream's original 250-350 estimate).  Both CLIs gain a public, discoverable injection seam — a small step toward "explicit injection" over "monkeypatch on private module surface."  Full 752 workspace + 894 deploy tests pass.
 
-### Phase 4 — `RunnerHarness` in `libraries/runner/src/chumicro_runner/testing.py`
+### Phase 4 — `RunnerHarness` in `chumicro_runner.testing` (declined 2026-05-12)
 
-Add a 30-LOC helper:
+Deeper inspection of the four target libraries showed the tick-loop shapes are **not uniform** enough for a single harness to be a clean win:
 
-```python
-class RunnerHarness:
-    def __init__(self, system_under_test, ticks=None):
-        self.system = system_under_test
-        self.ticks = ticks or FakeTicks()
-    def tick_until(self, predicate, max_ticks=200, advance_ms=1):
-        for _ in range(max_ticks):
-            if self.system.check(self.ticks.ticks_ms()):
-                self.system.handle(self.ticks.ticks_ms())
-            if predicate(): return
-            self.ticks.advance(advance_ms)
-        raise AssertionError(f"predicate not met after {max_ticks} ticks")
-```
+- **requests**: `drive_until_done(client, handle, ticks)` — needs `check()` + `handle()` + a `handle.done` flag.
+- **mqtt**: `_drive(client, ticks, count=1)` — fixed-count iteration, no predicate.
+- **http_server**: `_drive_until_idle(server, ticks)` — `handle()` + `in_flight == 0` predicate, no `check()`.
+- **websockets**: `while` loops gated on state-machine fields (`_connecting_phase == SENDING_HANDSHAKE`, etc.), with manual handshake feeding via `_drive_handshake`.
 
-Adopt across `requests`, `mqtt`, `http_server`, `websockets` tests.  Estimated reclamation: ~150 test LOC.  Cross-runtime safe: `testing.py` declares `__chumicro_runtimes__ = ("cpython",)`.
+A unified `RunnerHarness` accepting `check_fn` / `handle_fn` / `predicate` / `max_ticks` / `advance_ms` would be a configurable monster, and per-call-site usage gets **longer** because every call must pass lambdas for the three slots.  The current per-library helpers are 8-11 LOC each, used 5-20 times per library, and read naturally because they encode the library's specific concept (`handle.done`, `in_flight == 0`).  Forcing a shared shape would hurt readability for marginal LOC savings.
 
-### Phase 5 — `libraries/http_server/src/chumicro_http_server/testing.py`
+Per the project rule "Don't add features, refactor, or introduce abstractions beyond what the task requires": declined.  The per-library helpers stay.
 
-Create the missing module.  Park `FakeListener` + `request_bytes()` builder from `tests/test_http_server.py:34-64`.  Adopt across http_server tests.  Estimated reclamation: ~100 test LOC.
+### Phase 5 — `chumicro_http_server.testing` (shipped 2026-05-12)
+
+Public module created at `libraries/http_server/src/chumicro_http_server/testing.py` exporting:
+
+- `FakeListener(connections)` — listener stub that hands out queued sockets on `accept()`; empty queue raises `OSError(11, "would block")` so the server's EAGAIN path runs unchanged.
+- `request_bytes(method, path, *, headers, body)` — HTTP/1.1 request byte-string builder; auto-prepends `Content-Length` when body is present.
+
+Adoption: 48 reference sites across `tests/test_http_server.py` migrated from `_FakeListener` / `_request_bytes` to the new public names.  Module declares `__chumicro_runtimes__ = ("cpython",)`.  Local `_make_server`, `_drive_until_idle`, `_drive_until_all_responded` stay — they're shape-specific to the http_server test file and don't generalize.
+
+Result: 32 test LOC removed, 71 LOC added in `testing.py`.  `chumicro_http_server.testing` at 100 % isolated coverage from organic test usage.  119 host-side + 654 MP unix-port + 654 CP unix-port tests pass.  `chumicro-http-server` VERSION 0.8.0 → 0.9.0 (minor, new public surface).
 
 The other four libraries without `testing.py` (`compat`, `config`, `msgpack`, `ntp`) stay as-is — their tests don't show inlined-fake bloat, and adding empty modules just to be uniform is shape-following without payoff.
 
-## Totals
+## Totals (actuals)
 
-- Test LOC reduction: ~1,600–2,150 (~3 % of the 64,000-LOC test base, ~5 % of workbench).
-- Monkeypatch reduction: ~250–350 calls (~40 % of workbench's 755, ~30 % of total).
-- New `testing.py` modules: 3 (workspace, pytest-device, http_server).
-- Production-code refactor surface: 4 injection seams across `chumicro-deploy` (Deployer + CLI + onboarding).
+- Test LOC reduction: **~600 net** across 26 sites (740 + 159 + 258 + 32 deleted; 218 + 261 + 71 added in new `testing.py` modules plus ~140 in CLI env plumbing).  Original audit projected ~1,600–2,150 — the gap is real and matches the realistic-scope finding from Phase 3 below.
+- Monkeypatch reduction: **~40 calls** (~5 % of workbench's 755).  Original audit projected ~250-350; the workstream's Phase 3 framing assumed missing injection seams that mostly already existed (`detect_board_state` / `CircuitpythonTransport` already accept the kwargs the audit thought were missing).
+- New `testing.py` modules: **3** (workspace, pytest-device, http_server) — matches plan.
+- New public CLI injection surface: **2** (`chumicro_workspace.cli.CliEnv`, `chumicro_deploy.cli.CliEnv`) — landed in Phase 3 instead of the speculative `Deployer` class the workstream proposed.
 
-Not a wall-time speedup — pytest collection time is not load-bearing on preflight.  This is a maintainability win measured in dev-hours and a regression-shield win measured in fewer host-state-leak bugs of the kind the 2026-05-12 preflight investigation found.
+Not a wall-time speedup — pytest collection time is not load-bearing on preflight.  The actual wins are:
+
+- **Test infrastructure is now visible at each workbench package's public surface**, not buried inside test files.  Downstream `chumicro-workspace-template` authors who write workspace tests can `import` the helpers instead of inventing their own.
+- **Two CLIs gained an explicit injection seam** (`cli.main(argv, *, env=...)`), so tests can swap callables without monkeypatching private module symbols.  Future seams add fields to `CliEnv` rather than scattering new monkeypatch sites.
+- **Reduced regression risk** in the test base: the `isolate_from_host_filesystem`-style host-state-leak class of bugs is now harder to introduce because the seams are explicit.
+
+Phase 4 declined: tick-loop shapes are too divergent across libraries to unify cleanly without hurting readability.
