@@ -678,6 +678,41 @@ class TestOversize:
         # Connection still OPEN; ready for next inbound message.
         assert observed[0].state == WebSocketState.OPEN
 
+    def test_drop_with_event_next_message_arrives_intact(self):
+        """After an oversized assembly is dropped, the framing stream
+        stays aligned and the very next client→server message reaches
+        ``on_text``.
+        """
+        observed = []
+        oversized = []
+        received = []
+
+        def on_open(conn):
+            conn.on_text = lambda text: received.append(text)
+            conn.on_oversized = lambda reported_length: oversized.append(reported_length)
+
+        server, listener, clock = _make_server(
+            max_message_bytes=10,
+            when_oversized=WhenOversized.DROP_WITH_EVENT,
+            on_connection=lambda connection: (observed.append(connection), on_open(connection)),
+        )
+        peer, _key, _response = _drive_server_handshake(server, listener, clock)
+        peer.feed_inbound(
+            encode_frame(OPCODE_TEXT, b"AAAAA", fin=False, mask=make_mask_key())
+            + encode_frame(OPCODE_CONTINUATION, b"BBBBB", fin=False, mask=make_mask_key())
+            + encode_frame(OPCODE_CONTINUATION, b"CCCCC", fin=True, mask=make_mask_key())
+            + encode_frame(OPCODE_TEXT, b"hello", fin=True, mask=make_mask_key()),
+        )
+        for _index in range(6):
+            server.handle(clock.ticks_ms())
+        assert oversized, "on_oversized never fired"
+        assert observed[0].state == WebSocketState.OPEN, (
+            f"expected OPEN, got {observed[0].state}"
+        )
+        assert received == ["hello"], (
+            f"next message lost or corrupted; got {received!r}"
+        )
+
     def test_drop_silent(self):
         oversized = []
 
