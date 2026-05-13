@@ -358,6 +358,7 @@ class TestSendReceive:
         peer = FakeSocket()
         connection = Connection(
             peer,
+            clock.ticks_ms(),
             accept_path=None,
             max_message_bytes=1024,
             recv_budget_per_tick=64,

@@ -91,6 +91,7 @@ class Connection(_BaseSession):
     def __init__(
         self,
         socket,
+        now_ms: int,
         *,
         accept_path: str | None,
         max_message_bytes: int,
@@ -125,7 +126,7 @@ class Connection(_BaseSession):
         self._handshake_response_buffer = None
         self._handshake_response_offset = 0
         self._handshake_deadline_ticks = self._ticks.ticks_add(
-            self._ticks.ticks_ms(),
+            now_ms,
             handshake_timeout_ms,
         )
 
@@ -552,7 +553,7 @@ class WebSocketServer:
     # Internal
     # ------------------------------------------------------------------
 
-    def _accept_pending(self, now_ms: int) -> None:  # noqa: ARG002 — symmetry
+    def _accept_pending(self, now_ms: int) -> None:
         """Drain any pending accepts up to the connection cap."""
         while True:
             if len(self._connections) >= self._max_connections:
@@ -570,6 +571,7 @@ class WebSocketServer:
             client_socket, _address = accepted
             connection = Connection(
                 client_socket,
+                now_ms,
                 accept_path=self._accept_path,
                 max_message_bytes=self._max_message_bytes,
                 recv_budget_per_tick=self._recv_budget_per_tick,
