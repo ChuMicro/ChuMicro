@@ -23,13 +23,13 @@ NOT mask), and the accept-loop in :class:`WebSocketServer`.
 """
 
 from chumicro_config import InvalidConfigType, is_config_like
+from chumicro_sockets import is_eagain
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_websockets._session import (
     WhenOversized,
     _BaseSession,
     _force_non_blocking,
-    _is_eagain,
 )
 from chumicro_websockets._wire import (
     CLOSE_NORMAL,
@@ -522,7 +522,7 @@ class WebSocketServer:
             try:
                 accepted = self._listener.accept()
             except Exception as accept_error:  # noqa: BLE001 - narrow below
-                if _is_eagain(accept_error):
+                if is_eagain(accept_error):
                     return
                 # Listener errors are fatal-ish; record + close.
                 # Caller decides whether to rebuild the listener.

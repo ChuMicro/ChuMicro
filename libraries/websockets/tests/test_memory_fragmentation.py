@@ -7,9 +7,9 @@ itself contributes.
 
 Current coverage: inbound frame parsing.  Outbound coverage
 (``send_text`` / ``send_binary`` / ``send_ping`` + pong round-trip)
-deferred — those paths hit ``BlockingIOError`` inside
-:func:`chumicro_websockets._session._is_eagain`, which is a CPython
-builtin not available on MicroPython.
+deferred — wiring a deterministic outbound-EAGAIN producer through
+the existing fake socket adds setup not yet justified by the test
+budget.
 """
 
 import gc

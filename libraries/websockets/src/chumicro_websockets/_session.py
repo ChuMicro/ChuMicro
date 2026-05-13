@@ -12,6 +12,8 @@ modulo two policies:
 
 from collections import deque
 
+from chumicro_sockets import is_eagain
+
 from chumicro_websockets._wire import (
     CLOSE_BAD_DATA,
     CLOSE_INTERNAL_ERROR,
@@ -99,30 +101,6 @@ def _force_non_blocking(socket):
         setblocking(False)
     except OSError:  # pragma: no cover - defensive
         pass
-
-
-# MicroPython does not expose ``BlockingIOError`` as a built-in.
-# Define a local fallback subclass of ``OSError`` so the
-# ``isinstance(..., BlockingIOError)`` check below works on every runtime.
-try:
-    _BlockingIOError = BlockingIOError
-except NameError:  # pragma: no cover — MP / CP unix-port path
-    class _BlockingIOError(OSError):  # type: ignore[no-redef]
-        pass
-
-
-def _is_eagain(exception):
-    """Return True if *exception* indicates "no data ready / would block".
-
-    CPython raises :class:`BlockingIOError` (errno 11 on Linux, 35 on
-    macOS); MicroPython + CircuitPython raise :class:`OSError` with
-    ``errno == EAGAIN``.  Some adapters return ``0``/``None`` instead
-    — handled separately in the recv path.
-    """
-    errno_attr = getattr(exception, "errno", None)
-    if errno_attr in (11, 35, 9):  # EAGAIN, EWOULDBLOCK on macOS, EBADF
-        return True
-    return isinstance(exception, _BlockingIOError)
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +301,7 @@ class _BaseSession:
         try:
             sent = self._socket.send(chunk)
         except Exception as send_error:  # noqa: BLE001 - narrow below
-            if _is_eagain(send_error):
+            if is_eagain(send_error):
                 return
             self._fail_with_error(
                 WebSocketHandshakeError(
@@ -555,7 +533,7 @@ class _BaseSession:
             try:
                 sent = self._socket.send(chunk)
             except Exception as send_error:  # noqa: BLE001 - narrow below
-                if _is_eagain(send_error):
+                if is_eagain(send_error):
                     return
                 self._fail_with_error(
                     WebSocketProtocolError(
@@ -590,7 +568,7 @@ class _BaseSession:
         try:
             received = self._socket.recv_into(self._recv_view[:cap], cap)
         except Exception as recv_error:  # noqa: BLE001 - narrow below
-            if _is_eagain(recv_error):
+            if is_eagain(recv_error):
                 return None
             self._fail_with_error(
                 WebSocketProtocolError(
