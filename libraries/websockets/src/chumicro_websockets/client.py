@@ -28,7 +28,6 @@ from chumicro_websockets._session import (
     _BaseSession,
     _force_non_blocking,
     _is_eagain,
-    _new_tx_queue,
     _no_callback,
 )
 from chumicro_websockets._wire import (
@@ -40,7 +39,6 @@ from chumicro_websockets._wire import (
     DEFAULT_RECV_BUDGET_PER_TICK,
     DEFAULT_SEND_BUDGET_PER_TICK,
     OPCODE_PING,
-    FrameParser,  # noqa: F401 - re-exported for tests via chumicro_websockets._wire
     HandshakeParseState,
     HandshakeResponseParser,
     WebSocketHandshakeError,
@@ -54,21 +52,7 @@ from chumicro_websockets._wire import (
     parse_ws_url,
 )
 
-# Re-exports for back-compat — the public package once exported these
-# helpers from the client module.  Slimmed __init__.py (slice C) routes
-# advanced consumers through `chumicro_websockets._session` directly,
-# but server.py still imports the four helpers from here, and the
-# WhenOversized symbol stays at this module path so existing callers
-# (`from chumicro_websockets import WhenOversized`) keep working.
-__all__ = [
-    "ConnectingPhase",
-    "WebSocketClient",
-    "WhenOversized",
-    "_force_non_blocking",
-    "_is_eagain",
-    "_new_tx_queue",
-    "_no_callback",
-]
+__all__ = ["WebSocketClient"]
 
 
 # ---------------------------------------------------------------------------

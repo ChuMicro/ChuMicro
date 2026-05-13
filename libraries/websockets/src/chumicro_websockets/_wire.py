@@ -98,13 +98,6 @@ class WebSocketBackpressureError(WebSocketError):
     """
 
 
-class WebSocketOversizedError(WebSocketError):
-    """Inbound message exceeded ``max_message_bytes``.  Raised only
-    when ``when_oversized=DISCONNECT``; the other policies drop the
-    payload + close with :data:`CLOSE_TOO_BIG` instead of raising.
-    """
-
-
 class WebSocketStateError(WebSocketError):
     """Caller invoked an operation that requires a different state
     (e.g., ``send_text`` before OPEN, ``connect`` after OPEN).
