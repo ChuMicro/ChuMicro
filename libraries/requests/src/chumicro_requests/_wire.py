@@ -1006,9 +1006,10 @@ class ResponseParser:
         # next chunk-size line.
         if self._live_len() < 2:
             return False
-        if bytes(self._live_slice(0, 2)) != CRLF:
+        tail = self._live_slice(0, 2)
+        if tail != CRLF:
             self._fail(HttpProtocolError(
-                f"missing CRLF after chunk data: {bytes(self._live_slice(0, 2))!r}",
+                f"missing CRLF after chunk data: {bytes(tail)!r}",
             ))
             return True
         self._consume(2)

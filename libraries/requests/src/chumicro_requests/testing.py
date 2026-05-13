@@ -43,8 +43,6 @@ from chumicro_requests.client import RequestHandle, Response
 class _ScriptedCall:
     """One call recorded by :class:`FakeHttpClient` (URL + headers + timeout)."""
 
-    __slots__ = ("headers", "method", "timeout_ms", "url")
-
     def __init__(self, *, method, url, headers, timeout_ms):
         self.method = method
         self.url = url
