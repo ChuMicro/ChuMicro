@@ -39,13 +39,6 @@ DEFAULT_SEND_BUDGET_PER_TICK = const(4096)
 #: Default per-request body cap.
 DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
 
-#: Default steady-state body buffer size for :class:`RequestParser`.
-#: Sized to cover typical sensor + JSON-API request bodies without
-#: per-request alloc.  Bodies bigger than this fall back to a one-shot
-#: ``bytearray(content_length)`` released on the next :meth:`reset`.
-#: Mirrors :data:`chumicro_requests._wire.DEFAULT_BODY_BUFFER_SIZE`.
-DEFAULT_BODY_BUFFER_SIZE = const(1024)
-
 #: Default per-connection deadline.
 DEFAULT_REQUEST_TIMEOUT_MS = const(10000)
 
@@ -252,14 +245,14 @@ class RequestParser:
     enough bytes arrive.  Callers check :attr:`state` to know whether
     to keep feeding (anything other than ``DONE``/``ERROR``) or stop.
 
-    Body framing supported in slice 7a:
+    Body framing:
 
     * ``Content-Length: N`` — read exactly N bytes (capped at
       *max_body_bytes*).
     * No ``Content-Length`` (and no chunked) — assume zero-length
       body, transition straight to ``DONE``.
 
-    Chunked request bodies land in v2.
+    Chunked request bodies are not supported.
     """
 
     def __init__(
@@ -274,12 +267,9 @@ class RequestParser:
         Args:
             max_body_bytes: Hard cap on body size.
             body_buffer: Optional caller-owned ``bytearray`` to use as
-                the steady-state body buffer.  Allows a server with
-                keep-alive (v2) or a connection pool to reuse the
-                buffer across requests.  ``None`` means the parser
-                allocates its own ``bytearray(DEFAULT_BODY_BUFFER_SIZE)``
-                — current default for the v1 server (one connection
-                per request, no reuse).
+                the steady-state body buffer.  ``None`` (the default)
+                grows a fresh ``bytearray`` on demand sized to the
+                actual ``Content-Length``.
             body_buffer_view: Pre-cached ``memoryview(body_buffer)``;
                 required when ``body_buffer`` is provided.
         """
@@ -305,14 +295,12 @@ class RequestParser:
                 body_buffer_view = memoryview(body_buffer)
             self._body = body_buffer
             self._body_view = body_buffer_view
-            self._body_capacity = len(body_buffer)
         else:
             # No external buffer — grow on demand.  See the matching
             # rationale in
             # :class:`chumicro_requests._wire.ResponseParser.__init__`.
             self._body = bytearray()
             self._body_view = memoryview(self._body)
-            self._body_capacity = 0
         self._body_write_offset = 0
         self._body_remaining = 0
         self._error = None
@@ -602,7 +590,6 @@ class RequestParser:
             new_body[write_offset:end_offset] = source
             self._body = new_body
             self._body_view = memoryview(new_body)
-            self._body_capacity = end_offset
         self._body_write_offset = end_offset
         self._body_remaining -= take
         if self._body_remaining == 0:

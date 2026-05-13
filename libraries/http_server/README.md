@@ -65,7 +65,7 @@ while True:
 | `build_response(status, *, body, json, text, html, headers)` | Convenience builder with sensible Content-Type defaults. |
 | `RequestParser` | Streaming request parser (request line + headers + Content-Length body). |
 | `parse_query` / `split_target` | URL helpers. |
-| `ServerError` + subclasses | Typed exception hierarchy (subclasses `chumicro_requests.HttpError`). |
+| `ServerError` + subclasses | Typed exception hierarchy, independent of `chumicro_requests` so the server can ship without the client library. |
 
 ## Where this fits
 
