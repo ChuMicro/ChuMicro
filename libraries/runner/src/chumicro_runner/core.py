@@ -67,7 +67,6 @@ class TaskHandle:
         self._runner._remove(self)
 
     def __repr__(self) -> str:
-        """Return a developer-friendly representation."""
         status = "active" if self.active else "removed"
         period = self.period_ms
         count = self.run_count
@@ -228,11 +227,7 @@ class Runner:
 
     def _initial_next_due_ms(self, start_after_ms: int | None,
                              period_ms: int | None) -> int | None:
-        """Return the initial ``next_due_ms`` value, or ``None`` if eligible immediately.
-
-        ``start_after_ms`` wins over ``period_ms`` when both are set
-        (the documented "delay first fire" semantics).
-        """
+        """Return the initial ``next_due_ms``; ``start_after_ms`` wins over ``period_ms``."""
         delay_ms = start_after_ms if start_after_ms is not None else period_ms
         if delay_ms is None:
             return None
