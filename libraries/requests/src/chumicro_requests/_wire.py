@@ -92,12 +92,6 @@ DEFAULT_MAX_BODY_BYTES = const(65536)
 #: default; keeps tick latency LED-friendly.
 DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 
-#: Default initial capacity for chunked-decode body buffer.  Covers
-#: the common short-body case in one alloc; chunked transfers larger
-#: than this still grow via slice-assign-at-end (extends like the
-#: original ``extend`` shape).
-DEFAULT_CHUNKED_BODY_CAPACITY = const(256)
-
 #: Default steady-state body buffer size for :class:`ResponseParser`.
 #: Sized to cover typical sensor + JSON-API response bodies (most
 #: small-board HTTP traffic) without per-request allocation.  Bodies

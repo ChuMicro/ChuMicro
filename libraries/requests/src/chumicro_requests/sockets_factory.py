@@ -17,6 +17,8 @@ deploy-time AST walker won't follow what isn't referenced, so
 sits in ``[project].dependencies``.
 """
 
+import chumicro_sockets
+
 
 def chumicro_sockets_factory(*, radio=None, ssl_context=None):
     """Return a ``connection_factory`` wired to :mod:`chumicro_sockets`.
@@ -43,20 +45,12 @@ def chumicro_sockets_factory(*, radio=None, ssl_context=None):
         A ``callable(host, port, use_tls)`` ready to pass into
         :class:`chumicro_requests.HttpClient`'s
         ``connection_factory=`` parameter.
-
-    Lazy-imports :mod:`chumicro_sockets` so this submodule can be
-    unit-tested without the transport on PYTHONPATH and so the
-    deploy walker doesn't follow the transport import unless the
-    user actually references this submodule.
     """
     def factory(host, port, use_tls):
-        from chumicro_sockets import (  # noqa: PLC0415 - lazy
-            tcp_client_socket,
-            tls_client_socket,
-        )
-
         if use_tls:
-            return tls_client_socket(host, port, context=ssl_context, radio=radio)
-        return tcp_client_socket(host, port, radio=radio)
+            return chumicro_sockets.tls_client_socket(
+                host, port, context=ssl_context, radio=radio,
+            )
+        return chumicro_sockets.tcp_client_socket(host, port, radio=radio)
 
     return factory
