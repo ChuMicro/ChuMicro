@@ -155,7 +155,8 @@ def _stderr_progress(fraction: float, message: str) -> None:
 
 def _cmd_probe(args: argparse.Namespace) -> int:
     """Probe a connected board and print its identity."""
-    info = probe_device(_device_from_args(args))
+    probe_fn = args._env.probe_device_fn or probe_device
+    info = probe_fn(_device_from_args(args))
     if info.implementation is None:
         print("probe did not return implementation marker", file=sys.stderr)
         return 1
@@ -470,9 +471,12 @@ class CliEnv:
             :func:`chumicro_deploy.firmware.flash_firmware`.  Tests
             pass a recording stub to assert on the URL / device /
             kwargs the CLI forwards.
+        probe_device_fn: Override the probe callable.  ``None`` means
+            use :func:`chumicro_deploy.probe.probe_device`.
     """
 
     flash_firmware_fn: Callable[..., None] | None = None
+    probe_device_fn: Callable[..., object] | None = None
 
 
 _DEFAULT_ENV = CliEnv()
