@@ -334,48 +334,14 @@ class WebSocketServer:
     ) -> "WebSocketServer":
         """Build a :class:`WebSocketServer` from runtime config.
 
-        Reads the server-side keys declared in
-        ``[tool.chumicro.config]`` of ``libraries/websockets/pyproject.toml``:
-
-        * ``websockets.server.host`` → ``"0.0.0.0"`` (listen on all
-          interfaces).
-        * ``websockets.server.port`` → 8765 (the port used by this
-          library's example servers — no IANA-assigned standard
-          for chumicro WebSocket demos).
-        * ``websockets.server.max_message_bytes`` →
-          :data:`DEFAULT_MAX_MESSAGE_BYTES`.
-
-        All keys are optional with sensible defaults — empty
-        ``config`` produces a server bound to ``0.0.0.0:8765``.
-        Override individual keys in ``runtime_config.msgpack`` /
-        ``secrets.toml`` per project.
-
-        When *listener* is supplied, the caller owns the listening
-        socket.  When it's not, an auto-built listener wires through
-        :func:`chumicro_sockets.tcp_listening_socket` using *radio*
-        and the config-supplied host/port.
-
-        Args:
-            config: A :class:`chumicro_config.RuntimeConfig` or
-                plain flat dict.  Keys read are flat dotted strings.
-            on_connection: Required positional —
-                ``callable(connection)`` invoked once per inbound
-                connection.  Wires per-connection callbacks before
-                frames arrive; cannot be read from config.
-            radio: WiFi radio for the auto-built listener — CircuitPython
-                needs this; MicroPython auto-detects.  Ignored when
-                *listener* is passed.
-            listener: Pre-built listening socket.  When supplied, the
-                auto-built listener is skipped — caller owns the
-                bind / listen behaviour.
-            accept_path: Optional URI-path filter; pass through to
-                the constructor.  Not in the config manifest because
-                it's per-deploy app routing, not library-shape.
-            max_connections: Per-server cap (default 2).
-
-        Returns:
-            A configured ``WebSocketServer`` ready for ``check()`` /
-            ``handle()``.
+        Reads optional ``websockets.server.host`` /
+        ``websockets.server.port`` / ``websockets.server.max_message_bytes``
+        — empty ``config`` produces a server bound to ``0.0.0.0:8765``.
+        *on_connection* is required (wires per-connection callbacks
+        before frames arrive).  A *listener* override bypasses the
+        auto-built :func:`chumicro_sockets.tcp_listening_socket`.
+        *accept_path* + *max_connections* are app-routing knobs not
+        in the config manifest.
         """
         if listener is None:
             from chumicro_sockets import tcp_listening_socket  # noqa: PLC0415

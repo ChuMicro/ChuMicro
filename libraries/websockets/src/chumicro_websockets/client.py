@@ -121,69 +121,13 @@ class WebSocketClient(_BaseSession):
     ) -> "WebSocketClient":
         """Build a :class:`WebSocketClient` from runtime config.
 
-        Reads the client-side keys declared in
-        ``[tool.chumicro.config]`` of ``libraries/websockets/pyproject.toml``:
-
-        * ``websockets.client.max_message_bytes`` →
-          :data:`DEFAULT_MAX_MESSAGE_BYTES`.
-
-        Like :meth:`chumicro_ntp.NTPClient.from_config` (and unlike
-        :meth:`chumicro_mqtt.MQTTClient.from_config`), no key is
-        required and the auto-built ``connection_factory`` reads
-        zero config keys (host/port/use_tls live on each
-        :meth:`connect` URL, not on the client).  Empty ``config``
-        is valid input.
-
+        Reads optional ``websockets.client.max_message_bytes``.  No
+        key is required — host / port / use_tls live on each
+        :meth:`connect` URL, not on the client.  A *connection_factory*
+        override bypasses the auto-built factory entirely.
         ``websockets.client.connect_url`` is declared in the manifest
-        but is **not** consumed by ``from_config`` — the URL is a
-        per-connection argument the user passes to :meth:`connect`
-        after construction.  Read it in your app::
-
-            client = WebSocketClient.from_config(config, radio=...)
-            client.connect(config["websockets.client.connect_url"])
-
-        When *connection_factory* is supplied, the caller owns the
-        connection-opening behaviour.  When it's not, an auto-built
-        factory wires through
-        :func:`chumicro_websockets.sockets_factory.chumicro_sockets_factory`
-        using *radio* and *ssl_context*.
-
-        Args:
-            config: A :class:`chumicro_config.RuntimeConfig`
-                (typically ``chumicro_config.config``) or plain flat
-                dict.  Keys read are flat dotted strings.
-            radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
-                (auto-detected); ignored on MP and CPython.  Pass explicitly
-                for multi-radio prototypes or CP boards without a ``wifi``
-                module.  Ignored when *connection_factory* is passed.
-            ssl_context: ``SSLContext`` for ``wss://`` connections;
-                ``None`` uses the runtime default.  Ignored when
-                *connection_factory* is passed.
-            connection_factory: Custom ``(host: str, port: int,
-                use_tls: bool) -> socket`` callable.  The returned
-                object must expose:
-
-                * ``recv_into(buffer: memoryview, nbytes: int) -> int``
-                  — raises ``OSError(EAGAIN | EWOULDBLOCK)`` on no
-                  data, returns 0 on peer-close, otherwise bytes
-                  written.
-                * ``send(payload: bytes) -> int`` — raises
-                  ``OSError(EAGAIN | EWOULDBLOCK)`` when the send
-                  buffer is full, otherwise bytes sent (may be
-                  partial).
-                * ``close() -> None``
-                * ``setblocking(flag: bool) -> None`` — best-effort;
-                  absence is tolerated.
-
-                :func:`chumicro_sockets_factory` is one valid
-                producer.  Anything matching the shape works (stdlib
-                ``socket.socket`` after ``setblocking(False)``, an
-                upstream-library wrapper, a test fake).  When
-                supplied, the auto-built factory is skipped — caller
-                owns the connection-opening behaviour.
-
-        Returns:
-            A configured ``WebSocketClient`` ready for ``connect()``.
+        but consumed by your app on the :meth:`connect` call, not by
+        ``from_config``.
         """
         if connection_factory is None:
             try:
