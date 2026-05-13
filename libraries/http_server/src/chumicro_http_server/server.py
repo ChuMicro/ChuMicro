@@ -366,12 +366,14 @@ class _Connection:
         self._state = _ConnState.WANT_SEND_HEADERS
 
     def _drive_send(self):
+        response = self._response_bytes
+        total = len(response)
+        view = memoryview(response)
         consumed = 0
         budget = self._send_budget
-        while self._response_offset < len(self._response_bytes) and consumed < budget:
-            view = memoryview(self._response_bytes)[self._response_offset:]
-            capacity = min(len(view), budget - consumed)
-            chunk = view[:capacity]
+        while self._response_offset < total and consumed < budget:
+            end = self._response_offset + min(total - self._response_offset, budget - consumed)
+            chunk = view[self._response_offset:end]
             try:
                 sent = self._socket.send(chunk)
             except OSError as socket_error:
@@ -382,7 +384,7 @@ class _Connection:
                 return
             self._response_offset += sent
             consumed += sent
-        if self._response_offset >= len(self._response_bytes):
+        if self._response_offset >= total:
             self._state = _ConnState.DONE
 
     def _fail(self):
