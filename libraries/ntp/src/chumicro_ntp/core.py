@@ -17,9 +17,9 @@ except ImportError:
     def const(value):
         return value
 
-from chumicro_config import InvalidConfigType, is_config_like
-from chumicro_sockets import is_eagain
-from chumicro_timing import ticks as _DEFAULT_TICKS
+def _is_eagain(error):
+    return getattr(error, "errno", None) in (11, 35)
+
 
 #: Seconds between the NTP epoch (1900-01-01T00:00:00Z) and the
 #: Unix epoch (1970-01-01T00:00:00Z).  Constant since both epochs
@@ -244,11 +244,6 @@ class NTPClient:
         Returns:
             A configured ``NTPClient`` ready for ``query()``.
         """
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"NTPClient.from_config requires a RuntimeConfig or "
-                f"dict, got {type(config).__name__}",
-            )
         if socket is None:
             if socket_factory is None:
                 try:
@@ -292,7 +287,9 @@ class NTPClient:
         self._server = server
         self._port = port
         self._timeout_ms = timeout_ms
-        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        if ticks is None:
+            from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
+        self._ticks = ticks
         self._result: NTPResult | None = None
         # Pre-allocate the receive buffer so the hot path doesn't
         # allocate.  48 bytes is the SNTP packet size; larger buffers
@@ -382,7 +379,7 @@ class NTPClient:
                 self._recv_buffer,
             )
         except OSError as recv_error:
-            if is_eagain(recv_error):
+            if _is_eagain(recv_error):
                 # No data this tick.  Check the timeout instead.
                 self._check_timeout(result, now_ms)
                 return
