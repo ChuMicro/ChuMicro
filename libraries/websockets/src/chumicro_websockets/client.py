@@ -341,21 +341,7 @@ class WebSocketClient(_BaseSession):
         """Return ``True`` if there's work to do on this tick.  Cheap to
         call; safe to invoke before :meth:`connect` (returns ``False``).
         """
-        if self._state == WebSocketState.CLOSED:
-            return False
-        if not self._connect_called:
-            return False
-        if self._tx_partial is not None:
-            return True
-        if self._tx_queue:
-            return True
-        if self._state == WebSocketState.CONNECTING:
-            return True
-        if self._state == WebSocketState.OPEN:
-            return True
-        if self._state == WebSocketState.CLOSING:
-            return True
-        return False  # pragma: no cover - exhaustive
+        return self._connect_called and self._state != WebSocketState.CLOSED
 
     def handle(self, now_ms: int) -> None:
         """One tick of progress: drain bounded inbound through the
