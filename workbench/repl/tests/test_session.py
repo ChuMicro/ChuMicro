@@ -32,7 +32,7 @@ def _build_session(*, read_chunks):
     session = ReplSession(
         "/dev/cu.fake",
         time=fake_time,
-        port_factory=lambda *_args, **_kwargs: fake_port,
+        port_factory=fake_port,
     )
     return session, fake_port, fake_time
 

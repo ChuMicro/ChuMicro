@@ -8,14 +8,6 @@ from chumicro_repl import ExitCode, tail
 from chumicro_repl.highlight import strip_ansi_sequences
 from chumicro_repl.testing import FakeSerialPort, FakeTime
 
-
-def _build_factory(port: FakeSerialPort):
-    """Return a port factory that hands back *port* without consulting args."""
-    def factory(_address: str, _baudrate: int, _timeout: float) -> FakeSerialPort:
-        return port
-    return factory
-
-
 CIRCUITPYTHON_TRACEBACK = (
     "Traceback (most recent call last):\n"
     '  File "code.py", line 1, in <module>\n'
@@ -35,7 +27,7 @@ class TestExitCodes:
             seconds=0.05,
             output=output,
             time=time,
-            port_factory=_build_factory(port),
+            port_factory=port,
         )
         assert result is ExitCode.OK
         # The window elapsed because the port stopped emitting and
@@ -55,7 +47,7 @@ class TestExitCodes:
             seconds=10.0,
             output=output,
             time=time,
-            port_factory=_build_factory(port),
+            port_factory=port,
         )
         assert result is ExitCode.TRACEBACK_DETECTED
         # The output captured the traceback before tail returned.
@@ -73,7 +65,7 @@ class TestExitCodes:
             output=output,
             fail_on_traceback=False,
             time=time,
-            port_factory=_build_factory(port),
+            port_factory=port,
         )
         assert result is ExitCode.OK
 
@@ -91,7 +83,7 @@ class TestHighlightInline:
             seconds=10.0,
             output=output,
             time=FakeTime(),
-            port_factory=_build_factory(port),
+            port_factory=port,
         )
         assert result is ExitCode.TRACEBACK_DETECTED
         captured = output.getvalue()
@@ -115,7 +107,7 @@ class TestStreamingDecode:
             seconds=0.05,
             output=output,
             time=FakeTime(),
-            port_factory=_build_factory(port),
+            port_factory=port,
         )
         assert result is ExitCode.OK
         assert "sample 🙂 done" in output.getvalue()
@@ -133,7 +125,7 @@ class TestPortLifecycle:
             seconds=10.0,
             output=io.StringIO(),
             time=FakeTime(),
-            port_factory=_build_factory(port),
+            port_factory=port,
         )
         assert port.closed
 
@@ -144,7 +136,7 @@ class TestPortLifecycle:
             seconds=0.01,
             output=io.StringIO(),
             time=FakeTime(),
-            port_factory=_build_factory(port),
+            port_factory=port,
         )
         assert port.closed
 

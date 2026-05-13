@@ -191,6 +191,12 @@ class FakeSerialPort:
     lets tests script "first read returns bytes, second read drops
     the cable" scenarios without subclassing the fake.  Mirrors the
     pattern in :class:`chumicro_repl.testing.FakeSerialPort`.
+
+    Instances are callable and return themselves, so a
+    ``FakeSerialPort`` instance can be passed directly as a transport's
+    ``serial_port_factory`` kwarg — no wrapper closure needed.  Pass
+    *open_error* to script "factory raises when the transport asks for
+    a port" without writing a custom closure.
     """
 
     def __init__(
@@ -208,6 +214,19 @@ class FakeSerialPort:
         self._read_index = 0
         self._open_error = open_error
         self._raise_on_write = raise_on_write
+
+    def __call__(self, *_args: object, **_kwargs: object) -> FakeSerialPort:
+        """Return this port, or raise the scripted *open_error*.
+
+        Lets the instance double as a ``serial_port_factory`` callable.
+        Accepts both positional and keyword args (different transports
+        call factories with different signatures); all are ignored.
+        Tests that need to assert on factory args write an explicit
+        closure instead.
+        """
+        if self._open_error is not None:
+            raise self._open_error
+        return self
 
     @property
     def in_waiting(self) -> int:

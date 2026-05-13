@@ -58,6 +58,10 @@ class FakeSerialPort:
     consumes one chunk regardless of *n* — tests that need to model
     fine-grained byte-level delivery should script per-byte chunks.
 
+    Instances are callable and return themselves, so a
+    ``FakeSerialPort`` instance can be passed directly as a
+    ``serial_port_factory`` kwarg — no wrapper closure needed.
+
     Args:
         read_chunks: Items the next ``read(n)`` call returns, in
             order.  Each item is either ``bytes`` (returned verbatim)
@@ -70,6 +74,9 @@ class FakeSerialPort:
             raises this exception instead of recording the data.
             Used to script disconnects that fail the host's first
             attempt to send a keystroke.
+        open_error: When set, calling the instance (used as a
+            factory) raises this exception.  Lets tests script
+            "the factory failed to open a port" without a closure.
     """
 
     def __init__(
@@ -77,12 +84,25 @@ class FakeSerialPort:
         *,
         read_chunks: Iterable[bytes | BaseException] | None = None,
         raise_on_write: BaseException | None = None,
+        open_error: Exception | None = None,
     ) -> None:
         self.writes: list[bytes] = []
         self.closed = False
         self._read_chunks: list[bytes | BaseException] = list(read_chunks or [])
         self._read_index = 0
         self._raise_on_write = raise_on_write
+        self._open_error = open_error
+
+    def __call__(self, *_args: object, **_kwargs: object) -> FakeSerialPort:
+        """Return this port, or raise the scripted *open_error*.
+
+        Accepts both positional and keyword args; chumicro-repl calls
+        factories with positional ``(address, baudrate, timeout)``
+        while chumicro-deploy uses kwargs.
+        """
+        if self._open_error is not None:
+            raise self._open_error
+        return self
 
     @property
     def in_waiting(self) -> int:

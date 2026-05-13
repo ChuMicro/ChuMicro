@@ -105,12 +105,9 @@ class TestConnect:
         """connect() should send Ctrl-C×2 then Ctrl-A."""
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -123,12 +120,11 @@ class TestConnect:
 
     def test_connect_raises_on_port_open_failure(self) -> None:
         """connect() should raise when the serial port cannot be opened."""
-        def factory(**kwargs):
-            raise OSError("port not found")
+        port = FakeSerialPort(open_error=OSError("port not found"))
 
         transport = CircuitpythonTransport(
             "/dev/ttyNONE",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
 
@@ -142,12 +138,9 @@ class TestConnect:
         """connect() should raise when raw REPL prompt is not received."""
         port = FakeSerialPort(read_responses=[b"some other output"])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
 
@@ -162,14 +155,14 @@ class TestConnect:
         captured_kwargs = {}
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
+        def recording_factory(**kwargs):
             captured_kwargs.update(kwargs)
             return port
 
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             baudrate=9600,
-            serial_port_factory=factory,
+            serial_port_factory=recording_factory,
             time=FakeTime(),
         )
         transport.connect()
@@ -199,12 +192,9 @@ class TestStage:
 
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -233,12 +223,9 @@ class TestStage:
 
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -266,12 +253,9 @@ class TestStage:
 
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -292,12 +276,9 @@ class TestStage:
 
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -324,12 +305,9 @@ class TestStage:
 
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -361,12 +339,9 @@ class TestExecute:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -393,12 +368,9 @@ class TestExecute:
             read_responses=[_RAW_REPL_PROMPT, execute_response],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -425,12 +397,9 @@ class TestExecute:
             read_responses=[_RAW_REPL_PROMPT, b"ERROR\x04\x04>"],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -458,12 +427,9 @@ class TestExecute:
             read_responses=[_RAW_REPL_PROMPT, b"OKhello\x04\x04>"],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -478,12 +444,9 @@ class TestExecute:
         """execute() without prior stage() should raise."""
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -535,12 +498,9 @@ class TestExecuteScripts:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -575,12 +535,9 @@ class TestExecuteScripts:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -610,12 +567,9 @@ class TestMemoryProbe:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -633,12 +587,9 @@ class TestMemoryProbe:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -660,12 +611,9 @@ class TestMemoryProbe:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -693,12 +641,9 @@ class TestProbeImplementation:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -724,12 +669,9 @@ class TestProbeImplementation:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -751,12 +693,9 @@ class TestSoftReset:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -793,12 +732,9 @@ class TestDisconnect:
         """disconnect() should close the serial port."""
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -818,12 +754,9 @@ class TestDisconnect:
 
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -847,12 +780,9 @@ class TestDisconnect:
         """Calling disconnect() twice should not raise."""
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -928,9 +858,6 @@ class TestFlashMode:
         so ``_verify_drive_for_board``'s cheap path fires without
         consuming a probe response from the fake serial port.
         """
-        def factory(**kwargs):
-            return port
-
         pinned = Path(circuitpy_drive_path)
         monkeypatch.setattr(
             "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
@@ -941,7 +868,7 @@ class TestFlashMode:
         return CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
 
@@ -978,13 +905,10 @@ class TestFlashMode:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -1357,13 +1281,10 @@ class TestFlashMode:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="ram",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -1526,12 +1447,9 @@ class TestSendReplCommand:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -1715,13 +1633,10 @@ class TestCircuitpyBasePaths:
             ],
         )
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -1824,9 +1739,6 @@ class TestDeployFiles:
             reads.extend(extra_responses)
         port = FakeSerialPort(read_responses=reads)
 
-        def factory(**kwargs):
-            return port
-
         if drive_path is not None and monkeypatch is not None:
             pinned = Path(drive_path)
             monkeypatch.setattr(
@@ -1839,7 +1751,7 @@ class TestDeployFiles:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode=mode,
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -2383,13 +2295,10 @@ class TestDriveVerification:
     ) -> tuple[CircuitpythonTransport, FakeSerialPort]:
         port = FakeSerialPort(read_responses=reads)
 
-        def factory(**kwargs):
-            return port
-
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
-            serial_port_factory=factory,
+            serial_port_factory=port,
             time=FakeTime(),
         )
         transport.connect()
@@ -3099,14 +3008,14 @@ class TestWipeFilesystem:
         second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         ports = [first_port, second_port]
 
-        def factory(**kwargs):
+        def multi_port_factory(**kwargs):
             return ports.pop(0)
 
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
             timeout=0.05,
-            serial_port_factory=factory,
+            serial_port_factory=multi_port_factory,
             time=FakeTime(),
         )
         transport.connect()
