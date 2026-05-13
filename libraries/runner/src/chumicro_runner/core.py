@@ -199,9 +199,6 @@ class Runner:
         pending = self._pending
 
         for entry in self._entries:
-            if not entry.active:  # pragma: no cover — safety guard; _remove clears from list
-                continue
-
             # Time gate (period or start delay).
             if entry.next_due_ms is not None:
                 if ticks_diff(now_ms, entry.next_due_ms) < 0:
