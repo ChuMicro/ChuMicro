@@ -369,6 +369,19 @@ def derive_accept_key(client_key: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _merge_extra_headers(merged: "CaseInsensitiveDict", extra_headers) -> None:
+    """Merge caller-supplied headers into *merged* in insertion order.
+
+    Accepts a :class:`CaseInsensitiveDict`, a plain ``dict``, or any
+    iterable of ``(name, value)`` pairs.  ``None`` is a no-op.
+    """
+    if extra_headers is None:
+        return
+    iterable = extra_headers.items() if hasattr(extra_headers, "items") else extra_headers
+    for header_name, header_value in iterable:
+        merged[header_name] = header_value
+
+
 def encode_client_handshake(
     host: str,
     port: int,
@@ -389,15 +402,7 @@ def encode_client_handshake(
     host_value = host if is_default_port else f"{host}:{port}"
 
     merged = CaseInsensitiveDict()
-    if extra_headers is not None:
-        if isinstance(extra_headers, CaseInsensitiveDict):
-            iterable = extra_headers.items()
-        elif isinstance(extra_headers, dict):
-            iterable = extra_headers.items()
-        else:
-            iterable = extra_headers
-        for header_name, header_value in iterable:
-            merged[header_name] = header_value
+    _merge_extra_headers(merged, extra_headers)
     # Mandatory upgrade headers — applied AFTER caller's so they win.
     merged["Host"] = host_value
     merged["Upgrade"] = "websocket"
@@ -427,15 +432,7 @@ def encode_server_handshake_response(
     accept_token = derive_accept_key(client_key)
 
     merged = CaseInsensitiveDict()
-    if extra_headers is not None:
-        if isinstance(extra_headers, CaseInsensitiveDict):
-            iterable = extra_headers.items()
-        elif isinstance(extra_headers, dict):
-            iterable = extra_headers.items()
-        else:
-            iterable = extra_headers
-        for header_name, header_value in iterable:
-            merged[header_name] = header_value
+    _merge_extra_headers(merged, extra_headers)
     merged["Upgrade"] = "websocket"
     merged["Connection"] = "Upgrade"
     merged["Sec-WebSocket-Accept"] = accept_token
