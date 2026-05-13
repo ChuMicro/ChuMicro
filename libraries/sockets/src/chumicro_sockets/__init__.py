@@ -10,6 +10,7 @@ Public API::
         tls_client_socket,         # TLS factory
         udp_socket,                # UDP datagram factory (unicast + broadcast)
         ssl_context_with_ca,       # custom-CA helper
+        is_eagain,                 # would-block detector for non-blocking recv/send loops
     )
 
     from chumicro_sockets.testing import FakeSocket, FakeUDPSocket
@@ -36,6 +37,7 @@ __all__ = [
     "TCPClientSocket",
     "UDPSocket",
     "UnsupportedSSLConfigError",
+    "is_eagain",
     "ssl_context_with_ca",
     "ssl_context_with_cert_and_key",
     "ssl_context_with_cert_and_key_paths",
@@ -45,6 +47,18 @@ __all__ = [
     "tls_listening_socket",
     "udp_socket",
 ]
+
+
+def is_eagain(exception: BaseException) -> bool:
+    """``True`` if *exception* signals "would block, retry next tick".
+
+    Matches ``OSError(errno=11)`` (Linux / MP / CP) and ``35`` (macOS
+    CPython).  Custom-factory sockets must raise one of these on
+    non-blocking would-block — consumers' recv loops use this to
+    distinguish retry from a real socket error.
+    """
+    errno = getattr(exception, "errno", None)
+    return errno == 11 or errno == 35
 
 
 def _runtime_name() -> str:

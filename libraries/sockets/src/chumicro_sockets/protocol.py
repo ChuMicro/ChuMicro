@@ -19,6 +19,9 @@ The six operations:
 * ``fileno`` — for ``select.poll().register(fd, ...)``.  Returns ``-1``
   on adapters whose socket has no real fd (CP-radio fakes); callers
   who need polling check for ``-1`` and fall back to ``settimeout``.
+
+Custom-factory sockets must follow the same would-block shape —
+:func:`chumicro_sockets.is_eagain` is the consumer-side check.
 """
 
 # ``typing.Protocol`` only exists on CPython (and CP/MP builds that
