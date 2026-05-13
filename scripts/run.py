@@ -50,29 +50,37 @@ PYTHON = sys.executable
 def _default_workers() -> tuple[int, int]:
     """Return ``(phase_workers, package_workers)`` defaults sized for this host.
 
-    Sizing rule: total subprocess load (``phase × package``) stays roughly
-    at ``cpu_count()`` so we don't oversubscribe; per-dimension caps keep
-    each dimension in a sensible range (phases ≤ 11 — the preflight phase
-    count; package_workers ≤ 4 — diminishing returns past that since each
-    per-package job is a few seconds).
+    Preflight is mostly I/O-bound (pytest startup, subprocess spawning,
+    file reads), not CPU-bound, so mild oversubscription is a win.
+    Earlier sqrt-based sizing came from when the test phase was 73 s
+    and genuinely CPU-contended; post-2026-05 the test phase is ~3 s
+    and the wall-time floor is the slowest *single* phase (~5 s for
+    test-micropython).  Above that floor, adding workers can only help
+    by overlapping more phases.
 
-    Worked examples:
+    Sizing rule: run every preflight phase concurrently when cores
+    allow (cap at 11 — the total phase count), and let the
+    per-package test fan-out hit its diminishing-returns ceiling
+    around 8 packages wide.
+
+    Worked examples (benchmarked on a 12-core M-series host, 21
+    per-package test runs, preflight wall time):
 
     ====  =====  =======  ========
     cpu   phase  package  total
     ====  =====  =======  ========
-      4    2      2          4
-      8    3      2          6
-     12    3      4         12
-     16    4      4         16
-     24    5      4         20
+      4    4      4         16
+      8    8      6         48
+     12   11      8         88
+     16   11      8         88
+     24   11      8         88
     ====  =====  =======  ========
 
     Override via ``--phase-workers`` and ``--package-workers``.
     """
     cores = max(2, os.cpu_count() or 4)
-    phase = max(2, min(11, round(cores ** 0.5)))
-    package = max(1, min(4, cores // phase))
+    phase = max(2, min(11, cores))
+    package = max(2, min(8, cores // 2 + 2))
     return phase, package
 
 
