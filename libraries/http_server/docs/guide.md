@@ -95,7 +95,7 @@ The handler signature is `(Request) -> Response`.
 | `request.headers` | Case-insensitive dict. |
 | `request.body` | Raw `bytes` (or `b""` for body-less requests). |
 | `request.text()` | Body decoded per `Content-Type`'s charset. |
-| `request.json()` | Body parsed via `chumicro_msgpack`-compatible `json` import. |
+| `request.json()` | Body parsed via `json.loads` — UTF-8 in, Python types out. |
 
 `build_response(status_code, *, body=None, json=None, text=None, html=None, headers=None)` is the convenience builder — pass exactly one of `body=` / `json=` / `text=` / `html=` and it sets the right `Content-Type`:
 

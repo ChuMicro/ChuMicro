@@ -15,15 +15,11 @@ Per-connection state machine::
               -> DONE / CLOSING
                            \\-> ERROR (any state)
 
-The handler is called once, after headers parse + before the body is
-buffered.  For requests with a body, the handler can call
-``request.body_bytes()`` to consume it (the runner re-enters the
-connection until the body has arrived, then returns to the handler's
-continuation).
-
-This module ships single-connection-at-a-time, single-handler,
-canned 200 responses.  Routing + multi-connection + per-tick
-budgets are future work.
+The handler is called once, after the full request (headers + any
+``Content-Length`` body) has been parsed.  Bounded multi-connection
+(``max_connections``), per-tick recv / send byte budgets, and a
+``@server.route`` decorator with method dispatch + single trailing
+path parameter are all wired up.
 """
 
 import json
@@ -63,11 +59,6 @@ _REASONS = {
 }
 
 
-def _no_callback(*_args, **_kwargs):  # pragma: no cover - default no-op stub
-    """Default no-op callback so handlers can be stored unconditionally."""
-    return None
-
-
 def _force_non_blocking(socket):
     """Best-effort ``setblocking(False)`` on a socket.
 
@@ -97,9 +88,9 @@ class Request:
         method: HTTP verb (e.g. ``"GET"``).
         target: Raw request-target — e.g. ``"/api/widgets?page=2"``.
         path: Just the path component of the target.
-        query: :class:`CaseInsensitiveDict` of query-string parameters
-            (slice 7a leaves percent-encoding raw — most embedded
-            REST APIs avoid encoded params).
+        query: :class:`CaseInsensitiveDict` of query-string parameters.
+            Percent-encoding is not decoded — most embedded REST APIs
+            avoid encoded params.
         http_version: e.g. ``"HTTP/1.1"``.
         headers: :class:`CaseInsensitiveDict` of request headers.
         body: Raw request body as ``bytes``.
@@ -216,7 +207,6 @@ class _Connection:
     __slots__ = (
         "_deadline_ticks",
         "_handler",
-        "_max_request_body_bytes",
         "_parser",
         "_peer",
         "_recv_budget",
@@ -246,7 +236,6 @@ class _Connection:
         self._deadline_ticks = deadline_ticks
         self._recv_budget = recv_budget
         self._send_budget = send_budget
-        self._max_request_body_bytes = max_request_body_bytes
         self._parser = RequestParser(max_body_bytes=max_request_body_bytes)
         # Pre-allocated recv scratch reused by every :meth:`_drive_recv` call
         # — mirrors :class:`chumicro_mqtt._wire.PacketDecoder` and
@@ -293,9 +282,10 @@ class _Connection:
             ):
                 self._drive_send()
         except (OSError, ServerError):
-            # Either side of the wire died — drop the connection.
-            # The slice 7b path will refine this with a 400 best-effort
-            # write before close; for now we just close.
+            # Either side of the wire died — drop the connection.  The
+            # writer's response state is already past the point where a
+            # best-effort 400 would be useful, so we just fail; HttpServer
+            # closes the socket on the next tick.
             self._fail()
 
     def close(self):
@@ -651,12 +641,11 @@ class HttpServer:
             handler: Optional fallback callable
                 ``(Request) -> Response`` for paths that don't match
                 any route registered via :meth:`route`.  If ``None``
-                (the default), unrouted paths return 404.  Useful
-                for non-routed servers (slice-7a-style single-handler
-                shape) and for catch-alls.
+                (the default), unrouted paths return 404.  Useful for
+                single-handler servers without route registration and
+                for catch-alls under a routed server.
             max_connections: Cap on simultaneous in-flight connections.
-                Default 4 — sized for Pi Pico W heap.  Cap enforced
-                from slice 7c.
+                Default 4 — sized for Pi Pico W heap.
             request_timeout_ms: Per-connection deadline.  A connection
                 that hasn't reached ``DONE`` is dropped + the socket
                 is closed.
@@ -700,9 +689,6 @@ class HttpServer:
         # value bound to ``request.path_params[param_name]``.
         self._explicit_routes = {}
         self._pattern_routes = []
-
-        # Optional event hook.
-        self.on_error = _no_callback
 
     # ------------------------------------------------------------------
     # Public route registration
@@ -889,9 +875,14 @@ class HttpServer:
     # Runner contract
     # ------------------------------------------------------------------
 
-    def check(self, now_ms):  # noqa: ARG002 — runner contract uses now_ms
-        """Return ``True`` if there's accept work or in-flight work."""
-        return self._listener is None or bool(self._connections) or True
+    def check(self, now_ms):  # noqa: ARG002 — runner contract
+        """Always ``True``: the accept loop must run on every tick.
+
+        Mirrors :class:`chumicro_websockets.WebSocketServer.check` —
+        cheap to advance even with no in-flight connections, and the
+        listener may have a pending accept at any moment.
+        """
+        return True
 
     def handle(self, now_ms):
         """One tick of progress: lazy-open listener, accept, advance conns."""
