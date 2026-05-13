@@ -14,9 +14,9 @@ onto server-only boards for ~125 lines of shared code roughly
 doubles the flash footprint of a server-only deploy.  The RFCs
 are stable, so the duplication has near-zero drift cost.
 
-v1 scope: request line + headers + ``Content-Length`` body
-buffering.  Chunked request bodies and streaming-via-chunk-
-callback are v2.
+Scope: request line + headers + ``Content-Length`` body buffering.
+Chunked request bodies and streaming-via-chunk-callback are out of
+scope.
 """
 
 try:
@@ -509,7 +509,7 @@ class RequestParser:
         """Headers-complete: figure out body framing."""
         content_length_str = self._headers.get("Content-Length")
         if content_length_str is None:
-            # No Content-Length, no chunked (v2) — assume zero body.
+            # No Content-Length, no chunked — assume zero body.
             self._state = RequestParseState.DONE
             return
         try:

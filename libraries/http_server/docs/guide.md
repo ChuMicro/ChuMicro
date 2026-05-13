@@ -72,7 +72,7 @@ def temp(request):
 Two route shapes are supported:
 
 * **Exact match** — `"/api/widgets"`.  O(1) lookup.
-* **Single trailing parameter** — `"/widgets/<id>"`.  The matched segment populates `request.path_params["id"]`.  Multi-parameter routes (`/users/<uid>/posts/<pid>`) are a v2 ask.
+* **Single trailing parameter** — `"/widgets/<id>"`.  The matched segment populates `request.path_params["id"]`.  Multi-parameter routes (`/users/<uid>/posts/<pid>`) are not supported.
 
 Method dispatch:
 
