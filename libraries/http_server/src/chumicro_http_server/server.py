@@ -97,18 +97,6 @@ class Request:
         peer: ``(host, port)`` tuple of the connecting client.
     """
 
-    __slots__ = (
-        "body",
-        "headers",
-        "http_version",
-        "method",
-        "path",
-        "path_params",
-        "peer",
-        "query",
-        "target",
-    )
-
     def __init__(
         self,
         *,
@@ -154,8 +142,6 @@ class Response:
             automatically by the writer.
         body: Bytes to send as the response body (may be ``b""``).
     """
-
-    __slots__ = ("body", "headers", "reason", "status_code")
 
     def __init__(
         self,
@@ -203,21 +189,6 @@ class _Connection:
     server's :meth:`HttpServer.handle` advances every connection by
     one budgeted slice per tick.
     """
-
-    __slots__ = (
-        "_deadline_ticks",
-        "_handler",
-        "_parser",
-        "_peer",
-        "_recv_budget",
-        "_recv_buffer",
-        "_recv_view",
-        "_response_bytes",
-        "_response_offset",
-        "_send_budget",
-        "_socket",
-        "_state",
-    )
 
     def __init__(
         self,
