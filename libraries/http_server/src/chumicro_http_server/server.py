@@ -106,7 +106,6 @@ class Request:
         headers: object,
         body: bytes,
         peer: tuple,
-        path_params: dict | None = None,
     ) -> None:
         self.method = method
         self.target = target
@@ -116,7 +115,9 @@ class Request:
         self.peer = peer
         self.path, raw_query = split_target(target)
         self.query = parse_query(raw_query)
-        self.path_params = path_params if path_params is not None else {}
+        # Pattern-route handlers populate this dict at bind time
+        # (HttpServer._dispatch_request).  Non-route requests leave it empty.
+        self.path_params = {}
 
     def text(self) -> str:
         """Return :attr:`body` decoded as ``str`` using utf-8."""
