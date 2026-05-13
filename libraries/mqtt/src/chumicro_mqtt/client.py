@@ -14,10 +14,6 @@ sit in :mod:`chumicro_mqtt._wire`.
 
 from collections import deque
 
-from chumicro_config import InvalidConfigType, is_config_like
-from chumicro_sockets import is_eagain
-from chumicro_timing import ticks as _DEFAULT_TICKS
-
 from chumicro_mqtt._wire import (
     PACKET_CONNACK,
     PACKET_DISCONNECT,
@@ -42,6 +38,11 @@ from chumicro_mqtt._wire import (
     encode_subscribe,
     encode_unsubscribe,
 )
+
+
+def _is_eagain(error):
+    return getattr(error, "errno", None) in (11, 35)
+
 
 # ---------------------------------------------------------------------------
 # Connection state + pending-work tracking
@@ -341,11 +342,6 @@ class MQTTClient:
             manifest — they're application config the example /
             project reads directly via ``config["…"]``.
         """
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"MQTTClient.from_config requires a RuntimeConfig or "
-                f"dict, got {type(config).__name__}",
-            )
         if socket is None and socket_factory is None:
             # Lazy import so users who pass their own socket / socket_factory
             # don't pull chumicro_sockets into the deploy graph.  See
@@ -525,7 +521,9 @@ class MQTTClient:
         self._recv_budget_per_tick = recv_budget_per_tick
         self._max_tx_queue_size = max_tx_queue_size
 
-        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        if ticks is None:
+            from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
+        self._ticks = ticks
 
         decoder_kwargs = {}
         if rx_buffer_size is not None:
@@ -1065,7 +1063,7 @@ class MQTTClient:
         try:
             return self._socket.send(payload)
         except OSError as error:
-            if is_eagain(error):  # pragma: no cover - EAGAIN handling
+            if _is_eagain(error):  # pragma: no cover - EAGAIN handling
                 return 0
             raise
 
@@ -1121,7 +1119,7 @@ class MQTTClient:
             try:
                 got = self._socket.recv_into(buffer_view, capacity)
             except OSError as error:
-                if is_eagain(error):  # pragma: no cover - EAGAIN handling
+                if _is_eagain(error):  # pragma: no cover - EAGAIN handling
                     break  # EAGAIN — no data this tick.
                 raise
             if got == 0:
