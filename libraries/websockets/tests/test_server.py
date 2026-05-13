@@ -1004,4 +1004,3 @@ class TestServerFromConfig:
             accept_path="/echo",
         )
         assert server._accept_path == "/echo"  # noqa: SLF001
-
