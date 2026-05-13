@@ -1,6 +1,6 @@
 # Workstream: Test Ecosystem Ergonomics
 
-Status: **open** — audited 2026-05-12, five phases scoped, none started.
+Status: **open** — audited 2026-05-12, Phase 1 shipped 2026-05-12 (commit `115510e6`).  Phases 2-5 pending.
 
 ## Purpose
 
@@ -81,17 +81,23 @@ Consistent with [Decision 0010](../decisions/0010-library-testability.md)'s "fak
 
 Five phases, sequenced by ROI per phase (biggest workbench wins first, libraries-side polish last).  Each phase ships as one commit on `main` with VERSION bump on every affected package.
 
-### Phase 1 — `workbench/workspace/src/chumicro_workspace/testing.py` (highest ROI)
+### Phase 1 — `workbench/workspace/src/chumicro_workspace/testing.py` (shipped 2026-05-12)
 
-Create the missing module.  Park:
+Public module created at `workbench/workspace/src/chumicro_workspace/testing.py` exporting:
 
-- `FakePort(device, description)` — pyserial list_ports shim.
-- `FakeSubprocessRunner` — callable that records `(args, kwargs)` and returns `CompletedProcess`.  Replaces 8+ inlined `fake_run` lambdas.
-- `FakeProbeResult` — replaces `_Info` / `_MockEntry` inlines.
-- `seed_workspace(tmp_path, **overrides)` — replaces 410 `_seed_workspace` call sites.
-- `seed_project(tmp_path, **overrides)` — same for project scaffold.
+- `seed_workspace(tmp_path, *, runtime, device_id)` — collapses the old `_seed_workspace` + `_seed_workspace_with_cp_device` into one parameterized helper.
+- `seed_project(workspace_root, name)` — projects/<name>/{project_config.toml,code.py,main.py} scaffold.
+- `FakePort(device, description)` — pyserial `ListPortInfo` shim.
+- `FakeSubprocessRunner` + `FakeSubprocessCall` — callable recorder with `returncode` / `returncodes` knobs.
+- `fake_probe_info(...) -> FakeProbeInfo` — matches `chumicro_deploy.probe_device`'s return shape with firmware-floor-passing defaults and a `with_implementation=False` branch for the no-marker path.
 
-Adopt across `workbench/workspace/tests/`.  Bump `chumicro-workspace` VERSION (minor — new public test-helper surface).  Estimated reclamation: ~800–1,200 test LOC.
+Adoption in `tests/test_cli.py`: 30+ `seed_workspace` sites, 33 `fake_probe_info` sites, 4 `FakePort` sites, 14 `FakeSubprocessRunner` sites; `_seed_workspace_with_cp_device` collapsed to a one-line wrapper.  In `tests/test_onboarding.py`: the `_info_with_implementation` / `_info_without_implementation` helpers become two-line wrappers around `fake_probe_info`.
+
+Skipped on cost-benefit: `_patch_environment` in `test_cli.py` (already DRY across 5 callers via a parameterized `run_returncode`); `_install_capturing_subprocess` in `TestInstallLibraries` (already a class helper).  Migration would touch 30+ assertion lines for marginal LOC win.
+
+Result: 740 test LOC removed, 218 LOC added in `testing.py`, net -168 LOC.  `chumicro_workspace.testing` at 98 % coverage from organic test usage.  `chumicro-workspace` VERSION 0.24.0 → 0.25.0 (minor, new public surface).  Full 756-test workspace suite passes.
+
+The structural win is centralized fakes and a visible public surface for downstream workspace-template authors — LOC reduction is a side effect, not the headline.
 
 ### Phase 2 — `workbench/pytest-device/src/chumicro_pytest_device/testing.py`
 
