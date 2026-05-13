@@ -15,7 +15,9 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # Hot-path imports — touched by lint, run_command, ROOT-derived path
@@ -53,10 +55,12 @@ def _default_workers() -> tuple[int, int]:
     Preflight is mostly I/O-bound (pytest startup, subprocess spawning,
     file reads), not CPU-bound, so mild oversubscription is a win.
     Earlier sqrt-based sizing came from when the test phase was 73 s
-    and genuinely CPU-contended; post-2026-05 the test phase is ~3 s
-    and the wall-time floor is the slowest *single* phase (~5 s for
-    test-micropython).  Above that floor, adding workers can only help
-    by overlapping more phases.
+    and genuinely CPU-contended; the unit-test phases are seconds-scale
+    today.  After the per-library fan-out reached test-micropython /
+    test-circuitpython (each now ~2.5 s standalone, ~6 s under preflight
+    contention with concurrent test-cpython + build + docs), the wall-
+    time floor is dominated by whichever single phase loses most to
+    cross-phase resource contention — typically ``test (python <ver>)``.
 
     Sizing rule: run every preflight phase concurrently when cores
     allow (cap at 11 — the total phase count), and let the
@@ -101,6 +105,22 @@ _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS = _DEFAULT_PHASE_WORKERS
 #: (``python -m build``, ``python -m zensical build``, or pytest).
 #: See :func:`_default_workers`; override via ``--package-workers``.
 _DEFAULT_PACKAGE_PARALLEL_WORKERS = _DEFAULT_PACKAGE_WORKERS
+
+
+#: Default slow-test threshold for host CPython tests (seconds).
+#: Tests crossing this duration are surfaced as warn-only "SLOW"
+#: notices in the rolled-up phase summary — see
+#: :func:`_format_pytest_phase_summary`.  Override via
+#: ``--slow-test-threshold-cpython``.
+_DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON = 1.0
+
+
+#: Default slow-test threshold for unix-port (MicroPython /
+#: CircuitPython compatibility) tests (seconds).  Higher than CPython
+#: because each unix-port test pays a subprocess-spawn tax inside the
+#: chumicro-pytest-device plugin.  Override via
+#: ``--slow-test-threshold-unix-port``.
+_DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT = 2.0
 
 
 #: Env var the parent dispatcher sets when re-invoking ``scripts/run.py``
@@ -693,6 +713,7 @@ def test_cpython(
     elevated_packages: set[str] | None = None,
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
     quiet: bool = False,
+    slow_test_threshold_s: float = _DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
 ) -> int:
     """Run the CPython test suite for the given packages.
 
@@ -757,6 +778,10 @@ def test_cpython(
     # which routes the lines to the right place (live status, prefixed
     # interleave, or buffered replay) based on TTY + ``--quiet``.
     phases: list[tuple[str, Callable[[_Sink], int]]] = []
+    collector = _PytestResultCollector()
+    durations_args = [
+        "--durations=0", f"--durations-min={slow_test_threshold_s}",
+    ]
     run_counter = 0
     for package_dir in testable:
         runs = _plan_test_runs_for_library(package_dir, per_library)
@@ -807,6 +832,7 @@ def test_cpython(
                 *cov_args,
                 "--cov-report=",
                 *cov_gate_args,
+                *durations_args,
                 *disable_plugin_args,
                 test_target,
                 *extra_args,
@@ -816,7 +842,14 @@ def test_cpython(
             }
             label = f"{package_dir.relative_to(ROOT)}/{Path(test_target).name}"
             phases.append(
-                (label, _make_pytest_phase(command, run_environment)),
+                (
+                    label,
+                    _make_pytest_phase(
+                        command, run_environment,
+                        result_collector=collector,
+                        label=label,
+                    ),
+                ),
             )
 
     overall_exit_code, _failing_label = _run_parallel_phases(
@@ -824,6 +857,13 @@ def test_cpython(
         dispatcher=_pick_dispatcher(quiet=quiet),
         max_workers=package_workers,
     )
+
+    for line in _format_pytest_phase_summary(
+        "test",
+        collector.results,
+        slow_threshold_s=slow_test_threshold_s,
+    ):
+        print(line)
 
     if no_cov:
         return overall_exit_code
@@ -862,6 +902,9 @@ def _run_pytest_capturing(
 
 def _make_pytest_phase(
     command: list[str], environment: dict[str, str],
+    *,
+    result_collector: _PytestResultCollector | None = None,
+    label: str | None = None,
 ) -> Callable[[_Sink], int]:
     """Wrap a pytest invocation as a streaming phase callable.
 
@@ -869,8 +912,265 @@ def _make_pytest_phase(
     schedules per package.  Delegates to :func:`_run_pytest_capturing`
     so tests can monkeypatch one well-known seam to observe the
     constructed pytest command line.
+
+    When *result_collector* is provided, the phase additionally parses
+    the pytest output for the ``=== N passed in Xs ===`` summary line
+    plus the ``slowest durations`` block, suppresses those lines from
+    the sink, and stores a :class:`_PytestRunResult` under *label* so
+    the parent fan-out can emit a rolled-up phase summary.
     """
-    return lambda sink: _run_pytest_capturing(command, environment, sink)
+    if result_collector is None:
+        return lambda sink: _run_pytest_capturing(command, environment, sink)
+
+    phase_label = label or " ".join(command)
+
+    def phase(sink: _Sink) -> int:
+        filter_state = _PytestOutputFilter()
+        wrapped = _FilteringSink(sink, filter_state)
+        exit_code = _run_pytest_capturing(command, environment, wrapped)
+        result_collector.record(
+            _PytestRunResult.build(phase_label, exit_code, filter_state),
+        )
+        return exit_code
+
+    return phase
+
+
+# ---------------------------------------------------------------------------
+# Pytest output parsing: filter per-library summary lines into a
+# per-fan-out aggregate so the user sees one rolled-up "N passed across
+# M libraries in Xs" line instead of N noisy per-library summaries.
+# Also collects "slowest durations" entries so the parent phase can
+# surface a warn-only "SLOW (>Xs)" notice.
+# ---------------------------------------------------------------------------
+
+
+_PYTEST_SLOW_HEADER = re.compile(r"^=+\s*slowest durations\s*=+\s*$")
+_PYTEST_SLOW_ROW = re.compile(
+    r"^(?P<duration>\d+\.\d+)s\s+(?P<phase>call|setup|teardown)\s+(?P<test_id>\S+)\s*$",
+)
+_PYTEST_SLOW_TRAILER = re.compile(r"^\(\d+ durations? < .* hidden\.\)\s*$")
+_PYTEST_RESULT_FULL = re.compile(
+    r"^=+\s*"
+    r"(?:(?P<passed>\d+)\s+passed)?"
+    r"(?:,\s+(?P<skipped>\d+)\s+skipped)?"
+    r"(?:,\s+(?P<deselected>\d+)\s+deselected)?"
+    r"(?:,\s+\d+\s+warnings?)?"
+    r"\s+in\s+(?P<duration>\d+\.\d+)s",
+)
+_PYTEST_NO_TESTS_RAN = re.compile(r"^=+\s*no tests ran\s+in\s+\d+\.\d+s")
+
+
+@dataclass
+class _PytestRunResult:
+    """Parsed summary of a single pytest invocation."""
+
+    label: str
+    exit_code: int
+    passed: int = 0
+    skipped: int = 0
+    duration_s: float = 0.0
+    slow_tests: list[tuple[float, str]] = field(default_factory=list)
+
+    @classmethod
+    def build(
+        cls,
+        label: str,
+        exit_code: int,
+        filter_state: _PytestOutputFilter,
+    ) -> _PytestRunResult:
+        return cls(
+            label=label,
+            exit_code=exit_code,
+            passed=filter_state.passed,
+            skipped=filter_state.skipped,
+            duration_s=filter_state.duration_s,
+            slow_tests=list(filter_state.slow_tests),
+        )
+
+
+class _PytestResultCollector:
+    """Thread-safe accumulator for :class:`_PytestRunResult` objects.
+
+    Phase closures (run from worker threads via
+    :func:`_run_parallel_phases`) call :meth:`record` to deposit one
+    result per pytest invocation.  The parent fan-out reads
+    :attr:`results` after the parallel block completes.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._results: list[_PytestRunResult] = []
+
+    def record(self, result: _PytestRunResult) -> None:
+        with self._lock:
+            self._results.append(result)
+
+    @property
+    def results(self) -> list[_PytestRunResult]:
+        with self._lock:
+            return list(self._results)
+
+
+class _PytestOutputFilter:
+    """State machine that intercepts pytest summary + durations lines.
+
+    Plugged into a :class:`_FilteringSink`, this consumes the noisy
+    per-library summary lines (``=== N passed in Xs ===``) and the
+    ``slowest durations`` block, parsing them into structured fields
+    that the parent fan-out reads via :meth:`_PytestRunResult.build`.
+    Returns ``True`` from :meth:`consume` when a line was absorbed —
+    the wrapping sink then suppresses forwarding to the dispatcher.
+
+    Lines that don't match a known summary form (test progress dots,
+    failure tracebacks, "+ pytest ..." command echo, etc.) pass
+    through unchanged.
+    """
+
+    def __init__(self) -> None:
+        self.passed = 0
+        self.skipped = 0
+        self.duration_s = 0.0
+        self.slow_tests: list[tuple[float, str]] = []
+        self._in_slow_block = False
+
+    def consume(self, text: str) -> bool:
+        stripped = text.rstrip()
+        if _PYTEST_SLOW_HEADER.match(stripped):
+            self._in_slow_block = True
+            return True
+        if self._in_slow_block:
+            row = _PYTEST_SLOW_ROW.match(stripped)
+            if row is not None:
+                # Only count ``call`` durations — setup / teardown
+                # often dominate fast tests via fixture cost but
+                # aren't what the user means by "this test is slow".
+                if row.group("phase") == "call":
+                    self.slow_tests.append(
+                        (float(row.group("duration")), row.group("test_id")),
+                    )
+                return True
+            if _PYTEST_SLOW_TRAILER.match(stripped):
+                return True
+            if not stripped:
+                return True
+            # Anything else ends the block (the final ``=== N passed ===``
+            # line falls through to the summary handler below).
+            self._in_slow_block = False
+        match = _PYTEST_RESULT_FULL.match(stripped)
+        if match is not None:
+            if match.group("passed"):
+                self.passed += int(match.group("passed"))
+            if match.group("skipped"):
+                self.skipped += int(match.group("skipped"))
+            self.duration_s += float(match.group("duration"))
+            return True
+        if _PYTEST_NO_TESTS_RAN.match(stripped):
+            return True
+        return False
+
+
+class _FilteringSink:
+    """Duck-typed sink wrapper that routes through a :class:`_PytestOutputFilter`.
+
+    Lines the filter consumes are dropped before reaching the inner
+    sink (and therefore the dispatcher).  Everything else flows through
+    unchanged so progress dots and failure tracebacks still surface.
+    """
+
+    __slots__ = ("_inner", "_filter")
+
+    def __init__(self, inner: _Sink, filter_state: _PytestOutputFilter) -> None:
+        self._inner = inner
+        self._filter = filter_state
+
+    def line(self, text: str) -> None:
+        if self._filter.consume(text):
+            return
+        self._inner.line(text)
+
+    @property
+    def captured(self) -> str:
+        return self._inner.captured
+
+
+def _format_pytest_phase_summary(
+    label: str,
+    results: Sequence[_PytestRunResult],
+    *,
+    slow_threshold_s: float,
+) -> list[str]:
+    """Build the rolled-up summary lines for a per-library pytest fan-out.
+
+    Returns one summary line plus optional SLOW notices.  The summary
+    follows pytest's own ``X passed [, Y skipped] in Zs`` shape so log
+    scanners that already grep for "passed in" keep working, prefixed
+    with the fan-out scope (``<label>: ... across N libraries``).
+
+    Slow notices list every test whose ``call`` duration crossed
+    *slow_threshold_s*.  Warn-only — the parent fan-out's exit code is
+    unaffected.
+    """
+    passed = sum(result.passed for result in results)
+    skipped = sum(result.skipped for result in results)
+    duration_s = sum(result.duration_s for result in results)
+    library_count = len(results)
+
+    pieces = [f"{passed} passed"]
+    if skipped:
+        pieces.append(f"{skipped} skipped")
+    summary = (
+        f"{label}: {', '.join(pieces)} across {library_count} "
+        f"librar{'y' if library_count == 1 else 'ies'} "
+        f"in {duration_s:.2f}s"
+    )
+    lines = [summary]
+    slow_entries: list[tuple[float, str]] = []
+    for result in results:
+        for duration, test_id in result.slow_tests:
+            if duration >= slow_threshold_s:
+                slow_entries.append((duration, test_id))
+    if slow_entries:
+        slow_entries.sort(reverse=True)
+        lines.append(
+            f"{label}: SLOW (>{slow_threshold_s:.1f}s): "
+            + ", ".join(
+                f"{test_id} ({duration:.2f}s)"
+                for duration, test_id in slow_entries
+            ),
+        )
+    return lines
+
+
+class _OuterSinkDispatcher(_Dispatcher):
+    """Dispatcher that forwards every inner-phase line to a single outer sink.
+
+    Used when a top-level phase (e.g. ``test_micropython`` running as a
+    parallel phase of ``test_all_runtimes``) wants to fan out internally
+    without losing its parent's sink wiring.  Inner phase events
+    (started / done) are dropped; only line output flows out, because
+    the outer dispatcher already brackets the top-level phase itself.
+    """
+
+    def __init__(self, outer_sink: _Sink) -> None:
+        self._outer = outer_sink
+        self._lock = threading.Lock()
+        self._results: dict[str, tuple[int, str]] = {}
+
+    def phase_line(self, label: str, text: str) -> None:
+        with self._lock:
+            self._outer.line(text)
+
+    def phase_done(self, label: str, exit_code: int, captured: str) -> None:
+        with self._lock:
+            self._results[label] = (exit_code, captured)
+
+    def captured_outputs(self) -> dict[str, str]:
+        with self._lock:
+            return {
+                label: captured
+                for label, (_, captured) in self._results.items()
+            }
 
 
 def test_scripts(
@@ -1191,6 +1491,8 @@ def preflight(
     phase_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
     quiet: bool = False,
+    slow_test_threshold_cpython: float = _DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+    slow_test_threshold_unix_port: float = _DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
 ) -> int:
     """Run the full check suite that CI requires on every pull request.
 
@@ -1250,14 +1552,17 @@ def preflight(
     # "lint first, test-circuitpython last" shape regardless of
     # which phase actually finishes first.
     # Forward --package-workers to subcommands whose internal fan-out
-    # honors the cap (test, build, docs, check-api).  Phases that don't
-    # fan out per-package (lint, test-scripts, verify-examples,
-    # check-dep-graph, check-version, test-micropython,
-    # test-circuitpython) ignore it.
+    # honors the cap (test, build, docs, check-api, test-micropython,
+    # test-circuitpython).  Phases that don't fan out per-package (lint,
+    # test-scripts, verify-examples, check-dep-graph, check-version)
+    # ignore it.
     package_workers_args = ["--package-workers", str(package_workers)]
     check_api_workers_args = ["--max-workers", str(package_workers)]
 
-    test_args = ["test", "--all", *package_workers_args]
+    test_args = [
+        "test", "--all", *package_workers_args,
+        "--slow-test-threshold-cpython", str(slow_test_threshold_cpython),
+    ]
     if coverage_threshold is not None:
         test_args.extend(["--coverage-threshold", str(coverage_threshold)])
     if elevated_package_names is not None:
@@ -1265,11 +1570,16 @@ def preflight(
             ["--elevated-packages", ",".join(elevated_package_names)],
         )
 
-    test_micropython_args = ["test-micropython"]
+    unix_port_shared_args = [
+        *package_workers_args,
+        "--slow-test-threshold-unix-port", str(slow_test_threshold_unix_port),
+    ]
+
+    test_micropython_args = ["test-micropython", *unix_port_shared_args]
     if micropython_binary is not None:
         test_micropython_args.extend(["--micropython-binary", micropython_binary])
 
-    test_circuitpython_args = ["test-circuitpython"]
+    test_circuitpython_args = ["test-circuitpython", *unix_port_shared_args]
     if circuitpython_binary is not None:
         test_circuitpython_args.extend(
             ["--circuitpython-binary", circuitpython_binary],
@@ -1366,31 +1676,47 @@ def _emit(sink: _Sink | None, message: str) -> None:
         print(message)
 
 
+def _unix_port_test_library_dirs(
+    package_dirs: list[Path] | None,
+) -> list[Path]:
+    """Return per-library ``tests/`` directories for the unix-port fan-out.
+
+    Mirrors the pre-fan-out shape: with no explicit scope, sweep every
+    publishable library that ships a ``tests/`` directory.  The plugin
+    handles platform filtering ([tool.chumicro].platforms) and skips
+    per-test cases for libraries that don't target the active runtime,
+    so libraries that opt out still produce a "no tests collected"
+    pytest invocation we benignly absorb.
+    """
+    library_dirs = _selected_library_dirs(package_dirs)
+    if not library_dirs:
+        library_dirs = _selected_library_dirs(None)
+    return [
+        library_dir for library_dir in library_dirs
+        if (library_dir / "tests").is_dir()
+    ]
+
+
 def _pytest_unix_port_command(
-    runtime: str, binary: str | None, package_dirs: list[Path] | None,
+    runtime: str,
+    binary: str | None,
+    library_dir: Path,
+    *,
+    slow_test_threshold_s: float,
 ) -> list[str]:
     """Build the ``pytest ... --target unix-port --runtime <X>`` invocation.
 
-    Selects the same set of publishable libraries the parallel-phase
-    dispatcher used to pass directly to the compatibility script.  The
-    plugin handles platform filtering ([tool.chumicro].platforms) and
-    skips per-test cases for libraries that don't target *runtime*.
+    One command per library — the parallel fan-out below schedules a
+    separate pytest subprocess for each, so the wall-time floor for
+    the runtime phase is the slowest single library rather than the
+    serial sum.
     """
-    libraries_root = ROOT / "libraries"
-    library_dirs = _selected_library_dirs(package_dirs)
-    if library_dirs:
-        paths = [
-            str(library_dir / "tests")
-            for library_dir in library_dirs
-            if (library_dir / "tests").is_dir()
-        ]
-    else:
-        paths = [str(libraries_root)]
     command = [
-        PYTHON, "-m", "pytest", *paths,
+        PYTHON, "-m", "pytest", str(library_dir / "tests"),
         "--target", "unix-port",
         "--runtime", runtime,
         "--no-cov",
+        "--durations=0", f"--durations-min={slow_test_threshold_s}",
     ]
     if binary is not None:
         command.extend([f"--{runtime}-binary", binary])
@@ -1433,18 +1759,100 @@ def _ensure_unix_port_binary(
     return 0
 
 
+def _run_unix_port_test_phase(
+    runtime: str,
+    binary: str | None,
+    package_dirs: list[Path] | None,
+    *,
+    sink: _Sink | None,
+    package_workers: int,
+    slow_test_threshold_s: float,
+) -> int:
+    """Fan out unix-port pytest invocations per library.
+
+    Resolves *binary* once (so each worker skips re-resolution via
+    ``--{runtime}-binary``), builds one pytest command per library
+    under :func:`_unix_port_test_library_dirs`, and schedules them
+    through :func:`_run_parallel_phases`.  Aggregates per-library
+    pytest summaries into a single rolled-up line per runtime —
+    written through *sink* when called as a sub-phase of
+    :func:`test_all_runtimes`, otherwise straight to stdout.
+    """
+    library_dirs = _unix_port_test_library_dirs(package_dirs)
+    if not library_dirs:
+        _emit(sink, f"No library tests/ directories found for {runtime}.")
+        return 0
+
+    # When the caller didn't pass an explicit binary path, resolve it
+    # once and forward to every child pytest so workers skip the
+    # marker-file / PATH lookup the plugin would otherwise repeat per
+    # invocation.
+    resolved_binary = binary
+    if resolved_binary is None:
+        from shared import (
+            resolve_circuitpython_binary,
+            resolve_micropython_binary,
+        )
+        resolver = (
+            resolve_micropython_binary
+            if runtime == "micropython"
+            else resolve_circuitpython_binary
+        )
+        resolved_binary = resolver(None)
+
+    collector = _PytestResultCollector()
+    phases: list[tuple[str, Callable[[_Sink], int]]] = []
+    environment = pythonpath_environment()
+    for library_dir in library_dirs:
+        command = _pytest_unix_port_command(
+            runtime, resolved_binary, library_dir,
+            slow_test_threshold_s=slow_test_threshold_s,
+        )
+        label = f"{library_dir.relative_to(ROOT)}"
+        phases.append(
+            (
+                label,
+                _make_pytest_phase(
+                    command, environment,
+                    result_collector=collector,
+                    label=label,
+                ),
+            ),
+        )
+
+    dispatcher: _Dispatcher = (
+        _OuterSinkDispatcher(sink) if sink is not None
+        else _pick_dispatcher(quiet=False)
+    )
+    exit_code, _failing_label = _run_parallel_phases(
+        phases, dispatcher=dispatcher, max_workers=package_workers,
+    )
+
+    phase_label = f"test-{runtime}"
+    for line in _format_pytest_phase_summary(
+        phase_label,
+        collector.results,
+        slow_threshold_s=slow_test_threshold_s,
+    ):
+        _emit(sink, line)
+    return exit_code
+
+
 def test_micropython(
     binary: str | None = None,
     package_dirs: list[Path] | None = None,
     *,
     sink: _Sink | None = None,
+    package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+    slow_test_threshold_s: float = _DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
 ) -> int:
     """Run unix-port unit tests under the MicroPython binary.
 
-    Thin wrapper that auto-prepares the binary on first use, then
-    delegates to ``pytest ... --target unix-port --runtime micropython``.
-    Platform filtering happens inside ``chumicro-pytest-device`` based
-    on each library's ``[tool.chumicro].platforms``.
+    Auto-prepares the binary on first use, then fans out one
+    ``pytest ... --target unix-port --runtime micropython`` per library
+    through :func:`_run_unix_port_test_phase`.  Platform filtering
+    happens inside ``chumicro-pytest-device`` based on each library's
+    ``[tool.chumicro].platforms``.
     """
     from prepare_micropython import prepare_micropython
     from shared import resolve_micropython_binary
@@ -1455,16 +1863,12 @@ def test_micropython(
     )
     if prep_result != 0:
         return prep_result
-    command = _pytest_unix_port_command("micropython", binary, package_dirs)
-    if sink is not None:
-        sink.line(f"+ {' '.join(command)}")
-        exit_code, _ = stream_subprocess(
-            command,
-            on_line=sink.line,
-            environment=pythonpath_environment(),
-        )
-        return exit_code
-    return run_command(command, environment=pythonpath_environment())
+    return _run_unix_port_test_phase(
+        "micropython", binary, package_dirs,
+        sink=sink,
+        package_workers=package_workers,
+        slow_test_threshold_s=slow_test_threshold_s,
+    )
 
 
 def test_circuitpython(
@@ -1472,6 +1876,8 @@ def test_circuitpython(
     package_dirs: list[Path] | None = None,
     *,
     sink: _Sink | None = None,
+    package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+    slow_test_threshold_s: float = _DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
 ) -> int:
     """Run unix-port unit tests under the CircuitPython binary.
 
@@ -1487,22 +1893,21 @@ def test_circuitpython(
     )
     if prep_result != 0:
         return prep_result
-    command = _pytest_unix_port_command("circuitpython", binary, package_dirs)
-    if sink is not None:
-        sink.line(f"+ {' '.join(command)}")
-        exit_code, _ = stream_subprocess(
-            command,
-            on_line=sink.line,
-            environment=pythonpath_environment(),
-        )
-        return exit_code
-    return run_command(command, environment=pythonpath_environment())
+    return _run_unix_port_test_phase(
+        "circuitpython", binary, package_dirs,
+        sink=sink,
+        package_workers=package_workers,
+        slow_test_threshold_s=slow_test_threshold_s,
+    )
 
 
 def test_all_runtimes(
     micropython_binary: str | None = None,
     circuitpython_binary: str | None = None,
     package_dirs: list[Path] | None = None,
+    *,
+    package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+    slow_test_threshold_s: float = _DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
 ) -> int:
     """Run host tests and cross-runtime unit tests across all proven runtimes.
 
@@ -1525,12 +1930,16 @@ def test_all_runtimes(
             "test-micropython",
             lambda sink: test_micropython(
                 micropython_binary, package_dirs, sink=sink,
+                package_workers=package_workers,
+                slow_test_threshold_s=slow_test_threshold_s,
             ),
         ),
         (
             "test-circuitpython",
             lambda sink: test_circuitpython(
                 circuitpython_binary, package_dirs, sink=sink,
+                package_workers=package_workers,
+                slow_test_threshold_s=slow_test_threshold_s,
             ),
         ),
     )
@@ -1658,21 +2067,24 @@ _preflight_phase_subprocess_factory = _subcommand_phase_factory
 
 
 _PYTEST_RESULT_LINE = re.compile(
-    r"^=+\s*(?P<passed>\d+)\s+passed"
-    r"(?:,\s+\d+\s+(?:skipped|deselected|warnings?))*\s+in\s",
+    r"^(?:=+\s*|\S+:\s+)(?P<passed>\d+)\s+passed"
+    r"(?:,\s+\d+\s+(?:skipped|deselected|warnings?))*"
+    r"(?:\s+across\s+\d+\s+librar(?:y|ies))?"
+    r"\s+in\s+\d+\.\d+s",
     re.MULTILINE,
 )
 
 
 def _tally_pytest_counts(captured_outputs: dict[str, str]) -> int:
-    """Sum every ``=== N passed ... in Xs ===`` line across all phase outputs.
+    """Sum every ``N passed ... in Xs`` summary line across phase outputs.
 
-    Each preflight test phase produces one or more pytest summary lines
-    (the test phase itself fans out per-package and emits one per
-    package; test-micropython / test-circuitpython each emit one).
-    Counts every match so the end-of-run total reflects all tests
-    actually executed — host CPython + MicroPython unix-port +
-    CircuitPython unix-port.
+    Matches both the raw pytest summary (``=== N passed in Xs ===``,
+    used by phases that bypass the per-library filter like
+    ``test-scripts``) and the rolled-up phase summary that
+    :func:`_format_pytest_phase_summary` emits (``<phase>: N passed
+    across M libraries in Xs``).  Counts every match so the end-of-run
+    total reflects all tests actually executed — host CPython +
+    MicroPython unix-port + CircuitPython unix-port.
 
     Returns ``0`` when no pytest result lines are found (e.g. the
     dispatcher doesn't buffer output, like the live interleave mode).
@@ -2060,6 +2472,31 @@ def _binary_parent() -> argparse.ArgumentParser:
     return parent
 
 
+def _add_unix_port_test_args(parser: argparse.ArgumentParser) -> None:
+    """Attach per-library fan-out flags to a unix-port test subcommand.
+
+    Keeps ``test-micropython`` / ``test-circuitpython`` / ``test-all-
+    runtimes`` in lockstep on workers + slow-test-threshold knobs
+    without re-declaring them in three places.
+    """
+    parser.add_argument(
+        "--package-workers", type=int, metavar="N",
+        default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
+        help=(
+            f"cap on concurrent per-library pytest subprocesses "
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS} for this host)"
+        ),
+    )
+    parser.add_argument(
+        "--slow-test-threshold-unix-port", type=float, metavar="SECONDS",
+        default=_DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
+        help=(
+            f"warn-only threshold for surfacing slow unix-port tests "
+            f"(default: {_DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT:.1f}s)"
+        ),
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level CLI parser with subcommands."""
     parser = argparse.ArgumentParser(
@@ -2142,6 +2579,22 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     preflight_parser.add_argument(
+        "--slow-test-threshold-cpython", type=float, metavar="SECONDS",
+        default=_DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+        help=(
+            f"warn-only threshold for surfacing slow CPython unit tests "
+            f"(default: {_DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON:.1f}s)"
+        ),
+    )
+    preflight_parser.add_argument(
+        "--slow-test-threshold-unix-port", type=float, metavar="SECONDS",
+        default=_DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
+        help=(
+            f"warn-only threshold for surfacing slow unix-port tests "
+            f"(default: {_DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT:.1f}s)"
+        ),
+    )
+    preflight_parser.add_argument(
         "--quiet", action="store_true",
         help=(
             "buffer per-phase output; replay full transcript under "
@@ -2155,21 +2608,24 @@ def _build_parser() -> argparse.ArgumentParser:
         "prepare-mpy-cross",
         help="build mpy-cross compilers for both runtimes (no unix-port)",
     )
-    subparsers.add_parser(
+    test_micropython_parser = subparsers.add_parser(
         "test-micropython",
         parents=[scope, binary],
         help="MicroPython cross-runtime unit tests",
     )
-    subparsers.add_parser(
+    _add_unix_port_test_args(test_micropython_parser)
+    test_circuitpython_parser = subparsers.add_parser(
         "test-circuitpython",
         parents=[scope, binary],
         help="CircuitPython cross-runtime unit tests",
     )
-    subparsers.add_parser(
+    _add_unix_port_test_args(test_circuitpython_parser)
+    test_all_runtimes_parser = subparsers.add_parser(
         "test-all-runtimes",
         parents=[scope, binary],
         help="test all packages on CPython + MicroPython + CircuitPython",
     )
+    _add_unix_port_test_args(test_all_runtimes_parser)
     test_functional_parser = subparsers.add_parser(
         "test-functional",
         description=(
@@ -2425,6 +2881,14 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     test_parser.add_argument(
+        "--slow-test-threshold-cpython", type=float, metavar="SECONDS",
+        default=_DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON,
+        help=(
+            f"warn-only threshold for surfacing slow CPython unit tests "
+            f"(default: {_DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON:.1f}s)"
+        ),
+    )
+    test_parser.add_argument(
         "--quiet", action="store_true",
         help="buffer per-phase output; replay full transcript at end",
     )
@@ -2526,6 +2990,7 @@ def main(argv: list[str]) -> int:
             elevated_packages=elevated_packages,
             package_workers=args.package_workers,
             quiet=args.quiet,
+            slow_test_threshold_s=args.slow_test_threshold_cpython,
         )
 
     if args.task == "verify-examples":
@@ -2571,20 +3036,32 @@ def main(argv: list[str]) -> int:
             phase_workers=args.phase_workers,
             package_workers=args.package_workers,
             quiet=args.quiet,
+            slow_test_threshold_cpython=args.slow_test_threshold_cpython,
+            slow_test_threshold_unix_port=args.slow_test_threshold_unix_port,
         )
 
     if args.task == "test-micropython":
         package_dirs = _resolve_optional_scope(args)
-        return test_micropython(args.micropython_binary, package_dirs)
+        return test_micropython(
+            args.micropython_binary, package_dirs,
+            package_workers=args.package_workers,
+            slow_test_threshold_s=args.slow_test_threshold_unix_port,
+        )
 
     if args.task == "test-circuitpython":
         package_dirs = _resolve_optional_scope(args)
-        return test_circuitpython(args.circuitpython_binary, package_dirs)
+        return test_circuitpython(
+            args.circuitpython_binary, package_dirs,
+            package_workers=args.package_workers,
+            slow_test_threshold_s=args.slow_test_threshold_unix_port,
+        )
 
     if args.task == "test-all-runtimes":
         package_dirs = _resolve_optional_scope(args)
         return test_all_runtimes(
             args.micropython_binary, args.circuitpython_binary, package_dirs,
+            package_workers=args.package_workers,
+            slow_test_threshold_s=args.slow_test_threshold_unix_port,
         )
 
     if args.task == "test-functional":
