@@ -221,6 +221,7 @@ class _Connection:
         self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
         self._response_bytes = b""
+        self._response_view = memoryview(self._response_bytes)
         self._response_offset = 0
         self._state = _ConnState.WANT_REQUEST_LINE
 
@@ -334,13 +335,13 @@ class _Connection:
                 f"handler returned {type(response).__name__}, expected Response",
             )
         self._response_bytes = encode_response(response)
+        self._response_view = memoryview(self._response_bytes)
         self._response_offset = 0
         self._state = _ConnState.WANT_SEND_HEADERS
 
     def _drive_send(self):
-        response = self._response_bytes
-        total = len(response)
-        view = memoryview(response)
+        total = len(self._response_bytes)
+        view = self._response_view
         consumed = 0
         budget = self._send_budget
         while self._response_offset < total and consumed < budget:
