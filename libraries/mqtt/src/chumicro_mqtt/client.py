@@ -15,6 +15,7 @@ sit in :mod:`chumicro_mqtt._wire`.
 from collections import deque
 
 from chumicro_config import InvalidConfigType, is_config_like
+from chumicro_sockets import is_eagain
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_mqtt._wire import (
@@ -1064,8 +1065,7 @@ class MQTTClient:
         try:
             return self._socket.send(payload)
         except OSError as error:
-            errno = error.args[0] if error.args else None
-            if errno in (11, 35):  # pragma: no cover - EAGAIN handling
+            if is_eagain(error):  # pragma: no cover - EAGAIN handling
                 return 0
             raise
 
@@ -1121,8 +1121,7 @@ class MQTTClient:
             try:
                 got = self._socket.recv_into(buffer_view, capacity)
             except OSError as error:
-                errno = error.args[0] if error.args else None
-                if errno in (11, 35):  # pragma: no cover - EAGAIN handling
+                if is_eagain(error):  # pragma: no cover - EAGAIN handling
                     break  # EAGAIN — no data this tick.
                 raise
             if got == 0:

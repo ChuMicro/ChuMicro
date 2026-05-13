@@ -26,6 +26,7 @@ redirects, and chunked encoding are future work.
 import json
 
 from chumicro_config import InvalidConfigType, is_config_like
+from chumicro_sockets import is_eagain
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 from chumicro_requests._wire import (
@@ -842,8 +843,7 @@ class HttpClient:
         try:
             return self._socket.send(payload)
         except OSError as socket_error:
-            errno = socket_error.args[0] if socket_error.args else None
-            if errno in (11, 35):  # EAGAIN
+            if is_eagain(socket_error):
                 return 0
             raise
 
@@ -866,8 +866,7 @@ class HttpClient:
             try:
                 got = self._socket.recv_into(self._recv_view[:capacity], capacity)
             except OSError as socket_error:
-                errno = socket_error.args[0] if socket_error.args else None
-                if errno in (11, 35):  # EAGAIN
+                if is_eagain(socket_error):
                     return
                 raise
             if got == 0:
