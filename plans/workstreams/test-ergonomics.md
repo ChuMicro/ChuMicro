@@ -1,6 +1,6 @@
 # Workstream: Test Ecosystem Ergonomics
 
-Status: **closed** — audited 2026-05-12, Phases 1-3+5 shipped 2026-05-12; Phase 4 declined after deeper inspection.  Commits: `115510e6` (1), `b472f976` (2), `6d66ae1c` + `6111acd0` (3), `6256ce90` (5).
+Status: **closed** — audited 2026-05-12, Phases 1-3+5+6 shipped 2026-05-12; Phase 4 declined after deeper inspection.  Commits: `115510e6` (1), `b472f976` (2), `6d66ae1c` + `6111acd0` (3), `6256ce90` (5), `8f7d7f79` + `0afa7f4c` + `98cd48df` + `5dbad647` (6).
 
 ## Purpose
 
@@ -156,12 +156,33 @@ Result: 32 test LOC removed, 71 LOC added in `testing.py`.  `chumicro_http_serve
 
 The other four libraries without `testing.py` (`compat`, `config`, `msgpack`, `ntp`) stay as-is — their tests don't show inlined-fake bloat, and adding empty modules just to be uniform is shape-following without payoff.
 
-## Totals (actuals)
+### Phase 6 — Transport / fake-class ergonomics (shipped 2026-05-12)
 
-- Test LOC reduction: **~600 net** across 26 sites (740 + 159 + 258 + 32 deleted; 218 + 261 + 71 added in new `testing.py` modules plus ~140 in CLI env plumbing).  Original audit projected ~1,600–2,150 — the gap is real and matches the realistic-scope finding from Phase 3 below.
-- Monkeypatch reduction: **~40 calls** (~5 % of workbench's 755).  Original audit projected ~250-350; the workstream's Phase 3 framing assumed missing injection seams that mostly already existed (`detect_board_state` / `CircuitpythonTransport` already accept the kwargs the audit thought were missing).
-- New `testing.py` modules: **3** (workspace, pytest-device, http_server) — matches plan.
-- New public CLI injection surface: **2** (`chumicro_workspace.cli.CliEnv`, `chumicro_deploy.cli.CliEnv`) — landed in Phase 3 instead of the speculative `Deployer` class the workstream proposed.
+Triggered by a user-spotted finding: `~50 of the ~60 serial_port_factory= sites in test_circuitpython_transport.py wrap a FakeSerialPort in a 4-line closure that always returns the same instance the test already built` — the factory-callable contract was friction, not real variety.
+
+- **`FakeSerialPort.__call__` → self** (`8f7d7f79`, deploy 0.17.0 → 0.18.0).  Added `__call__(self, *_args, **_kwargs)` to both `chumicro_deploy.testing.FakeSerialPort` and `chumicro_repl.testing.FakeSerialPort` so instances double as a `serial_port_factory` callable.  Activated the previously-dead `open_error=` kwarg so tests script "factory raises" without a custom closure.  Migrated 30 simple `def factory(**kwargs): return port` closures in test_circuitpython_transport.py + 16 `port_factory=lambda *_args, **_kwargs: port` lambdas in repl tests + dropped repl's `_build_factory` helper.  -148 LOC across test files.
+
+- **`CircuitpythonTransport.drive_scanner` kwarg** (`0afa7f4c`, deploy 0.18.0 → 0.19.0).  Added `drive_scanner: Callable[[], list[Path]] | None = None` to the transport constructor, defaulting to `circuitpy_drive._circuitpy_volume_candidates`.  The two internal scan sites now route through `self._drive_scanner`.  Migrated the `_make_flash_transport` + `_connect` test helpers + 14 per-test sites via a regex-based bulk rewriter.  ~19 monkeypatches dropped.  4 monkeypatches stay legitimately: 3 tests exercise circuitpy_drive's module-level helpers directly (not transport-internal), and 2 auto-correct tests need the module-level patch because the auto-correct path goes through `find_circuitpy_drive_for_uid` — which calls the module-global, not the transport's scanner.
+
+- **`recovery.diagnose_port_holders` runner= kwarg** (`98cd48df`, deploy 0.19.0 → 0.20.0).  Added `runner: Callable[..., subprocess.CompletedProcess] = subprocess.run` to `diagnose_port_holders` and `_full_command_for_pid`.  5 recovery test methods migrated from `monkeypatch.setattr(recovery.subprocess, "run", ...)` to `runner=fake_run` kwarg.
+
+- **`chumicro_deploy.cli.CliEnv.probe_device_fn`** (`5dbad647`, deploy 0.20.0 → 0.21.0).  Added `probe_device_fn` to deploy's CliEnv.  2 test sites migrated from monkeypatch on `cli.probe_device` to `env=CliEnv(probe_device_fn=...)`.
+
+Scope decisions:
+
+- `subprocess_runner` threading through `flash_drive` was deferred: zero direct monkeypatches on `flash_drive.subprocess.run` across deploy tests — `chumicro_deploy.testing.isolate_from_host_filesystem` already absorbs every seam via a single autouse-friendly helper.  Adding `subprocess_runner` to 7 flash_drive functions + threading from `CircuitpythonTransport` would be wide surgery for zero monkeypatch reduction.
+- Deploy CliEnv expansion with `subprocess_runner` / `drive_scanner` fields was declined: deploy CLI sub-commands don't directly call subprocess.run or scan drives.  The transport's `drive_scanner` kwarg (above) and recovery's `runner=` kwarg cover the actual leverage points.
+
+Phase 6 totals: ~26 monkeypatches dropped, -148 LOC of factory wrappers, 1 new fake-class method (`__call__`), 1 new transport kwarg (`drive_scanner`), 2 new helper kwargs (`runner=` on recovery), 1 new CliEnv field (`probe_device_fn`).
+
+## Totals (actuals, after Phase 6)
+
+- Test LOC reduction: **~750 net** (Phases 1-5 saved ~600; Phase 6a alone removed 148 LOC of factory-closure wrappers).
+- Monkeypatch reduction: **~90 calls** total (885 → 795; ~10 % of starting total).  Phase 6 added ~26 to the earlier 40-ish drop.
+- New `testing.py` modules: **3** (workspace, pytest-device, http_server).
+- New public CLI injection surface: **2** (`chumicro_workspace.cli.CliEnv`, `chumicro_deploy.cli.CliEnv`).
+- New transport-level injection seams: **2** (`CircuitpythonTransport.drive_scanner`, `recovery.diagnose_port_holders(runner=...)`).
+- New fake-class ergonomic surface: `FakeSerialPort.__call__` (deploy + repl) + `open_error=` kwarg.
 
 Not a wall-time speedup — pytest collection time is not load-bearing on preflight.  The actual wins are:
 
