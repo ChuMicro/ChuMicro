@@ -291,49 +291,98 @@ input buffer (`PacketDecoder._buffer_view` in `chumicro_mqtt`,
 bytes for a downstream `.decode("utf-8")` or hashing, the wrap stays
 — memoryview lacks `.decode()`.
 
-## `__slots__` on MicroPython and CircuitPython
+## Device-library scaffolding cost — `__slots__` and pure-passthrough `@property`
 
-`__slots__` does not save memory on the runtimes that matter for
-ChuMicro.  MicroPython has no `__slots__` implementation
+Two CPython idioms that read as "good Python hygiene" land as dead flash
+on the runtimes ChuMicro actually targets.  Per
+[Decision 0065](decisions/0065-device-library-scaffolding-cost.md), both
+are banned in `libraries/*/src/`; workbench packages may use them at
+their author's discretion because they run on the laptop where the
+CPython payoff is real.
+
+### `__slots__`
+
+MicroPython has no `__slots__` implementation
 ([discussion #13745](https://github.com/orgs/micropython/discussions/13745))
 — the syntax parses without error but the instance still gets a regular
 `__dict__`, so per-instance memory is identical to a plain class.
 CircuitPython inherits this.  Only CPython actually drops the per-instance
-dict and locks the attribute set.
-
-So when you see `__slots__` in chumicro library code today
-(`chumicro_mqtt._wire.PacketPublish`, `chumicro_requests.client.HttpClient`,
-`chumicro_runner.core.Runner`, etc.) the value it provides is **CPython-test
-attribute locking**, not on-device RAM savings — typo'd attribute writes
-(`self.feild = ...`) fail loudly under CPython's `pytest` instead of
-silently creating a new attribute.
-
-Audit guidance:
-
-* **New classes:** don't add `__slots__` reflexively.  Add it only when
-  CPython-test attribute-locking is the deliberate goal (a class with
-  many similarly-named fields where a typo would silently shadow a real
-  attribute and pass tests by accident).
-* **Existing usages:** not a regression — leave them.  A coordinated
-  removal pass is on the work queue when audit-embedded gets run on each
-  library.
-* **In docstrings or comments:** never write "`__slots__` saves memory"
-  / "`__slots__` keeps the instance lean."  False on MP and CP — and
-  the comment ships in the source distribution.
+dict and locks the attribute set, and that payoff is CPython-test
+attribute locking (typo'd `self.feild = ...` fails loudly), not on-device
+RAM.
 
 ```python
-# ✅ Locks attribute names so a typo in tests doesn't silently shadow
+# ❌ Banned in libraries/*/src/ — MP/CP no-op, CPython test-only payoff
 class PacketPublish:
     __slots__ = ("packet_id", "payload", "qos", "retain", "topic")
 
-# ✅ Plain class — same on-device RAM, slightly less ceremony
+# ✅ Plain class — same on-device behavior, no scaffolding cost
 class PacketPublish:
     pass  # attributes assigned in __init__
 ```
 
-The audit angle is in
+CPython-side typo shielding isn't load-bearing: `python scripts/run.py
+preflight` runs every test on all three runtimes before commit, so a
+typo'd attribute fails the test regardless of `__slots__`.
+
+In docstrings or comments: never write "`__slots__` saves memory" /
+"`__slots__` keeps the instance lean."  Both are false on MP and CP, and
+the comment ships in the source distribution.
+
+### Pure-passthrough `@property`
+
+`@property` works on MP/CP via the descriptor protocol, but each access
+invokes the getter as a Python-level function call (multiple µs on MP/CP
+vs a direct attribute load), and each declaration allocates a `property`
+object on the class (~100 B per-class).  For a getter that just returns
+an instance attribute, name the attribute publicly instead.
+
+```python
+# ❌ Banned in libraries/*/src/ — descriptor cost for zero semantic value
+class RequestParser:
+    def __init__(self):
+        self._state = RequestParseState.REQUEST_LINE
+
+    @property
+    def state(self):
+        return self._state
+
+# ✅ Direct public attribute — same caller syntax, no descriptor
+class RequestParser:
+    def __init__(self):
+        self.state = RequestParseState.REQUEST_LINE
+```
+
+Callers write `parser.state` either way.  The underscored-internal-name
+convention isn't communicating anything the public attribute name doesn't
+already.
+
+### When `@property` is still allowed
+
+Properties that *compute* a value stay legitimate — they're doing work
+the caller would otherwise have to spell out:
+
+```python
+@property
+def is_done(self):
+    """Connection has reached a terminal state."""
+    return self._state in (_ConnState.DONE, _ConnState.ERROR)
+
+@property
+def body(self):
+    """Snapshot the body bytes received so far."""
+    return bytes(self._body_view[:self._body_write_offset])
+```
+
+If the computation is non-trivial enough that the dot-access syntax
+actively misleads ("this looks like a field, but it's doing work"),
+prefer a regular method (`def body_bytes(self) -> bytes: ...`).
+
+The audit angles are in
+[`.github/skills/audit-library/SKILL.md`](../.github/skills/audit-library/SKILL.md)
+§7 ("chumicro project-policy compliance") and
 [`.github/skills/audit-embedded/SKILL.md`](../.github/skills/audit-embedded/SKILL.md)
-§7 ("Code shape for embedded" → "`__slots__` reality").
+§7 ("Code shape for embedded").
 
 ## Constructor injection
 
