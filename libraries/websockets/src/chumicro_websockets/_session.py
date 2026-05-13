@@ -570,7 +570,7 @@ class _BaseSession:
         """
         cap = min(max_bytes, len(self._recv_buffer))
         try:
-            received = self._socket.recv_into(self._recv_view[:cap], cap)
+            received = self._socket.recv_into(self._recv_view, cap)
         except Exception as recv_error:  # noqa: BLE001 - narrow below
             if _is_eagain(recv_error):
                 return None

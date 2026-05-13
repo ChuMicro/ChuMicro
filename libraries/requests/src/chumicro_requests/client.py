@@ -773,7 +773,7 @@ class HttpClient:
         ):
             capacity = min(scratch_size, budget - consumed)
             try:
-                got = self._socket.recv_into(self._recv_view[:capacity], capacity)
+                got = self._socket.recv_into(self._recv_view, capacity)
             except OSError as socket_error:
                 if _is_eagain(socket_error):
                     return
