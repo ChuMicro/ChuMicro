@@ -259,19 +259,11 @@ class RequestParser:
         self,
         *,
         max_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
-        body_buffer: bytearray | None = None,
-        body_buffer_view: memoryview | None = None,
     ) -> None:
         """Construct a one-shot parser.
 
         Args:
             max_body_bytes: Hard cap on body size.
-            body_buffer: Optional caller-owned ``bytearray`` to use as
-                the steady-state body buffer.  ``None`` (the default)
-                grows a fresh ``bytearray`` on demand sized to the
-                actual ``Content-Length``.
-            body_buffer_view: Pre-cached ``memoryview(body_buffer)``;
-                required when ``body_buffer`` is provided.
         """
         self._max_body_bytes = max_body_bytes
         self._buffer = bytearray()
@@ -285,22 +277,11 @@ class RequestParser:
         self._target = ""
         self._http_version = ""
         self._headers = CaseInsensitiveDict()
-        # Body buffer: caller-supplied or self-allocated.  Either way
-        # it's a fixed-size steady-state buffer; oversized bodies
-        # (Content-Length > capacity) rebind ``_body`` to a one-shot
-        # ``bytearray(content_length)`` that gets freed when the parser
-        # is dereferenced.
-        if body_buffer is not None:
-            if body_buffer_view is None:
-                body_buffer_view = memoryview(body_buffer)
-            self._body = body_buffer
-            self._body_view = body_buffer_view
-        else:
-            # No external buffer — grow on demand.  See the matching
-            # rationale in
-            # :class:`chumicro_requests._wire.ResponseParser.__init__`.
-            self._body = bytearray()
-            self._body_view = memoryview(self._body)
+        # Body buffer grows on demand sized to the actual Content-Length.
+        # See the matching rationale in
+        # :class:`chumicro_requests._wire.ResponseParser.__init__`.
+        self._body = bytearray()
+        self._body_view = memoryview(self._body)
         self._body_write_offset = 0
         self._body_remaining = 0
         self._error = None

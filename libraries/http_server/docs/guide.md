@@ -116,12 +116,16 @@ The constructor exposes per-connection budgets so you can tune for your workload
 | Knob | Default | What it bounds |
 |---|---|---|
 | `max_connections` | `4` | Cap on simultaneous in-flight connections.  Sized for Pi Pico W heap. |
-| `request_timeout_ms` | `5000` | Per-connection deadline.  Stalled clients get the socket closed. |
+| `request_timeout_ms` | `10000` | Per-connection deadline.  Stalled clients get the socket closed. |
 | `recv_budget_per_tick` | `1024` | Bytes drained per connection per `handle()`.  Bounds tick latency under big uploads. |
 | `send_budget_per_tick` | `4096` | Bytes flushed per connection per `handle()`.  Higher than recv so small responses drain in one tick. |
 | `max_request_body_bytes` | `16 KB` | Cap on a single buffered request body.  Bigger bodies → 400. |
 
 Defaults are conservative; the per-tick budgets keep an LED blink visible even with a chatty client and a big POST body.
+
+## Connection lifetime
+
+Each request is served on a fresh accepted socket; every response includes `Connection: close` and the socket is closed once the response drains.  HTTP/1.1 keep-alive and connection pooling are not supported.  Chunked request bodies are not supported either — use `Content-Length`.
 
 ## Bring your own transport
 
