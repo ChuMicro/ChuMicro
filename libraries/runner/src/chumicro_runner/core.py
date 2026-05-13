@@ -19,74 +19,27 @@ All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 
-class _TaskEntry:
-    """Internal record for a single task registered with the runner.
+class TaskHandle:
+    """Handle returned by ``Runner.add()`` or ``add_periodic()``.
 
-    Each entry holds the check/handler callables, timing state, and a
-    run counter.  The runner iterates over entries every ``tick()`` to
-    decide which handlers fire.
-
-    Attributes:
-        check_function: Optional callable ``check_function(now_ms) -> bool``
-            that gates the handler.  ``None`` means no check gate (handler
-            fires whenever the time gate passes).
-        handler_function: Callable ``handler_function(now_ms)`` invoked when
-            the task is due.
-        period_ms: Interval in milliseconds between firings, or
-            ``None`` for non-periodic tasks (fire every tick once any
-            initial delay expires).
-        next_due_ms: Tick value at which the task becomes eligible, or
-            ``None`` if it is eligible immediately.  Updated after each
-            firing for periodic tasks.
-        run_count: Remaining number of times the handler may fire, or
-            ``None`` for unlimited.  Decremented by the runner after
-            each firing; the entry is auto-removed when it reaches zero.
-        active: ``True`` while the entry is registered.  Set to
-            ``False`` by ``Runner._remove_entry`` so that in-progress
-            iteration can skip it safely.
+    Inspect the task's state via the ``period_ms``, ``run_count``,
+    and ``active`` attributes; mutate via ``set_period()`` or
+    ``remove()``.
     """
 
     def __init__(self, check_function: object | None,
                  handler_function: object,
                  period_ms: int | None,
                  next_due_ms: int | None,
-                 run_count: int | None) -> None:
+                 run_count: int | None,
+                 runner: "Runner") -> None:
         self.check_function = check_function
         self.handler_function = handler_function
         self.period_ms = period_ms
         self.next_due_ms = next_due_ms
         self.run_count = run_count
         self.active = True
-
-
-class TaskHandle:
-    """Opaque handle returned by ``Runner.add()`` or ``add_periodic()``.
-
-    Provides runtime mutation of a registered task: change its period
-    or remove it from the runner entirely.
-
-    Read-only properties expose the current state for inspection and
-    testing.
-    """
-
-    def __init__(self, entry: _TaskEntry, runner: "Runner") -> None:
-        self._entry = entry
         self._runner = runner
-
-    @property
-    def period_ms(self) -> int | None:
-        """Return the task period in milliseconds, or ``None``."""
-        return self._entry.period_ms
-
-    @property
-    def run_count(self) -> int | None:
-        """Return the remaining run count, or ``None`` if unlimited."""
-        return self._entry.run_count
-
-    @property
-    def active(self) -> bool:
-        """Return whether the task is still registered."""
-        return self._entry.active
 
     def set_period(self, period_ms: int | None) -> None:
         """Add, change, or remove the period for this task.
@@ -101,23 +54,23 @@ class TaskHandle:
         """
         if period_ms is not None and period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")
-        self._entry.period_ms = period_ms
+        self.period_ms = period_ms
         if period_ms is not None:
             ticks = self._runner._ticks
             now_ms = ticks.ticks_ms()
-            self._entry.next_due_ms = ticks.ticks_add(now_ms, period_ms)
+            self.next_due_ms = ticks.ticks_add(now_ms, period_ms)
         else:
-            self._entry.next_due_ms = None
+            self.next_due_ms = None
 
     def remove(self) -> None:
         """Remove this task from the runner."""
-        self._runner._remove_entry(self._entry)
+        self._runner._remove(self)
 
     def __repr__(self) -> str:
         """Return a developer-friendly representation."""
-        status = "active" if self._entry.active else "removed"
-        period = self._entry.period_ms
-        count = self._entry.run_count
+        status = "active" if self.active else "removed"
+        period = self.period_ms
+        count = self.run_count
         parts = [f"period_ms={period}"]
         if count is not None:
             parts.append(f"run_count={count}")
@@ -203,12 +156,12 @@ class Runner:
             now_ms = self._ticks.ticks_ms()
             next_due_ms = self._ticks.ticks_add(now_ms, period_ms)
 
-        entry = _TaskEntry(
+        handle = TaskHandle(
             check_function, handler_function, period_ms, next_due_ms,
-            run_count,
+            run_count, self,
         )
-        self._entries.append(entry)
-        return TaskHandle(entry, self)
+        self._entries.append(handle)
+        return handle
 
     def add_periodic(self, handler: object, period_ms: int,
                      start_after_ms: int | None = None,
@@ -237,11 +190,11 @@ class Runner:
         else:
             next_due_ms = self._ticks.ticks_add(now_ms, period_ms)
 
-        entry = _TaskEntry(
-            None, handler, period_ms, next_due_ms, run_count,
+        handle = TaskHandle(
+            None, handler, period_ms, next_due_ms, run_count, self,
         )
-        self._entries.append(entry)
-        return TaskHandle(entry, self)
+        self._entries.append(handle)
+        return handle
 
     def tick(self) -> int:
         """Capture time, check tasks, then batch-fire handlers.
@@ -261,7 +214,7 @@ class Runner:
         pending = self._pending
 
         for entry in self._entries:
-            if not entry.active:  # pragma: no cover — safety guard; _remove_entry clears from list
+            if not entry.active:  # pragma: no cover — safety guard; _remove clears from list
                 continue
 
             # Time gate (period or start delay).
@@ -286,15 +239,15 @@ class Runner:
             if entry.run_count is not None:
                 entry.run_count -= 1
                 if entry.run_count <= 0:
-                    self._remove_entry(entry)
+                    self._remove(entry)
         pending.clear()
 
         return now_ms
 
-    def _remove_entry(self, entry: _TaskEntry) -> None:
-        """Remove *entry* from the runner (called by ``TaskHandle``)."""
-        entry.active = False
+    def _remove(self, handle: TaskHandle) -> None:
+        """Remove *handle* from the runner (called by ``TaskHandle``)."""
+        handle.active = False
         try:
-            self._entries.remove(entry)
+            self._entries.remove(handle)
         except ValueError:
             pass
