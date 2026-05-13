@@ -148,13 +148,7 @@ class Runner:
         if run_count is not None and run_count <= 0:
             raise ValueError("run_count must be greater than zero")
 
-        next_due_ms = None
-        if start_after_ms is not None:
-            now_ms = self._ticks.ticks_ms()
-            next_due_ms = self._ticks.ticks_add(now_ms, start_after_ms)
-        elif period_ms is not None:
-            now_ms = self._ticks.ticks_ms()
-            next_due_ms = self._ticks.ticks_add(now_ms, period_ms)
+        next_due_ms = self._initial_next_due_ms(start_after_ms, period_ms)
 
         handle = TaskHandle(
             check_function, handler_function, period_ms, next_due_ms,
@@ -184,11 +178,7 @@ class Runner:
         if run_count is not None and run_count <= 0:
             raise ValueError("run_count must be greater than zero")
 
-        now_ms = self._ticks.ticks_ms()
-        if start_after_ms is not None:
-            next_due_ms = self._ticks.ticks_add(now_ms, start_after_ms)
-        else:
-            next_due_ms = self._ticks.ticks_add(now_ms, period_ms)
+        next_due_ms = self._initial_next_due_ms(start_after_ms, period_ms)
 
         handle = TaskHandle(
             None, handler, period_ms, next_due_ms, run_count, self,
@@ -243,6 +233,19 @@ class Runner:
         pending.clear()
 
         return now_ms
+
+    def _initial_next_due_ms(self, start_after_ms: int | None,
+                             period_ms: int | None) -> int | None:
+        """Return the initial ``next_due_ms`` value, or ``None`` if eligible immediately.
+
+        ``start_after_ms`` wins over ``period_ms`` when both are set
+        (the documented "delay first fire" semantics).
+        """
+        delay_ms = start_after_ms if start_after_ms is not None else period_ms
+        if delay_ms is None:
+            return None
+        now_ms = self._ticks.ticks_ms()
+        return self._ticks.ticks_add(now_ms, delay_ms)
 
     def _remove(self, handle: TaskHandle) -> None:
         """Remove *handle* from the runner (called by ``TaskHandle``)."""
