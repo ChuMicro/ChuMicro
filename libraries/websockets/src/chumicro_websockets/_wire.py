@@ -955,15 +955,19 @@ class FrameParser:
         self._payload_view = self._payload_buffer_view
         self._payload_write_offset = 0
 
-    def feed(self, chunk: bytes) -> int:
-        """Consume bytes from *chunk*; return how many were used.
+    def feed(self, chunk: bytes, start: int = 0) -> int:
+        """Consume bytes from *chunk* starting at *start*; return how many
+        were used (relative to *start*).
+
+        *start* lets a caller feed the same buffer across multiple
+        per-frame passes without slicing it each iteration — the inner
+        loop in :meth:`chumicro_websockets._session._BaseSession._feed_frame_bytes`
+        used to ``chunk[offset:]`` per pass, which allocated a fresh
+        memoryview window each time.
 
         Per-state chunked consumption — header / length / mask states
         copy the bytes they need in one slice, payload state extends
         the buffer by ``min(remaining, payload_remaining)`` per pass.
-        On a 1024-byte recv (the default per-tick budget) this drops
-        from 1024 method calls + appends to a handful of slices, which
-        matters on MicroPython where each call frame allocates.
 
         The parser stops consuming when it transitions to
         ``FRAME_READY`` so any leftover bytes remain available to the
@@ -977,16 +981,17 @@ class FrameParser:
                 message in :attr:`error`.
         """
         consumed = 0
-        chunk_length = len(chunk)
+        effective_length = len(chunk) - start
         # Bind memoryview once so each per-state slice is zero-copy on
         # the source side.  Skip when the chunk is itself a memoryview
         # (callers like ``_session._recv_chunk`` already pass a view).
         chunk_view = chunk if isinstance(chunk, memoryview) else memoryview(chunk)
-        while consumed < chunk_length and self._state not in (
+        while consumed < effective_length and self._state not in (
             FrameParseState.FRAME_READY,
             FrameParseState.ERROR,
         ):
-            remaining = chunk_length - consumed
+            remaining = effective_length - consumed
+            cursor = start + consumed
             state = self._state
             if state == FrameParseState.READING_PAYLOAD:
                 payload = self._payload
@@ -997,12 +1002,12 @@ class FrameParser:
                     mask_key = self._mask_key
                     for index in range(take):
                         payload[write_offset + index] = (
-                            chunk_view[consumed + index]
+                            chunk_view[cursor + index]
                             ^ mask_key[(write_offset + index) & 3]
                         )
                 else:
                     payload[write_offset:write_offset + take] = (
-                        chunk_view[consumed : consumed + take]
+                        chunk_view[cursor : cursor + take]
                     )
                 consumed += take
                 write_offset += take
@@ -1020,7 +1025,7 @@ class FrameParser:
             else:  # READING_MASK
                 need = 4 - len(self._buffer)
             take = need if need <= remaining else remaining
-            self._buffer.extend(chunk_view[consumed : consumed + take])
+            self._buffer.extend(chunk_view[cursor : cursor + take])
             consumed += take
             if len(self._buffer) < need:
                 continue
