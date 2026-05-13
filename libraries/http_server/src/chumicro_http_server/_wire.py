@@ -331,11 +331,9 @@ class RequestParser:
     # Public observation
     # ------------------------------------------------------------------
     #
-    # Read-only API: ``state`` / ``method`` / ``target`` / ``http_version`` /
-    # ``headers`` / ``error`` are direct public attributes set during parsing.
-    # The body snapshot needs a computed view, so it stays a method-shape
-    # accessor for clarity (per Decision 0065 — computed values stay,
-    # pure-passthrough properties drop).
+    # ``state`` / ``method`` / ``target`` / ``http_version`` / ``headers`` /
+    # ``error`` are direct public attributes set during parsing.  The body
+    # snapshot needs a computed view, so it stays a method-shape accessor.
 
     @property
     def body(self):
