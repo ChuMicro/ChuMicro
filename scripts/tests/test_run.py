@@ -419,7 +419,6 @@ class TestMainDispatch:
         ])
 
         unix_port_kwargs = {
-            "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
             "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
         }
         assert micropython_result == 43
@@ -448,7 +447,6 @@ class TestMainDispatch:
         assert result == 49
         assert command_calls == [
             ((None, resolved_packages), {
-                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                 "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
             }),
         ]
@@ -467,7 +465,6 @@ class TestMainDispatch:
         assert result == 53
         assert command_calls == [
             (("/tmp/mpy", "/tmp/cpy", None), {
-                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                 "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
             }),
         ]
@@ -488,7 +485,6 @@ class TestMainDispatch:
         assert result == 57
         assert command_calls == [
             ((None, None, resolved_packages), {
-                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                 "slow_test_threshold_s": run._DEFAULT_SLOW_TEST_THRESHOLD_UNIX_PORT,
             }),
         ]
@@ -1246,16 +1242,16 @@ class TestPytestOutputFilter:
 class TestFormatPytestPhaseSummary:
     """Tests for the rolled-up phase-summary formatter."""
 
-    def test_single_library_uses_singular_form(self):
-        """One library reports ``1 library`` (not ``1 libraries``)."""
+    def test_single_invocation_omits_library_count_clause(self):
+        """A single pytest result skips the ``across N libraries`` clause."""
         result = run._PytestRunResult(
-            label="timing", exit_code=0, passed=29, duration_s=0.04,
+            label="test-micropython", exit_code=0, passed=654, duration_s=5.01,
         )
         lines = run._format_pytest_phase_summary(
             "test-micropython", [result], slow_threshold_s=2.0,
         )
         assert lines == [
-            "test-micropython: 29 passed across 1 library in 0.04s",
+            "test-micropython: 654 passed in 5.01s",
         ]
 
     def test_multi_library_includes_skips(self):
@@ -1305,105 +1301,26 @@ class TestFormatPytestPhaseSummary:
         assert len(lines) == 1
 
 
-class TestUnixPortPerLibraryFanout:
-    """Tests for the unix-port pytest fan-out (test-micropython / test-circuitpython)."""
+class TestUnixPortPytestCommand:
+    """Tests for the single-pytest unix-port command builder."""
 
-    def _stage_fake_libraries(self, fake_root: Path, names: list[str]) -> list[Path]:
-        """Create per-library tests/ stubs under tmp_root/libraries/<name>."""
-        libraries_root = fake_root / "libraries"
-        libraries_root.mkdir(exist_ok=True)
-        staged: list[Path] = []
-        for name in names:
-            package_dir = libraries_root / name
-            (package_dir / "tests").mkdir(parents=True)
-            staged.append(package_dir)
-        return staged
-
-    def test_one_pytest_invocation_per_library(self, monkeypatch, fake_root):
-        """The fan-out produces one pytest command per discovered library."""
-        staged = self._stage_fake_libraries(fake_root, ["alpha", "beta"])
-
-        commands: list[list[str]] = []
-
-        def fake_run_pytest(command, environment, sink):
-            commands.append(command)
-            return 0
-
-        monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
-        monkeypatch.setattr(run, "_selected_library_dirs", lambda _: staged)
-
-        exit_code = run._run_unix_port_test_phase(
+    def test_durations_threshold_flows_in(self):
+        """``--durations=0 --durations-min=<threshold>`` lands on every command."""
+        command = run._pytest_unix_port_command(
             "micropython", "/tmp/mpy", None,
-            sink=None,
-            package_workers=2,
-            slow_test_threshold_s=2.0,
-        )
-        assert exit_code == 0
-        scopes = [part for command in commands for part in command if "tests" in part]
-        assert len(scopes) == 2
-        assert any("alpha" in scope for scope in scopes)
-        assert any("beta" in scope for scope in scopes)
-
-    def test_each_command_includes_durations_args(self, monkeypatch, fake_root):
-        """Slow-test threshold flows into ``--durations-min=`` on every pytest call."""
-        staged = self._stage_fake_libraries(fake_root, ["alpha"])
-
-        commands: list[list[str]] = []
-        monkeypatch.setattr(
-            run, "_run_pytest_capturing",
-            lambda command, environment, sink: (commands.append(command), 0)[1],
-        )
-        monkeypatch.setattr(run, "_selected_library_dirs", lambda _: staged)
-
-        run._run_unix_port_test_phase(
-            "circuitpython", "/tmp/cpy", None,
-            sink=None, package_workers=2,
             slow_test_threshold_s=1.5,
         )
-        assert commands
-        assert any("--durations-min=1.5" in command for command in commands)
-        assert all("--durations=0" in command for command in commands)
+        assert "--durations=0" in command
+        assert "--durations-min=1.5" in command
 
-    def test_resolved_binary_passes_to_every_child(self, monkeypatch, fake_root):
-        """An explicit binary forwards via ``--{runtime}-binary`` on every call."""
-        staged = self._stage_fake_libraries(fake_root, ["alpha", "beta"])
-
-        commands: list[list[str]] = []
-        monkeypatch.setattr(
-            run, "_run_pytest_capturing",
-            lambda command, environment, sink: (commands.append(command), 0)[1],
-        )
-        monkeypatch.setattr(run, "_selected_library_dirs", lambda _: staged)
-
-        run._run_unix_port_test_phase(
-            "micropython", "/tmp/my_mpy", None,
-            sink=None, package_workers=2,
+    def test_runtime_binary_forwarded(self):
+        """``--{runtime}-binary <path>`` is appended when *binary* is set."""
+        command = run._pytest_unix_port_command(
+            "circuitpython", "/tmp/cpy", None,
             slow_test_threshold_s=2.0,
         )
-        assert commands
-        assert all(
-            "--micropython-binary" in command and "/tmp/my_mpy" in command
-            for command in commands
-        )
-
-    def test_no_library_tests_returns_zero(self, monkeypatch, fake_root):
-        """A workspace with no library tests/ dirs returns 0 cleanly."""
-        monkeypatch.setattr(run, "_selected_library_dirs", lambda _: [])
-
-        run_pytest_calls: list[list[str]] = []
-        monkeypatch.setattr(
-            run, "_run_pytest_capturing",
-            lambda command, environment, sink: (
-                run_pytest_calls.append(command), 0,
-            )[1],
-        )
-        exit_code = run._run_unix_port_test_phase(
-            "micropython", "/tmp/mpy", None,
-            sink=None, package_workers=2,
-            slow_test_threshold_s=2.0,
-        )
-        assert exit_code == 0
-        assert run_pytest_calls == []
+        assert "--circuitpython-binary" in command
+        assert "/tmp/cpy" in command
 
 
 # ---------------------------------------------------------------------------
