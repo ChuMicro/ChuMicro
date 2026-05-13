@@ -103,9 +103,9 @@ while True:
 | `TaskHandle` | Opaque handle for runtime mutation of a registered service |
 | `TaskHandle.set_period(period_ms)` | Add, change, or remove the period (`None` to remove) |
 | `TaskHandle.remove()` | Remove this service from the runner |
-| `TaskHandle.period_ms` | Read-only: the service period, or `None` |
-| `TaskHandle.run_count` | Read-only: remaining run count, or `None` if unlimited |
-| `TaskHandle.active` | Read-only: whether the service is still registered |
+| `TaskHandle.period_ms` | Current period in milliseconds, or `None`.  Mutate via `set_period()`, not direct assignment (direct writes skip the timer reset) |
+| `TaskHandle.run_count` | Remaining run count, or `None` if unlimited.  Decremented by the runner after each fire |
+| `TaskHandle.active` | Whether the service is still registered.  Set to `False` by `remove()` |
 
 ### Testing
 
