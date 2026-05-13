@@ -46,7 +46,6 @@ from chumicro_websockets._wire import (
     WebSocketProtocolError,
     WebSocketState,
     WebSocketStateError,
-    WebSocketTimeoutError,
     encode_server_handshake_response,
     encode_server_rejection,
 )
@@ -114,6 +113,7 @@ class Connection(_BaseSession):
             max_tx_queue_size=max_tx_queue_size,
             when_oversized=when_oversized,
             pong_timeout_ms=pong_timeout_ms,
+            handshake_timeout_ms=handshake_timeout_ms,
             close_timeout_ms=close_timeout_ms,
             ticks=ticks,
         )
@@ -310,22 +310,6 @@ class Connection(_BaseSession):
         self._state = WebSocketState.CLOSED
         self._handshake_deadline_ticks = None
         self.on_close(status_code, reason_phrase)
-
-    # ------------------------------------------------------------------
-    # Internal: timeouts
-    # ------------------------------------------------------------------
-
-    def _check_timeouts(self, now_ms: int) -> bool:
-        if self._handshake_deadline_ticks is not None:
-            if self._ticks.ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0:
-                self._fail_with_error(
-                    WebSocketTimeoutError(
-                        "handshake exceeded budget",
-                    ),
-                )
-                return True
-        return self._check_close_and_pong_timeouts(now_ms)
-
 
 # ---------------------------------------------------------------------------
 # WebSocketServer

@@ -161,6 +161,7 @@ class _BaseSession:
         max_tx_queue_size: int,
         when_oversized: str,
         pong_timeout_ms: int,
+        handshake_timeout_ms: int,
         close_timeout_ms: int,
         ticks,
     ) -> None:
@@ -171,6 +172,7 @@ class _BaseSession:
         self._max_tx_queue_size = max_tx_queue_size
         self._when_oversized = when_oversized
         self._pong_timeout_ms = pong_timeout_ms
+        self._handshake_timeout_ms = handshake_timeout_ms
         self._close_timeout_ms = close_timeout_ms
 
         self._ticks = ticks
@@ -203,6 +205,7 @@ class _BaseSession:
         self._inbound_message_opcode = None  # TEXT or BINARY when fragmented
         self._inbound_oversized = False
 
+        self._handshake_deadline_ticks = None
         self._close_deadline_ticks = None
         self._pending_ping_deadline_ticks = None
 
@@ -636,6 +639,20 @@ class _BaseSession:
         """Hook for subclasses to clear additional per-side state on close."""
 
     # -- timeouts ---------------------------------------------------------
+
+    def _check_timeouts(self, now_ms: int) -> bool:
+        """Trip an expired handshake / close / pong deadline.  Returns
+        ``True`` if a deadline tripped (caller should yield the tick).
+        """
+        if self._handshake_deadline_ticks is not None:
+            if self._ticks.ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0:
+                self._fail_with_error(
+                    WebSocketTimeoutError(
+                        f"handshake exceeded {self._handshake_timeout_ms} ms",
+                    ),
+                )
+                return True
+        return self._check_close_and_pong_timeouts(now_ms)
 
     def _check_close_and_pong_timeouts(self, now_ms: int) -> bool:
         """Trip an expired close-deadline or pong-deadline.  Returns

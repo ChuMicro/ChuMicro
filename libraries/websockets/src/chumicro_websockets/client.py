@@ -242,13 +242,13 @@ class WebSocketClient(_BaseSession):
             max_tx_queue_size=max_tx_queue_size,
             when_oversized=when_oversized,
             pong_timeout_ms=pong_timeout_ms,
+            handshake_timeout_ms=handshake_timeout_ms,
             close_timeout_ms=close_timeout_ms,
             ticks=ticks if ticks is not None else _DEFAULT_TICKS,
         )
 
         self._connection_factory = connection_factory
         self._ping_interval_ms = ping_interval_ms
-        self._handshake_timeout_ms = handshake_timeout_ms
 
         # Set on the first connect() call; before then state stays
         # CONNECTING but with no socket / no parsers — `connect()` is
@@ -261,7 +261,6 @@ class WebSocketClient(_BaseSession):
         self._handshake_send_buffer = None
         self._handshake_send_offset = 0
 
-        self._handshake_deadline_ticks = None
         self._next_auto_ping_ticks = None
 
         self.on_open = _no_callback
@@ -465,18 +464,6 @@ class WebSocketClient(_BaseSession):
     # ------------------------------------------------------------------
     # Internal: timeouts + auto-ping
     # ------------------------------------------------------------------
-
-    def _check_timeouts(self, now_ms: int) -> bool:
-        """Trip an expired deadline and return ``True`` if we transitioned."""
-        if self._handshake_deadline_ticks is not None:
-            if self._ticks.ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0:
-                self._fail_with_error(
-                    WebSocketTimeoutError(
-                        f"handshake exceeded {self._handshake_timeout_ms} ms",
-                    ),
-                )
-                return True
-        return self._check_close_and_pong_timeouts(now_ms)
 
     def _arm_auto_ping(self, now_ms: int) -> None:
         """Schedule the next auto-ping (if enabled).
