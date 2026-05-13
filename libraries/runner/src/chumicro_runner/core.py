@@ -162,8 +162,9 @@ class Runner:
                      run_count: int | None = None) -> TaskHandle:
         """Register a periodic handler with no check.
 
-        ``handler(now_ms)`` is called every *period_ms* milliseconds.
-        Returns a ``TaskHandle`` for runtime mutation.
+        Convenience wrapper around ``add(handler=..., period_ms=...)``
+        that requires *period_ms*.  Returns a ``TaskHandle`` for
+        runtime mutation.
 
         Args:
             handler: Callable ``handler(now_ms)`` to fire periodically.
@@ -173,18 +174,12 @@ class Runner:
             run_count: Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
         """
-        if period_ms <= 0:
-            raise ValueError("period_ms must be greater than zero")
-        if run_count is not None and run_count <= 0:
-            raise ValueError("run_count must be greater than zero")
-
-        next_due_ms = self._initial_next_due_ms(start_after_ms, period_ms)
-
-        handle = TaskHandle(
-            None, handler, period_ms, next_due_ms, run_count, self,
+        if period_ms is None:
+            raise ValueError("period_ms is required for add_periodic")
+        return self.add(
+            handler=handler, period_ms=period_ms,
+            start_after_ms=start_after_ms, run_count=run_count,
         )
-        self._entries.append(handle)
-        return handle
 
     def tick(self) -> int:
         """Capture time, check tasks, then batch-fire handlers.
