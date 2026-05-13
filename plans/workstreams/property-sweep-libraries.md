@@ -114,26 +114,9 @@ Keep (computed):
 |---|---|---|
 | 666 | `body` | `bytes(self._body_view[:self._body_write_offset])` |
 
-### chumicro_http_server
+### chumicro_http_server — DONE (2026-05-12, audit-embedded pass)
 
-**`src/chumicro_http_server/_wire.py`** — 7 properties; 6 drop, 1 keep.
-
-Drop:
-
-| Line | Property |
-|---|---|
-| 334 | `state` |
-| 339 | `method` |
-| 344 | `target` |
-| 353 | `http_version` |
-| 358 | `headers` |
-| 373 | `error` |
-
-Keep (computed):
-
-| Line | Property | Why keep |
-|---|---|---|
-| 363 | `body` | `bytes(self._body_view[:self._body_write_offset])` |
+All 7 pure-passthrough properties dropped (6 in `_wire.py`, 1 in `server.py`); 4 computed properties kept (`RequestParser.body`, `_Connection.is_done`, `HttpServer.listening`, `HttpServer.in_flight`).  Public API stays — callers still write `parser.state` / `connection.state`; backing field is now a direct public attribute.
 
 **`src/chumicro_http_server/server.py`** — 4 properties; 1 drop, 3 keep.
 

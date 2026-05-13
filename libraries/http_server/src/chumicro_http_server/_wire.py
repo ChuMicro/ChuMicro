@@ -272,11 +272,11 @@ class RequestParser:
         # half of it has been consumed — mirrors the read-cursor pattern
         # in :class:`chumicro_requests._wire.ResponseParser`.
         self._read_offset = 0
-        self._state = RequestParseState.REQUEST_LINE
-        self._method = ""
-        self._target = ""
-        self._http_version = ""
-        self._headers = CaseInsensitiveDict()
+        self.state = RequestParseState.REQUEST_LINE
+        self.method = ""
+        self.target = ""
+        self.http_version = ""
+        self.headers = CaseInsensitiveDict()
         # Body buffer grows on demand sized to the actual Content-Length.
         # See the matching rationale in
         # :class:`chumicro_requests._wire.ResponseParser.__init__`.
@@ -284,7 +284,7 @@ class RequestParser:
         self._body_view = memoryview(self._body)
         self._body_write_offset = 0
         self._body_remaining = 0
-        self._error = None
+        self.error = None
 
     # ------------------------------------------------------------------
     # Buffer helpers (read-cursor pattern — see ResponseParser)
@@ -330,35 +330,12 @@ class RequestParser:
     # ------------------------------------------------------------------
     # Public observation
     # ------------------------------------------------------------------
-
-    @property
-    def state(self):
-        """Current :class:`RequestParseState`."""
-        return self._state
-
-    @property
-    def method(self):
-        """HTTP method (e.g. ``"GET"``, ``"POST"``) once request line parses."""
-        return self._method
-
-    @property
-    def target(self):
-        """Request target — typically a path + optional query string.
-
-        For example: ``"/api/v1/widgets?page=2"``.  Use
-        :meth:`split_target` to separate the path and query.
-        """
-        return self._target
-
-    @property
-    def http_version(self):
-        """HTTP version string (e.g. ``"HTTP/1.1"``) once request line parses."""
-        return self._http_version
-
-    @property
-    def headers(self):
-        """Case-insensitive :class:`CaseInsensitiveDict` of request headers."""
-        return self._headers
+    #
+    # Read-only API: ``state`` / ``method`` / ``target`` / ``http_version`` /
+    # ``headers`` / ``error`` are direct public attributes set during parsing.
+    # The body snapshot needs a computed view, so it stays a method-shape
+    # accessor for clarity (per Decision 0065 — computed values stay,
+    # pure-passthrough properties drop).
 
     @property
     def body(self):
@@ -370,11 +347,6 @@ class RequestParser:
         """
         return bytes(self._body_view[:self._body_write_offset])
 
-    @property
-    def error(self):
-        """Last error raised during parsing or ``None``."""
-        return self._error
-
     # ------------------------------------------------------------------
     # Driving the parser
     # ------------------------------------------------------------------
@@ -385,10 +357,10 @@ class RequestParser:
         Raises :class:`ServerProtocolError` when the bytes can't be
         reconciled with HTTP/1.1.
         """
-        if self._state in (RequestParseState.DONE, RequestParseState.ERROR):
+        if self.state in (RequestParseState.DONE, RequestParseState.ERROR):
             return
         if chunk:
-            if self._state == RequestParseState.BODY:
+            if self.state == RequestParseState.BODY:
                 self._absorb_body_bytes(chunk)
             else:
                 self._buffer.extend(chunk)
@@ -396,16 +368,16 @@ class RequestParser:
 
     def feed_eof(self):
         """Signal that the peer closed.  Mid-headers is a protocol error."""
-        if self._state in (RequestParseState.DONE, RequestParseState.ERROR):
+        if self.state in (RequestParseState.DONE, RequestParseState.ERROR):
             return
-        if self._state == RequestParseState.BODY and self._body_remaining > 0:
+        if self.state == RequestParseState.BODY and self._body_remaining > 0:
             self._fail(ServerProtocolError(
                 f"client closed mid-body; {self._body_remaining} bytes "
                 "still expected per Content-Length",
             ))
             return
         self._fail(ServerProtocolError(
-            f"client closed before request completed (state={self._state})",
+            f"client closed before request completed (state={self.state})",
         ))
 
     # ------------------------------------------------------------------
@@ -415,11 +387,11 @@ class RequestParser:
     def _advance(self):
         """Consume buffered bytes until no more progress is possible."""
         while True:
-            if self._state == RequestParseState.REQUEST_LINE:
+            if self.state == RequestParseState.REQUEST_LINE:
                 if not self._try_parse_request_line():
                     return
                 continue
-            if self._state == RequestParseState.HEADERS:
+            if self.state == RequestParseState.HEADERS:
                 if not self._try_parse_headers():
                     return
                 continue
@@ -444,7 +416,7 @@ class RequestParser:
             self._fail(ServerProtocolError(
                 f"non-ASCII request line: {bytes(line)!r}",
             ))
-            raise self._error from decode_error
+            raise self.error from decode_error
         parts = text.split(" ")
         if len(parts) != 3:
             self._fail(ServerProtocolError(
@@ -467,10 +439,10 @@ class RequestParser:
                 f"empty request-target: {text!r}",
             ))
             return True
-        self._method = method
-        self._target = target
-        self._http_version = version_str
-        self._state = RequestParseState.HEADERS
+        self.method = method
+        self.target = target
+        self.http_version = version_str
+        self.state = RequestParseState.HEADERS
         return True
 
     def _try_parse_headers(self):
@@ -493,7 +465,7 @@ class RequestParser:
             self._fail(ServerProtocolError(
                 f"non-ASCII header line: {bytes(line)!r}",
             ))
-            raise self._error from decode_error
+            raise self.error from decode_error
         colon_index = text.find(":")
         if colon_index <= 0:
             self._fail(ServerProtocolError(
@@ -502,15 +474,15 @@ class RequestParser:
             return True
         name = text[:colon_index]
         value = text[colon_index + 1:].strip()
-        self._headers.add(name, value)
+        self.headers.add(name, value)
         return True
 
     def _enter_body_state(self):
         """Headers-complete: figure out body framing."""
-        content_length_str = self._headers.get("Content-Length")
+        content_length_str = self.headers.get("Content-Length")
         if content_length_str is None:
             # No Content-Length, no chunked — assume zero body.
-            self._state = RequestParseState.DONE
+            self.state = RequestParseState.DONE
             return
         try:
             content_length = int(content_length_str)
@@ -532,9 +504,9 @@ class RequestParser:
             return
         self._body_remaining = content_length
         if content_length == 0:
-            self._state = RequestParseState.DONE
+            self.state = RequestParseState.DONE
             return
-        self._state = RequestParseState.BODY
+        self.state = RequestParseState.BODY
         self._body_write_offset = 0
         # Don't pre-allocate the body upfront: the absorb path uses a
         # doubling-grow strategy that's measured cleaner on small-heap
@@ -574,12 +546,12 @@ class RequestParser:
         self._body_write_offset = end_offset
         self._body_remaining -= take
         if self._body_remaining == 0:
-            self._state = RequestParseState.DONE
+            self.state = RequestParseState.DONE
 
     def _fail(self, error):
         """Latch *error* and transition to ERROR."""
-        self._error = error
-        self._state = RequestParseState.ERROR
+        self.error = error
+        self.state = RequestParseState.ERROR
 
 
 # ---------------------------------------------------------------------------

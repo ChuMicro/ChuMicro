@@ -223,15 +223,11 @@ class _Connection:
         self._response_bytes = b""
         self._response_view = memoryview(self._response_bytes)
         self._response_offset = 0
-        self._state = _ConnState.WANT_REQUEST_LINE
-
-    @property
-    def state(self):
-        return self._state
+        self.state = _ConnState.WANT_REQUEST_LINE
 
     @property
     def is_done(self):
-        return self._state in (_ConnState.DONE, _ConnState.ERROR)
+        return self.state in (_ConnState.DONE, _ConnState.ERROR)
 
     def tick(self, now_ms, *, ticks_diff_func):
         """Advance the connection by one tick's worth of work."""
@@ -241,15 +237,15 @@ class _Connection:
             self._fail()
             return
         try:
-            if self._state in (
+            if self.state in (
                 _ConnState.WANT_REQUEST_LINE,
                 _ConnState.WANT_HEADERS,
                 _ConnState.WANT_BODY,
             ):
                 self._drive_recv()
-            if self._state == _ConnState.DISPATCHING:
+            if self.state == _ConnState.DISPATCHING:
                 self._dispatch_handler()
-            if self._state in (
+            if self.state in (
                 _ConnState.WANT_SEND_HEADERS,
                 _ConnState.WANT_SEND_BODY,
             ):
@@ -305,12 +301,12 @@ class _Connection:
         if parser_state == RequestParseState.ERROR:
             raise self._parser.error
         if parser_state == RequestParseState.DONE:
-            self._state = _ConnState.DISPATCHING
+            self.state = _ConnState.DISPATCHING
             return
         if parser_state == RequestParseState.HEADERS:
-            self._state = _ConnState.WANT_HEADERS
+            self.state = _ConnState.WANT_HEADERS
         elif parser_state == RequestParseState.BODY:
-            self._state = _ConnState.WANT_BODY
+            self.state = _ConnState.WANT_BODY
 
     # ------------------------------------------------------------------
     # Handler dispatch + response encoding
@@ -337,7 +333,7 @@ class _Connection:
         self._response_bytes = encode_response(response)
         self._response_view = memoryview(self._response_bytes)
         self._response_offset = 0
-        self._state = _ConnState.WANT_SEND_HEADERS
+        self.state = _ConnState.WANT_SEND_HEADERS
 
     def _drive_send(self):
         total = len(self._response_bytes)
@@ -358,10 +354,10 @@ class _Connection:
             self._response_offset += sent
             consumed += sent
         if self._response_offset >= total:
-            self._state = _ConnState.DONE
+            self.state = _ConnState.DONE
 
     def _fail(self):
-        self._state = _ConnState.ERROR
+        self.state = _ConnState.ERROR
 
 
 # ---------------------------------------------------------------------------
