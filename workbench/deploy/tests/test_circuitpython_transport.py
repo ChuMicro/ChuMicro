@@ -850,19 +850,15 @@ class TestFlashMode:
     ) -> CircuitpythonTransport:
         """Create a flash-mode transport with a fake serial port.
 
-        ``circuitpy_drive_path`` is plumbed into the transport via a
-        monkey-patch on :func:`_circuitpy_volume_candidates` since the
-        transport no longer accepts a pinned drive path — drive
-        resolution always goes through candidates + verify.  Also
-        plants a ``boot_out.txt`` and patches ``probe_implementation``
-        so ``_verify_drive_for_board``'s cheap path fires without
+        ``circuitpy_drive_path`` is plumbed into the transport via the
+        ``drive_scanner=`` constructor kwarg since the transport no
+        longer accepts a pinned drive path — drive resolution always
+        goes through candidates + verify.  Also plants a
+        ``boot_out.txt`` and patches ``probe_implementation`` so
+        ``_verify_drive_for_board``'s cheap path fires without
         consuming a probe response from the fake serial port.
         """
         pinned = Path(circuitpy_drive_path)
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [pinned],
-        )
         if pinned.is_dir():
             _plant_verifiable_circuitpy(pinned, monkeypatch)
         return CircuitpythonTransport(
@@ -870,6 +866,7 @@ class TestFlashMode:
             mode="flash",
             serial_port_factory=port,
             time=FakeTime(),
+            drive_scanner=lambda: [pinned],
         )
 
     def test_flash_mode_stores_mode(self) -> None:
@@ -887,11 +884,6 @@ class TestFlashMode:
     ) -> None:
         """stage() in flash mode should raise when drive is not found."""
         # Ensure auto-detection finds nothing.
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive"
-            "._circuitpy_volume_candidates",
-            lambda: [],
-        )
         # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
         # stage's autoreload-off (OK).  Stage raises before any further
         # REPL traffic, and disconnect's _enter_raw_repl finds an empty
@@ -910,6 +902,7 @@ class TestFlashMode:
             mode="flash",
             serial_port_factory=port,
             time=FakeTime(),
+            drive_scanner=lambda: [],
         )
         transport.connect()
 
@@ -1610,11 +1603,6 @@ class TestCircuitpyBasePaths:
         fake_drive.mkdir()
 
         # Make _circuitpy_volume_candidates return our fake path.
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive"
-            "._circuitpy_volume_candidates",
-            lambda: [fake_drive],
-        )
         _plant_verifiable_circuitpy(fake_drive, monkeypatch)
 
         source_dir = tmp_path / "src"
@@ -1638,6 +1626,7 @@ class TestCircuitpyBasePaths:
             mode="flash",
             serial_port_factory=port,
             time=FakeTime(),
+            drive_scanner=lambda: [fake_drive],
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -1739,12 +1728,10 @@ class TestDeployFiles:
             reads.extend(extra_responses)
         port = FakeSerialPort(read_responses=reads)
 
+        drive_scanner = None
         if drive_path is not None and monkeypatch is not None:
             pinned = Path(drive_path)
-            monkeypatch.setattr(
-                "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-                lambda: [pinned],
-            )
+            drive_scanner = lambda: [pinned]  # noqa: E731
             if pinned.is_dir():
                 _plant_verifiable_circuitpy(pinned, monkeypatch)
 
@@ -1753,6 +1740,7 @@ class TestDeployFiles:
             mode=mode,
             serial_port_factory=port,
             time=FakeTime(),
+            drive_scanner=drive_scanner,
         )
         transport.connect()
         return transport, port
@@ -2684,9 +2672,11 @@ class TestDriveVerification:
             self._boot_out("Board B", uid="BBBB2222"),
             encoding="utf-8",
         )
+        # find_circuitpy_drive_for_uid is a module-level helper that
+        # scans circuitpy_drive._circuitpy_volume_candidates() directly;
+        # not transport-internal, so monkeypatch the module-level fn.
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive"
-            "._circuitpy_volume_candidates",
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
             lambda: [first, second],
         )
         # Lower-case input matches upper-case UID in boot_out.txt.
@@ -2769,10 +2759,6 @@ class TestListFilesInScopeAndDelete:
         (tmp_path / "data").mkdir()
         (tmp_path / "data" / "log.txt").write_text("user data")  # out of scope
 
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [tmp_path],
-        )
         # boot_out.txt is planted by the helper with valid identity so
         # ``_verify_drive_for_board`` cheap-paths; it's still filtered
         # out of the scope listing because it's not a deploy-scope name.
@@ -2781,6 +2767,7 @@ class TestListFilesInScopeAndDelete:
             "/dev/ttyUSB0",
             mode="flash",
             time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
         )
         result = sorted(transport.list_files_in_scope())
         assert result == [
@@ -2794,14 +2781,11 @@ class TestListFilesInScopeAndDelete:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Drive resolution failure → empty listing (no exception)."""
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [],
-        )
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
             time=FakeTime(),
+            drive_scanner=lambda: [],
         )
         assert transport.list_files_in_scope() == []
 
@@ -2814,15 +2798,12 @@ class TestListFilesInScopeAndDelete:
         keeper = tmp_path / "lib" / "keep.py"
         keeper.write_text("# keep")
 
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [tmp_path],
-        )
         _plant_verifiable_circuitpy(tmp_path, monkeypatch)
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
             time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
         )
         transport.delete_files(["/lib/stale.py", "/lib/missing.py"])
         # Stale removed; missing tolerated silently; keeper survives.
@@ -2879,9 +2860,13 @@ class TestListFilesInScopeAndDelete:
         (right_drive / "lib").mkdir()
         (right_drive / "lib" / "right_only.py").write_text("y = 2")
 
+        # The auto-correct path goes through circuitpy_drive's module-
+        # level find_circuitpy_drive_for_uid helper, which uses the
+        # module-global _circuitpy_volume_candidates — not the
+        # transport's drive_scanner.  Patch both surfaces so the
+        # auto-correct sees both candidates.
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive"
-            "._circuitpy_volume_candidates",
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
             lambda: [wrong_drive, right_drive],
         )
 
@@ -2902,6 +2887,7 @@ class TestListFilesInScopeAndDelete:
             mode="flash",
             serial_port_factory=lambda **kw: port,
             time=FakeTime(),
+            drive_scanner=lambda: [wrong_drive, right_drive],
         )
         transport.connect()
         listed = sorted(transport.list_files_in_scope())
@@ -2940,11 +2926,13 @@ class TestListFilesInScopeAndDelete:
         right_target = right_drive / "lib" / "stale.py"
         right_target.write_text("# right board — should be deleted")
 
+        # Same caveat as test_list_files_in_scope_auto_corrects_stale_drive_path
+        # above: the auto-correct uses the module-level candidates fn.
         monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive"
-            "._circuitpy_volume_candidates",
+            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
             lambda: [wrong_drive, right_drive],
         )
+
         probe_marker = (
             "OK"
             "__CHU_IMPL__:circuitpython|10.1.4|S2Mini with ESP32S2-S2FN4R2\n"
@@ -2960,6 +2948,7 @@ class TestListFilesInScopeAndDelete:
             mode="flash",
             serial_port_factory=lambda **kw: port,
             time=FakeTime(),
+            drive_scanner=lambda: [wrong_drive, right_drive],
         )
         transport.connect()
         transport.delete_files(["/lib/stale.py"])
@@ -3000,10 +2989,6 @@ class TestWipeFilesystem:
         # reconnect.
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [drive],
-        )
         first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         ports = [first_port, second_port]
@@ -3017,6 +3002,7 @@ class TestWipeFilesystem:
             timeout=0.05,
             serial_port_factory=multi_port_factory,
             time=FakeTime(),
+            drive_scanner=lambda: [drive],
         )
         transport.connect()
         transport.wipe_filesystem()
@@ -3034,10 +3020,6 @@ class TestWipeFilesystem:
         """A failure tearing the dropped port down doesn't block re-connect."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [drive],
-        )
 
         class _UncloseablePort(FakeSerialPort):
             def close(self) -> None:
@@ -3053,6 +3035,7 @@ class TestWipeFilesystem:
             timeout=0.05,
             serial_port_factory=lambda **_: ports.pop(0),
             time=FakeTime(),
+            drive_scanner=lambda: [drive],
         )
         transport.connect()
         transport.wipe_filesystem()  # close failure swallowed; re-connect runs
@@ -3064,10 +3047,6 @@ class TestWipeFilesystem:
         """Drive mounted at the moment serial reconnects: no extra waits."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [drive],
-        )
 
         first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
@@ -3079,6 +3058,7 @@ class TestWipeFilesystem:
             timeout=0.05,
             serial_port_factory=lambda **_: ports.pop(0),
             time=fake_time,
+            drive_scanner=lambda: [drive],
         )
         transport.connect()
         before = fake_time.monotonic()
@@ -3095,10 +3075,6 @@ class TestWipeFilesystem:
         """Drive that appears mid-poll succeeds without raising."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()  # pre-existing on disk, but masked for first probes
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [drive],
-        )
         # Pretend the FAT volume hasn't remounted yet for the first two
         # poll probes, then "remount" by letting the real is_dir win.
         original_is_dir = Path.is_dir
@@ -3122,6 +3098,7 @@ class TestWipeFilesystem:
             timeout=0.05,
             serial_port_factory=lambda **_: ports.pop(0),
             time=FakeTime(),
+            drive_scanner=lambda: [drive],
         )
         transport.connect()
         transport.wipe_filesystem()
@@ -3133,10 +3110,6 @@ class TestWipeFilesystem:
     ) -> None:
         """Drive that never reappears within budget raises a clear error."""
         drive = tmp_path / "CIRCUITPY"  # never created
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [drive],
-        )
 
         first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
         second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
@@ -3147,6 +3120,7 @@ class TestWipeFilesystem:
             timeout=0.05,
             serial_port_factory=lambda **_: ports.pop(0),
             time=FakeTime(),
+            drive_scanner=lambda: [drive],
         )
         transport.connect()
         with pytest.raises(
@@ -3161,10 +3135,6 @@ class TestWipeFilesystem:
         """Drive directory exists but probe writes EACCES until macOS settles."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
-        monkeypatch.setattr(
-            "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
-            lambda: [drive],
-        )
         # First two probe writes hit EACCES (drive mounted but not yet
         # writable post-remount); third succeeds.
         original_write_bytes = Path.write_bytes
@@ -3190,6 +3160,7 @@ class TestWipeFilesystem:
             timeout=0.05,
             serial_port_factory=lambda **_: ports.pop(0),
             time=FakeTime(),
+            drive_scanner=lambda: [drive],
         )
         transport.connect()
         transport.wipe_filesystem()
