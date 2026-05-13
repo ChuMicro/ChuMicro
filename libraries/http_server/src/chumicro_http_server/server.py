@@ -28,10 +28,6 @@ budgets are future work.
 
 import json
 
-from chumicro_config import InvalidConfigType, is_config_like
-from chumicro_sockets import is_eagain
-from chumicro_timing import ticks as _DEFAULT_TICKS
-
 from chumicro_http_server._wire import (
     CRLF,
     DEFAULT_MAX_CONNECTIONS,
@@ -46,6 +42,11 @@ from chumicro_http_server._wire import (
     parse_query,
     split_target,
 )
+
+
+def _is_eagain(error):
+    return getattr(error, "errno", None) in (11, 35)
+
 
 #: Reason phrases for the status codes this server emits.
 _REASONS = {
@@ -328,7 +329,7 @@ class _Connection:
             try:
                 got = self._socket.recv_into(self._recv_view[:capacity], capacity)
             except OSError as socket_error:
-                if is_eagain(socket_error):
+                if _is_eagain(socket_error):
                     return
                 raise
             if got == 0:
@@ -384,7 +385,7 @@ class _Connection:
             try:
                 sent = self._socket.send(chunk)
             except OSError as socket_error:
-                if is_eagain(socket_error):
+                if _is_eagain(socket_error):
                     return
                 raise
             if sent <= 0:  # pragma: no cover - non-blocking-EAGAIN backpressure path
@@ -592,11 +593,6 @@ class HttpServer:
             A configured ``HttpServer`` ready for ``check()`` /
             ``handle()``.
         """
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"HttpServer.from_config requires a RuntimeConfig or "
-                f"dict, got {type(config).__name__}",
-            )
         if listener_factory is None:
             # Lazy import so users who pass their own listener_factory
             # don't pull chumicro_sockets into the deploy graph.  See
@@ -687,7 +683,9 @@ class HttpServer:
         self._send_budget_per_tick = send_budget_per_tick
         self._max_request_body_bytes = max_request_body_bytes
 
-        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        if ticks is None:
+            from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
+        self._ticks = ticks
 
         self._listener = None
         self._connections = []
@@ -916,7 +914,7 @@ class HttpServer:
         try:
             accept_result = self._listener.accept()
         except OSError as accept_error:
-            if is_eagain(accept_error):
+            if _is_eagain(accept_error):
                 return
             raise
         if accept_result is None:
