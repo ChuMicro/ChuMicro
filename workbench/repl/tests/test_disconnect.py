@@ -10,7 +10,7 @@ to validate three things uniformly:
   on success;
 - callers get a typed signal — :attr:`ExitCode.DISCONNECTED` from
   ``tail``, :class:`ReplSessionDisconnected` from
-  ``ReplSession``, :data:`DISCONNECTED_EXIT_CODE` from
+  ``ReplSession``, :attr:`ExitCode.DISCONNECTED` (``3``) from
   ``run_loop`` — that they can branch on without parsing strings.
 """
 
@@ -29,7 +29,7 @@ from chumicro_repl import (
 from chumicro_repl.highlight import strip_ansi_sequences
 from chumicro_repl.session import ReplSessionDisconnected
 from chumicro_repl.testing import FakeKeyboard, FakeSerialPort, FakeTime
-from chumicro_repl.tui import DISCONNECTED_EXIT_CODE, run_loop
+from chumicro_repl.tui import run_loop
 
 CTRL_X = b"\x18"
 RAW_REPL_PROMPT = b"raw REPL; CTRL-B to exit\r\n>"
@@ -240,7 +240,7 @@ class TestRunLoopDisconnect:
             port, keyboard, output,
             time=FakeTime(),
         )
-        assert result == DISCONNECTED_EXIT_CODE
+        assert result == int(ExitCode.DISCONNECTED)
         rendered = strip_ansi_sequences(output.getvalue())
         assert "device disconnected" in rendered
 
@@ -323,7 +323,7 @@ class TestRunLoopDisconnect:
             reconnect_seconds=0.5,
             reconnect_interval=0.1,
         )
-        assert result == DISCONNECTED_EXIT_CODE
+        assert result == int(ExitCode.DISCONNECTED)
         assert "giving up" in strip_ansi_sequences(output.getvalue())
 
     def test_initial_send_failure_triggers_reconnect(self):
@@ -399,4 +399,4 @@ class TestInteractiveReconnectDefaults:
             port_factory=first_port,
             reconnect_seconds=0.0,
         )
-        assert result == DISCONNECTED_EXIT_CODE
+        assert result == int(ExitCode.DISCONNECTED)

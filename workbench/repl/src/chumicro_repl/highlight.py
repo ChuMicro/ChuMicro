@@ -20,7 +20,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .patterns import PatternKind, PatternMatch, detect_patterns
+from .patterns import (
+    PatternKind,
+    PatternMatch,
+    StreamingPatternDetector,
+    detect_patterns,
+)
 
 #: ANSI CSI reset: ``\x1b[0m``.  Clears every SGR attribute.
 _ANSI_RESET = "\x1b[0m"
@@ -137,3 +142,43 @@ def strip_ansi_sequences(text: str) -> str:
     losing human-readable content.
     """
     return _ANSI_SEQUENCE_PATTERN.sub("", text)
+
+
+def colorize_stream_chunk(
+    text: str,
+    matches: list[PatternMatch],
+    detector: StreamingPatternDetector,
+    *,
+    theme: Theme | None = None,
+) -> str:
+    """Render *text* with ANSI highlighting using stream-coordinate *matches*.
+
+    Streaming callers (``tail()``, the interactive TUI, line mode) feed
+    the :class:`~chumicro_repl.patterns.StreamingPatternDetector` chunk
+    by chunk; it returns matches whose ``start`` / ``end`` are absolute
+    offsets from the start of the logical stream.  This helper
+    translates those offsets back into indices within the
+    most-recently-fed chunk and wraps each in-range span via
+    :func:`colorize`.  Matches whose translated coordinates fall
+    entirely outside *text* are skipped.
+    """
+    if not matches:
+        return text
+    stream_start = detector.total_fed - len(text)
+    local_matches: list[PatternMatch] = []
+    for pattern_match in matches:
+        local_start = pattern_match.start - stream_start
+        local_end = pattern_match.end - stream_start
+        if local_end <= 0 or local_start >= len(text):
+            continue
+        local_start = max(0, local_start)
+        local_end = min(len(text), local_end)
+        local_matches.append(
+            PatternMatch(
+                kind=pattern_match.kind,
+                start=local_start,
+                end=local_end,
+                text=text[local_start:local_end],
+            )
+        )
+    return colorize(text, theme=theme, matches=local_matches)

@@ -114,12 +114,11 @@ class Completer(Protocol):
 def _python_keywords() -> list[str]:
     """Return the language keywords that make sense at the prompt.
 
-    ``keyword.kwlist`` carries language reserved words; ``soft_kwlist``
-    (Python 3.9+) covers ``match`` / ``case`` / ``type``.  Combined
-    + sorted gives a stable list.
+    ``keyword.kwlist`` carries language reserved words; ``softkwlist``
+    covers ``match`` / ``case`` / ``type``.  Combined + sorted gives
+    a stable list.
     """
-    soft = list(getattr(keyword, "softkwlist", ()))
-    return sorted(set(keyword.kwlist) | set(soft))
+    return sorted(set(keyword.kwlist) | set(keyword.softkwlist))
 
 
 def _public_builtin_names() -> list[str]:

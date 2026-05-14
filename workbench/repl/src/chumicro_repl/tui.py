@@ -33,16 +33,21 @@ import time as _time_module
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, BinaryIO, Protocol, TextIO, cast
 
+from ._follow import ExitCode
 from ._serial import (
     CTRL_X,
     PortFactory,
     SerialPort,
     TimeSource,
+    close_quietly,
     default_port_factory,
+    flush_quietly,
+    resolve_address,
+    write_disconnect_notice,
 )
 from .framing import Utf8StreamDecoder
-from .highlight import DEFAULT_THEME, Theme, colorize
-from .patterns import PatternMatch, StreamingPatternDetector
+from .highlight import DEFAULT_THEME, Theme, colorize_stream_chunk
+from .patterns import StreamingPatternDetector
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,12 +58,6 @@ if TYPE_CHECKING:
 #: Poll interval inside the interactive loop.  Short enough to keep
 #: key echo feeling instantaneous; long enough not to peg a CPU.
 _POLL_INTERVAL = 0.005
-
-#: Process exit code surfaced when the device drops mid-session.
-#: Matches :attr:`chumicro_repl.ExitCode.DISCONNECTED` from the
-#: ``tail()`` path so a wrapping CLI can use one value across both
-#: surfaces.
-DISCONNECTED_EXIT_CODE = 3
 
 
 class KeyInputReader(Protocol):
@@ -92,7 +91,7 @@ def run_loop(
     """Run the interactive I/O loop until *exit_key* is pressed.
 
     Returns ``0`` on a normal Ctrl-X exit, or
-    :data:`DISCONNECTED_EXIT_CODE` (3) when the device drops and
+    :attr:`ExitCode.DISCONNECTED` (``3``) when the device drops and
     no reconnect callback is supplied (or the reconnect budget is
     exhausted).  Callers driving the loop from tests can inject
     custom *keyboard* / *output* / *time* to validate the
@@ -122,7 +121,7 @@ def run_loop(
             invoked when the current port drops and
             *reconnect_seconds* allows.  Defaults to ``None`` (no
             auto-reconnect — the loop returns
-            :data:`DISCONNECTED_EXIT_CODE` on the first disconnect).
+            :attr:`ExitCode.DISCONNECTED` on the first disconnect).
             :func:`interactive` wires this to a closure over the
             original port factory so a replug picks up
             automatically.
@@ -142,7 +141,7 @@ def run_loop(
     detector = StreamingPatternDetector()
     if welcome_banner:
         output.write(welcome_banner)
-        _flush_quietly(output)
+        flush_quietly(output)
 
     # Single-element list as a mutable container for the
     # ``_tui_reconnect`` helper to flag "user pressed exit_key
@@ -160,7 +159,7 @@ def run_loop(
         Returns either:
           * An ``int`` exit code — the caller must return it from
             :func:`run_loop` immediately (``0`` on user-requested exit
-            during reconnect, :data:`DISCONNECTED_EXIT_CODE` on budget
+            during reconnect, :attr:`ExitCode.DISCONNECTED` on budget
             exhaustion).
           * A ``(port, decoder, detector)`` tuple — the caller swaps
             its locals for these fresh instances and continues the
@@ -187,7 +186,7 @@ def run_loop(
         if user_exit_flag[0]:
             return 0
         if new_port is None:
-            return DISCONNECTED_EXIT_CODE
+            return int(ExitCode.DISCONNECTED)
         if send_initial_after and initial_send:
             try:
                 new_port.write(initial_send)
@@ -249,8 +248,10 @@ def run_loop(
             decoded = decoder.decode(chunk)
             if decoded:
                 matches = detector.feed(decoded)
-                output.write(_render(decoded, matches, detector, active_theme))
-                _flush_quietly(output)
+                output.write(colorize_stream_chunk(
+                    decoded, matches, detector, theme=active_theme,
+                ))
+                flush_quietly(output)
             if not exit_requested:
                 # Return to the keyboard-poll loop after one drain
                 # so interactive typing stays responsive — we only
@@ -266,8 +267,11 @@ def run_loop(
 #: device drops mid-session.  Long enough to cover a fumbled
 #: replug; bounded so a forgotten session eventually exits
 #: instead of holding the terminal hostage.  Press Ctrl-X
-#: during the window to abort early.
-DEFAULT_RECONNECT_SECONDS = 60.0
+#: during the window to abort early.  Named to distinguish from
+#: the shorter tail() default in :mod:`._follow` — the two
+#: surfaces want different ceilings (a CI-tail wants to fail
+#: fast; an interactive session wants to wait for the user).
+DEFAULT_TUI_RECONNECT_SECONDS = 60.0
 
 
 def interactive(
@@ -280,7 +284,7 @@ def interactive(
     time: TimeSource | None = None,
     port_factory: PortFactory | None = None,
     raw_mode_context: Callable[[int], contextlib.AbstractContextManager[None]] | None = None,
-    reconnect_seconds: float = DEFAULT_RECONNECT_SECONDS,
+    reconnect_seconds: float = DEFAULT_TUI_RECONNECT_SECONDS,
     reconnect_interval: float = 0.5,
 ) -> int:
     """Open *device* and run the interactive TUI until Ctrl-X.
@@ -304,16 +308,16 @@ def interactive(
             :func:`_posix_raw_mode`; tests pass a no-op.
         reconnect_seconds: How long to keep retrying the port
             factory after the device drops mid-session.  Default
-            :data:`DEFAULT_RECONNECT_SECONDS` (60 s); pass ``0.0``
+            :data:`DEFAULT_TUI_RECONNECT_SECONDS` (60 s); pass ``0.0``
             to disable reconnect (the loop returns
-            :data:`DISCONNECTED_EXIT_CODE` on the first OSError).
+            :attr:`ExitCode.DISCONNECTED` on the first OSError).
             Press Ctrl-X during the retry window to abort
             immediately.
         reconnect_interval: Sleep between reconnect attempts.
 
     Returns:
         ``0`` on normal Ctrl-X exit (including Ctrl-X during a
-        reconnect window); :data:`DISCONNECTED_EXIT_CODE` (3)
+        reconnect window); :attr:`ExitCode.DISCONNECTED` (``3``)
         when the device drops and the reconnect budget runs out.
     """
     active_input: BinaryIO = (
@@ -324,7 +328,7 @@ def interactive(
         port_factory if port_factory is not None else default_port_factory
     )
     raw_mode = raw_mode_context if raw_mode_context is not None else _posix_raw_mode
-    address, resolved_baudrate = _resolve_address(device, baudrate)
+    address, resolved_baudrate = resolve_address(device, baudrate)
     transport_label = _transport_label(device)
     welcome_banner = _format_welcome_banner(
         address=address, baudrate=resolved_baudrate, transport=transport_label,
@@ -359,7 +363,7 @@ def interactive(
                 reconnect_interval=reconnect_interval,
             )
     finally:
-        _close_quietly(port)
+        close_quietly(port)
 
 
 def interactive_line(
@@ -408,7 +412,7 @@ def interactive_line(
     active_factory: PortFactory = (
         port_factory if port_factory is not None else default_port_factory
     )
-    address, resolved_baudrate = _resolve_address(device, baudrate)
+    address, resolved_baudrate = resolve_address(device, baudrate)
     port = active_factory(address, resolved_baudrate, _POLL_INTERVAL)
     try:
         return run_line_mode(
@@ -421,7 +425,7 @@ def interactive_line(
             time=time,
         )
     finally:
-        _close_quietly(port)
+        close_quietly(port)
 
 
 def _format_welcome_banner(
@@ -460,10 +464,10 @@ def _format_welcome_banner(
 def _transport_label(device: Device | str) -> str | None:
     """Return the device's runtime label, or ``None`` for a bare path.
 
-    Duck-typed access mirrors :func:`_resolve_address` — accepts any
-    object with a ``.transport`` attribute (including the
-    :class:`chumicro_deploy.Device` dataclass) without a hard import
-    dependency on chumicro-deploy.
+    Duck-typed access mirrors :func:`chumicro_repl._serial.resolve_address`
+    — accepts any object with a ``.transport`` attribute (including
+    the :class:`chumicro_deploy.Device` dataclass) without a hard
+    import dependency on chumicro-deploy.
     """
     if isinstance(device, str):
         return None
@@ -547,63 +551,6 @@ def _fileno_or_none(stream: BinaryIO) -> int | None:
         return None
 
 
-def _render(
-    text: str,
-    matches: list[PatternMatch],
-    detector: StreamingPatternDetector,
-    theme: Theme,
-) -> str:
-    """Highlight *text* using *matches* translated into local indices.
-
-    Mirrors the offset math in
-    :func:`chumicro_repl._follow._highlight_chunk`.  Factored here so
-    the tail and TUI paths keep their streaming highlighters
-    independently testable.
-    """
-    if not matches:
-        return text
-    stream_start = detector.total_fed - len(text)
-    local_matches: list[PatternMatch] = []
-    for pattern_match in matches:
-        local_start = pattern_match.start - stream_start
-        local_end = pattern_match.end - stream_start
-        if local_end <= 0 or local_start >= len(text):
-            continue
-        local_start = max(0, local_start)
-        local_end = min(len(text), local_end)
-        local_matches.append(
-            PatternMatch(
-                kind=pattern_match.kind,
-                start=local_start,
-                end=local_end,
-                text=text[local_start:local_end],
-            )
-        )
-    return colorize(text, theme=theme, matches=local_matches)
-
-
-def _flush_quietly(stream: TextIO) -> None:
-    """Flush *stream*, swallowing closed-stream errors from tests."""
-    try:
-        stream.flush()
-    except (OSError, ValueError):  # pragma: no cover — closed stream
-        pass
-
-
-def _write_disconnect_notice(output: TextIO, error: OSError) -> None:
-    """Write a one-line dim notice describing a disconnect to *output*.
-
-    Mirrored in :func:`chumicro_repl._follow._write_disconnect_notice`
-    so the TUI exit and the ``tail()`` exit produce the same banner.
-    Kept short and ANSI-styled so it doesn't blend into device output
-    the user was watching.  ``\\r\\n`` line endings render correctly
-    under terminal raw mode (where the OS no longer auto-translates
-    ``\\n``).
-    """
-    output.write(f"\r\n\x1b[2m*** device disconnected — {error} ***\x1b[0m\r\n")
-    _flush_quietly(output)
-
-
 def _tui_reconnect(
     *,
     error: OSError,
@@ -637,8 +584,8 @@ def _tui_reconnect(
     OS often raises another OSError on close after a hot-unplug,
     which would otherwise mask the original error.
     """
-    _write_disconnect_notice(output, error)
-    _close_quietly(old_port)
+    write_disconnect_notice(output, error)
+    close_quietly(old_port)
     if reopen is None or reconnect_seconds <= 0:
         return None
     output.write(
@@ -646,7 +593,7 @@ def _tui_reconnect(
         f"plug the device back in, or press Ctrl-X to abort"
         f" ***\x1b[0m\r\n"
     )
-    _flush_quietly(output)
+    flush_quietly(output)
     deadline = time.monotonic() + reconnect_seconds
     while time.monotonic() < deadline:
         keystrokes = keyboard.read_available()
@@ -659,34 +606,10 @@ def _tui_reconnect(
         except OSError:
             continue
         output.write("\x1b[2m*** reconnected ***\x1b[0m\r\n")
-        _flush_quietly(output)
+        flush_quietly(output)
         return new_port
     output.write(
         f"\x1b[2m*** giving up after {reconnect_seconds:.0f}s ***\x1b[0m\r\n"
     )
-    _flush_quietly(output)
+    flush_quietly(output)
     return None
-
-
-def _close_quietly(port: SerialPort) -> None:
-    """Close *port*, swallowing the OSError a dead port often raises."""
-    try:
-        port.close()
-    except OSError:  # pragma: no cover — port already dying
-        pass
-
-
-def _resolve_address(
-    device: Device | str,
-    fallback_baudrate: int,
-) -> tuple[str, int]:
-    if isinstance(device, str):
-        return device, fallback_baudrate
-    address = getattr(device, "address", None)
-    if not isinstance(address, str):
-        raise TypeError(
-            f"interactive() expected a str port path or an object with "
-            f".address, got {type(device).__name__}"
-        )
-    baudrate = getattr(device, "baudrate", fallback_baudrate)
-    return address, int(baudrate)

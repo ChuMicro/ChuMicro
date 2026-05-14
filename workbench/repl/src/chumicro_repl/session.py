@@ -41,6 +41,7 @@ from ._serial import (
     SerialPort,
     TimeSource,
     default_port_factory,
+    resolve_address,
 )
 
 if TYPE_CHECKING:
@@ -154,7 +155,7 @@ class ReplSession:
         port_factory: PortFactory | None = None,
         connect_timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
-        address, resolved_baudrate = _resolve_device(device, baudrate)
+        address, resolved_baudrate = resolve_address(device, baudrate)
         self._address = address
         self._baudrate = resolved_baudrate
         # ``cast`` silences a structural-typing nit: stdlib ``time.sleep``
@@ -474,29 +475,3 @@ class ReplSession:
             port.close()
         except OSError:  # pragma: no cover — port already closed
             pass
-
-
-def _resolve_device(
-    device: Device | str,
-    fallback_baudrate: int,
-) -> tuple[str, int]:
-    """Return ``(address, baudrate)`` for either a Device or a path string.
-
-    Kept out of :meth:`ReplSession.__init__` so the construction site
-    reads as straight-line attribute assignment, and so tests can
-    exercise the resolution logic without running the full
-    constructor.
-    """
-    if isinstance(device, str):
-        return device, fallback_baudrate
-    # Duck-typed — accepts any object with ``address`` + ``baudrate``
-    # attrs.  Avoids a hard import dependency on chumicro_deploy
-    # for callers that only use ReplSession with a bare port path.
-    address = getattr(device, "address", None)
-    if not isinstance(address, str):
-        raise TypeError(
-            f"ReplSession expected a str port path or an object with "
-            f".address, got {type(device).__name__}"
-        )
-    baudrate = getattr(device, "baudrate", fallback_baudrate)
-    return address, int(baudrate)
