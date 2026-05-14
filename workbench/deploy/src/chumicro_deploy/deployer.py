@@ -184,17 +184,19 @@ class Deployer:
         pre_stage_hook: Callable[
             [TransportProtocol, dict[str, bytes], Callable[[float, str], None]],
             None,
-        ],
+        ] | None,
         transport_kwargs: dict[str, object],
     ) -> DeployResult:
         """Run the shared connect → (pre-stage) → deploy_files → disconnect flow.
 
         :meth:`deploy` and :meth:`deploy_diff` share every step except
-        the pre-stage phase (deploy has none; deploy_diff lists in-scope
-        files and deletes the stale set, or wipes the filesystem
-        outright).  *pre_stage_hook* receives the live transport plus
-        the new payload's file map and the same progress reporter the
-        outer flow uses; it owns the 0.1 / 0.2 stage milestones.
+        the pre-stage phase: a plain deploy has no extra work
+        (``pre_stage_hook=None`` — _run_deploy emits the 0.1 /
+        0.2 milestones inline), while deploy_diff lists in-scope files
+        and deletes the stale set (or wipes the filesystem outright)
+        via its hook.  When supplied, *pre_stage_hook* receives the
+        live transport plus the new payload's file map and the same
+        progress reporter the outer flow uses; it owns its own milestones.
 
         *transport_kwargs* are passed straight through to
         ``transport.deploy_files`` after merging with the runtime-
@@ -224,9 +226,11 @@ class Deployer:
         try:
             files = source.files()
             entrypoint = source.entrypoint()
-            # Hook owns the 0.1 / 0.2 (and optional further) milestones
-            # for its pre-stage work (collect files, wipe, list, delete).
-            pre_stage_hook(transport, files, _report)
+            if pre_stage_hook is None:
+                _report(0.1, "collecting files")
+                _report(0.2, "staging")
+            else:
+                pre_stage_hook(transport, files, _report)
             kwargs = _deploy_files_kwargs(
                 effective_device, entrypoint, tail_seconds=tail_seconds,
             )
@@ -309,15 +313,6 @@ class Deployer:
             ``execute_output``, and ``traceback`` populated.  ``success``
             is ``True`` when the output contains no detectable traceback.
         """
-        def plain_pre_stage(
-            transport: TransportProtocol,
-            files: dict[str, bytes],
-            report: Callable[[float, str], None],
-        ) -> None:
-            del transport, files  # plain deploy has no pre-stage work
-            report(0.1, "collecting files")
-            report(0.2, "staging")
-
         return self._run_deploy(
             source,
             force_deploy_mode=force_deploy_mode,
@@ -326,7 +321,7 @@ class Deployer:
             on_execute_line=on_execute_line,
             on_preflight_message=on_preflight_message,
             tail_seconds=tail_seconds,
-            pre_stage_hook=plain_pre_stage,
+            pre_stage_hook=None,
             transport_kwargs={"clean": clean},
         )
 
