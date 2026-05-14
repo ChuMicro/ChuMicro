@@ -143,12 +143,6 @@ def run_loop(
         output.write(welcome_banner)
         flush_quietly(output)
 
-    # Single-element list as a mutable container for the
-    # ``_tui_reconnect`` helper to flag "user pressed exit_key
-    # during reconnect"; cleaner than threading a third return
-    # type through every call site.
-    user_exit_flag: list[bool] = [False]
-
     def _try_recover(
         error: OSError,
         *,
@@ -171,7 +165,7 @@ def run_loop(
         Pass ``False`` from the initial-send branch (where the caller
         is about to retry the initial write itself).
         """
-        new_port = _tui_reconnect(
+        new_port, user_exited = _tui_reconnect(
             error=error,
             output=output,
             keyboard=keyboard,
@@ -181,9 +175,8 @@ def run_loop(
             reconnect_seconds=reconnect_seconds,
             reconnect_interval=reconnect_interval,
             old_port=port,
-            user_exit_flag=user_exit_flag,
         )
-        if user_exit_flag[0]:
+        if user_exited:
             return 0
         if new_port is None:
             return int(ExitCode.DISCONNECTED)
@@ -562,23 +555,24 @@ def _tui_reconnect(
     reconnect_seconds: float,
     reconnect_interval: float,
     old_port: SerialPort,
-    user_exit_flag: list[bool],
-) -> SerialPort | None:
+) -> tuple[SerialPort | None, bool]:
     """Run the reconnect loop after a disconnect.
 
-    Returns the freshly-opened :class:`SerialPort` on success.
-    Returns ``None`` when either the reconnect budget was exhausted
-    *or* the user pressed *exit_key* while we were waiting; the
-    caller distinguishes by reading ``user_exit_flag[0]``.
+    Returns ``(port, user_exited)``:
+
+    * ``(new_port, False)`` — factory succeeded; *new_port* is the
+      live :class:`SerialPort`.
+    * ``(None, True)`` — the user pressed *exit_key* during the
+      retry window; the caller should return ``0``.
+    * ``(None, False)`` — *reopen* was ``None``, the budget was
+      zero, or the budget elapsed; the caller should return
+      :attr:`ExitCode.DISCONNECTED`.
 
     Writes a "*** device disconnected — ... ***" notice on entry.
     When *reopen* is supplied and *reconnect_seconds* is positive,
     follows up with a "*** retrying ***" notice and polls until
     either the factory succeeds or the user presses *exit_key*; on
-    success a "*** reconnected ***" notice fires.  When *reopen*
-    is ``None`` or the budget is zero, the helper just writes the
-    disconnect notice and returns ``None`` so the caller falls
-    through to its disconnect-exit branch.
+    success a "*** reconnected ***" notice fires.
 
     The dead *old_port* is closed quietly before any retries; the
     OS often raises another OSError on close after a hot-unplug,
@@ -587,7 +581,7 @@ def _tui_reconnect(
     write_disconnect_notice(output, error)
     close_quietly(old_port)
     if reopen is None or reconnect_seconds <= 0:
-        return None
+        return None, False
     output.write(
         f"\x1b[2m*** retrying for up to {reconnect_seconds:.0f}s — "
         f"plug the device back in, or press Ctrl-X to abort"
@@ -598,8 +592,7 @@ def _tui_reconnect(
     while time.monotonic() < deadline:
         keystrokes = keyboard.read_available()
         if keystrokes and exit_key in keystrokes:
-            user_exit_flag[0] = True
-            return None
+            return None, True
         time.sleep(reconnect_interval)
         try:
             new_port = reopen()
@@ -607,9 +600,9 @@ def _tui_reconnect(
             continue
         output.write("\x1b[2m*** reconnected ***\x1b[0m\r\n")
         flush_quietly(output)
-        return new_port
+        return new_port, False
     output.write(
         f"\x1b[2m*** giving up after {reconnect_seconds:.0f}s ***\x1b[0m\r\n"
     )
     flush_quietly(output)
-    return None
+    return None, False
