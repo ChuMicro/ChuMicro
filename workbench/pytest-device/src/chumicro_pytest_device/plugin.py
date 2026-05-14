@@ -78,7 +78,9 @@ from .features import (
 from .pr_summary import (
     DeviceRunResult,
     FileRunResult,
+    format_duration,
     format_pr_summary_block,
+    runtime_display_name,
 )
 from .result_parser import RunResult, TestResult, parse_output
 from .runtime_config import get_runtime_config, missing_required_keys
@@ -427,11 +429,6 @@ class _PRSummaryCollector:
         """Total wall-clock span of the session, in seconds."""
         return max(self._session_end - self._session_start, 0.0)
 
-# Note: ``HARNESS_SOURCE`` and ``LIBRARIES_ROOT`` were module-level
-# constants pre-extraction; both are now session-scoped via
-# :func:`_harness_source_dir` and :func:`_libraries_root` so the
-# plugin works inside any workspace.
-
 
 def _parse_test_functions(filepath: Path) -> list[str]:
     """Use AST to discover test function names without importing.
@@ -532,29 +529,14 @@ def _iter_runtime_variants(
             yield function_name, device
 
 
-def _runtime_display_name(runtime_name: str) -> str:
-    """Return a UI-friendly runtime label.
-
-    Args:
-        runtime_name: Internal runtime identifier from device config.
-
-    Returns:
-        Human-friendly runtime label for IDE test trees.
-    """
-    return {
-        "micropython": "MicroPython",
-        "circuitpython": "CircuitPython",
-    }.get(runtime_name, runtime_name)
-
-
 def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime prepare step."""
-    return f"Setup — {_runtime_display_name(device_entry.runtime)}"
+    return f"Setup — {runtime_display_name(device_entry.runtime)}"
 
 
 def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime file-run step."""
-    return f"Run overhead — {_runtime_display_name(device_entry.runtime)}"
+    return f"Run overhead — {runtime_display_name(device_entry.runtime)}"
 
 
 def _sum_reported_test_durations(test_results: Iterable[TestResult]) -> float:
@@ -825,8 +807,6 @@ class DeviceBackend:
     per-device state lives in the session-scoped :class:`_TransportCache`.
     """
 
-    name = "device"
-
     def prepare(
         self,
         item: DeviceRuntimeItem,
@@ -1032,7 +1012,7 @@ class DeviceTestFile(pytest.File):
                     target_device=device,
                 )
             for name, device in _iter_runtime_variants(function_names, targets):
-                display_name = f"{name}[{_runtime_display_name(device.runtime)}]"
+                display_name = f"{name}[{runtime_display_name(device.runtime)}]"
                 yield DeviceTestItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
                     self,
                     name=display_name,
@@ -1415,7 +1395,6 @@ def _is_library_unit_test(file_path: Path) -> bool:
     if not (
         file_path.suffix == ".py"
         and file_path.name.startswith("test_")
-        and file_path.name.endswith(".py")
         and not file_path.name.endswith("_pytest.py")
         and "tests" in file_path.parts
     ):
@@ -1600,10 +1579,8 @@ def _read_library_platforms(library_dir: Path) -> tuple[str, ...] | None:
     pyproject = library_dir / "pyproject.toml"
     if not pyproject.exists():
         return None
-    try:
-        import tomllib  # noqa: PLC0415
-    except ImportError:  # pragma: no cover — 3.10 fallback
-        import tomli as tomllib  # type: ignore[no-redef]  # noqa: PLC0415
+    import tomllib  # noqa: PLC0415
+
     with pyproject.open("rb") as toml_file:
         data = tomllib.load(toml_file)
     platforms = data.get("tool", {}).get("chumicro", {}).get("platforms")
@@ -1859,7 +1836,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     print(
         f"Device test summary: {total_passed} passed, "
         f"{total_failed} failed, {total_errors} errors "
-        f"in {_format_seconds(total_duration)}"
+        f"in {format_duration(total_duration)}"
     )
     print(f"{'=' * 60}")
 
@@ -1870,13 +1847,6 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     print("-" * 60)
     print(pr_block)
     print("-" * 60)
-
-
-def _format_seconds(seconds: float) -> str:
-    """Format a wall-clock span for the top-of-summary banner."""
-    if seconds < 1.0:
-        return f"{int(round(seconds * 1000))}ms"
-    return f"{seconds:.2f}s"
 
 
 @pytest.hookimpl(hookwrapper=True)

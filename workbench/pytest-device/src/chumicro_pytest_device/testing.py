@@ -125,9 +125,6 @@ class HotPathTransport:
     def soft_reset(self) -> None:
         self.calls.append(("soft_reset", ()))
 
-    def reset(self) -> None:
-        self.calls.append(("reset", ()))
-
     def recover(self) -> None:
         self.calls.append(("recover", ()))
         if self._recover_raises is not None:
