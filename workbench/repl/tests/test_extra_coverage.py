@@ -185,10 +185,10 @@ class TestTailMatchesAcrossChunks:
         assert result is ExitCode.TRACEBACK_DETECTED
 
     def test_match_outside_local_chunk_window_is_skipped(self):
-        # _highlight_chunk skips matches whose translated coordinates
+        # colorize_stream_chunk skips matches whose translated coordinates
         # fall entirely outside the current chunk — exercise that
         # branch directly via the helper.
-        from chumicro_repl._follow import _highlight_chunk
+        from chumicro_repl.highlight import colorize_stream_chunk
         from chumicro_repl.patterns import StreamingPatternDetector
 
         detector = StreamingPatternDetector()
@@ -201,7 +201,9 @@ class TestTailMatchesAcrossChunks:
         spurious = PatternMatch(
             kind=PatternKind.SOFT_REBOOT, start=0, end=5, text="first",
         )
-        result = _highlight_chunk(text, [spurious], detector, Theme())
+        result = colorize_stream_chunk(
+            text, [spurious], detector, theme=Theme(),
+        )
         assert result == text
 
 

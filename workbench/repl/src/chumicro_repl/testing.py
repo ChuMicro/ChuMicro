@@ -148,7 +148,7 @@ class FakeSerialPort:
         self.closed = True
 
     def reset_input_buffer(self) -> None:
-        """No-op for the fake — a future test may want to record this call."""
+        """No-op — required by the :class:`SerialPort` protocol."""
 
     def feed(self, *chunks: bytes | BaseException) -> None:
         """Append more scripted chunks (or exceptions) after construction.

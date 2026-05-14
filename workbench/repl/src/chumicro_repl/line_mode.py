@@ -50,7 +50,7 @@ from typing import TYPE_CHECKING, TextIO, cast
 from ._serial import CTRL_C, CTRL_D, SerialPort, TimeSource
 from .completion import CompletionCache, build_default_completer
 from .framing import Utf8StreamDecoder
-from .highlight import DEFAULT_THEME, Theme
+from .highlight import DEFAULT_THEME, Theme, colorize_stream_chunk
 from .patterns import StreamingPatternDetector
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
@@ -498,8 +498,6 @@ def _drain_serial(
     the response complete.  Bounded by *window_seconds* total so a
     runaway-print loop on the device doesn't lock the prompt.
     """
-    from .tui import _render  # noqa: PLC0415 — avoid circular import at module load
-
     deadline = time.monotonic() + window_seconds
     last_read_at = time.monotonic()
     while True:
@@ -522,7 +520,9 @@ def _drain_serial(
         decoded = decoder.decode(chunk)
         if decoded:
             matches = detector.feed(decoded)
-            output.write(_render(decoded, matches, detector, theme))
+            output.write(colorize_stream_chunk(
+                decoded, matches, detector, theme=theme,
+            ))
             output.flush()
 
 

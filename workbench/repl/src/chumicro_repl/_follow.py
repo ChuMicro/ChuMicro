@@ -29,11 +29,15 @@ from ._serial import (
     PortFactory,
     SerialPort,
     TimeSource,
+    close_quietly,
     default_port_factory,
+    flush_quietly,
+    resolve_address,
+    write_disconnect_notice,
 )
 from .framing import Utf8StreamDecoder
-from .highlight import DEFAULT_THEME, Theme, colorize
-from .patterns import PatternKind, PatternMatch, StreamingPatternDetector
+from .highlight import DEFAULT_THEME, Theme, colorize_stream_chunk
+from .patterns import PatternKind, StreamingPatternDetector
 
 if TYPE_CHECKING:
     from chumicro_deploy import Device
@@ -72,12 +76,14 @@ _POLL_INTERVAL = 0.005
 #: mid-stream.  30 seconds covers the typical "unplug, fumble for
 #: the right cable, plug back in" cycle without keeping a CI script
 #: hung indefinitely.  Pass ``reconnect_seconds=0.0`` to disable.
-DEFAULT_RECONNECT_SECONDS = 30.0
+#: Named to distinguish from the longer interactive default in
+#: :mod:`.tui` — the two surfaces want different ceilings.
+DEFAULT_TAIL_RECONNECT_SECONDS = 30.0
 
 #: Interval between reconnect attempts.  500 ms is fast enough that
 #: a quick replug feels instant and slow enough that the host isn't
 #: hammering the OS device-node lookup.
-DEFAULT_RECONNECT_INTERVAL = 0.5
+DEFAULT_TAIL_RECONNECT_INTERVAL = 0.5
 
 
 def tail(
@@ -90,8 +96,8 @@ def tail(
     baudrate: int = 115200,
     time: TimeSource | None = None,
     port_factory: PortFactory | None = None,
-    reconnect_seconds: float = DEFAULT_RECONNECT_SECONDS,
-    reconnect_interval: float = DEFAULT_RECONNECT_INTERVAL,
+    reconnect_seconds: float = DEFAULT_TAIL_RECONNECT_SECONDS,
+    reconnect_interval: float = DEFAULT_TAIL_RECONNECT_INTERVAL,
 ) -> ExitCode:
     """Stream *seconds* of serial output from *device* to *output*.
 
@@ -128,13 +134,13 @@ def tail(
             opening the port through *port_factory* for up to this
             many seconds before giving up and returning
             :attr:`ExitCode.DISCONNECTED`.  Default
-            :data:`DEFAULT_RECONNECT_SECONDS` (30 s); set to ``0.0``
+            :data:`DEFAULT_TAIL_RECONNECT_SECONDS` (30 s); set to ``0.0``
             to disable retries (CI-friendly fail-fast).  The window
             is *additional* to *seconds* — time spent reconnecting
             does not count against the tail budget, since the
             user's intent is "watch for *seconds* of *output*".
         reconnect_interval: Sleep between reconnect attempts.
-            Default :data:`DEFAULT_RECONNECT_INTERVAL` (0.5 s).
+            Default :data:`DEFAULT_TAIL_RECONNECT_INTERVAL` (0.5 s).
 
     Returns:
         :class:`ExitCode` describing how the tail ended.
@@ -153,7 +159,7 @@ def tail(
     active_factory: PortFactory = (
         port_factory if port_factory is not None else default_port_factory
     )
-    address, resolved_baudrate = _resolve_address(device, baudrate)
+    address, resolved_baudrate = resolve_address(device, baudrate)
     port: SerialPort = active_factory(
         address, resolved_baudrate, _POLL_INTERVAL,
     )
@@ -175,9 +181,9 @@ def tail(
                 # ``OSError`` shows up on raw fd reads when the device
                 # node disappears.  Either way: tear down the dead
                 # port, optionally reopen, and resume.
-                _close_quietly(port)
+                close_quietly(port)
                 if reconnect_seconds <= 0:
-                    _write_disconnect_notice(active_output, disconnect_error)
+                    write_disconnect_notice(active_output, disconnect_error)
                     return ExitCode.DISCONNECTED
                 reconnected = _attempt_reconnect(
                     output=active_output,
@@ -206,12 +212,11 @@ def tail(
             if not decoded:
                 continue
             matches = detector.feed(decoded)
-            highlighted = _highlight_chunk(decoded, matches, detector, active_theme)
+            highlighted = colorize_stream_chunk(
+                decoded, matches, detector, theme=active_theme,
+            )
             active_output.write(highlighted)
-            try:
-                active_output.flush()
-            except (OSError, ValueError):  # pragma: no cover — closed stream
-                pass
+            flush_quietly(active_output)
             if fail_on_traceback and any(
                 pattern_match.kind in _FAIL_PATTERN_KINDS
                 for pattern_match in matches
@@ -221,11 +226,8 @@ def tail(
         tail_text = decoder.flush()
         if tail_text:
             active_output.write(tail_text)
-            try:
-                active_output.flush()
-            except (OSError, ValueError):  # pragma: no cover — closed stream
-                pass
-        _close_quietly(port)
+            flush_quietly(active_output)
+        close_quietly(port)
 
 
 def _read_chunk(port: SerialPort) -> bytes:
@@ -245,23 +247,6 @@ def _read_chunk(port: SerialPort) -> bytes:
     return port.read(1)
 
 
-def _write_disconnect_notice(output: TextIO, error: OSError) -> None:
-    """Write a one-line dim notice describing a disconnect to *output*.
-
-    Kept short and ANSI-styled so it doesn't blend into device
-    output the user was watching.  The exception message comes
-    from pyserial / the OS, so it usually points at the actual
-    cause (``[Errno 6] Device not configured`` /
-    ``device reports readiness to read but returned no data`` /
-    ``Input/output error``).
-    """
-    output.write(f"\r\n\x1b[2m*** device disconnected — {error} ***\x1b[0m\r\n")
-    try:
-        output.flush()
-    except (OSError, ValueError):  # pragma: no cover — closed stream
-        pass
-
-
 def _write_reconnecting_notice(output: TextIO, seconds: float) -> None:
     """Announce the start of an auto-reconnect cycle.
 
@@ -272,31 +257,13 @@ def _write_reconnecting_notice(output: TextIO, seconds: float) -> None:
         f"\x1b[2m*** retrying for up to {seconds:.0f}s — "
         f"plug the device back in, or press Ctrl-C to abort ***\x1b[0m\r\n"
     )
-    try:
-        output.flush()
-    except (OSError, ValueError):  # pragma: no cover — closed stream
-        pass
+    flush_quietly(output)
 
 
 def _write_reconnected_notice(output: TextIO) -> None:
     """Announce a successful auto-reconnect."""
     output.write("\x1b[2m*** reconnected ***\x1b[0m\r\n")
-    try:
-        output.flush()
-    except (OSError, ValueError):  # pragma: no cover — closed stream
-        pass
-
-
-def _close_quietly(port: SerialPort) -> None:
-    """Close *port*, swallowing the OSError a dead port often raises.
-
-    Reused on the disconnect / reconnect paths so the dead-port
-    teardown can't itself crash the loop.
-    """
-    try:
-        port.close()
-    except OSError:  # pragma: no cover — port already dying
-        pass
+    flush_quietly(output)
 
 
 def _attempt_reconnect(
@@ -336,7 +303,7 @@ def _attempt_reconnect(
         reconnect_seconds: Total budget in seconds.
         reconnect_interval: Sleep between attempts.
     """
-    _write_disconnect_notice(output, error)
+    write_disconnect_notice(output, error)
     _write_reconnecting_notice(output, reconnect_seconds)
     deadline = time.monotonic() + reconnect_seconds
     while time.monotonic() < deadline:
@@ -350,67 +317,5 @@ def _attempt_reconnect(
     output.write(
         f"\x1b[2m*** giving up after {reconnect_seconds:.0f}s ***\x1b[0m\r\n"
     )
-    try:
-        output.flush()
-    except (OSError, ValueError):  # pragma: no cover — closed stream
-        pass
+    flush_quietly(output)
     return None
-
-
-def _highlight_chunk(
-    text: str,
-    matches: list[PatternMatch],
-    detector: StreamingPatternDetector,
-    theme: Theme,
-) -> str:
-    """Render *text* with ANSI highlighting using *matches*.
-
-    *matches* indices are in the logical-stream coordinate system
-    the :class:`~chumicro_repl.patterns.StreamingPatternDetector`
-    uses — absolute offsets from the start of the stream.  This
-    helper translates them to offsets within *text* using the
-    detector's current offset so the ANSI wrapping lands on the
-    correct substrings of the current chunk.
-    """
-    if not matches:
-        return text
-    # Translate absolute offsets back into *text* coordinates.  The
-    # detector's `_offset` is the start of its internal buffer, which
-    # after trim equals the start of *text* plus already-processed
-    # characters.  Since this chunk was appended before we asked for
-    # matches, offsets beyond ``len(text)`` cannot exist.
-    stream_start = detector.total_fed - len(text)
-    local_matches: list[PatternMatch] = []
-    for pattern_match in matches:
-        local_start = pattern_match.start - stream_start
-        local_end = pattern_match.end - stream_start
-        if local_end <= 0 or local_start >= len(text):
-            continue
-        local_start = max(0, local_start)
-        local_end = min(len(text), local_end)
-        local_matches.append(
-            PatternMatch(
-                kind=pattern_match.kind,
-                start=local_start,
-                end=local_end,
-                text=text[local_start:local_end],
-            )
-        )
-    return colorize(text, theme=theme, matches=local_matches)
-
-
-def _resolve_address(
-    device: Device | str,
-    fallback_baudrate: int,
-) -> tuple[str, int]:
-    """Extract ``(address, baudrate)`` from a Device or a path string."""
-    if isinstance(device, str):
-        return device, fallback_baudrate
-    address = getattr(device, "address", None)
-    if not isinstance(address, str):
-        raise TypeError(
-            f"tail() expected a str port path or an object with "
-            f".address, got {type(device).__name__}"
-        )
-    baudrate = getattr(device, "baudrate", fallback_baudrate)
-    return address, int(baudrate)
