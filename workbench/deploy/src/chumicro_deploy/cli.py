@@ -485,7 +485,7 @@ _DEFAULT_ENV = CliEnv()
 def main(
     argv: list[str] | None = None,
     *,
-    env: CliEnv | None = None,
+    env: CliEnv | None = None,  # noqa: CHU001 — matches subprocess.run(env=...) convention
 ) -> int:
     """CLI entry point.  Returns the process exit code.
 
