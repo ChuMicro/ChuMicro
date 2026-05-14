@@ -29,6 +29,13 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "chumicro-test-harness",
+    "chumicro-msgpack",
+]
+
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
 Documentation = "https://chumicro.github.io/ChuMicro/runner/stable/"

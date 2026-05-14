@@ -30,6 +30,14 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "chumicro-test-harness",
+    "chumicro-pytest-device",
+    "chumicro-workspace",
+]
+
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
 Documentation = "https://chumicro.github.io/ChuMicro/wifi/stable/"
