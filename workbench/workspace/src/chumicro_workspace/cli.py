@@ -1873,9 +1873,200 @@ def _print_no_device_hint(runtime_required: str | None) -> None:
     )
 
 
-def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state machine
+class _DeployExampleError(Exception):
+    """Raised by deploy-example stage helpers; caller prints + returns the code.
+
+    Carries both the user-facing message (str payload) and the distinct
+    exit code (``DEPLOY_EXAMPLE_EXIT_*``) so the dispatcher catches once
+    at the top and returns the right code instead of threading "result
+    or exit-code" tuples through every stage.
+    """
+
+    def __init__(self, exit_code: int, message: str) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+
+
+@dataclass(frozen=True)
+class _DeployExamplePaths:
+    """Validated paths for a deploy-example invocation.
+
+    *example_path* is ``libraries/<lib>/examples/<stem>.py``; *library_root*
+    is ``libraries/<lib>/`` (the parent that owns it).  *stem* is the
+    example filename without the trailing ``.py``.
+    """
+
+    library_root: Path
+    example_path: Path
+    stem: str
+
+
+def _resolve_deploy_example_paths(
+    libraries_root: Path, args: argparse.Namespace,
+) -> _DeployExamplePaths:
+    """Validate that the requested library + example actually exist."""
+    if not args.library:
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+            "library positional required "
+            "(use --list to discover available libraries).",
+        )
+    if not args.example_name:
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+            "example positional required "
+            "(use --list <lib> to see available examples).",
+        )
+    library_root = libraries_root / args.library
+    if not library_root.is_dir():
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+            f"library {args.library!r} not found under {libraries_root}.",
+        )
+    stem = (
+        args.example_name[:-3]
+        if args.example_name.endswith(".py")
+        else args.example_name
+    )
+    example_path = library_root / "examples" / f"{stem}.py"
+    if not example_path.is_file():
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+            f"example file {example_path} not found.",
+        )
+    return _DeployExamplePaths(
+        library_root=library_root, example_path=example_path, stem=stem,
+    )
+
+
+def _resolve_example_runtime_required(
+    marker: tuple[str, ...] | None, args: argparse.Namespace,
+) -> str | None:
+    """Decide which runtime the example mandates.
+
+    * None marker / no constraint → returns None (universal example, fall
+      through to whatever the device runs).
+    * Single-runtime marker → returns that runtime.
+    * Multi-runtime marker → ``--runtime`` wins if it's in the set; an
+      explicit ``--device <id>`` defers the decision to the device-resolve
+      step (returns None).  Neither flag with a multi-runtime marker is
+      ambiguous — raise the precheck error.
+    """
+    if marker is None:
+        return None
+    if len(marker) == 1:
+        (runtime_required,) = marker
+        return runtime_required
+    if args.runtime and args.runtime in marker:
+        return args.runtime
+    if args.device_id is None:
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+            f"example targets multiple runtimes ({sorted(marker)}); "
+            "pass --runtime to disambiguate.",
+        )
+    return None
+
+
+def _resolve_deploy_example_device(
+    workspace: WorkspaceLayout,
     args: argparse.Namespace,
-) -> int:
+    *,
+    runtime_required: str | None,
+    non_interactive: bool,
+) -> Device:
+    """Resolve a Device for the deploy-example invocation.
+
+    Falls into the bootstrap wizard when no device is registered and the
+    mode allows it (interactive + ``--auto-register``).  Raises
+    :class:`_DeployExampleError` on the non-interactive / opt-out cases
+    and on wizard cancellation.
+    """
+    runtime_filter = (
+        None if args.device_id is not None else (runtime_required or args.runtime)
+    )
+    device_args = argparse.Namespace(
+        workspace_dir=args.workspace_dir,
+        device_id=args.device_id,
+        runtime=runtime_filter,
+    )
+    try:
+        return _resolve_device(workspace, device_args)
+    except (SystemExit, Exception):  # noqa: BLE001 — every load-failure routes to wizard
+        pass
+
+    if non_interactive or not args.auto_register:
+        _print_no_device_hint(runtime_required)
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED, "",
+        )
+    bootstrap_args = argparse.Namespace(
+        workspace_dir=args.workspace_dir,
+        port=None,
+        device_id=None,
+        with_demo=False,  # don't double up; we deploy the example next
+    )
+    if _cmd_bootstrap(bootstrap_args) != 0:
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED, "",
+        )
+    try:
+        return _resolve_device(workspace, device_args)
+    except SystemExit as exception:
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED, "",
+        ) from exception
+
+
+def _validate_example_runtime_matches_device(
+    *,
+    device_runtime: str,
+    runtime_required: str | None,
+    marker: tuple[str, ...] | None,
+) -> None:
+    """Cross-check the device's runtime against the example's marker."""
+    if runtime_required and device_runtime != runtime_required:
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+            f"example requires {runtime_required} but selected device "
+            f"runs {device_runtime}.  Pass --device <id> or --runtime "
+            f"{runtime_required} to pick a matching board.",
+        )
+    if marker is not None and device_runtime not in marker:
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+            f"example targets {sorted(marker)} but selected device runs "
+            f"{device_runtime}.  Pick a compatible board with --device <id>.",
+        )
+
+
+def _build_deploy_example_source(
+    paths: _DeployExamplePaths,
+    *,
+    libraries_root: Path,
+    target_runtime: str,
+    secrets_toml: Path,
+) -> Any:
+    """Build the example FileSource with every sibling library on the search path."""
+    library_roots = sorted(
+        path for path in libraries_root.iterdir() if path.is_dir()
+    )
+    try:
+        return example_source(
+            paths.library_root,
+            paths.stem,
+            library_roots=library_roots,
+            runtime=target_runtime,
+            secrets_toml=secrets_toml,
+        )
+    except (FileNotFoundError, ValueError) as build_error:
+        raise _DeployExampleError(
+            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+            f"precheck failed: {build_error}",
+        ) from build_error
+
+
+def _cmd_deploy_example(args: argparse.Namespace) -> int:
     """Deploy a library example to a registered device.
 
     Front-door command for running ``libraries/<lib>/examples/<name>.py``
@@ -1905,159 +2096,37 @@ def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state ma
     if args.list:
         return _list_examples(libraries_root, args.library)
 
-    # Library + example file existence (precheck — fast).
-    if not args.library:
-        print(
-            "deploy-example: library positional required "
-            "(use --list to discover available libraries).",
-            file=sys.stderr,
-        )
-        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
-    if not args.example_name:
-        print(
-            "deploy-example: example positional required "
-            "(use --list <lib> to see available examples).",
-            file=sys.stderr,
-        )
-        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
-    library_root = libraries_root / args.library
-    if not library_root.is_dir():
-        print(
-            f"deploy-example: library {args.library!r} not found "
-            f"under {libraries_root}.",
-            file=sys.stderr,
-        )
-        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
-    stem = (
-        args.example_name[:-3]
-        if args.example_name.endswith(".py")
-        else args.example_name
-    )
-    example_path = library_root / "examples" / f"{stem}.py"
-    if not example_path.is_file():
-        print(
-            f"deploy-example: example file {example_path} not found.",
-            file=sys.stderr,
-        )
-        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
-
-    # Required runtime per the example's __chumicro_runtimes__ marker.
-    # None = universal; we'll fall back to whatever the device runs.
-    marker = read_runtime_marker(example_path)
-    runtime_required: str | None = None
-    if marker is not None and len(marker) == 1:
-        (runtime_required,) = marker
-    elif marker is not None and len(marker) > 1:
-        # Multi-runtime example — disambiguation order:
-        # 1. --runtime explicit on the command line wins.
-        # 2. --device <id> implies a runtime via the device's transport
-        #    — let the device resolve below pick it up; runtime_required
-        #    stays None here and the post-resolve validation below
-        #    re-reads the marker against the resolved device.
-        # 3. Neither — error and ask the user to disambiguate.
-        if args.runtime and args.runtime in marker:
-            runtime_required = args.runtime
-        elif args.device_id is None:
-            print(
-                f"deploy-example: example targets multiple runtimes "
-                f"({sorted(marker)}); pass --runtime to disambiguate.",
-                file=sys.stderr,
-            )
-            return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
-
     non_interactive, should_tail = _resolve_deploy_example_modes(args)
 
-    # Resolve a device — state (1) detection.  When the user passed
-    # --device <id> explicitly, honour it and let the runtime check
-    # below catch any mismatch with the example's marker.  Otherwise
-    # the example's runtime (or --runtime) drives default-device
-    # selection.
-    if args.device_id is not None:
-        runtime_filter: str | None = None
-    else:
-        runtime_filter = runtime_required or args.runtime
-    device_args = argparse.Namespace(
-        workspace_dir=args.workspace_dir,
-        device_id=args.device_id,
-        runtime=runtime_filter,
-    )
-    device = None
     try:
-        device = _resolve_device(workspace, device_args)
-    except SystemExit:
-        device = None
-    except Exception:  # noqa: BLE001 — every load-failure routes to state (1)
-        device = None
-
-    if device is None:
-        if non_interactive or not args.auto_register:
-            _print_no_device_hint(runtime_required)
-            return DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
-        # Interactive: fall into the bootstrap wizard.
-        bootstrap_args = argparse.Namespace(
-            workspace_dir=args.workspace_dir,
-            port=None,
-            device_id=None,
-            with_demo=False,  # don't double up; we deploy the example next
+        paths = _resolve_deploy_example_paths(libraries_root, args)
+        marker = read_runtime_marker(paths.example_path)
+        runtime_required = _resolve_example_runtime_required(marker, args)
+        device = _resolve_deploy_example_device(
+            workspace, args,
+            runtime_required=runtime_required,
+            non_interactive=non_interactive,
         )
-        wizard_exit = _cmd_bootstrap(bootstrap_args)
-        if wizard_exit != 0:
-            return DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED
-        try:
-            device = _resolve_device(workspace, device_args)
-        except SystemExit:
-            return DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
-
-    # Validate device runtime matches the example's marker (if any).
-    # Single-runtime marker: device.transport must match.  Multi-runtime
-    # marker (runtime_required is None at this point per the
-    # disambiguation block above): device.transport must be one of the
-    # accepted runtimes — covers the `--device <id>` path on a
-    # cross-runtime example.
-    device_runtime = str(device.transport)
-    if runtime_required and device_runtime != runtime_required:
-        print(
-            f"deploy-example: example requires {runtime_required} but "
-            f"selected device runs {device_runtime}.  Pass --device "
-            f"<id> or --runtime {runtime_required} to pick a matching "
-            f"board.",
-            file=sys.stderr,
+        device_runtime = str(device.transport)
+        _validate_example_runtime_matches_device(
+            device_runtime=device_runtime,
+            runtime_required=runtime_required,
+            marker=marker,
         )
-        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
-    if marker is not None and device_runtime not in marker:
-        print(
-            f"deploy-example: example targets {sorted(marker)} but "
-            f"selected device runs {device_runtime}.  Pick a "
-            f"compatible board with --device <id>.",
-            file=sys.stderr,
-        )
-        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
-
-    target_runtime = runtime_required or device_runtime
-
-    # Build the FileSource — every other lib in libraries/ contributes
-    # its src/ to the import-graph search paths so cross-library imports
-    # resolve.
-    library_roots = sorted(
-        path for path in libraries_root.iterdir() if path.is_dir()
-    )
-    try:
-        source = example_source(
-            library_root,
-            stem,
-            library_roots=library_roots,
-            runtime=target_runtime,
+        target_runtime = runtime_required or device_runtime
+        source = _build_deploy_example_source(
+            paths,
+            libraries_root=libraries_root,
+            target_runtime=target_runtime,
             secrets_toml=workspace.secrets_toml,
         )
-    except (FileNotFoundError, ValueError) as build_error:
-        print(
-            f"deploy-example: precheck failed: {build_error}",
-            file=sys.stderr,
-        )
-        return DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+    except _DeployExampleError as error:
+        if str(error):
+            print(f"deploy-example: {error}", file=sys.stderr)
+        return error.exit_code
 
     print(
-        f"deploy-example: deploying {args.library}/{stem} → "
+        f"deploy-example: deploying {args.library}/{paths.stem} → "
         f"{device.transport} @ {device.address} ...",
     )
 
