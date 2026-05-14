@@ -6,7 +6,7 @@ supported runtime.
 
 ``BufferedHandler``'s queue is a ``deque(iterable, maxlen)`` rather than
 a list — ``append`` and ``popleft`` are O(1) and the deque's native
-``maxlen`` enforcement gives drop-oldest behaviour without the O(n)
+``maxlen`` enforcement gives drop-oldest behavior without the O(n)
 shift cost of ``list.pop(0)`` on small VMs.
 """
 

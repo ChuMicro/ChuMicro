@@ -32,7 +32,7 @@ UDP support lives in `chumicro-sockets` alongside TCP + TLS.  The
 public API gains:
 
 - `chumicro_sockets.UDPSocket` — duck-typed protocol with
-  `sendto(data, host, port)` (separated args, normalised across
+  `sendto(data, host, port)` (separated args, normalized across
   runtimes), `recvfrom_into(buffer, nbytes=0) -> (n, (host, port))`,
   `close`, `setblocking`, `settimeout`, `fileno`, `getsockname`.
 - `chumicro_sockets.udp_socket(bind_host, bind_port, *, radio,
@@ -53,7 +53,7 @@ Per-runtime adapters under `_adapters/`:
   builds expose `recvfrom`, not `recvfrom_into`).
 - **CPython** — stdlib `socket.socket(AF_INET, SOCK_DGRAM)` with the
   same wrapper shape so `sendto(data, host, port)` separated-arg
-  form is honoured.
+  form is honored.
 
 Each adapter wraps the native socket so the public surface is
 runtime-uniform — `_CPUDPWrapper`, `_MpUDPWrapper`,

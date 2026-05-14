@@ -29,7 +29,7 @@ The two changes are coupled — `examples/two_things/` is itself a nested layout
 A directory under `things/` (or under `examples/<example>/`) is one of three things:
 
 * **Thing** — leaf folder containing an entry-point file (`app.py`, `code.py`, or `main.py`).  This is what gets deployed.
-* **Namespace** — folder containing only sub-folders (or sub-folders + Markdown / `.txt` documentation).  Pure organisational structure; no entry point.
+* **Namespace** — folder containing only sub-folders (or sub-folders + Markdown / `.txt` documentation).  Pure organizational structure; no entry point.
 * **Supporting** — folder containing files but no entry point AND no descendant things.  Silently ignored by deploy / list / new.  Lets users park `docs/`, design notes, etc. anywhere in the tree without flagging them.
 
 Validation rule: each path segment must independently be a valid Python identifier (no hyphens, dots, leading digits, leading underscore).  The on-device import path is `things.<seg1>.<seg2>.app`, so each segment must satisfy Python's import grammar.
@@ -54,7 +54,7 @@ def classify(path: Path) -> Literal["thing", "namespace", "supporting"]:
 
 User-typed names accept three shapes:
 
-| Shape | Example | Behaviour |
+| Shape | Example | Behavior |
 |---|---|---|
 | Bare | `bedroom_sensor` | Look up across the entire tree.  If unique → that thing.  If ambiguous → list candidates + exit 2. |
 | Slash | `upstairs/bedroom_sensor` | Direct.  Files under `things/upstairs/bedroom_sensor/`. |
@@ -69,7 +69,7 @@ deploy: 'thing1' is ambiguous — multiple things match:
 specify the path: `python run.py deploy upstairs/thing1`
 ```
 
-Default behaviour with **no positional name**: deploy if the workspace has exactly one thing across the whole tree.  Two-or-more is an error.  Same shape as today's flat-layout default.
+Default behavior with **no positional name**: deploy if the workspace has exactly one thing across the whole tree.  Two-or-more is an error.  Same shape as today's flat-layout default.
 
 ## On-device shape
 
@@ -93,7 +93,7 @@ The boot-shim file generator emits an `__init__.py` for **every** namespace leve
 
 All `__init__.py` files at namespace levels are empty bytes.  Avoids PEP 420 namespace packages (more fragile on MP / CP than regular packages).
 
-## CLI command behaviour
+## CLI command behavior
 
 ### `python run.py new <path>`
 

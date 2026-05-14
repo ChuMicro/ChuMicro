@@ -1,7 +1,7 @@
 """Tests for the chumicro-pytest-device plugin.
 
-Tests AST-based test discovery, DeviceTestItem behaviour with faked
-transports, device config loading, and collection hook behaviour.
+Tests AST-based test discovery, DeviceTestItem behavior with faked
+transports, device config loading, and collection hook behavior.
 """
 
 from __future__ import annotations
@@ -1408,7 +1408,7 @@ class TestPytestCollectionModifyItemsFeatures:
     def _write_feature_test_file(
         tmp_path: Path, *, marker_tuple: str | None,
     ) -> Path:
-        """Materialise a fake test file with the given features marker.
+        """Materialize a fake test file with the given features marker.
 
         Args:
             tmp_path: Pytest fixture-supplied temp dir.

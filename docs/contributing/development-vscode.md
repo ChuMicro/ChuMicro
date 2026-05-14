@@ -50,7 +50,7 @@ Open the integrated terminal (`⌃\`` / `` Ctrl+` ``) and run:
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, and regenerates IDE configs.  It also materialises three gitignored starter files at the repo root if they're missing: `devices.yml`, `workspace.yml`, and `secrets.toml`.  If you plan to run functional tests on real hardware, see [Device Testing](device-testing.md) for board registration and `secrets.toml` setup.
+This installs dependencies, runs editable installs for every library and support package, and regenerates IDE configs.  It also materializes three gitignored starter files at the repo root if they're missing: `devices.yml`, `workspace.yml`, and `secrets.toml`.  If you plan to run functional tests on real hardware, see [Device Testing](device-testing.md) for board registration and `secrets.toml` setup.
 
 `setup` produces a lot of output — look for this at the end:
 

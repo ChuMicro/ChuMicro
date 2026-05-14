@@ -483,7 +483,7 @@ class FakeTransport:
         :class:`MicropythonTransport.deploy_files` (``"exec"`` or
         ``"soft_reboot"``) so the Deployer can pass-through without
         switching transports; the fake records it but doesn't
-        otherwise change behaviour.
+        otherwise change behavior.
 
         ``tail_seconds`` mirrors the CP transport's post-soft-reboot
         capture-window override.  The fake records it on

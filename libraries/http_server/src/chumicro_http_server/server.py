@@ -366,7 +366,7 @@ class _Connection:
 
 
 def encode_response(response: Response) -> bytes:
-    """Serialise a :class:`Response` into wire bytes.
+    """Serialize a :class:`Response` into wire bytes.
 
     Adds ``Content-Length`` (if the caller didn't) and ``Connection:
     close`` — keep-alive is not supported, so every response closes

@@ -22,7 +22,7 @@ Idiom for downstream libs::
     client.connect()
     assert sock.sent.startswith(b"\\x10")        # CONNECT packet wire prefix
 
-The fake's behaviour is deterministic: sends always succeed (modulo
+The fake's behavior is deterministic: sends always succeed (modulo
 scripted EAGAINs), recv_into reads from the queue head, and close
 flips a flag so subsequent operations raise the same ``OSError`` a
 real closed socket would.
@@ -34,7 +34,7 @@ __chumicro_runtimes__ = ("cpython",)
 
 from collections import deque
 
-# Errno 11 (EAGAIN) is the cross-runtime "would block" code.  Spelt
+# Errno 11 (EAGAIN) is the cross-runtime "would block" code.  Spelled
 # out as a constant so callers don't have to remember the magic.
 EAGAIN = 11
 
@@ -52,7 +52,7 @@ class FakeSocket:
 
     All methods match the :class:`~chumicro_sockets.protocol.TCPClientSocket`
     protocol; in addition, :meth:`enqueue_recv` and
-    :meth:`enqueue_eagain` script future behaviour and :attr:`sent`
+    :meth:`enqueue_eagain` script future behavior and :attr:`sent`
     exposes the byte log.
     """
 

@@ -590,7 +590,7 @@ Any internal FIFO queue in library code uses `collections.deque(iterable, maxlen
 rather than a plain `list`.  `list.pop(0)` is O(n) — every element shifts down
 one slot — and on small VMs the per-pop reallocation also fragments the heap.
 `deque` makes both `append` and `popleft` O(1) and the deque's native
-`maxlen` enforcement gives drop-oldest behaviour for free.
+`maxlen` enforcement gives drop-oldest behavior for free.
 
 ```python
 from collections import deque
@@ -680,7 +680,7 @@ verification in `plans/workstreams/library-pipeline.md`.
 ## mpremote internals we depend on
 
 `MicropythonTransport` is a thin layer over the vendored
-`mpremote.transport_serial.SerialTransport`.  Several behaviours of
+`mpremote.transport_serial.SerialTransport`.  Several behaviors of
 that class are undocumented upstream and have bitten us before — they
 are captured here so future edits do not unwittingly re-break them.
 

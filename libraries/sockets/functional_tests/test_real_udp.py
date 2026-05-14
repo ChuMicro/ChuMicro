@@ -1,7 +1,7 @@
 """Real-network UDP smoke tests for chumicro-sockets.
 
 End-to-end transport verification: bring wifi up, open a UDP socket,
-exchange one datagram with the host-side echo server materialised by
+exchange one datagram with the host-side echo server materialized by
 ``conftest.py``, and assert the echoed payload matches what we sent.
 
 Skipped at collection time when no credentials are configured —

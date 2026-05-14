@@ -188,7 +188,7 @@ Strict-verify error path + boot_out-missing auto-correct path covered by unit te
 
 ### 12. MicroPython 1.28 lacks `TimeoutError` builtin — SHIPPED (docs only)
 
-**Resolution.** Documented in `plans/patterns.md` under a new "Missing builtins on MicroPython 1.28" section, neighbouring the existing "Cross-runtime shim" pattern.  Entry covers the symptom (`NameError` on MP), the three established workarounds (library-specific subclass like `HttpTimeoutError` / `WebSocketTimeoutError` for new code, `OSError` directly for helper / glue code, local `class TimeoutError(OSError): ...` if the name is genuinely wanted), and explicitly tells future maintainers not to add a polyfill to `chumicro_compat` — a 2026-05-10 survey found zero callers wanting bare `TimeoutError`, so a compat polyfill would be public API surface with no consumers.
+**Resolution.** Documented in `plans/patterns.md` under a new "Missing builtins on MicroPython 1.28" section, neighboring the existing "Cross-runtime shim" pattern.  Entry covers the symptom (`NameError` on MP), the three established workarounds (library-specific subclass like `HttpTimeoutError` / `WebSocketTimeoutError` for new code, `OSError` directly for helper / glue code, local `class TimeoutError(OSError): ...` if the name is genuinely wanted), and explicitly tells future maintainers not to add a polyfill to `chumicro_compat` — a 2026-05-10 survey found zero callers wanting bare `TimeoutError`, so a compat polyfill would be public API surface with no consumers.
 
 CHU lint rule deferred — the codebase is currently clean and the pattern doc gives future agents the right shape.  Add a `chumicro-checks` rule the first time `raise TimeoutError(` reappears in a cross-runtime tree.
 

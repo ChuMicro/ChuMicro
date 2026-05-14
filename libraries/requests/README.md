@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A non-blocking HTTP/1.1 client — your LED keeps blinking through a TLS handshake.**
 
-A `requests`-flavoured surface that advances one chunk per runner tick — connect, send, recv, parse — so your control loop never stalls waiting for a peer.  Plain HTTP, HTTPS (live-verified on real boards), POST / PUT / PATCH / DELETE, JSON helper, redirect handling, and `Transfer-Encoding: chunked` decode.
+A `requests`-flavored surface that advances one chunk per runner tick — connect, send, recv, parse — so your control loop never stalls waiting for a peer.  Plain HTTP, HTTPS (live-verified on real boards), POST / PUT / PATCH / DELETE, JSON helper, redirect handling, and `Transfer-Encoding: chunked` decode.
 
 <br clear="left">
 

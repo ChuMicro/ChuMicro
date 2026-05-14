@@ -367,7 +367,7 @@ class HttpClient:
 
         No key is required; empty ``config`` is valid input.  When
         *connection_factory* is supplied, the caller owns the
-        connection-opening behaviour and *radio* / *ssl_context* are
+        connection-opening behavior and *radio* / *ssl_context* are
         ignored.  Otherwise an auto-built factory wires through
         :func:`chumicro_sockets_factory` using *radio* / *ssl_context*.
         """

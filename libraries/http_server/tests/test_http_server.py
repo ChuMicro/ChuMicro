@@ -1104,7 +1104,7 @@ class TestFromConfig:
 
     def test_explicit_listener_factory_bypasses_auto_build(self) -> None:
         """Passing listener_factory= skips the chumicro_sockets path
-        — caller owns the bind / TLS behaviour."""
+        — caller owns the bind / TLS behavior."""
         listener = FakeListener([])
         custom_factory = lambda: listener  # noqa: E731
         server = HttpServer.from_config(

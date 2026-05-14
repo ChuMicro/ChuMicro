@@ -64,7 +64,7 @@ If you added a new task, command, library, or changed existing behavior, ask: *"
 
 Stage and commit any uncommitted changes. Use the `git-commit` skill.
 
-Write commit messages that aid context recovery — summarise *what* in the
+Write commit messages that aid context recovery — summarize *what* in the
 subject, explain *why* in the body when non-trivial, and name affected
 libraries or decisions.
 

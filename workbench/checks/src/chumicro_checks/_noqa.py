@@ -1,7 +1,7 @@
 """``noqa`` directive parsing — shared between every rule that supports
 per-line suppression.
 
-Two suppression syntaxes are recognised:
+Two suppression syntaxes are recognized:
 
 * ``# noqa: CHU0NN`` — Python, TOML, INI, anywhere a ``#`` line comment
   is valid.

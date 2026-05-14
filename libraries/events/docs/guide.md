@@ -102,7 +102,7 @@ first and their events make it into the queue before the bus drains.
 
 The internal queue is a `collections.deque(iterable, maxlen)` rather
 than a list.  `append` and `popleft` are O(1) and the deque's native
-`maxlen` enforcement gives drop-oldest behaviour without the O(n)
+`maxlen` enforcement gives drop-oldest behavior without the O(n)
 shift cost that `list.pop(0)` carries on small VMs.  This is the
 project-wide convention for FIFO queues in chumicro libraries.
 

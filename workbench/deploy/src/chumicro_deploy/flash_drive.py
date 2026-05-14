@@ -537,7 +537,7 @@ def clean_dot_files(drive_path: Path) -> None:
         )
 
 
-#: Sentinel files / directories macOS recognises to skip a volume.  Planted
+#: Sentinel files / directories macOS recognizes to skip a volume.  Planted
 #: at the drive root so subsequent remounts inherit the suppression — the
 #: equivalent of ``mdutil -i off`` (which resets on remount) but persistent.
 #:

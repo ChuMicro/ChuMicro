@@ -13,7 +13,7 @@ The six operations:
   is exposed; CircuitPython's ``socketpool`` only ships ``recv_into``,
   so the cross-runtime API matches the most-restrictive runtime.
 * ``close`` — release the underlying file descriptor / radio handle.
-* ``setblocking`` / ``settimeout`` — control non-blocking behaviour;
+* ``setblocking`` / ``settimeout`` — control non-blocking behavior;
   return values on a would-block raise ``OSError(EAGAIN=11)`` across
   all three runtimes.
 * ``fileno`` — for ``select.poll().register(fd, ...)``.  Returns ``-1``

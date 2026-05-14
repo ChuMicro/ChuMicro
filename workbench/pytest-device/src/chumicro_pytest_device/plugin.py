@@ -1704,7 +1704,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
       load ``devices.yml``, apply ``--runtime`` / ``--micropython-device``
       / ``--circuitpython-device`` overrides on top of the
       ``defaults:`` block.  Omitted options preserve ``devices.yml``
-      behaviour, so IDE play-button runs work with zero flags.
+      behavior, so IDE play-button runs work with zero flags.
     - ``--target unix-port``: install :class:`UnixPortBackend`,
       synthesize one or two ``DeviceEntry`` records driven by
       ``--runtime`` (defaults to ``both``).  ``devices.yml`` is not

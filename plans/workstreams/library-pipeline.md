@@ -9,12 +9,12 @@
 The body below was written 2026-04-27 when the doc said "captured, no implementation yet."  Most of Tier A and the prereqs have shipped since.  Concrete state:
 
 * **Tier A — all three libraries shipped:**
-  * `chumicro-logging` — VERSION 0.1.1.  Levelled logging, runner-friendly, optional callable injection rather than required dep (the rule the workstream proposed).
+  * `chumicro-logging` — VERSION 0.1.1.  Leveled logging, runner-friendly, optional callable injection rather than required dep (the rule the workstream proposed).
   * `chumicro-ntp` — VERSION 0.1.1.  Runner-shaped SNTP client over an injected UDP socket; cross-runtime.
   * `chumicro-events` — VERSION 0.1.0.  Runner-shaped pub/sub event bus (bounded, drop-oldest); zero chumicro deps and no other library imports it (per [Decision 0042](../decisions/0042-library-dependency-policy.md)).
 * **Dependency policy resolved as [Decision 0042](../decisions/0042-library-dependency-policy.md)** (`proposed`, 2026-04-27).  The "core infrastructure = hard dep + factory helper" / "decoration = optional callback" split this workstream proposed is now the formal contract.  `chumicro-requests` (Decision 0040) had already established the workable shape: hard `chumicro-sockets` dep + `chumicro_sockets_factory(radio=…)` helper + explicit constructor parameter.  Each new library starts under the right rules.
 * **UDP for sockets shipped as [Decision 0043](../decisions/0043-chumicro-sockets-udp.md)** (`accepted`).  The "first check whether sockets exposes UDP" prereq the workstream flagged for ntp is closed — `chumicro_sockets.udp_socket` exists and ntp consumes it.
-* **`presence` / device-feedback layer — still open.**  The orchestrator described in §"Device-feedback layer" hasn't been started.  No events bus consumer beyond wifi → mqtt indirection has materialised; the third-consumer trigger the workstream named hasn't fired yet.
+* **`presence` / device-feedback layer — still open.**  The orchestrator described in §"Device-feedback layer" hasn't been started.  No events bus consumer beyond wifi → mqtt indirection has materialized; the third-consumer trigger the workstream named hasn't fired yet.
 * **Tier B (input / pixels / tone) — still hardware-gated** on the macropad.  The libraries themselves don't depend on the macropad — they're constructor-injected backends — but the validation matrix needs the board plugged in to land them with a functional-test floor.  Macropad isn't on the bench in the current setup.
 * **Tier C — still hardware-gated.**  Antennas not yet for LoRa, no GPS hardware wired, no stepper drivers.
 
@@ -65,7 +65,7 @@ The pipeline below is shaped by what we can validate **today on bare CPUs** vers
 
 | Library | Sketch | Why |
 |---|---|---|
-| **chumicro-logging** | Tiny levelled logger with a handler protocol; runner-friendly buffered handler; CPython stdlib `logging` as fake / passthrough. **Must NOT become a required dep of other chumicro libraries** — they accept an optional `logger` callable, default no-op. | Universal need.  CP `adafruit_logging` is minimal, MP `logging` is quirky, stdlib is overkill — chumicro can pick a small subset and unify. |
+| **chumicro-logging** | Tiny leveled logger with a handler protocol; runner-friendly buffered handler; CPython stdlib `logging` as fake / passthrough. **Must NOT become a required dep of other chumicro libraries** — they accept an optional `logger` callable, default no-op. | Universal need.  CP `adafruit_logging` is minimal, MP `logging` is quirky, stdlib is overkill — chumicro can pick a small subset and unify. |
 | **chumicro-ntp** | Non-blocking SNTP client on top of chumicro-sockets; emits a tick offset that timing helpers can consume. | High-leverage, ~150 lines. **First check whether chumicro-sockets exposes UDP** — Decision 0031 made it TCP+TLS-focused.  May need a small UDP add as a prereq slice. |
 | **chumicro-events** | Runner-shaped pub/sub: `bus.publish("wifi.connected", payload)`, `bus.subscribe(topic, handler)`. Topic strings, not classes.  Bounded queue, drops oldest with a count.  **Must NOT become a required dep of other chumicro libraries** — services keep their existing direct callbacks; events sits beside them as an optional aggregator the *thing* opts into.  See "Device-feedback layer" below for the use case driving this. | Several services already publish state changes via ad-hoc callbacks (wifi → indicator, mqtt → app). A bus would cut boilerplate **for the consumer**, not the producer.  Risk: premature abstraction if no aggregator emerges — the device-feedback layer is the third consumer that justifies it. |
 

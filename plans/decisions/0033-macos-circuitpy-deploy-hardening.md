@@ -69,7 +69,7 @@ after the rsync and then sleeps `FLUSH_SETTLE_DELAY` (default
 configurable because some boards' controllers are slower than
 others.
 
-### 3. Poll device-side visibility; synchronise capture on soft-reboot
+### 3. Poll device-side visibility; synchronize capture on soft-reboot
 
 Commit `3f1de8e`.  Even after host-side `sync` + settle, the
 *board*'s view of the volume can lag.  CircuitPython's FatFs
@@ -134,7 +134,7 @@ The classifier routes that message to `CIRCUITPY_DRIVE_MISSING` (not `PORT_UNAVA
 - The FAT32 hardenings (§1–§3) are best-effort and log at
   WARNING on failure.  A fresh macOS system without Spotlight
   or a headless user account without `xattr` still deploys; it
-  just logs that the optimisation was skipped.
+  just logs that the optimization was skipped.
 - The wedge detector (§4) fails open: missing `pgrep`/`ps`,
   subprocess timeout, or non-zero exit all return `False`
   (not wedged).  A false positive would silently block

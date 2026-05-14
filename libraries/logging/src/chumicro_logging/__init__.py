@@ -1,4 +1,4 @@
-"""Levelled logging for chumicro libraries — runner-friendly, no chumicro deps.
+"""Leveled logging for chumicro libraries — runner-friendly, no chumicro deps.
 
 A lightweight subset of stdlib ``logging`` that runs identically on
 CircuitPython, MicroPython, and CPython: integer levels, named loggers,

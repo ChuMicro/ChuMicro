@@ -71,7 +71,7 @@ def install_hint_for_rsync() -> str:
 
     Detects common Linux package managers via :func:`shutil.which`
     and produces a copy-paste-able ``sudo <manager> install rsync``
-    line.  Falls back to a generic message when no recognised
+    line.  Falls back to a generic message when no recognized
     manager is on PATH.  On macOS the system ships rsync, so the
     hint points at Xcode Command Line Tools / Homebrew as the
     recovery path.

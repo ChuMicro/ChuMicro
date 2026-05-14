@@ -43,7 +43,7 @@ from pathlib import Path
 #:
 #: * extending this set,
 #: * extending :data:`FEATURE_PROBE_SCRIPT` to detect it,
-#: * extending :func:`parse_feature_probe_output` to recognise it.
+#: * extending :func:`parse_feature_probe_output` to recognize it.
 #:
 #: Every feature in this set must be detectable by an ``import``
 #: probe — the MicroPython REPL on the target board can do

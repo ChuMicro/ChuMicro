@@ -298,7 +298,7 @@ class TestDeployerFollowKwargRouting:
         """CP transport doesn't accept ``follow`` — the Deployer must not pass it.
 
         Uses RAM mode to sidestep the CP-flash rsync gate (orthogonal
-        to the kwarg-routing behaviour under test).  The branch the
+        to the kwarg-routing behavior under test).  The branch the
         Deployer takes here is the same for CP RAM and CP flash —
         ``follow`` is suppressed for any non-MP transport.
         """

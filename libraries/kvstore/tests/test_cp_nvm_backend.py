@@ -69,7 +69,7 @@ def test_load_blank_0xff_slab_returns_empty() -> None:
 
 
 def test_load_blank_0x00_slab_returns_empty() -> None:
-    """Some chips initialise NVM to 0x00; backend treats it as blank."""
+    """Some chips initialize NVM to 0x00; backend treats it as blank."""
     nvm = bytearray(SAMD21_SIZE)  # default-init is 0x00
     backend = CpNvmBackend(nvm=nvm)
     assert backend.load() == b""

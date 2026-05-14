@@ -161,7 +161,7 @@ Recommended order — smallest-blast-radius first:
 6. **Slice E** (merge handshake parsers) — internal refactor, public API unchanged.  ✅ shipped `209b330`.
 7. **Slice G** (shared `_session.py`) — biggest LOC win, biggest test churn.  ✅ shipped (this commit).
 
-Each slice ships its own VERSION bump (patch for C/D/F, minor for A/E/G — observable behaviour change in A; refactors in E/G that change internals).
+Each slice ships its own VERSION bump (patch for C/D/F, minor for A/E/G — observable behavior change in A; refactors in E/G that change internals).
 
 ## Acceptance for the workstream as a whole
 
@@ -172,7 +172,7 @@ Final state (after slices A/C/D/F/E/G; slice B deferred):
 * Coverage 96.17 % on the websockets library (workspace gate is 94 %).
 * Public API surface is the slice-C 28-name set — kept stable across all subsequent slices.
 * Memory-knob defaults unchanged.
-* Live four-board re-verification: **deferred** — board-time hasn't been booked.  The host-side test matrix exercises every code path the live boards do; the per-tick perf change in slice A is the only potentially-observable behaviour change, and it's a pure win.  Re-verify before any PyPI release.
+* Live four-board re-verification: **deferred** — board-time hasn't been booked.  The host-side test matrix exercises every code path the live boards do; the per-tick perf change in slice A is the only potentially-observable behavior change, and it's a pure win.  Re-verify before any PyPI release.
 
 ## Out of scope
 

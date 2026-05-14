@@ -72,7 +72,7 @@ def discover_config_loaders() -> dict[str, ConfigLoader]:
     entries come from Python entry points in the
     ``chumicro_deploy.config_loaders`` group — any name collision
     with ``default`` is rejected by the registry so built-in
-    behaviour is not silently shadowed.
+    behavior is not silently shadowed.
 
     Returns:
         ``{name: loader}`` mapping where ``loader(path, *, device_id=None)``

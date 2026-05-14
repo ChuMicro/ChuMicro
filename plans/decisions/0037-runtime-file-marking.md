@@ -48,7 +48,7 @@ The PyPI sdist / wheel always ships every file under `src/` regardless of marker
 
 The bundle pipeline reads the marker via a small AST walk (no module execution — `ast.parse` + `ast.Assign` to top-level `__chumicro_runtimes__`).  No execution because the file may itself import runtime-only modules (`import wifi`, `import esp32`) that fail at parse-execute time on the host.
 
-Sub-runtimes (`micropython_esp32` vs `micropython_rp2`) are recognised but currently fold into `micropython` for bundle filtering — both MP variants ship the same `mpy6/` bundle today.  When a future board class diverges enough to warrant per-port mpy bundles, the marker vocabulary already supports it.
+Sub-runtimes (`micropython_esp32` vs `micropython_rp2`) are recognized but currently fold into `micropython` for bundle filtering — both MP variants ship the same `mpy6/` bundle today.  When a future board class diverges enough to warrant per-port mpy bundles, the marker vocabulary already supports it.
 
 ### 2. Filename suffix is convention only — not load-bearing
 

@@ -58,12 +58,12 @@ A fresh agent picking this up cold should:
 1. Read this file end to end.
 2. Read [Decision 0055](../decisions/0055-config-pipeline-unification.md) (the unification target this work consumes), [Decision 0056](../decisions/0056-transport-extra-files-staging.md) (the transport-API foundation — what each mode raises / writes), and [Decision 0057](../decisions/0057-two-file-config.md) (the current 2-file input shape).
 3. Hardware-validate the transport-API foundation end-to-end on the four-board canonical matrix *before* touching any conftest.  Stage a known-good `runtime_config.msgpack`, boot, read it back via `load_runtime_config()`, assert the dict round-trips byte-for-byte.  No such functional test exists today — the existing coverage is unit-only against `FakeTransport`.  This is the first deliverable of Step 1 below.
-4. Audit every conftest in the repo (find under `libraries/`, `workbench/`, `support/`) for `_test_creds.py` materialisation or other static-secrets shims beyond the seven networking libraries.  The seven listed in Step 2 are the known set; confirm or extend.
+4. Audit every conftest in the repo (find under `libraries/`, `workbench/`, `support/`) for `_test_creds.py` materialization or other static-secrets shims beyond the seven networking libraries.  The seven listed in Step 2 are the known set; confirm or extend.
 5. **Boards required.**  Hardware-in-the-loop validation is mandatory; CPython unit tests can't catch the failure modes.  The four-board matrix is `pi-pico-w-circuitpython-board`, `pi-pico-w-micropython-board`, `lolin-s2-circuitpython-board`, `lolin-s2-micropython-board` (one of each runtime × two RP2040/ESP32 boards).
 
 ## Scope (sequenced)
 
-The plugin's hook design depends on consumer behaviour — five of seven conftests just need static credentials staged, but three (mqtt, sockets, websockets) mutate the config dict mid-session with dynamic broker/echo/server values that aren't known until session-scoped fixtures spin up.  Designing the hook against `FakeTransport` alone risks getting late-binding wrong; designing it with one real consumer pins the contract.  Hence the sequencing below: plugin design + simplest consumer first, mechanical migration of the rest after.
+The plugin's hook design depends on consumer behavior — five of seven conftests just need static credentials staged, but three (mqtt, sockets, websockets) mutate the config dict mid-session with dynamic broker/echo/server values that aren't known until session-scoped fixtures spin up.  Designing the hook against `FakeTransport` alone risks getting late-binding wrong; designing it with one real consumer pins the contract.  Hence the sequencing below: plugin design + simplest consumer first, mechanical migration of the rest after.
 
 ### Step 1 — Plugin-side wiring + first consumer (wifi)
 
@@ -76,7 +76,7 @@ The plugin's hook design depends on consumer behaviour — five of seven conftes
 
 `libraries/wifi/functional_tests/`:
 
-5. `conftest.py` — drop `_test_creds.py` materialisation; encode the merged config dict from `compose_runtime_config()` to msgpack via the new plugin hook.
+5. `conftest.py` — drop `_test_creds.py` materialization; encode the merged config dict from `compose_runtime_config()` to msgpack via the new plugin hook.
 6. `test_real_*.py` — replace the `_test_creds` import block with `chumicro_config.load_runtime_config()` (see template under Step 3).
 
 7. **Hardware-validate on all four boards** (this also closes pre-condition 3).  Bring up a known config, stage it, boot, assert `load_runtime_config()` returns the same dict that `compose_runtime_config()` produced on the host.  CP-RAM-mode skip path verified to surface a clean error rather than a cryptic transport exception.
@@ -87,7 +87,7 @@ Step 1 is the API-design + risk-reduction slice.  Don't proceed to Step 2 until 
 
 `libraries/{requests,http_server,mqtt,sockets,websockets,ntp}/functional_tests/conftest.py`:
 
-1. Drop the `_test_creds.py` materialisation.
+1. Drop the `_test_creds.py` materialization.
 2. Encode the merged config dict to msgpack via the plugin hook from Step 1.
 3. Library-specific extras (mqtt broker spawn, sockets UDP echo, websockets PyPI server) mutate the merged dict with dynamic values *before* the hook captures it.
 4. Requests conftest writes `NOW_UTC_TUPLE` (a tuple, not a string).  Pick a config-section home — recommend `requests.now_utc_tuple` so it lives alongside the other requests-section config — and bake it into the dict shape at generation time.
@@ -150,8 +150,8 @@ The flat-key shape replaces the original two-level `_config["wifi"]["ssid"]` acc
 ## Constraints
 
 * The four-board matrix must pass functional tests after the migration.  Single-board passes are necessary but not sufficient — CP and MP report different config-load failure modes (CP raises `OSError`, MP raises `OSError` with different errno strings, etc.).
-* No backwards-compat burden — `_test_creds.py` materialisation is deleted, not deprecated.  Old conftests don't need to keep working alongside new ones; the hook contract is hard-cutover.
-* No on-device behaviour change to the libraries themselves; only test code rewrites.
+* No backwards-compat burden — `_test_creds.py` materialization is deleted, not deprecated.  Old conftests don't need to keep working alongside new ones; the hook contract is hard-cutover.
+* No on-device behavior change to the libraries themselves; only test code rewrites.
 * `chumicro-pytest-device` is the only workbench package with a public-API surface change — minor VERSION bump per Decision 0023.
 
 ## What this unblocks

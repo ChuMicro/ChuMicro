@@ -156,7 +156,7 @@ python run.py repl --tail garage/sensors/door_open
 # deploys, then streams the next 30 s of REPL output, exits clean
 ```
 
-Falls back to the existing tail behaviour when no positional thing is given.  Tiny addition (~30 LOC) on top of existing `_cmd_repl`.
+Falls back to the existing tail behavior when no positional thing is given.  Tiny addition (~30 LOC) on top of existing `_cmd_repl`.
 
 #### 2f — Multi-device deploys
 
@@ -210,7 +210,7 @@ Why migrate: scaffolding is a workspace-package concern (Decision 0032 §Rule 8 
 
 Slices:
 
-* **4a** — Carve templated content out of `scripts/templates/*.template` files into `chumicro-workspace`'s `_payloads/` tree.  Materialise a `chumicro_workspace.scaffold` module with `scaffold_library(target_dir, name)` and `scaffold_thing(target_dir, name)` functions.
+* **4a** — Carve templated content out of `scripts/templates/*.template` files into `chumicro-workspace`'s `_payloads/` tree.  Materialize a `chumicro_workspace.scaffold` module with `scaffold_library(target_dir, name)` and `scaffold_thing(target_dir, name)` functions.
 * **4b** — Add `--library` flag to `python run.py new`.  Library scaffold writes to `libraries/<name>/` (relative to workspace root) by default; `--into <path>` overrides.
 * **4c** — Update `scripts/run.py new-library` to call `chumicro_workspace.scaffold.scaffold_library` instead of the local copy.  Delete the local copy + its tests; relocate tests to `workbench/workspace/tests/test_scaffold.py`.
 
@@ -325,4 +325,4 @@ Plus an advanced user can develop their own chumicro-style libraries with `pytho
 * **Two-repo flow.**  Phases 1, 2, 3, 4, 5 each touch the chumicro mono-repo.  Phases 1 + 6 also touch the template repo (local clone at `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template`).
 * **Task-checkpoint per slice.**  Every slice ends with a green preflight + commit + push.  Don't batch slices.
 * **Tests come along.**  Every new module gets a test file.  Coverage gate stays at 94 % for changed packages.
-* **Templates live in `_payloads/`.**  Canonical scaffolds (thing, library, examples) live under `workbench/workspace/src/chumicro_workspace/_payloads/`.  The template repo's `_templates/` is a *user-owned-config materialisation source* (secrets.yml etc.) — not where scaffolds belong.
+* **Templates live in `_payloads/`.**  Canonical scaffolds (thing, library, examples) live under `workbench/workspace/src/chumicro_workspace/_payloads/`.  The template repo's `_templates/` is a *user-owned-config materialization source* (secrets.yml etc.) — not where scaffolds belong.

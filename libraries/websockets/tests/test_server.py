@@ -952,7 +952,7 @@ class TestServerFromConfig:
 
     def test_explicit_listener_bypasses_auto_built(self) -> None:
         """Passing listener= skips the chumicro_sockets.tcp_listening_socket
-        path entirely — caller owns the bind/listen behaviour."""
+        path entirely — caller owns the bind/listen behavior."""
         listener = FakeListener()
         server = WebSocketServer.from_config(
             {

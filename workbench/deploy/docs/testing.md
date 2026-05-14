@@ -88,7 +88,7 @@ def test_clock_is_stable_until_advanced() -> None:
 
 Two ways to move the clock forward:
 
-- `sleep(duration)` — the production code's `time.sleep()` analogue.  Accepts the same float seconds and advances the fake clock in lockstep, so production code that genuinely calls `sleep` before checking a deadline behaves correctly under the fake.
+- `sleep(duration)` — the production code's `time.sleep()` analog.  Accepts the same float seconds and advances the fake clock in lockstep, so production code that genuinely calls `sleep` before checking a deadline behaves correctly under the fake.
 - `advance(seconds)` — explicit clock movement when production does **not** sleep but the test needs to push past a deadline (e.g. simulating elapsed time between `connect()` and the next read).
 
 Pass `start=` to begin at a non-zero timestamp.  Useful when production reads `monotonic()` once at startup and you want to verify it computes deltas correctly:

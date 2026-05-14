@@ -169,7 +169,7 @@ def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False):
     """Open a UDP socket on CPython, bound to (bind_host, bind_port).
 
     Returns a :class:`_CPythonUDPWrapper` so the public ``sendto(data,
-    host, port)`` separated-arg shape is honoured (stdlib expects a
+    host, port)`` separated-arg shape is honored (stdlib expects a
     ``(host, port)`` tuple).
     """
     import socket  # noqa: PLC0415 — runtime-gated
@@ -184,7 +184,7 @@ def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False):
 class _CPythonUDPWrapper:
     """Adapts a CPython ``socket.socket`` to the chumicro_sockets UDP protocol.
 
-    Normalises ``sendto`` to the separated ``(data, host, port)``
+    Normalizes ``sendto`` to the separated ``(data, host, port)``
     signature and ``recvfrom_into`` to the ``(nbytes, (host, port))``
     return tuple.
     """

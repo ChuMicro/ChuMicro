@@ -109,7 +109,7 @@ DEFAULT_MAX_REDIRECTS = const(5)
 #: Status codes that the client follows when a ``Location`` header is
 #: present and the per-request redirect budget allows.  301/302/303
 #: switch the next request's method to ``GET`` (per RFC 7231 §6.4 +
-#: long-standing browser behaviour); 307/308 preserve the original
+#: long-standing browser behavior); 307/308 preserve the original
 #: method and body.
 REDIRECT_STATUS_CODES = frozenset({301, 302, 303, 307, 308})
 
@@ -1032,7 +1032,7 @@ class ResponseParser:
             self._state = ParseState.DONE
             return True
         # Non-empty trailer line — discard (RFC 7230 §4.1.2 lets us
-        # ignore trailers we don't recognise).
+        # ignore trailers we don't recognize).
         self._consume(crlf_index + 2)
         return True
 

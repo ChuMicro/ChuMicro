@@ -15,7 +15,7 @@ Run from the repo root with a board plugged in::
 
     .venv/bin/python workbench/deploy/examples/import_graph_deploy.py
 
-The script materialises a small project where the entrypoint only
+The script materializes a small project where the entrypoint only
 imports half of the available modules; the deploy then ships exactly
 the imported half.  Logs which files made the cut, prints the execute
 output, exits zero on success.
@@ -54,7 +54,7 @@ def _device_from_entry(entry: DeviceEntry) -> Device:
     )
 
 
-def _materialise_project(parent: Path) -> tuple[Path, Path]:
+def _materialize_project(parent: Path) -> tuple[Path, Path]:
     """Build a small project where main imports only some of the modules.
 
     Returns ``(project_dir, entrypoint_path)``.  The project carries:
@@ -105,7 +105,7 @@ def main() -> int:
     print(f"deploying to {board.address}")
 
     with tempfile.TemporaryDirectory(prefix="chumicro-example-") as tmp:
-        project_dir, entrypoint = _materialise_project(Path(tmp))
+        project_dir, entrypoint = _materialize_project(Path(tmp))
         source = ImportGraphSource(
             entrypoint=entrypoint,
             search_paths=[project_dir],

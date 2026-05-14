@@ -92,7 +92,7 @@ def tcp_client_socket(host: str, port: int, *, radio: object | None = None) -> T
 
     Raises:
         OSError: Connection refused, DNS failure, etc.  Adapters
-            normalise runtime-specific socket errors into ``OSError``.
+            normalize runtime-specific socket errors into ``OSError``.
         TypeError: CP runtime invoked on a board where ``import wifi``
             fails and no explicit ``radio=`` was passed.
     """

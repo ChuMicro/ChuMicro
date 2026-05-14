@@ -80,7 +80,7 @@ Strategy B (`chumicro_workspace.starter_drift` shipped 2026-05-04) stays in plac
 
 - New module: `chumicro_workspace.starter_diff` (probably).  Public `compute_missing_top_level_sections(user_path: Path, starter_text: str) -> list[str]` — returns top-level keys present in starter but missing in user's materialized file.  Pure function; pairs with the materialize_* family.
 - `materialize_workbench_starters` — when target exists (the case where today it skips silently), call `compute_missing_top_level_sections` and print the result.  Don't touch the file.  Same pattern for `materialize_templates`.
-- Optional: a `--apply-schema-additions` flag on `setup` that does the C-strategy append.  Off by default; opt-in until comment-preservation behaviour earns trust.
+- Optional: a `--apply-schema-additions` flag on `setup` that does the C-strategy append.  Off by default; opt-in until comment-preservation behavior earns trust.
 
 ### Tests
 
@@ -121,7 +121,7 @@ Strategy B (`chumicro_workspace.starter_drift` shipped 2026-05-04) stays in plac
 
 - Module name `starter_drift` (not `starter_diff`) — "drift" reads as a state (the user's file has drifted), "diff" reads as an operation; the public verb is `collect_missing_*` so the operation is named at the function, the module names the state being checked.
 - Output is a dotted-path list, not a YAML snippet — open question 1 picked dotted-path because (a) the recursive walker naturally produces it, (b) the actionable next step is "go look at the named field in the starter file", which a path locates faster than a snippet that may not match the user's existing structure.
-- Wired to fire at the tail of `setup` (not from inside `materialize_*` as the original sketch had it) — the `materialize_*` functions stay a pure shape, and `setup` orchestrates the side-effect.  Keeps the diff-vs-materialise concerns separable for the C/D/E follow-ups.
+- Wired to fire at the tail of `setup` (not from inside `materialize_*` as the original sketch had it) — the `materialize_*` functions stay a pure shape, and `setup` orchestrates the side-effect.  Keeps the diff-vs-materialize concerns separable for the C/D/E follow-ups.
 - Per-project `config.toml` drift (open question 3) is still out of scope; only `workspace.yml` is reconciled in this slice.
 
 ## Why this is a separate workstream from two-file-config-simplification
@@ -129,6 +129,6 @@ Strategy B (`chumicro_workspace.starter_drift` shipped 2026-05-04) stays in plac
 Both workstreams touch the materialize_* functions in `chumicro_workspace.template_apply`, but they're orthogonal:
 
 - Two-file simplification = "how many files, which ones tracked?"  Affects the *layout*.
-- Schema reconciliation = "what does setup do when a starter file already exists?"  Affects the *behaviour*.
+- Schema reconciliation = "what does setup do when a starter file already exists?"  Affects the *behavior*.
 
 Doing them together would interleave two design conversations.  Sequencing them — two-file first, then schema reconciliation — keeps each scope clean.  Reconciliation can also wait longer if signal is weak; conflating it with the two-file work would force shipping it on the two-file timeline.

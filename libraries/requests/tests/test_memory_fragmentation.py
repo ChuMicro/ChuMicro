@@ -25,7 +25,7 @@ currently succeed at once" — the metric that actually predicts
 whether N-byte-class code will run.
 
 Auto-GC remains enabled during the workload (we don't disable it):
-production behaviour is auto-managed GC, and disabling it during a
+production behavior is auto-managed GC, and disabling it during a
 fragmentation test creates artificial heap pressure that's a test
 artifact rather than something the parser would experience on a
 device.  The earlier ``_largest_free_block``-based metric had a

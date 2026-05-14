@@ -25,7 +25,7 @@ workspace template depends on.
 
 The canonical empty-registry text for a fresh workspace ships in
 ``_payloads/devices.yml.template`` next to this module; consumers
-materialise it via :func:`read_devices_yml_template`.  Schema and
+materialize it via :func:`read_devices_yml_template`.  Schema and
 default content live together so changes stay co-located.
 """
 
@@ -56,7 +56,7 @@ def read_devices_yml_template() -> str:
     Three-zone-headed shape with ``defaults.{micropython,
     circuitpython}: null`` (filled by ``add-device``), ``deploy_mode:
     flash``, ``ide_runtime: micropython``, and ``devices: []``.  Single
-    source of truth for every consumer that needs to materialise the
+    source of truth for every consumer that needs to materialize the
     file on first setup.
     """
     return _DEVICES_YML_TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -96,7 +96,7 @@ HARDWARE_BLOCK_ZONES: dict[str, str] = {
 }
 
 #: Every top-level entry key the writer knows about.  The single
-#: source of truth for "is this a recognised devices.yml field?" —
+#: source of truth for "is this a recognized devices.yml field?" —
 #: deploy's reader (``_validate_device``) derives its
 #: ``known_keys`` from this so adding a field in one place keeps the
 #: reader in sync automatically.  ``"hardware"`` is the nested

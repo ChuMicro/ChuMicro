@@ -59,7 +59,7 @@ These are the highest-impact and lowest-frequency findings.  When you see one, c
 Per `plans/decisions/README.md`, structural decisions get an ADR.  Audit for:
 
 * **Decisions made in code but not in plans/decisions/.**  Patterns that 3+ libraries follow without a corresponding ADR.  Either the pattern's a convention worth documenting, or it's accidental and should be reconsidered.
-* **ADRs that are stale.**  Decisions that describe behaviour the code no longer implements (the ADR was superseded but never updated).  Per AGENTS.md: "Edit ADR bodies in place when the decision changes."
+* **ADRs that are stale.**  Decisions that describe behavior the code no longer implements (the ADR was superseded but never updated).  Per AGENTS.md: "Edit ADR bodies in place when the decision changes."
 * **Conflicting ADRs.**  Decision N says X, Decision N+1 says Y, but both are listed as `accepted` and N hasn't been edited to point at N+1.
 
 ### 5. Workspace-tooling concerns
@@ -96,7 +96,7 @@ These cross-library invariants only show up at workspace scope.
   Zero callers in both → delete candidate.  Per the user-memory note `feedback_no_speculative_public_api.md`.
 
 * **Decision-ADR drift** — per `plans/decisions/README.md` and AGENTS.md:
-  * Every `accepted` ADR should describe the *current* state.  Audit for ADRs whose body describes behaviour the code no longer implements.
+  * Every `accepted` ADR should describe the *current* state.  Audit for ADRs whose body describes behavior the code no longer implements.
   * No `# Update (YYYY-MM-DD)` sections, no `> **Note:** Amended by...` blockquotes, no `Status: revised` (status is exactly four values: `proposed` / `accepted` / `superseded` / `deferred`).
   * When Decision N+1 supersedes part of Decision N, Decision N should be edited in place to reflect the new rule + cross-link N+1 inline.
 

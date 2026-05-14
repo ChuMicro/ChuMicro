@@ -223,7 +223,7 @@ assert recorder.calls == [100]
 
 ## Where this fits
 
-Depends on [`chumicro-timing`](../timing/) for the tick source.  Every networked library in ChuMicro registers here — [`wifi`](../wifi/), [`sockets`](../sockets/), [`requests`](../requests/), [`http_server`](../http_server/), [`mqtt`](../mqtt/), [`websockets`](../websockets/) — so the runner lives at the centre of any multi-service app.
+Depends on [`chumicro-timing`](../timing/) for the tick source.  Every networked library in ChuMicro registers here — [`wifi`](../wifi/), [`sockets`](../sockets/), [`requests`](../requests/), [`http_server`](../http_server/), [`mqtt`](../mqtt/), [`websockets`](../websockets/) — so the runner lives at the center of any multi-service app.
 
 ## Platform support
 

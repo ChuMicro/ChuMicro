@@ -161,7 +161,7 @@ class UnixPortBackend:
     ``support/test_harness/run_cross_runtime.py`` sets ``sys.path``
     inside the spawned process so library sources resolve.  Each
     ``test_*.py`` file is one ``--worker`` subprocess so the heap
-    starts clean per file, mirroring real-board behaviour.
+    starts clean per file, mirroring real-board behavior.
 
     Constructor args:
         workspace_root: Path to the mono-repo / workspace root.

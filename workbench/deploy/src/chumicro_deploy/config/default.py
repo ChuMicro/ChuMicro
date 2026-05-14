@@ -298,7 +298,7 @@ def load_raw_entries(
     The schema-shape primitive that ``chumicro-deploy`` owns: read
     the YAML, return the ``devices:`` list and the ``defaults:``
     mapping verbatim — no field validation, no Device construction,
-    no normalisation.  Consumers with richer schemas (the chumicro
+    no normalization.  Consumers with richer schemas (the chumicro
     mono-repo's IDE-test orchestration, future project-workspace
     template loaders) call this and layer their own validation on
     top, so the YAML shape lives in one place.
@@ -358,7 +358,7 @@ def load_raw_entries(
     return entries, raw_defaults
 
 
-def _normalise_device_entry(
+def _normalize_device_entry(
     entry: dict[str, Any],
     *,
     default_deploy_mode: str | None,
@@ -375,18 +375,18 @@ def _normalise_device_entry(
       absent from the entry; the fallback is applied here so the
       :class:`Device` is complete.
     """
-    normalised: dict[str, Any] = {
+    normalized: dict[str, Any] = {
         "transport": entry["runtime"],
         "address": entry["address"],
     }
     if "serial_baudrate" in entry:
-        normalised["baudrate"] = entry["serial_baudrate"]
+        normalized["baudrate"] = entry["serial_baudrate"]
     entry_deploy_mode = entry.get("deploy_mode")
     if entry_deploy_mode:
-        normalised["deploy_mode"] = entry_deploy_mode
+        normalized["deploy_mode"] = entry_deploy_mode
     elif default_deploy_mode:
-        normalised["deploy_mode"] = default_deploy_mode
-    return normalised
+        normalized["deploy_mode"] = default_deploy_mode
+    return normalized
 
 
 def load_devices_yml(
@@ -493,7 +493,7 @@ def load_devices_yml(
             )
         chosen = entries_by_id[fallback_id]
 
-    normalised = _normalise_device_entry(
+    normalized = _normalize_device_entry(
         chosen, default_deploy_mode=default_deploy_mode,
     )
-    return Device.from_dict(normalised)
+    return Device.from_dict(normalized)

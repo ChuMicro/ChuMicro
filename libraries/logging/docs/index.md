@@ -1,6 +1,6 @@
 # chumicro-logging
 
-**Levelled logging for ChuMicro libraries — non-blocking, zero dependencies.**
+**Leveled logging for ChuMicro libraries — non-blocking, zero dependencies.**
 
 Familiar stdlib-logging shape (level integers, named loggers, attached handlers) plus a `BufferedHandler` that drains records off the hot tick path on each runner tick.
 
