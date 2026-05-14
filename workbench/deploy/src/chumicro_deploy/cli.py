@@ -225,7 +225,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     # filter: unless --target-runtime overrides, the filter is the
     # device's configured runtime (--transport / --devices-file).
     device = _device_from_args(args)
-    target_runtime = args.target_runtime or str(device.transport)
+    target_runtime = args.target_runtime or device.transport
 
     source: DirectorySource | FileMapSource
     if args.directory is not None:

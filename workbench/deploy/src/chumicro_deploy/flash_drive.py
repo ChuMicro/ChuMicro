@@ -252,6 +252,29 @@ _BASE_RSYNC_EXCLUDES: tuple[str, ...] = (
 )
 
 
+def _rsync_exclude_and_endpoint_args(
+    source: Path,
+    destination: Path,
+    *,
+    additional_excludes: tuple[str, ...] | list[str],
+) -> list[str]:
+    """Return the tail args shared by :func:`rsync` and :func:`verify_rsync`.
+
+    Both callers append the same ``--exclude=…`` flags (from
+    :data:`_BASE_RSYNC_EXCLUDES` + the caller's additions) followed by
+    ``str(source) + "/"`` and ``str(destination) + "/"``.  Keeps the
+    exclude set + the trailing-slash convention in one place.
+    """
+    args: list[str] = []
+    for pattern in _BASE_RSYNC_EXCLUDES:
+        args.append(f"--exclude={pattern}")
+    for pattern in additional_excludes:
+        args.append(f"--exclude={pattern}")
+    args.append(str(source) + "/")
+    args.append(str(destination) + "/")
+    return args
+
+
 def rsync(
     source: Path,
     destination: Path,
@@ -315,12 +338,9 @@ def rsync(
     ]
     if delete:
         command.append("--delete")
-    for pattern in _BASE_RSYNC_EXCLUDES:
-        command.append(f"--exclude={pattern}")
-    for pattern in additional_excludes:
-        command.append(f"--exclude={pattern}")
-    command.append(str(source) + "/")
-    command.append(str(destination) + "/")
+    command.extend(_rsync_exclude_and_endpoint_args(
+        source, destination, additional_excludes=additional_excludes,
+    ))
     try:
         _run_subprocess_with_timeout(
             command,
@@ -417,12 +437,9 @@ def verify_rsync(
         "--dry-run",
         "--itemize-changes",
     ]
-    for pattern in _BASE_RSYNC_EXCLUDES:
-        command.append(f"--exclude={pattern}")
-    for pattern in additional_excludes:
-        command.append(f"--exclude={pattern}")
-    command.append(str(source) + "/")
-    command.append(str(destination) + "/")
+    command.extend(_rsync_exclude_and_endpoint_args(
+        source, destination, additional_excludes=additional_excludes,
+    ))
     try:
         result = subprocess.run(
             command,

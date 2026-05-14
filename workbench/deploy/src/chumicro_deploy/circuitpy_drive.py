@@ -31,7 +31,6 @@ from __future__ import annotations
 import errno
 import getpass
 import os
-import sys as _sys_module
 from pathlib import Path
 
 #: Volume name CircuitPython uses by default.
@@ -251,11 +250,3 @@ def _list_scope_on_drive(drive: Path) -> list[str]:
                 relative = path.relative_to(drive).as_posix()
                 found.append(f"/{relative}")
     return found
-
-
-# `os` and `sys` aren't directly used by the public helpers but get
-# imported here once so the module's expectations are visible at
-# import time (a hardened environment without ``$USER`` and without
-# a ``pwd`` database would surface immediately, not deep inside a
-# transport call).
-_ = (os, _sys_module)

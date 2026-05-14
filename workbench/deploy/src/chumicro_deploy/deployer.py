@@ -275,15 +275,28 @@ class Deployer:
                 :class:`~chumicro_deploy.sources.FileSource` —
                 ``files()`` returns path -> bytes, ``entrypoint()``
                 returns the boot file's on-device path.
+            force_deploy_mode: Override the pre-flight requires_flash
+                policy.  ``None`` (default) runs the pre-flight check
+                that auto-promotes RAM → flash when a flagged library
+                is in the graph; pass ``"ram"`` to keep RAM mode even
+                when a library is flagged, or ``"flash"`` to force
+                flash regardless.
             on_progress: Optional callback ``(fraction, message)``
-                invoked at coarse milestones: 0.0 "connecting", 0.3
-                "staging", 0.9 "executing", 1.0 "done".  Fractions
-                are nominal — ``deploy_files`` does not report
-                incremental progress today.
+                invoked at coarse milestones: 0.0 "connecting", 0.1
+                "collecting files", 0.2 "staging", 0.9 "executing",
+                1.0 "done".  Fractions are nominal — ``deploy_files``
+                does not report incremental progress today.
             on_file_staged: Forwarded to
                 :meth:`TransportProtocol.deploy_files`.
             on_execute_line: Forwarded to
                 :meth:`TransportProtocol.deploy_files`.
+            on_preflight_message: Optional callback for the
+                "switching to flash mode" message the requires_flash
+                pre-flight emits.  Defaults to ``sys.stderr``.
+            tail_seconds: CP-only override for how long the transport
+                captures serial output after the entrypoint's
+                soft-reboot.  ``None`` keeps the transport's built-in
+                default; ignored on MP transports.
             clean: Forwarded to :meth:`TransportProtocol.deploy_files`.
                 In CP flash mode triggers ``rsync --delete`` (with
                 ``settings.toml`` / ``boot.py`` / ``boot_out.txt``
@@ -359,6 +372,8 @@ class Deployer:
                 cleanup entirely (nothing left to diff against after a
                 wipe).  RAM-mode transports treat the wipe as a no-op
                 so callers don't need to gate on mode.
+            force_deploy_mode: Override the pre-flight requires_flash
+                policy.  Same semantics as :meth:`deploy`'s argument.
             on_progress: Optional ``(fraction, message)`` callback.
                 Stages: ``connecting``, ``listing in-scope`` /
                 ``wiping``, ``cleaning stale``, ``staging``,
@@ -368,6 +383,10 @@ class Deployer:
                 stale on-device path before deletion.  Lets the CLI
                 surface "removed: /lib/old.py" lines for transparency.
             on_execute_line: Forwarded to ``deploy_files``.
+            on_preflight_message: Forwarded to the same pre-flight
+                message sink as :meth:`deploy`.  Defaults to stderr.
+            tail_seconds: CP-only soft-reboot capture-window override.
+                Same semantics as :meth:`deploy`'s argument.
 
         Returns:
             :class:`DeployResult` populated as in :meth:`deploy`.  The
