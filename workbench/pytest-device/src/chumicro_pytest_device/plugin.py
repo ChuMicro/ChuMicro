@@ -327,7 +327,7 @@ class _PRSummaryCollector:
                 ),
             )
             cache = _session_cache(item.session)
-            transport = cache._transports.get(device_id)  # noqa: SLF001
+            transport = cache.peek_transport(device_id)
             if transport is not None:
                 try:
                     self._implementations[device_id] = (
@@ -619,6 +619,16 @@ class _TransportCache:
             transport.connect()
             self._transports[key] = transport
         return self._transports[key]
+
+    def peek_transport(self, device_id: str) -> TransportProtocol | None:
+        """Return the connected transport for a device without creating one.
+
+        Use this when the caller wants to act on an existing transport
+        (e.g. probe metadata for PR-summary rendering) but should NOT
+        connect a fresh one as a side effect.  Returns ``None`` when no
+        transport is cached yet.
+        """
+        return self._transports.get(device_id)
 
     def needs_staging(self, batch_key: tuple[str, str, str]) -> bool:
         """Check whether the library/test file needs to be staged.
