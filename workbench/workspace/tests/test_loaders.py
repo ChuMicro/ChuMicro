@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from chumicro_workspace import (
+from chumicro_workspace.loaders import (
     WorkspaceConfigError,
     read_project_config,
     read_secrets_toml,

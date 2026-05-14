@@ -10,7 +10,7 @@ and pip-installed wheels alike.
 
 from __future__ import annotations
 
-from chumicro_workspace import (
+from chumicro_workspace.templates import (
     read_devices_yml_template,
     read_secrets_toml_template,
     read_workspace_yml_template,

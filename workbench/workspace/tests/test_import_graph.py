@@ -3,13 +3,13 @@
 from pathlib import Path
 
 import pytest
-from chumicro_workspace import (
-    RUNTIME_CONFIG_DEVICE_PATH,
-    WorkspaceConfigError,
+from chumicro_workspace.deploy_source import RUNTIME_CONFIG_DEVICE_PATH
+from chumicro_workspace.import_graph import (
     build_search_paths,
     project_import_graph_source,
     read_library_sources,
 )
+from chumicro_workspace.loaders import WorkspaceConfigError
 from chumicro_workspace.workspace import WorkspaceLayout
 from msgpack import unpackb
 

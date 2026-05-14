@@ -8,11 +8,11 @@ it consumes natively.
 
 from pathlib import Path
 
-from chumicro_workspace import (
+from chumicro_workspace.pipeline import (
     build_runtime_config,
     compose_runtime_config,
-    write_runtime_config,
 )
+from chumicro_workspace.writer import write_runtime_config
 from msgpack import unpackb
 
 

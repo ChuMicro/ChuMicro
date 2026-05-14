@@ -14,10 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from chumicro_workspace import (
-    collect_missing_template_paths,
-    read_secrets_toml_template,
-)
+from chumicro_workspace.template_drift import collect_missing_template_paths
+from chumicro_workspace.templates import read_secrets_toml_template
 
 
 def _write_workspace_yml(workspace_root: Path, content: str) -> None:

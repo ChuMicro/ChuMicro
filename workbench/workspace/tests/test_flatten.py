@@ -1,7 +1,7 @@
 """Tests for ``flatten_config`` — the nested-to-dotted-key compose-time pass."""
 
 import pytest
-from chumicro_workspace import flatten_config
+from chumicro_workspace.flatten import flatten_config
 
 
 def test_flat_input_is_returned_unchanged() -> None:

@@ -10,7 +10,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from chumicro_workspace import additive_reapply
+from chumicro_workspace.additive_apply import additive_reapply
 
 
 def _patch_workspace_yml_template(

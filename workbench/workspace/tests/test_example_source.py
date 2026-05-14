@@ -11,12 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from chumicro_workspace import example_source
 from chumicro_workspace.deploy_source import (
     RUNTIME_CONFIG_DEVICE_PATH,
     WithRuntimeConfig,
 )
-from chumicro_workspace.example_source import _default_output_path
+from chumicro_workspace.example_source import _default_output_path, example_source
 
 # ---------------------------------------------------------------------------
 # Helpers — stage a minimal mono-repo with one library + one example

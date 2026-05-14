@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from chumicro_deploy import Deployer, Device, FileMapSource
 from chumicro_deploy.testing import FakeTransport
-from chumicro_workspace import (
+from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
     RUNTIME_CONFIG_DEVICE_PATH,
     WithRuntimeConfig,
@@ -232,7 +232,7 @@ class TestWithRuntimeConfig:
         # Project config drops ``password`` and there's no overlay —
         # validation must fire at deploy time, before the msgpack
         # lands on the device.
-        from chumicro_workspace import ConfigManifestError  # noqa: PLC0415
+        from chumicro_workspace.config_manifest import ConfigManifestError  # noqa: PLC0415
 
         secrets_toml = tmp_path / "secrets.toml"
         secrets_toml.write_text("")
