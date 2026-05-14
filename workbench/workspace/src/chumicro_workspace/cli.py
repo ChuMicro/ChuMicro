@@ -28,6 +28,7 @@ visible.
 from __future__ import annotations
 
 import argparse
+import json
 import keyword
 import re
 import shutil
@@ -39,6 +40,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import chumicro_deploy
+from chumicro_deploy import (
+    Deployer,
+    Device,
+    FileMapSource,
+    InteractiveDeployer,
+    NonInteractiveDeployer,
+    flash_firmware,
+)
+from chumicro_deploy.config.default import load_devices_yml
 from chumicro_deploy.config.devices_yaml import (
     DeviceAlreadyExistsError,
     DeviceNotFoundError,
@@ -61,14 +72,36 @@ from chumicro_deploy.macos_fskit import (
     MACOS_FSKIT_RECOVERY_COMMAND,
     detect_fskit_wedge,
 )
+from chumicro_deploy.recovery import DeployFailureKind, classify_deploy_failure
+from chumicro_deploy.runtime_marker import read_runtime_marker
+from ruamel.yaml import YAML
+from serial.tools import list_ports
 
+from chumicro_workspace import template_apply
+from chumicro_workspace.additive_apply import additive_reapply
 from chumicro_workspace.boot_shim import (
     project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
 )
-from chumicro_workspace.deploy_source import project_directory_source
+from chumicro_workspace.chumicro_dev import (
+    discover_chumicro_libraries,
+    read_chumicro_dev_path,
+    sync_library_sources,
+)
+from chumicro_workspace.config_manifest import (
+    ConfigManifestError,
+    aggregate_manifests,
+    find_library_roots,
+    read_manifest,
+    validate_runtime_config,
+)
+from chumicro_workspace.deploy_source import (
+    find_project_config,
+    project_directory_source,
+)
 from chumicro_workspace.deploy_targets import read_deploy_targets
+from chumicro_workspace.example_source import example_source
 from chumicro_workspace.firmware_support import (
     FirmwareSupportStatus,
     check_firmware_supported,
@@ -82,15 +115,36 @@ from chumicro_workspace.health import (
     collect_doctor_findings,
     collect_health_findings,
 )
-from chumicro_workspace.import_graph import project_import_graph_source
+from chumicro_workspace.import_graph import (
+    build_search_paths,
+    project_import_graph_source,
+)
+from chumicro_workspace.install_libraries import (
+    EXPERIMENTAL_BUNDLE_REPO,
+    STABLE_BUNDLE_REPO,
+    build_circup_command,
+    build_mip_commands,
+    discover_chumicro_imports,
+    import_name_to_package,
+)
 from chumicro_workspace.onboarding import (
     BoardState,
     RuntimeInferenceResult,
     detect_board_state,
     probe_with_runtime_inference,
 )
+from chumicro_workspace.pipeline import compose_runtime_config
 from chumicro_workspace.quality import load_quality_config
 from chumicro_workspace.recovery import detect_hints, format_hints
+from chumicro_workspace.scaffold import (
+    LibraryAlreadyExistsError,
+    scaffold_library,
+)
+from chumicro_workspace.template_apply import (
+    DEFAULT_TEMPLATE_URL,
+    ApplyAction,
+    materialize_workspace_templates,
+)
 from chumicro_workspace.workspace import (
     ENTRY_POINT_FILENAMES,
     ProjectClassification,
@@ -99,7 +153,7 @@ from chumicro_workspace.workspace import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
-    from chumicro_deploy import Device, DeviceImplementation
+    from chumicro_deploy import DeviceImplementation
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +260,6 @@ def _resolve_device(workspace: WorkspaceLayout, args: argparse.Namespace) -> Dev
             f"error: {workspace.devices_yaml} not found — run "
             "'add-device' to register a board first.",
         )
-    from chumicro_deploy.config.default import load_devices_yml  # noqa: PLC0415
-
     return load_devices_yml(
         workspace.devices_yaml,
         device_id=args.device_id,
@@ -229,8 +281,6 @@ def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
             f"error: {workspace.devices_yaml} not found — run "
             "'add-device' to register a board first.",
         )
-    from chumicro_deploy.config.default import load_devices_yml  # noqa: PLC0415
-
     raw = load_devices(workspace.devices_yaml)
     entries = raw.get("devices", []) or []
     if not entries:
@@ -285,11 +335,6 @@ def _cmd_setup(args: argparse.Namespace) -> int:
             f"setup: no pyproject.toml at {workspace.root} — "
             "skipping editable install.",
         )
-    from chumicro_workspace.template_apply import (  # noqa: PLC0415
-        ApplyAction,
-        materialize_workspace_templates,
-    )
-
     # Workspace templates — canonical content ships from the workbench
     # wheel (workspace.yml + secrets.toml) and chumicro_deploy
     # (devices.yml, schema-co-located).
@@ -306,12 +351,6 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     # ``deploy --import-graph`` (and the ``--boot-shim --import-graph``
     # composition, gap 5) resolve ``import chumicro_<name>`` against
     # the local checkout instead of the empty ``packages/`` dir.
-    from chumicro_workspace.chumicro_dev import (  # noqa: PLC0415
-        discover_chumicro_libraries,
-        read_chumicro_dev_path,
-        sync_library_sources,
-    )
-
     chumicro_path = read_chumicro_dev_path(workspace.root)
     if chumicro_path is not None:
         if not chumicro_path.is_dir():
@@ -349,8 +388,6 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     # Additive re-apply: append upstream-template keys missing from the
     # user's workspace.yml / secrets.toml, in place, comments preserved.
     # Existing edits are NEVER touched; only the missing keys land.
-    from chumicro_workspace.additive_apply import additive_reapply  # noqa: PLC0415
-
     appended = additive_reapply(workspace.root)
     if appended:
         for filename, paths in appended.items():
@@ -365,15 +402,9 @@ def _cmd_setup(args: argparse.Namespace) -> int:
 
 def _cmd_init(args: argparse.Namespace) -> int:
     """Clone the workspace template into a target directory."""
-    from chumicro_workspace.template_apply import (  # noqa: PLC0415
-        DEFAULT_TEMPLATE_URL,
-        ApplyAction,
-        init,
-    )
-
     template_url = args.template_url or DEFAULT_TEMPLATE_URL
     try:
-        report = init(
+        report = template_apply.init(
             args.target,
             template_url=template_url,
             git_reference=args.git_reference,
@@ -397,18 +428,10 @@ def _cmd_init(args: argparse.Namespace) -> int:
 
 def _cmd_update(args: argparse.Namespace) -> int:
     """Re-flow tool-owned template files from the canonical upstream."""
-    from chumicro_workspace.template_apply import (  # noqa: PLC0415
-        DEFAULT_TEMPLATE_URL,
-        ApplyAction,
-    )
-    from chumicro_workspace.template_apply import (
-        update as apply_update,
-    )
-
     workspace = _resolve_workspace(args)
     template_url = args.template_url or DEFAULT_TEMPLATE_URL
     try:
-        report = apply_update(
+        report = template_apply.update(
             workspace.root,
             template_url=template_url,
             git_reference=args.git_reference,
@@ -601,10 +624,6 @@ def _cmd_new(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        from chumicro_workspace.scaffold import (  # noqa: PLC0415
-            LibraryAlreadyExistsError,
-            scaffold_library,
-        )
         package_kind = "workbench" if args.workbench else "library"
         default_parent = (
             workspace.root / "workbench"
@@ -644,9 +663,7 @@ def _cmd_probe(args: argparse.Namespace) -> int:
     """Probe a board's runtime identity (delegates to chumicro-deploy)."""
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
-    from chumicro_deploy import probe_device  # noqa: PLC0415
-
-    info = probe_device(device)
+    info = chumicro_deploy.probe_device(device)
     if info.implementation is None:
         print("probe: no implementation marker", file=sys.stderr)
         return 1
@@ -660,9 +677,6 @@ def _cmd_probe(args: argparse.Namespace) -> int:
 
 def _cmd_discover(args: argparse.Namespace) -> int:
     """List serial ports the host can see (pyserial-backed)."""
-    # pyserial ships as a chumicro-deploy dep so it's always present.
-    from serial.tools import list_ports  # noqa: PLC0415
-
     ports = sorted(list_ports.comports(), key=lambda port: port.device)
     if not ports:
         print("discover: no serial ports detected")
@@ -679,8 +693,6 @@ def _cmd_devices(args: argparse.Namespace) -> int:
     if not workspace.devices_yaml.is_file():
         print(f"devices: {workspace.devices_yaml} does not exist yet")
         return 0
-    from ruamel.yaml import YAML  # noqa: PLC0415
-
     raw = YAML(typ="safe").load(workspace.devices_yaml.read_text()) or {}
     devices = raw.get("devices", [])
     if not devices:
@@ -715,12 +727,6 @@ def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
     ``.deploy_diff()`` as needed (both signatures match
     :class:`Deployer`'s exactly).
     """
-    from chumicro_deploy import (  # noqa: PLC0415
-        Deployer,
-        InteractiveDeployer,
-        NonInteractiveDeployer,
-    )
-
     deployer = Deployer(device)
     if non_interactive:
         return NonInteractiveDeployer(deployer)
@@ -751,8 +757,6 @@ def _emit_probe_failure(
     choice rarely matters — :func:`detect_board_state` falls back to
     UF2 + error-string heuristics — but the chosen runtime is honored.
     """
-    from chumicro_deploy import Device  # noqa: PLC0415
-
     diagnosis = detect_board_state(
         Device(transport=transport, address=address),
         uf2_search_paths=uf2_search_paths,
@@ -1320,10 +1324,6 @@ def _build_deploy_plan(
                 f"in {workspace.workspace_yaml.name}.  Map each project to "
                 "one or more device ids and re-run.",
             )
-        from chumicro_deploy.config.default import (  # noqa: PLC0415
-            load_devices_yml,
-        )
-
         plan: list[tuple[str, Path, list[Device]]] = []
         for project_path, device_ids in targets.items():
             project_dir = workspace.project_dir(project_path)
@@ -1384,10 +1384,6 @@ def _build_deploy_plan(
         targets = read_deploy_targets(workspace.workspace_yaml)
         mapped = targets.get(project_name)
         if mapped:
-            from chumicro_deploy.config.default import (  # noqa: PLC0415
-                load_devices_yml,
-            )
-
             try:
                 mapped_devices = [
                     load_devices_yml(workspace.devices_yaml, device_id=did)
@@ -1715,8 +1711,6 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
-    from chumicro_deploy import FileMapSource  # noqa: PLC0415
-
     entrypoint_path = f"/{device.effective_entrypoint}"
     source = FileMapSource(
         files={entrypoint_path: DEMO_PAYLOAD},
@@ -1911,7 +1905,6 @@ def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state ma
 
     # Required runtime per the example's __chumicro_runtimes__ marker.
     # None = universal; we'll fall back to whatever the device runs.
-    from chumicro_deploy.runtime_marker import read_runtime_marker  # noqa: PLC0415
     marker = read_runtime_marker(example_path)
     runtime_required: str | None = None
     if marker is not None and len(marker) == 1:
@@ -2010,7 +2003,6 @@ def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state ma
     library_roots = sorted(
         path for path in libraries_root.iterdir() if path.is_dir()
     )
-    from chumicro_workspace.example_source import example_source  # noqa: PLC0415
     try:
         source = example_source(
             library_root,
@@ -2034,10 +2026,6 @@ def _cmd_deploy_example(  # noqa: C901, PLR0911, PLR0912 — front-door state ma
     # Wrap in the recovery-coaching deployer.  NonInteractiveDeployer
     # re-raises after printing; InteractiveDeployer prompts to retry.
     runner = _make_deploy_runner(device, non_interactive=non_interactive)
-    from chumicro_deploy.recovery import (  # noqa: PLC0415
-        DeployFailureKind,
-        classify_deploy_failure,
-    )
     try:
         result = runner.deploy(
             source, clean=args.clean, tail_seconds=args.tail_seconds,
@@ -2135,9 +2123,7 @@ def _resolve_bootstrap_port(
     """
     if explicit_port:
         return explicit_port
-    from serial.tools import list_ports as _list_ports  # noqa: PLC0415
-
-    ports = sorted(_list_ports.comports(), key=lambda port: port.device)
+    ports = sorted(list_ports.comports(), key=lambda port: port.device)
     if not ports:
         print(
             "bootstrap: no serial ports detected.  "
@@ -2408,9 +2394,6 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     diffability; ``--repr`` switches to ``repr()`` for cases where
     the raw Python types matter (e.g. seeing ``bytes`` vs ``str``).
     """
-    from chumicro_workspace.deploy_source import find_project_config  # noqa: PLC0415
-    from chumicro_workspace.pipeline import compose_runtime_config  # noqa: PLC0415
-
     workspace = _resolve_workspace(args)
     project_dir = workspace.project_dir(_resolve_project_name(workspace, args.project))
     if not project_dir.is_dir():
@@ -2429,7 +2412,6 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     if args.repr:
         print(repr(resolved))
     else:
-        import json  # noqa: PLC0415
         print(json.dumps(resolved, indent=2, sort_keys=True, default=repr))
     return 0
 
@@ -2447,17 +2429,6 @@ def _cmd_config_validate(args: argparse.Namespace) -> int:
     that surfaces missing required keys with the exact dotted name
     the runtime accessor will request.
     """
-    from chumicro_workspace.config_manifest import (  # noqa: PLC0415
-        ConfigManifestError,
-        aggregate_manifests,
-        find_library_roots,
-        read_manifest,
-        validate_runtime_config,
-    )
-    from chumicro_workspace.deploy_source import find_project_config  # noqa: PLC0415
-    from chumicro_workspace.import_graph import build_search_paths  # noqa: PLC0415
-    from chumicro_workspace.pipeline import compose_runtime_config  # noqa: PLC0415
-
     workspace = _resolve_workspace(args)
     project_names = (
         list(args.projects) if args.projects else workspace.list_projects()
@@ -2754,7 +2725,6 @@ def _cmd_install_firmware(args: argparse.Namespace) -> int:
 
     flash_fn = args._env.flash_firmware_fn
     if flash_fn is None:
-        from chumicro_deploy import flash_firmware  # noqa: PLC0415
         flash_fn = flash_firmware
 
     flash_fn(
@@ -2861,15 +2831,6 @@ def _cmd_install_libraries(args: argparse.Namespace) -> int:
         )
         return 1
 
-    from chumicro_workspace.install_libraries import (  # noqa: PLC0415
-        EXPERIMENTAL_BUNDLE_REPO,
-        STABLE_BUNDLE_REPO,
-        build_circup_command,
-        build_mip_commands,
-        discover_chumicro_imports,
-        import_name_to_package,
-    )
-
     imports = discover_chumicro_imports(project_dir)
     if not imports:
         print(
@@ -2950,8 +2911,6 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
     confirm).
     """
     workspace = _resolve_workspace(args)
-    from chumicro_deploy import Device, probe_device  # noqa: PLC0415
-
     if args.runtime is None:
         inference = probe_with_runtime_inference(args.address)
         if inference.runtime is None or inference.info is None:
@@ -2969,7 +2928,7 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
     else:
         probe_device_obj = Device(transport=args.runtime, address=args.address)
         try:
-            info = probe_device(probe_device_obj)
+            info = chumicro_deploy.probe_device(probe_device_obj)
         except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
             _emit_probe_failure(
                 "add-device",
