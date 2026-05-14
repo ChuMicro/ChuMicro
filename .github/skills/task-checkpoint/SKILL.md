@@ -50,7 +50,7 @@ If nothing lifts, fine — many sessions are routine. But **default to lifting o
 `next-up.md` is the agent-managed work queue and the single source of truth for what's in flight, queued, blocked, and recently shipped. Every checkpoint touches it:
 
 - **`## Now`** — update so it reflects what just shipped (move the closed item to `## Done`) and what (if anything) is now in flight.
-- **`## Done (recent)`** — add a one-line pointer for the unit of work just completed: `**Title** (YYYY-MM-DD, commit `<short>`) — terse summary + workstream / archive link if applicable.` Drop the oldest entry if the section is at its 25-entry cap (CHU011 will fail otherwise).
+- **`## Done (recent)`** — add a pointer for the unit of work just completed: `**Title** (YYYY-MM-DD, commit `<short>`) — terse summary + workstream / archive link if applicable.` Aim for under ~500 chars; detail lives in the commit message and workstream doc. Drop the oldest entry if the section is at its 5-entry cap (CHU011 will fail otherwise).
 - **`## Next` / `## Investigations`** — add follow-ups discovered during the work; mark check-boxes for items that just shipped and move them to `## Done`.
 
 Each top-level bullet stays ≤5 bullet markers (lead + sub-bullets). If an entry needs more, promote to `plans/workstreams/<slug>.md` and link from a one-line pointer here.

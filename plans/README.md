@@ -21,7 +21,7 @@ Project knowledge base — decisions, roadmap, and active work.
 
 ## Rules
 
-- **`next-up.md` is the working queue and the front door.**  Each top-level bullet ≤5 bullet markers; promote to `workstreams/<name>.md` when bigger (CHU011).  `## Done (recent)` ≤25 entries — drop the oldest when adding a new one.  Move checked-off items to Done in the same edit.  The Done log is a one-line pointer log, not a changelog — verbose detail belongs in commit messages or workstream docs.
+- **`next-up.md` is the working queue and the front door.**  Each top-level bullet ≤5 bullet markers; promote to `workstreams/<name>.md` when bigger (CHU011).  `## Done (recent)` ≤5 entries — drop the oldest when adding a new one.  Move checked-off items to Done in the same edit.  Each Done entry: subject + commit hashes + headline result + workstream pointer; aim for under ~500 chars.  Verbose detail belongs in commit messages or workstream docs.
 - **Decisions are append-only.**  Record a new decision when tradeoffs matter or when the reasoning would otherwise have to be rediscovered.  Use the format in `decisions/README.md`.  Decisions can start as `proposed` and be promoted to `accepted` after review.
 - **Open questions are low-pressure.**  Add freely, resolve when the answer becomes clear.  Promote to a decision when the answer involves tradeoffs.
 - **Patterns are prescriptive.**  They show *how* to implement correctly.  Link to the decision that explains *why*.
