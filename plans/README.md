@@ -54,7 +54,7 @@ Use these states consistently in planning documents:
 | **What's unresolved** — open questions that aren't blocking | `plans/open-questions.md` |
 | **How to contribute as a human** — setup, workflow, per-IDE setup, PR process, release process, new library, new workbench package | [`docs/contributing/`](../docs/contributing/) |
 | **How to contribute as an agent** — workspace rules, skills table, context recovery, non-negotiable rules | [`AGENTS.md`](../AGENTS.md) |
-| **Agent procedural scripts** — step-by-step procedures for common tasks (commit, checkpoint, debug-test-failure, etc.) | [`.github/skills/`](../.github/skills/) |
+| **Agent procedural scripts** — step-by-step procedures for common tasks (commit, checkpoint, audits, etc.) | [`.github/skills/`](../.github/skills/) |
 | **Operational recovery / paste-this-command troubleshooting** when something broke | [`docs/troubleshooting/`](../docs/troubleshooting/) |
 | **Project overview for consumers** — what ChuMicro is, how to install | [`README.md`](../README.md) |
 | **Human entry point** | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |

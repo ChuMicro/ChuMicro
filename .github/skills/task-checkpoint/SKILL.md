@@ -25,7 +25,7 @@ Scan the output. Ask yourself:
 python scripts/run.py preflight --coverage-threshold 94 2>&1 | tail -5
 ```
 
-Must show: `Preflight passed`. If it fails because of your work, fix it before committing. Use the `debug-test-failure` skill if tests fail.
+Must show: `Preflight passed`. If it fails because of your work, fix it before committing.
 
 ## 3. Compress durable lessons before committing
 
