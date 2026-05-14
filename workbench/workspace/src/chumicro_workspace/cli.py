@@ -153,7 +153,7 @@ from chumicro_workspace.workspace import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
-    from chumicro_deploy import DeviceImplementation
+    from chumicro_deploy import DeviceImplementation, DeviceInfo
 
 
 # ---------------------------------------------------------------------------
@@ -823,6 +823,24 @@ def _emit_probe_failure(
         )
     for line in diagnosis.next_steps:
         print(f"  {line}", file=sys.stderr)
+
+
+def _hardware_from_probe_info(info: DeviceInfo) -> dict[str, str] | None:
+    """Build the ``hardware:`` dict for a fresh devices.yml entry from *info*.
+
+    Picks the three hardware-once fields the probe knows about — uid,
+    machine, board_id — and returns ``None`` (not an empty dict) when
+    none are populated so :func:`chumicro_deploy.add_device`'s
+    "no hardware section" branch fires cleanly.
+    """
+    hardware: dict[str, str] = {}
+    if info.uid:
+        hardware["uid"] = info.uid
+    if info.implementation and info.implementation.machine:
+        hardware["machine"] = info.implementation.machine
+    if info.board_id:
+        hardware["board_id"] = info.board_id
+    return hardware or None
 
 
 def _emit_failure_hints(deploy_result: Any) -> None:
@@ -2359,20 +2377,13 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
 
     # 5. Register.
     data = load_devices(workspace.devices_yaml)
-    hardware: dict[str, str] = {}
-    if info.uid:
-        hardware["uid"] = info.uid
-    if implementation.machine:
-        hardware["machine"] = implementation.machine
-    if info.board_id:
-        hardware["board_id"] = info.board_id
     try:
         add_device(
             data,
             device_id=device_id,
             runtime=implementation.name,
             address=port,
-            hardware=hardware or None,
+            hardware=_hardware_from_probe_info(info),
             firmware_version=implementation.version or None,
         )
     except DeviceAlreadyExistsError:
@@ -3069,13 +3080,7 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
     support = check_firmware_supported(info.implementation)
 
     data = load_devices(workspace.devices_yaml)
-    hardware: dict[str, str] = {}
-    if info.uid:
-        hardware["uid"] = info.uid
-    if info.implementation.machine:
-        hardware["machine"] = info.implementation.machine
-    if info.board_id:
-        hardware["board_id"] = info.board_id
+    hardware = _hardware_from_probe_info(info)
 
     # When the user didn't supply a positional id, derive one from the
     # probe's machine + runtime.  Suggested-id collisions resolve via
@@ -3095,7 +3100,7 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
             device_id=args.id,
             runtime=info.implementation.name,
             address=args.address,
-            hardware=hardware or None,
+            hardware=hardware,
             description=args.description,
             firmware_version=firmware_version or None,
         )
@@ -3114,7 +3119,7 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
         if firmware_version:
             update_device_firmware_version(data, args.id, firmware_version)
         try:
-            update_device_hardware(data, args.id, hardware, force=True)
+            update_device_hardware(data, args.id, hardware or {}, force=True)
         except HardwareOverwriteError as exception:
             print(f"add-device: {exception}", file=sys.stderr)
             return 1
