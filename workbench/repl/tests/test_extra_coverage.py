@@ -26,8 +26,8 @@ from chumicro_repl import (
     interactive,
     tail,
 )
-from chumicro_repl.framing import Utf8StreamDecoder
 from chumicro_repl._serial import default_port_factory
+from chumicro_repl.framing import Utf8StreamDecoder
 from chumicro_repl.testing import FakeKeyboard, FakeSerialPort, FakeTime
 
 
