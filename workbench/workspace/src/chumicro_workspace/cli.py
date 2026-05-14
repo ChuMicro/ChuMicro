@@ -4158,7 +4158,7 @@ _DEFAULT_ENV = CliEnv()
 def main(
     argv: Sequence[str] | None = None,
     *,
-    env: CliEnv | None = None,
+    env: CliEnv | None = None,  # noqa: CHU001 — matches subprocess.run(env=...) convention
 ) -> int:
     """Parse *argv* and dispatch to the selected command.
 
