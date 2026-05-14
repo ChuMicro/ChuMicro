@@ -207,7 +207,7 @@ The mono-repo itself has workspace shape (`workspace.yml` + `devices.yml` at roo
 
 ## Skills
 
-Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/) (also reachable at `.claude/skills/` via symlink). The session-start reminder lists every available skill with a one-line trigger — read the matching `SKILL.md` body before performing that task. `end-of-session` is human-only; agents use `task-checkpoint`.
+Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/) (also reachable at `.claude/skills/` via symlink). The session-start reminder lists every available skill with a one-line trigger — read the matching `SKILL.md` body before performing that task. After each unit of work, agents run `task-checkpoint`.
 
 ## File routing
 

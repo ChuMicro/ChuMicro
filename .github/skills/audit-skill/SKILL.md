@@ -11,7 +11,7 @@ Audit one SKILL.md file under `.github/skills/<name>/` (or a related set — e.g
 
 ## Scope
 
-`.github/skills/<name>/SKILL.md` files (also reachable at `.claude/skills/<name>/SKILL.md` via symlink — same file).  Out of scope: human-only docs (`end-of-session`), API-reference skills generated from code.
+`.github/skills/<name>/SKILL.md` files (also reachable at `.claude/skills/<name>/SKILL.md` via symlink — same file).  Out of scope: API-reference skills generated from code.
 
 **Arguments.**
 
@@ -310,7 +310,6 @@ LOW-CONFIDENCE (questions for the user):
 
 ## Defer / out of scope
 
-* **`end-of-session`** — human-only checklist; skill exists for documentation, not agent invocation.  Out of scope for `audit-skill`.
 * **`README` files inside `.github/skills/`** — index docs, not skills.  Use `audit-docs` if a README needs review.
 * **Plugin-namespaced skills (`plugin:skill`)** — out of project tree; can't be edited from here.
 * **Anthropic-recommended frontmatter fields not yet in use** (`when_to_use`, `argument-hint`, `disable-model-invocation`, etc.) — flag as a *low-confidence question*, not a finding.  Project convention may not adopt every field; ask before adding.

@@ -498,6 +498,23 @@ consistent API.  Keep function names aligned with CPython's stdlib.
 
 Related: `libraries/compat/`, Decision 0007.
 
+## Cross-runtime feature gotchas (`test-micropython` / `test-circuitpython` failures)
+
+When unix-port tests fail with `SyntaxError`, `NameError`, or `ImportError` on
+code that passed CPython tests, the usual suspects:
+
+- **CPython-only stdlib** — `typing`, `__future__`, much of `functools`.
+  Library code shouldn't import these (Decision 0021); tests sometimes do.
+- **Builtin gaps** — `TimeoutError` isn't a MicroPython 1.28 builtin
+  (see [Missing builtins on MicroPython 1.28](#missing-builtins-on-micropython-128)
+  below for the full pattern).
+- **f-string complexity** — nested expressions and format-spec expressions
+  trip MP; basic `f"{name}"` is fine.
+- **Newer syntax** — `match`/`case` and walrus `:=` need recent MP/CP; grep
+  `.tools/micropython/` and `.tools/circuitpython/` to verify before using.
+
+Related: Decision 0003, Decision 0016, Decision 0049.
+
 ## Missing builtins on MicroPython 1.28
 
 MicroPython 1.28 doesn't ship every CPython exception builtin.  In
