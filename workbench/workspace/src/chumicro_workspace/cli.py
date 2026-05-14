@@ -85,6 +85,7 @@ from chumicro_workspace.health import (
 from chumicro_workspace.import_graph import project_import_graph_source
 from chumicro_workspace.onboarding import (
     BoardState,
+    RuntimeInferenceResult,
     detect_board_state,
     probe_with_runtime_inference,
 )
@@ -726,6 +727,62 @@ def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
     return InteractiveDeployer(deployer)
 
 
+def _emit_probe_failure(
+    command_name: str,
+    *,
+    address: str,
+    transport: str = "micropython",
+    uf2_search_paths: list[Path] | None,
+    auto_detect_inference: RuntimeInferenceResult | None = None,
+    probe_exception: BaseException | None = None,
+) -> None:
+    """Emit the standard probe-failure block for *command_name* to stderr.
+
+    Header line states the cause; the diagnosis from
+    :func:`~chumicro_workspace.onboarding.detect_board_state` follows
+    as indented next-step hints.  Pass exactly one of
+    *auto_detect_inference* / *probe_exception* — the former drives
+    the "auto-detect failed (TypeName: msg)." / "no runtime returned
+    a probe marker." text; the latter drives the
+    "probe failed (TypeName: msg)." text.
+
+    The diagnostic probe runs under *transport* (defaults to
+    ``"micropython"``); on a probe-already-failed path the transport
+    choice rarely matters — :func:`detect_board_state` falls back to
+    UF2 + error-string heuristics — but the chosen runtime is honored.
+    """
+    from chumicro_deploy import Device  # noqa: PLC0415
+
+    diagnosis = detect_board_state(
+        Device(transport=transport, address=address),
+        uf2_search_paths=uf2_search_paths,
+    )
+    if probe_exception is not None:
+        print(
+            f"{command_name}: probe failed "
+            f"({type(probe_exception).__name__}: {probe_exception}).",
+            file=sys.stderr,
+        )
+    elif (
+        auto_detect_inference is not None
+        and auto_detect_inference.last_exception is not None
+    ):
+        exception = auto_detect_inference.last_exception
+        print(
+            f"{command_name}: auto-detect failed "
+            f"({type(exception).__name__}: {exception}).",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"{command_name}: auto-detect failed — "
+            "no runtime returned a probe marker.",
+            file=sys.stderr,
+        )
+    for line in diagnosis.next_steps:
+        print(f"  {line}", file=sys.stderr)
+
+
 def _emit_failure_hints(deploy_result: Any) -> None:
     """Print the traceback + matching app-level recovery hints to stderr.
 
@@ -770,7 +827,7 @@ def _format_size(num_bytes: int) -> str:
     return f"{num_bytes / mib:.1f} MiB"
 
 
-def _classify_dry_run_path(path: str, content: bytes) -> str:  # noqa: ARG001
+def _classify_dry_run_path(path: str) -> str:
     """Return a one-word category for *path* in the deploy file map.
 
     Drives the right-column annotation of ``deploy --dry-run`` so
@@ -834,7 +891,7 @@ def _render_dry_run_summary(
     for path in sorted_paths:
         content = files[path]
         size = _format_size(len(content)).rjust(size_width)
-        category = _classify_dry_run_path(path, content)
+        category = _classify_dry_run_path(path)
         lines.append(f"  {path.ljust(path_width)}  {size}  {category}")
     return "\n".join(lines)
 
@@ -2193,27 +2250,12 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
     print(f"bootstrap: probing {port} ...")
     inference = probe_with_runtime_inference(port)
     if inference.runtime is None or inference.info is None:
-        from chumicro_deploy import Device  # noqa: PLC0415
-
-        diagnosis = detect_board_state(
-            Device(transport="micropython", address=port),
+        _emit_probe_failure(
+            "bootstrap",
+            address=port,
             uf2_search_paths=args._env.uf2_search_paths,
+            auto_detect_inference=inference,
         )
-        if inference.last_exception is not None:
-            exception = inference.last_exception
-            print(
-                f"bootstrap: auto-detect failed "
-                f"({type(exception).__name__}: {exception}).",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                "bootstrap: auto-detect failed — "
-                "no runtime returned a probe marker.",
-                file=sys.stderr,
-            )
-        for line in diagnosis.next_steps:
-            print(f"  {line}", file=sys.stderr)
         return 1
 
     info = inference.info
@@ -2943,30 +2985,12 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
     if args.runtime is None:
         inference = probe_with_runtime_inference(args.address)
         if inference.runtime is None or inference.info is None:
-            # Fall through to the existing diagnose-and-print-error
-            # path with whichever transport candidate was last tried.
-            probe_device_obj = Device(
-                transport="micropython", address=args.address,
-            )
-            diagnosis = detect_board_state(
-                probe_device_obj,
+            _emit_probe_failure(
+                "add-device",
+                address=args.address,
                 uf2_search_paths=args._env.uf2_search_paths,
+                auto_detect_inference=inference,
             )
-            if inference.last_exception is not None:
-                exception = inference.last_exception
-                print(
-                    f"add-device: auto-detect failed "
-                    f"({type(exception).__name__}: {exception}).",
-                    file=sys.stderr,
-                )
-            else:
-                print(
-                    "add-device: auto-detect failed — "
-                    "no runtime returned a probe marker.",
-                    file=sys.stderr,
-                )
-            for line in diagnosis.next_steps:
-                print(f"  {line}", file=sys.stderr)
             return 1
         info = inference.info
         print(
@@ -2977,17 +3001,13 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
         try:
             info = probe_device(probe_device_obj)
         except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
-            diagnosis = detect_board_state(
-                probe_device_obj,
+            _emit_probe_failure(
+                "add-device",
+                address=args.address,
+                transport=args.runtime,
                 uf2_search_paths=args._env.uf2_search_paths,
+                probe_exception=exception,
             )
-            print(
-                f"add-device: probe failed "
-                f"({type(exception).__name__}: {exception}).",
-                file=sys.stderr,
-            )
-            for line in diagnosis.next_steps:
-                print(f"  {line}", file=sys.stderr)
             return 1
         if info.implementation is None:
             diagnosis = detect_board_state(
