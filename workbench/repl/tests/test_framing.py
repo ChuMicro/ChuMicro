@@ -103,14 +103,6 @@ class TestMixedAsciiAndMultibyte:
             decoded.append(decoder.decode(full[offset:offset + 1]))
         assert "".join(decoded) == "ok 🙂 done\n"
 
-    def test_pending_bytes_property_reports_buffered_count(self):
-        decoder = Utf8StreamDecoder()
-        decoder.decode(b"\xf0\x9f")
-        assert decoder.pending_bytes == 2
-        decoder.decode(b"\x99\x82")
-        assert decoder.pending_bytes == 0
-
-
 class TestMalformedLeadByte:
     """A leading byte that does not match any UTF-8 length pattern is flushed."""
 

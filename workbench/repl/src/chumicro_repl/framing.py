@@ -126,8 +126,3 @@ class Utf8StreamDecoder:
         leftover = bytes(self._buffer)
         self._buffer.clear()
         return leftover.decode("utf-8", errors="replace")
-
-    @property
-    def pending_bytes(self) -> int:
-        """Number of buffered bytes waiting on the next chunk."""
-        return len(self._buffer)
