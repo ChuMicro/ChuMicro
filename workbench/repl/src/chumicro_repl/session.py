@@ -43,6 +43,7 @@ from ._serial import (
     default_port_factory,
     resolve_address,
 )
+from .framing import Utf8StreamDecoder
 
 if TYPE_CHECKING:
     from chumicro_deploy import Device
@@ -68,6 +69,14 @@ _ENTER_DELAY = 0.1
 #: :meth:`_read_until_bytes`.  Kept short enough that short-timeout
 #: probes feel responsive without pegging a CPU core.
 _POLL_INTERVAL = 0.005
+
+#: Char-count lookback in :meth:`ReplSession.read_until`'s
+#: incremental rescan.  Each iteration searches from
+#: ``last_scanned - this`` so a regex pattern straddling the
+#: previous / current decode boundary still matches without
+#: forcing a re-scan from offset 0 on every poll.  256 is
+#: comfortably larger than any realistic REPL marker.
+_READ_UNTIL_LOOKBACK = 256
 
 
 class ReplSessionError(Exception):
@@ -349,35 +358,46 @@ class ReplSession:
             else re.compile(pattern)
         )
         deadline = self._time.monotonic() + timeout
-        accumulated = bytearray(self._read_remainder)
+        # Stream-decode incrementally so a long no-match run doesn't
+        # re-decode the full accumulated buffer on every iteration.
+        # ``_read_remainder`` carries bytes past a previous match
+        # forward; feeding them through the decoder handles a
+        # codepoint that was split at that boundary.
+        decoder = Utf8StreamDecoder()
+        accumulated = decoder.decode(bytes(self._read_remainder))
         self._read_remainder.clear()
+        # Re-scan baseline.  Each loop searches from
+        # ``last_scanned - _READ_UNTIL_LOOKBACK`` so a pattern
+        # straddling the previous / current decode boundary still
+        # matches, but we never re-scan the full accumulated text
+        # from offset 0.  256 chars comfortably covers any realistic
+        # REPL marker without unbounding the search cost.
+        last_scanned = 0
         while True:
-            decoded = accumulated.decode("utf-8", errors="replace")
-            match = compiled.search(decoded)
+            match = compiled.search(
+                accumulated, max(0, last_scanned - _READ_UNTIL_LOOKBACK),
+            )
             if match is not None:
-                # Save bytes past the match for the next read.  The
-                # decoded slice is in characters, not bytes — but
-                # since we always decode the *entire* accumulated
-                # bytearray, the encode round-trip recovers the
-                # right byte boundary.
-                consumed_text = decoded[:match.end()]
-                consumed_bytes = consumed_text.encode("utf-8")
-                self._read_remainder.extend(accumulated[len(consumed_bytes):])
+                consumed_text = accumulated[:match.end()]
+                tail_text = accumulated[match.end():]
+                if tail_text:
+                    self._read_remainder.extend(tail_text.encode("utf-8"))
                 return consumed_text
+            last_scanned = len(accumulated)
             try:
                 if port.in_waiting:
-                    accumulated.extend(port.read(port.in_waiting))
-                    continue
-                new_byte = port.read(1)
+                    chunk = port.read(port.in_waiting)
+                else:
+                    chunk = port.read(1)
             except OSError as disconnect_error:
                 raise ReplSessionDisconnected(disconnect_error) from disconnect_error
-            if new_byte:
-                accumulated.extend(new_byte)
+            if chunk:
+                accumulated += decoder.decode(chunk)
                 continue
             if self._time.monotonic() >= deadline:
                 raise ReplSessionError(
                     f"read_until({pattern!r}) timed out after "
-                    f"{timeout:.3f}s; captured {decoded!r}"
+                    f"{timeout:.3f}s; captured {accumulated!r}"
                 )
             self._time.sleep(_POLL_INTERVAL)
 
