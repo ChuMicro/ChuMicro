@@ -169,7 +169,7 @@ def update(
 
 
 def materialize_workspace_templates(workspace_root: Path) -> ApplyReport:
-    """Materialise the canonical first-write text for ``devices.yml`` /
+    """Materialize the canonical first-write text for ``devices.yml`` /
     ``workspace.yml`` / ``secrets.toml`` into *workspace_root*.
 
     Existing files are never overwritten.  Idempotent — re-running on

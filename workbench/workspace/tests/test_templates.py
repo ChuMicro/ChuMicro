@@ -35,7 +35,7 @@ class TestReadWorkspaceYmlTemplate:
         assert "environments" in content
 
     def test_blocks_ship_commented_out(self) -> None:
-        # workspace.yml is gitignored.  A fresh-materialised workspace
+        # workspace.yml is gitignored.  A fresh-materialized workspace
         # has no live values so contributors opt in deliberately.
         content = read_workspace_yml_template()
         for marker in ("# library_sources:", "# deploy_targets:", "# quality:"):
@@ -92,7 +92,7 @@ class TestReadDevicesYmlTemplate:
         assert "PROBED-ALWAYS" in content
 
     def test_empty_devices_registry(self) -> None:
-        # Fresh-materialised registry must parse to an empty list so
+        # Fresh-materialized registry must parse to an empty list so
         # ``add-device`` can append without a hand-edit.
         content = read_devices_yml_template()
         assert "devices: []" in content

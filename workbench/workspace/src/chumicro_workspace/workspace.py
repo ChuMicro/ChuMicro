@@ -13,7 +13,7 @@ and so on.  A directory is classified by walking its contents:
 * **project** — leaf containing an entry-point file
   (``app.py`` / ``code.py`` / ``main.py``).  Deployable.
 * **namespace** — recursively contains at least one project (or another
-  namespace).  Pure organisational structure; not deployed itself.
+  namespace).  Pure organizational structure; not deployed itself.
 * **supporting** — neither.  Silently ignored — lets users park
   ``docs/``, design notes, etc. anywhere in the tree without flagging
   them.
@@ -143,7 +143,7 @@ class WorkspaceLayout:
     def secrets_toml(self) -> Path:
         """Path to ``<root>/secrets.toml`` — gitignored device-bound config.
 
-        Materialised on first ``setup`` from the canonical template
+        Materialized on first ``setup`` from the canonical template
         (:func:`read_secrets_toml_template`).  Carries wifi credentials,
         MQTT broker auth, and any other workspace-wide default that
         flows onto a board through ``runtime_config.msgpack``.
@@ -201,11 +201,11 @@ class WorkspaceLayout:
 
         *name* may be a single segment (``"bedroom_sensor"``), slash-form
         (``"upstairs/bedroom_sensor"``), or dotted (``"upstairs.bedroom_sensor"``)
-        — dotted forms are normalised to slash so the ``Path`` join lands
+        — dotted forms are normalized to slash so the ``Path`` join lands
         in the right directory.
         """
-        normalised = name.replace(".", "/")
-        return self.projects_dir / normalised
+        normalized = name.replace(".", "/")
+        return self.projects_dir / normalized
 
     def list_projects(self) -> list[str]:
         """Return slash-form paths for every project under ``projects/``, sorted.

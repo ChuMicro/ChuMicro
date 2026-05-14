@@ -1,0 +1,14 @@
+# Placeholder values to satisfy the workspace's aggregated
+# required-keys manifest.  The fixture's app.py imports
+# chumicro_kvstore only and reads no config keys, but every library
+# on the import-graph search path contributes required keys and the
+# validator runs against the merged config regardless.  These are
+# never read at runtime.
+
+[wifi]
+ssid = "fixture-ssid"
+password = "fixture-password"
+
+[mqtt.broker]
+host = "fixture-broker"
+port = 1883

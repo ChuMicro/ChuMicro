@@ -1,7 +1,7 @@
 """Tests for ``chumicro_workspace.template_drift``.
 
 Surfaces fields the canonical workbench-owned template has gained
-since the user materialised their ``workspace.yml`` / ``secrets.toml``.
+since the user materialized their ``workspace.yml`` / ``secrets.toml``.
 The result feeds :func:`chumicro_workspace.additive_apply.additive_reapply`,
 which lands the missing keys in place.
 
@@ -52,7 +52,7 @@ class TestCollectMissingTemplatePaths:
     """Pure diff semantics, against ``workspace.yml``."""
 
     def test_no_user_file_returns_empty(self, tmp_path: Path) -> None:
-        # Pre-materialisation: the user hasn't run setup yet, so there's
+        # Pre-materialization: the user hasn't run setup yet, so there's
         # nothing to drift against.  Empty list is the silent path.
         assert collect_missing_template_paths(workspace_root=tmp_path) == []
 
@@ -68,7 +68,7 @@ class TestCollectMissingTemplatePaths:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Template gained a whole new top-level section since the user
-        # materialised — that's the canonical case the diff catches.
+        # materialized — that's the canonical case the diff catches.
         template = (
             "defaults:\n  wifi:\n    ssid: ap\n"
             "quality:\n  coverage_threshold: 85\n"

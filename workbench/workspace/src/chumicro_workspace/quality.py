@@ -162,7 +162,7 @@ def load_quality_config(workspace_yaml: Path) -> QualityConfig:
     Missing file or missing ``quality`` block → returns
     :class:`QualityConfig` with library-default values (lint
     enabled, no coverage gate).  Workspaces that haven't opted
-    in get the no-op behaviour.
+    in get the no-op behavior.
 
     Raises :class:`WorkspaceConfigError` on shape violations so the
     user sees the precise field that's wrong rather than a vague

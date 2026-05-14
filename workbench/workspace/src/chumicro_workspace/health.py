@@ -114,7 +114,7 @@ def check_workspace_yaml(workspace: WorkspaceLayout) -> HealthFinding:
 def check_secrets_toml(workspace: WorkspaceLayout) -> HealthFinding:
     """Verify ``secrets.toml`` exists and parses cleanly.
 
-    ``secrets.toml`` is gitignored and materialised on first
+    ``secrets.toml`` is gitignored and materialized on first
     ``setup`` — its absence on a fresh clone is a setup-not-yet-run
     state rather than a configuration error.
     """
@@ -124,7 +124,7 @@ def check_secrets_toml(workspace: WorkspaceLayout) -> HealthFinding:
             level=HealthLevel.WARN,
             message="not present",
             hint=(
-                "run `chumicro-workspace setup` to materialise the "
+                "run `chumicro-workspace setup` to materialize the "
                 "starter, then edit it with your wifi / broker credentials."
             ),
         )

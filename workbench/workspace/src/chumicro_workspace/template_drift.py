@@ -1,4 +1,4 @@
-"""Compare materialised user files to their canonical templates.
+"""Compare materialized user files to their canonical templates.
 
 Walks the parsed file and surfaces dotted-path keys present in the
 template but absent from the user's file.  Used by
@@ -31,11 +31,11 @@ def collect_missing_template_paths(
     filename: str = "workspace.yml",
 ) -> list[str]:
     """Return dotted-path keys present in the canonical template but
-    absent from the user's materialised *filename*.
+    absent from the user's materialized *filename*.
 
     Returns an empty list when:
 
-    * The user's file doesn't exist (still un-materialised — the
+    * The user's file doesn't exist (still un-materialized — the
       :func:`materialize_workspace_templates` call earlier in ``setup``
       will land it on this run; nothing to drift against yet).
     * Either parse fails — fail-soft so a bad file never breaks

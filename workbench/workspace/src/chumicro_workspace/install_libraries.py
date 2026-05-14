@@ -47,7 +47,7 @@ STABLE_BUNDLE_REPO = "ChuMicro-Bundle"
 #: Pre-release bundle repository for chumicro experimental releases.
 EXPERIMENTAL_BUNDLE_REPO = "ChuMicro-Bundle-Experimental"
 
-#: GitHub organisation that owns both bundle repos.  Used in
+#: GitHub organization that owns both bundle repos.  Used in
 #: ``circup bundle-add <org>/<repo>`` and ``mpremote mip install
 #: github:<org>/<repo>/<package>`` URLs.
 DEFAULT_GITHUB_ORG = "ChuMicro"
@@ -157,7 +157,7 @@ def build_mip_commands(
         packages: bundle package names — e.g. ``"chumicro-kvstore"``.
         bundle_repo: ``ChuMicro-Bundle`` (stable, default) or
             ``ChuMicro-Bundle-Experimental``.
-        org: GitHub organisation owning the bundle repo.
+        org: GitHub organization owning the bundle repo.
         address: optional serial address for ``mpremote connect``.
             Pass when multiple boards are connected so mpremote
             knows which one to install onto.

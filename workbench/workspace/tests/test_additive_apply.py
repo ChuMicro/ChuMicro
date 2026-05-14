@@ -39,7 +39,7 @@ class TestAdditiveReapplyToml:
     def test_no_op_when_user_file_absent(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        # Pre-materialisation: nothing to drift against.
+        # Pre-materialization: nothing to drift against.
         _patch_secrets_toml_template(monkeypatch, '[wifi]\nssid = "x"\n')
         result = additive_reapply(tmp_path)
         assert "secrets.toml" not in result
@@ -204,7 +204,7 @@ class TestPrivateHelpers:
             missing_paths=["nope.gone"],
         )
         # Round-trip leaves the user file effectively unchanged
-        # (tomlkit may normalise whitespace; just confirm content stable).
+        # (tomlkit may normalize whitespace; just confirm content stable).
         import tomllib  # noqa: PLC0415
         assert tomllib.loads(result) == {"wifi": {"ssid": "x"}}
 

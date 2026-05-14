@@ -171,7 +171,7 @@ class TestRealMonoRepoManifests:
 
 
 class TestAggregateManifests:
-    """Union behaviour across multiple libraries' manifests."""
+    """Union behavior across multiple libraries' manifests."""
 
     def test_empty_input_returns_none(self) -> None:
         assert aggregate_manifests([]) is None
@@ -260,7 +260,7 @@ class TestAggregateManifests:
 
 
 class TestValidateRuntimeConfig:
-    """Validator behaviour against a flat config dict."""
+    """Validator behavior against a flat config dict."""
 
     def test_passes_when_required_keys_present(self) -> None:
         manifest = ConfigManifest(

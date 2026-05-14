@@ -52,7 +52,7 @@ class TestWorkspaceLayout:
         )
 
     def test_project_dir_accepts_dotted_form(self, tmp_path: Path) -> None:
-        """Dotted names round-trip through ``Path`` after a ``.`` → ``/`` normalise."""
+        """Dotted names round-trip through ``Path`` after a ``.`` → ``/`` normalize."""
         layout = WorkspaceLayout(root=_seed_root(tmp_path))
         assert layout.project_dir("upstairs.bedroom_sensor") == (
             tmp_path / "projects" / "upstairs" / "bedroom_sensor"

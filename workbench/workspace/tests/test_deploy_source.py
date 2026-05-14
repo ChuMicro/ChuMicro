@@ -188,7 +188,7 @@ class TestWithRuntimeConfig:
         self, tmp_path: Path,
     ) -> None:
         # Default ``library_roots=None`` keeps the pre-Phase-2
-        # behaviour: no manifest reads, no validation.  Existing
+        # behavior: no manifest reads, no validation.  Existing
         # callers that don't yet plumb the import-graph library
         # list through stay unaffected.
         secrets_toml, project_config = _seed_paths(tmp_path)
