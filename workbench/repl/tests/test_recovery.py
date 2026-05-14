@@ -105,14 +105,6 @@ class TestRecoveryPlans:
         assert plan.headline
         assert plan.fix_steps
         assert all(isinstance(step, str) for step in plan.fix_steps)
-        assert isinstance(plan.retryable, bool)
-
-    def test_all_current_kinds_are_retryable(self):
-        # All current kinds are coachable / recoverable; ``retryable``
-        # is kept on the dataclass for forward compatibility with
-        # any future hard-failure kind we add (matching deploy's shape).
-        for kind in ReplFailureKind:
-            assert recovery_plan_for(kind).retryable is True
 
     def test_port_not_found_plan_mentions_cable_check(self):
         plan = recovery_plan_for(ReplFailureKind.PORT_NOT_FOUND)

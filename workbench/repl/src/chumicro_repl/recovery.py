@@ -201,16 +201,10 @@ class RecoveryPlan:
         fix_steps: Ordered physical actions the user can take.
             Rendered as a bulleted list by
             :class:`InteractiveReplSession`.
-        retryable: ``True`` when retrying after the user takes the
-            fix steps is worth attempting.  All current kinds are
-            retryable; the field is kept for forward-compat with
-            future hard-failure kinds (and to mirror the deploy
-            shape).
     """
 
     headline: str
     fix_steps: tuple[str, ...]
-    retryable: bool
 
 
 _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
@@ -226,7 +220,6 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
             "Tap the board's RESET button and wait 2–3 seconds for "
             "USB re-enumeration.",
         ),
-        retryable=True,
     ),
     ReplFailureKind.PORT_BUSY: RecoveryPlan(
         headline="The serial port is held by another process.",
@@ -239,7 +232,6 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
             "If the port was held by a crashed process, unplug + "
             "replug the board to force the OS to release it.",
         ),
-        retryable=True,
     ),
     ReplFailureKind.PORT_PERMISSION_DENIED: RecoveryPlan(
         headline="You don't have permission to open the serial port.",
@@ -254,7 +246,6 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
             "node is mounted into the container with the right "
             "permissions.",
         ),
-        retryable=True,
     ),
     ReplFailureKind.RAW_REPL_UNRESPONSIVE: RecoveryPlan(
         headline="The board didn't respond to the raw-REPL handshake.",
@@ -272,7 +263,6 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
             "firmware on it, flash one with "
             "`chumicro-deploy flash-firmware` first.",
         ),
-        retryable=True,
     ),
     ReplFailureKind.UNKNOWN: RecoveryPlan(
         headline="The session-start failure didn't match a known kind.",
@@ -283,7 +273,6 @@ _PLANS: dict[ReplFailureKind, RecoveryPlan] = {
             "If the failure repeats, file a chumicro-repl issue "
             "with the exception message and platform details.",
         ),
-        retryable=True,
     ),
 }
 
@@ -379,8 +368,6 @@ def coached_session_start(
                 error=error,
                 plan=plan,
             )
-            if not plan.retryable:
-                raise
             if attempt >= max_attempts:
                 raise
             if not _ask_retry(
