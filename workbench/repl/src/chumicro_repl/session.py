@@ -55,15 +55,14 @@ if TYPE_CHECKING:
 #: number.
 DEFAULT_TIMEOUT = 10.0
 
-#: Grace period after Ctrl-C interrupts before the board is expected
-#: to accept a Ctrl-A.  Matches the CircuitPython transport's
-#: ``_INTERRUPT_DELAY`` so the two packages agree on timing.
-_INTERRUPT_DELAY = 0.1
-
-#: Settling pause after Ctrl-A so the raw-REPL banner is fully emitted
-#: before we read the prompt.  Matches
-#: :data:`chumicro_deploy.circuitpython_transport._ENTER_DELAY`.
-_ENTER_DELAY = 0.1
+#: Pause between handshake steps — after each Ctrl-C to give the
+#: board time to settle, and after Ctrl-A to let the raw-REPL
+#: banner fully emit before we read for the prompt.  Matches the
+#: paired ``_INTERRUPT_DELAY`` / ``_ENTER_DELAY`` in
+#: ``chumicro_deploy.circuitpython_transport``; same value
+#: collapsed to one name here since both pauses serve the same
+#: "give the device a tick" purpose.
+_HANDSHAKE_SETTLE = 0.1
 
 #: Poll interval inside :meth:`ReplSession.read_until` /
 #: :meth:`_read_until_bytes`.  Kept short enough that short-timeout
@@ -415,13 +414,13 @@ class ReplSession:
         try:
             port.reset_input_buffer()
             port.write(CTRL_C)
-            self._time.sleep(_INTERRUPT_DELAY)
+            self._time.sleep(_HANDSHAKE_SETTLE)
             port.write(CTRL_C)
-            self._time.sleep(_INTERRUPT_DELAY)
+            self._time.sleep(_HANDSHAKE_SETTLE)
             port.write(CTRL_A)
         except OSError as disconnect_error:
             raise ReplSessionDisconnected(disconnect_error) from disconnect_error
-        self._time.sleep(_ENTER_DELAY)
+        self._time.sleep(_HANDSHAKE_SETTLE)
         prompt = self._read_until_bytes(
             RAW_REPL_PROMPT, timeout=self._connect_timeout, port=port,
         )
