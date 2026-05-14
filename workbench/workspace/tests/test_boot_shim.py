@@ -11,14 +11,14 @@ board.
 from pathlib import Path
 
 import pytest
-from chumicro_workspace import (
-    RUNTIME_CONFIG_DEVICE_PATH,
+from chumicro_workspace.boot_shim import (
     SHIM_ENTRYPOINT_SOURCE,
     boot_shim_files,
     project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
 )
+from chumicro_workspace.deploy_source import RUNTIME_CONFIG_DEVICE_PATH
 from chumicro_workspace.workspace import WorkspaceLayout
 from msgpack import unpackb
 

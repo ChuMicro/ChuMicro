@@ -1,7 +1,7 @@
 """Tests for the deep per-key merge."""
 
 import pytest
-from chumicro_workspace import merge_configs
+from chumicro_workspace.merge import merge_configs
 
 
 class TestMergeConfigs:
