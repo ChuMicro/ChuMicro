@@ -298,6 +298,106 @@ def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
 # ---------------------------------------------------------------------------
 
 
+def _setup_pip_install_editable(
+    workspace: WorkspaceLayout,
+    subprocess_runner: Callable[..., subprocess.CompletedProcess],
+) -> int:
+    """Run ``pip install -e <workspace.root>`` when a pyproject.toml is present.
+
+    Returns the subprocess return code (``0`` on success, nonzero from pip on
+    failure).  Returns ``0`` and prints a skip note when no pyproject.toml is
+    present — a workspace without one is a runtime-only layout that doesn't
+    declare its own deps.
+    """
+    pyproject = workspace.root / "pyproject.toml"
+    if not pyproject.is_file():
+        print(
+            f"setup: no pyproject.toml at {workspace.root} — "
+            "skipping editable install.",
+        )
+        return 0
+    print(f"setup: installing {workspace.root} (editable)")
+    completed = subprocess_runner(  # noqa: S603 — args fully controlled
+        [sys.executable, "-m", "pip", "install", "-e", str(workspace.root)],
+        check=False,
+    )
+    return completed.returncode
+
+
+def _setup_materialize_templates(workspace: WorkspaceLayout) -> None:
+    """Land the canonical first-write text for the three workspace-root files.
+
+    ``workspace.yml`` / ``secrets.toml`` / ``devices.yml`` — only files
+    that don't already exist are touched.  Print one line per materialised
+    file so the user sees what landed.
+    """
+    template_report = materialize_workspace_templates(workspace.root)
+    materialized_count = template_report.count(ApplyAction.MATERIALIZED)
+    if materialized_count:
+        print(f"setup: materialized {materialized_count} workspace template(s)")
+        for path, action in template_report:
+            if action == ApplyAction.MATERIALIZED:
+                print(f"  {path}")
+
+
+def _setup_sync_chumicro_dev(workspace: WorkspaceLayout) -> None:
+    """When ``chumicro-dev.toml`` points at a sibling chumicro checkout,
+    refresh ``workspace.yml``'s ``library_sources:`` block to match the
+    checkout's ``libraries/<name>/`` set.
+
+    No-op when ``chumicro-dev.toml`` is absent (regular mode), the
+    declared path doesn't exist (warn), or the path exists but has no
+    libraries (warn).  Otherwise rewrites the managed block in place.
+    """
+    chumicro_path = read_chumicro_dev_path(workspace.root)
+    if chumicro_path is None:
+        return
+    if not chumicro_path.is_dir():
+        print(
+            f"setup: warning — chumicro-dev.toml points at "
+            f"{chumicro_path} which doesn't exist; "
+            "skipping library_sources sync.",
+            file=sys.stderr,
+        )
+        return
+    libraries = discover_chumicro_libraries(chumicro_path)
+    if not libraries:
+        print(
+            f"setup: warning — no chumicro libraries found at "
+            f"{chumicro_path}/libraries/; "
+            "skipping library_sources sync.",
+            file=sys.stderr,
+        )
+        return
+    changed = sync_library_sources(workspace.workspace_yaml, libraries)
+    if changed:
+        print(
+            f"setup: synced library_sources for {len(libraries)} "
+            f"chumicro libraries from {chumicro_path}",
+        )
+    else:
+        print(
+            f"setup: library_sources already in sync with {chumicro_path}",
+        )
+
+
+def _setup_additive_reapply(workspace: WorkspaceLayout) -> None:
+    """Append upstream-template keys missing from the user's ``workspace.yml``
+    / ``secrets.toml``, in place, comments preserved.
+
+    Existing values are NEVER touched; only the missing keys land.  The
+    helper prints one line per file that gained keys.
+    """
+    appended = additive_reapply(workspace.root)
+    for filename, paths in appended.items():
+        plural = "key" if len(paths) == 1 else "keys"
+        joined = ", ".join(paths)
+        print(
+            f"setup: appended {len(paths)} {plural} to {filename} "
+            f"from the upstream template: {joined}",
+        )
+
+
 def _cmd_setup(args: argparse.Namespace) -> int:
     """Install workspace dependencies and materialise workspace templates.
 
@@ -321,82 +421,20 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         args.workspace_dir if args.workspace_dir is not None else Path.cwd()
     ).resolve()
     workspace = WorkspaceLayout(root=starting_dir)
-    pyproject = workspace.root / "pyproject.toml"
-    if pyproject.is_file():
-        print(f"setup: installing {workspace.root} (editable)")
-        completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
-            [sys.executable, "-m", "pip", "install", "-e", str(workspace.root)],
-            check=False,
-        )
-        if completed.returncode != 0:
-            return completed.returncode
-    else:
-        print(
-            f"setup: no pyproject.toml at {workspace.root} — "
-            "skipping editable install.",
-        )
-    # Workspace templates — canonical content ships from the workbench
-    # wheel (workspace.yml + secrets.toml) and chumicro_deploy
-    # (devices.yml, schema-co-located).
-    template_report = materialize_workspace_templates(workspace.root)
-    materialized_count = template_report.count(ApplyAction.MATERIALIZED)
-    if materialized_count:
-        print(f"setup: materialized {materialized_count} workspace template(s)")
-        for path, action in template_report:
-            if action == ApplyAction.MATERIALIZED:
-                print(f"  {path}")
 
-    # Gap 3(a): when chumicro-dev.toml points at a sibling chumicro
-    # checkout, sync workspace.yml's ``library_sources:`` block so
-    # ``deploy --import-graph`` (and the ``--boot-shim --import-graph``
-    # composition, gap 5) resolve ``import chumicro_<name>`` against
-    # the local checkout instead of the empty ``packages/`` dir.
-    chumicro_path = read_chumicro_dev_path(workspace.root)
-    if chumicro_path is not None:
-        if not chumicro_path.is_dir():
-            print(
-                f"setup: warning — chumicro-dev.toml points at "
-                f"{chumicro_path} which doesn't exist; "
-                "skipping library_sources sync.",
-                file=sys.stderr,
-            )
-        else:
-            libraries = discover_chumicro_libraries(chumicro_path)
-            if not libraries:
-                print(
-                    f"setup: warning — no chumicro libraries found at "
-                    f"{chumicro_path}/libraries/; "
-                    "skipping library_sources sync.",
-                    file=sys.stderr,
-                )
-            else:
-                changed = sync_library_sources(
-                    workspace.workspace_yaml, libraries,
-                )
-                if changed:
-                    print(
-                        f"setup: synced library_sources for "
-                        f"{len(libraries)} chumicro libraries from "
-                        f"{chumicro_path}",
-                    )
-                else:
-                    print(
-                        "setup: library_sources already in sync with "
-                        f"{chumicro_path}",
-                    )
+    pip_exit_code = _setup_pip_install_editable(
+        workspace, args._env.subprocess_runner,
+    )
+    if pip_exit_code != 0:
+        return pip_exit_code
 
-    # Additive re-apply: append upstream-template keys missing from the
-    # user's workspace.yml / secrets.toml, in place, comments preserved.
-    # Existing edits are NEVER touched; only the missing keys land.
-    appended = additive_reapply(workspace.root)
-    if appended:
-        for filename, paths in appended.items():
-            plural = "key" if len(paths) == 1 else "keys"
-            joined = ", ".join(paths)
-            print(
-                f"setup: appended {len(paths)} {plural} to {filename} "
-                f"from the upstream template: {joined}",
-            )
+    _setup_materialize_templates(workspace)
+    # Gap 3(a): chumicro-dev.toml mode — sync workspace.yml's
+    # library_sources: block so deploy --import-graph resolves
+    # `import chumicro_<name>` against the sibling checkout rather
+    # than the empty packages/ dir.
+    _setup_sync_chumicro_dev(workspace)
+    _setup_additive_reapply(workspace)
     return 0
 
 
