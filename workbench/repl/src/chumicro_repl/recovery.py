@@ -307,13 +307,13 @@ _ABORT_RESPONSES = frozenset({"q", "quit", "abort", "exit"})
 
 
 def coached_session_start(
-    callable: Callable[[], _T],
+    factory: Callable[[], _T],
     *,
     output: Callable[[str], None] = print,
     prompt: Callable[[str], str] = input,
     max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
 ) -> _T:
-    """Run *callable* with classify-coach-retry on session-start failures.
+    """Run *factory* with classify-coach-retry on session-start failures.
 
     Wraps any zero-arg callable that may raise :class:`OSError`,
     :class:`ReplSessionDisconnected`, or :class:`ReplSessionError`
@@ -340,7 +340,7 @@ def coached_session_start(
       user-friendly coaching prompt instead of a bare traceback.
 
     Args:
-        callable: Zero-arg callable performing the session start.
+        factory: Zero-arg callable performing the session start.
             Returns any value on success (caller's choice — could
             be a :class:`ReplSession`, an int exit code, ``None``,
             etc.); raises on connect failure.
@@ -351,7 +351,7 @@ def coached_session_start(
             Must be ``>= 1``.
 
     Returns:
-        Whatever *callable* returns on a successful attempt.
+        Whatever *factory* returns on a successful attempt.
 
     Raises:
         ValueError: ``max_attempts < 1``.
@@ -367,7 +367,7 @@ def coached_session_start(
     while attempt < max_attempts:
         attempt += 1
         try:
-            return callable()
+            return factory()
         except (OSError, ReplSessionError) as error:
             last_error = error
             kind = classify_session_failure(error)
