@@ -20,7 +20,7 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 **A feature that exists only in code is incomplete.** Docs, ADRs, planning files, scaffold templates, and CI are part of the deliverable, not commentary on it. Every unit of work touches them in lockstep:
 
 - **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, the [style guide](docs/contributing/style-guide.md), the [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. Don't limit yourself to a fixed list.
-- **Unit of work landed?** Move the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) to the top of `## Done (recent)` in the *same* edit. Cap is 25 entries — drop the oldest. CHU011 caps each top-level bullet at 5 sub-bullets; bigger items get promoted to [`plans/workstreams/<name>.md`](plans/workstreams/) and surface here as a one-line pointer.
+- **Unit of work landed?** Move the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) to the top of `## Done (recent)` in the *same* edit. Cap is 5 entries — drop the oldest. Each entry: subject + commit hashes + headline result + workstream pointer; aim for under ~500 chars. Detail lives in the commit message and the workstream doc, not the index. CHU011 caps each top-level bullet at 5 sub-bullets; bigger items get promoted to [`plans/workstreams/<name>.md`](plans/workstreams/) and surface here as a one-line pointer.
 - **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands.
 - **Decision changed?** Edit the ADR body in place (rewrite affected paragraphs so a cold reader gets accurate info) — no `Revised:` banners, no `## Update (YYYY-MM-DD)` sections. Status enum is `proposed` / `accepted` / `superseded` / `deferred` only. See [`plans/decisions/README.md`](plans/decisions/README.md).
 - **End of every unit of work** → run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill: preflight green, plans-doc updated, docs in sync, commit + push. Do not yield with uncommitted changes or untested behavior unless the work is explicitly partial — and say so.
@@ -87,7 +87,8 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 
 **Plans-doc brevity**
 
-- [`plans/next-up.md`](plans/next-up.md) is the agent-managed work queue and the single source of truth for what's in flight. Each top-level bullet is capped at 5 sub-bullets (CHU011); anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. `## Done (recent)` is capped at 25 entries. Enforced by `CHU011` in the [`chumicro-checks`](workbench/checks/) package. Suppress with `<!-- noqa: CHU011 -->` sparingly.
+- [`plans/next-up.md`](plans/next-up.md) is the agent-managed work queue and the single source of truth for what's in flight. Each top-level bullet is capped at 5 sub-bullets (CHU011); anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. `## Done (recent)` is capped at 5 entries. Enforced by `CHU011` in the [`chumicro-checks`](workbench/checks/) package. Suppress with `<!-- noqa: CHU011 -->` sparingly.
+- `Phase N` / `Slice N` references in commit subjects and `Done` entries must carry a 3-word topic (`Phase 6 — transport seams`, not bare `Phase 6`). The number alone is opaque six weeks later.
 
 ## Common pitfalls
 

@@ -103,7 +103,7 @@ class TestBulletCap:
 
 
 class TestDoneSectionCap:
-    """The ``## Done (recent)`` section is capped at 25 entries."""
+    """The ``## Done (recent)`` section is capped at 5 entries."""
 
     def test_at_cap_passes(self, tmp_path: Path) -> None:
         body = "## Done (recent)\n\n" + "\n".join(

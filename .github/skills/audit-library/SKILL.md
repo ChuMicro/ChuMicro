@@ -11,6 +11,8 @@ Audit one library (`libraries/<name>/` or `workbench/<name>/`) for cleanup oppor
 
 A "library" is one publishable package — one `pyproject.toml` + `src/<name>/` + `tests/`.  This skill stays inside that boundary; cross-library concerns escalate to `/audit-integration`, ecosystem concerns to `/audit-workspace`.
 
+**The named scope is the only scope.** Observations that fall outside the named library — even adjacent fixes that look obvious — file as a new `## Next` entry in `plans/next-up.md` and stop there. Don't fold them into the audit's commits. Out-of-scope diffs that ride along are the leading cause of revert traffic on audit work.
+
 Argument: the library name (matches the folder under `libraries/` or `workbench/`).  Example: `/audit-library wifi`, `/audit-library deploy`, `/audit-library workspace`.
 
 ## Audit philosophy

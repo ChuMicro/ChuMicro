@@ -8,7 +8,7 @@ Two sub-checks against ``plans/next-up.md``:
    ``plans/workstreams/`` (open) or ``plans/workstreams/archive/``
    (shipped) and replaced here by a one-line pointer.
 
-2. The ``## Done (recent)`` section contains at most 25 entries.
+2. The ``## Done (recent)`` section contains at most 5 entries.
 
 A bullet's extent runs from its top-level ``- `` line until the next
 top-level ``- ``, the next markdown heading, or end of file.
@@ -32,7 +32,7 @@ from chumicro_checks._rule import Rule
 
 _RULE_CODE = "CHU011"
 _BULLET_CAP = 5
-_DONE_SECTION_CAP = 25
+_DONE_SECTION_CAP = 5
 _DONE_HEADING_PREFIX = "Done"
 _NOQA_TAG = "<!-- " + "noqa: " + _RULE_CODE + " -->"
 
@@ -141,7 +141,7 @@ class CHU011_PlansBrevity(Rule):
     code = _RULE_CODE
     description = (
         "plans/next-up.md bullet caps (5 markers per top-level bullet, "
-        "25 entries in `## Done (recent)`)"
+        "5 entries in `## Done (recent)`)"
     )
 
     def check(self, repo_root: Path) -> list[Finding]:

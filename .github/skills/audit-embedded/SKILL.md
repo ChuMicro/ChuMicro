@@ -13,6 +13,8 @@ Argument: the library name (matches the folder under `libraries/`). Example: `/a
 
 Device libraries only. `workbench/<name>/` is host-only CPython — none of these dimensions apply there. `support/test_harness/` is borderline (it does run on devices); if you point this skill at it, only the device-side modules count.
 
+**The named scope is the only scope.** Observations outside the named library — even adjacent fixes that look obvious — file as a new `## Next` entry in `plans/next-up.md` and stop there. Don't fold them into the audit's commits. Out-of-scope diffs that ride along are the leading cause of revert traffic on audit work.
+
 Inside a device library, `src/<name>/testing.py` (and any other file marked `__chumicro_runtimes__ = ("cpython",)`) **is in scope**: even though those files never deploy to a board, they're imported by cross-runtime test files at runtime on MicroPython and CircuitPython unix ports. So the same parse-time / import-time rules apply — no `from __future__`, no `from typing import …`, no leading-underscore `const()` imports from siblings. The flash / cluster cost dimensions don't apply (the file doesn't ship to a device), but the runtime-correctness dimensions do.
 
 This skill runs **orthogonally to `/audit-library`**. They look for different things and both can be useful on the same library at different times.
