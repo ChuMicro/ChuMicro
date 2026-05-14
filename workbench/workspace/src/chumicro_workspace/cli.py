@@ -9,7 +9,7 @@ routes through this dispatcher.
 
 Commands are shipped at three depths:
 
-* **Implemented** — full behaviour wired to the underlying library
+* **Implemented** — full behavior wired to the underlying library
   (``deploy``, ``probe``, ``devices``, ``repl``, ``new``,
   ``install-firmware`` / ``upgrade-firmware``, ``discover``,
   ``test``, ``setup``).
@@ -328,7 +328,7 @@ def _setup_materialize_templates(workspace: WorkspaceLayout) -> None:
     """Land the canonical first-write text for the three workspace-root files.
 
     ``workspace.yml`` / ``secrets.toml`` / ``devices.yml`` — only files
-    that don't already exist are touched.  Print one line per materialised
+    that don't already exist are touched.  Print one line per materialized
     file so the user sees what landed.
     """
     template_report = materialize_workspace_templates(workspace.root)
@@ -399,17 +399,17 @@ def _setup_additive_reapply(workspace: WorkspaceLayout) -> None:
 
 
 def _cmd_setup(args: argparse.Namespace) -> int:
-    """Install workspace dependencies and materialise workspace templates.
+    """Install workspace dependencies and materialize workspace templates.
 
     Runs ``pip install -e .`` in the workspace root when a
-    ``pyproject.toml`` is present, then materialises any missing
+    ``pyproject.toml`` is present, then materializes any missing
     workspace templates (``devices.yml``, ``workspace.yml``,
     ``secrets.toml``) from the canonical content shipped in
     :mod:`chumicro_workspace.templates` (``devices.yml`` ships from
     ``chumicro_deploy`` since it owns the schema).  Idempotent —
     re-running is safe.
 
-    Setup is the one command that *materialises* ``workspace.yml`` —
+    Setup is the one command that *materializes* ``workspace.yml`` —
     it cannot use :func:`_resolve_workspace`'s walk-up-and-find-marker
     discovery, because on a fresh clone the marker doesn't exist yet.
     Resolve the workspace root directly from ``--workspace-dir`` or
@@ -594,7 +594,7 @@ def _resolve_new_source(
             )
         return template
     candidate = (workspace.root / from_path).resolve()
-    # Defence against `--from ../../etc/passwd` shenanigans — keep the
+    # Defense against `--from ../../etc/passwd` shenanigans — keep the
     # source under the workspace root.
     try:
         candidate.relative_to(workspace.root.resolve())
@@ -968,12 +968,12 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
       message.
     * **Slash** (``"garage/sensors/door_open"``) — direct path.
     * **Dotted** (``"garage.sensors.door_open"``) — same as slash;
-      normalised before return because ``/`` is the canonical form
+      normalized before return because ``/`` is the canonical form
       used by :meth:`WorkspaceLayout.list_projects`.
     """
-    normalised = name.replace(".", "/")
-    if "/" in normalised:
-        return normalised
+    normalized = name.replace(".", "/")
+    if "/" in normalized:
+        return normalized
     candidates = [
         path for path in workspace.list_projects()
         if path == name or path.endswith("/" + name)
@@ -2104,7 +2104,7 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
     * 3 — No device registered for runtime, ``--no-auto-register`` in
       effect (or non-interactive default).
     * 4 — Deploy failed (transport error; recovery hints on stderr).
-    * 5 — Bootstrap wizard cancelled by user (interactive mode only).
+    * 5 — Bootstrap wizard canceled by user (interactive mode only).
     * 6 — ``NO_PYTHON_RUNTIME``: board has Arduino or unknown firmware.
     """
     workspace = _resolve_workspace(args)
@@ -2174,10 +2174,7 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
         print("deploy-example: dropping into chumicro-repl ...")
         try:
             from chumicro_repl.cli import main as repl_main  # noqa: PLC0415
-            return repl_main([
-                "--transport", str(device.transport),
-                "--address", str(device.address),
-            ])
+            return repl_main(["--address", str(device.address)])
         except ImportError:
             print(
                 "deploy-example: chumicro-repl not installed; skipping "
@@ -3165,7 +3162,7 @@ def _cmd_rename(args: argparse.Namespace) -> int:
         _validate_project_name(old_input)
         _validate_project_name(new_input)
         # Old name accepts bare-name disambiguation against the live
-        # tree (mirrors deploy / switch).  New name is just normalised
+        # tree (mirrors deploy / switch).  New name is just normalized
         # — it doesn't exist yet so disambiguation doesn't apply.
         resolved_old = _resolve_project_name(workspace, old_input)
         resolved_new = new_input.replace(".", "/")
@@ -3323,7 +3320,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Scaffold a host-only workbench tool under "
             "<workspace>/workbench/<name>/.  Same scaffolder as "
-            "--library, but uses a workbench-flavoured pyproject "
+            "--library, but uses a workbench-flavored pyproject "
             "template (CLI entry point, no cross-runtime concerns; "
             "free to depend on CPython-only third-party libs).  "
             "Mutually exclusive with --library / --from."
@@ -3524,7 +3521,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
         help=(
             "Skip the built-in demo deploy at the end of the wizard.  "
-            "Default behaviour is to chain into the demo so a freshly "
+            "Default behavior is to chain into the demo so a freshly "
             "registered board ships *something* in one command — pass "
             "this flag in CI / scripted flows where you'll deploy your "
             "own payload next."
@@ -3881,7 +3878,7 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         help=(
             "Refuse to fall into the bootstrap wizard when no device is "
             "registered for the example's runtime — exit 3 with a "
-            "structured stderr hint instead.  Default behaviour is to "
+            "structured stderr hint instead.  Default behavior is to "
             "fall through into the wizard in interactive mode."
         ),
     )

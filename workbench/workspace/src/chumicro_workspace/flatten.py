@@ -3,8 +3,8 @@
 Nested ``[wifi]`` / ``[mqtt.broker]`` TOML tables on disk are the
 beginner-readable shape; the device-side runtime works with a flat
 dotted-key dict (``"wifi.ssid"``, ``"mqtt.broker.host"``).  Flattening
-happens once at compose time so the on-disk format optimises for
-human readability and the wire / device format optimises for memory
+happens once at compose time so the on-disk format optimizes for
+human readability and the wire / device format optimizes for memory
 on a 256 KB-RAM target — single hash lookup per key, no recursion.
 
 :func:`flatten_config` is the lone public function — pure, no I/O,

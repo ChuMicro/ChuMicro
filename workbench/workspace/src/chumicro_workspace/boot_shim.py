@@ -88,7 +88,7 @@ def project_app_exports_run(project_dir: Path) -> bool:
     """Return ``True`` when ``project_dir/app.py`` defines a top-level ``run``.
 
     AST-based check — does not import ``app.py``, so a syntax error
-    in the project doesn't crash detection.  Recognises both
+    in the project doesn't crash detection.  Recognizes both
     ``def run(...)`` and ``async def run(...)``.  Returns ``False``
     for ``app.py`` missing, syntax errors, or no top-level ``run``.
 

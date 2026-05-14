@@ -69,7 +69,7 @@ class FirmwareSupportResult:
             the board, or ``None`` if the probe ``version`` string
             didn't parse.
         floor: The floor for this runtime (matched lookup), or
-            ``None`` when the runtime name isn't recognised.
+            ``None`` when the runtime name isn't recognized.
         runtime_name: The probed implementation name, lowered.
     """
 
@@ -221,7 +221,7 @@ def explain(result: FirmwareSupportResult) -> list[str]:
         return [
             f"Could not parse the firmware version "
             f"({result.runtime_name} reported "
-            f"an unrecognised version string).  "
+            f"an unrecognized version string).  "
             "Libraries may still work but the floor check could not run.",
         ]
 

@@ -10,7 +10,7 @@ them directly.
 ``compose_runtime_config`` is the same flow without the msgpack
 write — useful for callers that need the resolved flat dict but not
 the on-disk artifact (host-side functional-test conftests use this
-to read keys without materialising an unused msgpack file).
+to read keys without materializing an unused msgpack file).
 
 Both functions return the **flat** dotted-key dict — nested tables
 on disk become ``"wifi.ssid"`` / ``"mqtt.broker.host"`` keys at

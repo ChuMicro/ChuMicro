@@ -150,7 +150,7 @@ def _append_missing_yaml(
     template_text: str,
     missing_paths: list[str],
 ) -> str:
-    """YAML analogue of :func:`_append_missing_toml`.
+    """YAML analog of :func:`_append_missing_toml`.
 
     Uses ruamel's round-trip parser so existing comments + key order
     survive the rewrite.  Intermediate mappings are created as plain

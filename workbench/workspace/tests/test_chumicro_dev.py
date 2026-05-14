@@ -264,7 +264,7 @@ class TestSyncLibrarySources:
         starter = (
             "# workspace.yml — root configuration for this workspace.\n"
             "#\n"
-            "# Gitignored.  Materialised on first ``setup`` and never\n"
+            "# Gitignored.  Materialized on first ``setup`` and never\n"
             "# overwritten.\n"
             "#\n"
             "# Five top-level blocks (all optional):\n"
@@ -287,7 +287,7 @@ class TestSyncLibrarySources:
         # Every line of the original header must survive byte-identical.
         for header_line in (
             "# workspace.yml — root configuration for this workspace.",
-            "# Gitignored.  Materialised on first ``setup`` and never",
+            "# Gitignored.  Materialized on first ``setup`` and never",
             "# Five top-level blocks (all optional):",
             "#   defaults:        Workspace-wide defaults.",
             "# defaults:",

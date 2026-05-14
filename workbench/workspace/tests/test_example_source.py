@@ -487,7 +487,7 @@ class TestDefaultOutputPath:
             runtime="circuitpython",
             secrets_toml=secrets,
         )
-        # files() materialises the msgpack — by the time it returns,
+        # files() materializes the msgpack — by the time it returns,
         # the default scratch artifact must exist on disk.
         source.files()
         expected = (

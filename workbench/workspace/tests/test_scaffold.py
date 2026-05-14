@@ -120,7 +120,7 @@ class TestScaffoldLibrary:
         api_text = (created / "docs" / "api.md").read_text()
         testing_text = (created / "docs" / "testing.md").read_text()
 
-        # Library-flavoured headings + footer link must be absent.
+        # Library-flavored headings + footer link must be absent.
         # (The workbench guide's GENERATION INSTRUCTIONS block names
         # the missing sections by their bare titles, so match the
         # heading form explicitly.)

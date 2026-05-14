@@ -1,7 +1,7 @@
 """Workspace-template readers — canonical content shipped from the wheel.
 
 Three workspace-root files have their canonical first-write content
-embedded inside a workbench wheel and materialised on first ``setup``:
+embedded inside a workbench wheel and materialized on first ``setup``:
 ``devices.yml`` (board registry — schema owned by ``chumicro-deploy``,
 re-exported here for symmetry), ``workspace.yml`` (host-only workspace
 machinery), and ``secrets.toml`` (workspace-wide credentials + device

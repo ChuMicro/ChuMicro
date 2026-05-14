@@ -69,7 +69,7 @@ def _load_template(
     """Read a scaffolding template by filename.
 
     Defaults to :data:`_LIBRARY_TEMPLATE_DIR`; pass
-    *template_dir=_WORKBENCH_TEMPLATE_DIR* for the workbench-flavoured
+    *template_dir=_WORKBENCH_TEMPLATE_DIR* for the workbench-flavored
     docs templates.  Pure filesystem read — no caching, no formatting.
     Caller does ``.format(**vars)`` on the returned string.
     """
@@ -116,7 +116,7 @@ def scaffold_library(
         package_kind: ``"library"`` (default) for cross-runtime
             device packages — produces the standard chumicro library
             shape with no extras.  ``"workbench"`` for host-only
-            CPython tools — uses a workbench-flavoured pyproject
+            CPython tools — uses a workbench-flavored pyproject
             template with a ``[project.scripts]`` block (CLI entry
             point), and pulls the four ``docs/`` templates from
             ``_payloads/workbench_template/`` (no Runner pattern,

@@ -137,7 +137,7 @@ class TestSetup:
         does not exist yet.  Regression test for the chicken-and-egg
         bug where ``_cmd_setup`` called ``_resolve_workspace`` (which
         walks up looking for the ``workspace.yml`` marker and raises
-        when absent) before the materialiser could create the marker.
+        when absent) before the materializer could create the marker.
 
         The fix resolves the workspace root from ``--workspace-dir`` /
         ``cwd`` directly for the setup command, bypassing the
@@ -148,7 +148,7 @@ class TestSetup:
         # Empty tmp_path — no workspace.yml, no devices.yml, no pyproject.
         exit_code = cli.main(["setup", "--workspace-dir", str(tmp_path)])
         assert exit_code == 0
-        # Workspace templates must materialise even when no
+        # Workspace templates must materialize even when no
         # workspace.yml existed at start.
         assert (tmp_path / "workspace.yml").is_file()
         assert (tmp_path / "devices.yml").is_file()
@@ -412,7 +412,7 @@ class TestNewNested:
             "garage.sensors.door_open",
         ])
         assert exit_code == 0
-        # Dotted form normalises to the slash-form filesystem layout.
+        # Dotted form normalizes to the slash-form filesystem layout.
         assert (
             root / "projects" / "garage" / "sensors" / "door_open" / "code.py"
         ).is_file()
@@ -580,7 +580,7 @@ class TestNewFromFlag:
     def test_rejects_source_outside_workspace(
         self, tmp_path: Path,
     ) -> None:
-        """Defence against ``--from ../../etc/passwd``-style escapes."""
+        """Defense against ``--from ../../etc/passwd``-style escapes."""
         root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main([
@@ -2627,7 +2627,7 @@ class TestBootstrapWizard:
         )
         _install_fake_transport(monkeypatch, transport)
 
-        # No --with-demo flag — demo is the default behaviour now.
+        # No --with-demo flag — demo is the default behavior now.
         exit_code = cli.main([
             "bootstrap", "--workspace-dir", str(root),
             "--port", "/dev/cu.fake",
@@ -4527,7 +4527,7 @@ class TestRenameNested:
             root / "projects" / "upstairs" / "door_open" / "code.py"
         ).is_file()
 
-    def test_dotted_form_normalises(self, tmp_path: Path) -> None:
+    def test_dotted_form_normalizes(self, tmp_path: Path) -> None:
         root = seed_workspace(tmp_path)
         seed_project(root, "garage/door_open")
 
@@ -5488,7 +5488,7 @@ class TestDeployExampleHappyPath:
 
 
 class TestDeployExampleModes:
-    """``_resolve_deploy_example_modes`` honours TTY default + flags."""
+    """``_resolve_deploy_example_modes`` honors TTY default + flags."""
 
     def test_non_interactive_flag_forces_no_tail(self) -> None:
         """``--non-interactive`` always disables tail, even with --tail."""
@@ -5676,7 +5676,7 @@ class TestDeployExampleAdditionalBranches:
         # Wizard called with no demo (we're about to deploy the example).
         assert bootstrap_calls[0].with_demo is False
 
-    def test_bootstrap_cancelled_exits_five(
+    def test_bootstrap_canceled_exits_five(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,

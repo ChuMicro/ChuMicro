@@ -3,7 +3,7 @@
 Two input shapes:
 
 * ``secrets.toml`` — workspace-wide credentials + device defaults
-  (TOML, gitignored, materialised on first ``setup`` from the
+  (TOML, gitignored, materialized on first ``setup`` from the
   canonical template).  The whole file is the device config —
   no ``defaults:`` wrapper, no other top-level blocks.  Keys are
   nested TOML tables (``[wifi] ssid = "x"``); compose-time flattening
