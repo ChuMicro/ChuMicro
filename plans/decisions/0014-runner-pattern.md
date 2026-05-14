@@ -87,7 +87,7 @@ This guarantees handlers see a consistent view of the world — no handler modif
 ## Alternatives considered
 
 - **Event-based pattern (service → event sink → dispatcher):** The initial implementation used an event bus: components emitted `Event` objects into an `EventQueueSink`, and a `SimpleEventDispatcher` routed them to handlers by event type.  This required significant ceremony (create sink, create dispatcher, register event types, pass both to runner) for simple cases where a service just needs to check a condition and fire a callback.  Removed in favor of the simpler gate-based model.  Can be re-added as a separate module when multi-handler routing is needed.
-- **Priority-based dispatch ordering:** Priority constants were defined but never used for dispatch ordering.  Constants without behaviour create confusion.  Deferred until the ecosystem actually needs contention management.
+- **Priority-based dispatch ordering:** Priority constants were defined but never used for dispatch ordering.  Constants without behavior create confusion.  Deferred until the ecosystem actually needs contention management.
 - **Component-owned sink / `next_event()`:** Less centralized, requires per-library queue logic, harder to orchestrate multiple components.  Rejected in favor of the runner-managed pattern.
 - **`ServiceContext` wrapping ticks + sink:** Adds a layer of indirection not needed at current scale.
 - **Period ownership on the dispatcher:** Created two parallel mechanisms for periodic behavior (service-side and dispatcher-side) which was confusing.  Consolidated to runner-only.

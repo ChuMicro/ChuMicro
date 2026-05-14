@@ -45,7 +45,7 @@ from chumicro_deploy import (
 )
 
 # ---------------------------------------------------------------------------
-# Terminal helpers — ANSI colour when isatty, plain text otherwise
+# Terminal helpers — ANSI color when isatty, plain text otherwise
 # ---------------------------------------------------------------------------
 
 _IS_TTY = sys.stdout.isatty()
@@ -351,7 +351,7 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
         return False
     _print_ok(
         "Traceback coaching rendered and returned without retrying — "
-        "expected behaviour for source-level bugs."
+        "expected behavior for source-level bugs."
     )
     return True
 
@@ -605,7 +605,7 @@ def scenario_flash_copy_failed(context: BoardContext) -> bool:
             return False
         _print_ok(
             "Oversized payload rejected at rsync time and coaching "
-            "routed to FLASH_COPY_FAILED — expected behaviour."
+            "routed to FLASH_COPY_FAILED — expected behavior."
         )
         return True
     _print_warn(
@@ -779,8 +779,8 @@ def main() -> int:
     _print_banner("Summary")
     for board_label, scenario_label, ok in results:
         marker = "OK " if ok else "FAIL"
-        colour = _GREEN if ok else _RED
-        print(f"  {colour}{marker}{_RESET}  {board_label}  |  {scenario_label}")
+        color = _GREEN if ok else _RED
+        print(f"  {color}{marker}{_RESET}  {board_label}  |  {scenario_label}")
     any_failure = any(not ok for _board, _scenario, ok in results)
     return 1 if any_failure else 0
 

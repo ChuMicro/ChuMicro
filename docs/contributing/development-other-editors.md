@@ -57,7 +57,7 @@ python scripts/run.py setup
 python scripts/run.py test-libraries-functional
 ```
 
-`setup` materialises three gitignored starter files at the repo root: `devices.yml`, `workspace.yml`, and `secrets.toml`.  See [Device Testing](device-testing.md) for board registration and `secrets.toml` setup, then use:
+`setup` materializes three gitignored starter files at the repo root: `devices.yml`, `workspace.yml`, and `secrets.toml`.  See [Device Testing](device-testing.md) for board registration and `secrets.toml` setup, then use:
 
 ```bash
 python scripts/run.py test-libraries-functional --library timing

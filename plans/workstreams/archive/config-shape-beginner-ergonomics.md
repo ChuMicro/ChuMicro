@@ -71,12 +71,12 @@ The four downstream consumers that would have to migrate:
 
 ### File 1: `secrets.toml` (renamed from `workspace.yml`)
 
-- Gitignored.  Materialised on first `setup` from a workbench-owned starter, never overwritten.
+- Gitignored.  Materialized on first `setup` from a workbench-owned starter, never overwritten.
 - Holds credentials and workspace-wide defaults that aren't safe to commit.
 - TOML format (replacing YAML).  Flat top-level keys with dotted naming:
   ```toml
   # secrets.toml — gitignored, never committed.
-  # Materialised on first `setup`; edit freely, re-running setup
+  # Materialized on first `setup`; edit freely, re-running setup
   # leaves user edits alone.
 
   "wifi.ssid"     = "bench-ap"
@@ -92,7 +92,7 @@ The four downstream consumers that would have to migrate:
 ### File 2: `<project>/project_config.toml`
 
 - Committed.  Scaffolded by `chumicro-workspace new <name>` from a per-project starter.
-- Holds per-project knobs — names, default device target, behaviour tweaks.  **Never secrets.**
+- Holds per-project knobs — names, default device target, behavior tweaks.  **Never secrets.**
 - Examples:
   ```toml
   # project_config.toml — committed, lives in version control.
@@ -265,7 +265,7 @@ Three sub-options for the on-disk shape:
 
 1. **Pure flat with dotted strings** (user's example).  `"wifi.password" = "x"` — every key is a top-level string with dots in the name.  Simplest reader; matches CP `settings.toml`'s flat-only constraint exactly.  Ugly for tables/arrays.
 2. **Standard nested TOML, flat dotted accessor** (recommended).  On-disk: `[wifi]\npassword = "x"`.  In code: `config.get("wifi.password")`.  The dotted-key API is a thin facade over the nested dict.  Beginners who eyeball the TOML file see clean section structure; beginners who write code use one-liner dotted keys.
-3. **Flat + standard nesting both supported.**  Reader normalises either form.  More flexible, more confusing.
+3. **Flat + standard nesting both supported.**  Reader normalizes either form.  More flexible, more confusing.
 
 *Lean: 2.*  TOML's nested-table syntax is what beginners see in every other Python project (pyproject.toml, ruff.toml, etc.).  The accessor API is where chumicro adds value — a flat dotted-key facade over a standard-nested file gives the best of both.  This is also the one option that doesn't force a wire-format change to `runtime_config.msgpack` (which is already nested).
 
@@ -275,7 +275,7 @@ The user proposes `wifi.password`.  CircuitPython's `settings.toml` uses `CIRCUI
 
 1. **Dotted lowercase** (`wifi.password`).  Reads like Python attribute access; matches the nested-table TOML shape one-to-one.
 2. **SCREAMING_SNAKE** (`WIFI_PASSWORD`).  Matches CP `settings.toml` and POSIX env-var convention.  No nesting.
-3. **Both.**  Reader normalises; documentation picks one for examples.
+3. **Both.**  Reader normalizes; documentation picks one for examples.
 
 *Lean: 1.*  Dotted lowercase is what every other TOML config in the Python ecosystem uses (pyproject `[tool.ruff]`, `[tool.coverage.report]`, etc.).  SCREAMING_SNAKE is appropriate when the file *is* the env (CP's case — `settings.toml` is loaded into the env namespace).  Chumicro's file is a config file, not env, so dotted lowercase fits.
 
@@ -355,7 +355,7 @@ Add observations to the **Findings** section below, dated and tied to a specific
 
 ### Probes to watch for
 
-1. **Re-setup behaviour.**  When a user edits `workspace.yml` and re-runs setup, what happens?  Does setup tell them their file is missing new starter sections?  (This is the `setup-schema-reconciliation` overlap — observations help both workstreams.)
+1. **Re-setup behavior.**  When a user edits `workspace.yml` and re-runs setup, what happens?  Does setup tell them their file is missing new starter sections?  (This is the `setup-schema-reconciliation` overlap — observations help both workstreams.)
 2. **First-deploy error UX.**  Deploy a project with a missing required key.  What error does the user see?  Where (deploy time vs boot time)?  Is it specific (`MissingConfigKey: required config key 'wifi.password' is missing — set it in secrets.toml under wifi.password`) or cryptic?
 3. **Section discoverability.**  A beginner edits `workspace.yml` for the first time.  Do they know what sections are valid?  Is there a discoverable list, or do they need to read the wifi/mqtt/requests/etc. READMEs?
 4. **Naming-style friction.**  As we move between files (workspace.yml's `defaults.wifi.password` and `<proj>/config.toml`'s `[wifi]\npassword`), do we hit ambiguity about which form is right?  Track every "wait, which file uses dots?" moment.
@@ -382,7 +382,7 @@ A fresh-clone user follows the README, runs `python3 run.py setup`, and gets:
 error: no workspace.yml found in /Users/chuxor/circuitpython/ChuMicro-Workspace-Template or any parent
 ```
 
-Root cause: [`_cmd_setup`](workbench/workspace/src/chumicro_workspace/cli.py:250) calls `_resolve_workspace(args)`, which in turn calls `WorkspaceLayout.from_dir()` — and that walks up looking for `workspace.yml` and raises `WorkspaceNotFoundError` when it's absent.  But setup itself is what *creates* `workspace.yml` (via `materialize_workbench_starters` ten lines later).  The bootstrap fails before reaching the materialiser.
+Root cause: [`_cmd_setup`](workbench/workspace/src/chumicro_workspace/cli.py:250) calls `_resolve_workspace(args)`, which in turn calls `WorkspaceLayout.from_dir()` — and that walks up looking for `workspace.yml` and raises `WorkspaceNotFoundError` when it's absent.  But setup itself is what *creates* `workspace.yml` (via `materialize_workbench_starters` ten lines later).  The bootstrap fails before reaching the materializer.
 
 This is a textbook "plug-in-and-go" regression: the very first command a beginner runs after `git clone` blocks with a confusing error about a file they shouldn't even need to know exists yet.
 
@@ -421,7 +421,7 @@ setup: materialized 2 workbench-owned starter(s)
 setup: synced library_sources for 15 chumicro libraries from /Users/chuxor/circuitpython/chumicro
 ```
 
-The materialised `workspace.yml` is:
+The materialized `workspace.yml` is:
 
 ```yaml
 
@@ -444,7 +444,7 @@ Two compounding problems:
 **Bearing on the research plan:**
 
 - `[reinforces]` Q3 (on-disk shape) — a starter with **real keys** (uncommented placeholders that the user replaces) survives round-trip preservation; an all-comments starter doesn't.  The user's proposal to put actual entries (`"wifi.ssid" = ""`, `"wifi.password" = ""`) in the starter rather than commented examples isn't just a stylistic choice — it's required for round-trip preservation to work at all.
-- `[reinforces]` Q1 (rename) and the file-format question — if the file's contents were canonical TOML with real keys (`"wifi.ssid" = ""` instead of `# ssid: my-ap`), there'd be no comment-vs-key mismatch.  TOML stdlib serialisation also doesn't have ruamel's "comments-attach-to-keys" gotcha.
+- `[reinforces]` Q1 (rename) and the file-format question — if the file's contents were canonical TOML with real keys (`"wifi.ssid" = ""` instead of `# ssid: my-ap`), there'd be no comment-vs-key mismatch.  TOML stdlib serialization also doesn't have ruamel's "comments-attach-to-keys" gotcha.
 - Surfaces a Q10: **Should the starter ship with placeholder real-keys or with all-commented examples?**  Real keys round-trip safely and double as the schema beginners can edit without thinking.  Commented examples preserve flexibility (no key clutter for users who don't need that section) but break round-trip preservation.
 
 **Workaround for verification:** edit `workspace.yml` manually to add `defaults.wifi.{ssid,password}` (uncommented) before scenario 5.  The round-trip will preserve them on subsequent setup runs because they're real keys now.
@@ -471,7 +471,7 @@ setup: library_sources already in sync with /Users/chuxor/circuitpython/chumicro
   ```
   add-device: warning — circuitpython firmware compatibility:
     Could not parse the firmware version
-    (circuitpython reported an unrecognised version string).
+    (circuitpython reported an unrecognized version string).
   ```
 
   The actual firmware string was `10.2.0-rc.0` (visible in the CP REPL banner).  The parser likely does not handle the `-rc.N` suffix.  `firmware_version: 10.2.0.` (trailing dot) is what landed in `devices.yml` — the regex captured up to the `-` then appended a stray dot.  Side effect: `requires_flash` floor checks are silently disabled on every contributor's machine running RC firmware.  **Real bug, separate workstream — not config-shape.**
@@ -537,7 +537,7 @@ This is the failure mode the user wanted: section name, missing key, and the lib
 - `[reinforces]` the user's "library dictates its slice of the config" intuition — this is exactly what Phase 2 enables.  The proposal to flatten the on-disk shape (Q3) doesn't change manifest semantics; it just changes the keys' names from `wifi.password` (nested) to `"wifi.password"` (flat).  The validator works the same way.
 - Adds a Q11: **should declaring a config manifest be required** (e.g., a `check-config-manifest` script that fails CI if a library imports `chumicro-config` but doesn't declare a manifest)?  Today it's opt-in and six libraries opted out.  Fail-fast incentive missing.
 
-This was the most informative scenario of the verification pass.  The good news: when the user-visible promise is honoured, it's honoured well — the error is precise, actionable, and beginner-readable.  The bad news: it's honoured only one library deep.
+This was the most informative scenario of the verification pass.  The good news: when the user-visible promise is honored, it's honored well — the error is precise, actionable, and beginner-readable.  The bad news: it's honored only one library deep.
 
 ---
 
@@ -558,7 +558,7 @@ The unification workstream landed correctly: the pipeline works end-to-end on re
 **Conclusions for Q1‑Q11:**
 
 - **Q1 (rename `workspace.yml` → `secrets.toml`)** — the verification reinforces but does not decide.  The error message in finding 1 (`error: no workspace.yml found in <root> or any parent`) is more diagnosable when the file's role is in its name.  But the rename is the second-order benefit; the first-order benefit is fixing the bugs that made the file-name appear in error messages at all.
-- **Q3 (on-disk shape — flat dotted strings vs nested tables)** — strongly reinforced.  Finding 2 (the comment-stripping bug) is rooted in ruamel-rt's "comments must attach to keys" behaviour.  TOML's stdlib serialisation doesn't have that constraint; nested tables with real keys (Q3 option 2) survive round-trip at all costs.  Q3 option 1 (pure flat with dotted strings) also works but adds verbose key names.  **Lean: option 2** — nested tables on disk, flat dotted accessor in code.
+- **Q3 (on-disk shape — flat dotted strings vs nested tables)** — strongly reinforced.  Finding 2 (the comment-stripping bug) is rooted in ruamel-rt's "comments must attach to keys" behavior.  TOML's stdlib serialization doesn't have that constraint; nested tables with real keys (Q3 option 2) survive round-trip at all costs.  Q3 option 1 (pure flat with dotted strings) also works but adds verbose key names.  **Lean: option 2** — nested tables on disk, flat dotted accessor in code.
 - **Q7 (manifest format flat vs nested)** — reinforced.  The current nested `[tool.chumicro.config.sections.wifi]` format works; flattening it to `[tool.chumicro.config]` with `required_keys = ["wifi.password"]` would match the proposed runtime accessor exactly without changing semantics.  **Lean: flatten when the on-disk shape flattens (Q3 + Q7 move together).**
 - **Q10 (new — starter content shape)** — the verification raised this question.  An all-comments starter breaks round-trip preservation in dev mode.  **Lean: ship real placeholder keys** (`"wifi.ssid" = ""` rather than `# ssid: my-ap`) — both for round-trip safety and as a built-in schema beginners see and edit.
 - **Q11 (new — required manifest declaration)** — the verification raised this too.  Six libraries don't declare manifests; a `check-config-manifest` ratchet (or a CI step that imports each library's pyproject.toml and fails if `chumicro-config` is imported anywhere in `src/` without a manifest block) would close the gap.  **Lean: add the ratchet**, but only after this workstream lands the renamed-file shape (so the manifests don't have to migrate twice).
@@ -604,7 +604,7 @@ Verbatim user direction:
 
 > "really all the re-apply has to do is add new keys that have been put into the template (commented out or not) and append them to the users existing config"
 
-This locks Q10 and adds a hard requirement on the setup re-apply behaviour.  Two parts:
+This locks Q10 and adds a hard requirement on the setup re-apply behavior.  Two parts:
 
 1. **Starter ships real placeholder values** (e.g., `"wifi.ssid" = "replace-with-your-ssid"`, `"wifi.password" = "replace-with-your-password"`).  Bogus enough that nothing can accidentally use them at runtime; real enough to survive parser round-trip; visible enough to invite editing.  *Implication: manifest validation needs to also reject placeholder values* (a key being "present" with `replace-with-your-ssid` shouldn't satisfy the manifest).  Two ways to enforce: a sentinel value the manifest validator knows to reject, OR a runtime check at `from_dict` time.  Lean: sentinel rejection at deploy time, since that's where the rest of the validation already lives.
 
@@ -612,7 +612,7 @@ This locks Q10 and adds a hard requirement on the setup re-apply behaviour.  Two
    - **No new template keys** → no-op.  User file untouched.
    - **New template keys** → append the new keys (in the same order the template introduces them, with their comments).  User file's existing content untouched.
 
-This is **strategy C** of the [`setup-schema-reconciliation.md`](setup-schema-reconciliation.md) workstream — promoted from "natural follow-up" to **the canonical setup re-apply behaviour**.  The user's framing ("if we can't preserve, we shouldn't re-apply at all") makes additive-only the contract.
+This is **strategy C** of the [`setup-schema-reconciliation.md`](setup-schema-reconciliation.md) workstream — promoted from "natural follow-up" to **the canonical setup re-apply behavior**.  The user's framing ("if we can't preserve, we shouldn't re-apply at all") makes additive-only the contract.
 
 This also implicitly **rejects strategy B** (show a diff, no auto-apply): the user's read is that re-apply should be silent + safe, not interactive.
 
@@ -679,7 +679,7 @@ Why this beats either pure-nested or pure-flat:
 
 - Pure nested costs N+1 dict allocations and two hash lookups per access on a memory-constrained board — measurable on a 256 KB target.
 - Pure flat (with literal dotted-string keys on disk) is uglier to read and edit.  `[wifi]\nssid = "..."` reads better than `"wifi.ssid" = "..."`.
-- Compose-time flattening lets the disk format optimise for human readability and the wire format optimise for device performance.  No tradeoff.
+- Compose-time flattening lets the disk format optimize for human readability and the wire format optimize for device performance.  No tradeoff.
 
 Q3 resolved.
 
@@ -779,7 +779,7 @@ Locked sequence (each step internally consistent; commit-cadence is "when rollba
 5. **Move credentials out of `workspace.yml` into `secrets.toml`** (host-side material).  Update the workbench payload, the materializer, and both repos.  Decision 0057 is updated or superseded here — needs an ADR.
 6. **Migrate per-project `config.toml` → `project_config.toml`** in the template repo.  Touches `examples/*/`, `projects/_template/`, `projects/example_sensor/`, and the mono-repo's functional-test conftests.
 7. **Migrate library manifests in pyproject.toml** to flat format.  Aligns with the Q11 push to declare manifests in the six libraries that don't have them yet.
-8. **Wire additive-only re-apply behaviour** into `setup` (strategy C — the Q10 contract).  Implementation detail: comment-preserving merge in TOML.  Open question 4 of `setup-schema-reconciliation.md` becomes the critical implementation challenge.
+8. **Wire additive-only re-apply behavior** into `setup` (strategy C — the Q10 contract).  Implementation detail: comment-preserving merge in TOML.  Open question 4 of `setup-schema-reconciliation.md` becomes the critical implementation challenge.
 9. **Drop the old nested API from `chumicro-config`.**  Final cleanup; no consumers left.
 
 No backward-compat burden — both repos can be updated atomically per step.  Commit cadence: one per step where the step is internally consistent and rollback-able; smaller commits inside a step only when an intermediate state needs preservation (debug, hardware verification, etc.).

@@ -171,7 +171,7 @@ def install_workspace(python: Path | None = None) -> int:
     1. Install ``requirements-dev.txt`` plus runtime-pinned type stubs
        (``circuitpython-stubs``, ``micropython-esp32-stubs``).
     2. Editable-install every publishable library and support package.
-    3. Materialise ``devices.yml`` / ``workspace.yml`` / ``secrets.toml``
+    3. Materialize ``devices.yml`` / ``workspace.yml`` / ``secrets.toml``
        from canonical templates if they don't already exist.
     4. Regenerate IDE configs for PyCharm and VS Code.
 

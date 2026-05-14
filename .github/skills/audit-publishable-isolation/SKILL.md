@@ -32,7 +32,7 @@ Argument: none, or `--repo mono` / `--repo template` / `--pattern <N>` to scope.
 | Generators in `scripts/` whose **output** reaches a user (e.g. `bundle_manager.py` writes the bundle README; `generate_config_files.py` emits user-facing strings) | indirect — the generator itself is mono-repo-only, but its output ships | yes (audit the **emitted strings**, not the generator's own docstrings) |
 | `ChuMicro-Workspace-Template/**` | clone-and-customize starter | yes |
 | `scripts/run.py`, `plans/`, mono-repo `AGENTS.md`, internal CI | mono-repo-only — never lands on consumer machine | **out of scope** (talking about run.py inside `scripts/run.py` is fine) |
-| Workbench `functional_tests/` and library `tests/` | mono-repo-only | **out of scope** unless they materialise content into a payload |
+| Workbench `functional_tests/` and library `tests/` | mono-repo-only | **out of scope** unless they materialize content into a payload |
 
 Tests and `scripts/` source are mono-repo-internal — they can name `Decision NNNN` and `plans/` freely.  The audit only fires when those names cross into something that *ships*.
 
@@ -168,7 +168,7 @@ grep -rnB1 -E "^\s*['\"]_[a-zA-Z_]" libraries/*/src/ workbench/*/src/  | grep -B
 
 **Replacement:** delete the re-export; update test patch paths to follow the canonical definition module (e.g. `chumicro_X.helpers._do_thing` instead of `chumicro_X.transport._do_thing`).  Break import cycles caused by extractions with a shared leaf types module (e.g. `recovery_kind.py` holding the types that both `recovery.py` and `recovery_plans.py` import) instead of lazy in-function imports.  See `/audit-library`'s "Extraction patterns" section.
 
-P8 sits with the other src/ leak patterns (P1–P3) rather than the cross-repo / generator patterns; it's a P1-relative ordering that prioritises depth of remediation (P8 fixes usually need a test-patch-path update plus a src/ edit), not search ordering.  Run greps for P1–P3, then P8, then move on to P4 onward.
+P8 sits with the other src/ leak patterns (P1–P3) rather than the cross-repo / generator patterns; it's a P1-relative ordering that prioritizes depth of remediation (P8 fixes usually need a test-patch-path update plus a src/ edit), not search ordering.  Run greps for P1–P3, then P8, then move on to P4 onward.
 
 ### P7. Bundle / config / scaffolder generators baking in mono-repo identity
 
@@ -219,7 +219,7 @@ grep -rn -E "f-?strings? .* (run\.py|scripts/|plans/|Decision \d)" scripts/
 * **Don't refactor while auditing.**  The pass produces a punch-list; cleanups land in their own commits per step 5.  Stopping mid-grep to fix one finding loses the cross-pattern view.
 * **Don't suppress with `# noqa: CHU006` to clear the audit.**  Suppression is for legitimate exceptions (a string that ships *with* the mono-repo context — e.g. a help message inside `scripts/run.py` itself).  Audit findings are leaks; rephrase, don't silence.
 * **Don't conflate the mono-repo and the template.**  P5 (template→mono-repo) and P6 (mono-repo→template) are different bugs with different fixes.  Keep them separate in the punch-list and the cleanup commits.
-* **Don't propose deleting the dev-mode plumbing.**  The workspace template's `chumicro_path` argument and `_workspace_template/` materialisation are real features; only the **prose** describing them as "the chumicro mono-repo's libraries directory" is leak.  Audit the words, leave the wires.
+* **Don't propose deleting the dev-mode plumbing.**  The workspace template's `chumicro_path` argument and `_workspace_template/` materialization are real features; only the **prose** describing them as "the chumicro mono-repo's libraries directory" is leak.  Audit the words, leave the wires.
 * **Don't fix README leaks one library at a time.**  Once you've decided on the new wording for "how to test this package," apply it to every workbench / library README in one batch — otherwise reviewers see N inconsistent rephrasings.
 
 ## Output format

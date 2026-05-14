@@ -1,6 +1,6 @@
 # Workstream: Pyright Cleanup
 
-Status: **parked.**  Phase 0 (config-only scoping, two passes) + Phase 1 (categorization) + Family A (real-defect shape-preserving fixes) + example-side spot-fixes shipped 2026-05-09 (1054 → 259 errors / 44 → 0 warnings).  Families B + C and Phases 3 + 4 + 5 + 6 deferred — pyright caused more friction than it surfaced this session, and the remaining buckets all need either user-driven structural decisions (Phase 4 ADR), readability tradeoffs we don't want to make speculatively (Families B + C), or are happy to live as-is until a forcing function appears.  Reopen when there's a concrete reason to return to it (e.g., adding pyright to preflight, or a real bug pyright would have caught).  The `pyright-lsp` plugin is currently disabled in `.claude/settings.json` for the same reason — IDE-strict diagnostics didn't honour `pyrightconfig.json`'s `ignore` globs and were noisier than the CLI.
+Status: **parked.**  Phase 0 (config-only scoping, two passes) + Phase 1 (categorization) + Family A (real-defect shape-preserving fixes) + example-side spot-fixes shipped 2026-05-09 (1054 → 259 errors / 44 → 0 warnings).  Families B + C and Phases 3 + 4 + 5 + 6 deferred — pyright caused more friction than it surfaced this session, and the remaining buckets all need either user-driven structural decisions (Phase 4 ADR), readability tradeoffs we don't want to make speculatively (Families B + C), or are happy to live as-is until a forcing function appears.  Reopen when there's a concrete reason to return to it (e.g., adding pyright to preflight, or a real bug pyright would have caught).  The `pyright-lsp` plugin is currently disabled in `.claude/settings.json` for the same reason — IDE-strict diagnostics didn't honor `pyrightconfig.json`'s `ignore` globs and were noisier than the CLI.
 
 ## Purpose
 
@@ -15,16 +15,16 @@ Pyright runs only on the developer's laptop / CI runner — never on the device.
 - Adding `getattr(module, "name")()` instead of a direct `module.name()` call — the `getattr` lookup costs a dict probe + a function-call frame on every invocation.  On a hot path (NTP-server tick, frame parser, inbound recv) this is a real measurable hit.
 - Adding `assert <var> is not None` plus a `local = self._foo` rebind just because pyright can't see a state-machine invariant — every `assert` is a branch + a string-literal const + bytecode that ships in flash and runs every call.  Locals frame slots cost RAM.  *Pyright thinks the cost is free; on these targets it isn't.*
 - Wrapping platform-only attribute accesses in helper functions that funnel through `getattr` — same overhead, plus an extra Python call frame per use.
-- Hoisting imports out of intentionally-lazy positions just to make pyright happy — re-evaluate the *why* first; some lazy imports exist to keep RAM unloaded until needed, and reordering them silently regresses startup behaviour.
+- Hoisting imports out of intentionally-lazy positions just to make pyright happy — re-evaluate the *why* first; some lazy imports exist to keep RAM unloaded until needed, and reordering them silently regresses startup behavior.
 
 Acceptable mitigations in runtime code, in order of preference:
 
 1. **Pyrightconfig-level scoping** — `ignore` patterns or per-path severity overrides in `pyrightconfig.json`.  Zero source change, zero runtime cost, zero flash cost.  Use when the same noise pattern hits many files in a tree (tests, functional_tests, examples).
-2. **File-level suppression** — `# pyright: <directive>` as a single line at the top of one specific file.  One comment that covers every diagnostic in the file.  Use when a single file is the noise epicentre and the file is small enough that the one comment line of flash is worth silencing many errors of IDE noise.
+2. **File-level suppression** — `# pyright: <directive>` as a single line at the top of one specific file.  One comment that covers every diagnostic in the file.  Use when a single file is the noise epicenter and the file is small enough that the one comment line of flash is worth silencing many errors of IDE noise.
 3. **Per-line `# pyright: ignore[<ruleName>]`** — comment text that ships to devices in the `.py` file.  Comments are not free: a `.py` file deployed to flash carries every comment byte (only `.mpy` cross-compilation strips them, and devices typically run `.py` until release).  Use sparingly — only when the suppression is high-value (silences multiple downstream noise lines) and no upstream mitigation fits.
 4. **Accept the noise** — no source change, no config change.  The right default when the diagnostic is just pyright misunderstanding a cross-runtime pattern.  Real defect fixes still happen normally; the noise is signal that those patterns exist, and reviewers learn to skim past it.
 
-Real defect fixes that change behaviour for the better even without pyright (Family A entries qualify) are always fine.
+Real defect fixes that change behavior for the better even without pyright (Family A entries qualify) are always fine.
 
 CPython-only trees (`workbench/`, `scripts/`, `tests/`, `functional_tests/` body code) do not have these constraints — restructuring there is fine.
 
@@ -34,7 +34,7 @@ This principle is load-bearing because it inverts the default reflex of "the typ
 
 `pyrightconfig.json` now sets `pythonVersion: "3.11"` (matches root `pyproject.toml` `target-version = "py311"`) and `reportMissingModuleSource: none`.  The latter silences the 43 "Import 'X' could not be resolved from source" warnings against CircuitPython / MicroPython platform modules (`microcontroller`, `esp32`, `wifi`, `socketpool`, `ssl`, `digitalio`, `bitbangio`, `analogio`, `board`, `micropython`, …) that ship as type stubs only — those are expected, not actionable.
 
-A second pass added an `ignore` glob list: `**/tests/**`, `**/functional_tests/**`, and `support/test_harness/src/chumicro_test_harness/runner.py`.  Tests use ad-hoc fakes pyright can't introspect; functional_tests import platform modules as bare `import wifi` etc.; the test_harness runner is the cross-runtime adapter seam whose entire purpose is to pretend it's MP/CP on the host.  All three trees are noise epicentres where pyright is least useful.  Pyrightconfig `ignore` is the right tool: the files are skipped from analysis but still importable from analysed files.  Zero source change, zero runtime cost, zero flash cost.
+A second pass added an `ignore` glob list: `**/tests/**`, `**/functional_tests/**`, and `support/test_harness/src/chumicro_test_harness/runner.py`.  Tests use ad-hoc fakes pyright can't introspect; functional_tests import platform modules as bare `import wifi` etc.; the test_harness runner is the cross-runtime adapter seam whose entire purpose is to pretend it's MP/CP on the host.  All three trees are noise epicenters where pyright is least useful.  Pyrightconfig `ignore` is the right tool: the files are skipped from analysis but still importable from analyzed files.  Zero source change, zero runtime cost, zero flash cost.
 
 Net change after both phase-0 passes: **44 → 0 warnings, 1054 → 266 errors** (758 silenced).  Examples are intentionally kept in scope — they are user-facing reference code where readability matters and the count tells us when the example is broken.
 

@@ -11,7 +11,7 @@ Validates two contracts:
 2. ``generate_config_files`` is idempotent — running it twice produces
    identical content and never overwrites an edited file.
 
-``generate_config_files`` materialises any missing config files from
+``generate_config_files`` materializes any missing config files from
 the canonical templates: ``devices.yml`` from ``chumicro_deploy``
 (co-located with the schema) and ``workspace.yml`` / ``secrets.toml``
 from ``chumicro_workspace.templates``.  Existing files are never
@@ -34,7 +34,7 @@ from chumicro_workspace import read_workspace_yml_template
 def test_devices_yml_template_validates_against_schema(tmp_path: Path) -> None:
     """The canonical template must satisfy the production schema.
 
-    Materialises the template into a temp dir and runs the same
+    Materializes the template into a temp dir and runs the same
     loader the IDE / functional-test runner uses.  A schema change
     that breaks the template fails here at unit-test time instead of
     surfacing as a confusing "Run setup to generate it" error from
@@ -88,7 +88,7 @@ def test_generate_config_files_idempotent(tmp_path: Path, monkeypatch) -> None:
     )
 
 
-def test_workspace_yml_materialised_from_template_verbatim(
+def test_workspace_yml_materialized_from_template_verbatim(
     tmp_path: Path, monkeypatch,
 ) -> None:
     """``setup`` writes ``workspace.yml`` from the canonical template.
@@ -104,7 +104,7 @@ def test_workspace_yml_materialised_from_template_verbatim(
 
     workspace_yml = tmp_path / "workspace.yml"
     assert workspace_yml.is_file()
-    # The materialised file comes verbatim from the template.
+    # The materialized file comes verbatim from the template.
     assert workspace_yml.read_text() == read_workspace_yml_template()
 
 

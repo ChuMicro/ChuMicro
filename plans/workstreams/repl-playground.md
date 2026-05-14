@@ -124,9 +124,9 @@ The current TUI (`workbench/repl/src/chumicro_repl/tui.py`) is a tight passthrou
 
 Three input modes, hot-toggleable mid-session:
 
-| Mode | Behaviour | Use |
+| Mode | Behavior | Use |
 |---|---|---|
-| **Passthrough** | Every byte goes straight to the device.  Today's behaviour. | Raw REPL, paste-mode, anything that wants exact byte forwarding. |
+| **Passthrough** | Every byte goes straight to the device.  Today's behavior. | Raw REPL, paste-mode, anything that wants exact byte forwarding. |
 | **Line** | Host buffers input via `prompt_toolkit`; user gets cursor edit, history, history-search (Ctrl-R), bracket matching.  On Enter, the full line ships to the device.  Lines starting with `:` are parsed as REPL commands (intercepted, not forwarded). | The default mode for typing code at the `>>>` prompt.  Where 95 % of interactive use happens. |
 | **Edit** | Host opens `$EDITOR` with a scratch buffer.  On save+exit, ships the buffer to the device line-by-line. | Multi-line code authoring.  Triggered by `:edit`. |
 

@@ -63,11 +63,11 @@ The decision this workstream executed has been promoted to [Decision 0055](../de
 - Update `docs/contributing/device-testing.md` + `CONTRIBUTING.md` for the new flow.
 
 **Workbench-payload consolidation (added mid-Phase-1 after user pushback):**
-- The user asked: "Why does the template repo need a devices.yml template?  Can't this be a shared workbench item with the mono-repo?"  Answer: yes.  The canonical starter content is now owned by `chumicro-workspace` at `_payloads/devices_yml/starter.yml.template`, exposed via `chumicro_workspace.read_devices_yml_starter()`.  Mono-repo's `scripts/generate_config_files.py` materialises `devices.yml` from this reader (no longer from `scripts/templates/devices.yml.template` — that file is deleted as residue).  Single source of truth.
+- The user asked: "Why does the template repo need a devices.yml template?  Can't this be a shared workbench item with the mono-repo?"  Answer: yes.  The canonical starter content is now owned by `chumicro-workspace` at `_payloads/devices_yml/starter.yml.template`, exposed via `chumicro_workspace.read_devices_yml_starter()`.  Mono-repo's `scripts/generate_config_files.py` materializes `devices.yml` from this reader (no longer from `scripts/templates/devices.yml.template` — that file is deleted as residue).  Single source of truth.
 
 **Workspace-template half (small follow-up after this phase lands):**
 - Add `ide_runtime: micropython` to `_workspace_template/devices.yml`'s `defaults:` block so workspace-template users who scaffold their own libraries get the same IDE play-button targeting as mono-repo contributors.  Fully additive — schema reader already accepts the field.
-- Replace `_workspace_template/devices.yml` itself with a call to `chumicro_workspace.read_devices_yml_starter()` from the template repo's setup flow, so the template repo also materialises from the workbench payload instead of carrying its own static copy.  Deletes residue, completes the unification.
+- Replace `_workspace_template/devices.yml` itself with a call to `chumicro_workspace.read_devices_yml_starter()` from the template repo's setup flow, so the template repo also materializes from the workbench payload instead of carrying its own static copy.  Deletes residue, completes the unification.
 
 **Files touched (mono-repo):** ~6.  Estimated 1 session.
 
@@ -96,9 +96,9 @@ The decision this workstream executed has been promoted to [Decision 0055](../de
 **Scope (executed):**
 - `workspace.yml` at mono-repo root populated with `[defaults.wifi]` (ssid + `!secret wifi_password` reference), `[defaults.mqtt.broker]` (host: `test.mosquitto.org`, port: 1883), commented-out `library_sources:` / `deploy_targets:` / `quality:` blocks documenting the full shape.  Mirror of the workspace-template repo's `workspace.yml` plus mono-repo-specific defaults (`mqtt.broker` for `libraries/mqtt/functional_tests/test_real_*.py`).
 - New `secrets.yml` starter content owned by `chumicro-workspace` at `_payloads/secrets_yml/starter.yml.template`, exposed via `chumicro_workspace.read_secrets_yml_starter()`.  Same workbench-payload pattern Phase 1 applied to `devices.yml` — single source of truth shared between the mono-repo and the workspace-template repo.
-- `scripts/generate_config_files.py` materialises both `devices.yml` and `secrets.yml` from the workbench payloads (de-duplicated via a shared `_materialise_from_workbench` helper).  `chumicro-dev-config.toml` still materialised from `scripts/templates/` until Phase 4 retires it.
+- `scripts/generate_config_files.py` materializes both `devices.yml` and `secrets.yml` from the workbench payloads (de-duplicated via a shared `_materialize_from_workbench` helper).  `chumicro-dev-config.toml` still materialized from `scripts/templates/` until Phase 4 retires it.
 - `.gitignore` gains `secrets.yml`.  `workspace.yml` is *not* gitignored (committed — no secrets in it; secrets live in `secrets.yml` referenced via `!secret`).
-- Tests: 4 new in `test_secrets_yml_starter.py`; 1 new in `test_generate_config_files.py` covering the workbench-payload materialisation.
+- Tests: 4 new in `test_secrets_yml_starter.py`; 1 new in `test_generate_config_files.py` covering the workbench-payload materialization.
 - `docs/contributing/device-testing.md` rewritten — old "device-config.yml" section (which was already stale; the actual file was `chumicro-dev-config.toml`) replaced with the unified workspace.yml + secrets.yml flow plus a "Legacy: chumicro-dev-config.toml" subsection explaining the Phase 4 migration.
 
 **Workspace-template half (small follow-up after Phase 3 lands):**
@@ -106,8 +106,8 @@ The decision this workstream executed has been promoted to [Decision 0055](../de
 
 **Phase 4 next steps that this enables:**
 - Functional-test conftests (`libraries/{wifi,requests,http_server,mqtt,sockets}/functional_tests/conftest.py`) migrate from `chumicro-dev-config.toml` → `workspace.yml + secrets.yml + per-library config.toml + chumicro-pytest-device's bake-config flag`.
-- `chumicro-dev-config.toml.template` deleted; the legacy materialisation in `generate_config_files.py` removed.
-- The `_test_creds.py` materialisation pattern across every networking-library conftest deleted in favour of `chumicro_config.load_runtime_config()`.
+- `chumicro-dev-config.toml.template` deleted; the legacy materialization in `generate_config_files.py` removed.
+- The `_test_creds.py` materialization pattern across every networking-library conftest deleted in favor of `chumicro_config.load_runtime_config()`.
 
 ### Phase 4 — functional tests dogfood the unified config sources *(done)*
 
@@ -115,8 +115,8 @@ The decision this workstream executed has been promoted to [Decision 0055](../de
 
 The original draft had the on-device test code call `chumicro_config.load_runtime_config()` directly (full dogfooding of the user-facing path).  That requires `chumicro-pytest-device` to stage a binary `runtime_config.msgpack` onto the device alongside the test files, which means extending `transport.stage()`'s API to accept `extra_files: dict[str, bytes]` — a transport-API change that touches CP / MP / fake transports and warrants its own decision pass.  Splitting the cost-benefit by half:
 
-- **What landed in Phase 4:** every networking-library functional-test conftest now reads the unified config sources (`workspace.yml` + per-library `functional_tests/config.toml` + `secrets.yml` via `chumicro_workspace.compose_runtime_config`).  The `_test_creds.py` materialisation pattern stays, but the data flowing into it comes from the unified pipeline instead of the legacy `chumicro-dev-config.toml`.  Half the dogfooding (host-side data flow) — sufficient to retire the legacy file.
-- **Deferred to a follow-up phase:** the on-device test code dropping the `_test_creds.py` import in favour of `from chumicro_config import load_runtime_config; config = load_runtime_config()`.  Gated on the transport-API change.
+- **What landed in Phase 4:** every networking-library functional-test conftest now reads the unified config sources (`workspace.yml` + per-library `functional_tests/config.toml` + `secrets.yml` via `chumicro_workspace.compose_runtime_config`).  The `_test_creds.py` materialization pattern stays, but the data flowing into it comes from the unified pipeline instead of the legacy `chumicro-dev-config.toml`.  Half the dogfooding (host-side data flow) — sufficient to retire the legacy file.
+- **Deferred to a follow-up phase:** the on-device test code dropping the `_test_creds.py` import in favor of `from chumicro_config import load_runtime_config; config = load_runtime_config()`.  Gated on the transport-API change.
 
 **Files touched (this phase):**
 
@@ -141,12 +141,12 @@ The original draft had the on-device test code call `chumicro_config.load_runtim
 
 Two paths the user is weighing:
 
-1. **Drop in mono-repo only.**  Mono-repo's `workspace.yml` becomes gitignored, holds wifi/mqtt creds in plaintext, no `secrets.yml`, no `!secret` marker resolution.  Materialised from a workbench-owned starter the same way Phase 1 did `devices.yml`.  Walks back the Phase 3 design partially — drop `secrets.yml` materialisation, drop the `!secret wifi_password` marker, put `password: replace-with-your-wifi-password` directly in the workspace.yml starter.  Workspace-template repo retains the three-file split (`workspace.yml` committed + per-project `config.toml` committed + `secrets.yml` gitignored, with `!secret` markers).  Two patterns coexist; "unification" is partial.
+1. **Drop in mono-repo only.**  Mono-repo's `workspace.yml` becomes gitignored, holds wifi/mqtt creds in plaintext, no `secrets.yml`, no `!secret` marker resolution.  Materialized from a workbench-owned starter the same way Phase 1 did `devices.yml`.  Walks back the Phase 3 design partially — drop `secrets.yml` materialization, drop the `!secret wifi_password` marker, put `password: replace-with-your-wifi-password` directly in the workspace.yml starter.  Workspace-template repo retains the three-file split (`workspace.yml` committed + per-project `config.toml` committed + `secrets.yml` gitignored, with `!secret` markers).  Two patterns coexist; "unification" is partial.
 2. **Drop everywhere** (including the workspace-template's user-facing pattern).  Either user-facing `workspace.yml` + per-project `config.toml` become gitignored (loses the "commit your project structure, only secrets are local" property), or both repos accept that secrets travel with the same file as non-secret config.
 
 **Lean from the side-chat:** drop in mono-repo only, pending the user's call on the template.
 
-**Why this is deferred:** the lift is small (one workspace.yml content edit + drop the secrets.yml materialisation in `generate_config_files.py` + delete the secrets.yml.starter payload + update gitignore + update tests), but it's a structural call about the unification premise — different from Phase 4's mechanical conftest migration.  Doing them together would muddy the commit story.  Phase 4 lands first using the current `!secret` shape; Phase 4.5 walks it back if/when the user picks path 1.
+**Why this is deferred:** the lift is small (one workspace.yml content edit + drop the secrets.yml materialization in `generate_config_files.py` + delete the secrets.yml.starter payload + update gitignore + update tests), but it's a structural call about the unification premise — different from Phase 4's mechanical conftest migration.  Doing them together would muddy the commit story.  Phase 4 lands first using the current `!secret` shape; Phase 4.5 walks it back if/when the user picks path 1.
 
 ### Phase 5 — IDE wiring + final cleanup *(done)*
 

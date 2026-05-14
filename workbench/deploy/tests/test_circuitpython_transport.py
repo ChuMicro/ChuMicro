@@ -26,7 +26,7 @@ from chumicro_deploy.testing import (
     isolate_from_host_filesystem,
 )
 
-#: Shorthand for the standard autoreload REPL acknowledgement.
+#: Shorthand for the standard autoreload REPL acknowledgment.
 _OK_RESPONSE = b"OK\x04\x04>"
 
 #: Test-only board identity used by :func:`_plant_verifiable_circuitpy` —
@@ -2626,7 +2626,7 @@ class TestDriveVerification:
     def test_read_boot_out_identity_extracts_uid_line(
         self, tmp_path: Path,
     ) -> None:
-        """``UID:`` line is extracted and normalised to uppercase."""
+        """``UID:`` line is extracted and normalized to uppercase."""
         from chumicro_deploy.circuitpy_drive import (
             _read_boot_out_identity,
         )

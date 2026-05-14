@@ -93,7 +93,7 @@ class CaseInsensitiveDict:
     to keep the embedded footprint small.
 
     Inlined from chumicro-requests to keep the server self-contained;
-    behaviour matches :class:`chumicro_requests.CaseInsensitiveDict`
+    behavior matches :class:`chumicro_requests.CaseInsensitiveDict`
     byte-for-byte.
     """
 
@@ -194,7 +194,7 @@ def parse_charset(content_type: str | None) -> str:
     historical RFC 2616 defaulted text to ISO-8859-1.
 
     Inlined from chumicro-requests to keep the server self-contained;
-    behaviour matches :func:`chumicro_requests.parse_charset`
+    behavior matches :func:`chumicro_requests.parse_charset`
     byte-for-byte.
 
     Args:

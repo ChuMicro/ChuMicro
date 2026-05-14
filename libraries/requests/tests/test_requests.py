@@ -1902,7 +1902,7 @@ class TestFromConfig:
 
     def test_explicit_connection_factory_bypasses_auto_factory(self):
         """Passing a connection_factory skips the auto-built one entirely
-        — caller owns the connection-opening behaviour."""
+        — caller owns the connection-opening behavior."""
         from chumicro_requests import HttpClient
 
         factory, _ = self._injected_factory()

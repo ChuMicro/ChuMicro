@@ -347,7 +347,7 @@ def test_cancel_in_flight_marks_failed() -> None:
     assert client.cancel() is True
     assert request.done is True
     assert isinstance(request.error, NTPError)
-    assert "cancelled" in str(request.error)
+    assert "canceled" in str(request.error)
 
 
 # ---------------------------------------------------------------------------

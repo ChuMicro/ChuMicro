@@ -171,7 +171,7 @@ class TestParseProbeOutput:
         assert result.uid == "E6614103E7174624"
 
     def test_uid_marker_is_uppercased(self) -> None:
-        """UID probes are normalised to upper-case hex."""
+        """UID probes are normalized to upper-case hex."""
         output = (
             "__CHU_IMPL__:circuitpython|10.2.0|S2Mini\n"
             "__CHU_UID__:487f301f0224\n"

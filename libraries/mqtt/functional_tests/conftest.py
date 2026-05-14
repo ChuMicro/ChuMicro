@@ -176,7 +176,7 @@ def pytest_configure(config: pytest.Config) -> None:
             else:
                 shutil.rmtree(workdir, ignore_errors=True)
 
-        # If the local mosquitto fixture didn't take over, honour the
+        # If the local mosquitto fixture didn't take over, honor the
         # workspace-template placeholder by suppressing the payload —
         # ``required_keys`` then skips the session at collection time.
         # Mirrors the wifi-ssid placeholder handling above.

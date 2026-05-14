@@ -34,7 +34,7 @@ The doc was written 2026-04-26 with status "proposed" + the audit verdict below 
 * **Step 5 — `chumicro-workspace demo`.**  Baked-in cross-runtime print-loop payload (`DEMO_PAYLOAD` constant) deploys to the active device + tails ~5s.  Stdlib-only so it works on any registered MP / CP board.
 * **Step 6 — `chumicro-requests` library.**  Six slices (3a–3f) shipped end-to-end: plain HTTP GET → body decode → HTTPS → POST/PUT/PATCH/DELETE + JSON helper → redirects → chunked decode.  Live-board verified on Pi Pico W CP + MP.  Decision 0040 (chumicro-requests + factory helper pattern) is the design ADR.
 * **Step 7 — `chumicro-http-server` library.**  Five slices (7a, 7b, 7d, 7t, 7-correction) shipped: scaffold + Decision 0041 + sockets `tcp_listening_socket` helper → routing decorator with `<param>` extraction → live-board verification across the four-board canonical matrix → TLS server investigation (works on MP rp2 + ESP32-S2 family on both runtimes; CP rp2 blocked at platform level).
-* **Step 8 — two-thing demo + examples organisation.**  `libraries/http_server/examples/circuitpython_two_thing_{server,sensor}.py` shipped — sensor POSTs sine-wave readings via `chumicro-requests` to a server displaying via `chumicro-http-server`.  Step 8's status log says: *"Step 8 closes out the beginner-onramp workstream's eight-step sequence."*
+* **Step 8 — two-thing demo + examples organization.**  `libraries/http_server/examples/circuitpython_two_thing_{server,sensor}.py` shipped — sensor POSTs sine-wave readings via `chumicro-requests` to a server displaying via `chumicro-http-server`.  Step 8's status log says: *"Step 8 closes out the beginner-onramp workstream's eight-step sequence."*
 
 ### Follow-on papercuts surfaced 2026-05-06 — all shipped same day
 

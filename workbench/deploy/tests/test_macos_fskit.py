@@ -114,7 +114,7 @@ def test_detect_false_when_pgrep_stdout_is_empty() -> None:
 
 
 def test_detect_false_when_pgrep_prints_non_numeric() -> None:
-    # Defence against a corrupted shell env where pgrep emits
+    # Defense against a corrupted shell env where pgrep emits
     # something weird — never pass it to ps.
     runner, _calls = _scripted_runner(
         [
@@ -163,7 +163,7 @@ def test_detect_false_when_ps_times_out() -> None:
 
 def test_detect_true_with_leading_whitespace_state() -> None:
     # ``ps -o state=`` on macOS often emits a leading space before
-    # the state letter; strip/contains checks must still recognise
+    # the state letter; strip/contains checks must still recognize
     # the wedge.
     runner, _calls = _scripted_runner(
         [

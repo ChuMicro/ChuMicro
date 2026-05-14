@@ -406,7 +406,7 @@ def test_physical_failures_are_retryable(kind: DeployFailureKind) -> None:
 
 
 # ---------------------------------------------------------------------------
-# InteractiveDeployer — retry loop + prompt behaviour
+# InteractiveDeployer — retry loop + prompt behavior
 # ---------------------------------------------------------------------------
 
 
@@ -1303,28 +1303,28 @@ class TestLooksLikeChumicro:
 
         return PortHolder(pid=12345, command=command)
 
-    def test_chumicro_deploy_subprocess_is_recognised(self) -> None:
+    def test_chumicro_deploy_subprocess_is_recognized(self) -> None:
         from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
 
         assert _looks_like_chumicro(self._holder(
             "/usr/bin/python /path/.venv/bin/chumicro-deploy ...",
         ))
 
-    def test_run_py_deploy_is_recognised(self) -> None:
+    def test_run_py_deploy_is_recognized(self) -> None:
         from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
 
         assert _looks_like_chumicro(self._holder(
             "/usr/bin/python /workspace/run.py deploy hello_world",  # noqa: CHU006 — workspace shim command name is data here
         ))
 
-    def test_mpremote_subprocess_is_recognised(self) -> None:
+    def test_mpremote_subprocess_is_recognized(self) -> None:
         from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
 
         assert _looks_like_chumicro(self._holder(
             "/usr/bin/python /path/mpremote connect /dev/cu.x exec ...",
         ))
 
-    def test_external_apps_are_not_recognised(self) -> None:
+    def test_external_apps_are_not_recognized(self) -> None:
         from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
 
         for command in (

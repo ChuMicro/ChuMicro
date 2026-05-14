@@ -1,6 +1,6 @@
 """Interactive recovery layer around :class:`Deployer`.
 
-Transport failures during deploy come in a small number of flavours —
+Transport failures during deploy come in a small number of flavors —
 port busy, CIRCUITPY drive missing, raw REPL unresponsive, rsync
 balked mid-copy.  All but a few are recoverable by the user taking
 a concrete physical action (close a program holding the port, tap
@@ -148,7 +148,7 @@ _BOOTSTRAP_EXEC_PATTERNS = (
 )
 
 #: Deploy-call misconfiguration — wrong flag, missing file, etc.
-#: These are programmer errors, not runtime conditions.  Classifier
+#: These are programr errors, not runtime conditions.  Classifier
 #: only flags them to steer retry decisions; the message is what
 #: the caller actually reads.
 _CONFIGURATION_PATTERNS = (
@@ -257,7 +257,7 @@ class PortHolder:
     command: str
 
 
-#: Recognise ``/dev/cu.X`` (macOS) and ``/dev/ttyACM0`` /
+#: Recognize ``/dev/cu.X`` (macOS) and ``/dev/ttyACM0`` /
 #: ``/dev/ttyUSB0`` (Linux) paths embedded in transport-error text.
 #: Used by :func:`_extract_port_path_from_error` to drive the
 #: post-failure ``lsof`` lookup.  The character class is restricted
@@ -458,7 +458,7 @@ class _RecoveringDeployer:
         """Print the lsof diagnosis for ``PORT_UNAVAILABLE`` failures.
 
         Pulls the port path out of *error*'s text, runs
-        :func:`diagnose_port_holders`, and emits a labelled section
+        :func:`diagnose_port_holders`, and emits a labeled section
         when something is holding the port.  Silently no-ops when
         the port can't be identified, lsof is unavailable, or the
         port has no current holders (the user-action recovery
@@ -672,7 +672,7 @@ class InteractiveDeployer(_RecoveringDeployer):
         """Deploy *source*, prompting the user to recover on failure.
 
         Signature matches :meth:`Deployer.deploy` exactly — all
-        callback parameters are forwarded.  The only new behaviour
+        callback parameters are forwarded.  The only new behavior
         is the retry loop + user prompts on classified failures.
         """
         return self._retry_loop(
@@ -701,7 +701,7 @@ class InteractiveDeployer(_RecoveringDeployer):
 
         Signature matches :meth:`Deployer.deploy_diff` exactly — all
         callback parameters and the ``wipe`` flag are forwarded.  The
-        only new behaviour is the retry loop + user prompts on
+        only new behavior is the retry loop + user prompts on
         classified failures, identical in shape to :meth:`deploy`.
         """
         return self._retry_loop(
@@ -773,8 +773,8 @@ class InteractiveDeployer(_RecoveringDeployer):
             f"Enter to retry (attempt {attempt + 1}/"
             f"{self._max_attempts}), or type 'quit' to abort: "
         )
-        normalised = response.strip().lower()
-        if not normalised:
+        normalized = response.strip().lower()
+        if not normalized:
             return True
-        first_char = normalised[0]
+        first_char = normalized[0]
         return first_char not in ("q", "a", "e")

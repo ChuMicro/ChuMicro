@@ -1036,7 +1036,7 @@ class TestTestCpython:
         package_dir = _make_test_package(fake_root, "timing")
         monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
 
-        # _run_pytest_capturing normalises pytest exit code 5 ("no tests
+        # _run_pytest_capturing normalizes pytest exit code 5 ("no tests
         # collected") to 0, mimicking what stream_subprocess + the
         # downstream remap would do for a real pytest run.
         def fake_stream(command, **_kwargs):

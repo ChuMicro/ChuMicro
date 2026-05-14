@@ -35,7 +35,7 @@ The board probe is the only slow check (~1 s).  It runs anyway because its outpu
 
 ### 3. Four first-touch board states
 
-Every `deploy-example` run resolves to one of these four states.  Behaviour for each is fixed (rejected: per-state user override flags — too many knobs for a beginner-front-door command).
+Every `deploy-example` run resolves to one of these four states.  Behavior for each is fixed (rejected: per-state user override flags — too many knobs for a beginner-front-door command).
 
 | State | Detection | Interactive | Non-interactive |
 |---|---|---|---|
@@ -66,7 +66,7 @@ State (3)'s firmware-install sub-wizard is *only* available in interactive mode.
 | 2 | Precheck failed (file missing, wrong runtime marker, missing config key) |
 | 3 | No device registered for runtime, `--no-auto-register` in effect |
 | 4 | Deploy itself failed (bubbled from a `DeployFailureKind` with recovery hints on stderr) |
-| 5 | Bootstrap wizard cancelled by user (interactive mode only) |
+| 5 | Bootstrap wizard canceled by user (interactive mode only) |
 | 6 | `NO_PYTHON_RUNTIME` — board has Arduino or unknown firmware |
 
 Distinct codes are load-bearing for agent/CI use — an agent can branch on the code without parsing stderr.

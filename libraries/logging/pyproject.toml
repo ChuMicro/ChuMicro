@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-logging"
 dynamic = ["version"]
-description = "Levelled logging for chumicro libraries — runner-friendly, no chumicro deps."
+description = "Leveled logging for chumicro libraries — runner-friendly, no chumicro deps."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

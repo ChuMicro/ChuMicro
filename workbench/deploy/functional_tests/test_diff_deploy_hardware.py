@@ -274,7 +274,7 @@ def test_circuitpython_ram_diff_deploy_collapses_to_plain(
 
 
 def test_fake_transport_matches_real_contract() -> None:
-    """Hardware-free check: FakeTransport's deploy_diff round-trip behaviour
+    """Hardware-free check: FakeTransport's deploy_diff round-trip behavior
     matches the real transport's contract (list/delete/deploy update
     the on-device state visibly).
 

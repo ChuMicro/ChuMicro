@@ -37,7 +37,7 @@ def _merged_runtime_config_with_creds() -> dict | None:
     """Return the deep-merged + flattened runtime-config dict, or ``None``.
 
     Returns the dict only when wifi credentials are configured —
-    matches the pre-migration behaviour where the on-device tests
+    matches the pre-migration behavior where the on-device tests
     silently skipped on missing creds.
     """
     if not _SECRETS_TOML.is_file():

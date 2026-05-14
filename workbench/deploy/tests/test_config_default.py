@@ -185,7 +185,7 @@ class TestLoadRawEntries:
         assert defaults["deploy_mode"] == "ram"
 
     def test_returns_raw_dicts_unchanged(self, tmp_path: Path) -> None:
-        """No normalisation: keys are exactly as written."""
+        """No normalization: keys are exactly as written."""
         yaml_path = _write(tmp_path, _MINIMAL_YAML)
         entries, _defaults = load_raw_entries(yaml_path)
         assert entries[0].get("runtime") == "micropython"

@@ -161,7 +161,7 @@ _LIST_SCOPE_SCRIPT: str = (
 #: gets remounted on boot.
 #:
 #: A plain recursive ``os.remove`` walk leaves LittleFS metadata
-#: blocks + wear-levelling artifacts on flash, so a board that
+#: blocks + wear-leveling artifacts on flash, so a board that
 #: filled up over many test runs (Pi Pico W LittleFS partition is
 #: ~850 KB; lolin-s2-mp's ``vfs`` partition is 2 MB) can still hit
 #: ``ENOSPC`` mid-deploy after a "wipe."  ``VfsLfs2.mkfs`` reformats

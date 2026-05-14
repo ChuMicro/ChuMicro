@@ -30,15 +30,15 @@ Naming locked to `extra_files` rather than `extra_binaries` / `extra_resources` 
 
 **Positive:**
 
-* `chumicro-pytest-device` can stage `runtime_config.msgpack` alongside test files, completing the dogfooding gap from Decision 0055 §4.  On-device test code drops `from _test_creds import SSID, PASSWORD` in favour of `from chumicro_config import load_runtime_config; config = load_runtime_config()` — same surface user code uses.
+* `chumicro-pytest-device` can stage `runtime_config.msgpack` alongside test files, completing the dogfooding gap from Decision 0055 §4.  On-device test code drops `from _test_creds import SSID, PASSWORD` in favor of `from chumicro_config import load_runtime_config; config = load_runtime_config()` — same surface user code uses.
 * `transport.stage()` now matches `Deployer.deploy()` in expressivity for the binary-staging case.  Future workbench tools that need to stage non-Python artifacts (LittleFS images, calibration tables, pre-baked bytecode) ride the same hook.
 * The `_KNOWN_TEST_SIBLING_MODULES = ("_test_creds.py",)` heuristic in `chumicro_pytest_device._test_runner` retires.  Sibling-file staging becomes explicit (the conftest tells pytest-device what to stage) instead of name-pattern-based.
 
 **Negative:**
 
 * Three transport implementations + `FakeTransport` need new code (~50–80 LOC each, plus tests).  The mode matrix (CP-RAM / CP-flash / MP-mount / MP-copy) gives four meaningfully different code paths.  CP-RAM raising `UnsupportedExtraFilesError` is the easy case; the others write bytes.
-* RAM-mode tests that want runtime-config can no longer stay in RAM mode — they must move to flash.  This is consistent with Decision 0047's framing (RAM mode is for unit-style tests that don't need persistence) but is a behavioural change for any test currently running on RAM that grows a config dependency in Phase 4.5b's conftest-migration session.
-* The on-device migration (deleting `_test_creds.py` materialisation, rewriting test files to call `load_runtime_config`) is scoped separately and gated on this ADR + transport extension shipping first.
+* RAM-mode tests that want runtime-config can no longer stay in RAM mode — they must move to flash.  This is consistent with Decision 0047's framing (RAM mode is for unit-style tests that don't need persistence) but is a behavioral change for any test currently running on RAM that grows a config dependency in Phase 4.5b's conftest-migration session.
+* The on-device migration (deleting `_test_creds.py` materialization, rewriting test files to call `load_runtime_config`) is scoped separately and gated on this ADR + transport extension shipping first.
 
 **Neutral:**
 

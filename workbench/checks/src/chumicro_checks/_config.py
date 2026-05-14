@@ -6,7 +6,7 @@ table::
     [tool.chumicro-checks]
     ignore = ["CHU012"]
 
-Recognised keys:
+Recognized keys:
 
 * ``ignore`` — list of CHU codes to skip in this repo.  Takes effect
   by default; CLI ``--ignore`` adds to it; CLI ``--select`` overrides

@@ -136,7 +136,7 @@ def _circuitpy_volume_candidates() -> list[Path]:
 def _read_boot_out_text(drive_path: Path) -> str | None:
     """Return the full text of ``boot_out.txt`` on *drive_path*, or ``None``.
 
-    Centralised so the identity reader has one error-swallowing policy.
+    Centralized so the identity reader has one error-swallowing policy.
     A missing or unreadable file yields ``None`` and the caller
     degrades gracefully.
     """

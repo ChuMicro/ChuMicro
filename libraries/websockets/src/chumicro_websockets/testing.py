@@ -27,7 +27,7 @@ __chumicro_runtimes__ = ("cpython",)
 
 
 class FakeConnection:
-    """Bidirectional in-memory pipe modelling :class:`TCPClientSocket`.
+    """Bidirectional in-memory pipe modeling :class:`TCPClientSocket`.
 
     Inject into :class:`WebSocketClient` via ``connection_factory=lambda
     *_args, **_kwargs: FakeConnection()``, or hand into a
@@ -41,7 +41,7 @@ class FakeConnection:
 
     The fake is non-blocking: an empty inbound buffer raises
     ``OSError(EAGAIN)``.  Closing inbound via :meth:`close_inbound`
-    flips the EAGAIN behaviour to "EOF" so tests can simulate a
+    flips the EAGAIN behavior to "EOF" so tests can simulate a
     peer disconnecting.
 
     Error injection:

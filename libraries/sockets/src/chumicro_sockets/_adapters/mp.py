@@ -200,7 +200,7 @@ class _MpUDPWrapper:  # pragma: no cover - device only
 
     MP's UDP socket exposes ``sendto((data, address))`` as
     ``sendto(data, address_tuple)`` and ``recvfrom(nbytes)`` returning
-    ``(data, address)``.  We normalise both into the separated-arg
+    ``(data, address)``.  We normalize both into the separated-arg
     public surface and polyfill ``recvfrom_into`` via ``recvfrom`` +
     bytearray copy (matches the TCP ``_MpSocketWrapper.recv_into``
     polyfill rationale: small one-shot allocation, no concurrent

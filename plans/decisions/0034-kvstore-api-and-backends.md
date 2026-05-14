@@ -80,7 +80,7 @@ guarantees and is the obvious match for ESP32 boards, but a caller
 with a reason to prefer file-based storage on the same board can
 pass `backend="littlefs"` and the LittleFS backend will use the
 mounted filesystem regardless of whether `esp32.NVS` is also
-available.  Auto-detect optimises for the common case; the explicit
+available.  Auto-detect optimizes for the common case; the explicit
 strings exist so users aren't locked in.
 
 ### 3. Mapping-shaped API, plus three explicit lifecycle methods
@@ -123,7 +123,7 @@ capacity, read LEN payload bytes, verify CRC.  Any check failing →
 `is_corrupt = True`, store resets to empty in-memory, `commit()` then
 overwrites the corrupt slab cleanly.
 
-MAGIC distinguishes "blank flash" from "corrupted write" — without it, a freshly-initialised slab (all `0xFF` or `0x00`) computes a CRC over random bytes and reports a corruption event on every first boot.  uint16 LEN saves 2 bytes vs uint32; the library raises at construction if a future backend exposes >64 KB of NVM.
+MAGIC distinguishes "blank flash" from "corrupted write" — without it, a freshly-initialized slab (all `0xFF` or `0x00`) computes a CRC over random bytes and reports a corruption event on every first boot.  uint16 LEN saves 2 bytes vs uint32; the library raises at construction if a future backend exposes >64 KB of NVM.
 
 ### 6. MP NVS encoding: single payload blob under a fixed key
 
@@ -206,7 +206,7 @@ shaped class can be added then alongside it.
 
 ### 10. Values round-trip via `chumicro-msgpack`
 
-`KVStore` uses `chumicro_msgpack` for all encoding — no per-backend serialisation.  Supported types: `int`, `bool`, `float`, `str`, `bytes`, `list`/`tuple` (decoded back as `list`), `dict` (str keys only), `None`.  Cycles raise `TypeError` from msgpack's encoder.
+`KVStore` uses `chumicro_msgpack` for all encoding — no per-backend serialization.  Supported types: `int`, `bool`, `float`, `str`, `bytes`, `list`/`tuple` (decoded back as `list`), `dict` (str keys only), `None`.  Cycles raise `TypeError` from msgpack's encoder.
 
 ## Consequences
 

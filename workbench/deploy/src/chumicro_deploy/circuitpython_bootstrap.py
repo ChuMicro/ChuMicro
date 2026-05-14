@@ -5,10 +5,10 @@ CircuitPython raw REPL.  Two builders share the same helper-function
 prefix:
 
 - :func:`build_circuitpython_bootstrap_scripts` — test-harness
-  flavour.  Registers library modules via the class-as-module
+  flavor.  Registers library modules via the class-as-module
   pattern (no ``types.ModuleType`` on CircuitPython), inlines a test
   file, and runs it through ``chumicro_test_harness.runner.run_module``.
-- :func:`build_circuitpython_deploy_scripts` — deploy flavour.
+- :func:`build_circuitpython_deploy_scripts` — deploy flavor.
   Registers every non-entrypoint file as an importable module, then
   ``exec()``-s the entrypoint as ``__main__``.  No test-harness
   dependency — the deploy tail is two lines long, kept as an inline
@@ -235,8 +235,8 @@ def _build_shared_prelude(
     """Return the helper + stub + population scripts both builders share.
 
     Both :func:`build_circuitpython_bootstrap_scripts` (test-harness
-    flavour) and :func:`build_circuitpython_deploy_scripts` (deploy
-    flavour) emit the same prelude — the class-as-module helper
+    flavor) and :func:`build_circuitpython_deploy_scripts` (deploy
+    flavor) emit the same prelude — the class-as-module helper
     definitions, the stub-registration pass, and the population pass
     — and diverge only on the final exec script.  Extracted here so
     a touch to the class-as-module machinery updates one builder

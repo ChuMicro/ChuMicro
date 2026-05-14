@@ -5,7 +5,7 @@ and identical on every supported runtime.
 
 The client speaks **SNTP** — a strict subset of NTPv4 sufficient for
 "what time is it?" queries against any standard NTP server.  Stratum,
-dispersion, and round-trip-delay are not modelled; clients that want
+dispersion, and round-trip-delay are not modeled; clients that want
 them should use a full NTP implementation (out of scope for embedded).
 
 Wire format reference: RFC 4330 §4.
@@ -381,10 +381,10 @@ class NTPClient:
 
         Returns:
             ``True`` if a query was in flight (now marked errored
-            with ``NTPError("cancelled")``); ``False`` if the client
+            with ``NTPError("canceled")``); ``False`` if the client
             was idle.
         """
         if not self.busy:
             return False
-        self._result._fail(NTPError("cancelled"))
+        self._result._fail(NTPError("canceled"))
         return True

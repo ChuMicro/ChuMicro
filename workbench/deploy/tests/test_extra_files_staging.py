@@ -1,6 +1,6 @@
 """Tests for ``transport.stage(extra_files=...)``.
 
-Verifies the per-transport behaviour of the ``extra_files``
+Verifies the per-transport behavior of the ``extra_files``
 keyword.  Three concrete transports + the host-side
 :class:`FakeTransport` each get a slice:
 

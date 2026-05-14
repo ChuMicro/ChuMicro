@@ -96,7 +96,7 @@ class InFlightPublish:
 class InFlightTable:
     """Indexed collection of :class:`InFlightPublish`, keyed by packet_id.
 
-    Centralises packet-id allocation: callers ask for the next free
+    Centralizes packet-id allocation: callers ask for the next free
     id, the table picks the next 1-65535 wraparound that isn't already
     in flight.  Packet-id 0 is reserved by the spec.  An exhausted
     id-space (every 65535 ids in flight) raises :class:`OverflowError`

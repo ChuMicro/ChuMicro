@@ -2,7 +2,7 @@
 
 <img src="support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Welcome.  ChuMicro is an open platform for cross-runtime Python libraries targeting CircuitPython, MicroPython, and CPython.  Whether you're fixing a typo, adding tests, or publishing your own library — you belong here.
+Welcome.  ChuMicro is a family of cross-runtime Python libraries for CircuitPython, MicroPython, and CPython.  Whether you're fixing a typo, adding tests, or publishing your own library — you belong here.
 
 **You don't need to be an expert.**  The tooling handles most of the hard parts (coverage, linting, cross-runtime checks, release automation).  If you can run a few commands and follow the guidelines, you can contribute.
 
@@ -12,7 +12,7 @@ Welcome.  ChuMicro is an open platform for cross-runtime Python libraries target
 
 ## What you're contributing to
 
-ChuMicro is a family of small Python libraries for microcontroller projects — WiFi, MQTT, HTTP client and server, sockets, NTP, websockets, timing helpers, levelled logging, persistent storage, and more.  Each library installs independently and runs unmodified on CircuitPython, MicroPython, and CPython.  Instead of `async` / `await`, every networked service follows a tick-based cooperative-loop pattern that's transparent to debug on a serial console.
+ChuMicro is a family of small Python libraries for microcontroller projects — WiFi, MQTT, HTTP server and client, sockets, NTP, websockets, timing helpers, leveled logging, persistent storage, and more.  Each library installs independently and runs unmodified on CircuitPython, MicroPython, and CPython.  Instead of `async` / `await`, every networked service follows a tick-based cooperative-loop pattern that's easy to debug from a serial console.
 
 A few things this shape means for contributing:
 
@@ -181,7 +181,7 @@ Specifically, preflight runs:
 - **Example imports** — every example file under `libraries/*/examples/` must parse and import cleanly.
 - **API + version checks** — flags removed public symbols without a `VERSION` bump.
 
-CI runs the same `preflight` command on every push, plus a few extras that are expensive locally — building distribution wheels, validating the CircuitPython and MicroPython bundle packagings.  Anything CI catches that preflight wouldn't is a tooling gap, not a contributor responsibility — file it as a bug; the goal is preflight ↔ CI parity.
+CI runs the same `preflight` command on every push, plus a few extras that are expensive locally — building distribution wheels, validating the CircuitPython and MicroPython bundle packagings.  Anything CI catches that preflight wouldn't is a tooling gap, not a contributor responsibility — file it as a bug; preflight is meant to run the same checks CI runs.
 
 A passing preflight is the bar for opening a PR.
 
@@ -189,7 +189,7 @@ A passing preflight is the bar for opening a PR.
 
 Every library has a per-library coverage gate (85% by default, configured in each library's `pyproject.toml`).  If your tests don't exercise enough lines, `run.py test` fails with the `Missing` column showing exactly which lines need coverage.
 
-You don't need to opt in — `pytest` and preflight apply the gate automatically.  Agent-driven workflows run against a stricter version of the same gate, which the tooling switches to on its own.
+You don't need to opt in — `pytest` and preflight apply the gate automatically.  Agent-driven workflows clear a 94% gate instead of 85%; the tooling switches threshold automatically.
 
 The [cheat sheet](docs/contributing/cheat-sheet.md) has the command for browsing covered vs uncovered lines as an HTML report.
 
@@ -269,7 +269,7 @@ A maintainer reviews the PR.  They may approve and merge, request changes, or le
 
 ### After merge
 
-Your change is on `main`.  If you bumped a `VERSION` file, an experimental release publishes automatically — see [Releases and Promotion](docs/contributing/releases.md) for what that means.  If not, the change is just in the next experimental release of whatever library next gets a version bump.
+Your change is on `main`.  If you bumped a `VERSION` file, an experimental release publishes automatically — see [Releases and Promotion](docs/contributing/releases.md) for what that means.  If not, the change ships with the library's next experimental release whenever its `VERSION` is bumped.
 
 You're done.  Next change is easier.
 
@@ -292,47 +292,6 @@ git push --force-with-lease    # update the PR (force is safe with --force-with-
 ```
 
 Rebasing keeps history linear and avoids merge commits cluttering the PR.  See [Git's rebase docs](https://git-scm.com/book/en/v2/Git-Branching-Rebasing) if you hit conflicts you're unsure how to resolve.
-
-## Preflight in depth
-
-`python scripts/run.py preflight` is the one command this guide asks you to memorise.  It runs the automated checks from the [Testing](#testing) section below — CPython unit tests, the same tests under MicroPython and CircuitPython unix-port builds, and example-import checks — plus lint, docs, and version gates.  On-device functional tests are opt-in (`--with-functional`).
-
-### When to run it
-
-- **Always before committing a non-trivial change.**  Preflight catches problems that don't surface in editor / IDE feedback — cross-runtime mismatches, coverage gaps, docstring issues.
-- **Not between every edit.**  Use focused `test --libraries <name>` runs for iteration; save preflight for the contract-with-CI moment.
-- **Before pushing if you rebased.**  Rebasing can re-introduce conflicts in test files; preflight catches them.
-
-### Reading a failure
-
-Preflight prints `FAIL` followed by the failing step.  Common patterns:
-
-- **`Required test coverage of 85.0% not reached`** — your tests don't exercise enough lines.  Look at the `Missing` column to see which lines need coverage.  If the missing lines are runtime-only branches that can't be tested on CPython, mark them with `# pragma: no cover` — see [Style Guide § Coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions).
-- **`ruff check` errors** — code style violation.  Click the file:line in your terminal (if your terminal supports it) or open the file at that line; the error message tells you what's wrong.
-- **`griffe warnings detected`** — docstring formatting issue.  Usually a missing type annotation on a function signature or a malformed `Args:` / `Returns:` section.
-- **`check-version` failure** — you changed library source under `src/` but didn't bump the library's `VERSION` file.  Edit `libraries/<name>/VERSION` (patch bump is usually right) and re-run.
-- **Cross-runtime test failure** — your test passes under CPython but fails under MicroPython or CircuitPython.  Reproduce locally with `pytest libraries/<name>/tests --target unix-port --runtime <X>`.  Usual culprits: `typing` imports (not available on devices), `from __future__` imports (no `__future__` module on devices), relative imports in library code (break CircuitPython RAM-mode deploys).
-
-### Coverage failure on code you didn't touch
-
-If preflight fails coverage on code that's pre-existing, note it in the PR description.  A maintainer can help fill the gap or mark an exception.  Don't artificially bump coverage to pass — that's exactly what the gate is trying to catch.
-
-### Skipping preflight for trivial fixes
-
-Docs-only PRs and trivial typo fixes can skip the full preflight — CI handles them separately and most checks are skipped automatically for `*.md` changes.  Use judgment; if you're unsure, run it.
-
-<details>
-<summary>What every preflight step does in detail (click to expand)</summary>
-
-- **Test coverage** per library (85% gate, line + branch).  Run individually: `python scripts/run.py test --libraries <name>`.
-- **Scripts infrastructure tests:** `python scripts/run.py test-scripts`.
-- **No lint errors:** `python scripts/run.py lint`.
-- **Examples must parse:** `python scripts/run.py verify-examples --libraries <name>`.
-- **Docs must build:** `python scripts/run.py docs --libraries <name>`.
-- **No API breakage** without a VERSION bump (`check-api` and `check-version`).
-- **Cross-runtime compatibility:** every library's tests run under MicroPython and CircuitPython unix ports.
-
-</details>
 
 ## Testing
 
@@ -428,7 +387,7 @@ What the wrappers add over bare `pytest libraries/.../functional_tests/`:
 
 - **`--pr-summary` markdown block** — at session end, prints a paste-ready table (per-device pass/fail/error counts, runtime + deploy-mode + implementation detail, total duration) that drops straight into the "Device testing" section of a PR description.  Bare pytest doesn't render this.
 - **Reconstructed-command line** in the PR block — the wrapper records the exact `python scripts/run.py test-libraries-functional …` invocation so a reviewer can re-run the same scope with one paste.
-- **Scope flags** — `--library <name>`, `--file <substring>`, `--function <substring>`, `--deploy-mode {ram,flash}`, `--runtime {micropython,circuitpython,both}`.  Composes them into the corresponding `--micropython-device` / `--deploy-mode` / `-k` pytest args under the hood.
+- **Scope flags** — `--library <name>`, `--file <substring>`, `--function <substring>`, `--deploy-mode {ram,flash}`, `--runtime {micropython,circuitpython,both}`.  Composes them into the corresponding `--micropython-device` / `--deploy-mode` / `-k` pytest args.
 - **`devices.yml` defaults resolution** — `--runtime both` selects the configured MP + CP boards from `defaults:` automatically; `--micropython-device <id>` / `--circuitpython-device <id>` override per-runtime targets.  Bare pytest reads the same `devices.yml`, but the wrapper's CLI shape is the one CI uses.
 
 You need a board plugged in and registered (`python scripts/run.py add-device …`).  Without a `devices.yml`, the tests skip cleanly — no error, no false failure.  Full hardware setup (deploy modes, multi-runtime, wifi credentials, IDE play-button integration) lives in [Device Testing](docs/contributing/device-testing.md).
@@ -448,6 +407,47 @@ chumicro-workspace deploy-example timing heartbeat_blink
 ```
 
 This is the smoke-test that catches "unit tests pass but the documented quickstart no longer runs."  Not required on every PR — reach for it on API changes, significant refactors, or anything that affects user-visible behavior.  A release-prep pass typically includes deploying each touched library's examples to the project's board matrix.
+
+## Preflight in depth
+
+`python scripts/run.py preflight` is the one command worth remembering.  It runs the automated checks from the [Testing](#testing) section above — CPython unit tests, the same tests under MicroPython and CircuitPython unix-port builds, and example-import checks — plus lint, docs, and version gates.  On-device functional tests are opt-in (`--with-functional`).
+
+### When to run it
+
+- **Always before committing a non-trivial change.**  Preflight catches problems that don't surface in editor / IDE feedback — cross-runtime mismatches, coverage gaps, docstring issues.
+- **Not between every edit.**  Use focused `test --libraries <name>` runs for iteration; save preflight for the contract-with-CI moment.
+- **After rebasing, before pushing.**  Rebasing can re-introduce conflicts in test files; preflight catches them.
+
+### Reading a failure
+
+Preflight prints `FAIL` followed by the failing step.  Common patterns:
+
+- **`Required test coverage of 85.0% not reached`** — your tests don't exercise enough lines.  Look at the `Missing` column to see which lines need coverage.  If the missing lines are runtime-only branches that can't be tested on CPython, mark them with `# pragma: no cover` — see [Style Guide § Coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions).
+- **`ruff check` errors** — code style violation.  Click the file:line in your terminal (if your terminal supports it) or open the file at that line; the error message tells you what's wrong.
+- **`griffe warnings detected`** — docstring formatting issue.  Usually a missing type annotation on a function signature or a malformed `Args:` / `Returns:` section.
+- **`check-version` failure** — you changed library source under `src/` but didn't bump the library's `VERSION` file.  Edit `libraries/<name>/VERSION` (patch bump is usually right) and re-run.
+- **Cross-runtime test failure** — your test passes under CPython but fails under MicroPython or CircuitPython.  Reproduce locally with `pytest libraries/<name>/tests --target unix-port --runtime <X>`.  Usual culprits: `typing` imports (not available on devices), `from __future__` imports (no `__future__` module on devices), relative imports in library code (break CircuitPython RAM-mode deploys).
+
+### Coverage failure on code you didn't touch
+
+If preflight fails coverage on code that's pre-existing, note it in the PR description.  A maintainer can help fill the gap or mark an exception.  Don't artificially bump coverage to pass — that's exactly what the gate is trying to catch.
+
+### Skipping preflight for trivial fixes
+
+Docs-only PRs and trivial typo fixes can skip the full preflight — CI handles them separately and most checks are skipped automatically for `*.md` changes.  Use judgment; if you're unsure, run it.
+
+<details>
+<summary>What every preflight step does in detail (click to expand)</summary>
+
+- **Test coverage** per library (85% gate, line + branch).  Run individually: `python scripts/run.py test --libraries <name>`.
+- **Scripts infrastructure tests:** `python scripts/run.py test-scripts`.
+- **No lint errors:** `python scripts/run.py lint`.
+- **Examples must parse:** `python scripts/run.py verify-examples --libraries <name>`.
+- **Docs must build:** `python scripts/run.py docs --libraries <name>`.
+- **No API breakage** without a VERSION bump (`check-api` and `check-version`).
+- **Cross-runtime compatibility:** every library's tests run under MicroPython and CircuitPython unix ports.
+
+</details>
 
 ## Commit messages
 
@@ -575,18 +575,6 @@ Why: `const()`, `memoryview`, pre-allocated buffers all help on a 256-KB MCU but
 
 How: write correct code first.  When a library hits a memory ceiling on a real board, optimize.  The [Style Guide § Memory patterns](docs/contributing/style-guide.md#memory-patterns-library-code-only) section has the cookbook for when you get there.
 
-## Common mistakes
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| Tests pass via `pytest` but `preflight` fails coverage | Bare `pytest` doesn't enforce the per-library coverage gate | Run `python scripts/run.py preflight` before committing — it surfaces the missing-coverage lines |
-| `functional_tests/` says no device is configured | `devices.yml` is missing or has wrong board IDs | Run `python scripts/run.py setup`, then `add-device`.  See [Device Testing](docs/contributing/device-testing.md) |
-| `check-version` fails but you only changed tests | CI checks source changes under `src/` | No VERSION bump needed for test-only / docs-only / infra changes — note in PR description |
-| Coverage fails on code you didn't touch | Pre-existing gap | Note in PR description; a maintainer can help |
-| `griffe warnings detected` in docs build | Missing type annotation | Add types to function signatures: `def foo(x: int)` — docstrings carry descriptions |
-| Merge conflicts after pushing | `main` moved while you were working | Rebase your branch onto the latest `main` |
-| PyCharm/VS Code shows red import underlines | IDE configs are stale | `python scripts/run.py sync-ide`, then reload the editor |
-
 ## When you're stuck
 
 A short troubleshooting checklist before reaching for help — most stuck moments resolve at one of these steps.
@@ -623,6 +611,18 @@ Ask.  Where:
 - **Want to try an AI agent on the work?** See [Working with Agents](docs/contributing/working-with-agents.md).
 
 Asking is welcome.  Better to answer a question than have you spin for an hour.
+
+## Common mistakes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Tests pass via `pytest` but `preflight` fails coverage | Bare `pytest` doesn't enforce the per-library coverage gate | Run `python scripts/run.py preflight` before committing — it surfaces the missing-coverage lines |
+| `functional_tests/` says no device is configured | `devices.yml` is missing or has wrong board IDs | Run `python scripts/run.py setup`, then `add-device`.  See [Device Testing](docs/contributing/device-testing.md) |
+| `check-version` fails but you only changed tests | CI checks source changes under `src/` | No VERSION bump needed for test-only / docs-only / infra changes — note in PR description |
+| Coverage fails on code you didn't touch | Pre-existing gap | Note in PR description; a maintainer can help |
+| `griffe warnings detected` in docs build | Missing type annotation | Add types to function signatures: `def foo(x: int)` — docstrings carry descriptions |
+| Merge conflicts after pushing | `main` moved while you were working | Rebase your branch onto the latest `main` |
+| PyCharm/VS Code shows red import underlines | IDE configs are stale | `python scripts/run.py sync-ide`, then reload the editor |
 
 ## Going deeper
 

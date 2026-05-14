@@ -9,7 +9,7 @@ Run from the repo root with a board plugged in::
 
     .venv/bin/python workbench/deploy/examples/programmatic_deploy.py
 
-The script materialises a tiny "hello, world" program in a temporary
+The script materializes a tiny "hello, world" program in a temporary
 directory, deploys it, prints the captured execute output, then exits
 zero on success.
 
@@ -63,7 +63,7 @@ def _device_from_entry(entry: DeviceEntry) -> Device:
     )
 
 
-def _materialise_hello_world(parent: Path) -> Path:
+def _materialize_hello_world(parent: Path) -> Path:
     """Write a tiny app to *parent* and return the directory."""
     source_dir = parent / "hello_app"
     source_dir.mkdir()
@@ -93,11 +93,11 @@ def main() -> int:
     print(f"deploying to {board.description or board.identifier} ({board.address})")
 
     with tempfile.TemporaryDirectory(prefix="chumicro-example-") as tmp:
-        source_dir = _materialise_hello_world(Path(tmp))
+        source_dir = _materialize_hello_world(Path(tmp))
         source = DirectorySource(
             source_dir, entrypoint="/main.py", resource_prefix="/",
         )
-        # Programmatic deploys typically want non-interactive behaviour
+        # Programmatic deploys typically want non-interactive behavior
         # — surface failures as exceptions for the surrounding script
         # to handle, rather than coaching a human through retries.
         result = Deployer(_device_from_entry(board)).deploy(source)

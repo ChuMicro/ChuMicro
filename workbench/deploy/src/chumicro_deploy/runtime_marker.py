@@ -24,7 +24,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-#: Canonical runtime names recognised in ``__chumicro_runtimes__``
+#: Canonical runtime names recognized in ``__chumicro_runtimes__``
 #: markers.  Sub-runtime names like ``micropython_esp32`` are accepted
 #: at parse time but currently fold into ``micropython`` for matching —
 #: both MP variants share the same ``mpy6/`` bundle today and the same

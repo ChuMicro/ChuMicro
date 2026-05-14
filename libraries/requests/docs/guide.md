@@ -74,7 +74,7 @@ Method handling follows long-standing browser + RFC 7231 §6.4 rules:
 `response.url` reflects the URL of the FINAL hop, not the original
 request. If the budget is exhausted before reaching a non-3xx response,
 the last 3xx is returned to the caller (matching CPython `requests`'
-default behaviour without the `raise_for_status()` step).
+default behavior without the `raise_for_status()` step).
 
 The `Location` header may be absolute (`https://other.com/dest`),
 absolute-path (`/api/v2`), or path-relative (`trinkets`). All three

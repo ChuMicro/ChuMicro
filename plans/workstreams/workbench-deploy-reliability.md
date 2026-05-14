@@ -27,7 +27,7 @@ Pyright-cleanup wrap-up included on-board validation of three changed examples (
 
 **More-likely causes worth investigating:**
 
-- **FAT32 corruption from concurrent host-write + device-USB-MSC interaction.**  FAT32 on USB-MSC has no journaling; a partially-written FAT chain can leave the volume in a state where the macOS `msdosfs` driver remounts it read-only as a self-defence measure.  The Pi Pico W's slower MSC controller (already noted in `circuitpython_transport.py:1442-1447` as a known stale-FAT-view source) makes this more likely on rp2 boards.
+- **FAT32 corruption from concurrent host-write + device-USB-MSC interaction.**  FAT32 on USB-MSC has no journaling; a partially-written FAT chain can leave the volume in a state where the macOS `msdosfs` driver remounts it read-only as a self-defense measure.  The Pi Pico W's slower MSC controller (already noted in `circuitpython_transport.py:1442-1447` as a known stale-FAT-view source) makes this more likely on rp2 boards.
 - **macOS `msdosfs` driver downgrading to RO on detected inconsistency.**  `mount` shows the volume at `/Volumes/CIRCUITPY` mounted with `read-only`; the kernel does this autonomously when it sees write errors or inconsistent FAT entries.  A diskutil verify pass would confirm.
 - **CP's own filesystem-write protection.**  CP can mark the drive read-only from the device side (`storage.remount("/", readonly=True)`); something in our deploy / example chain might be triggering it indirectly.
 
@@ -179,7 +179,7 @@ Shipped 2026-05-09.  `--tail-seconds N` plumbs end-to-end:
 - `_RecoveringDeployer` + `InteractiveDeployer` forward `tail_seconds` through their wrappers.
 - `chumicro-deploy deploy --tail-seconds N` CLI flag exposes it.
 
-Default behaviour unchanged for back-compat.  842 deploy tests pass at 95% coverage (840 pre-Step-3 + 2 new: `test_tail_seconds_zero_returns_immediately_with_empty_output`, `test_tail_seconds_overrides_default_window`).  `chumicro-deploy 0.9.0 → 0.10.0` (additive API).
+Default behavior unchanged for back-compat.  842 deploy tests pass at 95% coverage (840 pre-Step-3 + 2 new: `test_tail_seconds_zero_returns_immediately_with_empty_output`, `test_tail_seconds_overrides_default_window`).  `chumicro-deploy 0.9.0 → 0.10.0` (additive API).
 
 Bench-validated on Lolin S2 CP:
 
@@ -194,7 +194,7 @@ After all four land: 4-board validation sweep on Lolin S2 CP+MP and Pi Pico W CP
 
 ### Step 1b — Stop killing main.py at end of MP soft_reboot deploy ✅
 
-Discovered during the 4-board sweep.  `MicropythonTransport.deploy_files(follow="soft_reboot")` was calling `self._serial.enter_raw_repl(soft_reset=False)` after the post-Ctrl-D read window, which sends Ctrl-C × 2 + Ctrl-A (per mpremote `transport_serial.py:163-171`) — same problem as CP's old behaviour, just in a different transport.
+Discovered during the 4-board sweep.  `MicropythonTransport.deploy_files(follow="soft_reboot")` was calling `self._serial.enter_raw_repl(soft_reset=False)` after the post-Ctrl-D read window, which sends Ctrl-C × 2 + Ctrl-A (per mpremote `transport_serial.py:163-171`) — same problem as CP's old behavior, just in a different transport.
 
 Fix: dropped the post-soft-reboot `enter_raw_repl` call.  Subsequent transport ops re-enter raw REPL on demand via `_ensure_serial`; disconnect tolerates either REPL state.  Test renamed `test_re_enters_raw_repl_after_read` → `test_does_not_re_enter_raw_repl_after_read` with an index-based assertion that no `enter_raw_repl` appears after the soft-reboot read_until.  842 deploy tests pass.
 

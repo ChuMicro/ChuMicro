@@ -438,7 +438,7 @@ def test_unsupported_type_raises() -> None:
 
 
 def test_unknown_decode_byte_raises() -> None:
-    """Decoding a tag byte the decoder doesn't recognise should raise ValueError.
+    """Decoding a tag byte the decoder doesn't recognize should raise ValueError.
 
     0xc1 is reserved-and-never-used in the msgpack spec, so it has no
     branch in the decoder; it falls through to the generic

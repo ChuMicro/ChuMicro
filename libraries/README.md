@@ -17,7 +17,7 @@ Small, focused libraries for microcontrollers and laptops.  Use what you need �
 | **[timing](timing/)** | Timers that don't freeze your code — your loop keeps running while waiting.  No more `time.sleep()` locking everything up. |
 | **[runner](runner/)** | A simple task scheduler — register your services, call `runner.tick()` in your loop.  No async needed. |
 | **[compat](compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
-| **[logging](logging/)** | Levelled logging that's runner-friendly and never blocks your loop.  Per-logger levels with hierarchy resolution; zero chumicro deps. |
+| **[logging](logging/)** | Leveled logging that's runner-friendly and never blocks your loop.  Per-logger levels with hierarchy resolution; zero chumicro deps. |
 | **[events](events/)** | Runner-shaped pub/sub event bus — bounded, drop-oldest, zero deps.  Wires service callbacks (e.g. wifi state changes) into application-level handlers. |
 | **[msgpack](msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
 | **[config](config/)** | Type-checked runtime config with a shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`); each library reads its settings via `<Name>Config.from_config(...)`. |
@@ -60,6 +60,6 @@ The SVG is regenerated from each library's pyproject.toml by [`scripts/render_de
 - **"I need to expose HTTP routes on the device"** → [http_server](http_server/)
 - **"I need an MQTT client that doesn't freeze my loop"** → [mqtt](mqtt/)
 - **"I need a WebSocket client or server"** → [websockets](websockets/)
-- **"I want levelled logging that doesn't pull in chumicro deps"** → [logging](logging/)
+- **"I want leveled logging that doesn't pull in chumicro deps"** → [logging](logging/)
 - **"I want a pub/sub bus to wire wifi-state-change into app handlers"** → [events](events/)
 - **"`functools.partial` doesn't exist on my board"** → [compat](compat/)

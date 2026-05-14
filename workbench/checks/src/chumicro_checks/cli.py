@@ -49,7 +49,7 @@ def _find_repo_root(start: Path) -> Path:
 
 
 def _parse_codes(raw: str | None) -> set[str]:
-    """Split a comma-separated rule-code list into a normalised set."""
+    """Split a comma-separated rule-code list into a normalized set."""
     if not raw:
         return set()
     return {token.strip().upper() for token in raw.split(",") if token.strip()}

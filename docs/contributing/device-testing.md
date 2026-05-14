@@ -32,7 +32,7 @@ python scripts/run.py setup
 
 If the files already exist, setup leaves them alone.
 
-The first-materialised `devices.yml` ships with an empty `devices: []` registry.  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
+The first-materialized `devices.yml` ships with an empty `devices: []` registry.  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
 
 ## Register your boards via `add-device`
 
@@ -146,7 +146,7 @@ If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `f
 
 ## Configure `secrets.toml`
 
-Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialised by `setup` with placeholder values for `wifi.ssid` and `mqtt.broker.host`.
+Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialized by `setup` with placeholder values for `wifi.ssid` and `mqtt.broker.host`.
 
 Edit `secrets.toml` once per clone — fill in your wifi credentials + your broker host (the mqtt library refuses to silently dial a third-party broker, so this is required for mqtt-touching tests):
 

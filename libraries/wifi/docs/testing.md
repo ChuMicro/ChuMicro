@@ -62,7 +62,7 @@ def test_reconnect_after_link_drop():
 
 ## `FakeWifiAdapter` (lower level)
 
-When you need to compose your own service shape — for example, a test that wires `FakeWifiAdapter` into a real `WifiService` to verify the supervisor's behaviour — use the adapter directly:
+When you need to compose your own service shape — for example, a test that wires `FakeWifiAdapter` into a real `WifiService` to verify the supervisor's behavior — use the adapter directly:
 
 ```python
 from chumicro_wifi import WifiConfig, WifiService

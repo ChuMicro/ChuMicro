@@ -110,7 +110,7 @@ User-facing surface:
 
 The existing `chumicro_deploy.Deployer.deploy(source: FileSource)` plus `chumicro_workspace.WithRuntimeConfig` decorator handle most of the plumbing — `WithRuntimeConfig` already reads `secrets_toml` + `project_config`, validates against `library_roots` manifests, and merges the encoded msgpack into the inner source's file map at `/runtime_config.msgpack`.
 
-What doesn't exist yet: a `FileSource` implementation that maps a **single example file** to the on-device entrypoint (renaming `circuitpython_telemetry.py` → `/code.py` / `/main.py`) plus walks the example's import graph to bring along the right library `src/` trees under `/lib/`.  Existing `DirectorySource` treats a whole directory as one project — wrong shape for "this single file is the entrypoint, neighbouring example files in the same folder are unrelated."  Existing `project_import_graph_source` assumes a workspace-shaped project directory layout, also wrong.
+What doesn't exist yet: a `FileSource` implementation that maps a **single example file** to the on-device entrypoint (renaming `circuitpython_telemetry.py` → `/code.py` / `/main.py`) plus walks the example's import graph to bring along the right library `src/` trees under `/lib/`.  Existing `DirectorySource` treats a whole directory as one project — wrong shape for "this single file is the entrypoint, neighboring example files in the same folder are unrelated."  Existing `project_import_graph_source` assumes a workspace-shaped project directory layout, also wrong.
 
 So Phase 3 is **new infrastructure**, roughly:
 
@@ -174,7 +174,7 @@ merged["mqtt.broker.port"] = BROKER_PORT
 mqtt_config = RuntimeConfig(merged)
 ```
 
-Same final dict; no behavioural change.  Bench-validated: `python scripts/run.py deploy-example mqtt circuitpython_telemetry --device pi-pico-w-circuitpython-board --non-interactive` deployed without `SyntaxError`, executed past line 162 (the original failure point), and reached `WIFI_OK ip=172.16.1.21` — proof the CP parser accepts the new shape.  Pre-fix grep confirmed this was the only `**`-unpack idiom in `libraries/*/examples/`, so no audit overhang.
+Same final dict; no behavioral change.  Bench-validated: `python scripts/run.py deploy-example mqtt circuitpython_telemetry --device pi-pico-w-circuitpython-board --non-interactive` deployed without `SyntaxError`, executed past line 162 (the original failure point), and reached `WIFI_OK ip=172.16.1.21` — proof the CP parser accepts the new shape.  Pre-fix grep confirmed this was the only `**`-unpack idiom in `libraries/*/examples/`, so no audit overhang.
 
 **Not done (deliberately).**  We did *not* run the minimal CP-REPL probe of `d = {**{}, "k": 1}` to determine whether CircuitPython 10.2.0-rc.0 rejects the entire PEP 448 dict-`**unpack` idiom or just the multi-line continuation.  The fix is robust either way — the question only matters for filing an upstream CircuitPython issue.  Defer until the same idiom resurfaces somewhere else; if it does, run the probe then.
 

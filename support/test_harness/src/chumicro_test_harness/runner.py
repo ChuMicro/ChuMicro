@@ -67,7 +67,7 @@ def _iter_test_methods_on_class(class_name, test_class):
 	"""Yield `(qualified_name, bound_method)` pairs for ``test_*`` methods.
 
 	Each method is collected against a fresh instance of *test_class*,
-	mirroring pytest's per-test instance behaviour and ensuring that
+	mirroring pytest's per-test instance behavior and ensuring that
 	state mutated in one test doesn't carry into the next.
 
 	Args:
@@ -120,7 +120,7 @@ def run_module(module, name_filter=None):
 	is available (MicroPython / CircuitPython boards), per-test heap
 	deltas and a module-level summary are emitted.  Auto-GC is **left
 	enabled** during tests so the workload sees the same heap-management
-	behaviour as production code.
+	behavior as production code.
 
 	Why not disable auto-GC for "deterministic deltas"?  An earlier
 	version of this runner did exactly that, on the theory that disabling

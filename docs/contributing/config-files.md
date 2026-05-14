@@ -2,7 +2,7 @@
 
 <img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Three gitignored files live at the root of every ChuMicro workspace.  Each does what its name says.  `python scripts/run.py setup` materialises starter versions on first run; edit them as needs come up.
+Three gitignored files live at the root of every ChuMicro workspace.  Each does what its name says.  `python scripts/run.py setup` materializes starter versions on first run; edit them as needs come up.
 
 <br clear="left">
 
@@ -62,10 +62,10 @@ Three different jobs with three different gitignore promises and three different
 - **`devices.yml`** changes whenever a board is plugged or unplugged.  Per-machine state — drift between contributors would noise up shared history.
 - **`workspace.yml`** changes when the workspace layout shifts.  Stable across most days.
 
-The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).  Starter templates live under `workbench/workspace/src/chumicro_workspace/_payloads/` (tracked); the materialised files at the workspace root are gitignored.
+The split lands per [Decision 0057](../../plans/decisions/0057-two-file-config.md).  Starter templates live under `workbench/workspace/src/chumicro_workspace/_payloads/` (tracked); the materialized files at the workspace root are gitignored.
 
 ## Where to learn more
 
 - [Device testing](device-testing.md) — the device-side flow that reads all three files.
 - [Decision 0057](../../plans/decisions/0057-two-file-config.md) — the design rationale for the three-file split.
-- [`workbench/workspace/`](../../workbench/workspace/) — the package that materialises and validates each file.
+- [`workbench/workspace/`](../../workbench/workspace/) — the package that materializes and validates each file.

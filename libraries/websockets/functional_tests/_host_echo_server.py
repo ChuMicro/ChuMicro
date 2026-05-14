@@ -9,7 +9,7 @@ implementation that's never going to share bugs with us.
 
 Invoked with two args: ``<bind_host> <bind_port>``.  Prints
 ``READY <bind_host>:<bind_port>`` to stdout once listening so the
-parent process can wait for liveness before signalling the device.
+parent process can wait for liveness before signaling the device.
 """
 
 import asyncio

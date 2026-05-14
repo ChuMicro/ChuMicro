@@ -78,7 +78,7 @@ def mosquitto_broker(tmp_path_factory: pytest.TempPathFactory):
     """Spawn a Mosquitto broker on a free loopback port.
 
     Skips the whole module when Mosquitto isn't on PATH.  Yields the
-    port; tears down by signalling SIGTERM and reaping.
+    port; tears down by signaling SIGTERM and reaping.
     """
     if shutil.which("mosquitto") is None:
         pytest.skip("mosquitto not on PATH — skipping live broker tests")

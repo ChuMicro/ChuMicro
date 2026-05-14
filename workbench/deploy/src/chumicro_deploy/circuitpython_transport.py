@@ -402,7 +402,7 @@ class CircuitpythonTransport:
           session and does not reboot inside the session.  The board
           is left with autoreload off until the next reset / power
           cycle, which is fine because functional-test sessions don't
-          need ``code.py``-style reload-on-edit behaviour, and the
+          need ``code.py``-style reload-on-edit behavior, and the
           next flash-mode entry point will re-disable anyway.
         """
         self._send_repl_command(
@@ -1403,7 +1403,7 @@ class CircuitpythonTransport:
         """Delete *paths* from the CIRCUITPY drive.
 
         Flash mode only — RAM mode is a no-op since nothing was
-        ever written to flash.  Each path is normalised to a
+        ever written to flash.  Each path is normalized to a
         leading-slash form, joined under the CIRCUITPY mount point,
         and unlinked best-effort.  Missing paths and per-path errors
         are tolerated silently so a transient I/O hiccup never blocks
@@ -1706,7 +1706,7 @@ class CircuitpythonTransport:
         CircuitPython prints ``soft reboot`` when the interpreter
         restarts (in response to Ctrl-D from the friendly REPL) and
         ``Code done running.`` when code.py returns (or raises).  The
-        read synchronises on ``soft reboot`` first so any pre-reboot
+        read synchronizes on ``soft reboot`` first so any pre-reboot
         bytes still in the host's serial buffer are discarded rather
         than mistaken for this cycle's output.
 

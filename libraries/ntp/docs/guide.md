@@ -136,7 +136,7 @@ Tested on real CircuitPython and MicroPython boards with live `pool.ntp.org` que
 | Short response (< 48 bytes) | `NTPError("short SNTP response (N bytes)")` |
 | Wrong mode in the response | `NTPError("unexpected SNTP mode N")` |
 | Stratum-0 kiss-of-death | `NTPError("SNTP kiss-of-death (stratum=0)")` |
-| Cancelled via `client.cancel()` | `NTPError("cancelled")` |
+| Canceled via `client.cancel()` | `NTPError("canceled")` |
 | Socket recv failed (non-EAGAIN OSError) | `OSError` (raw, not wrapped) |
 
 `NTPError` is an `OSError` subclass so handlers that do

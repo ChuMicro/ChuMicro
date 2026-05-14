@@ -102,7 +102,7 @@ def udp_socket(
 
     CP's ``socketpool`` supports ``AF_INET`` + ``SOCK_DGRAM`` (verified
     on CP 10.x for both ESP32-S2 and rp2).  Returns a wrapper that
-    normalises ``sendto`` to the separated ``(data, host, port)``
+    normalizes ``sendto`` to the separated ``(data, host, port)``
     signature and exposes ``recvfrom_into`` directly (CP's socketpool
     already exposes it natively as ``recvfrom_into(buffer)`` returning
     ``(nbytes, (host, port))``).
@@ -127,7 +127,7 @@ def udp_socket(
 class _CPUDPWrapper:
     """Adapts a CP socketpool UDP socket to the chumicro_sockets UDP protocol.
 
-    Normalises ``sendto`` to the separated ``(data, host, port)``
+    Normalizes ``sendto`` to the separated ``(data, host, port)``
     signature.  CP's ``recvfrom_into(buffer)`` already returns the
     ``(nbytes, (host, port))`` tuple our protocol promises, so it's
     forwarded directly.
@@ -280,7 +280,7 @@ class _CPTLSListenerWrapper:
 
     The underlying CP wrapped-socket's ``accept()`` already returns
     a TLS-wrapped client socket (because the listener itself was
-    wrapped) — we just normalise the return shape.
+    wrapped) — we just normalize the return shape.
     """
 
     def __init__(self, wrapped_listener):

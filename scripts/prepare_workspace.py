@@ -242,7 +242,7 @@ def install_dependencies(python: Path) -> None:
     Delegates to :func:`shared.install_workspace`, which is the single
     source of truth shared with ``run.py setup``.  Installs
     ``requirements-dev.txt`` + runtime-pinned type stubs + editable
-    libraries and support packages, then materialises
+    libraries and support packages, then materializes
     ``devices.yml`` / ``workspace.yml`` / ``secrets.toml`` from
     canonical templates and refreshes IDE configs.
 

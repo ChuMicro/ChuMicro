@@ -148,7 +148,7 @@ _OUTPUT_MODE_ENV_VAR = "CHUMICRO_OUTPUT_MODE"
 # - ``quiet``: every line is buffered; on finish() the dispatcher
 #   replays each phase's full transcript under a ``== <label> ==``
 #   header in submission order.  This is the original (pre-2026-05)
-#   behaviour and the default for ``--quiet`` / agent / log-capture
+#   behavior and the default for ``--quiet`` / agent / log-capture
 #   contexts.
 # - ``interleave``: phase events (started / done) and every line of
 #   output print live, prefixed with ``[label]``.  Default for
@@ -239,7 +239,7 @@ class _Dispatcher:
 class _QuietDispatcher(_Dispatcher):
     """Buffer everything, replay at finish() in submission order.
 
-    The original (pre-2026-05) behaviour preserved as a fallback for
+    The original (pre-2026-05) behavior preserved as a fallback for
     ``--quiet``, agent / log-capture contexts, and any consumer that
     wants the deterministic per-phase header layout.
     """
@@ -886,7 +886,7 @@ def _run_pytest_capturing(
     they arrive (rather than buffering until the subprocess exits).
 
     Pytest exit code 5 ("no tests collected" — typically when a
-    ``-k`` filter matches nothing in a given library) is normalised
+    ``-k`` filter matches nothing in a given library) is normalized
     to 0 so it doesn't fail the whole sweep.  The "no tests ran" line
     still flows through the sink for log visibility.
     """
@@ -1412,7 +1412,7 @@ def docs_preview(package_dirs: list[Path]) -> int:
     # commits to the same ``_docs-preview`` git branch — running them
     # concurrently would race on the git index lock.  Unlike ``docs``
     # (which fans out per library because each writes to its own
-    # ``site/`` directory), the ``mike`` workflow is a serialised git-
+    # ``site/`` directory), the ``mike`` workflow is a serialized git-
     # plumbing pipeline by construction.  Worktree-per-library would
     # let us parallelize, but the wall time of an interactive
     # ``docs-preview`` is dominated by ``mike serve`` afterwards, so
@@ -1596,7 +1596,7 @@ def preflight(
     if parallel_result != 0:
         # The dispatcher already printed phase events and (in status /
         # quiet mode) the failing phase's transcript; finish with a
-        # labelled banner so the failing phase survives interleaved-
+        # labeled banner so the failing phase survives interleaved-
         # output schedulers where its [FAIL] line scrolls past the
         # visible tail.
         if failing_label is not None:
@@ -1690,7 +1690,7 @@ def _ensure_unix_port_binary(
 ) -> int:
     """Resolve or build the unix-port binary, returning a shell exit code.
 
-    Mirrors the auto-prepare-on-first-use behaviour the old
+    Mirrors the auto-prepare-on-first-use behavior the old
     ``_test_runtime_compat`` helper provided — the plugin can't build
     binaries itself, so the CLI wrapper does it before delegating.
     Returns 0 on success, non-zero when preparation failed.
@@ -2089,7 +2089,7 @@ def test_libraries_functional(
     plugin exposes.  The plugin owns collection, routing, transport
     caching, and the PR-summary block — the IDE play-button path
     uses exactly the same hooks, so CLI and IDE runs are byte-for-byte
-    equivalent in behaviour (device selection, mode overrides,
+    equivalent in behavior (device selection, mode overrides,
     reporting).
 
     Args:

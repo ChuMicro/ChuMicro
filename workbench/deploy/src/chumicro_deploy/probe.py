@@ -34,7 +34,7 @@ class DeviceInfo:
             name, version, machine string).  ``None`` when the probe
             script ran but no marker came back — almost always a
             hardware or connection issue.
-        board_id: Normalised board identifier (e.g.
+        board_id: Normalized board identifier (e.g.
             ``"raspberry_pi_pico_w"``).  Reserved — populated in a
             later slice via a board-specific probe.  Empty string
             today.

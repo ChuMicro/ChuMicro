@@ -55,7 +55,7 @@ def test_connect_publish_subscribe_roundtrip():
 | Helper | Returns |
 |---|---|
 | `canned_connack_bytes(return_code=0, session_present=False)` | CONNACK packet — `return_code=0` means accepted; 1-5 are rejection codes per MQTT 3.1.1 §3.2.2.3. |
-| `canned_puback_bytes(packet_id)` | PUBACK packet — drives QoS-1 publish acknowledgement. |
+| `canned_puback_bytes(packet_id)` | PUBACK packet — drives QoS-1 publish acknowledgment. |
 | `canned_suback_bytes(packet_id, granted_qos=0)` | SUBACK packet — acknowledges a one-subscription SUBSCRIBE. |
 | `canned_unsuback_bytes(packet_id)` | UNSUBACK packet — acknowledges an UNSUBSCRIBE. |
 | `canned_pingresp_bytes()` | PINGRESP packet — keep-alive response. |

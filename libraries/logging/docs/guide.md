@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-logging` is a small levelled logger that runs identically on
+`chumicro-logging` is a small leveled logger that runs identically on
 CircuitPython, MicroPython, and CPython.  It exposes the familiar
 stdlib-`logging` shape (level integers, named loggers, attached
 handlers) without depending on any other chumicro library, and adds a

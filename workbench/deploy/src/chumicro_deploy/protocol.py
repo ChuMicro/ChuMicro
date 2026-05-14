@@ -188,7 +188,7 @@ def is_in_deploy_scope(device_path: str) -> bool:
     ``boot.py`` overrides, hand-tuned ``settings.toml`` knobs — is
     out of scope and survives every diff-deploy untouched.
 
-    The check is path-shape only: callers should normalise their
+    The check is path-shape only: callers should normalize their
     paths to leading-slash form before calling.
     """
     if device_path in DEPLOY_SCOPE_FILES:
@@ -258,7 +258,7 @@ def parse_probe_output(output: str) -> DeviceImplementation | None:
 
 
 class UnsupportedExtraFilesError(NotImplementedError):
-    """Raised when ``transport.stage(extra_files=...)`` can't be honoured.
+    """Raised when ``transport.stage(extra_files=...)`` can't be honored.
 
     Today's only producer is CircuitPython RAM mode: there is no
     writable device-side filesystem to land bytes on (RAM mode runs
@@ -297,7 +297,7 @@ class TransportProtocol(Protocol):
         """Prepare the host-side staging area and (mode-dependent) push to device.
 
         *extra_modules* are additional Python files that the test files
-        import as top-level modules — host-fixture-materialised siblings
+        import as top-level modules — host-fixture-materialized siblings
         a conftest writes alongside its test files.  Each is registered
         as importable on the device alongside library sources: in RAM
         mode they join ``staged_sources`` so the inline bootstrap
@@ -402,7 +402,7 @@ class TransportProtocol(Protocol):
 
         Args:
             files: On-device-path -> file-bytes mapping.  Paths may
-                start with ``/``; transports normalise as needed.
+                start with ``/``; transports normalize as needed.
             entrypoint: On-device path (must be a key of *files*) for
                 the runtime to execute after staging.
             on_file_staged: Optional per-file callback invoked with
@@ -441,7 +441,7 @@ class TransportProtocol(Protocol):
 
         No-op when *paths* is empty.  Each path must be in the same
         leading-slash form :meth:`deploy_files` accepts; transports
-        normalise internally.  Missing paths are tolerated silently
+        normalize internally.  Missing paths are tolerated silently
         (the diff-routine call site is `delete what isn't in the new
         payload`, and a previous deploy may have already removed
         something — re-deleting shouldn't error).

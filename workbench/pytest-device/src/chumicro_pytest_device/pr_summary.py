@@ -6,7 +6,7 @@ plugin consumes per-test reports and feeds
 to render the final Markdown block users paste into PRs.
 
 Keep the output stable — it lands in PR bodies and reviewers skim
-it at-a-glance.  Any behaviour change here should be paired with a
+it at-a-glance.  Any behavior change here should be paired with a
 baseline update on the ``test-libraries-functional`` smoke runs.
 """
 
