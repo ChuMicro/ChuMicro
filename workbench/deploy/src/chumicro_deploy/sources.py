@@ -319,7 +319,7 @@ class ImportGraphSource:
                 "__chumicro_skip_factories__ entries did not match any "
                 f"discovered factory module: {list(unmatched)!r}.  "
                 "Discovered families: "
-                f"{sorted({stem for stem in discovered.values()})!r}.",
+                f"{sorted(set(discovered.values()))!r}.",
             )
         matched: set[str] = set()
         for matches in per_entry.values():

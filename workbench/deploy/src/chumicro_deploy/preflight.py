@@ -54,9 +54,12 @@ def find_libraries_requiring_flash(host_paths: list[Path]) -> list[str]:
         if pyproject is None or pyproject in seen_pyprojects:
             continue
         seen_pyprojects.add(pyproject)
-        if not _requires_flash(pyproject):
+        data = _load_pyproject(pyproject)
+        if data is None:
             continue
-        name = _project_name(pyproject)
+        if not data.get("tool", {}).get("chumicro", {}).get("requires_flash", False):
+            continue
+        name = data.get("project", {}).get("name")
         if name:
             flagged.add(name)
     return sorted(flagged)
@@ -76,28 +79,14 @@ def _find_pyproject(start: Path) -> Path | None:
     return None
 
 
-def _requires_flash(pyproject: Path) -> bool:
-    """Return ``True`` iff *pyproject* declares
-    ``[tool.chumicro].requires_flash = true``.
+def _load_pyproject(pyproject: Path) -> dict | None:
+    """Parse *pyproject* once and return its full document, or ``None``.
 
-    Returns ``False`` on parse error / missing block / missing key —
-    pre-flight defaults to "RAM mode is fine" when uncertain.
+    Pre-flight is best-effort: parse errors and unreadable files yield
+    ``None`` so callers fall through to "RAM mode is fine."
     """
     try:
         with open(pyproject, "rb") as handle:
-            data = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError):
-        return False
-    return bool(
-        data.get("tool", {}).get("chumicro", {}).get("requires_flash", False),
-    )
-
-
-def _project_name(pyproject: Path) -> str | None:
-    """Return the pip-name from ``[project].name``, or ``None`` when absent."""
-    try:
-        with open(pyproject, "rb") as handle:
-            data = tomllib.load(handle)
+            return tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError):
         return None
-    return data.get("project", {}).get("name")
