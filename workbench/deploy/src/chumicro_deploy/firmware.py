@@ -481,9 +481,7 @@ def _flash_firmware_uf2(
 
     # Step 2: locate the UF2 drive (explicit override → auto-detect
     # → interactive prompt → give up).
-    candidate_search_paths = (
-        _uf2_mount_candidates(search_paths)
-    )
+    candidate_search_paths = _uf2_mount_candidates(search_paths)
     drive_path: Path | None = bootloader_drive_path
     if drive_path is None:
         drive_path = _wait_for_uf2_drive(
