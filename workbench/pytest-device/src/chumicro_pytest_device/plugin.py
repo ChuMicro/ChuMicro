@@ -56,6 +56,7 @@ from chumicro_deploy import (
     resolve_ide_devices,
 )
 from chumicro_deploy.runtime_marker import read_runtime_marker
+from msgpack import packb
 
 from ._test_runner import (
     build_device_bootstrap,
@@ -112,8 +113,6 @@ def _encode_runtime_config_extra_files(
     payload = get_runtime_config(config)
     if payload is None:
         return None
-    from msgpack import packb  # noqa: PLC0415 — defer until first stage call
-
     return {
         _RUNTIME_CONFIG_DEVICE_PATH: packb(payload, use_single_float=True),
     }
