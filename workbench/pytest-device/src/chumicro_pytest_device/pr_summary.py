@@ -101,7 +101,7 @@ def format_duration(seconds: float) -> str:
     return f"{seconds:.2f}s"
 
 
-def format_markdown_table(
+def _format_markdown_table(
     headers: list[str],
     rows: list[list[str]],
     alignments: list[str] | None = None,
@@ -233,7 +233,7 @@ def format_pr_summary_block(
 
     if per_device_results:
         lines.append("")
-        lines.append(format_markdown_table(
+        lines.append(_format_markdown_table(
             _SUMMARY_HEADERS,
             [_device_summary_row(device) for device in per_device_results],
             _SUMMARY_ALIGNMENTS,
@@ -297,7 +297,7 @@ def _format_device_detail_section(device: DeviceRunResult) -> str:
     if len(device.files) == 1 and device.files[0].tests:
         return (
             f"{heading}\n"
-            + format_markdown_table(
+            + _format_markdown_table(
                 _TEST_HEADERS,
                 [_test_row(test) for test in device.files[0].tests],
                 _TEST_ALIGNMENTS,
@@ -305,7 +305,7 @@ def _format_device_detail_section(device: DeviceRunResult) -> str:
         )
     return (
         f"{heading}\n"
-        + format_markdown_table(
+        + _format_markdown_table(
             _FILE_HEADERS,
             [_file_row(file_result) for file_result in device.files],
             _FILE_ALIGNMENTS,

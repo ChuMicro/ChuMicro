@@ -306,7 +306,7 @@ class TestFormatMarkdownTable:
 
     def test_left_alignment_default_pads_right(self) -> None:
         """With no alignments argument, every column pads on the right."""
-        table = pr_summary.format_markdown_table(
+        table = pr_summary._format_markdown_table(
             headers=["Name", "Value"],
             rows=[["alpha", "1"], ["bravo", "22"]],
         )
@@ -320,7 +320,7 @@ class TestFormatMarkdownTable:
 
     def test_right_alignment_adds_trailing_colon_to_separator(self) -> None:
         """``"right"`` alignment marks the separator with a trailing colon."""
-        table = pr_summary.format_markdown_table(
+        table = pr_summary._format_markdown_table(
             headers=["N"],
             rows=[["1"], ["10"]],
             alignments=["right"],
@@ -335,7 +335,7 @@ class TestFormatMarkdownTable:
 
     def test_center_alignment_marks_both_ends_of_separator(self) -> None:
         """``"center"`` alignment marks the separator with colons on both ends."""
-        table = pr_summary.format_markdown_table(
+        table = pr_summary._format_markdown_table(
             headers=["Mode"],
             rows=[["ram"]],
             alignments=["center"],
@@ -348,7 +348,7 @@ class TestFormatMarkdownTable:
 
     def test_column_widths_respect_max_content(self) -> None:
         """Each column widens to fit its widest cell (header or data)."""
-        table = pr_summary.format_markdown_table(
+        table = pr_summary._format_markdown_table(
             headers=["Short", "Wider header"],
             rows=[["loooooong value", "x"]],
         )
