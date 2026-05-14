@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from chumicro_repl import PatternKind, Theme, colorize, strip_ansi_sequences
-from chumicro_repl.highlight import DEFAULT_THEME
+from chumicro_repl import PatternKind, Theme, colorize
+from chumicro_repl.highlight import DEFAULT_THEME, strip_ansi_sequences
 from chumicro_repl.patterns import PatternMatch
 
 CIRCUITPYTHON_TRACEBACK = (
