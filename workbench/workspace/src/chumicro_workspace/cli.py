@@ -1005,6 +1005,14 @@ class _DeployLayoutError(Exception):
     """
 
 
+class _DeployPlanError(Exception):
+    """Raised by :func:`_build_deploy_plan` on input-validation failure.
+
+    The instance's ``str`` is the user-facing message; the caller in
+    :func:`_cmd_deploy` prints it to stderr and returns 2.
+    """
+
+
 def _resolve_deploy_layout(
     *,
     project_dir: Path,
@@ -1160,10 +1168,11 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             )
             return 2
 
-    plan_or_exit = _build_deploy_plan(workspace, args)
-    if isinstance(plan_or_exit, int):
-        return plan_or_exit
-    deploy_plan = plan_or_exit
+    try:
+        deploy_plan = _build_deploy_plan(workspace, args)
+    except _DeployPlanError as plan_error:
+        print(f"deploy: {plan_error}", file=sys.stderr)
+        return 2
 
     exit_code = 0
     for project_name, project_dir, devices in deploy_plan:
@@ -1274,11 +1283,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
 
 def _build_deploy_plan(
     workspace: WorkspaceLayout, args: argparse.Namespace,
-) -> list[tuple[str, Path, list[Device]]] | int:
+) -> list[tuple[str, Path, list[Device]]]:
     """Resolve the (project, devices) pairs ``deploy`` will iterate.
-
-    Returns a list of ``(project_slash_path, project_dir, [Device, ...])``
-    tuples or an integer exit code when input validation fails.
 
     Three input shapes:
 
@@ -1291,6 +1297,10 @@ def _build_deploy_plan(
       ``--runtime`` choice, or — when no per-deploy override is
       passed — the project's ``deploy_targets`` entry, falling through
       to the workspace's ``devices.yml`` default.
+
+    Raises:
+        _DeployPlanError: Input validation failed — the str payload is
+            the actionable user-facing message.
     """
     if args.all_projects:
         if (
@@ -1299,21 +1309,17 @@ def _build_deploy_plan(
             or args.runtime is not None
             or args.all_devices
         ):
-            print(
-                "deploy: --all-projects is mutually exclusive with positional "
+            raise _DeployPlanError(
+                "--all-projects is mutually exclusive with positional "
                 "names / --device / --runtime / --all-devices.",
-                file=sys.stderr,
             )
-            return 2
         targets = read_deploy_targets(workspace.workspace_yaml)
         if not targets:
-            print(
-                "deploy: --all-projects requires a `deploy_targets:` block "
+            raise _DeployPlanError(
+                "--all-projects requires a `deploy_targets:` block "
                 f"in {workspace.workspace_yaml.name}.  Map each project to "
                 "one or more device ids and re-run.",
-                file=sys.stderr,
             )
-            return 2
         from chumicro_deploy.config.default import (  # noqa: PLC0415
             load_devices_yml,
         )
@@ -1322,23 +1328,19 @@ def _build_deploy_plan(
         for project_path, device_ids in targets.items():
             project_dir = workspace.project_dir(project_path)
             if not project_dir.is_dir():
-                print(
-                    f"deploy: deploy_targets references unknown project "
+                raise _DeployPlanError(
+                    f"deploy_targets references unknown project "
                     f"{project_path!r} (no projects/{project_path}/ directory).",
-                    file=sys.stderr,
                 )
-                return 2
             try:
                 project_devices = [
                     load_devices_yml(workspace.devices_yaml, device_id=did)
                     for did in device_ids
                 ]
             except (FileNotFoundError, ValueError) as error:
-                print(
-                    f"deploy: deploy_targets[{project_path!r}]: {error}",
-                    file=sys.stderr,
-                )
-                return 2
+                raise _DeployPlanError(
+                    f"deploy_targets[{project_path!r}]: {error}",
+                ) from error
             plan.append((project_path, project_dir, project_devices))
         return plan
 
@@ -1346,29 +1348,22 @@ def _build_deploy_plan(
     if not args.names:
         candidates = workspace.list_projects()
         if not candidates:
-            print(
-                "deploy: no projects to deploy.  Create one with "
-                "`new <name>` first.",
-                file=sys.stderr,
+            raise _DeployPlanError(
+                "no projects to deploy.  Create one with `new <name>` first.",
             )
-            return 2
         if len(candidates) > 1:
-            print(
-                "deploy: multiple projects in workspace; specify which "
+            raise _DeployPlanError(
+                "multiple projects in workspace; specify which "
                 f"to deploy ({', '.join(candidates)}).",
-                file=sys.stderr,
             )
-            return 2
         project_name = candidates[0]
         print(f"deploy: defaulting to {project_name} (only project in workspace).")
     else:
         if len(args.names) > 1:
-            print(
-                "deploy: multi-project deploys are no longer supported — "
+            raise _DeployPlanError(
+                "multi-project deploys are no longer supported — "
                 "pass one positional name per `deploy` call.",
-                file=sys.stderr,
             )
-            return 2
         project_name = _resolve_project_name(workspace, args.names[0])
     project_dir = workspace.project_dir(project_name)
     if not project_dir.is_dir():
@@ -1376,12 +1371,9 @@ def _build_deploy_plan(
 
     if args.all_devices:
         if args.device_id is not None or args.runtime is not None:
-            print(
-                "deploy: --all-devices is mutually exclusive with "
-                "--device / --runtime.",
-                file=sys.stderr,
+            raise _DeployPlanError(
+                "--all-devices is mutually exclusive with --device / --runtime.",
             )
-            return 2
         return [(project_name, project_dir, _resolve_all_devices(workspace))]
 
     # Default-from-mapping: when the user passed neither --device nor
@@ -1402,11 +1394,9 @@ def _build_deploy_plan(
                     for did in mapped
                 ]
             except (FileNotFoundError, ValueError) as error:
-                print(
-                    f"deploy: deploy_targets[{project_name!r}]: {error}",
-                    file=sys.stderr,
-                )
-                return 2
+                raise _DeployPlanError(
+                    f"deploy_targets[{project_name!r}]: {error}",
+                ) from error
             return [(project_name, project_dir, mapped_devices)]
     return [(project_name, project_dir, [_resolve_device(workspace, args)])]
 
