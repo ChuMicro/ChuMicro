@@ -504,30 +504,6 @@ def _filter_targets_by_marker(
     return [device for device in targets if device.runtime in folded]
 
 
-def _iter_runtime_variants(
-    function_names: list[str],
-    targets: list[DeviceEntry],
-) -> Iterator[tuple[str, DeviceEntry]]:
-    """Yield ``(function_name, device)`` pairs in IDE-friendly order.
-
-    When collecting a whole file for both runtimes, keep the runtime
-    variants of each function adjacent.  Some IDE test explorers build
-    parameterized-test groups from the incoming item stream, and a
-    runtime-first order can produce duplicate parent nodes when the two
-    variants of the same base function are far apart.
-
-    Args:
-        function_names: Sorted test function names from the file.
-        targets: Device targets selected for the session.
-
-    Yields:
-        Tuples of ``(function_name, device_entry)``.
-    """
-    for function_name in function_names:
-        for device in targets:
-            yield function_name, device
-
-
 def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime prepare step."""
     return f"Setup — {runtime_display_name(device_entry.runtime)}"
@@ -1010,15 +986,21 @@ class DeviceTestFile(pytest.File):
                     test_file=self.path,
                     target_device=device,
                 )
-            for name, device in _iter_runtime_variants(function_names, targets):
-                display_name = f"{name}[{runtime_display_name(device.runtime)}]"
-                yield DeviceTestItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
-                    self,
-                    name=display_name,
-                    test_file=self.path,
-                    function_name=name,
-                    target_device=device,
-                )
+            # Function-then-runtime order keeps the two runtime variants
+            # of each base function adjacent in the item stream — some IDE
+            # test explorers build parameterized groups from incoming
+            # order and produce duplicate parent nodes when variants are
+            # split apart.
+            for name in function_names:
+                for device in targets:
+                    display_name = f"{name}[{runtime_display_name(device.runtime)}]"
+                    yield DeviceTestItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
+                        self,
+                        name=display_name,
+                        test_file=self.path,
+                        function_name=name,
+                        target_device=device,
+                    )
 
 
 class DeviceRuntimeItem(pytest.Item):
