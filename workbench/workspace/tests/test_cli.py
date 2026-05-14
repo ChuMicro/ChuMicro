@@ -67,8 +67,8 @@ class TestParser:
     EXPECTED_COMMANDS = (
         "setup", "init", "update", "new", "add-device", "probe",
         "discover", "devices", "deploy", "projects", "status", "doctor",
-        "demo", "bootstrap", "sim", "test", "repl", "env", "use",
-        "rename", "install-firmware", "upgrade-firmware", "sync", "upgrade",
+        "demo", "bootstrap", "test", "repl",
+        "rename", "install-firmware", "upgrade-firmware",
         "reset-board", "config-validate", "dump-config",
     )
 
@@ -3515,36 +3515,6 @@ class TestWorkspaceResolution:
         with pytest.raises(SystemExit) as caught:
             cli.main(["devices", "--workspace-dir", str(tmp_path)])
         assert "workspace.yml" in str(caught.value)
-
-
-# ---------------------------------------------------------------------------
-# Stubs
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("command", "slice_marker"),
-    [
-        ("sim", "sim runner"),
-        ("env", "environments"),
-        ("use", "environments"),
-        ("sync", "superseded by `chumicro-workspace update`"),
-        ("upgrade", "superseded by `chumicro-workspace update --ref"),
-    ],
-)
-def test_stub_commands_exit_two_with_message(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    command: str,
-    slice_marker: str,
-) -> None:
-    """Each stubbed command must report its planned slice and exit 2."""
-    seed_workspace(tmp_path)
-    exit_code = cli.main([command, "--workspace-dir", str(tmp_path)])
-    assert exit_code == 2
-    captured_stderr = capsys.readouterr().err
-    assert "not implemented yet" in captured_stderr
-    assert slice_marker in captured_stderr
 
 
 # ---------------------------------------------------------------------------

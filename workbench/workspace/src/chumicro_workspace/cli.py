@@ -2935,20 +2935,6 @@ def _cmd_install_libraries(args: argparse.Namespace) -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# Stubs — register the surface; implementation lands in a later slice
-# ---------------------------------------------------------------------------
-
-
-def _stub(slice_or_phase: str) -> int:
-    """Emit a uniform "not implemented yet" message and return exit-code 2."""
-    print(
-        f"not implemented yet — landing in {slice_or_phase}.",
-        file=sys.stderr,
-    )
-    return 2
-
-
 def _cmd_add_device(args: argparse.Namespace) -> int:
     """Probe a board + register it in devices.yml.
 
@@ -3143,33 +3129,6 @@ def _cmd_rename(args: argparse.Namespace) -> int:
     dump_devices(data, workspace.devices_yaml)
     print(f"rename: device {old_id} → {new_id}")
     return 0
-
-
-def _cmd_sim(_args: argparse.Namespace) -> int:
-    """Run a project in CPython simulation."""
-    return _stub("sim runner — not implemented yet")
-
-
-def _cmd_env(_args: argparse.Namespace) -> int:  # noqa: CHU001 — workstream-spec command name
-    """List / show workspace environments."""
-    return _stub("environments — not implemented yet")
-
-
-def _cmd_use(_args: argparse.Namespace) -> int:
-    """Switch the active workspace environment."""
-    return _stub("environments — not implemented yet")
-
-
-def _cmd_sync(_args: argparse.Namespace) -> int:
-    """Re-apply the workspace template (superseded by `update`)."""
-    return _stub("superseded by `chumicro-workspace update`")
-
-
-def _cmd_upgrade(_args: argparse.Namespace) -> int:
-    """Pin to a newer workspace template version (superseded by `update --ref`)."""
-    return _stub(
-        "superseded by `chumicro-workspace update --ref <ref>`",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -3735,14 +3694,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bootstrap_parser.set_defaults(func=_cmd_bootstrap)
 
-    # ----- sim -----------------------------------------------------------
-    sim_parser = subparsers.add_parser(
-        "sim",
-        help="Run a project in CPython simulation (planned, not yet shipped).",
-    )
-    _add_workspace_arg(sim_parser)
-    sim_parser.set_defaults(func=_cmd_sim)
-
     # ----- test ----------------------------------------------------------
     test_parser = subparsers.add_parser(
         "test",
@@ -3895,22 +3846,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     repl_parser.set_defaults(func=_cmd_repl)
 
-    # ----- env -----------------------------------------------------------
-    env_parser = subparsers.add_parser(
-        "env",
-        help="List / show workspace environments (planned).",
-    )
-    _add_workspace_arg(env_parser)
-    env_parser.set_defaults(func=_cmd_env)
-
-    # ----- use -----------------------------------------------------------
-    use_parser = subparsers.add_parser(
-        "use",
-        help="Switch the active workspace environment (planned).",
-    )
-    _add_workspace_arg(use_parser)
-    use_parser.set_defaults(func=_cmd_use)
-
     # ----- rename --------------------------------------------------------
     rename_parser = subparsers.add_parser(
         "rename",
@@ -4035,22 +3970,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_device_selector(upgrade_firmware_parser)
     _add_firmware_args(upgrade_firmware_parser)
     upgrade_firmware_parser.set_defaults(func=_cmd_install_firmware)
-
-    # ----- sync ----------------------------------------------------------
-    sync_parser = subparsers.add_parser(
-        "sync",
-        help="Deprecated — superseded by `update`.",
-    )
-    _add_workspace_arg(sync_parser)
-    sync_parser.set_defaults(func=_cmd_sync)
-
-    # ----- upgrade -------------------------------------------------------
-    upgrade_parser = subparsers.add_parser(
-        "upgrade",
-        help="Deprecated — superseded by `update --ref <ref>`.",
-    )
-    _add_workspace_arg(upgrade_parser)
-    upgrade_parser.set_defaults(func=_cmd_upgrade)
 
     return parser
 
