@@ -34,9 +34,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .circuitpython_transport import CircuitpythonTransportError
+from .circuitpython_transport import (
+    CircuitpythonMidDeployDisconnected,
+    CircuitpythonTransportError,
+)
 from .macos_fskit import detect_fskit_wedge
-from .micropython_transport import MicropythonTransportError
+from .micropython_transport import (
+    MicropythonMidDeployDisconnected,
+    MicropythonTransportError,
+)
 from .recovery_kind import DeployFailureKind, RecoveryPlan
 from .recovery_plans import PLANS
 from .result import DeployResult
@@ -217,12 +223,7 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     # Typed disconnect subclasses skip the string-pattern dance —
     # they were raised because the device dropped, period.  Routes
     # to PORT_UNAVAILABLE because the user-facing fix is the same
-    # ("plug it back in").  isinstance check is import-light because
-    # the subclasses live in their owning transport modules and
-    # this module already imports them.
-    from .circuitpython_transport import CircuitpythonMidDeployDisconnected
-    from .micropython_transport import MicropythonMidDeployDisconnected
-
+    # ("plug it back in").
     if isinstance(
         error,
         (CircuitpythonMidDeployDisconnected, MicropythonMidDeployDisconnected),
