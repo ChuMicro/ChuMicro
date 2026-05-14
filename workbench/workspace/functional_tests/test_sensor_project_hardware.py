@@ -41,7 +41,7 @@ from pathlib import Path
 
 import pytest
 from chumicro_deploy import Deployer, Device, DeviceEntry
-from chumicro_workspace import project_import_graph_source
+from chumicro_workspace.import_graph import project_import_graph_source
 from chumicro_workspace.workspace import WorkspaceLayout
 
 # ---------------------------------------------------------------------------
@@ -128,12 +128,15 @@ _FAIL_FAST_CONFIG_TOML = """\
 # deploy returns within seconds, letting us assert phase markers.
 [wifi]
 ssid = "chumicro-layer2-test-bogus"
+password = "bogus-test-password"
 connect_timeout_ms = 2000
 reconnect_max = 0
 
-[mqtt]
-broker = "localhost"
+[mqtt.broker]
+host = "localhost"
 port = 1883
+
+[mqtt]
 client_id = "chumicro-layer2-test"
 
 [sensor]
@@ -191,6 +194,11 @@ def _stage_layer2_workspace(
         "  wifi:\n"
         "    password: bogus-test-password\n",
     )
+    # The import-graph deploy path composes runtime config from
+    # secrets.toml + per-project config.toml; an empty secrets.toml
+    # satisfies the file-exists precondition without supplying any
+    # workspace-wide defaults the test would otherwise need.
+    (tmp_path / "secrets.toml").write_text("")
     projects_dir = tmp_path / "projects"
     projects_dir.mkdir()
     sensor_dir = projects_dir / "example_sensor"
@@ -260,7 +268,15 @@ def test_sensor_project_reaches_boot_phase_marker_on_micropython(
         device_entrypoint="/main.py",
         extra_search_paths=_chumicro_library_search_paths(),
     )
-    result = Deployer(device).deploy(source)
+    # ``deploy_diff(wipe=True)`` reformats the device filesystem
+    # before staging.  Without it, a prior test (e.g. the boot-shim
+    # suite) can leave a colliding ``/app.py`` at the device root
+    # that resolves before the sensor's app.py at ``/lib/app.py``,
+    # causing the entrypoint to run stale code from a previous deploy.
+    # ``Deployer.deploy(clean=True)`` is too narrow on MicroPython —
+    # the MP transport's ``clean`` is documented as ``/lib``-only,
+    # leaving root-level ``/app.py`` / ``/code.py`` survivors.
+    result = Deployer(device).deploy_diff(source, wipe=True)
     _assert_layer2_phase_markers(result.execute_output)
 
 
@@ -282,7 +298,9 @@ def test_sensor_project_reaches_boot_phase_marker_on_circuitpython(
         device_entrypoint="/code.py",
         extra_search_paths=_chumicro_library_search_paths(),
     )
-    result = Deployer(device).deploy(source)
+    # See the MP twin above for why deploy_diff(wipe=True) is the
+    # right shape here.
+    result = Deployer(device).deploy_diff(source, wipe=True)
     _assert_layer2_phase_markers(result.execute_output)
 
 
@@ -309,14 +327,23 @@ def test_sensor_project_boot_counter_persists_across_deploys_on_micropython(
     )
     deployer = Deployer(device)
 
-    first = deployer.deploy(source)
+    # First deploy reformats the filesystem so the kvstore starts
+    # fresh and no prior test's ``/main.py`` / ``/app.py`` shadows the
+    # sensor project.  Second deploy preserves filesystem state so
+    # the kvstore boot-counter survives across deploys (the whole
+    # point of this test).
+    first = deployer.deploy_diff(source, wipe=True)
     _assert_layer2_phase_markers(first.execute_output)
 
     second = deployer.deploy(source)
     _assert_layer2_phase_markers(second.execute_output)
-    # Boot counter went up between deploys.  Allow the first to be any
-    # number ≥ 1 (in case a contributor's KVStore already had a count
-    # from a prior run); the second must be strictly greater.
+    # Boot counter went up between deploys.  The first deploy starts
+    # from a wiped kvstore so first count is 1.  Between captures, the
+    # deploy machinery soft-resets several times — each reset runs
+    # ``main.py`` again and bumps the counter — so the exact delta
+    # depends on transport internals.  What this test actually proves
+    # is that the kvstore *persists* across deploys (no wipe between),
+    # so we only assert the counter went up.
     import re
 
     first_count = int(
@@ -325,7 +352,7 @@ def test_sensor_project_boot_counter_persists_across_deploys_on_micropython(
     second_count = int(
         re.search(r"sensor: boot #(\d+)", second.execute_output).group(1),
     )
-    assert second_count == first_count + 1, (
+    assert second_count > first_count, (
         f"boot counter did not advance: first={first_count} second={second_count}"
     )
 
@@ -488,11 +515,14 @@ def _live_broker_config_toml(environment: dict[str, str], port: int) -> str:
     return (
         "[wifi]\n"
         f'ssid = "{environment["ssid"]}"\n'
+        f'password = "{environment["password"]}"\n'
         "connect_timeout_ms = 15000\n"
         "\n"
-        "[mqtt]\n"
-        f'broker = "{environment["broker_host"]}"\n'
+        "[mqtt.broker]\n"
+        f'host = "{environment["broker_host"]}"\n'
         f"port = {port}\n"
+        "\n"
+        "[mqtt]\n"
         'client_id = "chumicro-layer3-sensor"\n'
         "\n"
         "[sensor]\n"
@@ -514,18 +544,14 @@ def test_sensor_project_publishes_to_live_broker(
     _skip_unless_flash_mode(micropython_device)
     environment = _layer3_required_environment()
 
-    # Stage workspace BEFORE Mosquitto spawn: real wifi creds in the
-    # gitignored workspace.yml, sensor pointing
-    # at a placeholder broker that we'll overwrite with the real port
-    # after Mosquitto comes up.
+    # Stage workspace BEFORE Mosquitto spawn: sensor pointing at a
+    # placeholder broker that we'll overwrite with the real port
+    # after Mosquitto comes up.  Real wifi credentials land in the
+    # per-project config.toml via `_live_broker_config_toml` once
+    # the broker is bound (runtime config now reads `secrets.toml`
+    # + `config.toml` only — `workspace.yml` is the workspace
+    # marker, not a config source).
     workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
-    # Overwrite workspace.yml with the real password for layer 3.
-    (tmp_path / "workspace.yml").write_text(
-        "defaults:\n"
-        "  app_marker_prefix: layer2-sensor\n"
-        "  wifi:\n"
-        f'    password: "{environment["password"]}"\n',
-    )
 
     broker_workdir = tmp_path / "mosquitto"
     broker_workdir.mkdir()
