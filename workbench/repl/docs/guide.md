@@ -15,17 +15,8 @@ Host-only. No bundle registration or device-side install needed. After install, 
 ## Command-line interface
 
 ```bash
-# Interactive TUI by serial path (no chumicro-deploy needed).
+# Interactive TUI by serial path.
 chumicro-repl --address /dev/cu.usbmodem14101
-
-# Interactive TUI by devices.yml entry (chumicro-deploy installed).
-chumicro-repl --devices-file devices.yml --device back-porch
-
-# Pick the workspace's circuitpython default without naming the id.
-chumicro-repl --devices-file devices.yml --runtime circuitpython
-
-# Single-runtime devices.yml — no flags needed beyond --devices-file.
-chumicro-repl --devices-file devices.yml
 
 # One-shot tail for 5 seconds, fail on traceback (default).
 chumicro-repl --address /dev/cu.usbmodem14101 --tail 5
@@ -33,14 +24,6 @@ chumicro-repl --address /dev/cu.usbmodem14101 --tail 5
 # Tail without failing on traceback (useful for diagnosing crash loops).
 chumicro-repl --address /dev/cu.usbmodem14101 --tail 30 --no-fail-on-traceback
 ```
-
-When `--devices-file` is supplied, `chumicro-repl` resolves the target in this order:
-
-1. **`--device <id>`** — wins outright.  Same semantics as `chumicro-deploy --device <id>`.
-2. **`--runtime <circuitpython|micropython>`** — picks `defaults.<runtime>` from the file.  Use this when your workspace has both runtime defaults configured and you want one of them without memorizing the id.
-3. **Neither flag** — the loader's single-runtime fallback applies.  When exactly one runtime default is set in the file, that wins; when both are set the loader raises and the CLI surfaces the error.
-
-The schema and loader are owned by `chumicro_deploy.config.default.load_devices_yml` — no parallel parser, same `defaults:` / `devices:` shape `chumicro-deploy` reads.
 
 By default in a TTY, `chumicro-repl` opens **line mode** — a host-side line editor that buffers each line locally before shipping to the device.  Switch to byte-passthrough with `--mode passthrough` if you need raw-REPL framing or paste-mode forwarding.
 
@@ -108,7 +91,7 @@ Startup prints a dim banner identifying the connection (`chumicro-repl · /dev/c
 
 All other keystrokes pass through unchanged.  The board does its own line editing — arrow keys, backspace, history all work, but they live on the device, not the host.  No `:` commands, no Tab completion against the host catalog, no persistent history file (the device's own history scrolls inside the runtime's `>>>` prompt).
 
-Choose passthrough when you need byte-exact behaviour or when you're piping input over stdin (line mode requires interactive input from a TTY); choose line mode for everyday inner-loop work.  `--mode auto` (the default for the standalone `chumicro-repl` CLI and for `chumicro-workspace repl` from a workspace) inspects `sys.stdin.isatty()` and picks the right one.
+Choose passthrough when you need byte-exact behavior or when you're piping input over stdin (line mode requires interactive input from a TTY); choose line mode for everyday inner-loop work.  `--mode auto` (the default) inspects `sys.stdin.isatty()` and picks the right one.
 
 ## Tail mode for deploy follow-ups
 
@@ -157,7 +140,7 @@ with ReplSession("/dev/cu.usbmodem14101") as session:
     captured = session.read_until(r"READY", timeout=5.0)
 ```
 
-`exec(code, timeout=10.0)` returns stdout. If the board emitted stderr (typically because the code raised an exception), `ReplSession` raises `ReplSessionError` with the stderr block attached as the exception's `.stderr` attribute — raw REPL never raises a Python exception object across the wire, so surfacing it as a string is the closest host-side analogue.
+`exec(code, timeout=10.0)` returns stdout. If the board emitted stderr (typically because the code raised an exception), `ReplSession` raises `ReplSessionError` with the stderr block attached as the exception's `.stderr` attribute — raw REPL never raises a Python exception object across the wire, so surfacing it as a string is the closest host-side analog.
 
 `call(function_name, *args, **kwargs)` builds a `print(repr(<function_name>(*args, **kwargs)))` and parses the result via `ast.literal_eval`. Round-trips numbers, strings, bytes, tuples, lists, dicts, sets, booleans, and `None`. Anything else raises `ReplSessionError` because the repr is not a literal.
 

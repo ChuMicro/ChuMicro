@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, BinaryIO, Protocol, TextIO, cast
 from ._follow import ExitCode
 from ._serial import (
     CTRL_X,
+    DeviceLike,
     PortFactory,
     SerialPort,
     TimeSource,
@@ -51,8 +52,6 @@ from .patterns import StreamingPatternDetector
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from chumicro_deploy import Device
 
 
 #: Poll interval inside the interactive loop.  Short enough to keep
@@ -268,7 +267,7 @@ DEFAULT_TUI_RECONNECT_SECONDS = 60.0
 
 
 def interactive(
-    device: Device | str,
+    device: DeviceLike | str,
     *,
     baudrate: int = 115200,
     input_stream: BinaryIO | None = None,
@@ -360,7 +359,7 @@ def interactive(
 
 
 def interactive_line(
-    device: Device | str,
+    device: DeviceLike | str,
     *,
     baudrate: int = 115200,
     output: TextIO | None = None,
@@ -454,7 +453,7 @@ def _format_welcome_banner(
     return f"\x1b[2m{identity}\r\n{keys}\x1b[0m\r\n"
 
 
-def _transport_label(device: Device | str) -> str | None:
+def _transport_label(device: DeviceLike | str) -> str | None:
     """Return the device's runtime label, or ``None`` for a bare path.
 
     Duck-typed access mirrors :func:`chumicro_repl._serial.resolve_address`
@@ -513,7 +512,7 @@ def _posix_raw_mode(fd: int) -> Iterator[None]:
     extra deps.  On platforms without :mod:`termios` (Windows) the
     call falls through as a no-op; the TUI still works but key
     repeats and Ctrl-char interception depend on the terminal
-    emulator's own behaviour.
+    emulator's own behavior.
     """
     try:
         import termios  # noqa: PLC0415 — POSIX-only, deferred

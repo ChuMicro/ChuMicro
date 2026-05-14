@@ -60,7 +60,7 @@ def test_micropython_idle_tail_returns_ok(
         reconnect_seconds=0.0,
     )
     # OK or DISCONNECTED is acceptable depending on the host's
-    # serial driver behaviour during a quick open/close.  What
+    # serial driver behavior during a quick open/close.  What
     # we're proving is that the function returns *something*
     # rather than raising a SerialException.
     assert exit_code in (ExitCode.OK, ExitCode.DISCONNECTED)

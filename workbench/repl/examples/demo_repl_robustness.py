@@ -53,7 +53,7 @@ from chumicro_repl import (
 from chumicro_repl.highlight import strip_ansi_sequences
 
 # ---------------------------------------------------------------------------
-# Terminal helpers — ANSI colour when isatty, plain text otherwise
+# Terminal helpers — ANSI color when isatty, plain text otherwise
 # ---------------------------------------------------------------------------
 
 _IS_TTY = sys.stdout.isatty()

@@ -29,7 +29,7 @@ History is persistent at
 session on ``back-porch`` doesn't pollute one on ``greenhouse``.
 
 This module is independent from :mod:`chumicro_repl.tui` —
-:func:`run_line_mode` is the analogue of
+:func:`run_line_mode` is the analog of
 :func:`chumicro_repl.tui.run_loop` for the line-mode path.  The
 CLI's ``--mode`` flag picks one or the other.
 """

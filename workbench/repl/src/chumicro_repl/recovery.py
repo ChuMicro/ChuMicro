@@ -33,9 +33,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from types import TracebackType
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
-from ._serial import PortFactory, TimeSource
+from ._serial import DeviceLike, PortFactory, TimeSource
 from .session import (
     DEFAULT_TIMEOUT,
     ReplSession,
@@ -44,9 +44,6 @@ from .session import (
 )
 
 _T = TypeVar("_T")
-
-if TYPE_CHECKING:
-    from chumicro_deploy import Device
 
 
 #: Default ceiling on retry attempts.  Three matches
@@ -321,7 +318,7 @@ def coached_session_start(
 
     * :class:`InteractiveReplSession` — which wraps a
       :class:`ReplSession` context manager around the coaching loop
-      so programmatic callers get the same retry behaviour.
+      so programmatic callers get the same retry behavior.
     * The workspace ``repl`` CLI — which wraps the
       :func:`~chumicro_repl.tui.interactive_line` /
       :func:`~chumicro_repl.tui.interactive` calls so port-busy /
@@ -451,8 +448,9 @@ class InteractiveReplSession:
     auto-reconnect loop in :func:`tail` and :func:`run_loop`.
 
     Args:
-        device: :class:`chumicro_deploy.Device` or a serial port
-            path string.  Forwarded to :class:`ReplSession` on each
+        device: An object exposing ``.address`` (e.g. a
+            ``chumicro_deploy.Device``) or a bare serial-port path
+            string.  Forwarded to :class:`ReplSession` on each
             attempt.
         max_attempts: Ceiling on retry attempts.  Defaults to 3.
             Must be ``>= 1``.
@@ -475,7 +473,7 @@ class InteractiveReplSession:
 
     def __init__(
         self,
-        device: Device | str,
+        device: DeviceLike | str,
         *,
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
         prompt: Callable[[str], str] = input,

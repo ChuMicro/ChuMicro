@@ -23,9 +23,10 @@ from __future__ import annotations
 import sys
 import time as _time_module
 from enum import Enum
-from typing import TYPE_CHECKING, TextIO, cast
+from typing import TextIO, cast
 
 from ._serial import (
+    DeviceLike,
     PortFactory,
     SerialPort,
     TimeSource,
@@ -38,9 +39,6 @@ from ._serial import (
 from .framing import Utf8StreamDecoder
 from .highlight import DEFAULT_THEME, Theme, colorize_stream_chunk
 from .patterns import PatternKind, StreamingPatternDetector
-
-if TYPE_CHECKING:
-    from chumicro_deploy import Device
 
 
 class ExitCode(int, Enum):
@@ -87,7 +85,7 @@ DEFAULT_TAIL_RECONNECT_INTERVAL = 0.5
 
 
 def tail(
-    device: Device | str,
+    device: DeviceLike | str,
     seconds: float,
     *,
     fail_on_traceback: bool = True,

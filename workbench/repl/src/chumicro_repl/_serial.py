@@ -11,8 +11,9 @@ Also owns the small set of helpers that every streaming consumer
 on the disconnect / shutdown paths — closing a port quietly, writing
 the standard disconnect notice, flushing a TextIO without crashing on
 closed streams, and resolving ``(address, baudrate)`` from either a
-:class:`chumicro_deploy.Device` or a bare port-path string.  Sharing
-the implementations here keeps the four entry points behaviorally
+device object exposing an ``.address`` attribute (e.g. a
+``chumicro_deploy.Device``) or a bare port-path string.  Sharing the
+implementations here keeps the four entry points behaviorally
 consistent without three copies of each helper drifting apart.
 """
 
@@ -24,7 +25,18 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from typing import TextIO
 
-    from chumicro_deploy import Device
+
+class DeviceLike(Protocol):
+    """Structural interface for the slice of a serial device this
+    package consumes.
+
+    Any object exposing ``address`` (and optionally ``baudrate``)
+    satisfies this — keeps the REPL importable and usable for
+    bare-port-path callers without ``chumicro-deploy`` installed.
+    ``chumicro_deploy.Device`` satisfies it via duck typing.
+    """
+
+    address: str
 
 
 class SerialPort(Protocol):
@@ -160,10 +172,10 @@ def write_disconnect_notice(output: TextIO, error: OSError) -> None:
 
 
 def resolve_address(
-    device: Device | str,
+    device: DeviceLike | str,
     fallback_baudrate: int,
 ) -> tuple[str, int]:
-    """Return ``(address, baudrate)`` for a :class:`Device` or path string.
+    """Return ``(address, baudrate)`` for a device-like object or path string.
 
     Duck-typed — accepts any object with an ``address`` attribute
     (and optionally ``baudrate``) so callers don't pull in a hard

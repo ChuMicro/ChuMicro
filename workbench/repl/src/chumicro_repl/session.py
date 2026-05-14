@@ -28,7 +28,7 @@ import ast
 import re
 import time as _time_module
 from types import TracebackType
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 from ._serial import (
     CTRL_A,
@@ -37,6 +37,7 @@ from ._serial import (
     CTRL_D,
     RAW_REPL_EOT,
     RAW_REPL_PROMPT,
+    DeviceLike,
     PortFactory,
     SerialPort,
     TimeSource,
@@ -44,10 +45,6 @@ from ._serial import (
     resolve_address,
 )
 from .framing import Utf8StreamDecoder
-
-if TYPE_CHECKING:
-    from chumicro_deploy import Device
-
 
 #: Default per-exec timeout.  Matches
 #: :data:`chumicro_deploy.circuitpython_transport.DEFAULT_TIMEOUT` so
@@ -137,13 +134,14 @@ class ReplSession:
     friendly REPL, ready for an interactive user or another session.
 
     Args:
-        device: Either a :class:`chumicro_deploy.Device` or a bare
-            serial-port path string.  A bare string is treated as
-            the ``address``; baudrate / time / port-factory come
-            from the other keyword arguments.
+        device: Either an object exposing ``.address`` (e.g. a
+            ``chumicro_deploy.Device``) or a bare serial-port path
+            string.  A bare string is treated as the ``address``;
+            baudrate / time / port-factory come from the other
+            keyword arguments.
         baudrate: Only consulted when *device* is a string.  Ignored
-            for :class:`~chumicro_deploy.Device` — the device's own
-            ``baudrate`` wins.
+            when *device* exposes its own ``baudrate`` attribute —
+            the device's value wins.
         time: Injectable time source (for tests).  Defaults to the
             stdlib ``time`` module.
         port_factory: Injectable port factory (for tests).  Defaults
@@ -156,7 +154,7 @@ class ReplSession:
 
     def __init__(
         self,
-        device: Device | str,
+        device: DeviceLike | str,
         *,
         baudrate: int = 115200,
         time: TimeSource | None = None,
@@ -238,7 +236,7 @@ class ReplSession:
         the call raises :class:`ReplSessionError` with ``stderr``
         attached — raw REPL never raises an exception object on the
         host side, only on the board, so surfacing it as a stderr
-        blob is the closest host-side analogue.
+        blob is the closest host-side analog.
 
         Args:
             code: Python source to execute.  May contain newlines.
