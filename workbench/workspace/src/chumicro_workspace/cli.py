@@ -3414,132 +3414,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_workspace_arg(devices_parser)
     devices_parser.set_defaults(func=_cmd_devices)
 
-    # ----- deploy --------------------------------------------------------
-    deploy_parser = subparsers.add_parser(
-        "deploy",
-        help="Deploy one or more projects — app code + merged runtime config msgpack.",
-    )
-    _add_workspace_arg(deploy_parser)
-    _add_device_selector(deploy_parser)
-    deploy_parser.add_argument(
-        "names",
-        nargs="*",
-        metavar="name",
-        help=(
-            "Name of the project under projects/ to deploy.  Optional when "
-            "the workspace contains exactly one project — that project is "
-            "deployed by default.  One positional per `deploy` call; "
-            "multi-project deploys are no longer supported."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--entrypoint",
-        default=None,
-        help=(
-            "Override the on-device entrypoint path.  Defaults to "
-            "/code.py on CircuitPython and /main.py on MicroPython."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--import-graph",
-        action="store_true",
-        help=(
-            "AST-walk the entrypoint and ship only transitively-"
-            "imported modules instead of the full project directory.  "
-            "Reads workspace.yml's library_sources: for overrides.  "
-            "Combines with --boot-shim to ship libraries alongside "
-            "the boot-shim layout (walk starts from app.py)."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--boot-shim",
-        action="store_true",
-        help=(
-            "Ship project files at the device root + synthesise "
-            "/code.py (CP) or /main.py (MP) that imports app.run.  "
-            "app.py must export run().  Combines with --import-graph "
-            "to also ship libraries the project imports.  Auto-detected "
-            "when the project ships app.py with run() and no code.py / "
-            "main.py — passing --boot-shim explicitly is rarely needed."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help=(
-            "Print the file map deploy would ship without writing to "
-            "the device.  Doubles as documentation: the output is the "
-            "canonical reference for 'what does deploy actually do'."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--all-devices",
-        action="store_true",
-        help=(
-            "Deploy to every device in devices.yml in sequence.  "
-            "Mutually exclusive with --device / --runtime.  "
-            "Per-device failures don't abort the loop — every device "
-            "gets a chance, exit code reflects whether any failed."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--all-projects",
-        action="store_true",
-        help=(
-            "Deploy every project in workspace.yml's `deploy_targets:` "
-            "mapping to its declared device(s).  Mutually exclusive "
-            "with positional names / --device / --runtime / "
-            "--all-devices.  Per-project failures don't abort the loop; "
-            "exit code reflects whether any failed."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--wipe",
-        action="store_true",
-        help=(
-            "Erase the entire device filesystem before deploying.  "
-            "Destructive — wipes user-managed files (settings.toml, "
-            "uploaded assets, hand-edited boot.py) along with managed "
-            "deploy scope.  Use for clean-slate / corruption-recovery "
-            "flows; an ordinary deploy already cleans stale /lib/* "
-            "files via the diff-deploy primitive.  No-op in RAM mode "
-            "(nothing in flash to wipe)."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help=(
-            "Skip the recovery-coaching wrapper and let transport "
-            "errors propagate uncaught.  Use in CI / scripted flows "
-            "that don't have stdin to answer retry prompts.  "
-            "Interactive coaching is on by default."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--skip-health-check",
-        action="store_true",
-        help=(
-            "Skip the pre-deploy fast health gate.  By default, deploy "
-            "runs `status`-equivalent checks (workspace.yml / "
-            "devices.yml shape) and aborts on "
-            "ERROR-level findings before sending bytes to the device. "
-            "Use this flag for power-user CLI runs or CI flows that "
-            "have already validated the workspace state externally."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--target-runtime",
-        choices=("circuitpython", "micropython"),
-        default=None,
-        help=(
-            "Override the deploy-time runtime filter.  Defaults to "
-            "the device's configured runtime — files marked for a "
-            "different runtime via __chumicro_runtimes__ are filtered "
-            "out.  Set this to override the auto-derived value."
-        ),
-    )
-    deploy_parser.set_defaults(func=_cmd_deploy)
+    _add_deploy_parser(subparsers)
 
     # ----- projects --------------------------------------------------------
     projects_parser = subparsers.add_parser(
@@ -3612,115 +3487,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     demo_parser.set_defaults(func=_cmd_demo)
 
-    # ----- deploy-example ------------------------------------------------
-    deploy_example_parser = subparsers.add_parser(
-        "deploy-example",
-        help=(
-            "Deploy a library example (libraries/<lib>/examples/<name>.py) "
-            "to a registered device.  Front-door command for running "
-            "the first hello-world on a board."
-        ),
-    )
-    _add_workspace_arg(deploy_example_parser)
-    deploy_example_parser.add_argument(
-        "library",
-        nargs="?",
-        default=None,
-        help=(
-            "Library name under libraries/ (e.g. 'timing').  Required "
-            "unless --list is passed without an argument."
-        ),
-    )
-    deploy_example_parser.add_argument(
-        "example_name",
-        nargs="?",
-        default=None,
-        metavar="example",
-        help=(
-            "Example file stem under libraries/<lib>/examples/ "
-            "(e.g. 'circuitpython_blink' or 'circuitpython_blink.py' — "
-            "trailing .py is optional)."
-        ),
-    )
-    deploy_example_parser.add_argument(
-        "--list",
-        action="store_true",
-        help=(
-            "List every available example under libraries/<lib>/examples/ "
-            "and exit.  Pass a library positional to scope to one library."
-        ),
-    )
-    _add_device_selector(deploy_example_parser)
-    deploy_example_parser.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help=(
-            "Disable every prompt + long-running tail (sets implicit "
-            "--no-auto-register + --no-tail).  Auto-detected from "
-            "stdin TTY status; pass explicitly for CI / scripted runs."
-        ),
-    )
-    deploy_example_parser.add_argument(
-        "--no-auto-register",
-        dest="auto_register",
-        action="store_false",
-        default=True,
-        help=(
-            "Refuse to fall into the bootstrap wizard when no device is "
-            "registered for the example's runtime — exit 3 with a "
-            "structured stderr hint instead.  Default behaviour is to "
-            "fall through into the wizard in interactive mode."
-        ),
-    )
-    tail_group = deploy_example_parser.add_mutually_exclusive_group()
-    tail_group.add_argument(
-        "--tail",
-        dest="tail",
-        action="store_true",
-        default=True,
-        help=(
-            "After deploy, drop into `chumicro-repl tail` to follow the "
-            "example's output.  Interactive default; suppressed by "
-            "--non-interactive."
-        ),
-    )
-    tail_group.add_argument(
-        "--no-tail",
-        dest="tail",
-        action="store_false",
-        help="Exit cleanly after deploy instead of tailing the REPL.",
-    )
-    deploy_example_parser.add_argument(
-        "--no-clean",
-        dest="clean",
-        action="store_false",
-        default=True,
-        help=(
-            "Preserve files already on the device that aren't part of "
-            "this example's payload.  Default is to wipe stale `lib/` "
-            "packages and other deploy-managed files so each example "
-            "lands fresh; pass --no-clean if you've hand-installed "
-            "extra modules on the board you want to keep."
-        ),
-    )
-    deploy_example_parser.add_argument(
-        "--tail-seconds",
-        type=float,
-        default=None,
-        help=(
-            "How long to capture serial output after the entrypoint's "
-            "soft-reboot (CircuitPython flash mode only; MP transport "
-            "ignores this).  Default uses the transport's built-in "
-            "timeout (10 s).  Raise it for slow-wifi boards (Pi Pico W "
-            "cyw43 wifi-up + first network call takes 5-10 s) so the "
-            "first prints don't land outside the capture window — "
-            "common in --non-interactive --no-tail use (sweep harness, "
-            "CI runs).  Set to 0 to skip the capture entirely and "
-            "return as soon as the soft-reboot has been triggered, "
-            "leaving the board running."
-        ),
-    )
-    deploy_example_parser.set_defaults(func=_cmd_deploy_example)
+    _add_deploy_example_parser(subparsers)
 
     # ----- bootstrap -----------------------------------------------------
     bootstrap_parser = subparsers.add_parser(
@@ -3848,7 +3615,329 @@ def build_parser() -> argparse.ArgumentParser:
     )
     config_validate_parser.set_defaults(func=_cmd_config_validate)
 
-    # ----- repl ----------------------------------------------------------
+    _add_repl_parser(subparsers)
+
+    # ----- rename --------------------------------------------------------
+    rename_parser = subparsers.add_parser(
+        "rename",
+        help="Rename a project directory or a device id.",
+    )
+    _add_workspace_arg(rename_parser)
+    rename_target = rename_parser.add_mutually_exclusive_group(required=True)
+    rename_target.add_argument(
+        "--project",
+        nargs=2,
+        metavar=("OLD", "NEW"),
+        default=None,
+        help="Rename projects/OLD/ to projects/NEW/.",
+    )
+    rename_target.add_argument(
+        "--device",
+        nargs=2,
+        metavar=("OLD", "NEW"),
+        default=None,
+        help="Rename a devices.yml entry id (also rewrites defaults: references).",
+    )
+    rename_parser.set_defaults(func=_cmd_rename)
+
+    # ----- install-firmware ----------------------------------------------
+    install_firmware_parser = subparsers.add_parser(
+        "install-firmware",
+        help="Download + flash firmware onto the selected board.",
+    )
+    _add_workspace_arg(install_firmware_parser)
+    _add_device_selector(install_firmware_parser)
+    _add_firmware_args(install_firmware_parser)
+    install_firmware_parser.set_defaults(func=_cmd_install_firmware)
+
+    # ----- reset-board ----------------------------------------------------
+    reset_board_parser = subparsers.add_parser(
+        "reset-board",
+        help=(
+            "Wipe the device's user filesystem (clean-slate, no redeploy)."
+        ),
+        description=(
+            "Erase every user file the runtime can see on the selected "
+            "board — including out-of-scope files like settings.toml and "
+            "hand-edited boot.py — without redeploying any project.  "
+            "Standalone counterpart to `deploy --wipe`.  Used to recover "
+            "a board whose flash filled up with stage residue (the "
+            "MicroPython path runs `os.VfsLfs2.mkfs`, which `os.remove` "
+            "alone cannot match — LittleFS metadata + wear-leveling "
+            "artifacts survive a file-walk).  No-op in RAM / mount mode."
+        ),
+    )
+    _add_workspace_arg(reset_board_parser)
+    _add_device_selector(reset_board_parser)
+    reset_board_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help=(
+            "Confirm the destructive wipe.  Without this flag, the "
+            "command exits 2 without touching the board so a typoed "
+            "device id cannot accidentally erase production state."
+        ),
+    )
+    reset_board_parser.set_defaults(func=_cmd_reset_board)
+
+    _add_install_libraries_parser(subparsers)
+
+    # ----- upgrade-firmware ----------------------------------------------
+    upgrade_firmware_parser = subparsers.add_parser(
+        "upgrade-firmware",
+        help="Alias of install-firmware — same flash flow.",
+    )
+    _add_workspace_arg(upgrade_firmware_parser)
+    _add_device_selector(upgrade_firmware_parser)
+    _add_firmware_args(upgrade_firmware_parser)
+    upgrade_firmware_parser.set_defaults(func=_cmd_install_firmware)
+
+    return parser
+
+
+def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
+    """``deploy`` — the workspace's central command.  Single project per call."""
+    deploy_parser = subparsers.add_parser(
+        "deploy",
+        help="Deploy one or more projects — app code + merged runtime config msgpack.",
+    )
+    _add_workspace_arg(deploy_parser)
+    _add_device_selector(deploy_parser)
+    deploy_parser.add_argument(
+        "names",
+        nargs="*",
+        metavar="name",
+        help=(
+            "Name of the project under projects/ to deploy.  Optional when "
+            "the workspace contains exactly one project — that project is "
+            "deployed by default.  One positional per `deploy` call; "
+            "multi-project deploys are no longer supported."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--entrypoint",
+        default=None,
+        help=(
+            "Override the on-device entrypoint path.  Defaults to "
+            "/code.py on CircuitPython and /main.py on MicroPython."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--import-graph",
+        action="store_true",
+        help=(
+            "AST-walk the entrypoint and ship only transitively-"
+            "imported modules instead of the full project directory.  "
+            "Reads workspace.yml's library_sources: for overrides.  "
+            "Combines with --boot-shim to ship libraries alongside "
+            "the boot-shim layout (walk starts from app.py)."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--boot-shim",
+        action="store_true",
+        help=(
+            "Ship project files at the device root + synthesise "
+            "/code.py (CP) or /main.py (MP) that imports app.run.  "
+            "app.py must export run().  Combines with --import-graph "
+            "to also ship libraries the project imports.  Auto-detected "
+            "when the project ships app.py with run() and no code.py / "
+            "main.py — passing --boot-shim explicitly is rarely needed."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Print the file map deploy would ship without writing to "
+            "the device.  Doubles as documentation: the output is the "
+            "canonical reference for 'what does deploy actually do'."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--all-devices",
+        action="store_true",
+        help=(
+            "Deploy to every device in devices.yml in sequence.  "
+            "Mutually exclusive with --device / --runtime.  "
+            "Per-device failures don't abort the loop — every device "
+            "gets a chance, exit code reflects whether any failed."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--all-projects",
+        action="store_true",
+        help=(
+            "Deploy every project in workspace.yml's `deploy_targets:` "
+            "mapping to its declared device(s).  Mutually exclusive "
+            "with positional names / --device / --runtime / "
+            "--all-devices.  Per-project failures don't abort the loop; "
+            "exit code reflects whether any failed."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--wipe",
+        action="store_true",
+        help=(
+            "Erase the entire device filesystem before deploying.  "
+            "Destructive — wipes user-managed files (settings.toml, "
+            "uploaded assets, hand-edited boot.py) along with managed "
+            "deploy scope.  Use for clean-slate / corruption-recovery "
+            "flows; an ordinary deploy already cleans stale /lib/* "
+            "files via the diff-deploy primitive.  No-op in RAM mode "
+            "(nothing in flash to wipe)."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "Skip the recovery-coaching wrapper and let transport "
+            "errors propagate uncaught.  Use in CI / scripted flows "
+            "that don't have stdin to answer retry prompts.  "
+            "Interactive coaching is on by default."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--skip-health-check",
+        action="store_true",
+        help=(
+            "Skip the pre-deploy fast health gate.  By default, deploy "
+            "runs `status`-equivalent checks (workspace.yml / "
+            "devices.yml shape) and aborts on "
+            "ERROR-level findings before sending bytes to the device. "
+            "Use this flag for power-user CLI runs or CI flows that "
+            "have already validated the workspace state externally."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--target-runtime",
+        choices=("circuitpython", "micropython"),
+        default=None,
+        help=(
+            "Override the deploy-time runtime filter.  Defaults to "
+            "the device's configured runtime — files marked for a "
+            "different runtime via __chumicro_runtimes__ are filtered "
+            "out.  Set this to override the auto-derived value."
+        ),
+    )
+    deploy_parser.set_defaults(func=_cmd_deploy)
+
+
+def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
+    """``deploy-example`` — front-door for the first-touch board flow."""
+    deploy_example_parser = subparsers.add_parser(
+        "deploy-example",
+        help=(
+            "Deploy a library example (libraries/<lib>/examples/<name>.py) "
+            "to a registered device.  Front-door command for running "
+            "the first hello-world on a board."
+        ),
+    )
+    _add_workspace_arg(deploy_example_parser)
+    deploy_example_parser.add_argument(
+        "library",
+        nargs="?",
+        default=None,
+        help=(
+            "Library name under libraries/ (e.g. 'timing').  Required "
+            "unless --list is passed without an argument."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "example_name",
+        nargs="?",
+        default=None,
+        metavar="example",
+        help=(
+            "Example file stem under libraries/<lib>/examples/ "
+            "(e.g. 'circuitpython_blink' or 'circuitpython_blink.py' — "
+            "trailing .py is optional)."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "--list",
+        action="store_true",
+        help=(
+            "List every available example under libraries/<lib>/examples/ "
+            "and exit.  Pass a library positional to scope to one library."
+        ),
+    )
+    _add_device_selector(deploy_example_parser)
+    deploy_example_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "Disable every prompt + long-running tail (sets implicit "
+            "--no-auto-register + --no-tail).  Auto-detected from "
+            "stdin TTY status; pass explicitly for CI / scripted runs."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "--no-auto-register",
+        dest="auto_register",
+        action="store_false",
+        default=True,
+        help=(
+            "Refuse to fall into the bootstrap wizard when no device is "
+            "registered for the example's runtime — exit 3 with a "
+            "structured stderr hint instead.  Default behaviour is to "
+            "fall through into the wizard in interactive mode."
+        ),
+    )
+    tail_group = deploy_example_parser.add_mutually_exclusive_group()
+    tail_group.add_argument(
+        "--tail",
+        dest="tail",
+        action="store_true",
+        default=True,
+        help=(
+            "After deploy, drop into `chumicro-repl tail` to follow the "
+            "example's output.  Interactive default; suppressed by "
+            "--non-interactive."
+        ),
+    )
+    tail_group.add_argument(
+        "--no-tail",
+        dest="tail",
+        action="store_false",
+        help="Exit cleanly after deploy instead of tailing the REPL.",
+    )
+    deploy_example_parser.add_argument(
+        "--no-clean",
+        dest="clean",
+        action="store_false",
+        default=True,
+        help=(
+            "Preserve files already on the device that aren't part of "
+            "this example's payload.  Default is to wipe stale `lib/` "
+            "packages and other deploy-managed files so each example "
+            "lands fresh; pass --no-clean if you've hand-installed "
+            "extra modules on the board you want to keep."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "--tail-seconds",
+        type=float,
+        default=None,
+        help=(
+            "How long to capture serial output after the entrypoint's "
+            "soft-reboot (CircuitPython flash mode only; MP transport "
+            "ignores this).  Default uses the transport's built-in "
+            "timeout (10 s).  Raise it for slow-wifi boards (Pi Pico W "
+            "cyw43 wifi-up + first network call takes 5-10 s) so the "
+            "first prints don't land outside the capture window — "
+            "common in --non-interactive --no-tail use (sweep harness, "
+            "CI runs).  Set to 0 to skip the capture entirely and "
+            "return as soon as the soft-reboot has been triggered, "
+            "leaving the board running."
+        ),
+    )
+    deploy_example_parser.set_defaults(func=_cmd_deploy_example)
+
+
+def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
+    """``repl`` — interactive REPL, tail mode, or deploy-then-tail."""
     repl_parser = subparsers.add_parser(
         "repl",
         help=(
@@ -3917,70 +4006,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     repl_parser.set_defaults(func=_cmd_repl)
 
-    # ----- rename --------------------------------------------------------
-    rename_parser = subparsers.add_parser(
-        "rename",
-        help="Rename a project directory or a device id.",
-    )
-    _add_workspace_arg(rename_parser)
-    rename_target = rename_parser.add_mutually_exclusive_group(required=True)
-    rename_target.add_argument(
-        "--project",
-        nargs=2,
-        metavar=("OLD", "NEW"),
-        default=None,
-        help="Rename projects/OLD/ to projects/NEW/.",
-    )
-    rename_target.add_argument(
-        "--device",
-        nargs=2,
-        metavar=("OLD", "NEW"),
-        default=None,
-        help="Rename a devices.yml entry id (also rewrites defaults: references).",
-    )
-    rename_parser.set_defaults(func=_cmd_rename)
 
-    # ----- install-firmware ----------------------------------------------
-    install_firmware_parser = subparsers.add_parser(
-        "install-firmware",
-        help="Download + flash firmware onto the selected board.",
-    )
-    _add_workspace_arg(install_firmware_parser)
-    _add_device_selector(install_firmware_parser)
-    _add_firmware_args(install_firmware_parser)
-    install_firmware_parser.set_defaults(func=_cmd_install_firmware)
-
-    # ----- reset-board ----------------------------------------------------
-    reset_board_parser = subparsers.add_parser(
-        "reset-board",
-        help=(
-            "Wipe the device's user filesystem (clean-slate, no redeploy)."
-        ),
-        description=(
-            "Erase every user file the runtime can see on the selected "
-            "board — including out-of-scope files like settings.toml and "
-            "hand-edited boot.py — without redeploying any project.  "
-            "Standalone counterpart to `deploy --wipe`.  Used to recover "
-            "a board whose flash filled up with stage residue (the "
-            "MicroPython path runs `os.VfsLfs2.mkfs`, which `os.remove` "
-            "alone cannot match — LittleFS metadata + wear-leveling "
-            "artifacts survive a file-walk).  No-op in RAM / mount mode."
-        ),
-    )
-    _add_workspace_arg(reset_board_parser)
-    _add_device_selector(reset_board_parser)
-    reset_board_parser.add_argument(
-        "--yes",
-        action="store_true",
-        help=(
-            "Confirm the destructive wipe.  Without this flag, the "
-            "command exits 2 without touching the board so a typoed "
-            "device id cannot accidentally erase production state."
-        ),
-    )
-    reset_board_parser.set_defaults(func=_cmd_reset_board)
-
-    # ----- install-libraries ---------------------------------------------
+def _add_install_libraries_parser(subparsers: argparse._SubParsersAction) -> None:
+    """``install-libraries`` — circup (CP) / mip (MP) bundle install per project."""
     install_libraries_parser = subparsers.add_parser(
         "install-libraries",
         help=(
@@ -4031,18 +4059,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     install_libraries_parser.set_defaults(func=_cmd_install_libraries)
-
-    # ----- upgrade-firmware ----------------------------------------------
-    upgrade_firmware_parser = subparsers.add_parser(
-        "upgrade-firmware",
-        help="Alias of install-firmware — same flash flow.",
-    )
-    _add_workspace_arg(upgrade_firmware_parser)
-    _add_device_selector(upgrade_firmware_parser)
-    _add_firmware_args(upgrade_firmware_parser)
-    upgrade_firmware_parser.set_defaults(func=_cmd_install_firmware)
-
-    return parser
 
 
 def _add_firmware_args(parser: argparse.ArgumentParser) -> None:
