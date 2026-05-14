@@ -25,8 +25,6 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 - **Decision changed?** Edit the ADR body in place (rewrite affected paragraphs so a cold reader gets accurate info) — no `Revised:` banners, no `## Update (YYYY-MM-DD)` sections. Status enum is `proposed` / `accepted` / `superseded` / `deferred` only. See [`plans/decisions/README.md`](plans/decisions/README.md).
 - **End of every unit of work** → run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill: preflight green, plans-doc updated, docs in sync, commit + push. Do not yield with uncommitted changes or untested behavior unless the work is explicitly partial — and say so.
 
-Stale docs are a defect like any other. Treat them that way.
-
 ## Instruction priority
 
 When instructions overlap:
@@ -47,12 +45,12 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 **Workflow**
 
 - Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop — don't ship onto a broken `main`.
-- While the repo is private, commit directly to `main` — no feature branches, no PRs. This retires when the repo opens to outside contributors.
+- While the repo is private, commit directly to `main` — no feature branches, no PRs.
 - Pass the commit message via a single-quoted heredoc (`git commit -m "$(cat <<'EOF' … EOF)"`) so backticks, `$`, parens, and newlines pass through literally.  Read the [`git-commit`](.github/skills/git-commit/SKILL.md) skill before every commit.
 - `.scratch/` is gitignored — temp files, log captures.
 - Pipe large output through `tail` / `head` / `grep`, or redirect to `.scratch/`. Disable pagers (`git --no-pager`, `| cat`).
 - Use file tools for multi-line file content — never heredocs, `echo`, `printf`, or `cat`.
-- No backwards-compatibility burden. Nothing has shipped to PyPI yet (every package is `0.x`); edit forward, don't add migration shims, dual-read paths, or compat re-exports. "Public API" today means "us using it" — symbols with zero callers across this repo *and* the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo are dead code, not preserved future surface. Retires at the first stable (1.0+) release.
+- No backwards-compatibility burden until 1.0. Nothing has shipped to PyPI yet (every package is `0.x`); edit forward, don't add migration shims, dual-read paths, or compat re-exports. "Public API" today means "us using it" — symbols with zero callers across this repo *and* the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo are dead code, not preserved future surface.
 - Don't hard-code or commit secrets. Wifi passwords, MQTT credentials, API tokens, and the like belong only in the gitignored `secrets.toml` — never in `workspace.yml`, `project_config.toml`, example fixtures, or test data. See [Decision 0057](plans/decisions/0057-two-file-config.md).
 
 **Testing**
@@ -81,7 +79,7 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 
 **Code comments**
 
-- Code comments document the *why* of current code, nothing else. No history ("previously this did X"), no dated incidents ("2026-05-09 ESP32-S2 bake"), no removed-code explanations ("we used to also send Ctrl-C, dropped because…"), no workstream pointers ("Step 2 of workbench-deploy-reliability"). That belongs in the commit message, the ADR body, or the workstream file — all of which the next reader can find via `git log` / `plans/`. Same principle as the ADR-edit rule above: rewrite in place so a cold reader gets accurate info, don't layer dated annotations. Applies to docstrings and test-body comments too.
+- Code comments document the *why* of current code, nothing else. No history ("previously this did X"), no dated incidents ("2026-05-09 ESP32-S2 bake"), no removed-code explanations ("we used to also send Ctrl-C, dropped because…"), no workstream pointers ("Step 2 of workbench-deploy-reliability"). That belongs in the commit message, the ADR body, or the workstream file — all of which the next reader can find via `git log` / `plans/`. Applies to docstrings and test-body comments too.
 
 **Cross-repo isolation**
 
@@ -113,18 +111,16 @@ Ground rules. Each links to its source of truth where the *why* and edge cases l
 
 ## Writing tone
 
-Cut AI-tic phrases.  They sound non-human, drop information, and make prose harder to skim.  The fix is usually structural, not vocabulary — when you write *"the X promise"* or *"the X pattern"*, **name X concretely in the same sentence** so the reader doesn't have to infer it.
+Cut AI-tic phrases.  The fix is usually structural, not vocabulary — when you write *"the X promise"* or *"the X pattern"*, name X concretely in the same sentence so the reader doesn't have to infer it.
 
 Specific bans:
 
-- **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern.  Bad: *"Verifies the canonical promise: an LED keeps blinking…"*  Good: *"Verifies the LED-blink invariant: an LED keeps blinking…"*
-- **"the canonical X" generally** → check whether *"the X"* or *"the standard X"* is enough.  Keep `canonical encoding`, `canonical form`, `canonical path` — those are real technical terms with no fluff substitute.
-- **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright.  If a thing is comprehensive, list what it covers.  If a thing is robust, name what it survives.
+- **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern.
+- **"the canonical X" generally** → check whether *"the X"* or *"the standard X"* is enough.  Keep `canonical encoding`, `canonical form`, `canonical path` — real technical terms.
+- **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright.  If a thing is comprehensive, list what it covers.
 - **"It is worth noting that" / "It should be noted that" / "Note that"** (as a sentence opener) → just say the thing.
 - **"Let's dive into" / "Let's explore" / "In this section, we will"** → start with the content, not the meta-commentary.
-- **CHU lint codes in prose** (`CHU009`, `CHU010`, etc.) → name the rule's intent (*"silent test skips"*) instead of the code.  CHU codes are workspace-internal jargon a published-doc reader has no context for.  Enforced by `CHU006` — exempts `# noqa: CHUNNN` directives, flags everything else.
-
-When you catch yourself writing one, rewrite the sentence to *demonstrate* the property concretely instead of asserting it abstractly.
+- **CHU lint codes in prose** (`CHU009`, `CHU010`, etc.) → name the rule's intent (*"silent test skips"*) instead of the code.  Enforced by `CHU006` — exempts `# noqa: CHUNNN` directives.
 
 ## Project overview
 
@@ -210,30 +206,7 @@ The mono-repo itself has workspace shape (`workspace.yml` + `devices.yml` at roo
 
 ## Skills
 
-Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/) (also reachable at `.claude/skills/` via symlink). Read the relevant skill before performing the task.
-
-| Skill | When |
-|-------|------|
-| `git-commit` | Before every commit |
-| `task-checkpoint` | After each unit of work |
-| `debug-test-failure` | Tests fail |
-| `large-output` | Commands that produce big output |
-| `run-script` | Multi-line Python or structured file content |
-| `terminal-recovery` | Terminal hangs or shows a continuation prompt |
-| `new-library` | Adding a new device library |
-| `new-decision` | Recording a structural / pattern / tooling decision |
-| `guide-generation` | Writing or refreshing a library's `docs/guide.md` |
-| `validate-scripts` | Changing or validating `scripts/` infrastructure |
-| `audit-library` | Single-library code-quality audit |
-| `audit-embedded` | Single device-library on-device audit — flash, heap, fragmentation, runtime branches, `const()` / `memoryview` / `__slots__` reality, docs-match-code |
-| `audit-integration` | Cross-library boundary audit |
-| `audit-workspace` | Mono-repo-wide audit |
-| `audit-publishable-isolation` | Cross-repo audit for mono-repo concept leaks into shipped artifacts |
-| `audit-docs` | User-facing markdown doc audit — cold-reader readability, AI-tic phrases, jargon, unverified claims, section flow |
-| `session-handoff` | Capture session-transition context to `plans/handoffs/` before clearing or switching sessions.  User-invoked via `/session-handoff` — do not auto-trigger |
-| `session-resume` | Resume work from a session handoff.  User-invoked via `/session-resume [<slug>]` or by plain-language ask at session start — do not auto-trigger from a handoff pointer alone |
-
-`end-of-session` is a human-only checklist; agents use `task-checkpoint`.
+Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/) (also reachable at `.claude/skills/` via symlink). The session-start reminder lists every available skill with a one-line trigger — read the matching `SKILL.md` body before performing that task. `end-of-session` is human-only; agents use `task-checkpoint`.
 
 ## File routing
 
