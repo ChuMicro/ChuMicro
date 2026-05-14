@@ -38,14 +38,14 @@ def _handshake_chunks() -> list[bytes]:
 # --- chumicro_repl/__init__.py ----------------------------------------------
 
 class TestPackageDunder:
-    """Lazy-attr fallback + ``__dir__``."""
+    """Top-level package attribute surface."""
 
     def test_unknown_attribute_raises(self):
         with pytest.raises(AttributeError):
             chumicro_repl.does_not_exist  # noqa: B018 — intentional access
 
-    def test_dir_lists_lazy_attrs(self):
-        names = chumicro_repl.__dir__()
+    def test_dir_lists_exported_names(self):
+        names = dir(chumicro_repl)
         assert "ReplSession" in names
         assert "tail" in names
         assert "colorize" in names
