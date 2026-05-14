@@ -68,7 +68,7 @@ class _StubPromptSession:
 
     Each call to ``.prompt()`` returns the next scripted line; once
     the script is exhausted an EOFError raises so the loop exits
-    cleanly (mirrors prompt_toolkit's Ctrl-D behaviour).
+    cleanly (mirrors prompt_toolkit's Ctrl-D behavior).
     """
 
     def __init__(self, lines: list[str]) -> None:

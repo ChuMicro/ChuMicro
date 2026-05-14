@@ -3,7 +3,7 @@
 Each test in this module covers a specific defensive branch, error
 path, or seldom-hit edge case that the unit-test suites for each
 module skip because they focus on the happy path.  Splitting these
-out into one file keeps the per-module suites focused on behaviour
+out into one file keeps the per-module suites focused on behavior
 that a reader cares about while still hitting the agent-strict 94 %
 coverage gate.
 """
@@ -21,7 +21,6 @@ from chumicro_repl import (
     ReplSession,
     ReplSessionError,
     Theme,
-    cli,
     framing,
     interactive,
     tail,
@@ -207,46 +206,7 @@ class TestTailMatchesAcrossChunks:
         assert result == text
 
 
-# --- cli.py — devices.yml routing -------------------------------------------
-
-class TestCliDevicesFileRoute:
-    """``--devices-file`` consults chumicro-deploy's loader registry."""
-
-    def test_unknown_format_raises_systemexit(self, tmp_path):
-        devices_file = tmp_path / "devices.yml"
-        devices_file.write_text("devices: []\n")
-        parser = cli.build_parser()
-        args = parser.parse_args([
-            "--devices-file", str(devices_file),
-            "--devices-format", "definitely-not-a-format",
-        ])
-        with pytest.raises(SystemExit):
-            cli._device_from_args(args)
-
-    def test_known_format_invokes_loader(self, tmp_path, monkeypatch):
-        devices_file = tmp_path / "devices.yml"
-        devices_file.write_text("devices: []\n")
-
-        def fake_loader(path, *, device_id):
-            return f"loaded:{path}:{device_id}"
-
-        # Patch the loader registry to return our fake loader for
-        # ``"default"``.  ``discover_config_loaders`` is the fan-in
-        # point in chumicro-deploy.config.
-        monkeypatch.setattr(
-            "chumicro_deploy.config.discover_config_loaders",
-            lambda: {"default": fake_loader},
-        )
-        parser = cli.build_parser()
-        args = parser.parse_args([
-            "--devices-file", str(devices_file),
-            "--device", "back-porch",
-        ])
-        result = cli._device_from_args(args)
-        assert result == f"loaded:{devices_file}:back-porch"
-
-
-# --- tui.py — fileno fall-throughs and stream behaviour ----------------------
+# --- tui.py — fileno fall-throughs and stream behavior ----------------------
 
 class TestTuiHelpers:
     """Cover the ``_fileno_or_none`` and ``_StdinKeyboard`` paths."""

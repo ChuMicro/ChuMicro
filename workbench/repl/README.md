@@ -18,7 +18,7 @@ Two interactive surfaces: a line-mode editor with persistent per-device history,
 pip install chumicro-repl
 ```
 
-`pyserial` and `prompt_toolkit` come along as dependencies.  No board-side install — `chumicro-repl` talks to the existing CP / MP runtime over USB serial.  Native Windows isn't currently supported (raises `WindowsNotSupportedError` from the underlying `chumicro-deploy` host-platform check); WSL2 works.
+`pyserial` and `prompt_toolkit` come along as dependencies.  No board-side install — `chumicro-repl` talks to the existing CP / MP runtime over USB serial.  Native Windows isn't currently supported (the interactive TUI needs POSIX `termios`); WSL2 works.
 
 <details>
 <summary>Experimental (pre-release) versions and channel switching</summary>
@@ -37,8 +37,6 @@ Open an interactive REPL on a board:
 
 ```bash
 chumicro-repl --address /dev/cu.usbmodem1101
-# Or, with a workspace devices.yml:
-chumicro-repl --devices-file devices.yml --device back-porch
 ```
 
 That drops you into **line mode**: type `for index in r<Tab>` and Tab completes `range`; up-arrow recalls history; `:edit` opens `$EDITOR` with the recent buffer pre-seeded so multi-line blocks aren't a retype; `:save my-bringup` then `:load my-bringup` round-trips a snippet you'll paste again tomorrow.  Type `:help` to list every `:command`.
@@ -87,15 +85,13 @@ if result is ExitCode.TRACEBACK_DETECTED:
 
 ### CLI
 
-`chumicro-repl` (or `python -m chumicro_repl`).  Reads the same `devices.yml` schema [`chumicro-deploy`](../deploy/) owns.
+`chumicro-repl` (or `python -m chumicro_repl`).  Opens a serial REPL on a given port.
 
 | Form | What it does |
 |---|---|
 | `chumicro-repl --address /dev/cu.usbmodem...` | Interactive REPL on the bare port (line mode by default) |
-| `chumicro-repl --devices-file devices.yml --device <id>` | Same, but pull connection details from the workspace registry |
-| `chumicro-repl --devices-file devices.yml --runtime micropython` | Use the workspace's MP default device |
-| `chumicro-repl --mode passthrough ...` | Byte-passthrough mode (mpremote-shape — for raw REPL framing / paste mode) |
-| `chumicro-repl --tail SECONDS ...` | One-shot follow mode instead of interactive |
+| `chumicro-repl --address ... --mode passthrough` | Byte-passthrough mode (mpremote-shape — for raw REPL framing / paste mode) |
+| `chumicro-repl --address ... --tail SECONDS` | One-shot follow mode instead of interactive |
 
 ### Line-mode `:commands`
 
@@ -127,14 +123,14 @@ Leaf — no upstream ChuMicro deps (uses third-party `pyserial` and `prompt_tool
 
 ## Companion: chumicro-deploy
 
-[`chumicro-deploy`](../deploy/) is the sister workbench tool for pushing code onto a board, probing identity, and flashing firmware.  Both packages consume the same `devices.yml` schema (owned in `chumicro_deploy.config.default`), so a single workspace file points both at the same boards.  Typical flow: `Deployer.deploy(source)` writes the payload, then `tail(device, seconds=10)` follows the board for first-cycle output.
+[`chumicro-deploy`](../deploy/) is the sister workbench tool for pushing code onto a board, probing identity, and flashing firmware.  `chumicro-repl` is narrower — it opens a serial REPL given a port path — so the two compose cleanly: `Deployer.deploy(source)` writes the payload, then `tail(device, seconds=10)` (or any of the API entry points) follows the board for first-cycle output.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
 | `tail_after_deploy.py` | Programmatic deploy → tail with traceback fail-fast |
-| `demo_repl_robustness.py` | Walks the interactive TUI through unplug / replug / Ctrl-C scenarios — manual demo of the auto-reconnect + retry behaviour |
+| `demo_repl_robustness.py` | Walks the interactive TUI through unplug / replug / Ctrl-C scenarios — manual demo of the auto-reconnect + retry behavior |
 
 ## Contributing
 

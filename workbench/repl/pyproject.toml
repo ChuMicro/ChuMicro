@@ -34,6 +34,19 @@ dependencies = [
     "prompt_toolkit>=3.0",
 ]
 
+[project.optional-dependencies]
+# `pip install chumicro-repl[test]` gives a self-contained env for
+# pytest against workbench/repl/{tests,functional_tests}.
+# chumicro-deploy is a test-only dep: src/ doesn't import it (Device
+# is satisfied structurally by the local DeviceLike Protocol), but
+# the unit + functional tests construct real Device / DeviceEntry /
+# FileMapSource / Deployer instances to exercise the API workspace
+# uses to call chumicro_repl.interactive().
+test = [
+    "pytest",
+    "chumicro-deploy",
+]
+
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl"
