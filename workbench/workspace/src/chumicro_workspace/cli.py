@@ -984,22 +984,25 @@ def _suggest_add_device_id(
 
 @dataclass(frozen=True)
 class _ResolvedLayout:
-    """Resolved deploy layout — boot-shim and import-graph flags + user-error sentinel.
+    """Resolved deploy layout — boot-shim and import-graph flags.
 
     Returned by :func:`_resolve_deploy_layout` so the CLI dispatch
     has the final flag values without mutating ``args.boot_shim``
     or ``args.import_graph`` mid-flight (those represent what the
     *user* passed; the resolver decides what to actually do).
-
-    When :attr:`user_error` is ``True`` the resolver has already
-    printed an actionable message to stderr and the caller should
-    treat the deploy as failed (exit code 2); :attr:`boot_shim`
-    and :attr:`import_graph` are meaningless in that case.
     """
 
     boot_shim: bool
     import_graph: bool
-    user_error: bool = False
+
+
+class _DeployLayoutError(Exception):
+    """Raised by :func:`_resolve_deploy_layout` on shape / target mismatch.
+
+    The instance's ``str`` is the multi-line user-facing message; the
+    caller in :func:`_cmd_deploy` prints it to stderr and continues to
+    the next project / device with exit code 2.
+    """
 
 
 def _resolve_deploy_layout(
@@ -1026,8 +1029,10 @@ def _resolve_deploy_layout(
         No          No          Yes            any         shim+import
         No          No          No             any         USER ERROR
 
-    User-error cases print an actionable message to stderr before
-    returning :attr:`_ResolvedLayout.user_error` = ``True``.
+    Raises:
+        _DeployLayoutError: Project shape doesn't match the target
+            runtime's entrypoint convention.  The instance's str is
+            the actionable user-facing message.
     """
     if user_passed_boot_shim or user_passed_import_graph:
         # User-specified flags win; auto-detect is a no-op.
@@ -1051,28 +1056,20 @@ def _resolve_deploy_layout(
     # for the *other* runtime and targeted the wrong board.  Surface
     # as a clear error rather than silently shimming around it.
     if target_is_mp and has_code_py and not has_main_py:
-        print(
-            f"deploy: project {project_dir.name!r} has code.py "
+        raise _DeployLayoutError(
+            f"project {project_dir.name!r} has code.py "
             "(CircuitPython entrypoint) but you targeted a MicroPython "
             "board.\n"
             "  Fix: rename code.py → main.py for MicroPython, or "
             "deploy --runtime circuitpython.",
-            file=sys.stderr,
-        )
-        return _ResolvedLayout(
-            boot_shim=False, import_graph=False, user_error=True,
         )
     if target_is_cp and has_main_py and not has_code_py:
-        print(
-            f"deploy: project {project_dir.name!r} has main.py "
+        raise _DeployLayoutError(
+            f"project {project_dir.name!r} has main.py "
             "(MicroPython entrypoint) but you targeted a CircuitPython "
             "board.\n"
             "  Fix: rename main.py → code.py for CircuitPython, or "
             "deploy --runtime micropython.",
-            file=sys.stderr,
-        )
-        return _ResolvedLayout(
-            boot_shim=False, import_graph=False, user_error=True,
         )
 
     # No runtime-specific entrypoint — try shim mode.
@@ -1086,8 +1083,8 @@ def _resolve_deploy_layout(
         if app_py_present
         else "no app.py with run() callable"
     )
-    print(
-        f"deploy: project {project_dir.name!r} has no entrypoint "
+    raise _DeployLayoutError(
+        f"project {project_dir.name!r} has no entrypoint "
         "chumicro-deploy can use:\n"
         "  - no code.py at the project root (CircuitPython entrypoint)\n"
         "  - no main.py at the project root (MicroPython entrypoint)\n"
@@ -1096,10 +1093,6 @@ def _resolve_deploy_layout(
         "\n"
         "  Fix: name your script code.py (CP) or main.py (MP), OR\n"
         "       wrap your top-level code in `def run(): ...` in app.py.",
-        file=sys.stderr,
-    )
-    return _ResolvedLayout(
-        boot_shim=False, import_graph=False, user_error=True,
     )
 
 
@@ -1196,14 +1189,15 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             #   libraries from ``library_sources`` and ``shared/``).
             # * Runtime mismatch (e.g. ``code.py`` only, but target is MP)
             #   surfaces as a user error before any bytes leave the host.
-            layout_choice = _resolve_deploy_layout(
-                project_dir=project_dir,
-                target_entrypoint=device.effective_entrypoint,
-                user_passed_boot_shim=args.boot_shim,
-                user_passed_import_graph=args.import_graph,
-            )
-            if layout_choice.user_error:
-                # Resolver already printed the actionable message.
+            try:
+                layout_choice = _resolve_deploy_layout(
+                    project_dir=project_dir,
+                    target_entrypoint=device.effective_entrypoint,
+                    user_passed_boot_shim=args.boot_shim,
+                    user_passed_import_graph=args.import_graph,
+                )
+            except _DeployLayoutError as layout_error:
+                print(f"deploy: {layout_error}", file=sys.stderr)
                 exit_code = 2
                 continue
 
