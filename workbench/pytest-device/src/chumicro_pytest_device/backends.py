@@ -64,9 +64,6 @@ class BackendExecuteError(Exception):
 class Backend(Protocol):
     """Pluggable execution backend protocol."""
 
-    name: str
-    """Short backend identifier — ``"device"`` or ``"unix-port"``."""
-
     def prepare(
         self,
         item: DeviceRuntimeItem,
@@ -172,8 +169,6 @@ class UnixPortBackend:
             ``--micropython-binary`` / ``--circuitpython-binary``.
             ``None`` means "resolve via marker file / PATH at use time".
     """
-
-    name = "unix-port"
 
     def __init__(
         self,

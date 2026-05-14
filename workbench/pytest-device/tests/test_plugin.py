@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 from chumicro_deploy import DeviceEntry
-from chumicro_pytest_device import backends
+from chumicro_pytest_device import backends, pr_summary
 from chumicro_pytest_device import plugin as pytest_device
 from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
 from chumicro_pytest_device.testing import (
@@ -249,8 +249,8 @@ class TestRuntimeControlNames:
 
     def test_runtime_display_name(self) -> None:
         """Runtime labels should be human-friendly in the IDE tree."""
-        assert pytest_device._runtime_display_name("micropython") == "MicroPython"
-        assert pytest_device._runtime_display_name("circuitpython") == "CircuitPython"
+        assert pr_summary.runtime_display_name("micropython") == "MicroPython"
+        assert pr_summary.runtime_display_name("circuitpython") == "CircuitPython"
 
     def test_runtime_prepare_name(self) -> None:
         """Prepare items should include the runtime in a stable label."""
