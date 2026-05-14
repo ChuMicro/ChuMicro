@@ -22,7 +22,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from chumicro_deploy import Deployer, Device, DeviceEntry
-from chumicro_workspace import project_boot_source
+from chumicro_workspace.boot_shim import project_boot_source
 from chumicro_workspace.workspace import WorkspaceLayout
 
 # ---------------------------------------------------------------------------
@@ -40,10 +40,15 @@ def _build_device(entry: DeviceEntry) -> Device:
 
 
 def _seed_workspace(tmp_path: Path) -> WorkspaceLayout:
-    """Create a minimal workspace.yml under *tmp_path*."""
+    """Create a minimal workspace.yml + empty secrets.toml under *tmp_path*."""
     (tmp_path / "workspace.yml").write_text(
         "defaults:\n  app_marker_prefix: chu-bootshim\n",
     )
+    # The boot-shim deploy path composes runtime config from
+    # secrets.toml + per-project config.toml; an empty secrets.toml
+    # satisfies the file-exists precondition without supplying any
+    # workspace-wide defaults.
+    (tmp_path / "secrets.toml").write_text("")
     return WorkspaceLayout(root=tmp_path)
 
 
