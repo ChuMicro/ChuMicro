@@ -14,84 +14,43 @@ boards over pyserial.  Three surfaces:
   :meth:`~ReplSession.exec`, :meth:`~ReplSession.call`, and
   :meth:`~ReplSession.read_until` for headless fixtures.
 
-Imports are resolved lazily through ``__getattr__`` (PEP 562) — a
-``chumicro-repl --help`` invocation pays the cost of parsing argparse,
-not the cost of importing pyserial + the full pattern-detector graph.
+The heavy third-party deps (pyserial, prompt_toolkit) are imported
+lazily inside the call sites that actually need them
+(``default_port_factory``, ``_build_prompt_session``) — so ``import
+chumicro_repl`` is cheap regardless of which surface a caller uses.
 """
 
 from __future__ import annotations
 
-import importlib
-from typing import TYPE_CHECKING, Any
+from ._follow import ExitCode, tail
+from .completion import (
+    CompletionCache,
+    build_default_completer,
+    fetch_device_names,
+)
+from .highlight import Theme, colorize
+from .line_mode import (
+    BUILTIN_COMMANDS,
+    CommandHandler,
+    LineModeContext,
+)
+from .patterns import PatternKind, PatternMatch, detect_patterns
+from .recovery import (
+    InteractiveReplSession,
+    RecoveryPlan,
+    ReplFailureKind,
+    classify_session_failure,
+    coached_session_start,
+    recovery_plan_for,
+)
+from .session import ReplSession, ReplSessionDisconnected, ReplSessionError
+from .tui import interactive, interactive_line
 
-if TYPE_CHECKING:
-    # Re-imports for static analysis only.  Runtime resolution goes
-    # through the lazy ``__getattr__`` hook below; this block exists
-    # so pyright / mypy can see every name declared in ``__all__``
-    # without eagerly loading every submodule.
-    from ._follow import ExitCode, tail
-    from .completion import (
-        CompletionCache,
-        build_default_completer,
-        fetch_device_names,
-    )
-    from .highlight import Theme, colorize
-    from .line_mode import (
-        BUILTIN_COMMANDS,
-        CommandHandler,
-        LineModeContext,
-    )
-    from .patterns import PatternKind, PatternMatch, detect_patterns
-    from .recovery import (
-        InteractiveReplSession,
-        RecoveryPlan,
-        ReplFailureKind,
-        classify_session_failure,
-        coached_session_start,
-        recovery_plan_for,
-    )
-    from .session import ReplSession, ReplSessionDisconnected, ReplSessionError
-    from .tui import interactive, interactive_line
-
-#: Map of public attribute -> submodule.  ``__getattr__`` below walks
-#: this table to defer each submodule import until the attribute is
-#: first read.
-_LAZY_ATTRS: dict[str, str] = {
-    "BUILTIN_COMMANDS": "line_mode",
-    "CommandHandler": "line_mode",
-    "CompletionCache": "completion",
-    "ExitCode": "_follow",
-    "InteractiveReplSession": "recovery",
-    "LineModeContext": "line_mode",
-    "PatternKind": "patterns",
-    "PatternMatch": "patterns",
-    "RecoveryPlan": "recovery",
-    "ReplFailureKind": "recovery",
-    "ReplSession": "session",
-    "ReplSessionDisconnected": "session",
-    "ReplSessionError": "session",
-    "Theme": "highlight",
-    "build_default_completer": "completion",
-    "classify_session_failure": "recovery",
-    "coached_session_start": "recovery",
-    "colorize": "highlight",
-    "detect_patterns": "patterns",
-    "fetch_device_names": "completion",
-    "interactive": "tui",
-    "interactive_line": "tui",
-    "recovery_plan_for": "recovery",
-    "tail": "_follow",
-}
-
-#: Public API surface.  Spelled as a literal list so static type
-#: checkers (pyright in particular) can see every exported name.
-#: Keep alphabetized; a sorted assertion below catches drift.
-#:
-#: Module-private helpers that are useful but not core to the
-#: documented API stay accessible at their submodule path —
-#: ``from chumicro_repl.highlight import strip_ansi_sequences``,
-#: ``from chumicro_repl.framing import Utf8StreamDecoder``,
-#: ``from chumicro_repl.line_mode import run_line_mode``, etc.
+#: Public API surface.  Submodule-only helpers
+#: (``chumicro_repl.highlight.strip_ansi_sequences``,
+#: ``chumicro_repl.framing.Utf8StreamDecoder``,
+#: ``chumicro_repl.line_mode.run_line_mode``, etc.) stay reachable
+#: at their submodule path but are not re-exported here.
 __all__ = [
     "BUILTIN_COMMANDS",
     "CommandHandler",
@@ -118,21 +77,3 @@ __all__ = [
     "recovery_plan_for",
     "tail",
 ]
-assert sorted(__all__) == __all__, "__all__ must be alphabetized"
-assert set(__all__) == set(_LAZY_ATTRS), "__all__ must match _LAZY_ATTRS"
-
-
-def __getattr__(name: str) -> Any:
-    module_name = _LAZY_ATTRS.get(name)
-    if module_name is None:
-        raise AttributeError(
-            f"module 'chumicro_repl' has no attribute {name!r}"
-        )
-    module = importlib.import_module(f".{module_name}", __name__)
-    value = getattr(module, name)
-    globals()[name] = value
-    return value
-
-
-def __dir__() -> list[str]:
-    return [*globals().keys(), *_LAZY_ATTRS.keys()]
