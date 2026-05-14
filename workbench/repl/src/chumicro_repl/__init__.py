@@ -31,25 +31,15 @@ if TYPE_CHECKING:
     # without eagerly loading every submodule.
     from ._follow import ExitCode, tail
     from .completion import (
-        STATIC_CATALOG,
-        CombinedCompleter,
         CompletionCache,
-        DeviceCompleter,
-        KeywordCompleter,
         build_default_completer,
         fetch_device_names,
     )
-    from .framing import Utf8StreamDecoder
-    from .highlight import Theme, colorize, strip_ansi_sequences
+    from .highlight import Theme, colorize
     from .line_mode import (
         BUILTIN_COMMANDS,
-        DEFAULT_HISTORY_ROOT,
-        DEFAULT_SNIPPETS_ROOT,
         CommandHandler,
         LineModeContext,
-        history_path_for,
-        run_line_mode,
-        sanitize_address,
     )
     from .patterns import PatternKind, PatternMatch, detect_patterns
     from .recovery import (
@@ -68,15 +58,10 @@ if TYPE_CHECKING:
 #: first read.
 _LAZY_ATTRS: dict[str, str] = {
     "BUILTIN_COMMANDS": "line_mode",
-    "CombinedCompleter": "completion",
     "CommandHandler": "line_mode",
     "CompletionCache": "completion",
-    "DEFAULT_HISTORY_ROOT": "line_mode",
-    "DEFAULT_SNIPPETS_ROOT": "line_mode",
-    "DeviceCompleter": "completion",
     "ExitCode": "_follow",
     "InteractiveReplSession": "recovery",
-    "KeywordCompleter": "completion",
     "LineModeContext": "line_mode",
     "PatternKind": "patterns",
     "PatternMatch": "patterns",
@@ -85,39 +70,34 @@ _LAZY_ATTRS: dict[str, str] = {
     "ReplSession": "session",
     "ReplSessionDisconnected": "session",
     "ReplSessionError": "session",
-    "STATIC_CATALOG": "completion",
     "Theme": "highlight",
-    "Utf8StreamDecoder": "framing",
     "build_default_completer": "completion",
     "classify_session_failure": "recovery",
     "coached_session_start": "recovery",
     "colorize": "highlight",
     "detect_patterns": "patterns",
     "fetch_device_names": "completion",
-    "history_path_for": "line_mode",
     "interactive": "tui",
     "interactive_line": "tui",
     "recovery_plan_for": "recovery",
-    "run_line_mode": "line_mode",
-    "sanitize_address": "line_mode",
-    "strip_ansi_sequences": "highlight",
     "tail": "_follow",
 }
 
 #: Public API surface.  Spelled as a literal list so static type
 #: checkers (pyright in particular) can see every exported name.
 #: Keep alphabetized; a sorted assertion below catches drift.
+#:
+#: Module-private helpers that are useful but not core to the
+#: documented API stay accessible at their submodule path —
+#: ``from chumicro_repl.highlight import strip_ansi_sequences``,
+#: ``from chumicro_repl.framing import Utf8StreamDecoder``,
+#: ``from chumicro_repl.line_mode import run_line_mode``, etc.
 __all__ = [
     "BUILTIN_COMMANDS",
-    "CombinedCompleter",
     "CommandHandler",
     "CompletionCache",
-    "DEFAULT_HISTORY_ROOT",
-    "DEFAULT_SNIPPETS_ROOT",
-    "DeviceCompleter",
     "ExitCode",
     "InteractiveReplSession",
-    "KeywordCompleter",
     "LineModeContext",
     "PatternKind",
     "PatternMatch",
@@ -126,22 +106,16 @@ __all__ = [
     "ReplSession",
     "ReplSessionDisconnected",
     "ReplSessionError",
-    "STATIC_CATALOG",
     "Theme",
-    "Utf8StreamDecoder",
     "build_default_completer",
     "classify_session_failure",
     "coached_session_start",
     "colorize",
     "detect_patterns",
     "fetch_device_names",
-    "history_path_for",
     "interactive",
     "interactive_line",
     "recovery_plan_for",
-    "run_line_mode",
-    "sanitize_address",
-    "strip_ansi_sequences",
     "tail",
 ]
 assert sorted(__all__) == __all__, "__all__ must be alphabetized"

@@ -50,10 +50,11 @@ in `tail()` and `run_loop()`.
 
 ## Highlighting
 
-The `colorize()` function is exposed at the top level
-(`from chumicro_repl import colorize, Theme, strip_ansi_sequences`).
-It does not share the name of its module so the lazy-attr
-indirection is unnecessary here.
+`colorize()` and `Theme` are exposed at the top level
+(`from chumicro_repl import colorize, Theme`).  `strip_ansi_sequences`
+lives at the submodule path (`from chumicro_repl.highlight import
+strip_ansi_sequences`) since it's mostly used by tests + log-capture
+plumbing.
 
 ::: chumicro_repl.highlight
     options:

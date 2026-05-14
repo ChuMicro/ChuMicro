@@ -21,12 +21,12 @@ from chumicro_repl import (
     ReplSession,
     ReplSessionError,
     Theme,
-    Utf8StreamDecoder,
     cli,
     framing,
     interactive,
     tail,
 )
+from chumicro_repl.framing import Utf8StreamDecoder
 from chumicro_repl._serial import default_port_factory
 from chumicro_repl.testing import FakeKeyboard, FakeSerialPort, FakeTime
 

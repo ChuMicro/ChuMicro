@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from chumicro_repl import Utf8StreamDecoder
+from chumicro_repl.framing import Utf8StreamDecoder
 
 
 class TestSingleChunkDecoding:
