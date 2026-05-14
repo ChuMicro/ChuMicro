@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,17 +38,18 @@ DEFAULT_TEMPLATE_URL = (
 # ---------------------------------------------------------------------------
 
 
-class ApplyAction(str):
-    """One of: ``"written"`` (file landed), ``"skipped"`` (zone-skipped
-    or already existed), ``"refreshed"`` (tool-owned, rewritten on
-    update), ``"unchanged"`` (write would have produced identical
-    bytes), ``"materialized"`` (workbench-owned starter freshly created).
-    """
+class ApplyAction(StrEnum):
+    """What happened to one file during an init / update / materialize pass."""
 
+    #: File landed in the target on a fresh `init`.
     WRITTEN = "written"
+    #: Zone-skipped (user-owned on update) or already existed.
     SKIPPED = "skipped"
+    #: Tool-owned, rewritten by `update` because bytes changed.
     REFRESHED = "refreshed"
+    #: `update` write would have produced identical bytes — no-op.
     UNCHANGED = "unchanged"
+    #: Workbench-owned starter freshly created (`materialize_workspace_templates`).
     MATERIALIZED = "materialized"
 
 
@@ -55,15 +57,15 @@ class ApplyAction(str):
 class ApplyReport:
     """Per-file actions taken during a single operation."""
 
-    actions: list[tuple[str, str]] = field(default_factory=list)
+    actions: list[tuple[str, ApplyAction]] = field(default_factory=list)
 
-    def add(self, target_relative: str, action: str) -> None:
+    def add(self, target_relative: str, action: ApplyAction) -> None:
         self.actions.append((target_relative, action))
 
-    def count(self, action: str) -> int:
+    def count(self, action: ApplyAction) -> int:
         return sum(1 for _, taken in self.actions if taken == action)
 
-    def __iter__(self) -> Iterable[tuple[str, str]]:
+    def __iter__(self) -> Iterable[tuple[str, ApplyAction]]:
         return iter(self.actions)
 
 
