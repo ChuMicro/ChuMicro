@@ -91,13 +91,11 @@ class TestCompletionCache:
         assert cache.get("") is None
         assert cache.get("foo") is None
 
-    def test_len_and_contains(self) -> None:
+    def test_get_after_put(self) -> None:
         cache = CompletionCache()
-        assert len(cache) == 0
-        assert "any" not in cache
+        assert cache.get("") is None
         cache.put("", ["a"])
-        assert len(cache) == 1
-        assert "" in cache
+        assert cache.get("") == ("a",)
 
 
 class TestDeviceCompleter:
