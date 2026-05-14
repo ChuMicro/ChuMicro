@@ -20,6 +20,7 @@ leaves the board in a known state or points the user at the fix.
 
 from __future__ import annotations
 
+import dataclasses
 import glob
 import os
 import shutil
@@ -952,13 +953,8 @@ def flash_firmware(
             # a default hard_reset so the board comes back on its usual
             # runtime address — callers' subsequent probe_device /
             # Deployer calls keep working against the original Device.
-            bootloader_device = Device(
-                transport=device.transport,
-                address=bootloader_port,
-                baudrate=device.baudrate,
-                deploy_mode=device.deploy_mode,
-                entrypoint_name=device.entrypoint_name,
-                resource_prefix=device.resource_prefix,
+            bootloader_device = dataclasses.replace(
+                device, address=bootloader_port,
             )
             _flash_firmware_esptool(
                 local_firmware,
