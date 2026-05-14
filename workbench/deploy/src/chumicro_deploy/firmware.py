@@ -20,9 +20,12 @@ leaves the board in a known state or points the user at the fix.
 
 from __future__ import annotations
 
+import glob
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from collections.abc import Callable
@@ -453,8 +456,6 @@ def _copy_uf2_to_drive(
     # Flush host-side buffers before we start polling for re-enum.
     try:
         with destination.open("rb") as handle:
-            import os
-
             os.fsync(handle.fileno())
     except OSError:  # pragma: no cover — best-effort flush
         pass
@@ -543,8 +544,6 @@ def _list_candidate_serial_ports(
     globs: tuple[str, ...] = _SERIAL_PORT_GLOBS,
 ) -> set[str]:
     """Return the set of serial ports currently present on the host."""
-    import glob
-
     ports: set[str] = set()
     for pattern in globs:
         ports.update(glob.glob(pattern))
@@ -930,8 +929,6 @@ def flash_firmware(
             f"Unsupported reflash_method: {reflash_method!r} "
             f"(expected {allowed})"
         )
-
-    import tempfile
 
     with tempfile.TemporaryDirectory(prefix="chumicro_flash_") as staging:
         staging_path = Path(staging)
