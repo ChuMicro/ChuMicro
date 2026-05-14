@@ -17,6 +17,7 @@ Driven by :func:`additive_reapply`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -99,7 +100,9 @@ def _append_missing_toml(
         template_value = _walk_or_none(template_doc, segments)
         if template_value is None:
             continue
-        _set_nested(user_doc, segments, template_value)
+        _set_nested(
+            user_doc, segments, template_value, table_factory=tomlkit.table,
+        )
     return tomlkit.dumps(user_doc)
 
 
@@ -113,15 +116,26 @@ def _walk_or_none(doc: Any, segments: list[str]) -> Any:
     return cursor
 
 
-def _set_nested(doc: Any, segments: list[str], value: Any) -> None:
+def _set_nested(
+    doc: Any,
+    segments: list[str],
+    value: Any,
+    *,
+    table_factory: Callable[[], Any],
+) -> None:
     """Set ``doc[segments[0]][segments[1]]...[segments[-1]] = value``.
 
-    Creates intermediate tables via ``tomlkit.table()`` when missing.
+    Missing intermediate tables are created via *table_factory* —
+    ``tomlkit.table`` for TOML round-trip preservation, plain ``dict``
+    for YAML (ruamel auto-promotes plain dicts to ``CommentedMap`` on
+    dump).  Existing intermediates that aren't mapping-shaped get
+    replaced — the YAML path used to do this explicitly; the TOML
+    path now matches.
     """
     cursor = doc
     for segment in segments[:-1]:
-        if segment not in cursor:
-            cursor[segment] = tomlkit.table()
+        if segment not in cursor or not isinstance(cursor[segment], dict):
+            cursor[segment] = table_factory()
         cursor = cursor[segment]
     cursor[segments[-1]] = value
 
@@ -151,18 +165,8 @@ def _append_missing_yaml(
         template_value = _walk_or_none(template_data, segments)
         if template_value is None:
             continue
-        _set_nested_yaml(user_data, segments, template_value)
+        _set_nested(user_data, segments, template_value, table_factory=dict)
     from io import StringIO  # noqa: PLC0415
     buffer = StringIO()
     yaml.dump(user_data, buffer)
     return buffer.getvalue()
-
-
-def _set_nested_yaml(doc: dict, segments: list[str], value: Any) -> None:
-    """Like :func:`_set_nested` but doesn't depend on tomlkit table creation."""
-    cursor = doc
-    for segment in segments[:-1]:
-        if segment not in cursor or not isinstance(cursor[segment], dict):
-            cursor[segment] = {}
-        cursor = cursor[segment]
-    cursor[segments[-1]] = value
