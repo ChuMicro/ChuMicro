@@ -127,9 +127,16 @@ from chumicro_workspace.templates import (
     read_secrets_toml_template,
     read_workspace_yml_template,
 )
+from chumicro_workspace.workspace import (
+    ENTRY_POINT_FILENAMES,
+    ProjectClassification,
+    WorkspaceLayout,
+    WorkspaceNotFoundError,
+)
 from chumicro_workspace.writer import write_runtime_config
 
 __all__ = [
+    "ENTRY_POINT_FILENAMES",
     "GENERATED_DIRNAME",
     "MICROPYTHON_BOARD_BY_MACHINE",
     "RUNTIME_CONFIG_DEVICE_PATH",
@@ -142,9 +149,12 @@ __all__ = [
     "DevicesYamlError",
     "HardwareOverwriteError",
     "OnboardingDiagnosis",
+    "ProjectClassification",
     "UnresolvedFirmwareError",
     "WithRuntimeConfig",
     "WorkspaceConfigError",
+    "WorkspaceLayout",
+    "WorkspaceNotFoundError",
     "add_device",
     "additive_reapply",
     "aggregate_manifests",
