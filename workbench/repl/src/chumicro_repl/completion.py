@@ -193,12 +193,6 @@ class CompletionCache:
         """Drop every cached entry — call on device reset."""
         self._table.clear()
 
-    def __len__(self) -> int:
-        return len(self._table)
-
-    def __contains__(self, key: object) -> bool:
-        return key in self._table
-
 
 class DeviceCompleter:
     """Pluggable completer fronting a :class:`CompletionCache`.
