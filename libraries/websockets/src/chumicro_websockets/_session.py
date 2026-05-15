@@ -173,7 +173,7 @@ class _BaseSession:
         self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
 
-        self._state = WebSocketState.CONNECTING
+        self.state = WebSocketState.CONNECTING
         # Inbound frame parser; max_payload_bytes propagates from the
         # session-level message cap so the upstream cap also bounds heap
         # at the per-frame stage.
@@ -194,9 +194,9 @@ class _BaseSession:
         self._close_deadline_ticks = None
         self._pending_ping_deadline_ticks = None
 
-        self._last_close_code = None
-        self._last_close_reason = ""
-        self._last_error = None
+        self.last_close_code = None
+        self.last_close_reason = ""
+        self.last_error = None
 
         # Default callbacks fire as no-ops so subclasses + users can
         # store handlers unconditionally.
@@ -207,37 +207,15 @@ class _BaseSession:
         self.on_close = _no_callback
         self.on_oversized = _no_callback
 
-    # -- public observation -----------------------------------------------
-
-    @property
-    def state(self):
-        """Current :class:`WebSocketState`."""
-        return self._state
-
-    @property
-    def last_close_code(self):
-        """Close code seen / sent on shutdown (``None`` if no close negotiated)."""
-        return self._last_close_code
-
-    @property
-    def last_close_reason(self):
-        """Reason string seen / sent on shutdown (``""`` if absent)."""
-        return self._last_close_reason
-
-    @property
-    def last_error(self):
-        """The :class:`WebSocketError` that ended the session, or ``None``."""
-        return self._last_error
-
     # -- public send / close ----------------------------------------------
 
     def send_text(self, text: str) -> None:
         """Enqueue a text frame.  Raises :class:`WebSocketStateError`
         if not OPEN, :class:`WebSocketBackpressureError` if TX is full.
         """
-        if self._state != WebSocketState.OPEN:
+        if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
-                f"send_text() requires OPEN state, was {self._state}",
+                f"send_text() requires OPEN state, was {self.state}",
             )
         self._enqueue_user_frame(OPCODE_TEXT, text.encode("utf-8"))
 
@@ -246,9 +224,9 @@ class _BaseSession:
         ``memoryview``.  Raises :class:`WebSocketStateError` if not
         OPEN, :class:`WebSocketBackpressureError` if TX is full.
         """
-        if self._state != WebSocketState.OPEN:
+        if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
-                f"send_binary() requires OPEN state, was {self._state}",
+                f"send_binary() requires OPEN state, was {self.state}",
             )
         if isinstance(data, (bytearray, memoryview)):
             data = bytes(data)
@@ -264,9 +242,9 @@ class _BaseSession:
         Manual :meth:`send_ping` is for application-level ping/pong.
         Payload is capped at 125 bytes (control-frame limit).
         """
-        if self._state != WebSocketState.OPEN:
+        if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
-                f"send_ping() requires OPEN state, was {self._state}",
+                f"send_ping() requires OPEN state, was {self.state}",
             )
         self._enqueue_user_frame(OPCODE_PING, bytes(payload))
         self._arm_pong_deadline()
@@ -275,9 +253,9 @@ class _BaseSession:
         """Initiate a graceful close handshake.  Raises
         :class:`WebSocketStateError` if already CLOSING/CLOSED.
         """
-        if self._state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
+        if self.state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
             raise WebSocketStateError(
-                f"close() not allowed in state {self._state}",
+                f"close() not allowed in state {self.state}",
             )
         self._send_close(code, reason, None)
 
@@ -369,12 +347,12 @@ class _BaseSession:
                 consumed = self._frame_parser.feed(chunk, offset)
             except WebSocketProtocolError as protocol_error:
                 self._send_close(CLOSE_PROTOCOL_ERROR, str(protocol_error), now_ms)
-                self._last_error = protocol_error
+                self.last_error = protocol_error
                 return
             offset += consumed
             if self._frame_parser.state == FrameParseState.FRAME_READY:
                 self._dispatch_frame(now_ms)
-                if self._state == WebSocketState.CLOSED:
+                if self.state == WebSocketState.CLOSED:
                     return
                 self._frame_parser.reset()
 
@@ -447,7 +425,7 @@ class _BaseSession:
                 text = validate_text_payload(message_payload)
             except WebSocketProtocolError as utf8_error:
                 self._send_close(CLOSE_BAD_DATA, str(utf8_error), now_ms)
-                self._last_error = utf8_error
+                self.last_error = utf8_error
                 return
             self.on_text(text)
         else:
@@ -495,20 +473,20 @@ class _BaseSession:
         except WebSocketProtocolError as parse_error:
             # Even close frames must be valid; respond with protocol error.
             self._send_close(CLOSE_PROTOCOL_ERROR, str(parse_error), now_ms)
-            self._last_error = parse_error
+            self.last_error = parse_error
             return
 
-        if self._state == WebSocketState.CLOSING:
+        if self.state == WebSocketState.CLOSING:
             # We initiated.  Peer's CLOSE finishes the handshake.
-            if self._last_close_code is None:
-                self._last_close_code = code
-                self._last_close_reason = reason
+            if self.last_close_code is None:
+                self.last_close_code = code
+                self.last_close_reason = reason
             self._finalize_closed()
             return
 
         # Peer initiated.  Echo their close code back per RFC 6455 §5.5.1.
-        self._last_close_code = code
-        self._last_close_reason = reason
+        self.last_close_code = code
+        self.last_close_reason = reason
         self._send_close(code if code is not None else CLOSE_NORMAL, "", now_ms)
         self._finalize_closed()
 
@@ -598,7 +576,7 @@ class _BaseSession:
         Idempotent — a second :meth:`_send_close` while already CLOSING
         is a no-op (peer's CLOSE may arrive after we sent ours).
         """
-        if self._state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
+        if self.state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
             return
         try:
             payload = encode_close_payload(code, reason)
@@ -611,10 +589,10 @@ class _BaseSession:
         # the peer's values when this is the echo half of a peer-initiated
         # close handshake (where _handle_close_frame stored peer's
         # code/reason before calling us).
-        if self._last_close_code is None:
-            self._last_close_code = code
-            self._last_close_reason = reason
-        self._state = WebSocketState.CLOSING
+        if self.last_close_code is None:
+            self.last_close_code = code
+            self.last_close_reason = reason
+        self.state = WebSocketState.CLOSING
         if now_ms is None:
             now_ms = self._ticks.ticks_ms()
         self._close_deadline_ticks = self._ticks.ticks_add(
@@ -631,30 +609,30 @@ class _BaseSession:
             self._socket.close()
         except Exception:  # noqa: BLE001 - best-effort socket teardown
             pass
-        self._state = WebSocketState.CLOSED
+        self.state = WebSocketState.CLOSED
         self._close_deadline_ticks = None
         self._pending_ping_deadline_ticks = None
         self._on_finalized()
-        code = self._last_close_code if self._last_close_code is not None else CLOSE_NORMAL
-        self.on_close(code, self._last_close_reason)
+        code = self.last_close_code if self.last_close_code is not None else CLOSE_NORMAL
+        self.on_close(code, self.last_close_reason)
 
     def _fail_with_error(self, error) -> None:
         """Record *error*, force close, transition to CLOSED, fire on_close."""
-        if self._last_error is None:
-            self._last_error = error
-        if self._last_close_code is None:
-            self._last_close_code = CLOSE_INTERNAL_ERROR
-            self._last_close_reason = str(error)
+        if self.last_error is None:
+            self.last_error = error
+        if self.last_close_code is None:
+            self.last_close_code = CLOSE_INTERNAL_ERROR
+            self.last_close_reason = str(error)
         try:
             if self._socket is not None:
                 self._socket.close()
         except Exception:  # noqa: BLE001 - best-effort
             pass
-        self._state = WebSocketState.CLOSED
+        self.state = WebSocketState.CLOSED
         self._close_deadline_ticks = None
         self._pending_ping_deadline_ticks = None
         self._on_finalized()
-        self.on_close(self._last_close_code, self._last_close_reason)
+        self.on_close(self.last_close_code, self.last_close_reason)
 
     def _on_finalized(self) -> None:
         """Hook for subclasses to clear additional per-side state on close."""
@@ -686,7 +664,7 @@ class _BaseSession:
             and self._ticks.ticks_diff(self._close_deadline_ticks, now_ms) <= 0
         ):
             # Force closed even though peer didn't echo CLOSE.
-            self._last_error = WebSocketTimeoutError(
+            self.last_error = WebSocketTimeoutError(
                 f"peer did not send CLOSE within {self._close_timeout_ms} ms",
             )
             self._finalize_closed()
