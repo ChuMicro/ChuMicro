@@ -85,7 +85,7 @@ class TestSocketBlockingMode:
         )
         client.connect()  # marks user-wants-connected
         # Force the client into FAILED so handle() takes the self-heal path.
-        client._state = ProtocolState.FAILED  # noqa: SLF001 — test wants the gate
+        client.state = ProtocolState.FAILED
         client.handle(ticks.ticks_ms())
         assert factory_calls == [replacement]
         assert replacement.blocking is False
@@ -1117,7 +1117,7 @@ class TestSocketFactorySelfHeal:
         assert client.state == ProtocolState.CONNECTED
 
         # Force FAILED — simulate a wifi-drop that killed the socket.
-        client._state = ProtocolState.FAILED  # noqa: SLF001 — test seam
+        client.state = ProtocolState.FAILED
         _drive(client, ticks, count=2)
 
         # Self-heal ran: factory built a new socket, connect re-issued,
@@ -1136,7 +1136,7 @@ class TestSocketFactorySelfHeal:
         _drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
 
-        client._state = ProtocolState.FAILED  # noqa: SLF001 — test seam
+        client.state = ProtocolState.FAILED
         _drive(client, ticks, count=5)
         # No factory → no self-heal, stays FAILED.
         assert client.state == ProtocolState.FAILED
@@ -1169,7 +1169,7 @@ class TestSocketFactorySelfHeal:
         _drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
 
-        client._state = ProtocolState.FAILED  # noqa: SLF001 — test seam
+        client.state = ProtocolState.FAILED
         # Factory raises on the next 3 attempts; client stays FAILED.
         _drive(client, ticks, count=3)
         assert client.state == ProtocolState.FAILED
@@ -1205,7 +1205,7 @@ class TestSocketFactorySelfHeal:
 
         # Force FAILED — even with the factory present, the user-driven
         # disconnect should keep self-heal off.
-        client._state = ProtocolState.FAILED  # noqa: SLF001 — test seam
+        client.state = ProtocolState.FAILED
         _drive(client, ticks, count=5)
         assert client.state == ProtocolState.FAILED
         assert len(builds) == initial_build_count  # factory not called again

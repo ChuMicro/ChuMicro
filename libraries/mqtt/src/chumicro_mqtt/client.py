@@ -488,7 +488,7 @@ class MQTTClient:
         self._decoder_kwargs = decoder_kwargs
         self._decoder = PacketDecoder(**decoder_kwargs)
 
-        self._state = ProtocolState.DISCONNECTED
+        self.state = ProtocolState.DISCONNECTED
         self._in_flight = InFlightTable()
         self._pending_responses = []
         # 64-slot headroom above the user cap so the QoS-1 retry path
@@ -511,21 +511,11 @@ class MQTTClient:
         self.on_publish = _no_callback
         self.on_oversized = _no_callback
         self._pattern_handlers = []
-        self._last_error = None
+        self.last_error = None
 
     # ------------------------------------------------------------------
     # Public lifecycle
     # ------------------------------------------------------------------
-
-    @property
-    def state(self):
-        """Current :class:`ProtocolState` value."""
-        return self._state
-
-    @property
-    def last_error(self):
-        """Last :class:`MQTTError` seen on this connection (or ``None``)."""
-        return self._last_error
 
     def connect(self):
         """Open the TCP socket (if needed) and queue a CONNECT packet.
@@ -547,9 +537,9 @@ class MQTTClient:
         Raises:
             MQTTError: Called in a non-DISCONNECTED state.
         """
-        if self._state != ProtocolState.DISCONNECTED:
+        if self.state != ProtocolState.DISCONNECTED:
             raise MQTTError(
-                f"connect() requires DISCONNECTED state, was {self._state}",
+                f"connect() requires DISCONNECTED state, was {self.state}",
             )
         if self._socket is None:
             # No pre-built socket — invoke the factory.  Factory errors
@@ -559,10 +549,10 @@ class MQTTClient:
             try:
                 new_socket = self._socket_factory()
             except OSError as factory_error:
-                self._last_error = MQTTError(
+                self.last_error = MQTTError(
                     f"socket factory failed: {factory_error}",
                 )
-                self._state = ProtocolState.FAILED
+                self.state = ProtocolState.FAILED
                 self._user_wants_connected = True
                 return
             self._socket = new_socket
@@ -585,7 +575,7 @@ class MQTTClient:
                 deadline_ticks=self._deadline(self._ack_timeout_ms),
             ),
         )
-        self._state = ProtocolState.CONNECTING
+        self.state = ProtocolState.CONNECTING
         self._user_wants_connected = True
 
     def disconnect(self):
@@ -602,7 +592,7 @@ class MQTTClient:
             self._socket.close()
         except Exception:  # noqa: BLE001 — disconnect is best-effort  # pragma: no cover - defensive
             pass
-        self._state = ProtocolState.DISCONNECTED
+        self.state = ProtocolState.DISCONNECTED
         self._user_wants_connected = False
         self.on_disconnect()
 
@@ -671,9 +661,9 @@ class MQTTClient:
 
         See :meth:`publish` for QoS / callback semantics.
         """
-        if self._state != ProtocolState.CONNECTED:
+        if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
-                f"publish() requires CONNECTED state, was {self._state}",
+                f"publish() requires CONNECTED state, was {self.state}",
             )
         if qos > 1:
             raise UnsupportedQoSError(
@@ -762,9 +752,9 @@ class MQTTClient:
         on_subscribe: object | None = None,
     ) -> None:
         """Queue a SUBSCRIBE for *topic* verbatim — no ``root_topic`` prefix."""
-        if self._state != ProtocolState.CONNECTED:
+        if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
-                f"subscribe() requires CONNECTED state, was {self._state}",
+                f"subscribe() requires CONNECTED state, was {self.state}",
             )
         packet_id = self._in_flight.allocate_id()  # Reuse the id pool.
         packet = encode_subscribe(
@@ -798,9 +788,9 @@ class MQTTClient:
 
     def unsubscribe_raw(self, topic, *, on_unsubscribe=None):
         """Queue an UNSUBSCRIBE for *topic* verbatim — no ``root_topic`` prefix."""
-        if self._state != ProtocolState.CONNECTED:
+        if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
-                f"unsubscribe() requires CONNECTED state, was {self._state}",
+                f"unsubscribe() requires CONNECTED state, was {self.state}",
             )
         packet_id = self._in_flight.allocate_id()
         packet = encode_unsubscribe(packet_id=packet_id, topics=[topic])
@@ -873,7 +863,7 @@ class MQTTClient:
         non-blocking recv and bails on EAGAIN — so any non-terminal
         state is worth a tick.
         """
-        return self._state not in (ProtocolState.DISCONNECTED, ProtocolState.FAILED)
+        return self.state not in (ProtocolState.DISCONNECTED, ProtocolState.FAILED)
 
     def handle(self, now_ms):
         """One tick of progress.
@@ -903,13 +893,13 @@ class MQTTClient:
         automatically; tests that roll their own poll loops must do
         the same.
         """
-        if self._state == ProtocolState.FAILED:
+        if self.state == ProtocolState.FAILED:
             if self._socket_factory is None or not self._user_wants_connected:
                 return
             if not self._attempt_self_heal():
                 return
             # Self-heal succeeded — fall through and tick the new connection.
-        if self._state == ProtocolState.DISCONNECTED:
+        if self.state == ProtocolState.DISCONNECTED:
             return
         try:
             self._drain_tx_queue()
@@ -918,11 +908,11 @@ class MQTTClient:
             self._check_keepalive(now_ms)
             self._drain_tx_queue()
         except MQTTError as error:
-            self._last_error = error
-            self._state = ProtocolState.FAILED
+            self.last_error = error
+            self.state = ProtocolState.FAILED
         except OSError as error:
-            self._last_error = MQTTError(f"socket error: {error}")
-            self._state = ProtocolState.FAILED
+            self.last_error = MQTTError(f"socket error: {error}")
+            self.state = ProtocolState.FAILED
 
     def _attempt_self_heal(self):
         """Rebuild the socket via ``socket_factory`` and re-issue connect.
@@ -945,7 +935,7 @@ class MQTTClient:
         try:
             new_socket = self._socket_factory()
         except OSError as factory_error:
-            self._last_error = MQTTError(
+            self.last_error = MQTTError(
                 f"socket factory failed: {factory_error}",
             )
             return False
@@ -965,8 +955,8 @@ class MQTTClient:
         self._decoder = PacketDecoder(**self._decoder_kwargs)
         if self._clean_session:
             self._in_flight = InFlightTable()
-        self._state = ProtocolState.DISCONNECTED
-        self._last_error = None
+        self.state = ProtocolState.DISCONNECTED
+        self.last_error = None
         # Re-issue connect — this transitions to CONNECTING and queues
         # the CONNECT packet that the upcoming _drain_tx_queue() flushes.
         self.connect()
@@ -1201,10 +1191,10 @@ class MQTTClient:
                     f"broker rejected CONNECT (return code {packet.return_code}: "
                     f"{reason})"
                 )
-            self._last_error = MQTTConnectError(message, return_code=packet.return_code)
-            self._state = ProtocolState.FAILED
+            self.last_error = MQTTConnectError(message, return_code=packet.return_code)
+            self.state = ProtocolState.FAILED
             return
-        self._state = ProtocolState.CONNECTED
+        self.state = ProtocolState.CONNECTED
         self._next_ping_due_ticks = self._deadline(self._ping_interval_ms, now_ms=now_ms)
         self.on_connect()
 
@@ -1245,11 +1235,11 @@ class MQTTClient:
                     continue
                 if entry.retry_count >= self._publish_retry_max:
                     self._in_flight.discard(entry.packet_id)
-                    self._last_error = MQTTError(
+                    self.last_error = MQTTError(
                         f"PUBLISH packet_id {entry.packet_id} exceeded "
                         f"retry limit {self._publish_retry_max}",
                     )
-                    self._state = ProtocolState.FAILED
+                    self.state = ProtocolState.FAILED
                     return
                 entry.retry_count += 1
                 entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
@@ -1263,15 +1253,15 @@ class MQTTClient:
                 if self._ticks.ticks_diff(pending.deadline_ticks, now_ms) > 0:
                     continue
                 self._pending_responses.remove(pending)
-                self._last_error = MQTTError(
+                self.last_error = MQTTError(
                     f"timed out awaiting {pending.awaiting}",
                 )
-                self._state = ProtocolState.FAILED
+                self.state = ProtocolState.FAILED
                 return
 
     def _check_keepalive(self, now_ms):
         """Send a PINGREQ when half the keepalive interval has elapsed."""
-        if self._state != ProtocolState.CONNECTED:
+        if self.state != ProtocolState.CONNECTED:
             return
         if self._ticks.ticks_diff(self._next_ping_due_ticks, now_ms) > 0:
             return
