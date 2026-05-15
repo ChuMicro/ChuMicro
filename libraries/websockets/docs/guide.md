@@ -145,10 +145,19 @@ The library is sized for the minimum supported board class (256 KB
 MCU RAM, 4 MB flash):
 
 - `max_message_bytes` defaults to `16384` (16 KB).  Inbound messages
-  larger than this trigger `WhenOversized` policy.  Per-frame
-  `FrameParser.max_payload_bytes` defaults to the same value, so a
-  hostile peer with a 64-bit length header can't pin heap before
-  the parser rejects.
+  larger than this trigger `WhenOversized` policy.  The parser runs
+  a three-tier inbound size model (mirrors `chumicro-mqtt`):
+  - Tier 1, frames ≤ `payload_buffer_size` (256 B) — reuse the
+    steady-state buffer, zero per-frame allocation.
+  - Tier 2, frames between `payload_buffer_size` and
+    `max_payload_bytes` — one-shot `bytearray(payload_length)`,
+    freed after delivery.
+  - Tier 3, frames > `max_payload_bytes` — rolling discard, no
+    allocation beyond the steady-state buffer.  The bytes are gone
+    but `reported_length` is surfaced.  `WhenOversized` policy
+    decides whether to stay connected (`DROP_SILENT` /
+    `DROP_WITH_EVENT`, matching `chumicro-mqtt` / `chumicro-requests`)
+    or close with 1009 (`DISCONNECT`).
 - `max_tx_queue_size` defaults to `8` outbound messages.  Enqueueing
   past the cap raises `WebSocketBackpressureError`.  System-driven
   frames (auto-pong, close handshake) bypass the cap via 8 slots

@@ -186,6 +186,11 @@ class _BaseSession:
         self._inbound_message_buffer = bytearray()
         self._inbound_message_opcode = None  # TEXT or BINARY when fragmented
         self._inbound_oversized = False
+        # Running peer-reported size of the in-progress message.  Tracks
+        # the sum of frame ``reported_length`` values across the message
+        # — load-bearing when oversize trips at the frame layer (tier 3)
+        # since the message buffer never receives those bytes.
+        self._inbound_reported_length = 0
 
         self._handshake_send_buffer = None
         self._handshake_send_offset = 0
@@ -388,6 +393,7 @@ class _BaseSession:
 
     def _handle_data_frame(self, opcode: int, fin: bool, payload: bytes, now_ms: int) -> None:
         """Reassemble fragmented messages, applying oversize policy."""
+        frame_parser = self._frame_parser
         if opcode == OPCODE_CONTINUATION:
             if self._inbound_message_opcode is None:
                 self._send_close(
@@ -396,7 +402,6 @@ class _BaseSession:
                     now_ms,
                 )
                 return
-            self._extend_inbound_buffer(payload)
         else:
             # TEXT or BINARY — must NOT arrive mid-fragmentation.
             if self._inbound_message_opcode is not None:
@@ -407,6 +412,13 @@ class _BaseSession:
                 )
                 return
             self._inbound_message_opcode = opcode
+        self._inbound_reported_length += frame_parser.reported_length
+        if frame_parser.oversized:
+            # Tier 3: payload was drained at the frame layer, the empty
+            # ``payload`` arg is by design.  Mark the message oversized
+            # without extending the buffer.
+            self._inbound_oversized = True
+        else:
             self._extend_inbound_buffer(payload)
 
         if not fin:
@@ -442,10 +454,15 @@ class _BaseSession:
         self._inbound_message_buffer.extend(payload)
 
     def _finish_oversized_message(self, now_ms: int) -> None:
-        """Apply the WhenOversized policy at message-FIN time."""
-        reported_length = len(self._inbound_message_buffer)
-        # The buffer is incomplete — we stopped extending once we
-        # crossed the cap.  Surface the size we observed.
+        """Apply the WhenOversized policy at message-FIN time.
+
+        ``reported_length`` is the sum of declared frame lengths across
+        the message — for message-level oversize this equals what the
+        buffer would have held; for frame-level oversize (tier 3 at the
+        FrameParser) the buffer is empty and only this counter carries
+        the size peer reported.
+        """
+        reported_length = self._inbound_reported_length
         self._reset_inbound_state()
         policy = self._when_oversized
         if policy == WhenOversized.DROP_SILENT:
@@ -465,6 +482,7 @@ class _BaseSession:
         self._inbound_message_buffer = bytearray()
         self._inbound_message_opcode = None
         self._inbound_oversized = False
+        self._inbound_reported_length = 0
 
     def _handle_close_frame(self, payload: bytes, now_ms: int) -> None:
         """Process inbound CLOSE — record + reciprocate or finalize."""

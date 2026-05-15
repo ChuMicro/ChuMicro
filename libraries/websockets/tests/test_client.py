@@ -17,6 +17,7 @@ from chumicro_websockets import (
     CLOSE_INTERNAL_ERROR,
     CLOSE_NORMAL,
     CLOSE_PROTOCOL_ERROR,
+    CLOSE_TOO_BIG,
     OPCODE_BINARY,
     OPCODE_CLOSE,
     OPCODE_CONTINUATION,
@@ -905,6 +906,94 @@ class TestOversize:
         client.handle(clock.ticks_ms())
         assert oversized == []  # DISCONNECT does not fire on_oversized
         assert client.state == WebSocketState.CLOSING
+
+
+# ---------------------------------------------------------------------------
+# Frame-level oversize — single frame > max_payload_bytes
+# ---------------------------------------------------------------------------
+
+
+class TestFrameLevelOversize:
+    """A single inbound frame whose declared length exceeds the cap
+    used to terminate the connection with ``CLOSE_PROTOCOL_ERROR``;
+    now it drains at the frame layer (tier 3 in :class:`FrameParser`)
+    and the session applies its ``WhenOversized`` policy.  Matches
+    the shared cross-library oversize contract — ``DROP_WITH_EVENT``
+    drops the payload and stays connected for the next message, like
+    ``chumicro-mqtt`` and ``chumicro-requests``.
+    """
+
+    def test_drop_silent_drains_frame_and_stays_open(self):
+        client, socket, clock, _ = _make_client(
+            max_message_bytes=100,
+            when_oversized=WhenOversized.DROP_SILENT,
+        )
+        oversized = []
+        client.on_oversized = lambda reported_length: oversized.append(reported_length)
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        # Single frame, 500 bytes — well over max_message_bytes=100.
+        socket.feed_inbound(encode_frame(OPCODE_TEXT, b"X" * 500, fin=True, mask=None))
+        for _index in range(6):
+            client.handle(clock.ticks_ms())
+        assert oversized == []
+        assert client.state == WebSocketState.OPEN
+
+    def test_drop_with_event_reports_frame_length(self):
+        client, socket, clock, _ = _make_client(
+            max_message_bytes=100,
+            when_oversized=WhenOversized.DROP_WITH_EVENT,
+        )
+        oversized = []
+        client.on_oversized = lambda reported_length: oversized.append(reported_length)
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        socket.feed_inbound(encode_frame(OPCODE_TEXT, b"X" * 500, fin=True, mask=None))
+        for _index in range(6):
+            client.handle(clock.ticks_ms())
+        assert oversized == [500]
+        assert client.state == WebSocketState.OPEN
+
+    def test_disconnect_closes_with_too_big(self):
+        client, socket, clock, _ = _make_client(
+            max_message_bytes=100,
+            when_oversized=WhenOversized.DISCONNECT,
+        )
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        socket.feed_inbound(encode_frame(OPCODE_TEXT, b"X" * 500, fin=True, mask=None))
+        for _index in range(6):
+            client.handle(clock.ticks_ms())
+        assert client.state == WebSocketState.CLOSING
+        # The session-initiated close stamps the local close code on
+        # the session before queuing the CLOSE frame; the outbound
+        # frame is masked so the bytes-on-the-wire status field isn't
+        # readable without unmasking.
+        assert client.last_close_code == CLOSE_TOO_BIG
+
+    def test_normal_message_after_oversize_drain(self):
+        # The connection survives a tier-3 drain and the next inbound
+        # message parses cleanly — same property the message-level
+        # oversize tests check, exercised at the frame layer.
+        client, socket, clock, _ = _make_client(
+            max_message_bytes=100,
+            when_oversized=WhenOversized.DROP_WITH_EVENT,
+        )
+        received = []
+        oversized = []
+        client.on_text = lambda text: received.append(text)
+        client.on_oversized = lambda reported_length: oversized.append(reported_length)
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        socket.feed_inbound(
+            encode_frame(OPCODE_TEXT, b"X" * 500, fin=True, mask=None)
+            + encode_frame(OPCODE_TEXT, b"hello", fin=True, mask=None),
+        )
+        for _index in range(8):
+            client.handle(clock.ticks_ms())
+        assert oversized == [500]
+        assert received == ["hello"]
+        assert client.state == WebSocketState.OPEN
 
 
 # ---------------------------------------------------------------------------

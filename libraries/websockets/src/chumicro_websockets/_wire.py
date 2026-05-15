@@ -764,13 +764,19 @@ class FrameParseState:
 
         READING_HEADER -> [READING_LEN16 | READING_LEN64]
                        -> [READING_MASK]
-                       -> READING_PAYLOAD
+                       -> [READING_PAYLOAD | DRAINING_PAYLOAD]
                        -> FRAME_READY
                        \\-> ERROR (any state)
 
     After ``FRAME_READY``, the caller reads :attr:`fin` /
-    :attr:`opcode` / :attr:`payload`, then calls :meth:`reset` to
-    return to ``READING_HEADER`` for the next frame.
+    :attr:`opcode` / :attr:`payload` / :attr:`oversized`, then calls
+    :meth:`reset` to return to ``READING_HEADER`` for the next frame.
+
+    ``DRAINING_PAYLOAD`` is the tier-3 sink: payload bytes flow
+    through without being stored.  Entered when the declared frame
+    length exceeds ``max_payload_bytes``; on completion the frame
+    arrives at ``FRAME_READY`` with :attr:`oversized` set and
+    :attr:`payload` == ``b""``.
     """
 
     READING_HEADER = "reading_header"
@@ -778,6 +784,7 @@ class FrameParseState:
     READING_LEN64 = "reading_len64"
     READING_MASK = "reading_mask"
     READING_PAYLOAD = "reading_payload"
+    DRAINING_PAYLOAD = "draining_payload"
     FRAME_READY = "frame_ready"
     ERROR = "error"
 
@@ -789,11 +796,31 @@ class FrameParser:
     fragmentation reassembly, control-frame routing, mask-direction
     policy, and UTF-8 validation.
 
+    Three-tier inbound size handling mirrors
+    :class:`chumicro_mqtt._wire.PacketDecoder`:
+
+    * **Tier 1 — steady.**  Frame payload ≤ ``payload_buffer_size``.
+      Reuses the pre-allocated steady-state buffer.  No allocation.
+    * **Tier 2 — intact.**  Frame payload > ``payload_buffer_size``
+      but ≤ ``max_payload_bytes``.  One-shot ``bytearray(payload_length)``
+      allocated for this frame, dropped on the next :meth:`reset`.
+    * **Tier 3 — oversized.**  Frame payload > ``max_payload_bytes``.
+      No allocation beyond the steady-state buffer; payload bytes are
+      consumed off the wire without being stored (rolling discard).
+      :attr:`oversized` is set on ``FRAME_READY`` and :attr:`payload`
+      returns ``b""``.  The higher layer applies its ``WhenOversized``
+      policy on the empty frame — matches the shared cross-library
+      contract with ``chumicro-mqtt`` and ``chumicro-requests``,
+      where ``DROP_WITH_EVENT`` drops the oversized payload and
+      stays connected for the next inbound unit.
+
     Args:
-        max_payload_bytes: Per-frame payload cap.  Lengths above this
-            transition the parser to ``ERROR`` at the length-byte
-            stage (i.e. before any payload bytes get buffered) so a
-            hostile peer can't pin heap with a 64-bit length header.
+        max_payload_bytes: Per-frame payload cap.  Frames declaring a
+            larger length enter tier 3 (rolling discard); the parser
+            stays usable for the next frame.  This bounds heap, not
+            connection lifetime — a hostile peer can still trickle a
+            multi-GB declared length, which the session layer's
+            ``WhenOversized=DISCONNECT`` policy is the answer to.
 
     Public state on :attr:`state` == ``FRAME_READY``:
 
@@ -801,7 +828,10 @@ class FrameParser:
     * :attr:`rsv`        — int, three RSV bits packed (RSV1<<2|RSV2<<1|RSV3)
     * :attr:`opcode`     — int (one of ``OPCODE_*``)
     * :attr:`had_mask`   — bool (was MASK bit set?)
-    * :attr:`payload`    — ``bytes`` of unmasked payload
+    * :attr:`payload`    — ``bytes`` of unmasked payload (``b""`` on tier 3)
+    * :attr:`oversized`  — bool, payload was drained without buffering
+    * :attr:`reported_length` — int, declared frame length (load-bearing
+      on tier 3, where :attr:`payload` is empty)
     """
 
     def __init__(
@@ -822,9 +852,10 @@ class FrameParser:
         # Steady-state payload buffer reused across frames — same shape
         # as :class:`chumicro_mqtt._wire.PacketDecoder`.  Frames whose
         # payload fits in ``payload_buffer_size`` reuse the buffer
-        # (zero alloc per frame).  Oversized frames fall back to a
+        # (zero alloc per frame).  Tier-2 frames fall back to a
         # one-shot ``bytearray(payload_length)`` that gets dropped on
-        # the next :meth:`reset`.  ``_payload_view`` is the cached
+        # the next :meth:`reset`.  Tier-3 frames stay in the steady
+        # buffer and discard.  ``_payload_view`` is the cached
         # memoryview so per-write slice indexing doesn't construct a
         # fresh view object every call; refreshed only when ``_payload``
         # rebinds to a one-shot oversized buffer.  Live-board signal
@@ -837,6 +868,12 @@ class FrameParser:
         self._payload = self._payload_buffer
         self._payload_view = self._payload_buffer_view
         self._payload_write_offset = 0
+        # Tier-3 state.  ``oversized`` flips true at length-byte time
+        # for any frame whose declared length exceeds
+        # ``max_payload_bytes``; ``_drain_remaining`` counts payload
+        # bytes still to consume off the wire.
+        self.oversized = False
+        self._drain_remaining = 0
         self.error = None
 
     # ------------------------------------------------------------------
@@ -847,12 +884,21 @@ class FrameParser:
     def payload(self):
         """Unmasked payload of the just-completed frame as ``bytes``.
 
-        Returns ``b""`` until :attr:`state` == ``FRAME_READY``.  Reads
+        Returns ``b""`` until :attr:`state` == ``FRAME_READY``, and
+        also ``b""`` on tier-3 frames — see :attr:`oversized` and
+        :attr:`reported_length` for the size the peer declared.  Reads
         through the cached ``_payload_view`` (zero-copy memoryview slice)
         and snapshots one ``bytes`` copy for the caller — handlers may
         ``.decode()`` the result, which memoryview lacks.
         """
         return bytes(self._payload_view[:self._payload_write_offset])
+
+    @property
+    def reported_length(self):
+        """Frame length the peer declared (load-bearing on tier-3
+        frames where :attr:`payload` was drained without being stored).
+        """
+        return self._payload_length
 
     # ------------------------------------------------------------------
     # Driving
@@ -863,8 +909,8 @@ class FrameParser:
 
         Discards the just-finished frame's metadata + payload.  Rebinds
         ``_payload`` to the steady-state ``_payload_buffer`` (no alloc);
-        any one-shot oversized buffer from the prior frame is now
-        unreferenced and GC-eligible.
+        any one-shot tier-2 buffer from the prior frame is now
+        unreferenced and GC-eligible.  Clears tier-3 drain state.
         """
         self.state = FrameParseState.READING_HEADER
         self._buffer = bytearray()
@@ -877,6 +923,8 @@ class FrameParser:
         self._payload = self._payload_buffer
         self._payload_view = self._payload_buffer_view
         self._payload_write_offset = 0
+        self.oversized = False
+        self._drain_remaining = 0
 
     def feed(self, chunk: bytes, start: int = 0) -> int:
         """Consume bytes from *chunk* starting at *start*; return how many
@@ -891,6 +939,9 @@ class FrameParser:
         Per-state chunked consumption — header / length / mask states
         copy the bytes they need in one slice, payload state extends
         the buffer by ``min(remaining, payload_remaining)`` per pass.
+        Tier-3 payloads (length > ``max_payload_bytes``) drain through
+        the parser without being stored; :attr:`oversized` flips true
+        and :attr:`payload` returns ``b""`` at ``FRAME_READY``.
 
         The parser stops consuming when it transitions to
         ``FRAME_READY`` so any leftover bytes remain available to the
@@ -898,10 +949,10 @@ class FrameParser:
 
         Raises:
             WebSocketProtocolError: Reserved opcode, control frame
-                with payload >125, control frame with FIN=0, or
-                payload length exceeds ``max_payload_bytes``.  The
+                with payload >125, or control frame with FIN=0.  The
                 parser also transitions to ``ERROR`` and stores the
-                message in :attr:`error`.
+                message in :attr:`error`.  Oversized data frames do
+                NOT raise — they enter tier-3 drain.
         """
         consumed = 0
         effective_length = len(chunk) - start
@@ -936,6 +987,19 @@ class FrameParser:
                 write_offset += take
                 self._payload_write_offset = write_offset
                 if write_offset >= self._payload_length:
+                    self.state = FrameParseState.FRAME_READY
+                continue
+
+            if state == FrameParseState.DRAINING_PAYLOAD:
+                # Tier 3: count the bytes off the wire, don't store
+                # them, don't unmask them (the bytes are discarded
+                # either way).
+                drain_remaining = self._drain_remaining
+                take = drain_remaining if drain_remaining <= remaining else remaining
+                consumed += take
+                drain_remaining -= take
+                self._drain_remaining = drain_remaining
+                if drain_remaining == 0:
                     self.state = FrameParseState.FRAME_READY
                 continue
 
@@ -1002,27 +1066,47 @@ class FrameParser:
         self.state = FrameParseState.READING_LEN64
 
     def _after_length(self) -> None:
+        # RFC 6455 §5.5: control frames MUST be ≤ 125 bytes.  This is
+        # a protocol violation regardless of ``max_payload_bytes``, so
+        # it still raises — the connection must close with 1002.
         if self.opcode in CONTROL_OPCODES and self._payload_length > MAX_CONTROL_PAYLOAD_BYTES:
             raise self._fail(
                 f"control frame opcode 0x{self.opcode:x} payload "
                 f"{self._payload_length} > {MAX_CONTROL_PAYLOAD_BYTES}",
             )
+        # Data frame > max_payload_bytes — enter tier-3 drain instead
+        # of raising.  The session layer's ``WhenOversized`` policy
+        # decides whether to stay connected.  Mask state must still
+        # be consumed off the wire if MASK was set, since the 4 mask
+        # bytes precede the payload bytes.
         if self._payload_length > self._max_payload_bytes:
-            raise self._fail(
-                f"frame payload {self._payload_length} > "
-                f"max_payload_bytes={self._max_payload_bytes}",
-            )
+            self.oversized = True
+            self._drain_remaining = self._payload_length
+            if self.had_mask:
+                self.state = FrameParseState.READING_MASK
+                return
+            self._after_mask()
+            return
         if self.had_mask:
             self.state = FrameParseState.READING_MASK
             return
         self._after_mask()
 
     def _after_mask(self) -> None:
+        if self.oversized:
+            # Tier 3: skip the steady/intact buffer setup entirely.
+            # Payload bytes will be counted off and discarded by the
+            # ``DRAINING_PAYLOAD`` branch of :meth:`feed`.
+            if self._drain_remaining == 0:
+                self.state = FrameParseState.FRAME_READY
+                return
+            self.state = FrameParseState.DRAINING_PAYLOAD
+            return
         if self._payload_length == 0:
             self.state = FrameParseState.FRAME_READY
             return
-        # Reuse the steady-state payload buffer when the frame fits.
-        # Only oversized frames pay a per-frame allocation, and that
+        # Reuse the steady-state payload buffer when the frame fits
+        # (tier 1).  Only tier 2 pays a per-frame allocation, and that
         # one-shot bytearray is released on the next :meth:`reset`.
         if self._payload_length > self._payload_capacity:
             self._payload = bytearray(self._payload_length)

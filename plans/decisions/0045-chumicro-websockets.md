@@ -78,7 +78,7 @@ The "share a port with chumicro-http-server" question is sidestepped: `WebSocket
 ### 7. Frame coverage (RFC 6455 §5)
 
 * **Opcodes:** continuation (`0x0`), text (`0x1`), binary (`0x2`), close (`0x8`), ping (`0x9`), pong (`0xa`).  Reserved opcodes raise `WebSocketProtocolError` and close with `1002`.
-* **Length:** 7-bit, 16-bit (`126`), 64-bit (`127`).  64-bit lengths above `max_message_bytes` are rejected at the length-byte stage to avoid heap pressure.
+* **Length:** 7-bit, 16-bit (`126`), 64-bit (`127`).  Frame payloads above `max_payload_bytes` (= `max_message_bytes` by default) enter a tier-3 rolling drain at the length-byte stage — the bytes are consumed off the wire without being stored, the frame surfaces empty + `oversized=True`, and the session layer applies its `WhenOversized` policy at message-FIN per [Decision 0061](0061-whenoversized-cross-library-contract.md) §4.  No heap allocation beyond the steady-state payload buffer; the connection stays usable unless `WhenOversized=DISCONNECT`.
 * **Mask:** client always masks outbound; server validates client masks inbound (close `1002` on missing mask).  Server never masks outbound; client validates server doesn't mask inbound (close `1002` on present mask).
 * **Fragmentation:** inbound CONT-frame chains buffered up to `max_message_bytes`.  Control frames may interleave fragmented data without disturbing the in-progress assembly.  **Outbound: send-as-single-frame only in v1** (always `FIN=1`).
 * **Control frames:** ping / pong / close ≤ 125 bytes per RFC.  Auto-pong on inbound ping (within next handle tick).  Close-frame body parsed as `(2-byte code, UTF-8 reason)`.
