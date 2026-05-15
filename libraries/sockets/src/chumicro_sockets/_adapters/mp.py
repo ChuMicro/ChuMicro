@@ -135,20 +135,15 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
 
     *context* is an MP ``ssl.SSLContext`` or ``None``.
 
-    **Security note** — passing ``context=None`` on MP leaves
-    ``verify_mode = CERT_NONE``: MP ships no trust store, and bare
-    ``ssl.wrap_socket(sock, server_hostname=host)`` accepts any
-    certificate without validation.  This matches MP's own ``ssl``
-    default but is **not** equivalent to ``ssl.create_default_context()``
-    on CPython or to the CP ``socketpool`` TLS path.  Build an
-    explicit context with
-    :func:`chumicro_sockets.ssl_context_with_ca` (which sets
-    ``verify_mode = CERT_REQUIRED`` after loading the CA) for
-    verified TLS on MP.
-
-    Older MP builds expose ``ssl.wrap_socket`` as a free function
-    rather than a context method — this adapter calls the free
-    function so it works on both shapes.
+    When ``context`` is ``None``, the TLS handshake validates the
+    server cert against the library-shipped CA bundle in
+    :mod:`chumicro_sockets._ca_bundle` — loaded lazily and cached at
+    module level via :func:`_default_context`.  Override the trust set
+    at runtime with :func:`set_default_ca_bundle` (called transparently
+    by ``chumicro_sockets.set_default_ca_bundle``).  For explicit
+    no-verification (dev against self-signed brokers, captive-portal
+    probes), pass ``context=ssl_context_no_verify()`` — opt-out is
+    named so a code reviewer can grep for it.
 
     Non-blocking note: callers that need a non-blocking TLS socket
     (e.g. ``chumicro-mqtt``) call ``setblocking(False)`` on the
@@ -161,15 +156,13 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
     plain TCP); see :class:`_MpSocketWrapper.recv_into`.
     """
     import socket  # noqa: PLC0415 — MP-only import; staged-but-not-imported on CP
-    import ssl  # noqa: PLC0415 — MP-only import
 
     address_info = socket.getaddrinfo(host, port)[0]
     sock = socket.socket(address_info[0], address_info[1])
     sock.connect(address_info[-1])
     if context is None:
-        wrapped = ssl.wrap_socket(sock, server_hostname=host)
-    else:
-        wrapped = context.wrap_socket(sock, server_hostname=host)
+        context = _default_context()
+    wrapped = context.wrap_socket(sock, server_hostname=host)
     return _MpSocketWrapper(wrapped)
 
 
@@ -455,3 +448,73 @@ def _pem_to_der(ca_pem):  # pragma: no cover - device only
         if in_cert and line:
             base64_lines.append(line)
     return b"".join(der_parts)
+
+
+#: PEM override installed via :func:`set_default_ca_bundle`.  ``None``
+#: means "use the library-shipped bundle from
+#: :mod:`chumicro_sockets._ca_bundle`."
+_OVERRIDE_PEM = None
+
+#: Module-level cache of the parsed default :class:`ssl.SSLContext`.
+#: Invalidated when :func:`set_default_ca_bundle` changes the trust set.
+_DEFAULT_CONTEXT_CACHE = None
+
+
+def set_default_ca_bundle(pem_bytes):
+    """Replace or revert the CA bundle used by ``connect_tls(context=None)``.
+
+    Pass ``None`` to revert to the library-shipped bundle in
+    :mod:`chumicro_sockets._ca_bundle`.  Pass PEM bytes (or str) to
+    install a project-specific trust set — useful when the project
+    talks to a server signed by a private internal CA, or when a public
+    root we don't ship has rotated and the user needs to ship faster
+    than our release cadence.
+
+    The cached default context is invalidated; the next call to
+    :func:`connect_tls` with ``context=None`` rebuilds it from the new
+    bundle.
+    """
+    global _OVERRIDE_PEM, _DEFAULT_CONTEXT_CACHE
+    _OVERRIDE_PEM = pem_bytes
+    _DEFAULT_CONTEXT_CACHE = None
+
+
+def _default_context():  # pragma: no cover - device only
+    """Return the cached default :class:`ssl.SSLContext`, building on first use.
+
+    Loads ``_OVERRIDE_PEM`` when set, otherwise lazily imports
+    :mod:`chumicro_sockets._ca_bundle` and uses ``PEM_BYTES``.  Caching
+    means plain-TCP-only callers never pay the parse cost, and TLS
+    callers pay it exactly once.
+    """
+    global _DEFAULT_CONTEXT_CACHE
+    if _DEFAULT_CONTEXT_CACHE is not None:
+        return _DEFAULT_CONTEXT_CACHE
+    if _OVERRIDE_PEM is not None:
+        pem = _OVERRIDE_PEM
+    else:
+        from chumicro_sockets import _ca_bundle  # noqa: PLC0415 — lazy
+
+        pem = _ca_bundle.PEM_BYTES
+    _DEFAULT_CONTEXT_CACHE = ssl_context_with_ca(pem)
+    return _DEFAULT_CONTEXT_CACHE
+
+
+def ssl_context_no_verify():  # pragma: no cover - device only
+    """Return an MP ``ssl.SSLContext`` that **skips** certificate verification.
+
+    Explicit opt-out for callers that intentionally don't want to
+    validate the peer (dev against self-signed brokers, captive-portal
+    probes, smoke tests against expired or untrusted hosts).  Named so
+    code reviewers can grep for it — ``tls_client_socket(host, port,
+    context=ssl_context_no_verify())`` shouts what it does.
+
+    MP's :class:`ssl.SSLContext` constructed with
+    ``PROTOCOL_TLS_CLIENT`` defaults to ``verify_mode = CERT_NONE`` —
+    we return one explicitly so the call site documents the intent.
+    """
+    import ssl  # noqa: PLC0415 — runtime-gated
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.verify_mode = ssl.CERT_NONE
+    return context

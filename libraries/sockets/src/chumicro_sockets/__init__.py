@@ -38,6 +38,8 @@ __all__ = [
     "UDPSocket",
     "UnsupportedSSLConfigError",
     "is_eagain",
+    "set_default_ca_bundle",
+    "ssl_context_no_verify",
     "ssl_context_with_ca",
     "ssl_context_with_cert_and_key",
     "ssl_context_with_cert_and_key_paths",
@@ -130,18 +132,19 @@ def tls_client_socket(
       (mbedTLS-backed on RP2 + ESP32 from MP 1.24+).
     * **CPython** — stdlib ``ssl.SSLContext.wrap_socket``.
 
-    *context=None* behavior **diverges across runtimes today** — pass
-    an explicit context built from :func:`ssl_context_with_ca` if you
-    need uniform certificate verification:
+    *context=None* verifies on every runtime:
 
     * **CircuitPython** — verifies against the firmware-bundled
       mbedTLS CA store (``x509-crt-bundle``).
     * **CPython** — ``ssl.create_default_context()``; verifies against
       the host OS trust store.
-    * **MicroPython** — **accepts any certificate**.  MP ships no
-      trust store and bare ``ssl.wrap_socket`` leaves
-      ``verify_mode = CERT_NONE``.  Build an explicit context via
-      :func:`ssl_context_with_ca` for verified TLS on MP.
+    * **MicroPython** — verifies against the library-shipped CA
+      bundle (Let's Encrypt + DigiCert + Amazon + Google + GlobalSign
+      roots; see :func:`set_default_ca_bundle` to override).
+
+    For explicit no-verification (dev against self-signed brokers,
+    captive-portal probes), pass ``context=ssl_context_no_verify()``
+    — named so the opt-out is greppable in code review.
 
     Args:
         host: DNS name or IP literal.  Used as ``server_hostname``
@@ -479,3 +482,61 @@ def ssl_context_with_ca(ca_pem: str | bytes) -> object:
     from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
 
     return cpython.ssl_context_with_ca(ca_pem)
+
+
+def ssl_context_no_verify() -> object:
+    """Return an SSLContext that **skips** certificate verification.
+
+    Explicit opt-out for callers that intentionally don't want to
+    validate the peer — dev against self-signed brokers, captive-portal
+    probes, smoke tests against expired or untrusted hosts.  Named so
+    code reviewers can grep for it; using this where
+    ``ssl_context_with_ca`` would do is a security defect.
+
+    Returns:
+        Configured :class:`ssl.SSLContext` with verification disabled.
+        Shape varies per runtime — CP relies on the empty-string
+        ``load_verify_locations`` idiom; MP + CPython set
+        ``verify_mode = CERT_NONE`` directly.
+    """
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
+
+        return cp.ssl_context_no_verify()
+    if runtime == "micropython":
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
+
+        return mp.ssl_context_no_verify()
+    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
+
+    return cpython.ssl_context_no_verify()
+
+
+def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
+    """Replace or revert the CA bundle used by ``tls_client_socket(context=None)``.
+
+    On **MicroPython** the library ships a curated CA bundle (Let's
+    Encrypt + DigiCert + Amazon + Google + GlobalSign roots) consumed
+    by the default-secure ``connect_tls(context=None)`` path.  Call
+    this to swap in a project-specific bundle — useful when the
+    deployment talks to a server signed by a private internal CA, or
+    when a public root not in our shipped set has rotated and the
+    project needs to ship faster than our release cadence.
+
+    Pass ``None`` to revert to the library-shipped bundle.
+
+    **No-op on CircuitPython and CPython** — those runtimes get their
+    trust roots from the firmware bundle (CP) or the host OS trust
+    store (CPython); changing this library's bundle has no effect on
+    either path.
+
+    Args:
+        pem_bytes: PEM-encoded CA bundle (single or multi-cert) as
+            bytes or str, or ``None`` to revert.
+    """
+    if _runtime_name() == "micropython":
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
+
+        mp.set_default_ca_bundle(pem_bytes)
+    # CP + CPython: trust comes from elsewhere — silently ignore.

@@ -24,7 +24,7 @@ finally:
     sock.close()
 ```
 
-### TLS — current behavior of `context=None`
+### TLS — default-secure on every runtime
 
 ```python
 from chumicro_sockets import tls_client_socket
@@ -33,13 +33,15 @@ sock = tls_client_socket("api.example.com", 443, radio=None)
 sock.send(b"GET / HTTP/1.0\r\n\r\n")
 ```
 
-`context=None` is **not uniformly secure across runtimes today** — the per-runtime trust story diverges and the library hasn't yet papered over it.  Pass an explicit context built from [`ssl_context_with_ca`](api.md#chumicro_sockets.ssl_context_with_ca) if you need consistent certificate verification on every runtime.
+`context=None` verifies the cert chain on every runtime.  Each runtime gets its trust roots from the right place:
 
-| Runtime | `context=None` behavior |
+| Runtime | Source of trust roots |
 |---|---|
-| CircuitPython | Verifies against the firmware-bundled mbedTLS CA store (`x509-crt-bundle`).  Rejects expired / unknown roots. |
-| CPython | Routes through `ssl.create_default_context()` — verifies against the host OS trust store. |
-| MicroPython | **Accepts any certificate.**  MP ships no trust store and `ssl.wrap_socket(sock, server_hostname=host)` with no context leaves `verify_mode = CERT_NONE`.  Build an explicit context via [`ssl_context_with_ca`](api.md#chumicro_sockets.ssl_context_with_ca) for verified TLS on MP.
+| CircuitPython | Firmware-bundled mbedTLS CA store (`x509-crt-bundle`).  ~150 Mozilla NSS roots; built into the firmware. |
+| CPython | `ssl.create_default_context()` — host OS trust store. |
+| MicroPython | Library-shipped CA bundle (~11 KB PEM, 9 high-coverage roots: Let's Encrypt, DigiCert, Amazon, Google, GlobalSign).  Override via [`set_default_ca_bundle`](api.md#chumicro_sockets.set_default_ca_bundle) for private CAs or broader coverage. |
+
+For explicit no-verification (dev against self-signed brokers, captive-portal probes), pass `context=ssl_context_no_verify()` — the opt-out is named so a code reviewer can grep for it.
 
 ### TLS with a custom CA
 

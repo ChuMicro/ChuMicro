@@ -40,10 +40,11 @@ nbytes = sock.recv_into(buffer, 128)
 print(bytes(buffer[:nbytes]))
 sock.close()
 
-# TLS — verifies on CircuitPython (firmware CA bundle) and CPython
-# (host trust store).  MicroPython today leaves `context=None` as
-# CERT_NONE — pass an explicit `context=ssl_context_with_ca(pem)`
-# for verified TLS on MP.
+# TLS — verifies the cert chain on every runtime.  Each runtime gets
+# its trust roots from the right place: CircuitPython's firmware
+# bundle, CPython's OS trust store, MicroPython's library-shipped
+# bundle (override via `set_default_ca_bundle`).  Pass
+# `context=ssl_context_no_verify()` for explicit opt-out.
 sock = tls_client_socket("api.example.com", 443)
 ```
 
@@ -64,6 +65,8 @@ without hitting the network.
 | `tls_listening_socket(host, port, *, context, backlog=4, radio=None)` | Open a non-blocking TLS listening socket. |
 | `udp_socket(bind_host="0.0.0.0", bind_port=0, *, radio=None, broadcast=False)` | Open a UDP datagram socket; default args bind ephemeral. |
 | `ssl_context_with_ca(ca_pem)` | Build an `ssl.SSLContext` trusting only the supplied CA(s).  Works on every supported runtime. |
+| `ssl_context_no_verify()` | Build an `ssl.SSLContext` that **skips** certificate verification.  Explicit opt-out — named so a reviewer can grep for it. |
+| `set_default_ca_bundle(pem_bytes)` | Replace the CA bundle used by `tls_client_socket(context=None)` on MicroPython.  No-op on CP / CPython.  Pass `None` to revert to the library-shipped bundle. |
 | `ssl_context_with_cert_and_key_paths(cert_path, key_path)` | Server-side `ssl.SSLContext` from PEM file paths.  CP-portable shape. |
 | `TCPClientSocket` (Protocol) | TCP surface (`send`, `recv_into`, `close`, `setblocking`, `settimeout`, `fileno`). |
 | `UDPSocket` (Protocol) | UDP surface (`sendto(data, host, port)`, `recvfrom_into(buffer, nbytes=0) -> (n, (host, port))`, `close`, `setblocking`, `settimeout`, `fileno`, `getsockname`). |

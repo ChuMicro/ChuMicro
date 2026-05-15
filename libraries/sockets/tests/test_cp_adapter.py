@@ -786,3 +786,20 @@ class TestSslContextWithCa:
             context = cp_adapter.ssl_context_with_ca(ca_pem)
         assert isinstance(context.cadata, str)
         assert "more-payload" in context.cadata
+
+
+class TestSslContextNoVerify:
+    def test_clears_bundle_and_check_hostname(self) -> None:
+        """CP's no-verify shape: ``load_verify_locations("")`` empties
+        the firmware bundle attachment and ``check_hostname = False``
+        completes the opt-out.  The combination resolves to
+        ``MBEDTLS_SSL_VERIFY_NONE`` at handshake time."""
+        from chumicro_sockets._adapters import cp as cp_adapter
+        ssl_swap, fake_ssl = _install_ssl_stub()
+        with ssl_swap:
+            context = cp_adapter.ssl_context_no_verify()
+        assert context is fake_ssl.contexts_built[0]
+        # Empty-string cadata is the CP idiom for "no CAs, fall through
+        # to VERIFY_NONE".  See shared-module/ssl/SSLSocket.c.
+        assert context.cadata == ""
+        assert context.check_hostname is False

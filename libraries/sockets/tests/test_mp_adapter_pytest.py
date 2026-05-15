@@ -262,19 +262,42 @@ class TestConnectTcp:
 
 
 class TestConnectTls:
-    def test_default_uses_free_wrap_socket(self, mp_adapter: types.ModuleType) -> None:
-        """`context=None` routes through the module-level ssl.wrap_socket
-        — the older-MP-build call shape."""
+    def test_default_uses_cached_default_context(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """``context=None`` builds (and caches) a default SSLContext
+        from the shipped CA bundle.
+
+        Shape Y: the older MP idiom of calling the module-level
+        ``ssl.wrap_socket`` (which left ``verify_mode = CERT_NONE``)
+        is gone — the adapter now lazily builds an SSLContext loaded
+        with ``chumicro_sockets._ca_bundle.PEM_BYTES`` and reuses it
+        across every default-context connection.
+        """
         wrapper = mp_adapter.connect_tls("broker.example.com", 8883)
-        wrap_calls = sys.modules["ssl"]._free_wrap_calls  # type: ignore[attr-defined]
-        assert len(wrap_calls) == 1
-        wrapped_sock, server_hostname = wrap_calls[0]
-        # The wrapper holds the wrapped (TLS) socket; the wrap call
-        # received the raw underlying socket.
+        cached = mp_adapter._DEFAULT_CONTEXT_CACHE
+        assert cached is not None, "default context should be cached"
+        assert len(cached.wrapped) == 1
+        wrapped_sock, server_hostname = cached.wrapped[0]
         underlying = wrapper._sock  # type: ignore[attr-defined]
         assert wrapped_sock is underlying
         assert server_hostname == "broker.example.com"
         assert underlying.connected_to == ("broker.example.com", 8883)
+        # Free-form ssl.wrap_socket must not be called — it leaves
+        # verify_mode=CERT_NONE on MP and is the bug Shape Y fixes.
+        assert sys.modules["ssl"]._free_wrap_calls == []  # type: ignore[attr-defined]
+
+    def test_default_context_reused_across_calls(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """Two ``context=None`` connections share the same cached SSLContext."""
+        mp_adapter.connect_tls("a.example.com", 8883)
+        first_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
+        mp_adapter.connect_tls("b.example.com", 8883)
+        second_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
+        assert first_cached is second_cached
+        # Both connections recorded on the same context.
+        assert len(second_cached.wrapped) == 2
 
     def test_explicit_context_uses_context_wrap(
         self, mp_adapter: types.ModuleType,
@@ -292,6 +315,84 @@ class TestConnectTls:
         assert server_hostname == "broker.example.com"
         # Free-form should NOT have fired.
         assert sys.modules["ssl"]._free_wrap_calls == []  # type: ignore[attr-defined]
+        # And explicit context bypasses the default-bundle cache.
+        assert mp_adapter._DEFAULT_CONTEXT_CACHE is None
+
+
+class TestSetDefaultCaBundle:
+    def test_override_invalidates_cache_and_routes_to_overridden_pem(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """``set_default_ca_bundle(pem)`` swaps the trust set and
+        drops the cached SSLContext so the next default-context call
+        rebuilds from the new bundle."""
+        # First connection — caches a context built from PEM_BYTES.
+        mp_adapter.connect_tls("a.example.com", 8883)
+        first_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
+        assert first_cached is not None
+
+        # Install an override.
+        override_pem = (
+            b"-----BEGIN CERTIFICATE-----\n"
+            b"3q2+7w==\n"
+            b"-----END CERTIFICATE-----\n"
+        )
+        mp_adapter.set_default_ca_bundle(override_pem)
+        assert mp_adapter._OVERRIDE_PEM is override_pem
+        # Cache should be invalidated.
+        assert mp_adapter._DEFAULT_CONTEXT_CACHE is None
+
+        # Next default-context call rebuilds.
+        mp_adapter.connect_tls("b.example.com", 8883)
+        second_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
+        assert second_cached is not None
+        assert second_cached is not first_cached
+        # The new cached context was built from the override PEM —
+        # check by inspecting what load_verify_locations recorded.
+        # The override PEM body decodes to b"\xde\xad\xbe\xef".
+        assert second_cached.cadata == b"\xde\xad\xbe\xef"
+
+    def test_revert_to_packaged_bundle_via_none(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """``set_default_ca_bundle(None)`` removes the override and
+        rebuilds the cache from the library-shipped PEM_BYTES."""
+        override_pem = (
+            b"-----BEGIN CERTIFICATE-----\n"
+            b"3q2+7w==\n"
+            b"-----END CERTIFICATE-----\n"
+        )
+        mp_adapter.set_default_ca_bundle(override_pem)
+        # Build cache from override.
+        mp_adapter.connect_tls("a.example.com", 8883)
+        override_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
+        assert override_cached.cadata == b"\xde\xad\xbe\xef"
+
+        # Revert.
+        mp_adapter.set_default_ca_bundle(None)
+        assert mp_adapter._OVERRIDE_PEM is None
+        assert mp_adapter._DEFAULT_CONTEXT_CACHE is None
+
+        # Next call rebuilds from packaged PEM_BYTES.
+        mp_adapter.connect_tls("b.example.com", 8883)
+        reverted_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
+        assert reverted_cached is not override_cached
+        # Packaged bundle's DER differs from the test override.
+        assert reverted_cached.cadata != b"\xde\xad\xbe\xef"
+        assert reverted_cached.cadata is not None
+        assert len(reverted_cached.cadata) > 0
+
+
+class TestSslContextNoVerify:
+    def test_returns_context_with_cert_none(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """``ssl_context_no_verify()`` returns an SSLContext with
+        ``verify_mode = CERT_NONE`` — explicit opt-out, named so a
+        reviewer can grep for it."""
+        import ssl as fake_ssl_module
+        context = mp_adapter.ssl_context_no_verify()
+        assert context.verify_mode == fake_ssl_module.CERT_NONE
 
 
 class TestSslContextWithCa:
