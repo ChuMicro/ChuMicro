@@ -5659,7 +5659,7 @@ class TestDeployExampleAdditionalBranches:
             )
             return 0
 
-        monkeypatch.setattr(cli, "_cmd_bootstrap", fake_bootstrap)
+        monkeypatch.setattr(cli.examples, "_cmd_bootstrap",fake_bootstrap)
         transport = FakeTransport(execute_output="")
         _install_fake_transport(monkeypatch, transport)
         # In TTY mode the handler also tries to drop into chumicro-repl
@@ -5688,7 +5688,7 @@ class TestDeployExampleAdditionalBranches:
         (root / "devices.yml").write_text("devices: []\n")
         _seed_example_library(root, "timing")
         monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
-        monkeypatch.setattr(cli, "_cmd_bootstrap", lambda _args: 1)
+        monkeypatch.setattr(cli.examples, "_cmd_bootstrap",lambda _args: 1)
 
         exit_code = cli.main([
             "deploy-example", "--workspace-dir", str(root),
@@ -5720,7 +5720,7 @@ class TestDeployExampleAdditionalBranches:
                 )
 
         monkeypatch.setattr(
-            cli, "_make_deploy_runner",
+            cli.examples, "_make_deploy_runner",
             lambda _device, *, non_interactive: _NoPythonDeployer(),
         )
 
@@ -5750,7 +5750,7 @@ class TestDeployExampleAdditionalBranches:
                 )
 
         monkeypatch.setattr(
-            cli, "_make_deploy_runner",
+            cli.examples, "_make_deploy_runner",
             lambda _device, *, non_interactive: _PortBusyDeployer(),
         )
 
