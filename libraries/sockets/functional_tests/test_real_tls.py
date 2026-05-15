@@ -12,8 +12,18 @@ the conftest's ``set_runtime_config(..., required_keys=...)`` declares
 ``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
 applies ``pytest.mark.skip`` with a clear message before deploy.
 
-Endpoint: ``example.com:443`` — IANA-reserved, ships a small
-known body, supports modern TLS.
+Endpoint: ``valid-isrgrootx1.letsencrypt.org:443`` — a stable
+purpose-built Let's Encrypt endpoint whose chain terminates at
+ISRG Root X1, which is in both the MP shipped bundle and the CP
+firmware bundle.  This keeps the test a *transport / recv-drain*
+smoke test rather than an accidental trust-coverage test (trust
+breadth is owned by ``test_real_tls_matrix.py``).  Body is ~4 KB
+— enough to exercise the multi-iteration recv loop, small enough
+to buffer on a 256 KB board.  (``example.com`` was the prior
+target; it moved behind Cloudflare and now chains to AAA
+Certificate Services / Sectigo, a root the curated MP bundle does
+not ship; ``letsencrypt.org`` chains correctly but its ~90 KB
+body exhausts the heap when fully accumulated.)
 
 Known platform gap: Pi Pico W CircuitPython hits a
 post-handshake EPIPE on the rp2-port mbedTLS build.  This test
@@ -29,7 +39,7 @@ from chumicro_sockets import tls_client_socket
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-_TARGET_HOST = "example.com"
+_TARGET_HOST = "valid-isrgrootx1.letsencrypt.org"
 _TARGET_PORT = 443
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
 _RECV_DEADLINE_MS = 15_000
@@ -69,6 +79,40 @@ def _send_all(socket: object, data: bytes) -> None:
             _sleep_ms(5)
 
 
+def _seed_rtc(now_utc_tuple: tuple) -> None:
+    """Set the device RTC so Shape Y cert validity-time checks pass.
+
+    Boot RTC on most ports is epoch / 2021; without seeding, mbedTLS
+    rejects the target's valid cert with "validity starts in the
+    future" once the MP default context verifies (Shape Y).  Real
+    deployments NTP-sync; conftest bakes the host clock so the test
+    stays off the network for time.
+    """
+    try:
+        import machine  # noqa: PLC0415 — MP-only
+
+        machine.RTC().datetime((
+            now_utc_tuple[0], now_utc_tuple[1], now_utc_tuple[2],
+            0,
+            now_utc_tuple[3], now_utc_tuple[4], now_utc_tuple[5], 0,
+        ))
+        return
+    except (ImportError, AttributeError):
+        pass
+    try:
+        from time import struct_time  # noqa: PLC0415 — CP path
+
+        import rtc  # noqa: PLC0415 — CP-only
+
+        rtc.RTC().datetime = struct_time((
+            now_utc_tuple[0], now_utc_tuple[1], now_utc_tuple[2],
+            now_utc_tuple[3], now_utc_tuple[4], now_utc_tuple[5],
+            0, 0, -1,
+        ))
+    except (ImportError, AttributeError):
+        pass
+
+
 def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
     wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
     wifi = WifiService(wifi_config)
@@ -96,6 +140,7 @@ def test_real_tls_handshake_and_recv() -> None:
             "means the conftest's required_keys list is incomplete.",
         )
 
+    _seed_rtc(config["sockets.now_utc_tuple"])
     wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
