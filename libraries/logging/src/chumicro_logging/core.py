@@ -73,34 +73,15 @@ class Logger:
         level: int = INFO,
         handlers: list | None = None,
     ) -> None:
-        self._name = name
-        self._level = level
+        self.name = name
+        self.level = level
         self._handlers: list = list(handlers) if handlers is not None else []
-        self._handler_errors = 0
-
-    @property
-    def name(self) -> str:
-        """The logger's name."""
-        return self._name
-
-    @property
-    def level(self) -> int:
-        """Current minimum-emit level."""
-        return self._level
-
-    @level.setter
-    def level(self, value: int) -> None:
-        self._level = value
+        self.handler_errors = 0
 
     @property
     def handlers(self) -> tuple:
         """Snapshot of attached handlers as a tuple."""
         return tuple(self._handlers)
-
-    @property
-    def handler_errors(self) -> int:
-        """Count of handler exceptions swallowed since construction."""
-        return self._handler_errors
 
     def add_handler(self, handler: object) -> None:
         """Attach a handler.  No-op if already attached.
@@ -126,17 +107,17 @@ class Logger:
         Useful for skipping expensive message construction when the
         record would be dropped anyway.
         """
-        return level >= self._level
+        return level >= self.level
 
     def log(self, level: int, message: str) -> None:
         """Emit *message* at *level* to every attached handler."""
-        if level < self._level:
+        if level < self.level:
             return
         for handler in self._handlers:
             try:
-                handler.emit(level, self._name, message)
+                handler.emit(level, self.name, message)
             except Exception:  # noqa: BLE001
-                self._handler_errors += 1
+                self.handler_errors += 1
 
     def debug(self, message: str) -> None:
         """Emit at ``DEBUG``."""
@@ -185,25 +166,16 @@ class StreamHandler:
         formatter: object | None = None,
     ) -> None:
         self._stream = stream if stream is not None else sys.stdout
-        self._level = level
+        self.level = level
         self._formatter = formatter if formatter is not None else default_formatter
         self._flush = getattr(self._stream, "flush", None)
-
-    @property
-    def level(self) -> int:
-        """Current minimum-emit level."""
-        return self._level
-
-    @level.setter
-    def level(self, value: int) -> None:
-        self._level = value
 
     def emit(self, level: int, name: str, message: str) -> None:
         """Format the record and write it to the stream.
 
         Records below the handler's level are dropped silently.
         """
-        if level < self._level:
+        if level < self.level:
             return
         self._stream.write(self._formatter(level, name, message))
         self._stream.write("\n")
@@ -245,41 +217,22 @@ class BufferedHandler:
         if capacity < 1:
             raise ValueError("capacity must be at least 1")
         self._downstream = downstream
-        self._capacity = capacity
-        self._level = level
+        self.capacity = capacity
+        self.level = level
         self._buffer = deque((), capacity)
-        self._dropped = 0
-
-    @property
-    def level(self) -> int:
-        """Current minimum-buffer level."""
-        return self._level
-
-    @level.setter
-    def level(self, value: int) -> None:
-        self._level = value
-
-    @property
-    def capacity(self) -> int:
-        """Maximum buffered records before drop-oldest kicks in."""
-        return self._capacity
+        self.dropped = 0
 
     @property
     def buffered(self) -> int:
         """Records currently buffered, awaiting flush."""
         return len(self._buffer)
 
-    @property
-    def dropped(self) -> int:
-        """Records dropped due to overflow since construction."""
-        return self._dropped
-
     def emit(self, level: int, name: str, message: str) -> None:
         """Buffer the record.  Drop the oldest if full."""
-        if level < self._level:
+        if level < self.level:
             return
-        if len(self._buffer) >= self._capacity:
-            self._dropped += 1
+        if len(self._buffer) >= self.capacity:
+            self.dropped += 1
         # deque(maxlen=capacity) drops the oldest record automatically.
         self._buffer.append((level, name, message))
 
