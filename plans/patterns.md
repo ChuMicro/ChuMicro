@@ -762,6 +762,18 @@ Rule + code shape live in [Style Guide § Subprocess binary resolution](../docs/
 Canonical implementation: `MicropythonTransport._run_mpremote` (commit `e4f669e`).
 Apply the pattern to any new host-side shell-out to `mpremote` / `esptool` / `rshell` / `ampy`.
 
+## Eager imports are the default — lazy is only for genuinely optional paths
+
+Default to module-top imports for library and workbench code.  Lazy / function-scope imports are reserved for genuinely optional code paths — typically DI / factory shapes where the import is only reached when no alternative was injected (`if socket_factory is None: from chumicro_sockets import tcp_client_socket`), error-format helpers reached only on the failure branch, or branches that fire once in a blue moon between actual hardware boots.
+
+**Why:** Module-top imports load long-lived state contiguously into the heap before any short-lived buffer churn has fragmented it.  A lazy import that runs after wifi-connect / MQTT-subscribe / scratch buffers have come and gone has to fit its long-lived state into the holes those allocations left behind.  Synthetic peak-RAM benchmarks miss this — peak isn't the metric that matters on small allocators; fragmentation is.
+
+Don't lazify "to reduce import-time RAM" when the deferred-to point sits a few stack frames after the deferred-from point — that's the worst case: no peak savings, plus fragmentation cost.  "Cold path called once at boot" does not qualify as optional in this sense; the deferred-to point is too close to the deferred-from point to save anything.
+
+The lazy patterns documented below (PEP 562, per-function adapter selection) apply only after this default has been chosen against.
+
+Related: Decision 0010 (constructor injection — same "defer the cost" philosophy at the class-instance scope), `plans/workstreams/lazy-loading-research.md` for the Tier A / Tier B classification.
+
 ## Lazy module-level imports via PEP 562 `__getattr__` (workbench)
 
 **Workbench-only in practice.**  PEP 562's `module __getattr__` is
