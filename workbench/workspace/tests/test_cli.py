@@ -4126,7 +4126,7 @@ class TestAddDeviceRuntimeInference:
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
         # Also rebind the name imported into cli.py.
-        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        monkeypatch.setattr(cli.devices, "probe_with_runtime_inference", fake_inference)
 
         exit_code = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
@@ -4158,7 +4158,7 @@ class TestAddDeviceRuntimeInference:
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
-        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        monkeypatch.setattr(cli.devices, "probe_with_runtime_inference", fake_inference)
 
         import chumicro_deploy
 
@@ -4197,7 +4197,7 @@ class TestAddDeviceRuntimeInference:
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
-        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        monkeypatch.setattr(cli.devices, "probe_with_runtime_inference", fake_inference)
 
         # detect_board_state will run its own probe — stub it so we don't
         # actually try to open the port.
@@ -4249,7 +4249,7 @@ class TestAddDeviceRuntimeInference:
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
-        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        monkeypatch.setattr(cli.devices, "probe_with_runtime_inference", fake_inference)
 
         import chumicro_deploy
 
@@ -4307,7 +4307,7 @@ class TestAddDeviceOmittedId:
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
-        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        monkeypatch.setattr(cli.devices, "probe_with_runtime_inference", fake_inference)
 
         # No positional id passed.
         exit_code = cli.main([
@@ -4345,7 +4345,7 @@ class TestAddDeviceOmittedId:
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
-        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        monkeypatch.setattr(cli.devices, "probe_with_runtime_inference", fake_inference)
 
         # First registration.
         cli.main([
@@ -4414,7 +4414,7 @@ class TestAddDeviceOmittedId:
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
         )
-        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        monkeypatch.setattr(cli.devices, "probe_with_runtime_inference", fake_inference)
 
         exit_code = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),

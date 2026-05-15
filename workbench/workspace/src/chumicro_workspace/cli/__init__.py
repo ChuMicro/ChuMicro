@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -39,7 +38,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import chumicro_deploy
 from chumicro_deploy import (
     Deployer,
     Device,
@@ -51,16 +49,9 @@ from chumicro_deploy import (
 from chumicro_deploy.config.default import load_devices_yml
 from chumicro_deploy.config.devices_yaml import (
     DeviceAlreadyExistsError,
-    DeviceNotFoundError,
-    HardwareOverwriteError,
     add_device,
     dump_devices,
-    list_device_ids,
     load_devices,
-    rename_device,
-    update_device_address,
-    update_device_firmware_version,
-    update_device_hardware,
 )
 from chumicro_deploy.firmware_url import (
     UnresolvedFirmwareError,
@@ -72,7 +63,6 @@ from chumicro_deploy.macos_fskit import (
 )
 from chumicro_deploy.recovery import DeployFailureKind, classify_deploy_failure
 from chumicro_deploy.runtime_marker import read_runtime_marker
-from ruamel.yaml import YAML
 from serial.tools import list_ports
 
 from chumicro_workspace.boot_shim import (
@@ -91,14 +81,21 @@ from chumicro_workspace.cli._common import (
     _render_dry_run_summary,
     _resolve_all_devices,
     _resolve_device,
+    _resolve_project_name,
     _resolve_workspace,
     _stdin_prompt,
 )
-from chumicro_workspace.cli.setup import (
-    _add_setup_parsers,
-    _ensure_namespace_parents,
-    _validate_project_name,
+from chumicro_workspace.cli.devices import (
+    _add_devices_parsers,
+    _add_rename_parser,
 )
+from chumicro_workspace.cli.devices import (
+    _suggest_add_device_id as _suggest_add_device_id,
+)
+from chumicro_workspace.cli.devices import (
+    _suggest_device_id as _suggest_device_id,
+)
+from chumicro_workspace.cli.setup import _add_setup_parsers
 from chumicro_workspace.config_manifest import (
     ConfigManifestError,
     aggregate_manifests,
@@ -138,8 +135,6 @@ from chumicro_workspace.install_libraries import (
     import_name_to_package,
 )
 from chumicro_workspace.onboarding import (
-    BoardState,
-    detect_board_state,
     probe_with_runtime_inference,
 )
 from chumicro_workspace.pipeline import compose_runtime_config
@@ -156,53 +151,6 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 # ---------------------------------------------------------------------------
 # Implemented commands
 # ---------------------------------------------------------------------------
-
-
-def _cmd_probe(args: argparse.Namespace) -> int:
-    """Probe a board's runtime identity (delegates to chumicro-deploy)."""
-    workspace = _resolve_workspace(args)
-    device = _resolve_device(workspace, args)
-    info = chumicro_deploy.probe_device(device)
-    if info.implementation is None:
-        print("probe: no implementation marker", file=sys.stderr)
-        return 1
-    print(f"runtime: {info.implementation.name}")
-    print(f"version: {info.implementation.version}")
-    print(f"machine: {info.implementation.machine}")
-    if info.uid:
-        print(f"uid: {info.uid}")
-    return 0
-
-
-def _cmd_discover(args: argparse.Namespace) -> int:
-    """List serial ports the host can see (pyserial-backed)."""
-    ports = sorted(list_ports.comports(), key=lambda port: port.device)
-    if not ports:
-        print("discover: no serial ports detected")
-        return 0
-    for port in ports:
-        description = port.description or "(no description)"
-        print(f"{port.device}\t{description}")
-    return 0
-
-
-def _cmd_devices(args: argparse.Namespace) -> int:
-    """Print the entries in ``devices.yml`` (one per line)."""
-    workspace = _resolve_workspace(args)
-    if not workspace.devices_yaml.is_file():
-        print(f"devices: {workspace.devices_yaml} does not exist yet")
-        return 0
-    raw = YAML(typ="safe").load(workspace.devices_yaml.read_text()) or {}
-    devices = raw.get("devices", [])
-    if not devices:
-        print("devices: no entries")
-        return 0
-    for entry in devices:
-        identifier = entry.get("id", "?")
-        runtime = entry.get("runtime", "?")
-        address = entry.get("address", "?")
-        print(f"{identifier}\t{runtime}\t{address}")
-    return 0
 
 
 def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
@@ -230,92 +178,6 @@ def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
     if non_interactive:
         return NonInteractiveDeployer(deployer)
     return InteractiveDeployer(deployer)
-
-
-def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
-    """Resolve a user-typed project name to a canonical slash-form path.
-
-    Accepts three shapes:
-
-    * **Bare** (``"door_open"``) — looked up across the whole
-      ``projects/`` tree.  Unique match → that project.  Multiple matches →
-      ``SystemExit`` listing the candidates.  No match → caller's
-      existence check surfaces the ``FileNotFoundError``-shaped
-      message.
-    * **Slash** (``"garage/sensors/door_open"``) — direct path.
-    * **Dotted** (``"garage.sensors.door_open"``) — same as slash;
-      normalized before return because ``/`` is the canonical form
-      used by :meth:`WorkspaceLayout.list_projects`.
-    """
-    normalized = name.replace(".", "/")
-    if "/" in normalized:
-        return normalized
-    candidates = [
-        path for path in workspace.list_projects()
-        if path == name or path.endswith("/" + name)
-    ]
-    if len(candidates) == 1:
-        return candidates[0]
-    if len(candidates) > 1:
-        candidate_list = "\n".join(f"  {path}" for path in candidates)
-        raise SystemExit(
-            f"deploy: {name!r} is ambiguous — multiple projects match:\n"
-            f"{candidate_list}\n"
-            f"specify the path: `python run.py deploy {candidates[0]}`",
-        )
-    # No match — let the caller's existence check produce the standard
-    # "project not found" message after constructing the dir path.
-    return name
-
-
-def _suggest_add_device_id(
-    *,
-    implementation: DeviceImplementation,
-    existing_ids: set[str],
-) -> str:
-    """Default ``add-device`` id when the user omits the positional.
-
-    Composes :func:`_suggest_device_id` (the machine-string slug used
-    by the bootstrap wizard) with a runtime suffix and collision
-    resolution against the workspace's existing ``devices.yml``:
-
-    * ``"Raspberry Pi Pico W with rp2040"`` + circuitpython
-      → ``"raspberry-pi-pico-w-cp"``
-    * ``"S2Mini with ESP32S2-S2FN4R2"`` + circuitpython
-      → ``"s2mini-cp"``
-    * ``"LOLIN_S2_MINI with ESP32-S2FN4R2"`` + micropython
-      → ``"lolin-s2-mini-mp"``
-    * Empty machine string + circuitpython → ``"circuitpython-cp"``
-      (fallback shape from the underlying slug helper; rare —
-      indicates a probe that returned no machine identifier).
-
-    When the resulting id collides with *existing_ids*, append a
-    numeric suffix: ``"-2"``, ``"-3"``, etc.  The user can rename the
-    entry afterwards with ``rename --device <old> <new>``.
-
-    Probe-suggested ids spare a beginner running ``add-device``
-    without a positional id from inventing one cold when the probe
-    already knows what board this is.
-
-    Args:
-        implementation: Probe's :class:`DeviceImplementation` (carries
-            the ``machine`` string + runtime ``name``).
-        existing_ids: All ids already in ``devices.yml`` — for
-            collision resolution.
-    """
-    base_slug = _suggest_device_id(implementation)
-    runtime_suffix_map = {"circuitpython": "cp", "micropython": "mp"}
-    suffix = runtime_suffix_map.get(
-        implementation.name, implementation.name.lower(),
-    )
-    base_id = f"{base_slug}-{suffix}"
-
-    if base_id not in existing_ids:
-        return base_id
-    counter = 2
-    while f"{base_id}-{counter}" in existing_ids:
-        counter += 1
-    return f"{base_id}-{counter}"
 
 
 @dataclass(frozen=True)
@@ -1460,34 +1322,6 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
     return 0
 
 
-def _suggest_device_id(implementation: DeviceImplementation) -> str:
-    """Suggest a device id from the probed machine string.
-
-    Strips the ``" with <chip>"`` SoC suffix and slugifies the
-    leading board identifier:
-
-    * ``"Raspberry Pi Pico W with rp2040"``     → ``"raspberry-pi-pico-w"``
-    * ``"S2Mini with ESP32S2-S2FN4R2"``         → ``"s2mini"``
-    * ``"LOLIN_S2_MINI with ESP32-S2FN4R2"``    → ``"lolin-s2-mini"``
-
-    The strip pattern is ``" with <anything-to-end-of-string>"``
-    rather than ``\\w+$`` — chip variants like ``ESP32S2-S2FN4R2``
-    contain hyphens and would otherwise survive into the slug as
-    ``s2mini-with-esp32s2-s2fn4r2``.
-
-    Falls back to ``"board"`` when ``machine`` is empty (older
-    firmware) or sanitises to nothing — neutral default that the
-    user can rename via ``rename --device``.
-    """
-    machine = implementation.machine or ""
-    # Trim the trailing " with <chip>" tail at end-of-string.  Anchored
-    # at $ so a board with the word "with" mid-name doesn't lose its tail.
-    cleaned = re.sub(r"\s+with\s+.*$", "", machine, flags=re.IGNORECASE)
-    # Replace non-identifier runs with single hyphens, lowercase.
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", cleaned).strip("-").lower()
-    return slug or "board"
-
-
 def _resolve_bootstrap_port(
     explicit_port: str | None,
     *,
@@ -2332,194 +2166,6 @@ def _cmd_install_libraries(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_add_device(args: argparse.Namespace) -> int:
-    """Probe a board + register it in devices.yml.
-
-    Builds a fresh entry by probing the supplied address: ``runtime``
-    + ``hardware.uid`` + ``hardware.machine`` come from
-    :func:`chumicro_deploy.probe_device`; ``address`` rides through
-    as-is.  When ``--runtime`` is omitted, the runtime is inferred
-    by trying every candidate transport in turn — the user can plug
-    a fresh board in and register it without knowing what firmware
-    it runs.  Re-running with the same id triggers a re-probe and is
-    blocked unless ``--force`` is passed (the typical second
-    invocation is "I swapped boards on this id" — make the user
-    confirm).
-    """
-    workspace = _resolve_workspace(args)
-    if args.runtime is None:
-        inference = probe_with_runtime_inference(args.address)
-        if inference.runtime is None or inference.info is None:
-            _emit_probe_failure(
-                "add-device",
-                address=args.address,
-                uf2_search_paths=args._env.uf2_search_paths,
-                auto_detect_inference=inference,
-            )
-            return 1
-        info = inference.info
-        print(
-            f"add-device: auto-detected runtime = {inference.runtime}",
-        )
-    else:
-        probe_device_obj = Device(transport=args.runtime, address=args.address)
-        try:
-            info = chumicro_deploy.probe_device(probe_device_obj)
-        except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
-            _emit_probe_failure(
-                "add-device",
-                address=args.address,
-                transport=args.runtime,
-                uf2_search_paths=args._env.uf2_search_paths,
-                probe_exception=exception,
-            )
-            return 1
-        if info.implementation is None:
-            diagnosis = detect_board_state(
-                probe_device_obj,
-                uf2_search_paths=args._env.uf2_search_paths,
-            )
-            if diagnosis.state is BoardState.UF2_BOOTLOADER:
-                print(
-                    "add-device: board is in UF2 bootloader, not REPL — "
-                    "install firmware first.",
-                    file=sys.stderr,
-                )
-            else:
-                print(
-                    "add-device: probe did not return implementation marker",
-                    file=sys.stderr,
-                )
-            for line in diagnosis.next_steps:
-                print(f"  {line}", file=sys.stderr)
-            return 1
-
-    firmware_version = info.implementation.version
-    support = check_firmware_supported(info.implementation)
-
-    data = load_devices(workspace.devices_yaml)
-    hardware = _hardware_from_probe_info(info)
-
-    # When the user didn't supply a positional id, derive one from the
-    # probe's machine + runtime.  Suggested-id collisions resolve via
-    # numeric suffix; the user can rename the entry afterwards via
-    # ``rename --device``.
-    if args.id is None:
-        existing_ids = set(list_device_ids(data))
-        args.id = _suggest_add_device_id(
-            implementation=info.implementation,
-            existing_ids=existing_ids,
-        )
-        print(f"add-device: using suggested id {args.id!r} (derived from probe)")
-
-    try:
-        add_device(
-            data,
-            device_id=args.id,
-            runtime=info.implementation.name,
-            address=args.address,
-            hardware=hardware,
-            description=args.description,
-            firmware_version=firmware_version or None,
-        )
-    except DeviceAlreadyExistsError:
-        if not args.force:
-            print(
-                f"add-device: {args.id!r} already exists; pass --force "
-                "to re-probe and update the entry",
-                file=sys.stderr,
-            )
-            return 1
-        # Re-probe path: keep the existing entry's user-owned fields,
-        # refresh the address silently, and update hardware-once leaves
-        # under --force semantics so a board swap is reflected.
-        update_device_address(data, args.id, args.address)
-        if firmware_version:
-            update_device_firmware_version(data, args.id, firmware_version)
-        try:
-            update_device_hardware(data, args.id, hardware or {}, force=True)
-        except HardwareOverwriteError as exception:
-            print(f"add-device: {exception}", file=sys.stderr)
-            return 1
-
-    dump_devices(data, workspace.devices_yaml)
-    print(f"add-device: registered {args.id} ({info.implementation.name})")
-    if support.status is not FirmwareSupportStatus.SUPPORTED:
-        print(
-            f"add-device: warning — {info.implementation.name} "
-            f"firmware compatibility:",
-            file=sys.stderr,
-        )
-        for line in explain_firmware_support(support):
-            print(f"  {line}", file=sys.stderr)
-    return 0
-
-
-def _cmd_rename(args: argparse.Namespace) -> int:
-    """Rename a project directory or a device id.
-
-    Two modes (mutually exclusive): ``--project OLD NEW`` moves the
-    project directory under ``projects/`` (both names accept bare /
-    slash / dotted forms, intermediate namespace dirs are auto-
-    created when the new path is in a fresh namespace);
-    ``--device OLD NEW`` rewrites the devices.yml entry id + every
-    reference to it under ``defaults:``.
-
-    A project rename does NOT touch already-deployed devices —
-    re-deploy the project under its new name to refresh ``/active.py``
-    on each board.
-    """
-    workspace = _resolve_workspace(args)
-
-    if (args.project is None) == (args.device is None):
-        print(
-            "rename: pass exactly one of --project OLD NEW or --device OLD NEW",
-            file=sys.stderr,
-        )
-        return 2
-
-    if args.project is not None:
-        old_input, new_input = args.project
-        _validate_project_name(old_input)
-        _validate_project_name(new_input)
-        # Old name accepts bare-name disambiguation against the live
-        # tree (mirrors deploy / switch).  New name is just normalized
-        # — it doesn't exist yet so disambiguation doesn't apply.
-        resolved_old = _resolve_project_name(workspace, old_input)
-        resolved_new = new_input.replace(".", "/")
-        old_path = workspace.project_dir(resolved_old)
-        new_path = workspace.project_dir(resolved_new)
-        if not old_path.is_dir():
-            print(f"rename: project {old_path} not found", file=sys.stderr)
-            return 1
-        if new_path.exists():
-            print(f"rename: {new_path} already exists", file=sys.stderr)
-            return 1
-        created_namespaces = _ensure_namespace_parents(workspace, new_path)
-        for namespace_dir in created_namespaces:
-            print(
-                f"rename: creating namespace "
-                f"{namespace_dir.relative_to(workspace.root)}/",
-            )
-        old_path.rename(new_path)
-        print(f"rename: {resolved_old} → {resolved_new}")
-        return 0
-
-    old_id, new_id = args.device
-    data = load_devices(workspace.devices_yaml)
-    try:
-        rename_device(data, old_id, new_id)
-    except DeviceNotFoundError:
-        print(f"rename: device {old_id!r} not found in devices.yml", file=sys.stderr)
-        return 1
-    except DeviceAlreadyExistsError as exception:
-        print(f"rename: {exception}", file=sys.stderr)
-        return 1
-    dump_devices(data, workspace.devices_yaml)
-    print(f"rename: device {old_id} → {new_id}")
-    return 0
-
-
 # ---------------------------------------------------------------------------
 # Parser construction
 # ---------------------------------------------------------------------------
@@ -2538,80 +2184,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _add_setup_parsers(subparsers)
-
-    # ----- add-device ----------------------------------------------------
-    add_device_parser = subparsers.add_parser(
-        "add-device",
-        help="Probe a board and register it in devices.yml.",
-    )
-    _add_workspace_arg(add_device_parser)
-    add_device_parser.add_argument(
-        "id",
-        nargs="?",
-        default=None,
-        help=(
-            "User-friendly device id (e.g. 'back-porch-mp').  Optional: "
-            "when omitted, a default is derived from the probe's "
-            "machine string + runtime suffix (e.g. "
-            "'raspberry-pi-pico-w-cp').  When the suggested id collides "
-            "with an existing entry in devices.yml, a numeric suffix "
-            "is appended (e.g. 'raspberry-pi-pico-w-cp-2')."
-        ),
-    )
-    add_device_parser.add_argument(
-        "--address",
-        required=True,
-        help="Serial port path of the connected board.",
-    )
-    add_device_parser.add_argument(
-        "--runtime",
-        choices=("circuitpython", "micropython"),
-        default=None,
-        help=(
-            "Runtime to probe — picks the right Device facade for "
-            "probe_device.  Optional: when omitted, the runtime is "
-            "auto-detected by trying both transports against the "
-            "given address."
-        ),
-    )
-    add_device_parser.add_argument(
-        "--description",
-        default=None,
-        help="Free-form note recorded under 'description:' (user-owned zone).",
-    )
-    add_device_parser.add_argument(
-        "--force",
-        action="store_true",
-        help=(
-            "Overwrite an existing entry with this id — refreshes the "
-            "address and hardware-once fields from the live probe."
-        ),
-    )
-    add_device_parser.set_defaults(func=_cmd_add_device)
-
-    # ----- probe ---------------------------------------------------------
-    probe_parser = subparsers.add_parser(
-        "probe",
-        help="Print the runtime identity reported by the selected board.",
-    )
-    _add_workspace_arg(probe_parser)
-    _add_device_selector(probe_parser)
-    probe_parser.set_defaults(func=_cmd_probe)
-
-    # ----- discover ------------------------------------------------------
-    discover_parser = subparsers.add_parser(
-        "discover",
-        help="List the serial ports the host currently sees.",
-    )
-    discover_parser.set_defaults(func=_cmd_discover)
-
-    # ----- devices -------------------------------------------------------
-    devices_parser = subparsers.add_parser(
-        "devices",
-        help="Print every entry in devices.yml.",
-    )
-    _add_workspace_arg(devices_parser)
-    devices_parser.set_defaults(func=_cmd_devices)
+    _add_devices_parsers(subparsers)
 
     _add_deploy_parser(subparsers)
 
@@ -2808,29 +2381,7 @@ def build_parser() -> argparse.ArgumentParser:
     config_validate_parser.set_defaults(func=_cmd_config_validate)
 
     _add_repl_parser(subparsers)
-
-    # ----- rename --------------------------------------------------------
-    rename_parser = subparsers.add_parser(
-        "rename",
-        help="Rename a project directory or a device id.",
-    )
-    _add_workspace_arg(rename_parser)
-    rename_target = rename_parser.add_mutually_exclusive_group(required=True)
-    rename_target.add_argument(
-        "--project",
-        nargs=2,
-        metavar=("OLD", "NEW"),
-        default=None,
-        help="Rename projects/OLD/ to projects/NEW/.",
-    )
-    rename_target.add_argument(
-        "--device",
-        nargs=2,
-        metavar=("OLD", "NEW"),
-        default=None,
-        help="Rename a devices.yml entry id (also rewrites defaults: references).",
-    )
-    rename_parser.set_defaults(func=_cmd_rename)
+    _add_rename_parser(subparsers)
 
     # ----- install-firmware ----------------------------------------------
     install_firmware_parser = subparsers.add_parser(
