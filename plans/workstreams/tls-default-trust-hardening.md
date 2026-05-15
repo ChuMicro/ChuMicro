@@ -132,5 +132,23 @@ Opened 2026-05-15.
   `/runtime_config.msgpack` (pre-existing pytest-device limitation,
   orthogonal); auto-switch is bypassed by the explicit-force hatch
   by design — unit-tested in test_deployer.py.
-- [ ] #6 RAM instrumentation test + #7 final subset sizing + Decision
-  0067 body correction (curated-subset-is-permanent).
+- [x] **#6 RAM instrumentation** (`d2e5588d`) —
+  `test_ca_bundle_ram_cost.py` (MP-only, warm-up-then-measure):
+  ~500 B parsed-chain RAM/root, ~187 KB free baseline (Pi Pico W
+  MP), retained < 2 KB on release.  Regression trip-wire + the
+  measured basis for sizing.
+- [x] **#7 final subset sizing** (`c464ba39`) — 9 → 17 roots
+  (added Sectigo AAA + USERTrust RSA/ECC [the demonstrated
+  example.com gap], GoDaddy/Starfield G2, Entrust G2, Microsoft
+  RSA/ECC 2017).  ~16 KB DER, well within budget; RAM not the
+  constraint.  4-board matrix 20/20.
+- [x] **rename** `_resolve_effective_device` →
+  `_effective_device_for_source` (`4de8f6f6`) — name now signals
+  the deploy-mode decision depends on the source.
+- [x] **Decision 0067 body corrected** (`<this commit>`) — DER
+  data-file (not PEM constant), `read_der()` lifetime rationale,
+  17-root permanent-subset constraint, real measured numbers, the
+  `ssl_context_with_ca` PEM-or-DER change moved out of "what does
+  not change", clock-dependency consequence, no `regen` script.
+
+**Workstream complete.**
