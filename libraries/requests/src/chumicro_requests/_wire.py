@@ -548,11 +548,11 @@ class ResponseParser:
         # See on-device fragmentation tests in
         # ``functional_tests/test_memory_fragmentation_on_device.py``.
         self._read_offset = 0
-        self._state = ParseState.STATUS
-        self._status_code = None
-        self._reason = ""
-        self._http_version = ""
-        self._headers = CaseInsensitiveDict()
+        self.state = ParseState.STATUS
+        self.status_code = None
+        self.reason = ""
+        self.http_version = ""
+        self.headers = CaseInsensitiveDict()
         # Body buffer: caller-supplied (HttpClient passes its long-
         # lived buffer for cross-request reuse) or self-allocated
         # (standalone use).  Either way ``_body`` is the active buffer
@@ -587,7 +587,7 @@ class ResponseParser:
         self._body_remaining = -1
         # Bytes left in the current chunk (chunked decode only).
         self._chunk_remaining = 0
-        self._error = None
+        self.error = None
 
     # ------------------------------------------------------------------
     # Buffer helpers (read-cursor pattern)
@@ -639,31 +639,6 @@ class ResponseParser:
     # ------------------------------------------------------------------
 
     @property
-    def state(self):
-        """Current :class:`ParseState`."""
-        return self._state
-
-    @property
-    def status_code(self):
-        """HTTP status code (e.g. 200) once headers parse, else ``None``."""
-        return self._status_code
-
-    @property
-    def reason(self):
-        """Reason phrase (e.g. ``"OK"``) once headers parse, else ``""``."""
-        return self._reason
-
-    @property
-    def http_version(self):
-        """HTTP version string (e.g. ``"HTTP/1.1"``) once status line parses."""
-        return self._http_version
-
-    @property
-    def headers(self):
-        """Case-insensitive :class:`CaseInsensitiveDict` of response headers."""
-        return self._headers
-
-    @property
     def body(self):
         """Body bytes received so far (final once :attr:`state` is ``DONE``).
 
@@ -673,11 +648,6 @@ class ResponseParser:
         memoryview lacks.
         """
         return bytes(self._body_view[:self._body_write_offset])
-
-    @property
-    def error(self):
-        """Last error raised during parsing or ``None``."""
-        return self._error
 
     # ------------------------------------------------------------------
     # Driving the parser
@@ -689,10 +659,10 @@ class ResponseParser:
         Raises :class:`HttpProtocolError` (or :class:`HttpOversizedError`)
         when the bytes can't be reconciled with HTTP/1.1.
         """
-        if self._state in (ParseState.DONE, ParseState.ERROR):
+        if self.state in (ParseState.DONE, ParseState.ERROR):
             return
         if chunk:
-            if self._state == ParseState.BODY:
+            if self.state == ParseState.BODY:
                 # Skip the staging buffer for length-known/-unknown body
                 # bytes — straight in.  Chunked decode flows through the
                 # state machine via _buffer because each chunk is framed.
@@ -710,30 +680,30 @@ class ResponseParser:
         normal end-of-body signal.  Mid-chunk it's always an error —
         chunked encoding is self-terminating.
         """
-        if self._state == ParseState.DONE:
+        if self.state == ParseState.DONE:
             return
-        if self._state == ParseState.ERROR:
+        if self.state == ParseState.ERROR:
             return
-        if self._state == ParseState.BODY and self._body_remaining < 0:
+        if self.state == ParseState.BODY and self._body_remaining < 0:
             # Length-unknown body; peer-close == done.
-            self._state = ParseState.DONE
+            self.state = ParseState.DONE
             return
-        if self._state == ParseState.BODY and self._body_remaining > 0:
+        if self.state == ParseState.BODY and self._body_remaining > 0:
             self._fail(HttpProtocolError(
                 f"peer closed mid-body; {self._body_remaining} bytes "
                 "still expected per Content-Length",
             ))
             return
-        if self._state in (
+        if self.state in (
             ParseState.CHUNK_SIZE, ParseState.CHUNK_DATA, ParseState.CHUNK_TRAILER,
         ):
             self._fail(HttpProtocolError(
-                f"peer closed mid-chunked-body (state={self._state})",
+                f"peer closed mid-chunked-body (state={self.state})",
             ))
             return
         # Mid-headers or mid-status — peer hung up before responding.
         self._fail(HttpProtocolError(
-            f"peer closed before response completed (state={self._state})",
+            f"peer closed before response completed (state={self.state})",
         ))
 
     # ------------------------------------------------------------------
@@ -743,23 +713,23 @@ class ResponseParser:
     def _advance(self):
         """Consume buffered bytes until no more progress is possible."""
         while True:
-            if self._state == ParseState.STATUS:
+            if self.state == ParseState.STATUS:
                 if not self._try_parse_status_line():
                     return
                 continue
-            if self._state == ParseState.HEADERS:
+            if self.state == ParseState.HEADERS:
                 if not self._try_parse_headers():
                     return
                 continue
-            if self._state == ParseState.CHUNK_SIZE:
+            if self.state == ParseState.CHUNK_SIZE:
                 if not self._try_parse_chunk_size():
                     return
                 continue
-            if self._state == ParseState.CHUNK_DATA:
+            if self.state == ParseState.CHUNK_DATA:
                 if not self._try_consume_chunk_data():
                     return
                 continue
-            if self._state == ParseState.CHUNK_TRAILER:
+            if self.state == ParseState.CHUNK_TRAILER:
                 if not self._try_parse_chunk_trailer():
                     return
                 continue
@@ -779,7 +749,7 @@ class ResponseParser:
             self._fail(HttpProtocolError(
                 f"non-ASCII status line: {bytes(line)!r}",
             ))
-            raise self._error from decode_error
+            raise self.error from decode_error
         parts = text.split(" ", 2)
         if len(parts) < 2:
             self._fail(HttpProtocolError(f"malformed status line: {text!r}"))
@@ -791,15 +761,15 @@ class ResponseParser:
             ))
             return True
         try:
-            self._status_code = int(code_str)
+            self.status_code = int(code_str)
         except ValueError:
             self._fail(HttpProtocolError(
                 f"non-integer status code: {code_str!r}",
             ))
             return True
-        self._http_version = version_str
-        self._reason = parts[2] if len(parts) == 3 else ""
-        self._state = ParseState.HEADERS
+        self.http_version = version_str
+        self.reason = parts[2] if len(parts) == 3 else ""
+        self.state = ParseState.HEADERS
         return True
 
     def _try_parse_headers(self):
@@ -821,7 +791,7 @@ class ResponseParser:
             self._fail(HttpProtocolError(
                 f"non-ASCII header line: {bytes(line)!r}",
             ))
-            raise self._error from decode_error
+            raise self.error from decode_error
         colon_index = text.find(":")
         if colon_index <= 0:
             self._fail(HttpProtocolError(
@@ -830,20 +800,20 @@ class ResponseParser:
             return True
         name = text[:colon_index]
         value = text[colon_index + 1:].strip()
-        self._headers.add(name, value)
+        self.headers.add(name, value)
         return True
 
     def _enter_body_state(self):
         """Headers-complete: figure out body framing."""
-        if self._status_code in NO_BODY_STATUS_CODES or (
-            100 <= self._status_code < 200
+        if self.status_code in NO_BODY_STATUS_CODES or (
+            100 <= self.status_code < 200
         ):
-            self._state = ParseState.DONE
+            self.state = ParseState.DONE
             return
         # Transfer-Encoding takes precedence over Content-Length per
         # RFC 7230 §3.3.3 — when both are present, the framing is
         # chunked and Content-Length is informational only.
-        transfer_encoding = self._headers.get("Transfer-Encoding")
+        transfer_encoding = self.headers.get("Transfer-Encoding")
         if transfer_encoding is not None:
             # We accept "chunked" as the final (or only) coding.  Other
             # transfer codings (gzip, deflate, identity stacked with
@@ -856,9 +826,9 @@ class ResponseParser:
                     "(only 'chunked' is supported in v1)",
                 ))
                 return
-            self._state = ParseState.CHUNK_SIZE
+            self.state = ParseState.CHUNK_SIZE
             return
-        content_length_str = self._headers.get("Content-Length")
+        content_length_str = self.headers.get("Content-Length")
         if content_length_str is not None:
             try:
                 content_length = int(content_length_str)
@@ -881,9 +851,9 @@ class ResponseParser:
                 return
             self._body_remaining = content_length
             if content_length == 0:
-                self._state = ParseState.DONE
+                self.state = ParseState.DONE
                 return
-            self._state = ParseState.BODY
+            self.state = ParseState.BODY
             self._body_write_offset = 0
             # Don't pre-allocate the body upfront: the absorb path
             # handles growth via doubling-grow (one-shot realloc when
@@ -903,7 +873,7 @@ class ResponseParser:
             return
         # Length-unknown — read until peer closes.
         self._body_remaining = -1
-        self._state = ParseState.BODY
+        self.state = ParseState.BODY
         if self._live_len() > 0:
             tail = bytes(self._live_slice(0))
             self._reset_buffer()
@@ -930,7 +900,7 @@ class ResponseParser:
             self._fail(HttpProtocolError(
                 f"non-ASCII chunk-size line: {bytes(line)!r}",
             ))
-            raise self._error from decode_error
+            raise self.error from decode_error
         # Strip chunk-extensions (everything after the first ';').
         semicolon_index = text.find(";")
         size_text = text[:semicolon_index] if semicolon_index != -1 else text
@@ -961,14 +931,14 @@ class ResponseParser:
             ))
             return True
         if chunk_size == 0:
-            self._state = ParseState.CHUNK_TRAILER
+            self.state = ParseState.CHUNK_TRAILER
             return True
         # No upfront body alloc needed — the steady-state buffer is
         # already in place from :meth:`__init__` / :meth:`reset`.
         # Chunks that fit write in place; chunks that overflow trigger
         # a one-shot grow in :meth:`_try_consume_chunk_data`.
         self._chunk_remaining = chunk_size
-        self._state = ParseState.CHUNK_DATA
+        self.state = ParseState.CHUNK_DATA
         return True
 
     def _try_consume_chunk_data(self):
@@ -1013,7 +983,7 @@ class ResponseParser:
             ))
             return True
         self._consume(2)
-        self._state = ParseState.CHUNK_SIZE
+        self.state = ParseState.CHUNK_SIZE
         return True
 
     def _try_parse_chunk_trailer(self):
@@ -1029,7 +999,7 @@ class ResponseParser:
         if crlf_index == 0:
             # Empty trailer line — end of chunked body.
             self._consume(2)
-            self._state = ParseState.DONE
+            self.state = ParseState.DONE
             return True
         # Non-empty trailer line — discard (RFC 7230 §4.1.2 lets us
         # ignore trailers we don't recognize).
@@ -1062,7 +1032,7 @@ class ResponseParser:
             self._absorb_body_chunk(chunk[:take] if take < len(chunk) else chunk)
             self._body_remaining -= take
             if self._body_remaining == 0:
-                self._state = ParseState.DONE
+                self.state = ParseState.DONE
             return
         # Length-unknown: enforce the max-body cap as we go.
         chunk_len = len(chunk)
@@ -1113,5 +1083,5 @@ class ResponseParser:
 
     def _fail(self, error):
         """Latch *error* and transition to ERROR."""
-        self._error = error
-        self._state = ParseState.ERROR
+        self.error = error
+        self.state = ParseState.ERROR

@@ -251,30 +251,10 @@ class RequestHandle:
     """
 
     def __init__(self, *, url):
-        self._url = url
-        self._done = False
-        self._response = None
-        self._error = None
-
-    @property
-    def url(self):
-        """The URL that was requested."""
-        return self._url
-
-    @property
-    def done(self):
-        """``True`` once the request finishes (success or failure)."""
-        return self._done
-
-    @property
-    def response(self):
-        """The :class:`Response` if the request succeeded, else ``None``."""
-        return self._response
-
-    @property
-    def error(self):
-        """The :class:`HttpError` if the request failed, else ``None``."""
-        return self._error
+        self.url = url
+        self.done = False
+        self.response = None
+        self.error = None
 
     @property
     def result(self):
@@ -286,24 +266,24 @@ class RequestHandle:
                 before ``done`` is ``True`` is a programming error
                 and raises :class:`HttpError`.
         """
-        if not self._done:
+        if not self.done:
             raise HttpError(
                 "RequestHandle.result accessed before done; "
                 "poll handle.done first",
             )
-        if self._error is not None:
-            raise self._error
-        return self._response
+        if self.error is not None:
+            raise self.error
+        return self.response
 
     def _set_response(self, response):
         """Internal: client calls this on success."""
-        self._response = response
-        self._done = True
+        self.response = response
+        self.done = True
 
     def _set_error(self, error):
         """Internal: client calls this on failure."""
-        self._error = error
-        self._done = True
+        self.error = error
+        self.done = True
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +468,7 @@ class HttpClient:
         self._state = _RequestState.IDLE
         self._socket = None
         self._handle = None  # current RequestHandle
-        self._url = None
+        self.url = None
         self._original_url = None  # URL the user called get/post with
         self._tx_buffer = b""  # request bytes pending send
         self._tx_offset = 0
@@ -651,7 +631,7 @@ class HttpClient:
             self._deadline_ticks, now_ms,
         ) <= 0:
             self._fail(HttpTimeoutError(
-                f"request to {self._url!r} timed out after deadline",
+                f"request to {self.url!r} timed out after deadline",
             ))
             return
 
@@ -676,7 +656,7 @@ class HttpClient:
         """Common path for GET / POST / PUT / PATCH / DELETE."""
         if self._state != _RequestState.IDLE:
             raise HttpBusyError(
-                f"client busy on {self._url!r}; await handle.done before issuing another",
+                f"client busy on {self.url!r}; await handle.done before issuing another",
             )
         if body is not None and json_body is not None:
             raise ValueError(
@@ -729,7 +709,7 @@ class HttpClient:
         )
         self._socket = self._connection_factory(host, port, use_tls)
         _force_non_blocking(self._socket)
-        self._url = url
+        self.url = url
         self._tx_buffer = request_bytes
         self._tx_offset = 0
         # Per-request parser, but we hand it the long-lived body buffer
@@ -811,7 +791,7 @@ class HttpClient:
             http_version=parser.http_version,
             headers=parser.headers,
             body=parser.body,
-            url=self._url,
+            url=self.url,
             oversized_dropped=False,
         )
         self._handle._set_response(response)  # noqa: SLF001 — internal handoff
@@ -825,7 +805,7 @@ class HttpClient:
         307 / 308 the original method + body are preserved.
         """
         try:
-            new_url = resolve_redirect_url(self._url, location)
+            new_url = resolve_redirect_url(self.url, location)
         except HttpError as redirect_error:
             self._handle._set_error(redirect_error)  # noqa: SLF001
             self._reset_socket()
@@ -867,7 +847,7 @@ class HttpClient:
                 self._complete_oversized_drop()
                 return
             if self._when_oversized == WhenOversized.DROP_WITH_EVENT:
-                self.on_oversized(error.reported_length, self._url)
+                self.on_oversized(error.reported_length, self.url)
                 self._complete_oversized_drop()
                 return
             # DISCONNECT — fall through to fail path.
@@ -883,7 +863,7 @@ class HttpClient:
             http_version=self._parser.http_version,
             headers=self._parser.headers,
             body=b"",
-            url=self._url,
+            url=self.url,
             oversized_dropped=True,
         )
         self._handle._set_response(response)  # noqa: SLF001 — internal handoff
@@ -912,7 +892,7 @@ class HttpClient:
         """Close the socket best-effort and clear all per-request state."""
         self._close_socket_only()
         self._handle = None
-        self._url = None
+        self.url = None
         self._original_url = None
         self._original_method = None
         self._original_headers = None
