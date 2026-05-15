@@ -2428,7 +2428,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2473,7 +2473,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2524,7 +2524,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2573,7 +2573,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2614,7 +2614,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2658,7 +2658,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -4376,7 +4376,7 @@ class TestAddDeviceOmittedId:
             fake_inference_second,
         )
         monkeypatch.setattr(
-            cli, "probe_with_runtime_inference", fake_inference_second,
+            cli.devices, "probe_with_runtime_inference", fake_inference_second,
         )
         capsys.readouterr()  # drain first run's output.
         exit_code = cli.main([
