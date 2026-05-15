@@ -293,7 +293,7 @@ def test_check_handles_too_early_handle_call_idempotently() -> None:
     # but right after a failed attempt, check is false.  Verify handle does
     # nothing if invoked between scheduled attempts.
     service._next_attempt_due_ms = ticks.ticks_ms() + 1_000_000  # noqa: SLF001
-    service._state = WifiState.RECONNECTING  # noqa: SLF001
+    service.state = WifiState.RECONNECTING
     service.handle(ticks.ticks_ms())
     assert service.state == WifiState.RECONNECTING
 

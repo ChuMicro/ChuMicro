@@ -33,19 +33,7 @@ class CpWifiAdapter(WifiAdapter):
     def __init__(self, radio=None):
         if radio is None:
             radio = self._acquire_runtime_radio()
-        self._radio = radio
-
-    @property
-    def radio(self):
-        """Underlying ``wifi.radio`` singleton, or the injected fake.
-
-        Exposed so consumers like ``chumicro-sockets`` /
-        ``chumicro-ntp`` can take ``radio=wifi.adapter.radio``
-        uniformly across every runtime — the ``WifiAdapter`` base
-        class supplies a ``radio = None`` class attribute on MP /
-        CPython where there's no per-radio handle.
-        """
-        return self._radio
+        self.radio = radio
 
     @staticmethod
     def _acquire_runtime_radio():
@@ -73,7 +61,7 @@ class CpWifiAdapter(WifiAdapter):
         them here (documented in the adapter docstring).
         """
         if config.hostname is not None:
-            self._radio.hostname = config.hostname
+            self.radio.hostname = config.hostname
 
     def connect(self, config):
         """Block on ``wifi.radio.connect`` budgeted by ``connect_timeout_ms``.
@@ -94,26 +82,26 @@ class CpWifiAdapter(WifiAdapter):
         """
         timeout_seconds = config.connect_timeout_ms / 1000
         try:
-            self._radio.connect(
+            self.radio.connect(
                 config.ssid,
                 config.password,
                 timeout=timeout_seconds,
             )
         except OSError:
             return False
-        return self._radio.connected
+        return self.radio.connected
 
     def disconnect(self):
         """Tear down the active station association."""
-        self._radio.stop_station()
+        self.radio.stop_station()
 
     def is_linked(self):
         """``True`` when the substrate reports an active association."""
-        return bool(self._radio.connected)
+        return bool(self.radio.connected)
 
     def ip(self):
         """Return the IPv4 address as a string, or ``None``."""
-        if not self._radio.connected:
+        if not self.radio.connected:
             return None
-        address = self._radio.ipv4_address
+        address = self.radio.ipv4_address
         return str(address) if address is not None else None
