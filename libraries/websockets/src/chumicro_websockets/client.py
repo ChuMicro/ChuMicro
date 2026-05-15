@@ -191,22 +191,13 @@ class WebSocketClient(_BaseSession):
         # what actually kicks off any I/O.
         self._connect_called = False
         self._connecting_phase = None
-        self._url = ""
+        self.url = ""
 
         self._handshake_response_parser = None
 
         self._next_auto_ping_ticks = None
 
         self.on_open = _no_callback
-
-    # ------------------------------------------------------------------
-    # Public observation
-    # ------------------------------------------------------------------
-
-    @property
-    def url(self):
-        """The URL the client connected to (or ``""`` before :meth:`connect`)."""
-        return self._url
 
     # ------------------------------------------------------------------
     # Public lifecycle
@@ -236,10 +227,10 @@ class WebSocketClient(_BaseSession):
         if self._connect_called:
             raise WebSocketStateError(
                 f"connect() may only be called once per WebSocketClient; "
-                f"current state is {self._state}",
+                f"current state is {self.state}",
             )
         self._connect_called = True
-        self._url = url
+        self.url = url
 
         scheme, host, port, path = parse_ws_url(url)
         use_tls = scheme == "wss"
@@ -266,7 +257,7 @@ class WebSocketClient(_BaseSession):
             budget_ms,
         )
 
-        self._state = WebSocketState.CONNECTING
+        self.state = WebSocketState.CONNECTING
         self._connecting_phase = ConnectingPhase.SENDING_HANDSHAKE
 
     # ------------------------------------------------------------------
@@ -277,14 +268,14 @@ class WebSocketClient(_BaseSession):
         """Return ``True`` if there's work to do on this tick.  Cheap to
         call; safe to invoke before :meth:`connect` (returns ``False``).
         """
-        return self._connect_called and self._state != WebSocketState.CLOSED
+        return self._connect_called and self.state != WebSocketState.CLOSED
 
     def handle(self, now_ms: int) -> None:
         """One tick of progress: drain bounded inbound through the
         framing parser, then bounded outbound from the TX queue.  All
         callbacks fire here.  Safe to call when there's no work.
         """
-        if self._state == WebSocketState.CLOSED or not self._connect_called:
+        if self.state == WebSocketState.CLOSED or not self._connect_called:
             return
 
         # Timeout checks first — even if there's other work to do,
@@ -292,7 +283,7 @@ class WebSocketClient(_BaseSession):
         if self._check_timeouts(now_ms):
             return
 
-        if self._state == WebSocketState.CONNECTING:
+        if self.state == WebSocketState.CONNECTING:
             if self._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
                 self._send_handshake_chunk(now_ms)
             elif self._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE:
@@ -304,7 +295,7 @@ class WebSocketClient(_BaseSession):
         self._drain_inbound(now_ms)
         self._drain_outbound()
 
-        if self._state == WebSocketState.OPEN:
+        if self.state == WebSocketState.OPEN:
             self._maybe_emit_auto_ping(now_ms)
 
     # ------------------------------------------------------------------
@@ -351,7 +342,7 @@ class WebSocketClient(_BaseSession):
             self._handshake_response_parser = None
             self._connecting_phase = None
             self._handshake_deadline_ticks = None
-            self._state = WebSocketState.OPEN
+            self.state = WebSocketState.OPEN
             self._arm_auto_ping(now_ms)
             self.on_open()
             # The peer may have piggybacked frame bytes after the

@@ -863,7 +863,7 @@ class TestConnectionEdges:
             on_connection=lambda connection: observed.append(connection),
         )
         _drive_server_handshake(server, listener, clock)
-        observed[0]._state = WebSocketState.CLOSED
+        observed[0].state = WebSocketState.CLOSED
         assert observed[0].check(clock.ticks_ms()) is False
 
     def test_pong_overdue_finalizes(self):

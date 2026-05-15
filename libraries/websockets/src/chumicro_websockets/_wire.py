@@ -509,39 +509,12 @@ class _HandshakeLineParser:
         # fragmentation source on Lolin S2 ESP32-S2.  See on-device
         # tests in ``functional_tests/test_memory_fragmentation_on_device.py``.
         self._read_offset = 0
-        self._state = self._initial_state
-        self._http_version = ""
-        self._headers = CaseInsensitiveDict()
-        self._error = None
-        self._leftover = b""
+        self.state = self._initial_state
+        self.http_version = ""
+        self.headers = CaseInsensitiveDict()
+        self.error = None
+        self.leftover = b""
 
-    @property
-    def state(self):
-        """Current :class:`HandshakeParseState`."""
-        return self._state
-
-    @property
-    def http_version(self):
-        """Parsed HTTP version (e.g. ``"HTTP/1.1"``), or ``""``."""
-        return self._http_version
-
-    @property
-    def headers(self):
-        """Parsed headers as a :class:`CaseInsensitiveDict`."""
-        return self._headers
-
-    @property
-    def error(self):
-        """Last parse error if :attr:`state` == ``ERROR``."""
-        return self._error
-
-    @property
-    def leftover(self):
-        """Bytes past the header terminator (start of the framing stream).
-
-        Empty until :attr:`state` == ``DONE``.
-        """
-        return self._leftover
 
     def feed(self, chunk: bytes) -> None:
         """Consume *chunk* bytes; advance state if possible.
@@ -550,7 +523,7 @@ class _HandshakeLineParser:
         first line, or any subclass validation failure (and transitions
         to ``ERROR``).
         """
-        if self._state in (HandshakeParseState.DONE, HandshakeParseState.ERROR):
+        if self.state in (HandshakeParseState.DONE, HandshakeParseState.ERROR):
             return
         self._buffer.extend(chunk)
         # Cap is on *unconsumed* bytes — the cursor amortizes the
@@ -569,7 +542,7 @@ class _HandshakeLineParser:
             line = bytes(self._live_slice(0, terminator_index))
             self._consume(terminator_index + 2)
 
-            if self._state == HandshakeParseState.HEADERS:
+            if self.state == HandshakeParseState.HEADERS:
                 if not line:
                     self._finalize()
                     return
@@ -621,16 +594,16 @@ class _HandshakeLineParser:
         header_value = decoded[colon_index + 1:].strip()
         if not header_name:
             raise self._fail(f"empty header name in {decoded!r}")
-        self._headers[header_name] = header_value
+        self.headers[header_name] = header_value
 
     def _validate_upgrade_headers(self, role_label: str) -> None:
         """Check the two upgrade headers shared by both sides."""
-        upgrade = self._headers.get("Upgrade", "").lower()
+        upgrade = self.headers.get("Upgrade", "").lower()
         if "websocket" not in upgrade:
             raise self._fail(
                 f"{role_label} missing 'Upgrade: websocket' (got {upgrade!r})",
             )
-        connection = self._headers.get("Connection", "").lower()
+        connection = self.headers.get("Connection", "").lower()
         connection_tokens = {token.strip() for token in connection.split(",")}
         if "upgrade" not in connection_tokens:
             raise self._fail(
@@ -639,14 +612,14 @@ class _HandshakeLineParser:
 
     def _commit_done(self) -> None:
         """Stash remaining buffered bytes as :attr:`leftover` + transition DONE."""
-        self._leftover = bytes(self._live_slice(0))
+        self.leftover = bytes(self._live_slice(0))
         self._buffer = bytearray()
         self._read_offset = 0
-        self._state = HandshakeParseState.DONE
+        self.state = HandshakeParseState.DONE
 
     def _fail(self, message: str) -> WebSocketHandshakeError:
-        self._error = message
-        self._state = HandshakeParseState.ERROR
+        self.error = message
+        self.state = HandshakeParseState.ERROR
         return WebSocketHandshakeError(message)
 
     def _parse_first_line(self, line: bytes) -> None:  # pragma: no cover - abstract
@@ -669,18 +642,8 @@ class HandshakeResponseParser(_HandshakeLineParser):
     def __init__(self, expected_accept: str, *, max_header_bytes: int = 8192):
         super().__init__(max_header_bytes=max_header_bytes)
         self._expected_accept = expected_accept
-        self._status_code = None
-        self._reason = ""
-
-    @property
-    def status_code(self):
-        """Parsed status code (e.g. ``101``), or ``None`` until parsed."""
-        return self._status_code
-
-    @property
-    def reason(self):
-        """Parsed reason phrase, or ``""`` until parsed."""
-        return self._reason
+        self.status_code = None
+        self.reason = ""
 
     def _parse_first_line(self, line: bytes) -> None:
         try:
@@ -693,24 +656,24 @@ class HandshakeResponseParser(_HandshakeLineParser):
         parts = decoded.split(" ", 2)
         if len(parts) < 2:
             raise self._fail(f"malformed status line: {decoded!r}")
-        self._http_version = parts[0]
+        self.http_version = parts[0]
         try:
-            self._status_code = int(parts[1])
+            self.status_code = int(parts[1])
         except ValueError as parse_error:
             raise self._fail(
                 f"non-integer status code: {decoded!r}",
             ) from parse_error
-        self._reason = parts[2] if len(parts) == 3 else ""
-        if self._status_code != 101:
+        self.reason = parts[2] if len(parts) == 3 else ""
+        if self.status_code != 101:
             raise self._fail(
-                f"server did not switch protocols: {self._status_code} "
-                f"{self._reason}",
+                f"server did not switch protocols: {self.status_code} "
+                f"{self.reason}",
             )
-        self._state = HandshakeParseState.HEADERS
+        self.state = HandshakeParseState.HEADERS
 
     def _finalize(self) -> None:
         self._validate_upgrade_headers("server response")
-        accept = self._headers.get("Sec-WebSocket-Accept", "")
+        accept = self.headers.get("Sec-WebSocket-Accept", "")
         if accept != self._expected_accept:
             raise self._fail(
                 f"Sec-WebSocket-Accept mismatch: expected "
@@ -732,23 +695,13 @@ class HandshakeRequestParser(_HandshakeLineParser):
 
     def __init__(self, *, max_header_bytes: int = 8192):
         super().__init__(max_header_bytes=max_header_bytes)
-        self._method = ""
-        self._path = ""
-
-    @property
-    def method(self):
-        """Parsed method (``"GET"``), or ``""`` until parsed."""
-        return self._method
-
-    @property
-    def path(self):
-        """Parsed request-target, or ``""`` until parsed."""
-        return self._path
+        self.method = ""
+        self.path = ""
 
     @property
     def client_key(self):
         """Verbatim ``Sec-WebSocket-Key`` once headers parse, else ``""``."""
-        return self._headers.get("Sec-WebSocket-Key", "")
+        return self.headers.get("Sec-WebSocket-Key", "")
 
     def _parse_first_line(self, line: bytes) -> None:
         try:
@@ -760,27 +713,27 @@ class HandshakeRequestParser(_HandshakeLineParser):
         parts = decoded.split(" ")
         if len(parts) != 3:
             raise self._fail(f"malformed request line: {decoded!r}")
-        self._method = parts[0]
-        self._path = parts[1]
-        self._http_version = parts[2]
-        if self._method != "GET":
-            raise self._fail(f"method must be GET, got {self._method!r}")
-        if not self._http_version.startswith("HTTP/1."):
+        self.method = parts[0]
+        self.path = parts[1]
+        self.http_version = parts[2]
+        if self.method != "GET":
+            raise self._fail(f"method must be GET, got {self.method!r}")
+        if not self.http_version.startswith("HTTP/1."):
             raise self._fail(
-                f"unsupported HTTP version {self._http_version!r}; "
+                f"unsupported HTTP version {self.http_version!r}; "
                 f"must be HTTP/1.1+",
             )
-        self._state = HandshakeParseState.HEADERS
+        self.state = HandshakeParseState.HEADERS
 
     def _finalize(self) -> None:
         self._validate_upgrade_headers("client request")
-        version = self._headers.get("Sec-WebSocket-Version", "")
+        version = self.headers.get("Sec-WebSocket-Version", "")
         if version != WS_VERSION:
             raise self._fail(
                 f"unsupported Sec-WebSocket-Version {version!r}; "
                 f"must be {WS_VERSION!r}",
             )
-        key = self._headers.get("Sec-WebSocket-Key", "")
+        key = self.headers.get("Sec-WebSocket-Key", "")
         if not key:
             raise self._fail("client request missing Sec-WebSocket-Key")
         try:
@@ -858,12 +811,12 @@ class FrameParser:
         payload_buffer_size: int = DEFAULT_PAYLOAD_BUFFER_SIZE,
     ):
         self._max_payload_bytes = max_payload_bytes
-        self._state = FrameParseState.READING_HEADER
+        self.state = FrameParseState.READING_HEADER
         self._buffer = bytearray()
-        self._fin = False
-        self._rsv = 0
-        self._opcode = 0
-        self._had_mask = False
+        self.fin =False
+        self.rsv = 0
+        self.opcode = 0
+        self.had_mask = False
         self._payload_length = 0
         self._mask_key = b""
         # Steady-state payload buffer reused across frames — same shape
@@ -884,36 +837,11 @@ class FrameParser:
         self._payload = self._payload_buffer
         self._payload_view = self._payload_buffer_view
         self._payload_write_offset = 0
-        self._error = None
+        self.error = None
 
     # ------------------------------------------------------------------
     # Observation
     # ------------------------------------------------------------------
-
-    @property
-    def state(self):
-        """Current :class:`FrameParseState`."""
-        return self._state
-
-    @property
-    def fin(self):
-        """``FIN`` bit of the in-flight or just-completed frame."""
-        return self._fin
-
-    @property
-    def rsv(self):
-        """Packed RSV bits (RSV1<<2 | RSV2<<1 | RSV3); usually 0."""
-        return self._rsv
-
-    @property
-    def opcode(self):
-        """Opcode of the in-flight or just-completed frame (0-15)."""
-        return self._opcode
-
-    @property
-    def had_mask(self):
-        """Whether the inbound frame had the ``MASK`` bit set."""
-        return self._had_mask
 
     @property
     def payload(self):
@@ -925,11 +853,6 @@ class FrameParser:
         ``.decode()`` the result, which memoryview lacks.
         """
         return bytes(self._payload_view[:self._payload_write_offset])
-
-    @property
-    def error(self):
-        """Last parse error if :attr:`state` == ``ERROR``."""
-        return self._error
 
     # ------------------------------------------------------------------
     # Driving
@@ -943,12 +866,12 @@ class FrameParser:
         any one-shot oversized buffer from the prior frame is now
         unreferenced and GC-eligible.
         """
-        self._state = FrameParseState.READING_HEADER
+        self.state = FrameParseState.READING_HEADER
         self._buffer = bytearray()
-        self._fin = False
-        self._rsv = 0
-        self._opcode = 0
-        self._had_mask = False
+        self.fin =False
+        self.rsv = 0
+        self.opcode = 0
+        self.had_mask = False
         self._payload_length = 0
         self._mask_key = b""
         self._payload = self._payload_buffer
@@ -986,19 +909,19 @@ class FrameParser:
         # the source side.  Skip when the chunk is itself a memoryview
         # (callers like ``_session._recv_chunk`` already pass a view).
         chunk_view = chunk if isinstance(chunk, memoryview) else memoryview(chunk)
-        while consumed < effective_length and self._state not in (
+        while consumed < effective_length and self.state not in (
             FrameParseState.FRAME_READY,
             FrameParseState.ERROR,
         ):
             remaining = effective_length - consumed
             cursor = start + consumed
-            state = self._state
+            state = self.state
             if state == FrameParseState.READING_PAYLOAD:
                 payload = self._payload
                 write_offset = self._payload_write_offset
                 need = self._payload_length - write_offset
                 take = need if need <= remaining else remaining
-                if self._had_mask:
+                if self.had_mask:
                     mask_key = self._mask_key
                     for index in range(take):
                         payload[write_offset + index] = (
@@ -1013,7 +936,7 @@ class FrameParser:
                 write_offset += take
                 self._payload_write_offset = write_offset
                 if write_offset >= self._payload_length:
-                    self._state = FrameParseState.FRAME_READY
+                    self.state = FrameParseState.FRAME_READY
                 continue
 
             if state == FrameParseState.READING_HEADER:
@@ -1049,23 +972,23 @@ class FrameParser:
     def _dispatch_header(self) -> None:
         first_byte = self._buffer[0]
         second_byte = self._buffer[1]
-        self._fin = bool(first_byte & 0x80)
-        self._rsv = (first_byte >> 4) & 0x07
-        self._opcode = first_byte & 0x0F
-        self._had_mask = bool(second_byte & 0x80)
+        self.fin =bool(first_byte & 0x80)
+        self.rsv = (first_byte >> 4) & 0x07
+        self.opcode = first_byte & 0x0F
+        self.had_mask = bool(second_byte & 0x80)
         length_marker = second_byte & 0x7F
 
-        if self._rsv != 0:
+        if self.rsv != 0:
             raise self._fail(
-                f"non-zero RSV bits {self._rsv:03b} (no extensions negotiated)",
+                f"non-zero RSV bits {self.rsv:03b} (no extensions negotiated)",
             )
-        if self._opcode in CONTROL_OPCODES:
-            if not self._fin:
+        if self.opcode in CONTROL_OPCODES:
+            if not self.fin:
                 raise self._fail(
-                    f"control frame opcode 0x{self._opcode:x} must be FIN=1",
+                    f"control frame opcode 0x{self.opcode:x} must be FIN=1",
                 )
-        elif self._opcode not in DATA_OPCODES:
-            raise self._fail(f"reserved opcode 0x{self._opcode:x}")
+        elif self.opcode not in DATA_OPCODES:
+            raise self._fail(f"reserved opcode 0x{self.opcode:x}")
 
         self._buffer = bytearray()
         if length_marker < 126:
@@ -1073,15 +996,15 @@ class FrameParser:
             self._after_length()
             return
         if length_marker == 126:
-            self._state = FrameParseState.READING_LEN16
+            self.state = FrameParseState.READING_LEN16
             return
         # length_marker == 127
-        self._state = FrameParseState.READING_LEN64
+        self.state = FrameParseState.READING_LEN64
 
     def _after_length(self) -> None:
-        if self._opcode in CONTROL_OPCODES and self._payload_length > MAX_CONTROL_PAYLOAD_BYTES:
+        if self.opcode in CONTROL_OPCODES and self._payload_length > MAX_CONTROL_PAYLOAD_BYTES:
             raise self._fail(
-                f"control frame opcode 0x{self._opcode:x} payload "
+                f"control frame opcode 0x{self.opcode:x} payload "
                 f"{self._payload_length} > {MAX_CONTROL_PAYLOAD_BYTES}",
             )
         if self._payload_length > self._max_payload_bytes:
@@ -1089,14 +1012,14 @@ class FrameParser:
                 f"frame payload {self._payload_length} > "
                 f"max_payload_bytes={self._max_payload_bytes}",
             )
-        if self._had_mask:
-            self._state = FrameParseState.READING_MASK
+        if self.had_mask:
+            self.state = FrameParseState.READING_MASK
             return
         self._after_mask()
 
     def _after_mask(self) -> None:
         if self._payload_length == 0:
-            self._state = FrameParseState.FRAME_READY
+            self.state = FrameParseState.FRAME_READY
             return
         # Reuse the steady-state payload buffer when the frame fits.
         # Only oversized frames pay a per-frame allocation, and that
@@ -1107,11 +1030,11 @@ class FrameParser:
         # else: ``_payload`` / ``_payload_view`` already alias the
         # steady-state buffer from :meth:`__init__` / :meth:`reset`.
         self._payload_write_offset = 0
-        self._state = FrameParseState.READING_PAYLOAD
+        self.state = FrameParseState.READING_PAYLOAD
 
     def _fail(self, message: str) -> WebSocketProtocolError:
-        self._error = message
-        self._state = FrameParseState.ERROR
+        self.error = message
+        self.state = FrameParseState.ERROR
         return WebSocketProtocolError(message)
 
 

@@ -125,22 +125,8 @@ class Connection(_BaseSession):
             handshake_timeout_ms,
         )
 
-        self._request_path = ""
-        self._request_headers = None
-
-    # ------------------------------------------------------------------
-    # Public observation
-    # ------------------------------------------------------------------
-
-    @property
-    def request_path(self):
-        """URI path from the inbound upgrade request (``""`` until OPEN)."""
-        return self._request_path
-
-    @property
-    def request_headers(self):
-        """Headers from the inbound upgrade request (``None`` until OPEN)."""
-        return self._request_headers
+        self.request_path = ""
+        self.request_headers = None
 
     # ------------------------------------------------------------------
     # Server-driven runner (called by WebSocketServer)
@@ -148,19 +134,19 @@ class Connection(_BaseSession):
 
     def check(self, now_ms: int) -> bool:
         """Return ``True`` if there's work to do for this connection."""
-        if self._state == WebSocketState.CLOSED:
+        if self.state == WebSocketState.CLOSED:
             return False
         return True
 
     def handle(self, now_ms: int) -> None:
         """One tick of progress for this connection."""
-        if self._state == WebSocketState.CLOSED:
+        if self.state == WebSocketState.CLOSED:
             return
 
         if self._check_timeouts(now_ms):
             return
 
-        if self._state == WebSocketState.CONNECTING:
+        if self.state == WebSocketState.CONNECTING:
             if self._handshake_phase == ServerHandshakePhase.READING_REQUEST:
                 self._receive_handshake_chunk(now_ms)
             elif self._handshake_phase == ServerHandshakePhase.SENDING_RESPONSE:
@@ -219,8 +205,8 @@ class Connection(_BaseSession):
             self._handshake_request_parser.client_key,
         )
         self._handshake_send_offset = 0
-        self._request_path = self._handshake_request_parser.path
-        self._request_headers = self._handshake_request_parser.headers
+        self.request_path = self._handshake_request_parser.path
+        self.request_headers = self._handshake_request_parser.headers
         self._post_handshake_carry = self._handshake_request_parser.leftover
         self._handshake_phase = ServerHandshakePhase.SENDING_RESPONSE
 
@@ -234,7 +220,7 @@ class Connection(_BaseSession):
         self._handshake_send_buffer = None
         self._handshake_phase = None
         self._handshake_deadline_ticks = None
-        self._state = WebSocketState.OPEN
+        self.state = WebSocketState.OPEN
         # Hand the connection to the user so they can wire callbacks.
         # Errors from the user callback transition us to CLOSED with
         # CLOSE_INTERNAL_ERROR — the connection isn't viable without
@@ -258,12 +244,12 @@ class Connection(_BaseSession):
     def _reject_with_400(self, message: str) -> None:
         body = message.encode("utf-8")
         self._send_rejection_response(400, "Bad Request", body)
-        self._last_error = WebSocketHandshakeError(message)
+        self.last_error = WebSocketHandshakeError(message)
 
     def _reject_with_404(self, message: str) -> None:
         body = message.encode("utf-8")
         self._send_rejection_response(404, "Not Found", body)
-        self._last_error = WebSocketHandshakeError(message)
+        self.last_error = WebSocketHandshakeError(message)
 
     def _send_rejection_response(
         self,
@@ -281,7 +267,7 @@ class Connection(_BaseSession):
             self._socket.close()
         except Exception:  # noqa: BLE001 - best-effort
             pass
-        self._state = WebSocketState.CLOSED
+        self.state = WebSocketState.CLOSED
         self._handshake_deadline_ticks = None
         self.on_close(status_code, reason_phrase)
 
@@ -394,7 +380,7 @@ class WebSocketServer:
         self._ticks = ticks
 
         self._connections: list[Connection] = []
-        self._closed = False
+        self.closed = False
 
     # ------------------------------------------------------------------
     # Public observation
@@ -410,11 +396,6 @@ class WebSocketServer:
         """How many connections are currently active (any non-CLOSED state)."""
         return len(self._connections)
 
-    @property
-    def closed(self) -> bool:
-        """``True`` after :meth:`close` — listener teardown done."""
-        return self._closed
-
     # ------------------------------------------------------------------
     # Public lifecycle
     # ------------------------------------------------------------------
@@ -425,7 +406,7 @@ class WebSocketServer:
         After :meth:`close`, :meth:`check` returns ``False`` and
         :meth:`handle` is a no-op.
         """
-        if self._closed:
+        if self.closed:
             return
         try:
             self._listener.close()
@@ -441,7 +422,7 @@ class WebSocketServer:
                 # when the close handshake can't complete.
                 connection._finalize_closed()
         self._connections.clear()
-        self._closed = True
+        self.closed = True
 
     # ------------------------------------------------------------------
     # Runner contract
@@ -449,7 +430,7 @@ class WebSocketServer:
 
     def check(self, now_ms: int) -> bool:
         """Return ``True`` if there's work to do this tick."""
-        if self._closed:
+        if self.closed:
             return False
         # Always True — accept loop must run, and any active connection
         # may need attention.  Conservative; cheap enough.
@@ -457,7 +438,7 @@ class WebSocketServer:
 
     def handle(self, now_ms: int) -> None:
         """Accept new connections + advance every active connection one tick."""
-        if self._closed:
+        if self.closed:
             return
         self._accept_pending(now_ms)
         # Iterate over a snapshot so a connection finalizing inside
