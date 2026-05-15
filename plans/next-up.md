@@ -5,6 +5,7 @@
 ## Now
 
 - [ ] **Resume workspace-library-curation Phase 1 from session handoff** — see [`handoffs/2026-05-12-workspace-library-curation-design-resolved.md`](handoffs/2026-05-12-workspace-library-curation-design-resolved.md).
+- [ ] **Resume deploy-mode-unification (Decision 0068) implementation from session handoff** — see [`handoffs/2026-05-15-deploy-mode-unification.md`](handoffs/2026-05-15-deploy-mode-unification.md).
 
 ## Next
 
