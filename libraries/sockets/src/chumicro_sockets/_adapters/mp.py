@@ -498,21 +498,28 @@ def set_default_ca_bundle(pem_bytes):
 def _default_context():  # pragma: no cover - device only
     """Return the cached default :class:`ssl.SSLContext`, building on first use.
 
-    Loads ``_OVERRIDE_PEM`` when set, otherwise lazily imports
-    :mod:`chumicro_sockets._ca_bundle` and uses ``PEM_BYTES``.  Caching
-    means plain-TCP-only callers never pay the parse cost, and TLS
-    callers pay it exactly once.
+    When an override is set (:func:`set_default_ca_bundle`) the
+    in-RAM override bytes are used.  Otherwise the shipped bundle is
+    read from the sibling ``_ca_bundle.der`` data file via
+    :func:`chumicro_sockets._ca_bundle.read_der`.
+
+    The DER buffer is passed straight into ``ssl_context_with_ca`` as
+    an unbound temporary and no reference is kept here, so it is
+    collectable the moment ``load_verify_locations`` has copied it
+    into mbedTLS — freed before the socket / handshake working set
+    allocates (tight lifetime → minimal fragmentation; see
+    ``_ca_bundle`` docstring).  Caching means plain-TCP-only callers
+    never pay the read+parse, and TLS callers pay it exactly once.
     """
     global _DEFAULT_CONTEXT_CACHE
     if _DEFAULT_CONTEXT_CACHE is not None:
         return _DEFAULT_CONTEXT_CACHE
     if _OVERRIDE_PEM is not None:
-        pem = _OVERRIDE_PEM
-    else:
-        from chumicro_sockets import _ca_bundle  # noqa: PLC0415 — lazy
+        _DEFAULT_CONTEXT_CACHE = ssl_context_with_ca(_OVERRIDE_PEM)
+        return _DEFAULT_CONTEXT_CACHE
+    from chumicro_sockets import _ca_bundle  # noqa: PLC0415 — lazy
 
-        pem = _ca_bundle.PEM_BYTES
-    _DEFAULT_CONTEXT_CACHE = ssl_context_with_ca(pem)
+    _DEFAULT_CONTEXT_CACHE = ssl_context_with_ca(_ca_bundle.read_der())
     return _DEFAULT_CONTEXT_CACHE
 
 

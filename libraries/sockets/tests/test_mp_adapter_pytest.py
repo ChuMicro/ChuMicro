@@ -261,6 +261,25 @@ class TestConnectTcp:
         wrapper.close()
 
 
+class TestCaBundleLoader:
+    def test_read_der_returns_concatenated_der_blob(self) -> None:
+        """``_ca_bundle.read_der()`` returns the sibling .der file's
+        bytes — concatenated DER (first byte ASN.1 SEQUENCE 0x30),
+        matching the on-disk artifact exactly."""
+        import pathlib
+
+        from chumicro_sockets import _ca_bundle
+
+        der = _ca_bundle.read_der()
+        assert isinstance(der, bytes)
+        assert der[:1] == b"\x30", "concatenated DER must start with SEQUENCE"
+        on_disk = (
+            pathlib.Path(_ca_bundle.__file__).parent / "_ca_bundle.der"
+        ).read_bytes()
+        assert der == on_disk
+        assert len(der) > 4000  # 9-root bundle is ~8 KB
+
+
 class TestConnectTls:
     def test_default_uses_cached_default_context(
         self, mp_adapter: types.ModuleType,
@@ -270,9 +289,9 @@ class TestConnectTls:
 
         Shape Y: the older MP idiom of calling the module-level
         ``ssl.wrap_socket`` (which left ``verify_mode = CERT_NONE``)
-        is gone — the adapter now lazily builds an SSLContext loaded
-        with ``chumicro_sockets._ca_bundle.PEM_BYTES`` and reuses it
-        across every default-context connection.
+        is gone — the adapter now lazily builds an SSLContext from the
+        shipped ``_ca_bundle.read_der()`` DER and reuses it across
+        every default-context connection.
         """
         wrapper = mp_adapter.connect_tls("broker.example.com", 8883)
         cached = mp_adapter._DEFAULT_CONTEXT_CACHE
@@ -326,7 +345,8 @@ class TestSetDefaultCaBundle:
         """``set_default_ca_bundle(pem)`` swaps the trust set and
         drops the cached SSLContext so the next default-context call
         rebuilds from the new bundle."""
-        # First connection — caches a context built from PEM_BYTES.
+        # First connection — caches a context built from the shipped
+        # DER bundle (_ca_bundle.read_der()).
         mp_adapter.connect_tls("a.example.com", 8883)
         first_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
         assert first_cached is not None
@@ -356,7 +376,7 @@ class TestSetDefaultCaBundle:
         self, mp_adapter: types.ModuleType,
     ) -> None:
         """``set_default_ca_bundle(None)`` removes the override and
-        rebuilds the cache from the library-shipped PEM_BYTES."""
+        rebuilds the cache from the library-shipped DER bundle."""
         override_pem = (
             b"-----BEGIN CERTIFICATE-----\n"
             b"3q2+7w==\n"
@@ -373,7 +393,7 @@ class TestSetDefaultCaBundle:
         assert mp_adapter._OVERRIDE_PEM is None
         assert mp_adapter._DEFAULT_CONTEXT_CACHE is None
 
-        # Next call rebuilds from packaged PEM_BYTES.
+        # Next call rebuilds from the packaged DER bundle.
         mp_adapter.connect_tls("b.example.com", 8883)
         reverted_cached = mp_adapter._DEFAULT_CONTEXT_CACHE
         assert reverted_cached is not override_cached
