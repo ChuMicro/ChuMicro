@@ -11,10 +11,12 @@ response back to the FakeSocket's `sent` buffer where tests assert.
 """
 
 from chumicro_http_server import (
+    DEFAULT_BODY_BUFFER_SIZE,
     CaseInsensitiveDict,
     HttpServer,
     RequestParser,
     RequestParseState,
+    ServerOversizedError,
     ServerProtocolError,
     build_response,
     encode_response,
@@ -201,13 +203,15 @@ class TestRequestParser:
         )
         assert parser.state == RequestParseState.ERROR
 
-    def test_oversized_content_length(self):
+    def test_oversized_content_length_raises_oversized(self):
         parser = RequestParser(max_body_bytes=10)
         parser.feed(
             b"POST / HTTP/1.1\r\n"
             b"Content-Length: 9999\r\n\r\n",
         )
         assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerOversizedError)
+        assert parser.error.reported_length == 9999
 
     def test_zero_content_length_completes(self):
         parser = RequestParser()
@@ -246,6 +250,95 @@ class TestRequestParser:
         )
         parser.feed_eof()
         assert parser.state == RequestParseState.ERROR
+
+
+# ---------------------------------------------------------------------------
+# RequestParser — three-tier body buffer
+# ---------------------------------------------------------------------------
+
+
+class TestRequestParserBodyBufferTiers:
+    """Tier 1 (caller-supplied steady buffer, no alloc), Tier 2 (sized
+    rebind for bigger-but-allowed bodies), Tier 3 (413 before alloc).
+    Mirrors :class:`chumicro_requests._wire.HttpResponseParser`'s three
+    tiers but with HTTP-shaped error semantics at tier 3 — Content-Length
+    is always known up-front (no chunked decode), so the sized rebind
+    happens at headers-complete time, not lazily per chunk.
+    """
+
+    def test_body_fits_in_supplied_buffer_writes_in_place(self):
+        body_buffer = bytearray(1024)
+        body_buffer_view = memoryview(body_buffer)
+        parser = RequestParser(
+            body_buffer=body_buffer,
+            body_buffer_view=body_buffer_view,
+        )
+        parser.feed(
+            b"POST / HTTP/1.1\r\n"
+            b"Content-Length: 5\r\n\r\n"
+            b"hello",
+        )
+        assert parser.state == RequestParseState.DONE
+        assert parser.body == b"hello"
+        # The body buffer object the caller supplied is the same object
+        # the parser wrote into — no sized rebind happened.
+        assert parser._body is body_buffer  # noqa: SLF001
+        assert body_buffer[:5] == b"hello"
+
+    def test_body_at_capacity_writes_in_place(self):
+        # Exactly at capacity — still tier 1, no rebind.
+        body_buffer = bytearray(5)
+        parser = RequestParser(
+            body_buffer=body_buffer,
+            max_body_bytes=10,
+        )
+        parser.feed(
+            b"POST / HTTP/1.1\r\n"
+            b"Content-Length: 5\r\n\r\n"
+            b"hello",
+        )
+        assert parser.state == RequestParseState.DONE
+        assert parser.body == b"hello"
+        assert parser._body is body_buffer  # noqa: SLF001
+
+    def test_body_overflow_rebinds_sized_to_fit(self):
+        body_buffer = bytearray(8)
+        parser = RequestParser(
+            body_buffer=body_buffer,
+            max_body_bytes=1024,
+        )
+        payload = b"A" * 100  # > 8 but < 1024
+        parser.feed(
+            b"POST / HTTP/1.1\r\n"
+            b"Content-Length: 100\r\n\r\n"
+            + payload,
+        )
+        assert parser.state == RequestParseState.DONE
+        assert parser.body == payload
+        # Sized rebind happened: ``_body`` is now a fresh bytearray of
+        # exactly the body length, and the caller's buffer was NOT
+        # mutated (still all zeros, ready for the next request).
+        assert parser._body is not body_buffer  # noqa: SLF001
+        assert len(parser._body) == 100  # noqa: SLF001
+        assert body_buffer == bytearray(8)
+
+    def test_standalone_parser_starts_empty(self):
+        # No body_buffer supplied — capacity 0.  First body triggers a
+        # sized rebind to the exact Content-Length.  Confirms the
+        # constraint: never pre-alloc a default-sized buffer in
+        # standalone use (the on-device fragmentation tests measured
+        # 1024-byte defaults as a regression).
+        parser = RequestParser()
+        assert parser._body_capacity == 0  # noqa: SLF001
+        assert len(parser._body) == 0  # noqa: SLF001
+        parser.feed(
+            b"POST / HTTP/1.1\r\n"
+            b"Content-Length: 5\r\n\r\n"
+            b"hello",
+        )
+        assert parser.state == RequestParseState.DONE
+        assert parser.body == b"hello"
+        assert parser._body_capacity == 5  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------
@@ -469,6 +562,88 @@ class TestHttpServerProtocolError:
         server, ticks, _ = _make_server(sockets=[(sock, ("127.0.0.1", 1))])
         _drive_until_idle(server, ticks)
         assert server.in_flight == 0
+
+
+class TestHttpServerOversizedBody:
+    """Content-Length over the cap returns 413 cleanly (no handler
+    invocation, no body allocation) and closes the connection.
+    """
+
+    def test_oversize_content_length_returns_413(self):
+        handler_calls = []
+
+        def handler(request):
+            handler_calls.append(request)
+            return build_response(200, text="should not reach handler")
+
+        # 50_000 declared body bytes > default 16_384 cap.
+        request = (
+            b"POST /upload HTTP/1.1\r\n"
+            b"Host: device.local\r\n"
+            b"Content-Length: 50000\r\n\r\n"
+        )
+        sock, peer = _connection(request)
+        server, ticks, _ = _make_server(sockets=[(sock, peer)], handler=handler)
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 413 Payload Too Large\r\n")
+        assert b"50000" in sock.sent  # reported_length surfaces in the body
+        assert handler_calls == []
+        assert sock.closed is True
+
+    def test_oversize_does_not_drain_body(self):
+        # Even when the client started sending body bytes before the
+        # server could read headers, the 413 path should not read more
+        # than the headers + whatever already sat in the recv buffer.
+        # The connection closes; whether the bytes were consumed is a
+        # property of the kernel, not us.
+        handler_calls = []
+
+        def handler(request):
+            handler_calls.append(request)
+            return build_response(200, text="should not reach handler")
+
+        request = (
+            b"POST /upload HTTP/1.1\r\n"
+            b"Host: device.local\r\n"
+            b"Content-Length: 50000\r\n\r\n"
+            + b"X" * 1000  # client already started sending body bytes
+        )
+        sock, peer = _connection(request)
+        server, ticks, _ = _make_server(sockets=[(sock, peer)], handler=handler)
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 413 Payload Too Large\r\n")
+        assert handler_calls == []
+
+    def test_oversize_emits_connection_close(self):
+        sock, peer = _connection(
+            b"POST / HTTP/1.1\r\n"
+            b"Content-Length: 99999\r\n\r\n",
+        )
+        server, ticks, _ = _make_server(sockets=[(sock, peer)])
+        _drive_until_idle(server, ticks)
+        assert b"Connection: close\r\n" in sock.sent
+
+    def test_body_within_cap_runs_handler(self):
+        # Negative control: bodies up to max_request_body_bytes still
+        # work normally through the standard handler path.
+        captured = {}
+
+        def handler(request):
+            captured["body"] = request.body
+            return build_response(200, text="ok")
+
+        body = b"x" * (DEFAULT_BODY_BUFFER_SIZE * 2)  # > steady buffer, < cap
+        sock, peer = _connection(request_bytes(
+            method="POST", path="/upload", body=body,
+        ))
+        server, ticks, _ = _make_server(
+            sockets=[(sock, peer)],
+            handler=handler,
+            max_request_body_bytes=DEFAULT_BODY_BUFFER_SIZE * 4,
+        )
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 200 OK\r\n")
+        assert captured["body"] == body
 
 
 class TestHttpServerTimeout:
