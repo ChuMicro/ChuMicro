@@ -40,7 +40,10 @@ nbytes = sock.recv_into(buffer, 128)
 print(bytes(buffer[:nbytes]))
 sock.close()
 
-# TLS with the runtime's default CA store.
+# TLS — verifies on CircuitPython (firmware CA bundle) and CPython
+# (host trust store).  MicroPython today leaves `context=None` as
+# CERT_NONE — pass an explicit `context=ssl_context_with_ca(pem)`
+# for verified TLS on MP.
 sock = tls_client_socket("api.example.com", 443)
 ```
 

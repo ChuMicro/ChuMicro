@@ -133,10 +133,18 @@ def connect_tcp(host, port):  # pragma: no cover - device only
 def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
     """Open a TLS connection on MicroPython.
 
-    *context* is an MP ``ssl.SSLContext`` (or ``None`` for the
-    default).  When ``None``, ``ssl.wrap_socket`` is called with
-    ``server_hostname=host`` so the TLS handshake validates the
-    cert chain against the system trust store.
+    *context* is an MP ``ssl.SSLContext`` or ``None``.
+
+    **Security note** — passing ``context=None`` on MP leaves
+    ``verify_mode = CERT_NONE``: MP ships no trust store, and bare
+    ``ssl.wrap_socket(sock, server_hostname=host)`` accepts any
+    certificate without validation.  This matches MP's own ``ssl``
+    default but is **not** equivalent to ``ssl.create_default_context()``
+    on CPython or to the CP ``socketpool`` TLS path.  Build an
+    explicit context with
+    :func:`chumicro_sockets.ssl_context_with_ca` (which sets
+    ``verify_mode = CERT_REQUIRED`` after loading the CA) for
+    verified TLS on MP.
 
     Older MP builds expose ``ssl.wrap_socket`` as a free function
     rather than a context method — this adapter calls the free
