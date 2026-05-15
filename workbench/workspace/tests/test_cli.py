@@ -4679,7 +4679,7 @@ class TestDeployHealthGate:
             hint="ignore — test fixture",
         )
         monkeypatch.setattr(
-            workspace_cli, "collect_health_findings",
+            workspace_cli.deploy, "collect_health_findings",
             lambda _ws: [synthetic_error],
         )
 
