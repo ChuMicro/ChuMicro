@@ -139,8 +139,10 @@ def tls_client_socket(
     * **CPython** — ``ssl.create_default_context()``; verifies against
       the host OS trust store.
     * **MicroPython** — verifies against the library-shipped CA
-      bundle (Let's Encrypt + DigiCert + Amazon + Google + GlobalSign
-      roots; see :func:`set_default_ca_bundle` to override).
+      bundle (17 roots: Let's Encrypt, DigiCert, Amazon, Google,
+      GlobalSign, Sectigo, GoDaddy/Starfield, Entrust, Microsoft —
+      a strict subset of CP's firmware bundle; see
+      :func:`set_default_ca_bundle` to override).
 
     For explicit no-verification (dev against self-signed brokers,
     captive-portal probes), pass ``context=ssl_context_no_verify()``
@@ -545,10 +547,11 @@ def ssl_context_no_verify() -> object:
 def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
     """Replace or revert the CA bundle used by ``tls_client_socket(context=None)``.
 
-    On **MicroPython** the library ships a curated CA bundle (Let's
-    Encrypt + DigiCert + Amazon + Google + GlobalSign roots) consumed
-    by the default-secure ``connect_tls(context=None)`` path.  Call
-    this to swap in a project-specific bundle — useful when the
+    On **MicroPython** the library ships a curated 17-root CA bundle
+    (Let's Encrypt, DigiCert, Amazon, Google, GlobalSign, Sectigo,
+    GoDaddy/Starfield, Entrust, Microsoft) consumed by the
+    default-secure ``connect_tls(context=None)`` path.  Call this to
+    swap in a project-specific bundle — useful when the
     deployment talks to a server signed by a private internal CA, or
     when a public root not in our shipped set has rotated and the
     project needs to ship faster than our release cadence.

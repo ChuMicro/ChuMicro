@@ -39,7 +39,7 @@ sock.send(b"GET / HTTP/1.0\r\n\r\n")
 |---|---|
 | CircuitPython | Firmware-bundled mbedTLS CA store (`x509-crt-bundle`).  ~150 Mozilla NSS roots; built into the firmware. |
 | CPython | `ssl.create_default_context()` — host OS trust store. |
-| MicroPython | Library-shipped CA bundle (~11 KB PEM, 9 high-coverage roots: Let's Encrypt, DigiCert, Amazon, Google, GlobalSign).  Override via [`set_default_ca_bundle`](api.md#chumicro_sockets.set_default_ca_bundle) for private CAs or broader coverage. |
+| MicroPython | Library-shipped CA bundle (~16 KB DER, 17 high-coverage roots: Let's Encrypt, DigiCert, Amazon, Google, GlobalSign, Sectigo, GoDaddy/Starfield, Entrust, Microsoft).  A strict subset of CircuitPython's firmware bundle.  Override via [`set_default_ca_bundle`](api.md#chumicro_sockets.set_default_ca_bundle) for private CAs or broader coverage. |
 
 For explicit no-verification (dev against self-signed brokers, captive-portal probes), pass `context=ssl_context_no_verify()` — the opt-out is named so a code reviewer can grep for it.
 

@@ -277,7 +277,7 @@ class TestCaBundleLoader:
             pathlib.Path(_ca_bundle.__file__).parent / "_ca_bundle.der"
         ).read_bytes()
         assert der == on_disk
-        assert len(der) > 4000  # 9-root bundle is ~8 KB
+        assert len(der) > 4000  # 17-root bundle is ~16 KB
 
 
 class TestConnectTls:
