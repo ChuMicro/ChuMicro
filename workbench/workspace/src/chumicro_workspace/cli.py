@@ -202,6 +202,25 @@ def _add_device_selector(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_non_interactive_arg(parser: argparse.ArgumentParser) -> None:
+    """Attach the shared ``--non-interactive`` flag.
+
+    Tells the command to skip user prompts and recovery-coaching
+    wrappers, failing fast with a distinct exit code instead.
+    Auto-detected from stdin TTY status when omitted; CI / agent
+    callers pass it explicitly to guarantee no interactive blocking.
+    """
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "Skip prompts and recovery-coaching wrappers and fail fast "
+            "with a distinct exit code.  Auto-detected from stdin TTY "
+            "status; pass explicitly for CI / scripted runs."
+        ),
+    )
+
+
 def _resolve_workspace(args: argparse.Namespace) -> WorkspaceLayout:
     """Locate the workspace root for *args*.
 
@@ -2295,7 +2314,118 @@ def _resolve_bootstrap_device_id(
     return raw.strip() or suggested_id
 
 
-def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for readability
+def _bootstrap_probe(
+    port: str, *, uf2_search_paths: tuple[Path, ...] | None,
+) -> tuple[DeviceInfo, DeviceImplementation] | None:
+    """Probe *port* with runtime auto-inference.
+
+    Returns the resolved ``(info, implementation)`` pair on success or
+    ``None`` after emitting failure diagnostics — caller turns that into
+    a non-zero exit code.
+    """
+    print(f"bootstrap: probing {port} ...")
+    inference = probe_with_runtime_inference(port)
+    if inference.runtime is None or inference.info is None:
+        _emit_probe_failure(
+            "bootstrap",
+            address=port,
+            uf2_search_paths=uf2_search_paths,
+            auto_detect_inference=inference,
+        )
+        return None
+
+    info = inference.info
+    implementation = info.implementation
+    print(f"  runtime: {implementation.name} {implementation.version}")
+    if implementation.machine:
+        print(f"  machine: {implementation.machine}")
+    return info, implementation
+
+
+def _warn_if_firmware_unsupported(
+    implementation: DeviceImplementation,
+) -> None:
+    """Print firmware-support warnings for OLD / UNKNOWN / UNPARSEABLE."""
+    support = check_firmware_supported(implementation)
+    if support.status is FirmwareSupportStatus.SUPPORTED:
+        return
+    print(
+        f"  note: {implementation.name} firmware compatibility:",
+        file=sys.stderr,
+    )
+    for line in explain_firmware_support(support):
+        print(f"  {line}", file=sys.stderr)
+
+
+def _register_bootstrap_device(
+    workspace: WorkspaceLayout,
+    *,
+    device_id: str,
+    port: str,
+    info: DeviceInfo,
+    implementation: DeviceImplementation,
+) -> bool:
+    """Write the probed device into ``devices.yml``.
+
+    Returns ``True`` on success; ``False`` after printing the
+    already-exists hint so the caller can exit non-zero.
+    """
+    data = load_devices(workspace.devices_yaml)
+    try:
+        add_device(
+            data,
+            device_id=device_id,
+            runtime=implementation.name,
+            address=port,
+            hardware=_hardware_from_probe_info(info),
+            firmware_version=implementation.version or None,
+        )
+    except DeviceAlreadyExistsError:
+        print(
+            f"bootstrap: device id {device_id!r} already exists "
+            f"in {workspace.devices_yaml}.  Pick a different id "
+            "or run `add-device --force` to refresh the existing "
+            "entry.",
+            file=sys.stderr,
+        )
+        return False
+    dump_devices(data, workspace.devices_yaml)
+    print(f"  registered {device_id} at {port}.")
+    return True
+
+
+def _maybe_run_demo(args: argparse.Namespace, device_id: str) -> int:
+    """Run the demo deploy when ``--with-demo`` was passed; otherwise no-op."""
+    if not args.with_demo:
+        return 0
+    demo_args = argparse.Namespace(
+        workspace_dir=args.workspace_dir,
+        device_id=device_id,
+        runtime=None,
+        non_interactive=False,
+    )
+    return _cmd_demo(demo_args)
+
+
+def _print_bootstrap_next_steps() -> None:
+    """Print the new / deploy / repl pointer block."""
+    print()
+    print("bootstrap: ready.  Next steps:")
+    print(
+        "  python run.py new <project-name>      "
+        "# create a new project under projects/",
+    )
+    print(
+        "  python run.py deploy                "
+        "# deploy your only project (no name needed)",
+    )
+    print(
+        "  python run.py repl                  "
+        "# open the REPL on your board",
+    )
+
+
+def _cmd_bootstrap(
     args: argparse.Namespace,
     *,
     prompt_func: Callable[[str], str] = _stdin_prompt,
@@ -2333,95 +2463,38 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
     """
     workspace = _resolve_workspace(args)
 
-    # 1. Port pick.
     port = _resolve_bootstrap_port(args.port, prompt_func=prompt_func)
     if port is None:
         return 1
 
-    # 2. Probe.
-    print(f"bootstrap: probing {port} ...")
-    inference = probe_with_runtime_inference(port)
-    if inference.runtime is None or inference.info is None:
-        _emit_probe_failure(
-            "bootstrap",
-            address=port,
-            uf2_search_paths=args._env.uf2_search_paths,
-            auto_detect_inference=inference,
-        )
+    probed = _bootstrap_probe(
+        port, uf2_search_paths=args._env.uf2_search_paths,
+    )
+    if probed is None:
         return 1
+    info, implementation = probed
 
-    info = inference.info
-    implementation = info.implementation
-    print(f"  runtime: {implementation.name} {implementation.version}")
-    if implementation.machine:
-        print(f"  machine: {implementation.machine}")
+    _warn_if_firmware_unsupported(implementation)
 
-    # 3. Firmware-support check.
-    support = check_firmware_supported(implementation)
-    if support.status is not FirmwareSupportStatus.SUPPORTED:
-        print(
-            f"  note: {implementation.name} firmware compatibility:",
-            file=sys.stderr,
-        )
-        for line in explain_firmware_support(support):
-            print(f"  {line}", file=sys.stderr)
-
-    # 4. Device id pick.
     suggested_id = _suggest_device_id(implementation)
     device_id = _resolve_bootstrap_device_id(
         args.device_id, suggested_id, prompt_func=prompt_func,
     )
 
-    # 5. Register.
-    data = load_devices(workspace.devices_yaml)
-    try:
-        add_device(
-            data,
-            device_id=device_id,
-            runtime=implementation.name,
-            address=port,
-            hardware=_hardware_from_probe_info(info),
-            firmware_version=implementation.version or None,
-        )
-    except DeviceAlreadyExistsError:
-        print(
-            f"bootstrap: device id {device_id!r} already exists "
-            f"in {workspace.devices_yaml}.  Pick a different id "
-            "or run `add-device --force` to refresh the existing "
-            "entry.",
-            file=sys.stderr,
-        )
+    if not _register_bootstrap_device(
+        workspace,
+        device_id=device_id,
+        port=port,
+        info=info,
+        implementation=implementation,
+    ):
         return 1
-    dump_devices(data, workspace.devices_yaml)
-    print(f"  registered {device_id} at {port}.")
 
-    # 6. Optional demo.
-    if args.with_demo:
-        demo_args = argparse.Namespace(
-            workspace_dir=args.workspace_dir,
-            device_id=device_id,
-            runtime=None,
-            non_interactive=False,
-        )
-        demo_exit = _cmd_demo(demo_args)
-        if demo_exit != 0:
-            return demo_exit
+    demo_exit = _maybe_run_demo(args, device_id)
+    if demo_exit != 0:
+        return demo_exit
 
-    # 7. Summary.
-    print()
-    print("bootstrap: ready.  Next steps:")
-    print(
-        "  python run.py new <project-name>      "
-        "# create a new project under projects/",
-    )
-    print(
-        "  python run.py deploy                "
-        "# deploy your only project (no name needed)",
-    )
-    print(
-        "  python run.py repl                  "
-        "# open the REPL on your board",
-    )
+    _print_bootstrap_next_steps()
     return 0
 
 
@@ -3474,14 +3547,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_workspace_arg(demo_parser)
     _add_device_selector(demo_parser)
-    demo_parser.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help=(
-            "Skip the recovery-coaching wrapper and let transport "
-            "errors propagate uncaught.  Use in CI / scripted flows."
-        ),
-    )
+    _add_non_interactive_arg(demo_parser)
     demo_parser.set_defaults(func=_cmd_demo)
 
     _add_deploy_example_parser(subparsers)
@@ -3785,16 +3851,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
             "(nothing in flash to wipe)."
         ),
     )
-    deploy_parser.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help=(
-            "Skip the recovery-coaching wrapper and let transport "
-            "errors propagate uncaught.  Use in CI / scripted flows "
-            "that don't have stdin to answer retry prompts.  "
-            "Interactive coaching is on by default."
-        ),
-    )
+    _add_non_interactive_arg(deploy_parser)
     deploy_parser.add_argument(
         "--skip-health-check",
         action="store_true",
@@ -3861,15 +3918,7 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     _add_device_selector(deploy_example_parser)
-    deploy_example_parser.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help=(
-            "Disable every prompt + long-running tail (sets implicit "
-            "--no-auto-register + --no-tail).  Auto-detected from "
-            "stdin TTY status; pass explicitly for CI / scripted runs."
-        ),
-    )
+    _add_non_interactive_arg(deploy_example_parser)
     deploy_example_parser.add_argument(
         "--no-auto-register",
         dest="auto_register",
@@ -3971,18 +4020,7 @@ def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
         default=True,
         help="Tail mode only: do not exit non-zero on a detected traceback.",
     )
-    repl_parser.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help=(
-            "Skip the recovery-coaching wrapper around session-start "
-            "errors (port-busy / port-not-found / permission-denied / "
-            "raw-REPL-unresponsive).  With a positional project, also "
-            "skips the wrapper around the deploy-then-tail flow.  "
-            "Use in CI / scripted flows that can't answer retry "
-            "prompts."
-        ),
-    )
+    _add_non_interactive_arg(repl_parser)
     repl_parser.add_argument(
         "--mode",
         choices=("auto", "line", "passthrough"),
@@ -4101,11 +4139,7 @@ def _add_firmware_args(parser: argparse.ArgumentParser) -> None:
         default="0x0",
         help="esptool path only: write-flash offset (default 0x0).",
     )
-    parser.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help="Fail instead of prompting when bootloader entry needs help.",
-    )
+    _add_non_interactive_arg(parser)
 
 
 # ---------------------------------------------------------------------------
