@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import socket
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,15 @@ def _merged_runtime_config_with_creds() -> dict | None:
         return None
     if ssid == "replace-with-your-ap-ssid":
         return None
+    # Bake the host's UTC clock so the TLS matrix test can seed the
+    # device RTC — Shape Y default validation rejects valid certs as
+    # "validity starts in the future" when the board boots at epoch.
+    # Real deployments NTP-sync; baking the host clock keeps the test
+    # off the network for time.  Mirrors requests.now_utc_tuple.
+    now = datetime.now(UTC)
+    merged["sockets.now_utc_tuple"] = (
+        now.year, now.month, now.day, now.hour, now.minute, now.second,
+    )
     return merged
 
 
