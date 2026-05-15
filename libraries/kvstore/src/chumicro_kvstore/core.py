@@ -125,9 +125,11 @@ class KVStore:
 
     def __init__(self, backend: Backend | str = "auto") -> None:
         self._backend: Backend = _resolve_backend(backend)
+        self.capacity: int = self._backend.capacity
+        self.backend_name: str = self._backend.name
         self._data: dict[str, object] = {}
         self._last_payload: bytes = b""
-        self._is_corrupt: bool = False
+        self.is_corrupt: bool = False
         self._auto_load()
 
     # --- lifecycle -------------------------------------------------
@@ -146,7 +148,7 @@ class KVStore:
         except KVStoreCorrupt:
             self._data = {}
             self._last_payload = b""
-            self._is_corrupt = True
+            self.is_corrupt = True
             return
         if not payload:
             self._data = {}
@@ -156,7 +158,7 @@ class KVStore:
         if not isinstance(loaded, dict):
             self._data = {}
             self._last_payload = b""
-            self._is_corrupt = True
+            self.is_corrupt = True
             return
         self._data = dict(loaded)
         self._last_payload = bytes(payload)
@@ -171,14 +173,14 @@ class KVStore:
         if not payload:
             self._data = {}
             self._last_payload = b""
-            self._is_corrupt = False
+            self.is_corrupt = False
             return
         loaded = unpackb(payload)
         if not isinstance(loaded, dict):
             raise KVStoreCorrupt("payload is not a dict")
         self._data = dict(loaded)
         self._last_payload = bytes(payload)
-        self._is_corrupt = False
+        self.is_corrupt = False
 
     def commit(self) -> None:
         """Encode the current dict and persist it through the backend.
@@ -202,13 +204,13 @@ class KVStore:
 
     def _persist(self, payload: bytes) -> None:
         """Capacity-check + save + state update — shared by both commit paths."""
-        if len(payload) > self._backend.capacity:
+        if len(payload) > self.capacity:
             raise KVStoreFull(
-                f"payload size {len(payload)} exceeds capacity {self._backend.capacity}"
+                f"payload size {len(payload)} exceeds capacity {self.capacity}"
             )
         self._backend.save(payload)
         self._last_payload = payload
-        self._is_corrupt = False
+        self.is_corrupt = False
 
     # --- mapping-shaped API ----------------------------------------
 
@@ -264,27 +266,6 @@ class KVStore:
     # --- introspection ---------------------------------------------
 
     @property
-    def capacity(self) -> int:
-        return self._backend.capacity
-
-    @property
     def bytes_used(self) -> int:
         """Encoded size of the *current* in-memory dict (not the persisted payload)."""
         return len(packb(self._data))
-
-    @property
-    def is_corrupt(self) -> bool:
-        """``True`` after a failed-integrity load.
-
-        Sticky until the next successful ``commit()`` or ``reload()``.
-        """
-        return self._is_corrupt
-
-    @property
-    def backend_name(self) -> str:
-        """Stable identifier for the active backend.
-
-        One of ``"nvm"``, ``"nvs"``, ``"littlefs"``, ``"memory"``, or a
-        custom name on injected test backends.
-        """
-        return self._backend.name
