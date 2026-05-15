@@ -1,12 +1,10 @@
-# Pure-passthrough `@property` sweep across device libraries
+# Pure-passthrough `@property` sweep across device libraries — DONE
 
-Per [Decision 0065](../decisions/0065-device-library-scaffolding-cost.md), pure-passthrough `@property` declarations (`def state(self): return self._state`) are banned in `libraries/*/src/`.  Replace with a direct public attribute (`self.state = ...` in `__init__`).  Computed properties (doing real work — `bytes(view[:offset])`, `len(self._queue)`, `self._state in (DONE, ERROR)`) stay legitimate; convert to a method only if dot-access actively misleads the reader.
+Per [Decision 0065](../decisions/0065-device-library-scaffolding-cost.md), pure-passthrough `@property` declarations (`def state(self): return self._state`) are banned in `libraries/*/src/`.  Replaced with direct public attributes (`self.state = ...` in `__init__`).  Computed properties (real work — `bytes(view[:offset])`, `len(self._queue)`, `self._state in (DONE, ERROR)`) kept.
 
-This workstream catalogues findings library by library so the cleanup can run in small reversible commits.  Each library gets its own commit + patch-or-minor `VERSION` bump per the audit-library skill rule.
+**Status (2026-05-14):** all `src/` passthroughs dropped.  10 libraries swept in order — chumicro_timing → chumicro_mqtt → chumicro_events → chumicro_kvstore → chumicro_logging → chumicro_wifi → chumicro_ntp → chumicro_requests → chumicro_websockets (chumicro_http_server already done 2026-05-12).  Each library landed as one commit + a patch `VERSION` bump (check-api confirmed patch is sufficient for the 0.x pre-1.0 SemVer semantics).  See `git log --grep "Decision 0065"` for the full series.
 
-**Total today:** 89 `@property` decorators across 16 device-library `src/` files (excluding `testing.py`).  Roughly 67 are pure passthroughs (drop), 22 are computed (keep).  `libraries/runner/` has zero `@property` declarations — no work there.  Another agent is active in `libraries/runner/`; this sweep doesn't touch it regardless.
-
-Findings cover device-library `src/` only.  `testing.py` properties (17 across 7 files) are listed separately at the bottom — same Decision 0065 ban applies but the flash-cost argument is weaker since `testing.py` is `("cpython",)`-marked + doesn't deploy.
+`testing.py` passthroughs remain — `("cpython",)`-marked, the flash-cost argument doesn't apply, and the per-access cost on MP/CP unix-port test runs is the only remaining lever.  Inventory preserved below for a future pass.
 
 ## Per-library findings
 
