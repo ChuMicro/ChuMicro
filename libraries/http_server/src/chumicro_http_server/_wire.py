@@ -36,8 +36,17 @@ DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 #: Default per-connection send cap.
 DEFAULT_SEND_BUDGET_PER_TICK = const(4096)
 
-#: Default per-request body cap.
+#: Default per-request body cap.  Bodies bigger than this are rejected
+#: at headers-complete time with a 413 response — no body allocation.
 DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
+
+#: Default steady-state body buffer size for :class:`RequestParser`.
+#: The Connection layer allocates one of these per accepted connection
+#: and passes it to the parser, so requests whose Content-Length fits
+#: parse with zero body allocation; larger requests get a one-shot
+#: ``bytearray(content_length)`` sized-to-fit, freed after the response
+#: drains.  Matches :data:`chumicro_requests._wire.DEFAULT_BODY_BUFFER_SIZE`.
+DEFAULT_BODY_BUFFER_SIZE = const(1024)
 
 #: Default per-connection deadline.
 DEFAULT_REQUEST_TIMEOUT_MS = const(10000)
@@ -69,6 +78,23 @@ class ServerProtocolError(ServerError):
 
     Connection should be torn down + a 400 returned (best-effort).
     """
+
+
+class ServerOversizedError(ServerError):
+    """Request ``Content-Length`` exceeds ``max_body_bytes``.
+
+    Surfaced by the parser at headers-complete time, before any body
+    bytes are allocated.  The connection layer responds with 413
+    Payload Too Large and closes — the body is never read.  Sibling
+    of :class:`ServerProtocolError` so ``except ServerError`` catches
+    both, but distinct so the connection can choose 413 over 400.
+
+    :attr:`reported_length` is the value the client declared.
+    """
+
+    def __init__(self, message, *, reported_length):
+        super().__init__(message)
+        self.reported_length = reported_length
 
 
 # ---------------------------------------------------------------------------
@@ -245,43 +271,97 @@ class RequestParser:
     enough bytes arrive.  Callers check :attr:`state` to know whether
     to keep feeding (anything other than ``DONE``/``ERROR``) or stop.
 
-    Body framing:
+    Body framing — two active tiers + a steady-state tier reserved
+    for keep-alive (parallel to :class:`chumicro_requests._wire.
+    HttpResponseParser`'s shape):
 
-    * ``Content-Length: N`` — read exactly N bytes (capped at
-      *max_body_bytes*).
-    * No ``Content-Length`` (and no chunked) — assume zero-length
-      body, transition straight to ``DONE``.
+    * **Sized rebind.**  ``Content-Length ≤ max_body_bytes`` but >
+      ``body_buffer`` capacity (default capacity is 0, since
+      ``body_buffer`` is unused by ``_Connection`` today).  The parser
+      allocates one ``bytearray(content_length)`` sized exactly to
+      fit at headers-complete time and slice-assigns body bytes
+      directly into it.  Single allocation per request, freed when
+      the parser is dereferenced.
+    * **413 reject.**  ``Content-Length > max_body_bytes``.  No body
+      allocation.  Parser raises :class:`ServerOversizedError` and
+      the connection layer responds 413 Payload Too Large.
+    * **Steady (reserved).**  ``Content-Length ≤ body_buffer
+      capacity``.  Body writes land in the caller-supplied buffer
+      with zero allocation.  ``_Connection`` does not supply a
+      ``body_buffer`` today because every response emits
+      ``Connection: close`` — the buffer would have a use-once
+      lifetime, which the on-device fragmentation tests in
+      ``chumicro_requests`` measured as a regression.  When
+      keep-alive lands and connections live across requests, the
+      buffer becomes a steady-state tier worth pre-allocating.
 
-    Chunked request bodies are not supported.
+    Chunked request bodies are not supported, so Content-Length is
+    always known when entering ``BODY`` state — sized-rebind happens
+    at :meth:`_enter_body_state`, not lazily during body absorption.
+
+    No Content-Length and no chunked → assume zero-length body,
+    transition straight to ``DONE``.
     """
 
     def __init__(
         self,
         *,
         max_body_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
+        body_buffer: bytearray | None = None,
+        body_buffer_view: memoryview | None = None,
     ) -> None:
         """Construct a one-shot parser.
 
         Args:
-            max_body_bytes: Hard cap on body size.
+            max_body_bytes: Hard cap on body size — exceeded ⇒ 413.
+            body_buffer: Optional caller-owned ``bytearray`` reused as
+                a steady-state body buffer across requests.  Requests
+                whose Content-Length fits land in it with zero
+                allocation; bigger-but-allowed requests rebind ``_body``
+                to a one-shot sized-to-fit buffer for that request only
+                and leave the caller's reference unchanged.  ``None``
+                (the default, and what ``_Connection`` passes today)
+                means the parser starts empty and the sized-rebind
+                path allocates fresh for every body.  Pre-allocating
+                a buffer that has a use-once lifetime fragments worse
+                than allocating sized-to-fit on demand (measured by
+                the on-device fragmentation tests in
+                ``chumicro_requests``); only supply ``body_buffer``
+                when its lifetime truly spans multiple requests.
+            body_buffer_view: Pre-cached ``memoryview(body_buffer)``
+                supplied by the caller to avoid the parser constructing
+                one.  Optional even when ``body_buffer`` is provided
+                (a view will be made if missing).
         """
         self._max_body_bytes = max_body_bytes
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
         # the cursor and only realloates the bytearray when at least
         # half of it has been consumed — mirrors the read-cursor pattern
-        # in :class:`chumicro_requests._wire.ResponseParser`.
+        # in :class:`chumicro_requests._wire.HttpResponseParser`.
         self._read_offset = 0
         self.state = RequestParseState.REQUEST_LINE
         self.method = ""
         self.target = ""
         self.http_version = ""
         self.headers = CaseInsensitiveDict()
-        # Body buffer grows on demand sized to the actual Content-Length.
-        # See the matching rationale in
-        # :class:`chumicro_requests._wire.ResponseParser.__init__`.
-        self._body = bytearray()
-        self._body_view = memoryview(self._body)
+        # Body buffer: caller-supplied (``_Connection`` passes the
+        # long-lived per-connection buffer) or self-allocated (standalone
+        # use starts empty + rebinds on first request).  ``_body`` is
+        # the active buffer, ``_body_view`` the cached memoryview,
+        # ``_body_capacity`` the size of the active buffer.  Oversized
+        # but-allowed requests (capacity < Content-Length ≤ max_body_bytes)
+        # rebind ``_body`` in :meth:`_enter_body_state`.
+        if body_buffer is not None:
+            if body_buffer_view is None:
+                body_buffer_view = memoryview(body_buffer)
+            self._body = body_buffer
+            self._body_view = body_buffer_view
+            self._body_capacity = len(body_buffer)
+        else:
+            self._body = bytearray()
+            self._body_view = memoryview(self._body)
+            self._body_capacity = 0
         self._body_write_offset = 0
         self._body_remaining = 0
         self.error = None
@@ -476,7 +556,7 @@ class RequestParser:
         return True
 
     def _enter_body_state(self):
-        """Headers-complete: figure out body framing."""
+        """Headers-complete: figure out body framing + size the body buffer."""
         content_length_str = self.headers.get("Content-Length")
         if content_length_str is None:
             # No Content-Length, no chunked — assume zero body.
@@ -495,37 +575,40 @@ class RequestParser:
             ))
             return
         if content_length > self._max_body_bytes:
-            self._fail(ServerProtocolError(
+            # Tier 3: 413 before any body allocation.  The connection
+            # layer catches ``ServerOversizedError`` and responds 413
+            # rather than treating it as a generic protocol-error 400.
+            self._fail(ServerOversizedError(
                 f"Content-Length {content_length} exceeds cap "
                 f"{self._max_body_bytes}",
+                reported_length=content_length,
             ))
             return
         self._body_remaining = content_length
         if content_length == 0:
             self.state = RequestParseState.DONE
             return
+        # Tier 2 sized-rebind when the steady buffer (caller-supplied
+        # or empty) can't hold this request.  Tier 1 — when capacity
+        # already covers ``content_length`` — touches no heap.
+        if content_length > self._body_capacity:
+            self._body = bytearray(content_length)
+            self._body_view = memoryview(self._body)
+            self._body_capacity = content_length
         self.state = RequestParseState.BODY
         self._body_write_offset = 0
-        # Don't pre-allocate the body upfront: the absorb path uses a
-        # doubling-grow strategy that's measured cleaner on small-heap
-        # boards than a per-request tier-N alloc/free cycle.  When the
-        # consumer supplied an external ``body_buffer`` and the request
-        # fits, no allocation happens at all.  See the matching path in
-        # :class:`chumicro_requests._wire.ResponseParser._enter_body_state`.
-        # Any bytes left over from header parsing are body bytes.
         if self._live_len() > 0:
             tail_view = self._live_slice(0)
             self._reset_buffer()
             self._absorb_body_bytes(tail_view)
 
     def _absorb_body_bytes(self, chunk):
-        """Write body bytes; slice-assign + one-shot grow on overflow.
+        """Write body bytes into the pre-sized body buffer.
 
-        Same shape as
-        :meth:`chumicro_requests._wire.ResponseParser._absorb_body_chunk`:
-        slice-assign in place when the write fits, one-shot exact-size
-        replace when it doesn't.  Never uses ``bytearray.extend`` —
-        that's three allocations per logical write on CP / MP.
+        :meth:`_enter_body_state` already sized ``_body`` to the
+        declared Content-Length (the steady-state buffer when it fits,
+        a one-shot sized-rebind otherwise), so every write here fits
+        and slice-assign is unconditional.  No grow fallback.
         """
         if self._body_remaining == 0:
             return  # Already complete; ignore extra (client sent too many).
@@ -533,14 +616,7 @@ class RequestParser:
         write_offset = self._body_write_offset
         end_offset = write_offset + take
         source = chunk[:take] if take < len(chunk) else chunk
-        if end_offset <= len(self._body_view):
-            self._body[write_offset:end_offset] = source
-        else:
-            new_body = bytearray(end_offset)
-            new_body[:write_offset] = self._body_view[:write_offset]
-            new_body[write_offset:end_offset] = source
-            self._body = new_body
-            self._body_view = memoryview(new_body)
+        self._body[write_offset:end_offset] = source
         self._body_write_offset = end_offset
         self._body_remaining -= take
         if self._body_remaining == 0:
@@ -602,6 +678,7 @@ def parse_query(raw_query: str) -> "CaseInsensitiveDict":
 # also import from chumicro_requests.
 __all__ = [
     "CRLF",
+    "DEFAULT_BODY_BUFFER_SIZE",
     "DEFAULT_MAX_CONNECTIONS",
     "DEFAULT_MAX_REQUEST_BODY_BYTES",
     "DEFAULT_RECV_BUDGET_PER_TICK",
@@ -611,6 +688,7 @@ __all__ = [
     "RequestParseState",
     "RequestParser",
     "ServerError",
+    "ServerOversizedError",
     "ServerProtocolError",
     "parse_charset",
     "parse_query",

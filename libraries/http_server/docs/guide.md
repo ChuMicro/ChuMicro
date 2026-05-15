@@ -119,7 +119,7 @@ The constructor exposes per-connection budgets so you can tune for your workload
 | `request_timeout_ms` | `10000` | Per-connection deadline.  Stalled clients get the socket closed. |
 | `recv_budget_per_tick` | `1024` | Bytes drained per connection per `handle()`.  Bounds tick latency under big uploads. |
 | `send_budget_per_tick` | `4096` | Bytes flushed per connection per `handle()`.  Higher than recv so small responses drain in one tick. |
-| `max_request_body_bytes` | `16 KB` | Cap on a single buffered request body.  Bigger bodies → 400. |
+| `max_request_body_bytes` | `16 KB` | Cap on a single buffered request body.  Requests declaring a larger `Content-Length` get a `413 Payload Too Large` response — no body bytes are allocated.  Within the cap, the body buffer is sized-to-fit at headers-complete time (one `bytearray(content_length)` allocation per request), freed when the response drains. |
 
 Defaults are conservative; the per-tick budgets keep an LED blink visible even with a chatty client and a big POST body.
 

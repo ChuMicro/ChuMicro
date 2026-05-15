@@ -35,6 +35,7 @@ from chumicro_http_server._wire import (
     RequestParser,
     RequestParseState,
     ServerError,
+    ServerOversizedError,
     parse_query,
     split_target,
 )
@@ -54,6 +55,7 @@ _REASONS = {
     400: "Bad Request",
     404: "Not Found",
     405: "Method Not Allowed",
+    413: "Payload Too Large",
     500: "Internal Server Error",
     503: "Service Unavailable",
 }
@@ -208,6 +210,18 @@ class _Connection:
         self._deadline_ticks = deadline_ticks
         self._recv_budget = recv_budget
         self._send_budget = send_budget
+        # No per-connection steady-state body buffer: every response
+        # emits ``Connection: close`` so each :class:`_Connection`
+        # serves exactly one request before being destroyed.  A
+        # pre-allocated buffer here would have a use-once lifetime —
+        # the same shape as the standalone case where
+        # ``chumicro_requests``'s on-device fragmentation tests
+        # measured a default-sized body buffer as a regression.  The
+        # parser starts empty and the sized-rebind path in
+        # :meth:`RequestParser._enter_body_state` does one allocation
+        # of ``bytearray(content_length)`` for the request.  When
+        # keep-alive lands and ``_Connection`` lives across requests,
+        # revisit and pass a long-lived buffer in here.
         self._parser = RequestParser(max_body_bytes=max_request_body_bytes)
         # Pre-allocated recv scratch reused by every :meth:`_drive_recv` call
         # — mirrors :class:`chumicro_mqtt._wire.PacketDecoder` and
@@ -250,6 +264,11 @@ class _Connection:
                 _ConnState.WANT_SEND_BODY,
             ):
                 self._drive_send()
+        except ServerOversizedError as oversized_error:
+            # 413 before any body bytes were allocated — surface the
+            # response cleanly instead of letting the connection die
+            # silently with a TCP close.
+            self._emit_error_response(413, str(oversized_error))
         except (OSError, ServerError):
             # Either side of the wire died — drop the connection.  The
             # writer's response state is already past the point where a
@@ -358,6 +377,19 @@ class _Connection:
 
     def _fail(self):
         self.state = _ConnState.ERROR
+
+    def _emit_error_response(self, status_code: int, message: str) -> None:
+        """Stage a pre-built error response for the send half of the tick.
+
+        Used for failure modes that have a sensible HTTP-level reply
+        (e.g. 413 from :class:`ServerOversizedError`).  After this,
+        ``handle()`` keeps ticking the connection through send + DONE.
+        """
+        response = _build_error_response(status_code, message)
+        self._response_bytes = encode_response(response)
+        self._response_view = memoryview(self._response_bytes)
+        self._response_offset = 0
+        self.state = _ConnState.WANT_SEND_HEADERS
 
 
 # ---------------------------------------------------------------------------
