@@ -30,14 +30,9 @@ class Heartbeat:
         if period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")
 
-        self._period_ms = period_ms
+        self.period_ms = period_ms
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
         self._last_beat_ms = self._ticks.ticks_ms()
-
-    @property
-    def period_ms(self) -> int:
-        """Return the configured heartbeat period in milliseconds."""
-        return self._period_ms
 
     def reset(self, now_ms: int) -> None:
         """Reset the heartbeat schedule to start counting from *now_ms*.
@@ -56,7 +51,7 @@ class Heartbeat:
         Returns:
             ``True`` if the period has elapsed.
         """
-        return self._ticks.ticks_diff(now_ms, self._last_beat_ms) >= self._period_ms
+        return self._ticks.ticks_diff(now_ms, self._last_beat_ms) >= self.period_ms
 
     def poll(self, now_ms: int) -> bool:
         """Return ``True`` once per elapsed period and advance the heartbeat state.
