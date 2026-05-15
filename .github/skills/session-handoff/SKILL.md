@@ -5,6 +5,8 @@ description: Capture session-transition context to plans/handoffs/ before cleari
 
 # Session Handoff
 
+Pairs with [`session-resume`](../session-resume/SKILL.md) — write/read symmetry.
+
 Used when you're about to `/clear`, switch to a fresh session, or otherwise leave conversation state behind, and the session produced context that would not survive `git log` + `plans/next-up.md` alone.
 
 A handoff is a **faithful, complete state-transfer document** — as long as the session warrants. Not a tight summary. The next session should be able to pick up nearly fully informed by reading the handoff plus the warm-up ritual (`git --no-pager log --oneline -20` + `plans/next-up.md`).
@@ -20,8 +22,9 @@ The handoff is for things that don't fit in the existing homes. **Lift durable s
 | Failed attempts and dead ends, so future-me doesn't re-walk them | Agent-facing rule whose violation cost time → `AGENTS.md` non-negotiables |
 | Things noticed but intentionally not fixed | Hardware / runtime quirk near the workaround → inline `# `-comment + commit-message body |
 | Search terms / file paths that get you back into the headspace | What was tried and rejected with rationale → commit message body |
-| Open questions waiting on user input | Work scope that outgrew 5 sub-bullets → `plans/workstreams/<name>.md` |
-| Conversation-state context (where my reasoning was when we paused) | Anything that should be `git blame`-able |
+| Conversation-state context (where my reasoning was when we paused) | Open question waiting on user input → `plans/open-questions.md` |
+|  | Work scope that outgrew CHU011's 5-bullet cap (lead + sub-bullets) → `plans/workstreams/<name>.md` |
+|  | Anything that should be `git blame`-able |
 
 If something belongs in one of the right-column homes, route it there — the handoff is for what's left over.
 
@@ -56,7 +59,7 @@ Ask the user (or work from conversation context if it's already clear) — these
 - What was learned (about the codebase, a tool, a board, a bug) that hasn't been written up anywhere?
 - What needs to be re-researched or verified next session?
 - What were the dead ends — paths tried that didn't pan out, so future-me doesn't re-walk them?
-- What are the open questions waiting on a user answer?
+- What open questions are still waiting on a user answer? (These belong in `plans/open-questions.md` — handoffs get deleted on resume, so don't park questions here.)
 - What gotchas surfaced — workarounds applied, brittle assumptions, environmental quirks?
 - If the next session has only the handoff and `git log`, what context would they still be missing? Add pointers (key files, ADRs, search terms) to rebuild fast.
 
@@ -101,10 +104,6 @@ Template — include only the sections that have content; drop empty sections ra
 
 <key files to re-read, recent commits to look at, search terms / grep patterns, related ADRs/workstreams to skim, any external links>
 
-## Open questions waiting on user
-
-<things blocked on a decision the user hasn't made yet>
-
 ## Gotchas
 
 <workarounds applied, brittle assumptions, environmental quirks, anything that would bite future-me>
@@ -120,10 +119,10 @@ Append one top-level bullet to `## Now` pointing at the handoff:
 - [ ] **Resume <topic> from session handoff** — see [`handoffs/<YYYY-MM-DD>-<slug>.md`](handoffs/<YYYY-MM-DD>-<slug>.md).
 ```
 
-Keep it to one line (CHU011 caps each top-level bullet at 5 lines including sub-bullets — a one-line top-level is the right shape here). When the work picked up *from* this handoff finishes, the bullet migrates to `## Done (recent)` per the normal AGENTS.md rule, and the handoff file becomes git history.
+Keep it to one line (CHU011 caps each top-level bullet at 5 bullet points — lead + sub-bullets — and a one-line top-level is the right shape here). When the work picked up *from* this handoff finishes, the bullet migrates to `## Done (recent)` per the normal AGENTS.md rule, and the handoff file becomes git history.
 
 ### 6. Show diff, commit
 
-Show the user the diff (handoff file + next-up.md edit). Once approved, follow the `git-commit` skill — pass the message via a single-quoted heredoc (`git commit -m "$(cat <<'EOF' … EOF)"`). Commit message names the handoff topic and links any related workstream or ADR.
+Show the user the diff (handoff file + next-up.md edit). Once approved, follow the [`git-commit`](../git-commit/SKILL.md) skill. Commit message names the handoff topic and links any related workstream or ADR.
 
 After commit, the handoff is durable — the user can `/clear` knowing the next session's warm-up will surface it via `next-up.md ## Now`.

@@ -7,7 +7,9 @@ description: Full lifecycle for creating a new ChuMicro library — from scaffol
 
 This skill covers the full workflow from scaffolding a new library through making it release-ready. The scaffold command creates the skeleton; everything after that is on you.
 
-## 1. Scaffold
+## Procedure
+
+### 1. Scaffold
 
 ```bash
 python scripts/run.py new-library <name>
@@ -19,20 +21,13 @@ This creates `libraries/<name>/` with the full directory tree (including a start
 python scripts/run.py test --libraries <name> 2>&1 | tail -5
 ```
 
-## 2. Write the implementation
+### 2. Write the implementation
 
 The scaffold creates a starter class in `src/chumicro_<name>/core.py` that demonstrates constructor injection, Google-style docstrings, and a `check(now_ms)` method. Replace it with your real code.
 
 Put production code in `src/chumicro_<name>/`.
 
-**Rules for library code** (these run on microcontrollers):
-
-- No `async`/`await` — use the tick-based runner pattern (Decision 0014).
-- Constructor injection for time, I/O, network (Decision 0010).
-- Docstring descriptions only; type annotations on signatures (Decision 0021).
-- f-strings for formatting. `const()` / `memoryview` / pre-allocated buffers where appropriate.
-- Minimize dependencies — prefer pure-Python compatible with all three runtimes.
-- If the library has active components, implement `check(now_ms) -> bool` so they work with `Runner`.
+Library code runs on microcontrollers — [`AGENTS.md` → "Code shape (libraries — runs on a microcontroller)"](../../../AGENTS.md#non-negotiable-rules) is the authoritative rule set.  It covers the runner-shape contract ([Decision 0014](../../../plans/decisions/0014-runner-pattern.md) + [0051](../../../plans/decisions/0051-runner-shaped-as-project-policy.md)), constructor injection ([0010](../../../plans/decisions/0010-library-testability.md)), absolute-import policy, PEP 604 / 585 type-annotation syntax ([0021](../../../plans/decisions/0021-docstring-type-policy.md)), the cross-library dependency policy ([0042](../../../plans/decisions/0042-library-dependency-policy.md)), runtime markings ([0037](../../../plans/decisions/0037-runtime-file-marking.md) + [0044](../../../plans/decisions/0044-deploy-time-runtime-filtering.md)), the `__slots__` / pure-passthrough-`@property` ban ([0065](../../../plans/decisions/0065-device-library-scaffolding-cost.md)), and naming conventions ([CHU001](../../../workbench/checks/) + [0022](../../../plans/decisions/0022-naming-conventions.md)).  Read it before writing non-trivial library code.
 
 **Public API goes in `__init__.py`:**
 
@@ -44,7 +39,7 @@ from chumicro_<name>.core import MyClass, my_function
 __all__ = ["MyClass", "my_function"]
 ```
 
-## 3. Write tests
+### 3. Write tests
 
 Tests go in `libraries/<name>/tests/`. Run with:
 
@@ -56,8 +51,8 @@ python scripts/run.py test --libraries <name>
 
 - 94% branch coverage gate. Check with: `python scripts/run.py test --libraries <name> 2>&1 | tail -20`
 - Use constructor injection — accept dependencies as parameters, don't import globals.
-- Per-library pytest runs (Decision 0009) — never bare `pytest` from root.
-- Use fakes from upstream libraries (`from chumicro_timing.testing import FakeTicks`), don't mock what you don't own (Decision 0010).
+- Per-library pytest runs ([Decision 0009](../../../plans/decisions/0009-per-library-test-runs.md)) — never bare `pytest` from root.
+- Use fakes from upstream libraries (`from chumicro_timing.testing import FakeTicks`), don't mock what you don't own ([Decision 0010](../../../plans/decisions/0010-library-testability.md)).
 
 **Quick iteration:**
 
@@ -65,7 +60,7 @@ python scripts/run.py test --libraries <name>
 python scripts/run.py test -k <name>/test_something -x -v --no-cov
 ```
 
-## 4. Add a testing submodule (if applicable)
+### 4. Add a testing submodule (if applicable)
 
 If the library exposes injectable services that downstream consumers need to fake, create `src/chumicro_<name>/testing.py` with ready-made fakes.
 
@@ -77,11 +72,11 @@ The scaffold creates a stub `testing.py` with instructions. **If the library has
 4. Remove the Testing Helpers link from `docs/index.md`
 5. Remove the Testing helpers link from `README.md`
 
-## 5. Write examples
+### 5. Write examples
 
 Put examples in `libraries/<name>/examples/`. At least one per major feature.
 
-**Rules (Decision 0013):**
+**Rules ([Decision 0013](../../../plans/decisions/0013-docs-and-examples-standards.md)):**
 
 - Top-level code — no `if __name__ == "__main__":` guard.
 - Simulated examples must run on CPython without hardware.
@@ -102,9 +97,9 @@ Verify examples pass:
 python scripts/run.py verify-examples --libraries <name>
 ```
 
-## 6. Write the user guide
+### 6. Write the user guide
 
-Use the `guide-generation` skill to generate `docs/guide.md`. The scaffold creates a placeholder — replace it with real content derived from the source code.
+Use the [`guide-generation`](../guide-generation/SKILL.md) skill to generate `docs/guide.md`. The scaffold creates a placeholder — replace it with real content derived from the source code.
 
 Verify docs build:
 
@@ -118,7 +113,7 @@ Preview locally:
 python scripts/run.py docs --libraries <name> --serve
 ```
 
-## 7. Fill in the README
+### 7. Fill in the README
 
 The scaffold generates `README.md` with TODO placeholders. Fill in:
 
@@ -126,7 +121,7 @@ The scaffold generates `README.md` with TODO placeholders. Fill in:
 - API summary table (what's included)
 - Platform support notes
 
-## 8. Update pyproject.toml
+### 8. Update pyproject.toml
 
 The scaffold generates a minimal `pyproject.toml`. Update:
 
@@ -134,7 +129,7 @@ The scaffold generates a minimal `pyproject.toml`. Update:
 - `dependencies` — if the library depends on other chumicro libraries (e.g., `"chumicro-timing>=0.1"`)
 - `[tool.chumicro].platforms` — only if the library doesn't target all three runtimes (omit for all-platform)
 
-## 9. Bump VERSION if needed
+### 9. Bump VERSION if needed
 
 VERSION starts at `0.1.0`. Leave it unless you're making a second release. For subsequent changes:
 
@@ -142,19 +137,9 @@ VERSION starts at `0.1.0`. Leave it unless you're making a second release. For s
 - Minor (`0.2.0`): new features, breaking changes while pre-1.0
 - Major (`1.0.0`): stable API declaration
 
-## 10. Run preflight
+### 10. Close out
 
-```bash
-python scripts/run.py preflight 2>&1 | tail -5
-```
-
-Must show: `Preflight passed — required CI checks should pass.`
-
-This runs: lint, build, docs (with griffe warning detection), tests (94% coverage), verify-examples, check-version, check-api, and cross-runtime compatibility.
-
-## 11. Commit
-
-Use the `git-commit` skill. Write a message naming the new library and summarizing what it provides.
+Follow the [`task-checkpoint`](../task-checkpoint/SKILL.md) skill — preflight (94% coverage gate), update `plans/next-up.md` with a `## Done (recent)` entry pointing at the new library, then commit + push via the [`git-commit`](../git-commit/SKILL.md) skill.  The commit message names the new library and summarizes what it provides.
 
 ## Checklist
 
@@ -168,6 +153,5 @@ Use the `git-commit` skill. Write a message naming the new library and summarizi
 [ ] docs/guide.md — real content, no placeholders
 [ ] README.md — description and API summary filled in
 [ ] pyproject.toml — description and dependencies
-[ ] Preflight passes
-[ ] Committed with clean tree
+[ ] task-checkpoint done — preflight green, plans/next-up.md refreshed, committed
 ```

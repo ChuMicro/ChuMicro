@@ -7,9 +7,9 @@ Incidents and worked examples that shaped the audit dimensions in [SKILL.md](SKI
 - [Stale CLI / recovery-command / status claims](#stale-cli--recovery-command--status-claims)
 - [Doc bugs cluster — audit numbers and symbols together](#doc-bugs-cluster--audit-numbers-and-symbols-together)
 - [Tests that pass a parameter but don't exercise it](#tests-that-pass-a-parameter-but-dont-exercise-it)
-- [I/O in `__init__` violates the runner contract](#io-in-init-violates-the-runner-contract)
+- [I/O in the constructor violates the runner contract](#io-in-the-constructor-violates-the-runner-contract)
 - [Speculative public-API class properties](#speculative-public-api-class-properties)
-- [No `__slots__` in device-library code](#no-slots-in-device-library-code)
+- [No slots in device-library code](#no-slots-in-device-library-code)
 - [Spec-trivia in `__all__` — and the doc residue](#spec-trivia-in-all--and-the-doc-residue)
 - [ABC + exceptions split across files](#abc--exceptions-split-across-files)
 - [Inspect the staged diff before every audit commit](#inspect-the-staged-diff-before-every-audit-commit)
@@ -33,7 +33,7 @@ A test setup like `MQTTClient(max_message_bytes=8192, rx_buffer_size=64, ...)` l
 
 **Audit move:** for every test that passes a tunable kwarg, mentally change the kwarg's value and ask "would this test still pass?"  If yes, the test exercises "doesn't crash when set," not "does what it claims."  Either the test needs a value-sensitive assertion, the parameter is dead surface, or both.  Same family of finding as the "lying class name" honesty check — the gap is between what the test code looks like it's testing and what it actually tests.
 
-## I/O in `__init__` violates the runner contract
+## I/O in the constructor violates the runner contract
 
 Any library that claims runner-shape (`check(now_ms)` / `handle(now_ms)` interface) promises errors land on `state` / `last_error`, observable via introspection — not as exceptions out of the constructor.  When `__init__` calls a factory that opens a socket, opens a file, dials a network host, or otherwise touches the world, an `OSError(ECONNREFUSED)` propagates out of `MyClient(...)` and bypasses the state-machine contract entirely.
 
@@ -49,7 +49,7 @@ The chumicro_ntp audit flagged `NTPResult.ticks_started_ms` — a public read-on
 
 **Pattern:** Named-without-underscore properties / methods on public classes are the same shape of speculative surface as `__all__` exports.  When internal code uses the name, the rewrite is mechanical (access the underscored attribute with `# noqa: SLF001`, matching how the rest of the class is already touched).  Default action is HIGH-confidence drop — same evidence threshold as `__all__` exports.
 
-## No `__slots__` in device-library code
+## No slots in device-library code
 
 `chumicro_requests.client` and `chumicro_http_server.server` each dropped three `__slots__` blocks with no behavior change.  MicroPython and CircuitPython have no `__slots__` implementation; the runtimes parse the declaration but the attribute-locking + per-instance-dict-drop is a CPython-only behavior.  On-device value is zero, the only payoff is typo-shielding inside CPython tests, and the cost is the parsed declaration on every board this library ships to.  Per-board flash sits around 800 KB total across ~15 libraries — every line of test-only scaffolding in `src/` is real flash spent for zero device value.
 

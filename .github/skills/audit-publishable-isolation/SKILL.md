@@ -1,6 +1,6 @@
 ---
 name: audit-publishable-isolation
-description: Cross-repo audit for leaks of mono-repo-internal concepts into shipped artifacts. Finds places where publishable libraries / workbench packages, their READMEs, their error strings, or the workspace-template starter name internal tools (run.py, scripts/, plans/, Decision NNNN), specific upstream repos (chumicro mono-repo, ChuMicro-Workspace-Template), or upstream directory shapes. Use when leak patterns feel "sprinkled everywhere" or after a release-prep pass.
+description: Cross-repo audit for leaks of mono-repo-internal concepts into shipped artifacts — PyPI packages, READMEs, generated payloads, the workspace-template starter. Finds run.py / scripts/ / plans/ / Decision NNNN refs, upstream repo names, and directory-shape assumptions. Use when leaks feel sprinkled everywhere or before a release-prep pass.
 ---
 
 # Publishable-isolation audit
@@ -71,7 +71,7 @@ grep -rn -iE "\b[a-z][a-z0-9-]+-(audit|cleanup|followups|reliability|hardening|g
 
 ### P2. `Decision NNNN` references in shipped source
 
-ADR pointers that mean nothing to a PyPI consumer who doesn't have `plans/decisions/`.  CHU006 catches the canonical spelling; gaps include `Decision-0042`, `decision 0042`, ADR shorthand.
+ADR pointers that mean nothing to a PyPI consumer who doesn't have `plans/decisions/`.  CHU006 catches `Decision 0NNN` and `ADR 0NNN`; gaps include hyphenated (`Decision-0042`) and lowercase (`decision 0042`) variants.
 
 **Search recipes:**
 ```
@@ -141,6 +141,21 @@ grep -rn "starter repo\|starter clone" workbench/*/src/   # often paired with im
 
 **Replacement:** `template_apply.py`'s default URL stays (with a comment noting it's overridable); functional tests use a fixture-controlled URL; READMEs frame the package's role as "renders a starter from any chumicro-shaped template repo," not "ships *the* template."
 
+### P7. Bundle / config / scaffolder generators baking in mono-repo identity
+
+`scripts/bundle_manager.py` writes the bundle README that ships *to consumers*.  `scripts/generate_config_files.py` emits user-facing strings written into user workspaces.  These generators are mono-repo-internal, so audit their **output** — what string the consumer ultimately sees — not the generator's own implementation.
+
+**Search recipes:**
+```
+grep -rn -E "_SOURCE_REPO|GITHUB_ORG|ChuMicro/ChuMicro\b" scripts/
+grep -rn -E "f-?strings? .* (run\.py|scripts/|plans/|Decision \d)" scripts/
+# Then trace the literal strings each generator writes — _what reaches the user?_
+```
+
+**Distinguish:** the constant `GITHUB_ORG = "ChuMicro"` is fine *if* it parameterises a configurable upstream URL; it's leak if it ends up in copy-pasted prose like "see https://github.com/ChuMicro/ChuMicro for …" emitted to a downstream consumer.
+
+**Replacement:** generators emit generic prose; the upstream URL appears in mono-repo-internal docs (release notes, CHANGELOG) but not in the artifact that lands on a user's machine.
+
 ### P8. Test-harness scaffolding in publishable `src/`
 
 Code in `libraries/*/src/` or `workbench/*/src/` that exists *only* to keep test infrastructure stable — `__all__` placeholders that re-export private names solely so `monkeypatch.setattr` paths don't churn, lazy in-function imports introduced to silence import cycles caused by test-extracted modules, "kept around so monkeypatch paths keep working" comment blocks.  These are mono-repo-test-shape concerns leaking into shipped code; a `pip install` consumer has no monkeypatch paths to preserve.
@@ -166,24 +181,7 @@ grep -rnB1 -E "^\s*['\"]_[a-zA-Z_]" libraries/*/src/ workbench/*/src/  | grep -B
 * Public-API re-exports from a parent `__init__.py` are normal — `chumicro_deploy/__init__.py` re-exporting `Device` from `device.py` is *the* public surface, not a test crutch.
 * The leak is specifically: re-exports of private names (leading underscore), or `__all__` declarations whose justification is "tests patch this here."
 
-**Replacement:** delete the re-export; update test patch paths to follow the canonical definition module (e.g. `chumicro_X.helpers._do_thing` instead of `chumicro_X.transport._do_thing`).  Break import cycles caused by extractions with a shared leaf types module (e.g. `recovery_kind.py` holding the types that both `recovery.py` and `recovery_plans.py` import) instead of lazy in-function imports.  See `/audit-library`'s "Extraction patterns" section.
-
-P8 sits with the other src/ leak patterns (P1–P3) rather than the cross-repo / generator patterns; it's a P1-relative ordering that prioritizes depth of remediation (P8 fixes usually need a test-patch-path update plus a src/ edit), not search ordering.  Run greps for P1–P3, then P8, then move on to P4 onward.
-
-### P7. Bundle / config / scaffolder generators baking in mono-repo identity
-
-`scripts/bundle_manager.py` writes the bundle README that ships *to consumers*.  `scripts/generate_config_files.py` emits user-facing strings written into user workspaces.  These generators are mono-repo-internal, so audit their **output** — what string the consumer ultimately sees — not the generator's own implementation.
-
-**Search recipes:**
-```
-grep -rn -E "_SOURCE_REPO|GITHUB_ORG|ChuMicro/ChuMicro\b" scripts/
-grep -rn -E "f-?strings? .* (run\.py|scripts/|plans/|Decision \d)" scripts/
-# Then trace the literal strings each generator writes — _what reaches the user?_
-```
-
-**Distinguish:** the constant `GITHUB_ORG = "ChuMicro"` is fine *if* it parameterises a configurable upstream URL; it's leak if it ends up in copy-pasted prose like "see https://github.com/ChuMicro/ChuMicro for …" emitted to a downstream consumer.
-
-**Replacement:** generators emit generic prose; the upstream URL appears in mono-repo-internal docs (release notes, CHANGELOG) but not in the artifact that lands on a user's machine.
+**Replacement:** delete the re-export; update test patch paths to follow the actual definition module (e.g. `chumicro_X.helpers._do_thing` instead of `chumicro_X.transport._do_thing`).  Break import cycles caused by extractions with a shared leaf types module (e.g. `recovery_kind.py` holding the types that both `recovery.py` and `recovery_plans.py` import) instead of lazy in-function imports.  See `/audit-library`'s "Extraction patterns" section.
 
 ## Process
 
@@ -202,17 +200,11 @@ grep -rn -E "f-?strings? .* (run\.py|scripts/|plans/|Decision \d)" scripts/
    * **Structural** — P6 / P7 hits that imply API changes (e.g., parameterising a hard-coded URL).
 5. **Two-pass split.**  Don't bundle src/ rephrases with README rewrites in one commit.  Separate diffs: (a) shipped src/ leaks, (b) README + docs leaks, (c) workspace-template leaks, (d) generator-output leaks.  Each commits separately.
 6. **Per-batch task-checkpoint.**  Run `python scripts/run.py preflight --coverage-threshold 94` after each commit batch.  Read the `git-commit` skill before committing.
-7. **Lint hardening status.**  These extensions reduce manual audit load by catching common shapes automatically.
-   * **CHU006 bare `run.py`** — landed.  `\brun\.py\b` (no `scripts/` prefix) fires everywhere except `workbench/workspace/src/` (the package that legitimately owns the workspace shim).
-   * **CHU007 — workbench packages don't import library packages** — landed.  Enforces Decision 0052 via AST scan of `workbench/*/src/`.
-   * **CHU006 README + docs scan extension** — *not yet landed* (deferred workstream — surfaces ~80 leaks across library `docs/` trees and `support/test_harness/README.md` that need careful per-file inlining of ADR rationale).  When this lands, widen the `chumicro_workspace` exemption from `workbench/workspace/src/` to `workbench/workspace/` (the README + docs legitimately mention `run.py` too).
-   * **CHU008 — workspace-template repo lint** — landed in the [`chumicro-checks`](../../../workbench/checks/) package.  Different rule set than CHU006: bare `run.py` is *allowed* in the template (the template ships its own); forbidden patterns are mono-repo-shape prose like Decision NNNN refs, `plans/...md` paths, `scripts/run.py` references, and "chumicro mono-repo" framing.  Self-no-ops in repos without a `packages/` directory (the template-shape signal), so it's safe to register everywhere.
-   Each lint extension lands in its own commit *after* the cleanup that makes it green, so adding the rule never breaks an existing build.
-
-### What CHU007/CHU008 mean
-
-* **CHU007** = "workbench packages don't import library packages" (Decision 0052).  Lives in the [`chumicro-checks`](../../../workbench/checks/) package.  AST scan of `workbench/*/src/`; flags any `import chumicro_<libname>` or `from chumicro_<libname>` where `<libname>` matches a `libraries/` package.  Allows imports of other workbench packages (`chumicro_deploy`, `chumicro_workspace`) and support packages (`chumicro_test_harness`).  Suppress with `# noqa: CHU007`.
-* **CHU008** = workspace-template repo isolation lint.  Lives in the [`chumicro-checks`](../../../workbench/checks/) package alongside CHU006 — both are instances of the same `LeakRule` abstraction with different scan-root resolvers and forbidden-pattern sets.  Self-no-ops in any repo without a `packages/` directory at root (the template-shape signal), so it's safe to register globally; downstream user workspaces and the workspace-template starter both pick it up via `pip install chumicro-checks`.  Same machinery as CHU006, template-repo-shaped diagnostics.
+7. **Lint hardening — what's automated.**  Three CHU rules in the [`chumicro-checks`](../../../workbench/checks/) package cover common leak shapes so the manual audit can focus on prose nuance.
+   * **CHU006** — mono-repo isolation.  `\bscripts/run\.py\b`, `\brun\.py\b` (bare), `\b(?:Decision|ADR)\s*0\d{3}\b`, `\bplans/(?:decisions|workstreams|next-up|patterns|learnings)\b`, and "chumicro mono-repo" framing.  Walker covers `src/`, `docs/`, `tests/`, `functional_tests/`, `examples/`, `README.md`, and `pyproject.toml`.  Exempts the whole `workbench/workspace/` tree (the package that legitimately owns the workspace shim) and `workbench/checks/` (rule descriptions need to name what they catch).  Suppress with `# noqa: CHU006`.
+   * **CHU007** — workbench packages don't import library packages (Decision 0052).  AST scan of `workbench/*/src/`; flags any `import chumicro_<libname>` or `from chumicro_<libname>` where `<libname>` matches a `libraries/` package.  Allows imports of other workbench packages (`chumicro_deploy`, `chumicro_workspace`) and support packages (`chumicro_test_harness`).  Suppress with `# noqa: CHU007`.
+   * **CHU008** — workspace-template repo isolation.  Same `LeakRule` machinery as CHU006 with a different scan-root resolver and forbidden-pattern set: bare `run.py` is *allowed* (the template ships its own); forbidden are Decision/ADR refs, `plans/...md` paths, `scripts/run.py`, and "chumicro mono-repo" framing.  Self-no-ops in repos without a `packages/` directory (the template-shape signal), so it's safe to register everywhere; downstream user workspaces and the template starter both pick it up via `pip install chumicro-checks`.
+   Each lint addition lands in its own commit *after* the cleanup that makes it green, so adding the rule never breaks an existing build.
 
 ## Anti-patterns
 
