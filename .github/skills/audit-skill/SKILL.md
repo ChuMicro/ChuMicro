@@ -71,6 +71,8 @@ The loader agent matches user messages against the `description` text.  The body
 * **Procedure-first vs narrative** — skill bodies are read by an agent mid-task, not browsed by a human.  Flag long narrative preambles before any actionable step.  *"In this skill we will explore how to…"* / *"This skill covers many aspects of…"* — drop, start with the procedure.
 * **Section ordering** — most skills want: Scope → Philosophy/Why → Dimensions/Checks → Procedure → Output format → Don'ts → Defer.  Bodies that bury Procedure below 400 lines of philosophy are unloadable.
 * **Heading depth** — usually H1 (title) + H2 (top-level sections) + H3 (subsections).  Past H4, the structure is over-nested.
+* **Rule-first vs example-first** — when teaching a principle, state the rule (with its reasoning) before the example.  *Good/bad* contrasts that leave the principle implicit force the reading agent to reverse-engineer it from the shape of the example — two reasoning hops instead of one, and the inferred rule covers only the cases the example covers.  Flag long *"common mistakes"* / *"good vs bad"* / *"❌ … ✅ …"* blocks doing the work that a single principle sentence would do.
+* **Tool calls that could be invocation-time injection** — when a body opens with *"first, run X via Bash to get [state]"* and that value is invariably needed up front (git status, file listing, env vars), Claude Code's invocation-time shell expansion (the bang-backtick `` !`cmd` `` syntax used in slash-command and skill prose) substitutes stdout before the first agent step, saving a tool round-trip.  Flag the prose pattern; verify the current injection syntax in Claude Code docs before rewriting.
 
 ### 4. Cold-agent loadability
 
@@ -81,6 +83,8 @@ Can an agent invoke this skill with no session context and know what *"done"* lo
 * **No implicit prior-conversation context** — flag phrasings like *"continue from the previous pass"*, *"as we discussed"*, *"the user mentioned earlier"*.  The skill can be invoked fresh.
 * **Arguments documented** — if the skill takes a path / name argument, the body says so and shows examples.
 * **Single-pass walkable** — can an agent walk top-to-bottom and execute, or does the body require jumping around?  Procedure section should be linear.
+* **Mental simulation** — pick a representative user invocation and walk the body as a cold agent.  Flag *divergence points* (steps where two Claude instances would produce meaningfully different outputs because the spec is under-specified), *stuck points* (steps that need info not yet gathered or argued), and *dead ends* (the skill's workflow stops but the user's goal isn't accomplished — the user has to do something manually after).
+* **Edge-case probe** — try 2–3 adversarial inputs: missing argument, malformed path, contradictory request, an input from outside the skill's intended domain.  Does the skill detect + surface a useful error, or silently produce wrong output?  Flag the latter as `loadability`.
 
 ### 5. Reference rot
 
@@ -158,7 +162,7 @@ Rules without an incident behind them are hard for the agent to weigh against co
 Walk these in order:
 
 1. **Frontmatter + discoverability pass** (dims 1, 2) — read the YAML, run the description through *what* + *when* check, flag jargon / vagueness.
-2. **Body shape + loadability pass** (dims 3, 4) — `wc -l`, section grep (`grep -nE '^## ' <file>`), check for explicit when-to-use + exit-condition clauses.
+2. **Body shape + loadability pass** (dims 3, 4) — `wc -l`, section grep (`grep -nE '^## ' <file>`), check for explicit when-to-use + exit-condition clauses.  Then walk the body as a cold agent against one representative invocation (mental simulation), and probe 2–3 adversarial inputs (missing arg, malformed path, contradictory request).
 3. **Reference rot pass** (dim 5) — extract every `Decision NNNN`, `scripts/run.py`, `CHU0NN`, sibling-skill name, file path, intra-doc anchor link, and embedded grep / awk snippet.  Resolve / dry-run each.
 4. **Drift pass** (dim 6) — for each restated AGENTS.md / ADR rule, diff against the source.
 5. **Composability pass** (dim 7) — does the skill defer to `task-checkpoint` / `git-commit` / siblings where it should?

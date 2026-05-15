@@ -59,6 +59,7 @@ Read top-to-bottom three times, one per reader (see philosophy above for who bai
 * **Assumed tooling.**  *"Run `mip install …` from your REPL"* — beginner doesn't know what `mip` is, what a REPL is in this context, or how to access either.  Either define inline or link to a single onramp doc.
 * **Audience-split mentions of mono-repo-only tooling.**  Library and workbench READMEs serve **two audiences**: PyPI / circup / mip consumers (just want to use the package) and mono-repo contributors (have the workspace cloned).  Mentions like *"register a board with `chumicro-workspace add-device`"* are useful to the second but confusing to the first.  Flag every reference to mono-repo-only CLIs (`chumicro-workspace`, `python scripts/run.py`, `chumicro-deploy`) in a published library / workbench README and ask: *"can a PyPI installer act on this?  If not, prefix with 'In the [mono-repo](url)…' or move to the dev-contributing section."*
 * **Pitch missing the "why".**  Beginner reads the install instructions, runs the example, and asks *"what would I use this for?"*.  The differentiators section needs at least one concrete production scenario, not just feature bullets.
+* **Feature bullets that lead with implementation instead of use.**  *"Constructor-injected duck-typed I/O dependencies"* fails — name what the user can DO (*"Bring your own socket, your own clock"*).  Avoid type-system jargon (`duck-typed`, `Protocol`, `structural typing`), inline method-name lists, *"valid producer"*-style abstractions, and test-fake framing.  Lead with concrete library class names, stdlib alternatives, production scenarios; acknowledge defaults before swap-outs.  See [style-guide § Documentation tone](../../../docs/contributing/style-guide.md#documentation-tone).
 
 ### 2. Vocabulary + grammar tics
 
@@ -90,6 +91,8 @@ Per-word handling:
 
 Keep *"the"* for genuinely-specific singular nouns: *"the LED"*, *"the loop"*, *"the request"* — these refer to a specific instance in the example and dropping the article reads wrong.
 
+**Paraphrasing keeps filler.**  When rewriting prose that already contains AI-tic words, the easy move is to keep the filler intact and swap the rest.  Audit the net delta on flagged words across the rewrite — *"canonical"* should drop, not survive paraphrased.
+
 ### 3. Implementation-detail leakage
 
 User-facing docs should not expose internal metrics or development jargon.
@@ -100,6 +103,7 @@ User-facing docs should not expose internal metrics or development jargon.
 * **Specific test-board names** — *"WeMos / Lolin S2 + Pi Pico W in CP and MP"* is bench setup.  *"Tested on real CircuitPython and MicroPython boards before each release"* carries the same trust without naming hardware.
 * **File:line refs** — fine in code comments / commit messages, jarring in user docs.
 * **Internal run.py task names without context** — *"`python scripts/run.py preflight`"* is fine in a "Running tests" section; *"run preflight before committing"* in passing prose without saying what preflight does is jargon.
+* **Cross-package redirects in publishable docs** — *"This package doesn't do X. Use `other-package` for X instead"* / *"For X, lives one level up in Y"* leak mono-repo awareness into a leaf package's PyPI-facing surface.  Relative paths like `../workspace/` only resolve in the mono-repo docs site; they break PyPI README rendering.  State what THIS package does; don't apologize for non-features by naming siblings.  See [style-guide § Documentation tone](../../../docs/contributing/style-guide.md#documentation-tone).
 
 ### 4. Verify load-bearing technical claims
 
@@ -211,7 +215,7 @@ Trailing `# comment` annotations should narrate behavior, not label operations �
 * **Narration** — *"# every 30 s, queue a fetch for example.com"* — keep.
 * **Runtime / runner relationship narration** — for runner-shaped code, the comment should name the runner's call relationship: *"# Runner calls this every 30 s — if no fetch is in flight, queue a new one"*, *"# Runner asks this every tick — True once the response is ready"*.
 * **Density.**  An example block with a comment on every line usually has labels masquerading as narration.  Three comments on a 20-line block is a healthy rate when each names a *why*.
-* **Per-change audit-style comments don't belong in examples.**  *"# bench-validated -25 % allocation"* or *"# skips the bytes() copy"* — these are commit-message material, not example code (see `feedback_audit_comments_in_commit_not_code.md` for the broader rule on user-facing artefacts).
+* **Per-change audit-style comments don't belong in examples.**  *"# bench-validated -25 % allocation"* or *"# skips the bytes() copy"* — these are commit-message material, not example code (see AGENTS.md → Code comments for the broader rule; `/audit-library` and `/audit-embedded` carry the audit-pass operational detail).
 
 ### 9. Historical rationale
 
