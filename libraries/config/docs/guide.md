@@ -70,20 +70,12 @@ There is no type coercion.  `"1883"` stays a string; the `__init__` does any con
 
 ### Pattern B — client-with-injection (direct `config.get`)
 
-When the class being constructed is a runner / client / service that takes both config-derived fields and non-config injectables (or has per-class guards), don't wrap `load_section` — it has no slot for the injectables and no hook for the guards.  Read keys directly and prepend the same input guard `load_section` would have done:
+When the class being constructed is a runner / client / service that takes both config-derived fields and non-config injectables (or has per-class guards), don't wrap `load_section` — it has no slot for the injectables and no hook for the guards.  Read keys directly:
 
 ```python
-from chumicro_config import InvalidConfigType, is_config_like
-
-
 class NTPClient:
     @classmethod
     def from_config(cls, config, *, socket=None, ticks=None):
-        if not is_config_like(config):
-            raise InvalidConfigType(
-                f"NTPClient.from_config requires a RuntimeConfig or dict, "
-                f"got {type(config).__name__}"
-            )
         server = config.get("ntp.server", "pool.ntp.org")
         port = config.get("ntp.port", 123)
         timeout_ms = config.get("ntp.timeout_ms", 5_000)
@@ -93,7 +85,7 @@ class NTPClient:
         )
 ```
 
-The `is_config_like` guard is the same shape `load_section` applies internally — call it explicitly at the top of every Pattern B `from_config` so callers get the same `InvalidConfigType` regardless of which pattern the library used.  Without it, `None` / `str` / `int` passed in produce unhelpful `AttributeError` / silent `MissingConfigKey` instead of the clear "you passed the wrong shape" error the value-object path raises.
+No upfront `isinstance` / "config-like" guard.  A `None` / `str` / `int` passed for *config* fails on the first `.get(...)` with `AttributeError` — clear enough at the call site to diagnose, without flash cost in every Pattern B factory for a check the caller almost never trips.
 
 Pattern B's freedom to mix is exactly its point — `MQTTClient.from_config` reads `mqtt.broker.host` *and* takes an injectable `socket` factory *and* enforces a broker-required guard; trying to express any of that through `load_section`'s `required` / `optional` mapping bends it into a less-readable shape than the inline reads.
 
