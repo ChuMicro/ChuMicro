@@ -39,6 +39,10 @@ Dependency resolution: `library add` reads the target library's `pyproject.toml`
 
 Pin state lives in `workspace.yml` under a new `libraries:` table — see Q2 below for the schema.
 
+**Landing location** — `chumicro_workspace`'s CLI is now a package (`workbench/workspace/src/chumicro_workspace/cli/` with `__init__.py` + `_common.py` + `setup.py` + `devices.py`).  The `library` subcommand surface lands as a new `cli/library.py` module following the same shape as `cli/setup.py` and `cli/devices.py` — subparser builder + `_cmd_<verb>` functions + thin handoff into a `chumicro_workspace.library` core module.  Subparser registration in `cli/__init__.py`'s `build_parser`.
+
+**Agent-runnable surface** — the transitive-deps prompt is an interactive seam, so per [Decision 0066](../decisions/0066-agent-runnable-clis.md) the subcommand needs `--non-interactive` behavior.  When non-interactive: `library add` must not prompt; it either installs the full transitive set (recommended default) or fails with a distinct exit code naming the unresolved choice.  The decline-all-transitive option (`--decline-transitive` or similar) can be added later if a real workflow needs it.  TTY auto-detection via `sys.stdin.isatty()` matches the rest of the workbench CLI.
+
 ### Phase 3 — Non-chumicro upstreams (Adafruit, micropython-lib)
 
 Separate ADR-worthy decision: write a thin `BundleGrabber` that knows the Adafruit-Bundle and micropython-lib shapes, or wrap `mip`/`circup` as subprocesses for non-chumicro libs only.
