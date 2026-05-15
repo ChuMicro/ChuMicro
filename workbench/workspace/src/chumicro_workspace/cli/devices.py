@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import chumicro_deploy
@@ -34,12 +35,15 @@ from serial.tools import list_ports
 
 from chumicro_workspace.cli._common import (
     _add_device_selector,
+    _add_non_interactive_arg,
     _add_workspace_arg,
     _emit_probe_failure,
     _hardware_from_probe_info,
     _resolve_device,
     _resolve_project_name,
+    _resolve_serial_port,
     _resolve_workspace,
+    _stdin_prompt,
 )
 from chumicro_workspace.cli.setup import (
     _ensure_namespace_parents,
@@ -202,21 +206,43 @@ def _suggest_add_device_id(
 # ---------------------------------------------------------------------------
 
 
-def _cmd_add_device(args: argparse.Namespace) -> int:
+def _cmd_add_device(
+    args: argparse.Namespace,
+    *,
+    prompt_func: Callable[[str], str] = _stdin_prompt,
+) -> int:
     """Probe a board + register it in devices.yml.
 
-    Builds a fresh entry by probing the supplied address: ``runtime``
+    Builds a fresh entry by probing the resolved address: ``runtime``
     + ``hardware.uid`` + ``hardware.machine`` come from
     :func:`chumicro_deploy.probe_device`; ``address`` rides through
-    as-is.  When ``--runtime`` is omitted, the runtime is inferred
-    by trying every candidate transport in turn — the user can plug
-    a fresh board in and register it without knowing what firmware
-    it runs.  Re-running with the same id triggers a re-probe and is
-    blocked unless ``--force`` is passed (the typical second
-    invocation is "I swapped boards on this id" — make the user
-    confirm).
+    as-is.  When ``--address`` is omitted in interactive mode, the
+    user is shown a numbered list of detected serial ports (or the
+    only one is auto-picked); ``--non-interactive`` requires
+    ``--address`` and exits 2 otherwise.  When ``--runtime`` is
+    omitted, the runtime is inferred by trying every candidate
+    transport in turn — the user can plug a fresh board in and
+    register it without knowing what firmware it runs.  Re-running
+    with the same id triggers a re-probe and is blocked unless
+    ``--force`` is passed (the typical second invocation is "I
+    swapped boards on this id" — make the user confirm).  Passing
+    ``--demo`` chains into the built-in demo deploy after the
+    register succeeds.
     """
     workspace = _resolve_workspace(args)
+    if args.address is None:
+        if args.non_interactive:
+            print(
+                "add-device: --address is required in non-interactive mode.",
+                file=sys.stderr,
+            )
+            return 2
+        resolved_address = _resolve_serial_port(
+            None, command_name="add-device", prompt_func=prompt_func,
+        )
+        if resolved_address is None:
+            return 1
+        args.address = resolved_address
     if args.runtime is None:
         inference = probe_with_runtime_inference(args.address)
         if inference.runtime is None or inference.info is None:
@@ -322,6 +348,19 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
         )
         for line in explain_firmware_support(support):
             print(f"  {line}", file=sys.stderr)
+    if getattr(args, "demo", False):
+        # Local-import the demo handler so devices.py doesn't pull
+        # examples.py at module-import time (the demo handler imports
+        # the deploy stack).
+        from chumicro_workspace.cli.examples import _cmd_demo  # noqa: PLC0415
+        demo_args = argparse.Namespace(
+            workspace_dir=args.workspace_dir,
+            device_id=args.id,
+            runtime=None,
+            non_interactive=args.non_interactive,
+            _env=args._env,
+        )
+        return _cmd_demo(demo_args)
     return 0
 
 
@@ -417,8 +456,13 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
     )
     add_device_parser.add_argument(
         "--address",
-        required=True,
-        help="Serial port path of the connected board.",
+        default=None,
+        help=(
+            "Serial port path of the connected board.  Optional: when "
+            "omitted in interactive mode, the wizard auto-picks the "
+            "only detected port or prompts with a numbered list when "
+            "multiple are present.  Required under --non-interactive."
+        ),
     )
     add_device_parser.add_argument(
         "--runtime",
@@ -444,6 +488,17 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
             "address and hardware-once fields from the live probe."
         ),
     )
+    add_device_parser.add_argument(
+        "--demo",
+        action="store_true",
+        help=(
+            "After registering, chain into the built-in demo deploy "
+            "so a freshly registered board ships *something* in one "
+            "command.  Equivalent to running `demo --device <id>` "
+            "next."
+        ),
+    )
+    _add_non_interactive_arg(add_device_parser)
     add_device_parser.set_defaults(func=_cmd_add_device)
 
     probe_parser = subparsers.add_parser(

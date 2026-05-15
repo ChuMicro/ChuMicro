@@ -33,17 +33,14 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from chumicro_workspace.cli._common import (
+    _resolve_serial_port as _resolve_serial_port,
+)
 from chumicro_workspace.cli.bootstrap import (
     _add_bootstrap_parser,
 )
 from chumicro_workspace.cli.bootstrap import (
     _cmd_bootstrap as _cmd_bootstrap,
-)
-from chumicro_workspace.cli.bootstrap import (
-    _resolve_bootstrap_device_id as _resolve_bootstrap_device_id,
-)
-from chumicro_workspace.cli.bootstrap import (
-    _resolve_bootstrap_port as _resolve_bootstrap_port,
 )
 from chumicro_workspace.cli.config import _add_config_parsers
 from chumicro_workspace.cli.deploy import (
