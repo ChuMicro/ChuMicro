@@ -55,9 +55,16 @@ loudly auto-switches instead of silently mis-deploying.
    0009 shape) with `context=unit-sweep` — step 4 (data-file) is
    skipped, so a stray `src/` data file (e.g. `_ca_bundle.der`)
    doesn't force the whole sweep to flash; only `requires_flash`
-   libraries fall back per-library.  `preflight --with-device-unit`
-   opt-in flag, parallel to `--with-functional`.  Not in default
-   preflight.
+   libraries fall back per-library.  Each per-library deploy is
+   single-mode (all-or-nothing — no within-deploy mixing); mode
+   varies *across* the sweep's N deploys, not within one.  **Open
+   sub-question:** exact batching granularity — strict per-library
+   (N deploys, reuses the existing per-package shape) vs. a
+   light-RAM / heavy-flash two-bucket split (2 deploys, fewer
+   connect/stage cycles, but a 17-library RAM staging may OOM).
+   Decide during implementation against measured staging cost.
+   `preflight --with-device-unit` opt-in flag, parallel to
+   `--with-functional`.  Not in default preflight.
 5. **Docs + AGENTS.md.**  Command table, `devices.yml` schema,
    device-testing.md matrix.  AGENTS.md gets the command + the
    supported-matrix rule once the command exists (not before — it's
