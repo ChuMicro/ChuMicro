@@ -131,16 +131,29 @@ class Deployer:
            escape hatch.
         2. ``self._device.deploy_mode != "ram"``: the device already
            wants flash (or some future mode); nothing to switch.
-        3. Source doesn't expose ``host_paths()``: we have no graph to
+        3. Staged set contains any non-``.py`` data file: switch the
+           *whole* deploy to flash.  RAM-mode CircuitPython is a
+           raw-REPL ``exec()`` with no device filesystem — non-``.py``
+           files are silently dropped, so the asset would simply be
+           missing on-device.  All-or-nothing (no half-RAM/half-flash
+           dance); emit an explanation.
+        4. Source doesn't expose ``host_paths()``: we have no graph to
            inspect — proceed in RAM mode silently
            (:class:`~chumicro_deploy.sources.FileMapSource` is the
            common case here).
-        4. No library in the graph carries ``[tool.chumicro]
+        5. No library in the graph carries ``[tool.chumicro]
            requires_flash = true``: proceed in RAM mode silently.
-        5. At least one library is flagged: switch to flash mode and
+        6. At least one library is flagged: switch to flash mode and
            emit a human-readable explanation through
            *on_preflight_message* (or stderr when ``None``).
         """
+
+        def _emit(message: str) -> None:
+            if on_preflight_message is not None:
+                on_preflight_message(message)
+            else:
+                print(message, file=sys.stderr)
+
         if force_deploy_mode is not None:
             if force_deploy_mode == self._device.deploy_mode:
                 return self._device
@@ -148,6 +161,21 @@ class Deployer:
 
         if self._device.deploy_mode != DeployMode.RAM:
             return self._device
+
+        data_files = sorted(
+            name for name in source.files() if not name.endswith(".py")
+        )
+        if data_files:
+            _emit(
+                f"chumicro-deploy: switching to flash mode — staged set "
+                f"includes non-.py data file(s) ({', '.join(data_files)}) "
+                f"that RAM-mode deploy cannot carry (raw-REPL exec has no "
+                f"device filesystem; the file(s) would be missing). "
+                f"Pass force_deploy_mode='ram' to bypass.",
+            )
+            return dataclasses.replace(
+                self._device, deploy_mode=DeployMode.FLASH,
+            )
 
         host_paths_method = getattr(source, "host_paths", None)
         if host_paths_method is None:
@@ -157,18 +185,13 @@ class Deployer:
         if not flagged:
             return self._device
 
-        message = (
+        _emit(
             f"chumicro-deploy: switching to flash mode — "
             f"{', '.join(flagged)} declare `[tool.chumicro] "
             f"requires_flash = true` (heavy parsers / state machines / "
             f"recv buffers often OOM in RAM mode on smaller boards). "
-            f"Pass force_deploy_mode='ram' to bypass."
+            f"Pass force_deploy_mode='ram' to bypass.",
         )
-        if on_preflight_message is not None:
-            on_preflight_message(message)
-        else:
-            print(message, file=sys.stderr)
-
         return dataclasses.replace(self._device, deploy_mode=DeployMode.FLASH)
 
     def _run_deploy(

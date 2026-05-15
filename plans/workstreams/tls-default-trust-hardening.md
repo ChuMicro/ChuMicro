@@ -101,11 +101,27 @@ Opened 2026-05-15.
   CPython PEM-or-DER.  Streaming converter (no split / no GC storm).
   Strict RFC 7468 `CERTIFICATE` boundary; alternate armors → clear
   ValueError, documented.  sockets 0.5.0 → 0.6.0.
-- [ ] #1 consolidated 4-board matrix test (needs `_seed_rtc` for the
-  real-HTTPS leg).
-- [ ] #9 RAM-mode data-file staging investigation (gates #10a).
-- [ ] #10a shipped bundle as a DER **data file** + low-RAM loader
-  (free source post-parse).  #10b/#10c (user-CA detect, converter)
-  done above.
+- [x] **#1 consolidated 4-board matrix test** (`eeb4994b`) — three
+  legs (no-verify accepts / default rejects / default accepts a real
+  ISRG-X1 host) green on Lolin S2 + Pi Pico W × CP/MP.  `_seed_rtc`
+  from host clock (conftest publishes `sockets.now_utc_tuple`).
+  Surfaced concrete #7 evidence: example.com → AAA Certificate
+  Services / Sectigo, *not* in the 9-root MP bundle (CP firmware
+  has it) — Sectigo/AAA is a must-add for the final subset.
+- [x] **#9 RAM-mode data-file staging** (`<this commit>`) — finding:
+  CP RAM-mode (raw-REPL exec, no FS) silently drops non-`.py` files
+  (`circuitpython_bootstrap.py:119-121`); MP mount-mode + all flash
+  modes carry them.  Resolution: `Deployer._resolve_effective_device`
+  now auto-switches the *whole* deploy to flash when the staged set
+  has any non-`.py` file (all-or-nothing, after the `force_deploy_mode`
+  escape hatch, same contract as `requires_flash`).  workbench/deploy
+  0.21.1 → 0.22.0.  Decision: **DER ships as a data file** (not a
+  `.py` constant) — the file's tight read→parse→free *lifetime*
+  beats the constant's fragmentation (evict-after-parse strands an
+  ~8 KB hole among long-lived TLS objects; non-compacting GC).
+- [ ] #10a shipped bundle as a DER **data file** + low-RAM loader:
+  read→`load_verify_locations`→local freed *before* long-lived TLS
+  allocs; resolve path via package `__file__` (reliable — data-file
+  deploys are now guaranteed flash).  #10b/#10c done above.
 - [ ] #6 RAM instrumentation test + #7 final subset sizing + Decision
   0067 body correction (curated-subset-is-permanent).
