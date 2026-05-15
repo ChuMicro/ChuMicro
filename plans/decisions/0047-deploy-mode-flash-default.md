@@ -64,29 +64,23 @@ kvstore, ntp, wifi, compat, logging, events) leave the flag absent.
 
 ### 3. Pre-flight check + auto-switch with explanation
 
-`chumicro-deploy` adds a pre-flight step before transport.connect():
+A RAM-mode deploy auto-switches to flash, with a human-readable
+explanation, when the deploy graph carries a `requires_flash` library.
+The `requires_flash` schema (§2) is the library-side input to that
+check; the check itself proceeds in flash mode (no error, no aborted
+run) and mutates only the *effective* mode for the run — the user's
+`Device` is untouched.  `force_deploy_mode='ram'` (CLI:
+`--force-deploy-mode ram`) is the escape hatch that skips it
+(debugging the failure mode; explicit RAM iteration on a high-RAM
+board; one-off probes).
 
-1. If `device.deploy_mode != "ram"`, skip — nothing to switch.
-2. If `force_deploy_mode` was passed, skip — caller chose explicitly.
-3. Walk the deploy graph's host paths up to their containing
-   `pyproject.toml`.  For each unique pyproject, read
-   `[tool.chumicro].requires_flash`.
-4. If any are `true`: auto-switch to `"flash"` mode and emit a
-   human-readable explanation::
-
-       switching to flash mode: chumicro-mqtt, chumicro-requests
-       declare `requires_flash = true` (heavy parsers + state
-       machines often OOM in RAM mode on smaller boards).
-       Pass force_deploy_mode='ram' to bypass.
-
-   The deploy proceeds in flash mode.  No error, no aborted run.
-5. The auto-switch mutates the *effective* deploy mode for this run
-   only; the user's `Device` instance is untouched.
-
-The escape hatch `force_deploy_mode='ram'` (CLI: `--force-deploy-mode ram`)
-skips the pre-flight check entirely.  Use cases: debugging the
-failure mode itself; explicit RAM-mode iteration on a high-RAM
-board; one-off probes.
+The *mechanism* — originally a chumicro-deploy-only pre-flight — is
+now a single resolver shared by `chumicro-deploy` and
+`chumicro-pytest-device`, with an additional non-`.py`-data-file
+trigger and a `devices.yml` flash-only device capability, so the
+functional/on-device test path applies the same policy instead of a
+divergent copy.  See [Decision 0068](0068-unified-deploy-mode-resolution.md)
+for the unified resolution order and the supported deploy-mode matrix.
 
 The auto-switch is the right default per the user's framing during
 plan review: forcing the user to debug-and-retry with a different

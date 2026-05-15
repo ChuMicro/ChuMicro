@@ -491,33 +491,3 @@ Currently scripts use `print()` for warnings and status.  A unified
 `logging` setup would allow log levels, consistent formatting, and
 filtering — but only makes sense if applied across all scripts, not
 piecemeal.  Parked for a rainy day.
-
-### Two deploy-mode resolvers — the non-`.py`⇒flash safety check lives in only one
-
-`Deployer._effective_device_for_source` (chumicro-deploy / CLI /
-production deploys) auto-switches RAM→flash when the staged set
-contains a non-`.py` data file or a `requires_flash` library.  The
-pytest-device functional-test path uses a *different* resolver,
-`resolve_effective_deploy_mode` (`workbench/pytest-device/.../_test_runner.py`),
-which only honours CLI `--deploy-mode` > devices.yml per-device >
-global default — it has no non-`.py` / `requires_flash` policy.
-
-The split itself is defensible (app-deploy safety policy vs
-test-harness explicit mode choice).  The gap: CP RAM-mode source
-staging *silently skips* non-`.py` files (`circuitpython_bootstrap.py`
-~L119-121) rather than erroring like the `extra_files` /
-`runtime_config.msgpack` path does.  So running any sockets-TLS-
-touching functional test (sockets' own matrix, or mqtt / requests /
-websockets / http_server client TLS — all depend on sockets and stage
-`_ca_bundle.der`) with `--deploy-mode ram` on CircuitPython silently
-drops the bundle → confusing failure, no "switch to flash" hint.
-Masked today only because functional tests default to flash (Decision
-0047); bites anyone who explicitly picks ram.
-
-Candidate fix: hoist "non-`.py` staged file + RAM = unsafe" into a
-shared check — resolver #1 keeps auto-switching; the pytest-device
-path should at least error loudly instead of silently skipping.
-Small, focused; out of scope for the (closed) TLS default-trust
-hardening workstream.
-
-Related: Decision 0047 (functional tests flash by default), Decision 0067 (MP TLS default trust — what introduced the staged `.der`), commit `80927ff0` (the resolver #1 non-`.py` switch).
