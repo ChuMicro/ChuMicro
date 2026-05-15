@@ -224,3 +224,24 @@ def ssl_context_with_ca(ca_pem):
         ca_pem = bytes(ca_pem).decode("ascii")
     context.load_verify_locations(cadata=ca_pem)
     return context
+
+
+def ssl_context_no_verify():
+    """Return a CPython ``ssl.SSLContext`` that **skips** verification.
+
+    Explicit opt-out for callers that intentionally don't want to
+    validate the peer.  Named so code reviewers can grep for it —
+    ``tls_client_socket(host, port, context=ssl_context_no_verify())``
+    shouts what it does.
+
+    Inverts both of ``ssl.create_default_context``'s secure defaults:
+    ``check_hostname = False`` (must come first — stdlib refuses to
+    set ``verify_mode = CERT_NONE`` while ``check_hostname`` is true)
+    and ``verify_mode = CERT_NONE``.
+    """
+    import ssl  # noqa: PLC0415 — runtime-gated
+
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context

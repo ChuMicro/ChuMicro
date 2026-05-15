@@ -20,6 +20,8 @@ import chumicro_sockets
 from chumicro_sockets import (
     UnsupportedSSLConfigError,
     is_eagain,
+    set_default_ca_bundle,
+    ssl_context_no_verify,
     ssl_context_with_ca,
     ssl_context_with_cert_and_key,
     ssl_context_with_cert_and_key_paths,
@@ -550,6 +552,146 @@ class TestSslContextWithCa:
 
         assert isinstance(result, _RecordingContext)
         assert "fake-bytes" in captured["cadata"]
+
+
+# ---------------------------------------------------------------------------
+# ssl_context_no_verify — per-runtime opt-out shape
+# ---------------------------------------------------------------------------
+
+
+class TestSslContextNoVerifyRouting:
+    def test_cpython_route_inverts_default_secure_context(self) -> None:
+        """CPython adapter: ``create_default_context`` + flip
+        ``check_hostname`` and ``verify_mode = CERT_NONE``."""
+        fake_ssl = _FakeModule()
+        fake_ssl.CERT_NONE = 0
+
+        class _CtxStub:
+            check_hostname = True
+            verify_mode = None
+
+        fake_ssl.create_default_context = lambda: _CtxStub()
+
+        with _set_runtime("cpython"), \
+                _SwapItem(sys.modules, "ssl", fake_ssl):
+            result = ssl_context_no_verify()
+
+        assert isinstance(result, _CtxStub)
+        # Must set check_hostname False BEFORE verify_mode (stdlib
+        # refuses verify_mode=CERT_NONE while check_hostname is true).
+        assert result.check_hostname is False
+        assert result.verify_mode == fake_ssl.CERT_NONE
+
+    def test_cp_route_uses_empty_string_load_verify_idiom(self) -> None:
+        """CP adapter: ``load_verify_locations(cadata="")`` falls through
+        the firmware-bundle/cacert_buf checks to VERIFY_NONE at handshake."""
+        captured: dict = {}
+
+        class _CtxStub:
+            check_hostname = True
+
+            def load_verify_locations(self, *, cadata):
+                captured["cadata"] = cadata
+
+        fake_ssl = _FakeModule()
+        fake_ssl.create_default_context = lambda: _CtxStub()
+
+        with _set_runtime("circuitpython"), \
+                _SwapItem(sys.modules, "ssl", fake_ssl):
+            result = ssl_context_no_verify()
+
+        assert isinstance(result, _CtxStub)
+        assert captured["cadata"] == ""
+        assert result.check_hostname is False
+
+    def test_mp_route_delegates_to_mp_adapter(self) -> None:
+        """MP routing delegates to the adapter's ``ssl_context_no_verify``."""
+        captured: dict = {"called": False}
+
+        def fake_factory():
+            captured["called"] = True
+            return "fake-no-verify-context"
+
+        contexts = [_set_runtime("micropython")]
+        contexts.extend(_stub_mp_adapter(ssl_context_no_verify=fake_factory))
+
+        for context in contexts:
+            context.__enter__()
+        try:
+            result = ssl_context_no_verify()
+        finally:
+            for context in reversed(contexts):
+                context.__exit__(None, None, None)
+
+        assert result == "fake-no-verify-context"
+        assert captured["called"] is True
+
+
+# ---------------------------------------------------------------------------
+# set_default_ca_bundle — only MP delegates
+# ---------------------------------------------------------------------------
+
+
+class TestSetDefaultCaBundleRouting:
+    def test_mp_route_delegates_to_mp_adapter(self) -> None:
+        captured: dict = {}
+
+        def fake_setter(pem):
+            captured["pem"] = pem
+
+        contexts = [_set_runtime("micropython")]
+        contexts.extend(_stub_mp_adapter(set_default_ca_bundle=fake_setter))
+
+        for context in contexts:
+            context.__enter__()
+        try:
+            set_default_ca_bundle(b"fake-pem")
+        finally:
+            for context in reversed(contexts):
+                context.__exit__(None, None, None)
+
+        assert captured["pem"] == b"fake-pem"
+
+    def test_cp_route_is_noop(self) -> None:
+        """CP gets trust from the firmware bundle — calling
+        ``set_default_ca_bundle`` must not touch the MP adapter."""
+        captured: dict = {}
+
+        def fake_setter(pem):
+            captured["pem"] = pem  # should never fire
+
+        contexts = [_set_runtime("circuitpython")]
+        contexts.extend(_stub_mp_adapter(set_default_ca_bundle=fake_setter))
+
+        for context in contexts:
+            context.__enter__()
+        try:
+            set_default_ca_bundle(b"ignored")
+        finally:
+            for context in reversed(contexts):
+                context.__exit__(None, None, None)
+
+        assert captured == {}
+
+    def test_cpython_route_is_noop(self) -> None:
+        """CPython gets trust from the OS store — call must be silent."""
+        captured: dict = {}
+
+        def fake_setter(pem):
+            captured["pem"] = pem
+
+        contexts = [_set_runtime("cpython")]
+        contexts.extend(_stub_mp_adapter(set_default_ca_bundle=fake_setter))
+
+        for context in contexts:
+            context.__enter__()
+        try:
+            set_default_ca_bundle(None)
+        finally:
+            for context in reversed(contexts):
+                context.__exit__(None, None, None)
+
+        assert captured == {}
 
 
 # ---------------------------------------------------------------------------

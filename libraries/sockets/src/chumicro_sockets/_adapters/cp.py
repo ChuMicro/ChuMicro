@@ -320,3 +320,28 @@ def ssl_context_with_ca(ca_pem):
     context = ssl.create_default_context()
     context.load_verify_locations(cadata=ca_pem)
     return context
+
+
+def ssl_context_no_verify():
+    """Return a CP ``ssl.SSLContext`` that **skips** certificate verification.
+
+    Explicit opt-out for callers that intentionally don't want to
+    validate the peer.  Named so code reviewers can grep for it —
+    ``tls_client_socket(host, port, context=ssl_context_no_verify())``
+    shouts what it does.
+
+    Implementation: CircuitPython's :class:`ssl.SSLContext` exposes no
+    settable ``verify_mode`` property — the authmode is decided at
+    handshake time based on whether CAs were loaded.  Calling
+    ``load_verify_locations("")`` with an empty string clears the
+    firmware-attached CA bundle and sets ``cacert_bytes = 0``, which
+    falls through to ``MBEDTLS_SSL_VERIFY_NONE`` at handshake (see
+    CP's ``shared-module/ssl/SSLSocket.c``).  ``check_hostname = False``
+    matches the other runtimes' opt-out shape.
+    """
+    import ssl  # noqa: PLC0415 — CP-only import
+
+    context = ssl.create_default_context()
+    context.load_verify_locations(cadata="")
+    context.check_hostname = False
+    return context
