@@ -28,6 +28,82 @@ loudly auto-switches instead of silently mis-deploying.
   unit suite runs on unix-port; `--target device` exists but no
   dedicated bulk command.
 
+## Implementation map (for a cold session — read before touching code)
+
+Concrete code locations, verified this session.  Line numbers drift —
+grep the symbol.
+
+**The two resolvers to unify:**
+
+- `workbench/deploy/src/chumicro_deploy/deployer.py` →
+  `Deployer._effective_device_for_source` (~L112).  This is the CLI /
+  app-deploy resolver; it *already* has the force / not-ram /
+  non-`.py` / `requires_flash` order (added this session, commit
+  `80927ff0`).  4 tests: `workbench/deploy/tests/test_deployer.py`
+  `TestPreflightAutoSwitch` + `TestPreflightDataFileAutoSwitch`.
+  Phase 1 lifts this body into a standalone
+  `resolve_deploy_mode(...)` in `chumicro_deploy` and re-points the
+  method at it (behaviour-preserving — those 8 tests must stay green).
+- `workbench/pytest-device/src/chumicro_pytest_device/_test_runner.py`
+  → `resolve_effective_deploy_mode` (~L181).  The test-path resolver
+  with NO source/lib inspection — the divergence.  Phase 2 makes it
+  delegate to the shared resolver.
+
+**Staging / what feeds `staged_files` and `requires_flash_libs`:**
+
+- `_test_runner.py` → `resolve_library_source_dirs` (~L103-178):
+  returns dependency-first `src/` *directories* (library + its
+  chumicro pyproject deps + test-file-imported libs).  This is the
+  dependency-closure walk.  For functional/app-deploy `staged_files`
+  = whole closure (these dirs); for the unit sweep `staged_files` =
+  library-under-test's own `src/` only.  `requires_flash_libs` is
+  derived from this same closure walk (transitive — 0068 §1 step 3),
+  regardless of the `staged_files` scope.
+- Staging orchestration: `plugin.py` ~L805-868 (per-item prepare;
+  flash re-stages per library via `_bulk_stage_for_device`
+  ~L1290 with `library_filter`, RAM re-stages per file with
+  `_should_soft_reset_before_stage` ~L1243).  The per-library
+  isolation (rsync `--delete` on library switch; soft-reset between
+  RAM files) ALREADY EXISTS — the sweep reuses it untouched, do not
+  rebuild it.  Comments at `plugin.py` ~L816-821 / ~L1254-1265 and
+  `circuitpython_bootstrap.py` ~L119-121 ("non-`.py` silently
+  skipped in RAM-mode CP") encode the constraints — read them.
+- `device.py`: `DeployMode` enum, `DEFAULT_DEPLOY_MODE = "flash"`
+  (~L33).  The sweep's last-resort default is `ram`, NOT this — that
+  is a *caller* choice in the sweep command, not a change to
+  `DEFAULT_DEPLOY_MODE` (don't flip the global; 0047 owns it).
+- `chumicro_deploy.sources.FileSource.files()` → on-device path map;
+  `circuitpython_bootstrap.py` is the RAM CP raw-REPL subsystem
+  (RAM-only; verified NOT shared with `chumicro-repl`, which has its
+  own `workbench/repl/.../session.py`).
+
+**Verification (Phase-2 regression is the load-bearing one):**
+
+- `--deploy-mode ram` + `libraries/sockets/functional_tests/test_real_tls_matrix.py`
+  on a CP board must now *loudly switch to flash and pass* — today
+  it silently drops `_ca_bundle.der`.  Run on the 4-board canonical
+  matrix (Lolin S2 + Pi Pico W × CP/MP).
+- `chumicro_ntp` unit suite must stay RAM (dependency-closure
+  non-poisoning — 0068 §1 step 4 / workstream acceptance).
+
+**Explicitly OUT of scope (do not conflate):**
+
+- The `plans/next-up.md` "`subprocess.run(["sync"])` slow
+  CircuitpythonTransport tests" item is a SEPARATE unit-test-isolation
+  defect (real `sync` not faked).  It is *not* caused by, fixed by,
+  or related to this workstream.  Preflight never deploys to a board;
+  this work does not touch preflight timing.  Leave that item alone.
+- Do NOT delete RAM mode / the bootstrap subsystem.  Deletion was
+  considered this session and explicitly rejected (0068 Alternatives)
+  — most libraries are RAM-capable and the subsystem works.
+- Do NOT supersede 0028 or 0047.  0028's RAM/flash transport
+  mechanics stay; 0047's `requires_flash` schema + flash-default
+  stay.  0068 only unifies the *resolution policy* on top and
+  cross-links 0047 §3 (already edited in place).
+- AGENTS.md / docs / `device-testing.md` updates land in **Phase 5,
+  after the command exists** — do not document the flag/command/schema
+  before they're real.
+
 ## Phases
 
 1. **Shared resolver.**  Lift the policy into one
@@ -135,5 +211,7 @@ mode pick) → 5 (after the surface is real).
 
 ## Status
 
-- [ ] not started — workstream opened 2026-05-15 (design captured in
-  Decision 0068; implementation pending sign-off).
+- [ ] **not started — Decision 0068 `accepted` + signed off
+  2026-05-15; ready to implement.**  Phase 1 is the entry point
+  (shared resolver); see the implementation map above before
+  starting.  No code written yet.
