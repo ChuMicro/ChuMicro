@@ -130,9 +130,18 @@ def tls_client_socket(
       (mbedTLS-backed on RP2 + ESP32 from MP 1.24+).
     * **CPython** — stdlib ``ssl.SSLContext.wrap_socket``.
 
-    *context=None* on every runtime calls the runtime's
-    ``ssl.create_default_context()`` — picks up the system trust
-    store, modern ciphers, hostname verification on.
+    *context=None* behavior **diverges across runtimes today** — pass
+    an explicit context built from :func:`ssl_context_with_ca` if you
+    need uniform certificate verification:
+
+    * **CircuitPython** — verifies against the firmware-bundled
+      mbedTLS CA store (``x509-crt-bundle``).
+    * **CPython** — ``ssl.create_default_context()``; verifies against
+      the host OS trust store.
+    * **MicroPython** — **accepts any certificate**.  MP ships no
+      trust store and bare ``ssl.wrap_socket`` leaves
+      ``verify_mode = CERT_NONE``.  Build an explicit context via
+      :func:`ssl_context_with_ca` for verified TLS on MP.
 
     Args:
         host: DNS name or IP literal.  Used as ``server_hostname``

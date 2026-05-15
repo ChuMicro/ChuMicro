@@ -24,7 +24,7 @@ finally:
     sock.close()
 ```
 
-### TLS, runtime default trust store
+### TLS — current behavior of `context=None`
 
 ```python
 from chumicro_sockets import tls_client_socket
@@ -33,7 +33,13 @@ sock = tls_client_socket("api.example.com", 443, radio=None)
 sock.send(b"GET / HTTP/1.0\r\n\r\n")
 ```
 
-`context=None` uses each runtime's default CA bundle.  CPython routes through `ssl.create_default_context()`; MP uses the system trust store via `ssl.wrap_socket(server_hostname=host)`; CP uses the radio's built-in trust store.
+`context=None` is **not uniformly secure across runtimes today** — the per-runtime trust story diverges and the library hasn't yet papered over it.  Pass an explicit context built from [`ssl_context_with_ca`](api.md#chumicro_sockets.ssl_context_with_ca) if you need consistent certificate verification on every runtime.
+
+| Runtime | `context=None` behavior |
+|---|---|
+| CircuitPython | Verifies against the firmware-bundled mbedTLS CA store (`x509-crt-bundle`).  Rejects expired / unknown roots. |
+| CPython | Routes through `ssl.create_default_context()` — verifies against the host OS trust store. |
+| MicroPython | **Accepts any certificate.**  MP ships no trust store and `ssl.wrap_socket(sock, server_hostname=host)` with no context leaves `verify_mode = CERT_NONE`.  Build an explicit context via [`ssl_context_with_ca`](api.md#chumicro_sockets.ssl_context_with_ca) for verified TLS on MP.
 
 ### TLS with a custom CA
 
