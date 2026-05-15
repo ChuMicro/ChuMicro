@@ -1845,7 +1845,7 @@ class TestDoctorFixFskitWedge:
         path polls twice — pre + post killall).  Pass the returned
         runner to :func:`cli.main` via ``env=cli.CliEnv(subprocess_runner=...)``.
         """
-        monkeypatch.setattr(cli.sys, "platform", platform)
+        monkeypatch.setattr(cli.health.sys, "platform", platform)
         states = list(wedge_states) if wedge_states is not None else [False]
         detect_calls: list[bool] = []
 
@@ -1854,9 +1854,9 @@ class TestDoctorFixFskitWedge:
             detect_calls.append(value)
             return value
 
-        monkeypatch.setattr(cli, "detect_fskit_wedge", fake_detect)
+        monkeypatch.setattr(cli.health, "detect_fskit_wedge", fake_detect)
         monkeypatch.setattr(
-            cli.shutil, "which",
+            cli.health.shutil, "which",
             lambda name: "/usr/bin/sudo" if sudo_on_path else None,
         )
         # Patch isatty in place on whatever pytest has installed — it
@@ -1864,11 +1864,11 @@ class TestDoctorFixFskitWedge:
         # a regular file.  Replacing the whole stream object breaks
         # pytest's stderr capture and the wrapper's print-to-stderr
         # error paths.
-        monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: stdin_tty)
-        monkeypatch.setattr(cli.sys.stderr, "isatty", lambda: stderr_tty)
+        monkeypatch.setattr(cli.health.sys.stdin, "isatty", lambda: stdin_tty)
+        monkeypatch.setattr(cli.health.sys.stderr, "isatty", lambda: stderr_tty)
 
         # Skip the 2-second settle.
-        monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
+        monkeypatch.setattr(cli.health.time, "sleep", lambda _seconds: None)
 
         return FakeSubprocessRunner(returncode=run_returncode), detect_calls
 

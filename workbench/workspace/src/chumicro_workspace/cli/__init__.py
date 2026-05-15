@@ -29,10 +29,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
 import sys
-import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,10 +54,6 @@ from chumicro_deploy.config.devices_yaml import (
 from chumicro_deploy.firmware_url import (
     UnresolvedFirmwareError,
     derive_firmware_url,
-)
-from chumicro_deploy.macos_fskit import (
-    MACOS_FSKIT_RECOVERY_COMMAND,
-    detect_fskit_wedge,
 )
 from chumicro_deploy.recovery import DeployFailureKind, classify_deploy_failure
 from chumicro_deploy.runtime_marker import read_runtime_marker
@@ -95,6 +89,7 @@ from chumicro_workspace.cli.devices import (
 from chumicro_workspace.cli.devices import (
     _suggest_device_id as _suggest_device_id,
 )
+from chumicro_workspace.cli.health import _add_health_parsers
 from chumicro_workspace.cli.setup import _add_setup_parsers
 from chumicro_workspace.config_manifest import (
     ConfigManifestError,
@@ -117,9 +112,7 @@ from chumicro_workspace.firmware_support import (
     explain as explain_firmware_support,
 )
 from chumicro_workspace.health import (
-    HealthFinding,
     HealthLevel,
-    collect_doctor_findings,
     collect_health_findings,
 )
 from chumicro_workspace.import_graph import (
@@ -680,193 +673,6 @@ def _cmd_projects(args: argparse.Namespace) -> int:
             print(name)
         return 0
     print(_render_projects_tree(workspace))
-    return 0
-
-
-#: Glyphs for ``status`` line prefixes.  Plain Unicode dingbats so
-#: every reasonable terminal renders them; downstream consumers
-#: that want strict ASCII can pipe through ``sed`` to remap.
-_HEALTH_LEVEL_PREFIX: dict[HealthLevel, str] = {
-    HealthLevel.OK: "✓",
-    HealthLevel.WARN: "⚠",
-    HealthLevel.ERROR: "✗",
-}
-
-#: Width of the label column in ``status`` output.  Picked so the
-#: longest current label (``WORKSPACE.YML``) plus a 2-space gutter
-#: lines up the prefix glyph at the same column for every row.
-_STATUS_LABEL_WIDTH: int = 16
-
-
-def _format_health_finding(finding: HealthFinding) -> str:
-    """Return the one-line representation of *finding* for ``status``."""
-    prefix = _HEALTH_LEVEL_PREFIX[finding.level]
-    label = finding.label.ljust(_STATUS_LABEL_WIDTH)
-    return f"{label}{prefix} {finding.message}"
-
-
-def _print_health_findings(
-    workspace: WorkspaceLayout,
-    findings: list[HealthFinding],
-) -> int:
-    """Print *findings* with the status/doctor renderer; return exit code.
-
-    Header line carries the workspace root.  Each finding renders as
-    ``LABEL <glyph> message``; warning / error findings carry an
-    optional hint indented under the label column.  Exit code flips
-    to 1 only on at least one ERROR — warnings stay at 0 so the
-    output composes cleanly with shell-pipe checks.
-    """
-    print(f"WORKSPACE       {workspace.root}")
-    has_error = False
-    for finding in findings:
-        print(_format_health_finding(finding))
-        if finding.hint and finding.level is not HealthLevel.OK:
-            print(f"{' ' * _STATUS_LABEL_WIDTH}  hint: {finding.hint}")
-        if finding.level is HealthLevel.ERROR:
-            has_error = True
-    return 1 if has_error else 0
-
-
-def _cmd_status(args: argparse.Namespace) -> int:
-    """Print a one-line-per-check workspace health snapshot.
-
-    Runs the three fast static checks (workspace.yml validity,
-    devices.yml count, projects tree summary).  ``doctor`` is the
-    stricter sibling that adds Python version checking and per-project
-    AST scans for ``run()``.
-    """
-    workspace = _resolve_workspace(args)
-    return _print_health_findings(workspace, collect_health_findings(workspace))
-
-
-def _cmd_doctor(args: argparse.Namespace) -> int:
-    """Strict sibling of ``status`` — adds AST + Python-version checks.
-
-    With ``--fix-fskit-wedge`` dispatches to the macOS FSKit recovery
-    wrapper instead of the static checks.  That path has no workspace
-    dependency — wedge detection + the killall recovery don't touch
-    workspace state.
-
-    On top of ``status``'s four checks, ``doctor`` runs:
-
-    * ``check_python_version`` — is the host Python on a supported
-      version (3.11+).
-    * ``check_project_run_functions`` — AST-walks each project's
-      ``app.py`` and verifies a top-level ``run()`` definition
-      exists (the workspace_runtime boot contract).
-
-    Same renderer + exit-code rules as ``status``: errors flip exit
-    to 1, warnings stay at 0.  Per-project failures list the failing
-    project names in the hint so the user can navigate straight to
-    the broken file.
-
-    Per-device reachability probes (``check the board responds on
-    its address``) are deferred until we have a hardware-cheap probe
-    primitive that can run without blocking the static checks.
-    """
-    if getattr(args, "fix_fskit_wedge", False):
-        return _fix_fskit_wedge(args._env.subprocess_runner)
-    workspace = _resolve_workspace(args)
-    return _print_health_findings(workspace, collect_doctor_findings(workspace))
-
-
-#: Distinct exit codes for the ``--fix-fskit-wedge`` path so scripted
-#: callers can tell *why* the wrapper refused to run.  ``0`` is wedge
-#: cleared; ``1`` (default) is reserved for genuine command-failure
-#: paths the runner picks up.
-_FSKIT_FIX_EXIT_NOT_DARWIN = 2
-_FSKIT_FIX_EXIT_NOT_WEDGED = 3
-_FSKIT_FIX_EXIT_NO_TTY = 4
-_FSKIT_FIX_EXIT_NO_SUDO = 5
-_FSKIT_FIX_EXIT_PERSISTS = 6
-
-
-def _fix_fskit_wedge(
-    subprocess_runner: Callable[..., subprocess.CompletedProcess],
-) -> int:
-    """Opt-in sudo wrapper around :data:`MACOS_FSKIT_RECOVERY_COMMAND`.
-
-    Refuses on non-macOS, when no wedge is detected (running the
-    killall on a healthy system damages mounted volumes), when
-    stdin/stderr are not a TTY (sudo can't prompt for a password),
-    or when ``sudo`` is not on PATH.  When all checks pass, runs the
-    killall, settles 2 s, re-runs detection, and reports.  Distinct
-    exit codes per refusal class so scripted callers can branch.
-    """
-    if sys.platform != "darwin":
-        print(
-            "[chumicro-workspace] FSKit wedge recovery is macOS-only.",
-            file=sys.stderr,
-        )
-        return _FSKIT_FIX_EXIT_NOT_DARWIN
-
-    if not detect_fskit_wedge():
-        print(
-            "[chumicro-workspace] No FSKit wedge detected — refusing "
-            "to run the recovery command.\n"
-            "Running it on a healthy system kills daemons mid-"
-            "operation on mounted volumes and leaves them in an "
-            "I/O-error state that needs physical replug to recover.",
-            file=sys.stderr,
-        )
-        return _FSKIT_FIX_EXIT_NOT_WEDGED
-
-    # sudo prompts for the password on stderr by default.  If either
-    # stdin (where it reads the password) or stderr (where it writes
-    # the prompt) is not a TTY, the prompt either silently hangs or
-    # the user can't see it.  Refuse and surface the paste fallback.
-    if not sys.stdin.isatty() or not sys.stderr.isatty():
-        print(
-            "[chumicro-workspace] Cannot prompt for sudo on a non-"
-            "interactive shell.  Paste this into a Terminal tab "
-            f"manually:\n    {MACOS_FSKIT_RECOVERY_COMMAND}",
-            file=sys.stderr,
-        )
-        return _FSKIT_FIX_EXIT_NO_TTY
-
-    if shutil.which("sudo") is None:
-        print(
-            "[chumicro-workspace] `sudo` is not on PATH.  Paste this "
-            f"manually:\n    {MACOS_FSKIT_RECOVERY_COMMAND}",
-            file=sys.stderr,
-        )
-        return _FSKIT_FIX_EXIT_NO_SUDO
-
-    print(
-        "[chumicro-workspace] FSKit wedge detected.  Running recovery "
-        "(sudo will prompt for your password).",
-    )
-    # MACOS_FSKIT_RECOVERY_COMMAND is the literal "sudo killall -9
-    # <daemon> <daemon> ..." line; whitespace-split is safe — the
-    # constant has no quoting / shell metacharacters.
-    completed = subprocess_runner(  # noqa: S603 — argv from a vetted constant
-        MACOS_FSKIT_RECOVERY_COMMAND.split(),
-        check=False,
-    )
-    if completed.returncode != 0:
-        print(
-            "[chumicro-workspace] Recovery command failed (exit "
-            f"{completed.returncode}).  Reboot is the always-safe "
-            "alternative.",
-            file=sys.stderr,
-        )
-        return completed.returncode
-
-    # Daemons respawn under launchd; give them a beat before
-    # re-checking so the detector doesn't catch the gap between the
-    # killall returning and the new ``diskarbitrationd`` registering
-    # its process state.
-    time.sleep(2.0)
-    if detect_fskit_wedge():
-        print(
-            "[chumicro-workspace] Wedge persists after killall.  "
-            "Reboot is the always-safe alternative.",
-            file=sys.stderr,
-        )
-        return _FSKIT_FIX_EXIT_PERSISTS
-
-    print("[chumicro-workspace] FSKit wedge cleared.")
     return 0
 
 
@@ -2204,40 +2010,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     projects_parser.set_defaults(func=_cmd_projects)
 
-    # ----- status --------------------------------------------------------
-    status_parser = subparsers.add_parser(
-        "status",
-        help=(
-            "Print a one-line-per-check workspace health snapshot "
-            "(workspace.yml validity, devices.yml count, "
-            "projects tree summary)."
-        ),
-    )
-    _add_workspace_arg(status_parser)
-    status_parser.set_defaults(func=_cmd_status)
-
-    # ----- doctor --------------------------------------------------------
-    doctor_parser = subparsers.add_parser(
-        "doctor",
-        help=(
-            "Strict sibling of `status` — adds Python version check "
-            "and a per-project AST scan for `run()`."
-        ),
-    )
-    _add_workspace_arg(doctor_parser)
-    doctor_parser.add_argument(
-        "--fix-fskit-wedge",
-        action="store_true",
-        dest="fix_fskit_wedge",
-        help=(
-            "macOS only.  Detect the FSKit wedge and, if present, "
-            "run the sudo killall recovery command for you (sudo "
-            "prompts for your password inline).  Refuses to run "
-            "when no wedge is detected — running the recovery on a "
-            "healthy system damages mounted volumes."
-        ),
-    )
-    doctor_parser.set_defaults(func=_cmd_doctor)
+    _add_health_parsers(subparsers)
 
     # ----- demo ----------------------------------------------------------
     demo_parser = subparsers.add_parser(
