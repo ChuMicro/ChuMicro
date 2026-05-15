@@ -483,3 +483,34 @@ class TestSslContextWithCa:
         )
         context = mp_adapter.ssl_context_with_ca(ca_pem)
         assert context.verify_mode == fake_ssl_module.CERT_REQUIRED
+
+    def test_der_input_passed_through_unconverted(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """Raw DER (ASN.1 SEQUENCE, first byte 0x30) is loaded as-is —
+        no PEM markers, so it must NOT be run through ``_pem_to_der``
+        (which would yield empty trust)."""
+        der = b"\x30\x82\x01\x23" + b"\x00" * 60  # DER-shaped blob
+        context = mp_adapter.ssl_context_with_ca(der)
+        assert context.cadata == der
+
+    def test_bytearray_der_normalized_and_passed_through(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """bytearray DER is normalized to bytes and passed through."""
+        der = bytearray(b"\x30\x82\x00\x10" + b"\x01" * 20)
+        context = mp_adapter.ssl_context_with_ca(der)
+        assert context.cadata == bytes(der)
+
+    def test_neither_pem_nor_der_raises_valueerror(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """Input that is neither PEM-marked nor 0x30-led is rejected
+        early with a clear ValueError rather than silently trusting
+        nothing."""
+        try:
+            mp_adapter.ssl_context_with_ca(b"not a certificate at all")
+        except ValueError as error:
+            assert "PEM" in str(error) and "DER" in str(error)
+        else:
+            raise AssertionError("expected ValueError for non-cert input")

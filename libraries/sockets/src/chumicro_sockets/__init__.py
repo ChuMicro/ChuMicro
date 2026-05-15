@@ -459,16 +459,45 @@ def ssl_context_with_ca(ca_pem: str | bytes) -> object:
     """Build an SSLContext that trusts the CA(s) in *ca_pem*.
 
     The common "default everything except the trust anchor" recipe.
-    Identical shape on every runtime (every supported board ships
-    on-board ``ssl``).  Returned as ``object``
-    rather than ``ssl.SSLContext`` so we don't force ``import ssl``
-    at module-load time on plain-TCP-only consumers.
+    Returned as ``object`` rather than ``ssl.SSLContext`` so we don't
+    force ``import ssl`` at module-load time on plain-TCP-only
+    consumers.
+
+    Input format acceptance is **not uniform** — it follows what each
+    runtime's ``ssl`` binding can take:
+
+    * **MicroPython** — PEM *or* DER.  PEM is converted to DER
+      internally (unconditionally — see the MP adapter); DER is loaded
+      as-is.  DER is preferred for user-supplied CAs on MP-targeted
+      code: it skips the conversion and is the only format the rp2
+      mbedTLS build accepts.
+    * **CPython** — PEM *or* DER (stdlib accepts both).
+    * **CircuitPython** — **PEM only**.  CP's ``load_verify_locations``
+      binding takes an ASCII ``str``; a DER blob raises ``ValueError``
+      up front rather than failing cryptically.
+
+    Multi-cert bundles (concatenated PEM blocks or concatenated DER)
+    are supported on every runtime.
+
+    "PEM" here means the RFC 7468 certificate encoding — the exact
+    ``-----BEGIN CERTIFICATE-----`` / ``-----END CERTIFICATE-----``
+    boundary that ``openssl``, the Mozilla/curl bundle, and Let's
+    Encrypt all emit.  Alternate armors are **not** auto-handled and
+    raise ``ValueError`` (never silent mistrust): a legacy
+    ``X509 CERTIFICATE`` label, ``TRUSTED CERTIFICATE`` (carries extra
+    trust data), ``PKCS7`` containers, or bare unarmored base64.
+    Re-export those as a standard ``CERTIFICATE`` PEM, or pass DER.
 
     Args:
-        ca_pem: PEM-encoded CA bundle.  ASCII / UTF-8 decodable.
+        ca_pem: CA bundle.  PEM (``str``/``bytes``) on every runtime;
+            DER (``bytes``) on MicroPython + CPython only.
 
     Returns:
         Configured :class:`ssl.SSLContext`.
+
+    Raises:
+        ValueError: input is not an accepted format for the runtime
+            (e.g. DER on CircuitPython, or neither PEM nor DER).
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":

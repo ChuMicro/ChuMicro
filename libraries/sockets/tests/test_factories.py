@@ -551,7 +551,45 @@ class TestSslContextWithCa:
             result = ssl_context_with_ca(ca_pem)
 
         assert isinstance(result, _RecordingContext)
+        # PEM bytes → decoded to str for stdlib's cadata.
+        assert isinstance(captured["cadata"], str)
         assert "fake-bytes" in captured["cadata"]
+
+    def test_cpython_der_bytes_passed_through(self) -> None:
+        """stdlib ``load_verify_locations`` accepts DER as bytes-like
+        ``cadata``; the CPython adapter passes raw DER through unchanged
+        (cross-runtime parity with MP's DER acceptance)."""
+        captured: dict = {}
+
+        class _RecordingContext:
+            def load_verify_locations(self, *, cadata):
+                captured["cadata"] = cadata
+
+        fake_ssl = _FakeModule()
+        fake_ssl.create_default_context = lambda: _RecordingContext()
+        der = b"\x30\x82\x01\x10" + b"\x00" * 40
+
+        with _set_runtime("cpython"), \
+                _SwapItem(sys.modules, "ssl", fake_ssl):
+            ssl_context_with_ca(der)
+
+        assert captured["cadata"] == der
+        assert isinstance(captured["cadata"], bytes)
+
+    def test_cpython_non_cert_input_raises(self) -> None:
+        """Neither PEM nor DER → clear ValueError, not a silent
+        empty-trust context."""
+        fake_ssl = _FakeModule()
+        fake_ssl.create_default_context = lambda: object()
+
+        with _set_runtime("cpython"), \
+                _SwapItem(sys.modules, "ssl", fake_ssl):
+            try:
+                ssl_context_with_ca(b"plainly not a certificate")
+            except ValueError as error:
+                assert "PEM" in str(error) and "DER" in str(error)
+            else:
+                raise AssertionError("expected ValueError for non-cert input")
 
 
 # ---------------------------------------------------------------------------

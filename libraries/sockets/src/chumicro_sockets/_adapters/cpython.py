@@ -220,9 +220,23 @@ def ssl_context_with_ca(ca_pem):
     import ssl  # noqa: PLC0415 — runtime-gated
 
     context = ssl.create_default_context()
-    if isinstance(ca_pem, (bytes, bytearray)):
-        ca_pem = bytes(ca_pem).decode("ascii")
-    context.load_verify_locations(cadata=ca_pem)
+    if isinstance(ca_pem, str):
+        context.load_verify_locations(cadata=ca_pem)
+    else:
+        raw = bytes(ca_pem)
+        if b"-----BEGIN CERTIFICATE-----" in raw:
+            # PEM bytes — stdlib wants ``cadata`` as str for PEM.
+            context.load_verify_locations(cadata=raw.decode("ascii"))
+        elif raw[:1] == b"\x30":
+            # DER (ASN.1 SEQUENCE) — stdlib accepts bytes-like cadata
+            # as DER directly.
+            context.load_verify_locations(cadata=raw)
+        else:
+            raise ValueError(
+                "ssl_context_with_ca expects PEM "
+                "(-----BEGIN CERTIFICATE-----) or DER (ASN.1 SEQUENCE, "
+                "first byte 0x30) — got neither",
+            )
     return context
 
 

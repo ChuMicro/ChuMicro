@@ -787,6 +787,30 @@ class TestSslContextWithCa:
         assert isinstance(context.cadata, str)
         assert "more-payload" in context.cadata
 
+    def test_der_bytes_rejected_with_clear_error(self) -> None:
+        """CP's binding can't take DER — reject up front with a clear
+        message instead of a cryptic UnicodeDecodeError deep in
+        ``.decode('ascii')``."""
+        from chumicro_sockets._adapters import cp as cp_adapter
+        der = b"\x30\x82\x01\x23\xff\xfe\x00\x80"  # not ASCII-decodable
+        try:
+            cp_adapter.ssl_context_with_ca(der)
+        except ValueError as error:
+            assert "PEM" in str(error)
+            assert "DER" in str(error)
+        else:
+            raise AssertionError("expected ValueError for DER input on CP")
+
+    def test_str_non_pem_rejected(self) -> None:
+        """A str that isn't PEM is rejected with the same clear error."""
+        from chumicro_sockets._adapters import cp as cp_adapter
+        try:
+            cp_adapter.ssl_context_with_ca("definitely not a pem")
+        except ValueError as error:
+            assert "PEM" in str(error)
+        else:
+            raise AssertionError("expected ValueError for non-PEM str on CP")
+
 
 class TestSslContextNoVerify:
     def test_clears_bundle_and_check_hostname(self) -> None:
