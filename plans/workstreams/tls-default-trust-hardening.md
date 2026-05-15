@@ -45,8 +45,20 @@ plainly — it currently implies "9 now, more later."
    document the override.
 5. **Ship DER, not PEM** — DER loads on every MP port (rp2 + esp);
    only PEM breaks rp2 (no `MBEDTLS_PEM_PARSE_C`).  So always ship
-   pre-converted DER — no board probe needed, the "detect" fork
-   dissolves.  Drops the `_pem_to_der` runtime cost + transient peak.
+   pre-converted DER for the *default bundle we control* — no board
+   probe needed, the "detect" fork dissolves.  Drops the `_pem_to_der`
+   runtime cost + transient peak.
+
+   **User-provided CAs are different** (not uniform across runtimes):
+   MP needs DER on rp2 / auto-converts PEM via `_pem_to_der`; CP's
+   binding wants an ASCII PEM `str` (DER isn't ASCII-decodable);
+   CPython takes either.  `ssl_context_with_ca` must accept PEM **or**
+   DER and detect by first byte (`0x2D` `-----` PEM, `0x30` ASN.1
+   DER): MP detect (PEM→convert, DER→passthrough), CPython passthrough,
+   CP PEM-or-clear-error (today DER → silent empty-trust, verified).
+   `_pem_to_der` stays for the MP user-PEM path.  No new CLI: guide
+   documents DER-preferred + `openssl x509 -outform DER` + a ~6-line
+   bundle snippet.
 6. **Stable low-RAM loader + RAM instrumentation** — preserved
    functional test that measures resident + transient heap on each
    board for the bundle load, so subset size is set from data, and
