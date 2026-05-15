@@ -70,55 +70,19 @@ class EventBus:
     def __init__(self, capacity: int = 64) -> None:
         if capacity < 1:
             raise ValueError("capacity must be at least 1")
-        self._capacity = capacity
+        self.capacity = capacity
         self._queue = deque((), capacity)
         self._subscribers: dict = {}
         self._next_token = 0
-        self._dropped = 0
-        self._handler_errors = 0
-        self._drained = 0
-        self._delivered = 0
-
-    @property
-    def capacity(self) -> int:
-        """Maximum buffered records."""
-        return self._capacity
+        self.dropped = 0
+        self.handler_errors = 0
+        self.drained = 0
+        self.delivered = 0
 
     @property
     def buffered(self) -> int:
         """Records currently buffered, awaiting dispatch."""
         return len(self._queue)
-
-    @property
-    def dropped(self) -> int:
-        """Records dropped due to overflow since construction."""
-        return self._dropped
-
-    @property
-    def handler_errors(self) -> int:
-        """Subscriber exceptions swallowed since construction."""
-        return self._handler_errors
-
-    @property
-    def drained(self) -> int:
-        """Records taken off the queue since construction.
-
-        Counts events that reached ``handle`` and were processed,
-        whether or not anyone was subscribed at the time.  Pair with
-        ``delivered`` for the handler-invocation count.
-        """
-        return self._drained
-
-    @property
-    def delivered(self) -> int:
-        """Handler invocations attempted since construction.
-
-        Counts every ``handler(topic, ...)`` call ``handle`` issued —
-        ``records_drained × subscribers_at_that_moment``.  Includes
-        handlers that raised (those also increment
-        ``handler_errors``).
-        """
-        return self._delivered
 
     def topics(self) -> tuple:
         """Snapshot of currently-subscribed topics."""
@@ -198,7 +162,7 @@ class EventBus:
         The record is **not** dispatched immediately.  Subscribers see
         it the next time ``handle`` runs.  When the queue is full,
         ``deque(maxlen)`` drops the **oldest** record on append and
-        ``_dropped`` is incremented — newest data wins, on the
+        ``dropped`` is incremented — newest data wins, on the
         assumption that aged-out records are stale and recent events
         are more actionable than ancient backlog.
 
@@ -218,8 +182,8 @@ class EventBus:
             topic: Exact topic string.
             *args: Any objects — not interpreted by the bus.
         """
-        if len(self._queue) >= self._capacity:
-            self._dropped += 1
+        if len(self._queue) >= self.capacity:
+            self.dropped += 1
         if len(args) == 1:
             payload = args[0]
         elif not args:
@@ -298,12 +262,12 @@ class EventBus:
                     try:
                         handler(topic, payload)
                     except Exception:  # noqa: BLE001
-                        self._handler_errors += 1
+                        self.handler_errors += 1
                     delivered += 1
                     index += 1
             drained += 1
-        self._drained += drained
-        self._delivered += delivered
+        self.drained += drained
+        self.delivered += delivered
         return drained
 
     def clear(self) -> None:
@@ -315,4 +279,4 @@ class EventBus:
         """
         # Reassign rather than calling .clear() — MicroPython's deque
         # does not implement clear() in every build.
-        self._queue = deque((), self._capacity)
+        self._queue = deque((), self.capacity)
