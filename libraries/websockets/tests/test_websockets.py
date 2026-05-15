@@ -868,6 +868,108 @@ class TestFrameParserHappyPath:
 
 
 # ---------------------------------------------------------------------------
+# FrameParser — tier-3 oversize drain
+# ---------------------------------------------------------------------------
+
+
+class TestFrameParserOversizeDrain:
+    """Frames declaring a length > ``max_payload_bytes`` drain through
+    the parser without storing the payload; the parser stays usable
+    for the next frame.  Mirrors :class:`chumicro_mqtt._wire.PacketDecoder`'s
+    tier-3 rolling discard so the session layer can apply its
+    ``WhenOversized`` policy at message-FIN time, matching the shared
+    cross-library oversize contract.
+    """
+
+    def test_oversize_16bit_length_drains_payload(self):
+        parser = FrameParser(max_payload_bytes=100)
+        payload = b"X" * 500
+        consumed = parser.feed(b"\x82\x7e" + struct.pack("!H", 500) + payload)
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.oversized is True
+        assert parser.payload == b""
+        assert parser.reported_length == 500
+        assert consumed == 4 + 500
+
+    def test_oversize_64bit_length_drains_payload(self):
+        parser = FrameParser(max_payload_bytes=100)
+        payload = b"Y" * 1000
+        consumed = parser.feed(b"\x82\x7f" + struct.pack("!Q", 1000) + payload)
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.oversized is True
+        assert parser.payload == b""
+        assert parser.reported_length == 1000
+        assert consumed == 10 + 1000
+
+    def test_oversize_masked_frame_drains_without_unmasking(self):
+        # Mask bytes still consumed off the wire, but payload bytes
+        # are discarded — XOR is skipped (the bytes are going in the
+        # bin either way).
+        parser = FrameParser(max_payload_bytes=100)
+        mask = b"mask"
+        payload = b"Z" * 500
+        frame = b"\x82\xfe" + struct.pack("!H", 500) + mask + payload
+        consumed = parser.feed(frame)
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.oversized is True
+        assert parser.had_mask is True
+        assert parser.payload == b""
+        assert parser.reported_length == 500
+        assert consumed == len(frame)
+
+    def test_oversize_drain_across_feed_calls(self):
+        # Tier-3 drain must hold state across short feeds — real TCP
+        # delivers bytes in arbitrary chunks.
+        parser = FrameParser(max_payload_bytes=100)
+        frame = b"\x82\x7e" + struct.pack("!H", 500) + b"X" * 500
+        consumed = 0
+        chunk_size = 73
+        for offset in range(0, len(frame), chunk_size):
+            consumed += parser.feed(frame[offset : offset + chunk_size])
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.oversized is True
+        assert consumed == len(frame)
+
+    def test_reset_after_oversize_clears_state(self):
+        parser = FrameParser(max_payload_bytes=100)
+        parser.feed(b"\x82\x7e" + struct.pack("!H", 500) + b"X" * 500)
+        assert parser.oversized is True
+        parser.reset()
+        assert parser.state == FrameParseState.READING_HEADER
+        assert parser.oversized is False
+        # Next frame parses normally.
+        parser.feed(b"\x81\x05hello")
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.oversized is False
+        assert parser.payload == b"hello"
+
+    def test_oversize_frame_followed_by_normal_frame(self):
+        # Two back-to-back frames in one feed call: oversized + normal.
+        # `consumed` stops at the oversized frame's last byte; caller
+        # then resets and feeds the rest.
+        parser = FrameParser(max_payload_bytes=100)
+        oversized = b"\x82\x7e" + struct.pack("!H", 500) + b"X" * 500
+        normal = b"\x81\x05hello"
+        consumed = parser.feed(oversized + normal)
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.oversized is True
+        assert consumed == len(oversized)
+        parser.reset()
+        consumed = parser.feed(normal)
+        assert parser.state == FrameParseState.FRAME_READY
+        assert parser.oversized is False
+        assert parser.payload == b"hello"
+        assert consumed == len(normal)
+
+    def test_oversize_control_frame_still_raises(self):
+        # RFC 6455 §5.5: control frame > 125 is a protocol error even
+        # under tier-3 routing.  Connection must close with 1002.
+        parser = FrameParser(max_payload_bytes=10_000)
+        with raises(WebSocketProtocolError, match="125"):
+            parser.feed(b"\x89\x7e" + struct.pack("!H", 200))
+
+
+# ---------------------------------------------------------------------------
 # FrameParser — error paths
 # ---------------------------------------------------------------------------
 
@@ -905,16 +1007,6 @@ class TestFrameParserErrors:
         parser = FrameParser()
         with raises(WebSocketProtocolError, match="125"):
             parser.feed(b"\x89\x7e" + struct.pack("!H", 126))
-
-    def test_payload_over_max_raises(self):
-        parser = FrameParser(max_payload_bytes=100)
-        with raises(WebSocketProtocolError, match="max_payload_bytes"):
-            parser.feed(b"\x82\x7e" + struct.pack("!H", 500))
-
-    def test_payload_over_max_via_64bit_length_raises(self):
-        parser = FrameParser(max_payload_bytes=100)
-        with raises(WebSocketProtocolError, match="max_payload_bytes"):
-            parser.feed(b"\x82\x7f" + struct.pack("!Q", 1 << 40))
 
     def test_feed_after_error_returns_zero_consumed(self):
         parser = FrameParser()
