@@ -91,4 +91,21 @@ correction.
 
 ## Status
 
-- [ ] not started — workstream opened 2026-05-15
+Opened 2026-05-15.
+
+- [x] **#2 sendall** + brittle `led_counter` assertion — fixed
+  (`7497ac32`).  Surfaced the clock dependency (recorded above).
+- [x] **#5 / user-CA detection + streamed `_pem_to_der`** (`96959951`)
+  — `ssl_context_with_ca` PEM-or-DER: MP detect + unconditional
+  PEM→DER (no `sys.platform` branch), CP PEM-only-clear-error,
+  CPython PEM-or-DER.  Streaming converter (no split / no GC storm).
+  Strict RFC 7468 `CERTIFICATE` boundary; alternate armors → clear
+  ValueError, documented.  sockets 0.5.0 → 0.6.0.
+- [ ] #1 consolidated 4-board matrix test (needs `_seed_rtc` for the
+  real-HTTPS leg).
+- [ ] #9 RAM-mode data-file staging investigation (gates #10a).
+- [ ] #10a shipped bundle as a DER **data file** + low-RAM loader
+  (free source post-parse).  #10b/#10c (user-CA detect, converter)
+  done above.
+- [ ] #6 RAM instrumentation test + #7 final subset sizing + Decision
+  0067 body correction (curated-subset-is-permanent).
