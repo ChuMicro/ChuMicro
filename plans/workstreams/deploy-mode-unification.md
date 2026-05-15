@@ -37,25 +37,32 @@ loudly auto-switches instead of silently mis-deploying.
    at it (behavior-preserving for the CLI path).  Unit-test the
    resolution order exhaustively (it already has 4 tests in
    `test_deployer.py` — migrate + extend).
-2. **pytest-device adopts it.**  `resolve_effective_deploy_mode`
-   delegates to the shared resolver, passing the resolution unit's
-   staged file set (`resolve_library_source_dirs` walk) so functional
-   runs get the non-`.py`→flash + `requires_flash` policy.  Loud
-   message, continue in flash — never silent-skip.  Regression: a
-   `--deploy-mode ram` run of the sockets TLS matrix on CP must now
-   loudly switch to flash and pass (today it silently drops
-   `_ca_bundle.der`).
+2. **pytest-device adopts it (functional path).**
+   `resolve_effective_deploy_mode` delegates to the shared resolver,
+   passing `staged_files` = the **full dependency closure**
+   (`resolve_library_source_dirs` walk) so a cross-library functional
+   test that needs a dependency's data file (e.g. requests-functional
+   needing `sockets/_ca_bundle.der`) is correctly forced to flash, not
+   silently dropped.  Loud message, continue in flash — never
+   silent-skip.  Regression: a `--deploy-mode ram` run of the sockets
+   TLS matrix on CP must now loudly switch to flash and pass (today it
+   silently drops `_ca_bundle.der`).
 3. **`devices.yml` capability.**  Optional per-device boolean
    `supports_ram_mode` (default/absent ⇒ `true`; back-compatible).
    Resolver step 2.  Loader fold + schema doc + template + a
    commented-out example on the Pi Pico W entries.
 4. **On-device unit-sweep command.**  `scripts/run.py
    test-unit-on-device` (final name TBD): cross-runtime unit suite on
-   real boards.  Applies the §1 rule **per library suite**, groups
-   libraries by resolved mode, runs each group as **one single-mode
-   device session** reusing the existing per-library staging untouched
-   (flash: rsync `--delete` on library switch; RAM: soft-reset between
-   files — both already exist).  `ram` pref on a RAM-capable board ⇒
+   real boards.  Applies the §1 rule **per library suite**, passing
+   `staged_files` = that library's **own package src only** (NOT the
+   dependency closure) so a dependency's data file (`sockets`'s
+   `_ca_bundle.der`) doesn't poison every sockets-dependent suite —
+   safe because pure unit tests can't reach a dep's data-file path
+   (0003/0016).  Groups libraries by resolved mode, runs each group as
+   **one single-mode device session** reusing the existing per-library
+   staging untouched (flash: rsync `--delete` on library switch; RAM:
+   soft-reset between files — both already exist).  `ram` pref on a
+   RAM-capable board ⇒
    a RAM session over the light libraries + a flash session over the
    `requires_flash` / data-file ones; `flash` pref or no-RAM board ⇒
    one flash session.  No per-library transport switching, no
@@ -90,6 +97,13 @@ mode pick) → 5 (after the surface is real).
   pref or non-RAM board ⇒ one flash session, all libraries.
   `preflight --with-device-unit` appends it; default `preflight`
   unchanged (no device deploy).
+- **Dependency-closure non-poisoning:** `chumicro_ntp`'s unit suite
+  (depends on `sockets`, not `requires_flash`, never touches TLS)
+  stays in the RAM session — its own-src has no data file, and
+  `sockets`'s `_ca_bundle.der` in the dependency closure does NOT
+  flip it.  Conversely a `chumicro-requests` *functional* test on CP
+  RAM still loudly switches to flash (full-closure scope sees the
+  dependency's data file).
 - `devices.yml` `supports_ram_mode: false` honored with a loud
   message; absent ⇒ both modes (back-compat).
 
