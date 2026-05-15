@@ -2149,12 +2149,12 @@ class TestDemo:
 
 
 # ---------------------------------------------------------------------------
-# bootstrap — end-to-end wizard
+# bootstrap + add-device — interactive port-picker + onboarding wizard
 # ---------------------------------------------------------------------------
 
 
 class TestBootstrapHelpers:
-    """Unit-level tests for the bootstrap helper functions."""
+    """Unit-level tests for the device-id suggestion + port-picker helpers."""
 
     def test_suggest_device_id_strips_with_chip_tail(self) -> None:
         from chumicro_deploy import DeviceImplementation
@@ -2214,26 +2214,26 @@ class TestBootstrapHelpers:
         ))
         assert result == "board"
 
-    def test_resolve_bootstrap_port_explicit_wins(self) -> None:
-        from chumicro_workspace.cli import _resolve_bootstrap_port
+    def test_resolve_serial_port_explicit_wins(self) -> None:
+        from chumicro_workspace.cli import _resolve_serial_port
 
-        result = _resolve_bootstrap_port("/dev/cu.fake")
+        result = _resolve_serial_port("/dev/cu.fake")
         assert result == "/dev/cu.fake"
 
-    def test_resolve_bootstrap_port_no_ports_returns_none(
+    def test_resolve_serial_port_no_ports_returns_none(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace.cli import _resolve_bootstrap_port
+        from chumicro_workspace.cli import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(list_ports, "comports", lambda: [])
-        result = _resolve_bootstrap_port(None)
+        result = _resolve_serial_port(None)
         assert result is None
 
-    def test_resolve_bootstrap_port_single_port_auto_picks(
+    def test_resolve_serial_port_single_port_auto_picks(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace.cli import _resolve_bootstrap_port
+        from chumicro_workspace.cli import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(
@@ -2241,13 +2241,13 @@ class TestBootstrapHelpers:
             "comports",
             lambda: [FakePort("/dev/cu.only", "Pi Pico W")],
         )
-        result = _resolve_bootstrap_port(None)
+        result = _resolve_serial_port(None)
         assert result == "/dev/cu.only"
 
-    def test_resolve_bootstrap_port_multiple_ports_prompts(
+    def test_resolve_serial_port_multiple_ports_prompts(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace.cli import _resolve_bootstrap_port
+        from chumicro_workspace.cli import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(
@@ -2255,13 +2255,13 @@ class TestBootstrapHelpers:
             "comports",
             lambda: [FakePort("/dev/cu.a"), FakePort("/dev/cu.b")],
         )
-        result = _resolve_bootstrap_port(None, prompt_func=lambda _: "2")
+        result = _resolve_serial_port(None, prompt_func=lambda _: "2")
         assert result == "/dev/cu.b"
 
-    def test_resolve_bootstrap_port_invalid_choice_returns_none(
+    def test_resolve_serial_port_invalid_choice_returns_none(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace.cli import _resolve_bootstrap_port
+        from chumicro_workspace.cli import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(
@@ -2270,39 +2270,28 @@ class TestBootstrapHelpers:
             lambda: [FakePort("/dev/cu.a"), FakePort("/dev/cu.b")],
         )
         # Out-of-range numeric choice.
-        result = _resolve_bootstrap_port(
+        result = _resolve_serial_port(
             None, prompt_func=lambda _: "99",
         )
         assert result is None
         # Non-numeric choice.
-        result = _resolve_bootstrap_port(
+        result = _resolve_serial_port(
             None, prompt_func=lambda _: "garbage",
         )
         assert result is None
 
-    def test_resolve_bootstrap_device_id_explicit_wins(self) -> None:
-        from chumicro_workspace.cli import _resolve_bootstrap_device_id
+    def test_resolve_serial_port_command_name_in_messages(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """``command_name`` keyword tunes the user-facing log prefix."""
+        from chumicro_workspace.cli import _resolve_serial_port
+        from serial.tools import list_ports
 
-        result = _resolve_bootstrap_device_id(
-            "explicit", "suggested", prompt_func=lambda _: "ignored",
-        )
-        assert result == "explicit"
-
-    def test_resolve_bootstrap_device_id_blank_uses_default(self) -> None:
-        from chumicro_workspace.cli import _resolve_bootstrap_device_id
-
-        result = _resolve_bootstrap_device_id(
-            None, "suggested", prompt_func=lambda _: "  ",
-        )
-        assert result == "suggested"
-
-    def test_resolve_bootstrap_device_id_uses_typed_value(self) -> None:
-        from chumicro_workspace.cli import _resolve_bootstrap_device_id
-
-        result = _resolve_bootstrap_device_id(
-            None, "suggested", prompt_func=lambda _: "  porch  ",
-        )
-        assert result == "porch"
+        monkeypatch.setattr(list_ports, "comports", lambda: [])
+        _resolve_serial_port(None, command_name="bootstrap")
+        assert "bootstrap: no serial ports detected" in capsys.readouterr().err
 
 
 class TestSuggestAddDeviceId:
@@ -2397,7 +2386,12 @@ class TestSuggestAddDeviceId:
 
 
 class TestBootstrapWizard:
-    """End-to-end CLI tests for `chumicro-workspace bootstrap`."""
+    """End-to-end CLI tests for `chumicro-workspace bootstrap`.
+
+    The bootstrap shim delegates to ``add-device`` for the probe +
+    register flow, then prints a "next steps" footer for first-time
+    users.  Demo deploy is opt-in via ``--demo``.
+    """
 
     def _seed(self, tmp_path: Path) -> Path:
         (tmp_path / "workspace.yml").write_text('# machinery only\n')
@@ -2410,7 +2404,7 @@ class TestBootstrapWizard:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """All flags set → no prompts, full registration, summary printed."""
+        """All flags set → no prompts, full registration, footer printed."""
         root = self._seed(tmp_path)
 
         from chumicro_workspace import cli as workspace_cli
@@ -2428,7 +2422,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.devices, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2436,16 +2430,14 @@ class TestBootstrapWizard:
 
         exit_code = cli.main([
             "bootstrap", "--workspace-dir", str(root),
-            "--port", "/dev/cu.fake",
-            "--device-id", "pico",
-            "--no-demo",  # this test focuses on the registration path
+            "--address", "/dev/cu.fake",
+            "pico",
         ])
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "probing /dev/cu.fake" in captured.out
-        assert "runtime: micropython 1.27.0" in captured.out
-        assert "registered pico at /dev/cu.fake" in captured.out
-        # Next-steps summary shows all three pointers.
+        assert "auto-detected runtime = micropython" in captured.out
+        assert "registered pico" in captured.out
+        # Next-steps footer (the bootstrap shim's only addition over add-device).
         assert "new <project-name>" in captured.out
         assert "deploy" in captured.out
         assert "repl" in captured.out
@@ -2473,7 +2465,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.devices, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2492,8 +2484,8 @@ class TestBootstrapWizard:
         exit_code = cli.main(
             [
                 "bootstrap", "--workspace-dir", str(root),
-                "--port", "/dev/cu.x",
-                "--device-id", "pico",
+                "--address", "/dev/cu.x",
+                "pico",
             ],
             env=cli.CliEnv(uf2_search_paths=[]),
         )
@@ -2524,7 +2516,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.devices, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2532,9 +2524,8 @@ class TestBootstrapWizard:
 
         exit_code = cli.main([
             "bootstrap", "--workspace-dir", str(root),
-            "--port", "/dev/cu.x",
-            "--device-id", "pico",
-            "--no-demo",  # focused on the floor-warning surface, not demo
+            "--address", "/dev/cu.x",
+            "pico",
         ])
         assert exit_code == 0
         captured = capsys.readouterr()
@@ -2551,7 +2542,8 @@ class TestBootstrapWizard:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Bootstrapping a second board onto an existing id should fail
-        cleanly, not silently overwrite."""
+        cleanly, not silently overwrite.  ``--force`` is the documented
+        opt-in for the swap-board case (same as add-device)."""
         root = self._seed(tmp_path)
         # Pre-seed devices.yml with the conflicting id.
         (root / "devices.yml").write_text(
@@ -2573,7 +2565,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.devices, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2581,25 +2573,24 @@ class TestBootstrapWizard:
 
         exit_code = cli.main([
             "bootstrap", "--workspace-dir", str(root),
-            "--port", "/dev/cu.new",
-            "--device-id", "pico",
+            "--address", "/dev/cu.new",
+            "pico",
         ])
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "already exists" in captured.err
 
-    def test_demo_runs_by_default(
+    def test_demo_does_not_run_by_default(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Bootstrap chains into demo unless ``--no-demo`` is passed.
+        """Bootstrap registers without chaining into demo unless ``--demo`` is passed.
 
-        The wizard's value is "freshly registered board ships
-        *something* in one command" — having to remember a separate
-        ``--with-demo`` flag defeats that.  Demo on by default;
-        ``--no-demo`` is the CI / scripted-flow opt-out.
+        The opt-in flip (was opt-out via ``--no-demo``) keeps the
+        common path quiet — most onboarding flows want the user to
+        deploy their own code next, not see a demo first.
         """
         root = self._seed(tmp_path)
 
@@ -2614,51 +2605,7 @@ class TestBootstrapWizard:
             )
 
         monkeypatch.setattr(
-            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
-        )
-        monkeypatch.setattr(
-            onboarding, "probe_with_runtime_inference", fake_inference,
-        )
-
-        # Stub the deploy transport so the demo step doesn't need
-        # real hardware.
-        transport = FakeTransport(
-            execute_output="Hello from ChuMicro!\ndemo complete!\n",
-        )
-        _install_fake_transport(monkeypatch, transport)
-
-        # No --with-demo flag — demo is the default behavior now.
-        exit_code = cli.main([
-            "bootstrap", "--workspace-dir", str(root),
-            "--port", "/dev/cu.fake",
-            "--device-id", "pico",
-        ])
-        assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "registered pico" in captured.out
-        assert "Hello from ChuMicro" in captured.out
-
-    def test_no_demo_skips_demo_step(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        """``--no-demo`` opts out of the demo deploy."""
-        root = self._seed(tmp_path)
-
-        from chumicro_workspace import cli as workspace_cli
-        from chumicro_workspace import onboarding
-
-        def fake_inference(address: str, **_kw):
-            return onboarding.RuntimeInferenceResult(
-                info=fake_probe_info(version="1.27.0"),
-                runtime="micropython",
-                transport_used="micropython",
-            )
-
-        monkeypatch.setattr(
-            workspace_cli.bootstrap, "probe_with_runtime_inference", fake_inference,
+            workspace_cli.devices, "probe_with_runtime_inference", fake_inference,
         )
         monkeypatch.setattr(
             onboarding, "probe_with_runtime_inference", fake_inference,
@@ -2673,9 +2620,8 @@ class TestBootstrapWizard:
 
         exit_code = cli.main([
             "bootstrap", "--workspace-dir", str(root),
-            "--port", "/dev/cu.fake",
-            "--device-id", "pico",
-            "--no-demo",
+            "--address", "/dev/cu.fake",
+            "pico",
         ])
         assert exit_code == 0
         captured = capsys.readouterr()
@@ -2683,6 +2629,50 @@ class TestBootstrapWizard:
         # Demo deploy never ran, so transport was never constructed.
         assert constructed == []
         assert "should not run" not in captured.out
+
+    def test_demo_runs_with_demo_flag(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """``--demo`` chains into the built-in demo deploy after register."""
+        root = self._seed(tmp_path)
+
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=fake_probe_info(version="1.27.0"),
+                runtime="micropython",
+                transport_used="micropython",
+            )
+
+        monkeypatch.setattr(
+            workspace_cli.devices, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+
+        # Stub the deploy transport so the demo step doesn't need
+        # real hardware.
+        transport = FakeTransport(
+            execute_output="Hello from ChuMicro!\ndemo complete!\n",
+        )
+        _install_fake_transport(monkeypatch, transport)
+
+        exit_code = cli.main([
+            "bootstrap", "--workspace-dir", str(root),
+            "--address", "/dev/cu.fake",
+            "--demo",
+            "pico",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "registered pico" in captured.out
+        assert "Hello from ChuMicro" in captured.out
 
 
 # ---------------------------------------------------------------------------
@@ -4425,6 +4415,100 @@ class TestAddDeviceOmittedId:
         assert "using suggested id" not in captured.out
         body = (tmp_path / "devices.yml").read_text()
         assert "id: porch" in body
+
+
+class TestAddDeviceOmittedAddress:
+    """``add-device`` accepts no ``--address`` and falls into the
+    serial-port picker (auto-pick when one port detected, prompt
+    when multiple).  Non-interactive callers must pass ``--address``
+    explicitly.
+    """
+
+    def _seed(self, tmp_path: Path) -> None:
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
+
+    def _stub_inference(
+        self, monkeypatch: pytest.MonkeyPatch, version: str = "10.1.4",
+    ) -> None:
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=fake_probe_info(
+                    runtime="circuitpython",
+                    machine="Raspberry Pi Pico W with rp2040",
+                    version=version,
+                ),
+                runtime="circuitpython",
+                transport_used="circuitpython",
+            )
+
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            cli.devices, "probe_with_runtime_inference", fake_inference,
+        )
+
+    def test_single_port_auto_picks(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """One port detected → used silently, no prompt."""
+        self._seed(tmp_path)
+        from serial.tools import list_ports
+
+        monkeypatch.setattr(
+            list_ports,
+            "comports",
+            lambda: [FakePort("/dev/cu.only", "Pi Pico W")],
+        )
+        self._stub_inference(monkeypatch)
+
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "only one port found — using /dev/cu.only" in captured.out
+        body = (tmp_path / "devices.yml").read_text()
+        assert "address: /dev/cu.only" in body
+
+    def test_no_ports_returns_one(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Empty port list → exit 1 with hint."""
+        self._seed(tmp_path)
+        from serial.tools import list_ports
+
+        monkeypatch.setattr(list_ports, "comports", lambda: [])
+
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+        ])
+        assert exit_code == 1
+        assert "no serial ports detected" in capsys.readouterr().err
+
+    def test_non_interactive_without_address_returns_two(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """``--non-interactive`` requires ``--address`` — agent-runnable CLIs never prompt."""
+        self._seed(tmp_path)
+
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--non-interactive",
+        ])
+        assert exit_code == 2
+        assert "--address is required" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +24,7 @@ from chumicro_deploy.config.devices_yaml import (
     find_device,
     load_devices,
 )
+from serial.tools import list_ports
 
 from chumicro_workspace.onboarding import (
     RuntimeInferenceResult,
@@ -403,10 +404,71 @@ def _render_dry_run_summary(
 def _stdin_prompt(prompt_text: str) -> str:
     """Real-stdin prompt — tests inject a deterministic substitute.
 
-    Sole indirection point for ``_cmd_bootstrap`` so the wizard's
+    Sole indirection point for interactive subcommands so their
     branching logic stays unit-testable without TTY plumbing.
     """
     return input(prompt_text)
+
+
+def _resolve_serial_port(
+    explicit_port: str | None,
+    *,
+    command_name: str = "add-device",
+    prompt_func: Callable[[str], str] = _stdin_prompt,
+) -> str | None:
+    """Pick the serial port to operate on.
+
+    * ``explicit_port`` set → use it verbatim.
+    * No ports detected → print a hint to stderr, return ``None``.
+    * Exactly one port → use it without prompting.
+    * Multiple ports → list them, prompt for a number.
+
+    Args:
+        explicit_port: ``--address`` / ``--port`` flag value, or
+            ``None`` to discover interactively.
+        command_name: Prefix used in the user-facing log lines so
+            output reads as the calling subcommand's voice.
+        prompt_func: Indirection point for tests.  Defaults to
+            ``_stdin_prompt``.
+
+    Returns:
+        The chosen port path, or ``None`` on no-discovery / invalid
+        input.  Caller turns ``None`` into a non-zero exit code.
+    """
+    if explicit_port:
+        return explicit_port
+    ports = sorted(list_ports.comports(), key=lambda port: port.device)
+    if not ports:
+        print(
+            f"{command_name}: no serial ports detected.  "
+            "Plug in a board and try again.",
+            file=sys.stderr,
+        )
+        return None
+    if len(ports) == 1:
+        only_port = ports[0]
+        print(f"{command_name}: only one port found — using {only_port.device}.")
+        return only_port.device
+    print(f"{command_name}: pick a board:")
+    for index, port in enumerate(ports, start=1):
+        description = port.description or "(no description)"
+        print(f"  [{index}] {port.device}  {description}")
+    raw_choice = prompt_func(f"  Pick [1-{len(ports)}]: ")
+    try:
+        chosen_index = int(raw_choice.strip())
+    except ValueError:
+        print(
+            f"{command_name}: invalid choice {raw_choice!r}",
+            file=sys.stderr,
+        )
+        return None
+    if chosen_index < 1 or chosen_index > len(ports):
+        print(
+            f"{command_name}: choice {chosen_index} out of range",
+            file=sys.stderr,
+        )
+        return None
+    return ports[chosen_index - 1].device
 
 
 # ---------------------------------------------------------------------------
