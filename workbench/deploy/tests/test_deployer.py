@@ -486,6 +486,81 @@ class TestPreflightAutoSwitch:
         assert "chumicro-mylib" in captured.err
 
 
+class TestPreflightDataFileAutoSwitch:
+    """A RAM-mode deploy whose staged set contains any non-.py data
+    file auto-switches the *whole* deploy to flash — RAM-mode
+    CircuitPython is a raw-REPL exec with no device filesystem, so the
+    asset would be silently dropped.  All-or-nothing; no hybrid.
+    """
+
+    def _ram_deployer(self) -> tuple[Deployer, FakeTransport]:
+        fake = FakeTransport(execute_output="ok\n")
+        device = Device(
+            transport="micropython",
+            address="/dev/fake",
+            deploy_mode="ram",
+            transport_factory=lambda _device: fake,
+        )
+        return Deployer(device), fake
+
+    def test_data_file_in_ram_set_switches_to_flash(self):
+        deployer, _ = self._ram_deployer()
+        source = FileMapSource(
+            {"/code.py": "pass", "/lib/chumicro_sockets/_ca_bundle.der": b"\x30\x82"},
+            entrypoint="/code.py",
+        )
+        messages: list[str] = []
+        result = deployer.deploy(source, on_preflight_message=messages.append)
+
+        assert result.success is True
+        assert len(messages) == 1
+        assert "switching to flash mode" in messages[0]
+        assert "_ca_bundle.der" in messages[0]
+
+    def test_all_python_ram_set_stays_ram_silently(self):
+        deployer, _ = self._ram_deployer()
+        source = FileMapSource(
+            {"/code.py": "pass", "/lib/helper.py": "X = 1"},
+            entrypoint="/code.py",
+        )
+        messages: list[str] = []
+        result = deployer.deploy(source, on_preflight_message=messages.append)
+
+        assert result.success is True
+        assert messages == []  # no false positive on an all-.py set
+
+    def test_force_ram_bypasses_data_file_switch(self):
+        """Explicit ``force_deploy_mode='ram'`` is the power-user escape
+        hatch — same contract as the requires_flash pre-flight.  The
+        data file will be missing on-device; caller's choice."""
+        deployer, _ = self._ram_deployer()
+        source = FileMapSource(
+            {"/code.py": "pass", "/data.bin": b"\x00\x01"},
+            entrypoint="/code.py",
+        )
+        messages: list[str] = []
+        result = deployer.deploy(
+            source,
+            force_deploy_mode="ram",
+            on_preflight_message=messages.append,
+        )
+
+        assert result.success is True
+        assert messages == []
+
+    def test_data_file_switch_message_defaults_to_stderr(self, capsys):
+        deployer, _ = self._ram_deployer()
+        source = FileMapSource(
+            {"/code.py": "pass", "/assets/bundle.der": b"\x30"},
+            entrypoint="/code.py",
+        )
+        deployer.deploy(source)
+
+        captured = capsys.readouterr()
+        assert "switching to flash mode" in captured.err
+        assert "bundle.der" in captured.err
+
+
 class TestTracebackExtraction:
     def test_extract_takes_last_traceback(self):
         output = (
