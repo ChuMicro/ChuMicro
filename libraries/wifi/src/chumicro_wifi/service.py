@@ -91,11 +91,11 @@ class WifiService:
         ticks: object | None = None,
     ) -> None:
         self._config = config
-        self._adapter = adapter if adapter is not None else _select_adapter()
+        self.adapter = adapter if adapter is not None else _select_adapter()
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
 
-        self._state = WifiState.DISCONNECTED
-        self._last_error = None
+        self.state = WifiState.DISCONNECTED
+        self.last_error = None
         self._next_attempt_due_ms = self._ticks.ticks_ms()
         self._current_backoff_ms = config.reconnect_backoff_start_ms
         self._reconnect_attempts = 0
@@ -103,19 +103,14 @@ class WifiService:
 
         # Apply hostname / power-save / static-IP once; the adapter
         # is responsible for the substrate-specific knobs.
-        self._adapter.configure(self._config)
+        self.adapter.configure(self._config)
 
     # --- public state ------------------------------------------------
 
     @property
-    def state(self):
-        """Current state (one of :class:`WifiState`'s constants)."""
-        return self._state
-
-    @property
     def connected(self):
         """``True`` when the substrate is currently linked."""
-        return self._state == WifiState.CONNECTED
+        return self.state == WifiState.CONNECTED
 
     @property
     def ip(self):
@@ -130,27 +125,7 @@ class WifiService:
         re-reading after a transition (or after a DHCP renewal) is
         correct; the allocation cost is the price of seeing changes.
         """
-        return self._adapter.ip() if self.connected else None
-
-    @property
-    def last_error(self):
-        """Most recent exception from the adapter, or ``None``."""
-        return self._last_error
-
-    @property
-    def adapter(self):
-        """The active :class:`~chumicro_wifi._adapters.base.WifiAdapter`.
-
-        Exposed so consumers needing a per-runtime substrate handle
-        — typically CircuitPython's radio — can write
-        ``radio=wifi.adapter.radio`` uniformly across every runtime.
-        On MP / CPython the base class supplies ``radio = None`` so
-        the same line is well-defined and harmless.
-
-        ``wifi.adapter.name`` is the stable string identifier ("cp",
-        "mp_esp32", "mp_rp2", "fake") — useful for logging.
-        """
-        return self._adapter
+        return self.adapter.ip() if self.connected else None
 
     def on_state_change(self, callback: object) -> None:
         """Register a callback invoked on every state transition.
@@ -175,10 +150,10 @@ class WifiService:
         3. We're between attempts (``CONNECTING`` / ``RECONNECTING``)
            and the backoff timer is due.
         """
-        if self._state == WifiState.FAILED:
+        if self.state == WifiState.FAILED:
             return False
-        if self._state == WifiState.CONNECTED:
-            return not self._adapter.is_linked()
+        if self.state == WifiState.CONNECTED:
+            return not self.adapter.is_linked()
         return self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) >= 0
 
     def handle(self, now_ms):
@@ -187,17 +162,17 @@ class WifiService:
         Idempotent within a tick — if ``check`` returned ``False``
         and ``handle`` is called anyway, this is a no-op.
         """
-        if self._state == WifiState.CONNECTED:
-            if not self._adapter.is_linked():
+        if self.state == WifiState.CONNECTED:
+            if not self.adapter.is_linked():
                 self._transition(WifiState.RECONNECTING)
                 self._reset_backoff()
                 self._next_attempt_due_ms = now_ms
             return
 
-        if self._state == WifiState.FAILED:
+        if self.state == WifiState.FAILED:
             return
 
-        if self._state == WifiState.DISCONNECTED:
+        if self.state == WifiState.DISCONNECTED:
             self._transition(WifiState.CONNECTING)
 
         # CONNECTING or RECONNECTING — attempt the substrate connect.
@@ -210,13 +185,13 @@ class WifiService:
 
     def _attempt_connect(self, now_ms):
         try:
-            ok = self._adapter.connect(self._config)
+            ok = self.adapter.connect(self._config)
         except Exception as error:  # noqa: BLE001 - adapter errors flow through last_error
-            self._last_error = error
+            self.last_error = error
             ok = False
 
         if ok:
-            self._last_error = None
+            self.last_error = None
             self._reset_backoff()
             self._reconnect_attempts = 0
             self._transition(WifiState.CONNECTED)
@@ -238,10 +213,10 @@ class WifiService:
         )
 
     def _transition(self, new_state):
-        if new_state == self._state:
+        if new_state == self.state:
             return
-        old_state = self._state
-        self._state = new_state
+        old_state = self.state
+        self.state = new_state
         for callback in self._state_callbacks:
             callback(old_state, new_state)
 

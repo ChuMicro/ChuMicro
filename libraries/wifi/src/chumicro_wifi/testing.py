@@ -168,12 +168,7 @@ class FakeWifi(WifiService):
     @property
     def calls(self):
         """List of recorded adapter calls — assertion target for tests."""
-        return self._fake_adapter.calls
-
-    @property
-    def adapter(self):
-        """The underlying :class:`FakeWifiAdapter` for direct inspection."""
-        return self._fake_adapter
+        return self.adapter.calls
 
     # --- convenience for tick-driven tests ---------------------------
 

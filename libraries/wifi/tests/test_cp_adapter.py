@@ -60,7 +60,7 @@ def test_runtime_acquisition_raises_clear_error_on_cpython() -> None:
 def test_injected_radio_accepted() -> None:
     radio = _FakeRadio()
     adapter = CpWifiAdapter(radio=radio)
-    assert adapter._radio is radio  # noqa: SLF001 - test introspection
+    assert adapter.radio is radio
     assert adapter.name == "cp"
 
 

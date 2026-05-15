@@ -126,7 +126,7 @@ def test_reconnect_after_deliberate_disconnect() -> None:
 
     # Drop the substrate association directly so the service detects
     # link-down on the next tick.
-    service._adapter.disconnect()  # noqa: SLF001 - test introspection
+    service.adapter.disconnect()
     print("Substrate link dropped; driving service through reconnect...")
 
     # First detect the drop.
