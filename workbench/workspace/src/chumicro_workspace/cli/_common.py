@@ -407,3 +407,44 @@ def _stdin_prompt(prompt_text: str) -> str:
     branching logic stays unit-testable without TTY plumbing.
     """
     return input(prompt_text)
+
+
+# ---------------------------------------------------------------------------
+# Project-name resolution (shared by deploy / deploy-example / config / rename)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
+    """Resolve a user-typed project name to a canonical slash-form path.
+
+    Accepts three shapes:
+
+    * **Bare** (``"door_open"``) — looked up across the whole
+      ``projects/`` tree.  Unique match → that project.  Multiple matches →
+      ``SystemExit`` listing the candidates.  No match → caller's
+      existence check surfaces the ``FileNotFoundError``-shaped
+      message.
+    * **Slash** (``"garage/sensors/door_open"``) — direct path.
+    * **Dotted** (``"garage.sensors.door_open"``) — same as slash;
+      normalized before return because ``/`` is the canonical form
+      used by :meth:`WorkspaceLayout.list_projects`.
+    """
+    normalized = name.replace(".", "/")
+    if "/" in normalized:
+        return normalized
+    candidates = [
+        path for path in workspace.list_projects()
+        if path == name or path.endswith("/" + name)
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        candidate_list = "\n".join(f"  {path}" for path in candidates)
+        raise SystemExit(
+            f"deploy: {name!r} is ambiguous — multiple projects match:\n"
+            f"{candidate_list}\n"
+            f"specify the path: `python run.py deploy {candidates[0]}`",
+        )
+    # No match — let the caller's existence check produce the standard
+    # "project not found" message after constructing the dir path.
+    return name
