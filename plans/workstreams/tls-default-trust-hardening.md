@@ -119,9 +119,18 @@ Opened 2026-05-15.
   `.py` constant) — the file's tight read→parse→free *lifetime*
   beats the constant's fragmentation (evict-after-parse strands an
   ~8 KB hole among long-lived TLS objects; non-compacting GC).
-- [ ] #10a shipped bundle as a DER **data file** + low-RAM loader:
-  read→`load_verify_locations`→local freed *before* long-lived TLS
-  allocs; resolve path via package `__file__` (reliable — data-file
-  deploys are now guaranteed flash).  #10b/#10c done above.
+- [x] **#10a shipped bundle as a DER data file + loader** (`<this
+  commit>`) — `_ca_bundle.der` (7996 B, 9 roots) ships as package
+  data; `_ca_bundle.py` is now a tiny co-located loader shim
+  (`read_der()` resolves the sibling via its own `__file__`, falls
+  back to `/lib/chumicro_sockets/_ca_bundle.der`).  `mp._default_context`
+  feeds `read_der()` straight into `ssl_context_with_ca` as an unbound
+  temporary → freed before socket/handshake allocs.  Wheel-verified
+  (.der in the artifact); 4-board matrix 10/10 with the file loader;
+  155 unit tests.  sockets 0.6.0 → 0.6.1.  #10b/#10c done earlier.
+  Note: `--deploy-mode ram` + CP also can't stage
+  `/runtime_config.msgpack` (pre-existing pytest-device limitation,
+  orthogonal); auto-switch is bypassed by the explicit-force hatch
+  by design — unit-tested in test_deployer.py.
 - [ ] #6 RAM instrumentation test + #7 final subset sizing + Decision
   0067 body correction (curated-subset-is-permanent).
