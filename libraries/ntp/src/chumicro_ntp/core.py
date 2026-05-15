@@ -110,14 +110,9 @@ class NTPResult:
 
     def __init__(self, ticks_started_ms: int) -> None:
         self._ticks_started_ms = ticks_started_ms
-        self._done = False
+        self.done = False
         self._unix_seconds: int | None = None
-        self._error: Exception | None = None
-
-    @property
-    def done(self) -> bool:
-        """``True`` once the exchange completes (success or failure)."""
-        return self._done
+        self.error: Exception | None = None
 
     @property
     def unix_seconds(self) -> int:
@@ -128,21 +123,16 @@ class NTPResult:
                 :attr:`error` for the underlying exception.
             RuntimeError: The exchange has not finished yet.
         """
-        if not self._done:
+        if not self.done:
             raise RuntimeError("NTP request still in flight")
-        if self._error is not None:
-            raise self._error
+        if self.error is not None:
+            raise self.error
         return self._unix_seconds  # type: ignore[return-value]
-
-    @property
-    def error(self) -> Exception | None:
-        """The exception that ended the exchange, or ``None`` on success."""
-        return self._error
 
     def _fail(self, exception: Exception) -> None:
         """Mark the request done with an error."""
-        self._error = exception
-        self._done = True
+        self.error = exception
+        self.done = True
 
 
 class NTPClient:
@@ -251,10 +241,10 @@ class NTPClient:
     ) -> None:
         if timeout_ms <= 0:
             raise ValueError("timeout_ms must be positive")
-        self._socket = socket
-        self._server = server
-        self._port = port
-        self._timeout_ms = timeout_ms
+        self.socket = socket
+        self.server = server
+        self.port = port
+        self.timeout_ms = timeout_ms
         if ticks is None:
             from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
         self._ticks = ticks
@@ -265,29 +255,9 @@ class NTPClient:
         self._recv_buffer = bytearray(PACKET_SIZE)
 
     @property
-    def server(self) -> str:
-        """Configured NTP server hostname."""
-        return self._server
-
-    @property
-    def port(self) -> int:
-        """Configured NTP server UDP port."""
-        return self._port
-
-    @property
-    def timeout_ms(self) -> int:
-        """Per-request recv-side timeout."""
-        return self._timeout_ms
-
-    @property
     def busy(self) -> bool:
         """``True`` between :meth:`query` and result completion."""
         return self._result is not None and not self._result.done
-
-    @property
-    def socket(self) -> object:
-        """The injected UDP socket.  Exposed for introspection only."""
-        return self._socket
 
     def query(self) -> NTPResult:
         """Issue a single SNTP query.
@@ -310,7 +280,7 @@ class NTPClient:
         now_ms = self._ticks.ticks_ms()
         result = NTPResult(ticks_started_ms=now_ms)
         try:
-            self._socket.sendto(_CLIENT_REQUEST, self._server, self._port)
+            self.socket.sendto(_CLIENT_REQUEST, self.server, self.port)
         except OSError as send_error:
             result._fail(send_error)
             self._result = result
@@ -343,7 +313,7 @@ class NTPClient:
         if result is None or result.done:
             return
         try:
-            received_count, _sender = self._socket.recvfrom_into(
+            received_count, _sender = self.socket.recvfrom_into(
                 self._recv_buffer,
             )
         except OSError as recv_error:
@@ -366,12 +336,12 @@ class NTPClient:
             result._fail(parse_error)
             return
         result._unix_seconds = unix_seconds  # noqa: SLF001
-        result._done = True  # noqa: SLF001
+        result.done = True
 
     def _check_timeout(self, result: "NTPResult", now_ms: int) -> None:
         """Fail *result* with a timeout ``NTPError`` if the deadline has elapsed."""
         elapsed_ms = self._ticks.ticks_diff(now_ms, result._ticks_started_ms)  # noqa: SLF001
-        if elapsed_ms >= self._timeout_ms:
+        if elapsed_ms >= self.timeout_ms:
             result._fail(
                 NTPError(f"SNTP query timed out after {elapsed_ms} ms"),
             )
