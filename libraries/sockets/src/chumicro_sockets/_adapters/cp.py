@@ -302,21 +302,43 @@ class _CPTLSListenerWrapper:
 def ssl_context_with_ca(ca_pem):
     """Build an SSL context that trusts *ca_pem* on a CP radio.
 
-    Identical shape to the CPython and MP helpers — supported CP
-    boards ship the on-board ``ssl`` module so the call site is
-    uniform across runtimes.  Accepts PEM as ``str`` or ``bytes``;
-    CP's ``load_verify_locations`` expects a ``str`` so we coerce.
+    **PEM only on CircuitPython.**  CP's ``load_verify_locations``
+    binding takes an ASCII ``str``; DER (raw ASN.1 binary) is not
+    ASCII-decodable, so it cannot be passed here.  We check for the
+    ``-----BEGIN CERTIFICATE-----`` marker up front and raise a clear
+    error if it is absent — otherwise a DER input would fail deep in
+    ``.decode("ascii")`` with a cryptic ``UnicodeDecodeError``.  (MP
+    accepts PEM *or* DER; CPython accepts either — this PEM-only
+    constraint is specific to the CP binding.)
 
     The returned context inherits ``ssl.create_default_context``'s
     ``CERT_REQUIRED`` + ``check_hostname=True`` defaults — loading
     a custom CA only makes sense when you intend to verify against
     it.  Override on the returned context if a test or
     development scenario needs different behavior.
+
+    Raises:
+        ValueError: input is not PEM (no ``-----BEGIN CERTIFICATE-----``
+            marker) — e.g. a DER blob, which CP cannot accept.
     """
     import ssl  # noqa: PLC0415 — CP-only import
 
     if isinstance(ca_pem, (bytes, bytearray)):
+        if b"-----BEGIN CERTIFICATE-----" not in bytes(ca_pem):
+            raise ValueError(
+                "CircuitPython ssl_context_with_ca requires PEM input "
+                "(-----BEGIN CERTIFICATE-----); CP's load_verify_locations "
+                "binding cannot accept DER.  Convert to PEM, or pass DER "
+                "only on MicroPython / CPython.",
+            )
         ca_pem = bytes(ca_pem).decode("ascii")
+    elif "-----BEGIN CERTIFICATE-----" not in ca_pem:
+        raise ValueError(
+            "CircuitPython ssl_context_with_ca requires PEM input "
+            "(-----BEGIN CERTIFICATE-----); CP's load_verify_locations "
+            "binding cannot accept DER.  Convert to PEM, or pass DER "
+            "only on MicroPython / CPython.",
+        )
     context = ssl.create_default_context()
     context.load_verify_locations(cadata=ca_pem)
     return context

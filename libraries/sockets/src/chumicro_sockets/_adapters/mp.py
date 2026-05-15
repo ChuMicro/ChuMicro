@@ -372,49 +372,58 @@ class _MpTLSListenerWrapper:  # pragma: no cover - device only
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     """Build an MP ``ssl.SSLContext`` that trusts only *ca_pem*.
 
-    Accepts a **PEM** input (the standard ``-----BEGIN CERTIFICATE-----``
-    block that ``openssl`` produces by default).  Converts to DER
-    internally before passing to ``load_verify_locations`` so it
-    works on every MP port — including the rp2 (Pi Pico W) build
-    that ships mbedTLS *without* ``MBEDTLS_PEM_PARSE_C`` to save flash.
+    Accepts **PEM or DER**:
 
-    Multi-cert PEM bundles (multiple ``-----BEGIN CERTIFICATE-----``
-    blocks back-to-back) are supported: each block is converted to
-    DER independently and the DERs are concatenated.  mbedTLS's
-    ``mbedtls_x509_crt_parse`` walks a buffer of sequential DER
-    certs natively.
+    * PEM (``-----BEGIN CERTIFICATE-----`` ... what ``openssl``
+      produces by default) is converted to DER via
+      :func:`_pem_to_der` and the DER is loaded.
+    * DER (raw ASN.1, first byte ``0x30``) is loaded as-is.
 
-    Why the conversion: feeding ``load_verify_locations`` the same
-    self-signed CA in different shapes splits along build config:
+    Conversion is **unconditional on MicroPython** — not gated on
+    board type.  The expensive case (a large shipped trust bundle)
+    is pre-converted to a DER data file and never reaches this path;
+    a *user-supplied* CA is realistically one to a few certs, so the
+    one-time `find`-scan + base64 decode at context-construction is
+    sub-millisecond and not worth a fragile ``sys.platform`` branch.
+    DER is the lowest-common-denominator that loads on every MP port
+    (rp2's mbedTLS ships without ``MBEDTLS_PEM_PARSE_C``; esp builds
+    have it — converting always sidesteps that split entirely).
 
-    * Pi Pico W RP2 — every PEM variant raises ``ValueError('invalid
-      cert')``; only DER (binary, no PEM markers) loads.
-    * Lolin S2 ESP32-S2 — PEM (string or bytes, with or without
-      trailing newline, LF or CRLF) loads.  DER also loads.
+    Multi-cert bundles (several ``-----BEGIN CERTIFICATE-----`` blocks
+    back-to-back, or concatenated DER) are supported — mbedTLS's
+    ``mbedtls_x509_crt_parse`` walks sequential DER certs natively.
 
-    The split is build-config: ESP-IDF's mbedTLS is built with
-    ``MBEDTLS_PEM_PARSE_C``; rp2's port-bundled mbedTLS is not
-    (the symbol isn't defined in
-    ``ports/rp2/mbedtls/mbedtls_config_port.h`` or the common
-    config it pulls in).  DER is the lowest-common-denominator
-    that works everywhere.
-
-    The returned context defaults to ``verify_mode = CERT_REQUIRED``
-    — loading a CA only makes sense when you intend to verify
-    against it.  Override on the returned context if you need a
-    different mode for a specific test.
+    The returned context sets ``verify_mode = CERT_REQUIRED`` —
+    loading a CA only makes sense when you intend to verify against
+    it.
 
     Args:
-        ca_pem: PEM-encoded CA bundle as bytes or str.  ASCII /
-            UTF-8 decodable.  Single cert or multi-cert bundle.
+        ca_pem: PEM or DER CA bundle as bytes / str / bytearray.
+            Single cert or multi-cert bundle.
+
+    Raises:
+        ValueError: input is neither PEM nor DER-shaped.
     """
     import ssl  # noqa: PLC0415 — MP-only import
 
     if isinstance(ca_pem, str):
         ca_pem = ca_pem.encode("ascii")
-    der = _pem_to_der(ca_pem)
+    elif not isinstance(ca_pem, bytes):
+        ca_pem = bytes(ca_pem)  # bytearray / memoryview
+
+    if b"-----BEGIN CERTIFICATE-----" in ca_pem:
+        cadata = _pem_to_der(ca_pem)
+    elif ca_pem[:1] == b"\x30":  # ASN.1 SEQUENCE — already DER
+        cadata = ca_pem
+    else:
+        raise ValueError(
+            "ssl_context_with_ca expects PEM "
+            "(-----BEGIN CERTIFICATE-----) or DER (ASN.1 SEQUENCE, "
+            "first byte 0x30) — got neither",
+        )
+
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.load_verify_locations(cadata=der)
+    context.load_verify_locations(cadata=cadata)
     context.verify_mode = ssl.CERT_REQUIRED
     return context
 
@@ -422,32 +431,39 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
 def _pem_to_der(ca_pem):  # pragma: no cover - device only
     """Convert a PEM bundle (one or more certs) to concatenated DER bytes.
 
-    Walks line-by-line, accumulating base64 between matched
-    ``-----BEGIN CERTIFICATE-----`` / ``-----END CERTIFICATE-----``
-    pairs.  Each pair's body is base64-decoded independently; the
-    resulting DER blocks are concatenated.  Tolerates LF or CRLF
-    line endings, blank lines, leading / trailing whitespace.
+    Streaming: locates each ``-----BEGIN CERTIFICATE-----`` /
+    ``-----END CERTIFICATE-----`` pair with C-level ``bytes.find``
+    (no per-line Python loop), then base64-decodes the raw
+    marker-to-marker slice directly.  ``binascii.a2b_base64`` skips
+    every non-base64 byte — embedded ``\\n``, ``\\r``, spaces, blank
+    lines — so no line splitting, whitespace stripping, or per-cert
+    intermediate list is needed (verified: MP ``modbinascii.c`` does
+    ``if (sextet == -1) continue``; CPython's default
+    ``strict_mode=False`` behaves the same).
+
+    *ca_pem* must be ``bytes`` (the caller normalizes).  Slices are
+    taken through a ``memoryview`` so the per-cert base64 region is
+    not copied before decoding; only the growing DER output and the
+    final ``bytes()`` allocate.
     """
     import binascii  # noqa: PLC0415 — MP-only import
 
-    der_parts = []
-    base64_lines = []
-    in_cert = False
-    for raw_line in ca_pem.split(b"\n"):
-        line = raw_line.strip()
-        if line == b"-----BEGIN CERTIFICATE-----":
-            in_cert = True
-            base64_lines = []
-            continue
-        if line == b"-----END CERTIFICATE-----":
-            if in_cert and base64_lines:
-                der_parts.append(binascii.a2b_base64(b"".join(base64_lines)))
-            in_cert = False
-            base64_lines = []
-            continue
-        if in_cert and line:
-            base64_lines.append(line)
-    return b"".join(der_parts)
+    begin_marker = b"-----BEGIN CERTIFICATE-----"
+    end_marker = b"-----END CERTIFICATE-----"
+    source = memoryview(ca_pem)
+    der_out = bytearray()
+    search_from = 0
+    while True:
+        begin_at = ca_pem.find(begin_marker, search_from)
+        if begin_at < 0:
+            break
+        body_start = begin_at + len(begin_marker)
+        end_at = ca_pem.find(end_marker, body_start)
+        if end_at < 0:
+            break
+        der_out += binascii.a2b_base64(source[body_start:end_at])
+        search_from = end_at + len(end_marker)
+    return bytes(der_out)
 
 
 #: PEM override installed via :func:`set_default_ca_bundle`.  ``None``
