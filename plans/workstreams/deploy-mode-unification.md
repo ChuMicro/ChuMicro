@@ -38,21 +38,26 @@ loudly auto-switches instead of silently mis-deploying.
    resolution order exhaustively (it already has 4 tests in
    `test_deployer.py` — migrate + extend).
 2. **pytest-device adopts it.**  `resolve_effective_deploy_mode`
-   delegates to the shared resolver, passing the staged file set
-   (`resolve_library_source_dirs` walk) so functional/on-device runs
-   get the non-`.py`→flash + `requires_flash` policy.  Loud message,
-   continue in flash — never silent-skip.  Regression: a
+   delegates to the shared resolver, passing `context` (`functional`)
+   + the staged file set (`resolve_library_source_dirs` walk) so
+   functional runs get the non-`.py`→flash + `requires_flash` policy.
+   Loud message, continue in flash — never silent-skip.  Regression: a
    `--deploy-mode ram` run of the sockets TLS matrix on CP must now
    loudly switch to flash and pass (today it silently drops
    `_ca_bundle.der`).
-3. **`devices.yml` capability.**  Optional per-device
-   `supported_deploy_modes: [flash]` (loader-folded; absent ⇒
-   `[flash, ram]`).  Resolver step 2.  Schema doc + template +
-   `devices.yml` example comment.
+3. **`devices.yml` capability.**  Optional per-device boolean
+   `supports_ram_mode` (default/absent ⇒ `true`; back-compatible).
+   Resolver step 2 (universal).  Loader fold + schema doc + template
+   + a commented-out example on the Pi Pico W entries.
 4. **On-device unit-sweep command.**  `scripts/run.py
    test-unit-on-device` (final name TBD): cross-runtime unit suite on
-   real boards, RAM-blessed.  `preflight --with-device-unit` opt-in
-   flag, parallel to `--with-functional`.  Not in default preflight.
+   real boards, RAM-blessed.  Resolves mode **per library** (Decision
+   0009 shape) with `context=unit-sweep` — step 4 (data-file) is
+   skipped, so a stray `src/` data file (e.g. `_ca_bundle.der`)
+   doesn't force the whole sweep to flash; only `requires_flash`
+   libraries fall back per-library.  `preflight --with-device-unit`
+   opt-in flag, parallel to `--with-functional`.  Not in default
+   preflight.
 5. **Docs + AGENTS.md.**  Command table, `devices.yml` schema,
    device-testing.md matrix.  AGENTS.md gets the command + the
    supported-matrix rule once the command exists (not before — it's
@@ -70,10 +75,13 @@ mode pick) → 5 (after the surface is real).
 - 4-board: `--deploy-mode ram` + sockets TLS matrix on CP → loud
   "switching to flash" + green (no silent `_ca_bundle.der` drop).
 - `test-unit-on-device` runs the cross-runtime unit suite on the
-  4-board matrix in RAM mode; `preflight --with-device-unit` appends
-  it; default `preflight` unchanged (no device deploy).
-- `devices.yml` `supported_deploy_modes: [flash]` honored with a loud
-  message.
+  4-board matrix; light libraries ride RAM (per-library resolution),
+  only `requires_flash` libraries fall to flash; a stray `src/` data
+  file does NOT force the sweep to flash.  `preflight
+  --with-device-unit` appends it; default `preflight` unchanged (no
+  device deploy).
+- `devices.yml` `supports_ram_mode: false` honored with a loud
+  message; absent ⇒ both modes (back-compat).
 
 ## Status
 

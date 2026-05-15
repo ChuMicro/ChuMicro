@@ -15,30 +15,36 @@ Decision 0047 flipped the default to flash, added the `[tool.chumicro] requires_
 
 ### 1. One resolver, used by both subsystems
 
-A single deploy-mode policy — `resolve_deploy_mode(configured_mode, *, staged_files, device_caps, requires_flash_libs, force) -> (mode, message | None)` — owned by `chumicro-deploy` and consumed by both `Deployer` and `chumicro-pytest-device`'s `_test_runner`.  Resolution order (extends 0047 §3):
+A single deploy-mode policy — `resolve_deploy_mode(configured_mode, *, context, staged_files, device_caps, requires_flash_libs, force) -> (mode, message | None)` — owned by `chumicro-deploy` and consumed by both `Deployer` and `chumicro-pytest-device`'s `_test_runner`.  `context` is `app-deploy`, `functional`, or `unit-sweep`; some triggers are context-scoped.  Resolution order (extends 0047 §3):
 
 1. `force` set → that mode, no further policy (the "I know what I'm doing" escape hatch).
-2. Device declares flash-only (see §2) and `ram` requested → flash.
-3. Configured mode is `ram` **and** the staged set contains a non-`.py` data file → flash.
-4. Configured mode is `ram` **and** a graph library declares `requires_flash = true` → flash.
+2. Device declares `supports_ram_mode: false` (see §2) and `ram` requested → flash.  *Universal* — a board that can't RAM can't RAM.
+3. Configured mode is `ram` **and** a graph library declares `requires_flash = true` → flash.  *Universal* — the library OOMs on *import* in RAM on a small board (Decision 0047) regardless of unit-vs-functional; the import happens either way.
+4. Configured mode is `ram` **and** the staged set contains a non-`.py` data file → flash.  ***`app-deploy` / `functional` context only.***  A unit test is pure by the Decision 0003 / 0016 runtime-boundary contract (no wifi, no on-device files); a data file that rides along in `src/` but is never `open()`-ed by a unit test is harmless if RAM-mode CP drops it, and forcing the sweep to flash for an unused file would defeat the whole point of the RAM unit sweep.  If a "unit test" genuinely needs an on-device file it is mis-categorized — it is functional.
 5. Otherwise → the configured mode unchanged.
+
+The *configured mode* (input to the policy) is itself resolved first by the existing precedence: CLI `--deploy-mode` → per-device `deploy_mode` → `devices.yml` global `defaults.deploy_mode` → `DEFAULT_DEPLOY_MODE`.  The policy above then gates that preference by capability (step 2) and context-appropriate requirements (steps 3–4).  So a `--with-device-unit` run honors the global default first, then the board capability, then (only because a heavy library imports) `requires_flash` — exactly the precedence intuition that prompted this refinement.
 
 Whenever 2–4 override the request the resolver returns a human-readable message; the caller emits it and **continues** (no silent skip, no aborted run — same "do the safe thing, explain it" philosophy as 0047 §3).  This makes the pytest-device path loud where it is silent today and removes the duplicated, drift-prone policy.
 
 ### 2. Per-device capability in `devices.yml`
 
-New optional per-device key declaring which modes a board supports:
+New optional per-device boolean.  There are exactly two modes (Decision 0028) and flash is always available (every board can write its FS — it is the production-shaped path), so the only real degree of freedom is whether the board can do RAM mode.  A boolean captures that with no invalid states; an array (`[flash]` / `[ram, flash]`) would invite nonsense combinations and a verbose default.
 
 ```yaml
-- id: some-board
-  supported_deploy_modes: [flash]   # absent ⇒ [flash, ram] (status quo)
+- id: pi-pico-w-circuitpython-board
+  # supports_ram_mode: false   # default true; set false for boards
+  #                            # where RAM mode is unreliable (e.g.
+  #                            # Pi Pico W CYW43 RAM-mode TLS wedging)
 ```
 
-A board that operationally only supports flash declares it; requesting `ram` yields `device <id> only supports flash mode — running in flash` and continues.  Absent key preserves today's behavior (both modes).
+`supports_ram_mode` (default `true`, absent ⇒ `true` — back-compatible) is a *capability*, orthogonal to the existing `deploy_mode` *preference*: preference says what you'd like, capability says what's possible.  `supports_ram_mode: false` + `ram` requested yields `device <id> does not support RAM mode — running in flash` and continues.
 
 ### 3. On-device unit sweep is a first-class command
 
 A new `scripts/run.py` task runs the cross-runtime *unit* suite (the suite that otherwise runs on unix-port) on real boards.  **Not** in default preflight.  `preflight --with-device-unit` is an opt-in flag that appends it, parallel to the existing `--with-functional`.  RAM mode is the recommended mode for this sweep (pure tests, no assets, wear-sensitive at volume); flash is also supported per `devices.yml`.
+
+The sweep resolves deploy mode **per library**, not once for the whole run (consistent with Decision 0009 per-library test runs).  Otherwise step 3 (`requires_flash`) fires the moment the staged graph includes any of the four heavy libraries (`chumicro-mqtt` / `requests` / `http-server` / `websockets`), forcing the *entire* sweep to flash and defeating the RAM value for the ~17 light libraries.  Per-library resolution lets light libraries ride RAM (fast, zero wear) while only the `requires_flash` libraries fall back to flash on small boards — the granularity that makes the RAM unit sweep worth having.
 
 ### 4. The supported matrix is explicit
 
