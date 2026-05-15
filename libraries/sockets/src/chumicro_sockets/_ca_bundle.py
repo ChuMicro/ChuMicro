@@ -22,12 +22,23 @@ firmware-bundled ``x509-crt-bundle``; CPython uses the OS trust
 store.  Override at runtime via
 :func:`chumicro_sockets.set_default_ca_bundle`.
 
-Roots shipped (covering the bulk of modern public HTTPS): ISRG Root
-X1/X2 (Let's Encrypt), DigiCert Global Root CA/G2/G3, Amazon Root
-CA 1, GTS Root R1/R4 (Google), GlobalSign Root CA — a strict subset
-of CircuitPython's firmware bundle, so a chain that validates here
-on MP also validates against the CP firmware bundle on the same
-board.  ~8 KB.
+Roots shipped (17, covering the bulk of modern public HTTPS): ISRG
+Root X1/X2 (Let's Encrypt), DigiCert Global Root CA/G2/G3, Amazon
+Root CA 1, GTS Root R1/R4 (Google), GlobalSign Root CA, AAA
+Certificate Services + USERTrust RSA/ECC (Sectigo — the largest CA
+by certificate count), Go Daddy / Starfield Services G2, Entrust
+Root G2, Microsoft RSA/ECC Root 2017.  A strict subset of
+CircuitPython's firmware bundle, so a chain that validates here on
+MP also validates against the CP firmware bundle on the same board.
+~16 KB DER; ~500 B parsed-chain RAM per root (measured — see
+``functional_tests/test_ca_bundle_ram_cost.py``), far below the
+board headroom, so flash (~900 B/root) and bundle maintenance, not
+RAM, bound the set size.  The set is a permanent curated subset, not
+a stopgap: MicroPython's ``ssl`` only exposes
+``load_verify_locations`` (parse-every-root-into-heap); it cannot
+use a flash-resident verify callback the way CircuitPython's
+firmware bundle does, so shipping all ~150 Mozilla roots is not
+viable on a 256 KB board.
 """
 
 __chumicro_runtimes__ = ("micropython",)
