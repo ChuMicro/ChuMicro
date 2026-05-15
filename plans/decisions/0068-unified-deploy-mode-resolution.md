@@ -13,19 +13,19 @@ Decision 0047 flipped the default to flash, added the `[tool.chumicro] requires_
 
 ## Decision
 
-### 1. One resolver, used by both subsystems
+### 1. One resolver, one rule, no context flag
 
-A single deploy-mode policy — `resolve_deploy_mode(configured_mode, *, context, staged_files, device_caps, requires_flash_libs, force) -> (mode, message | None)` — owned by `chumicro-deploy` and consumed by both `Deployer` and `chumicro-pytest-device`'s `_test_runner`.  `context` is `app-deploy`, `functional`, or `unit-sweep`; some triggers are context-scoped.  Resolution order (extends 0047 §3):
+A single deploy-mode policy — `resolve_deploy_mode(configured_mode, *, staged_files, device_caps, requires_flash_libs, force) -> (mode, message | None)` — owned by `chumicro-deploy` and consumed by both `Deployer` and `chumicro-pytest-device`.  It is applied per **resolution unit**: a single deploy for `Deployer`; a single library's test suite for the sweep (§3).  There is no context parameter — the same rule applies everywhere:
 
 1. `force` set → that mode, no further policy (the "I know what I'm doing" escape hatch).
-2. Device declares `supports_ram_mode: false` (see §2) and `ram` requested → flash.  *Universal* — a board that can't RAM can't RAM.
-3. Configured mode is `ram` **and** a graph library declares `requires_flash = true` → flash.  *Universal* — the library OOMs on *import* in RAM on a small board (Decision 0047) regardless of unit-vs-functional; the import happens either way.
-4. Configured mode is `ram` **and** the staged set contains a non-`.py` data file → flash.  ***`app-deploy` / `functional` context only.***  A unit test is pure by the Decision 0003 / 0016 runtime-boundary contract (no wifi, no on-device files); a data file that rides along in `src/` but is never `open()`-ed by a unit test is harmless if RAM-mode CP drops it, and forcing the sweep to flash for an unused file would defeat the whole point of the RAM unit sweep.  If a "unit test" genuinely needs an on-device file it is mis-categorized — it is functional.
-5. Otherwise → the configured mode unchanged.
+2. Device declares `supports_ram_mode: false` (§2) and `ram` requested → flash.  A board that can't RAM can't RAM.
+3. Configured mode is `ram` **and** the resolution unit's library is `requires_flash` → flash.  It OOMs on *import* in RAM on a small board (Decision 0047); the import happens regardless of test shape.
+4. Configured mode is `ram` **and** the resolution unit's staged set contains a non-`.py` file → flash.  Applied uniformly — no "is this a pure unit test that happens not to open it" analysis.  Conservative (a library shipping a data file, e.g. `chumicro_sockets`'s `_ca_bundle.der`, runs flash even where its unit tests wouldn't read it) but simple, safe, and the cost is borne only by the few libraries that ship data files — the rest still ride RAM.
+5. Otherwise → the configured mode unchanged (a RAM preference stays RAM).
 
-The *configured mode* (input to the policy) is itself resolved first by the existing precedence: CLI `--deploy-mode` → per-device `deploy_mode` → `devices.yml` global `defaults.deploy_mode` → `DEFAULT_DEPLOY_MODE`.  The policy above then gates that preference by capability (step 2) and context-appropriate requirements (steps 3–4).  So a `--with-device-unit` run honors the global default first, then the board capability, then (only because a heavy library imports) `requires_flash` — exactly the precedence intuition that prompted this refinement.
+`configured_mode` is resolved first by the existing precedence: CLI `--deploy-mode` → per-device `deploy_mode` → `devices.yml` global `defaults.deploy_mode` → `DEFAULT_DEPLOY_MODE`.  The rule then gates that preference by board capability (2) and the unit's own requirements (3–4).  So a global `ram` preference *stays RAM* for every library that supports RAM on a board that supports RAM, and only the specific library suites that trip 2–4 fall to flash.
 
-Whenever 2–4 override the request the resolver returns a human-readable message; the caller emits it and **continues** (no silent skip, no aborted run — same "do the safe thing, explain it" philosophy as 0047 §3).  This makes the pytest-device path loud where it is silent today and removes the duplicated, drift-prone policy.
+Whenever 2–4 override the request the resolver returns a human-readable message; the caller emits it and **continues** (no silent skip, no aborted run — the "do the safe thing, explain it" philosophy of 0047 §3).  This makes the pytest-device path loud where it is silent today and removes the duplicated, drift-prone second policy.
 
 ### 2. Per-device capability in `devices.yml`
 
@@ -42,20 +42,16 @@ New optional per-device boolean.  There are exactly two modes (Decision 0028) an
 
 ### 3. On-device unit sweep is a first-class command
 
-A new `scripts/run.py` task runs the cross-runtime *unit* suite (the suite that otherwise runs on unix-port) on real boards.  **Not** in default preflight.  `preflight --with-device-unit` is an opt-in flag that appends it, parallel to the existing `--with-functional`.  RAM mode is the recommended mode for this sweep (pure tests, no assets, wear-sensitive at volume); flash is also supported per `devices.yml`.
+A new `scripts/run.py` task runs the cross-runtime *unit* suite (the suite that otherwise runs on unix-port) on real boards.  **Not** in default preflight.  `preflight --with-device-unit` is an opt-in flag that appends it, parallel to `--with-functional`.
 
-The sweep resolves deploy mode **per library**, not once for the whole run (consistent with Decision 0009 per-library test runs).  Otherwise step 3 (`requires_flash`) fires the moment the staged graph includes any of the four heavy libraries (`chumicro-mqtt` / `requests` / `http-server` / `websockets`), forcing the *entire* sweep to flash and defeating the RAM value for the ~17 light libraries.  Per-library resolution lets light libraries ride RAM (fast, zero wear) while only the `requires_flash` libraries fall back to flash on small boards — the granularity that makes the RAM unit sweep worth having.  Without it the feature is inert: the full unit suite *always* contains a `requires_flash` library, so a single-global-mode sweep is *always* flash and the RAM sweep never happens.
-
-This does **not** reintroduce within-a-deploy mixing.  A single deploy is always all-or-nothing — RAM-mode CP exec's the whole staged set or none of it; flash writes the whole set.  The Decision 0009 per-library model means the sweep is *N sequential, independent deploys* (the same shape `scripts/run.py test` already uses: per-package subprocess + per-library coverage), each internally single-mode.  Mode varies *across* the per-library deploys of one sweep; it never varies *within* a deploy.  These are different axes — the "no half-flash/half-RAM" rule (within a deploy) is unchanged; per-library mode selection (between deploys) is the structure that delivers the feature.  The exact batching granularity (strict per-library vs. a light-libs-RAM / heavy-libs-flash two-bucket split — coarser, fewer connect/stage cycles, but a 17-library RAM staging may itself OOM) is an implementation tradeoff for the workstream, not locked here; the ADR locks only the principle (resolve finer than whole-sweep; never mix within a deploy).
+The sweep applies the §1 rule **per library suite**, then groups libraries by resolved mode and runs each group as **one single-mode device session**.  With a `ram` preference on a RAM-capable board: a RAM session over the libraries that resolved to RAM, then a flash session over those that resolved to flash (`requires_flash` libs + libraries shipping a data file).  With a `flash` preference, or a board that can't RAM: one flash session over everything.  Each session reuses the **existing** per-library staging untouched — flash re-stages per library with rsync `--delete` cleaning the prior library off (`plugin.py` ~L816-821); RAM re-stages per file with a soft-reset between (`plugin.py` ~L1254-1265, which exists precisely so the previous file's RAM doesn't stack and OOM the next).  No new isolation machinery, no mid-session mode switching: a session is one mode, the grouping is computed once up front.  This is why a single global `ram` preference still gets RAM speed + zero wear for the ~16 light libraries while only the heavy/data-file ones fall to flash — without it the feature is inert (the full suite always contains a `requires_flash` library, so a single-mode sweep is always flash).
 
 ### 4. The supported matrix is explicit
 
 | Shape | unix-port | on-device flash | on-device RAM |
 |---|---|---|---|
-| **unit** | default (no deploy) | supported (new command) | supported, **blessed for the new sweep** |
-| **functional** | n/a | default (0047) | only when the suite stages no data files; otherwise the resolver loudly switches to flash |
-
-"functional + RAM + staged data files" is **not** a supported combination — the unified resolver switches it to flash with an explanation, never silently drops the file.
+| **unit** | default (no deploy) | supported | supported; light library suites ride RAM, heavy/data-file suites grouped into a flash session |
+| **functional** | n/a | default (0047) | honored unless the §1 rule forces a deploy to flash (then loud, never a silent file drop) |
 
 ## Consequences
 
@@ -70,3 +66,4 @@ This does **not** reintroduce within-a-deploy mixing.  A single deploy is always
 - **Keep two resolvers, just add the missing check to the test one.**  Rejected: duplicated policy is what drifted into the silent-drop bug in the first place; a second copy will drift again.
 - **Rip RAM mode out entirely.**  Tempting (a whole CP raw-REPL bootstrap subsystem, recurring footguns).  Rejected: it is the enabling mechanism for on-device unit sweeps, whose value this very TLS work demonstrated (unix-port hid the rp2 mbedTLS and fragmentation behaviors).  The footguns are all functional-test-with-assets concerns; unit tests are pure and don't trip them.  Narrow the blessed surface instead of removing the capability.
 - **Make "functional + RAM + data files" a hard error.**  Rejected: inconsistent with 0047's established "classify, do the safe thing, explain" precedent (mirrors the `chumicro_deploy.recovery` layer).  Auto-switch + loud message is the house style.
+- **Per-library mode resolution with the transport switching mode mid-sweep + a `context` parameter on the resolver.**  An earlier draft of this ADR.  Rejected: deploy mode is session-scoped today (the transport is cached per device), so per-library mode would mean tearing down and re-standing the transport between libraries, plus a `context` flag to scope which triggers apply.  Computing each library's mode up front and grouping same-mode libraries into one single-mode session per group delivers the identical outcome with no mid-session switching, no context flag, and zero changes to the existing per-library staging — strictly simpler.  The "within-deploy vs across-deploy mixing" distinction the earlier draft had to spell out simply disappears: every session is one mode.
