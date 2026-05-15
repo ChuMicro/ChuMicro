@@ -33,10 +33,16 @@ loudly auto-switches instead of silently mis-deploying.
 1. **Shared resolver.**  Lift the policy into one
    `chumicro_deploy` function `resolve_deploy_mode(configured, *,
    staged_files, device_caps, requires_flash_libs, force) ->
-   (mode, message|None)`.  Re-point `Deployer._effective_device_for_source`
-   at it (behavior-preserving for the CLI path).  Unit-test the
-   resolution order exhaustively (it already has 4 tests in
-   `test_deployer.py` — migrate + extend).
+   (mode, message|None)`.  `requires_flash_libs` is the **transitive
+   import/dependency closure** (not the unit's own lib) — importing a
+   flash-only dep OOMs regardless of test purity.  When the closure
+   forces flash but the unit's own library doesn't declare
+   `requires_flash`, the message recommends it add the declaration
+   (durable record; resolver never edits pyproject).  Re-point
+   `Deployer._effective_device_for_source` at it (behavior-preserving
+   for the CLI path).  Unit-test the resolution order exhaustively
+   (it already has 4 tests in `test_deployer.py` — migrate + extend),
+   including the transitive-undeclared-warn case.
 2. **pytest-device adopts it (functional path).**
    `resolve_effective_deploy_mode` delegates to the shared resolver,
    passing `staged_files` = the **full dependency closure**
@@ -67,9 +73,18 @@ loudly auto-switches instead of silently mis-deploying.
    `requires_flash` / data-file ones; `flash` pref or no-RAM board ⇒
    one flash session.  No per-library transport switching, no
    `context` flag, no within-session mixing (a session is one mode).
-   `preflight --with-device-unit` opt-in flag, parallel to
-   `--with-functional`.  Not in default preflight.  **Open
-   sub-question:** does a single RAM session staging ~16 light
+   The sweep's last-resort default mode is **RAM** (CLI → per-device
+   → global `defaults.deploy_mode` → RAM), distinct from Deployer /
+   functional which fall back to flash (0047) — the sweep exists for
+   RAM-capable on-device validation.  Behavioral pass/fail only:
+   **no coverage gating** (coverage.py can't trace MP/CP; 0009/0025
+   stay unix-port-only; the command takes no `--coverage-threshold`).
+   **OOM→`requires_flash` learning:** if a library that resolved to
+   RAM still OOMs on stage/import, flip *that* suite to flash for the
+   run + recommend it declare `requires_flash` (same channel as the
+   §1 transitive warning).  `preflight --with-device-unit` opt-in
+   flag, parallel to `--with-functional`.  Not in default preflight.
+   **Open sub-question:** does a single RAM session staging ~16 light
    libraries' src+tests at once OOM?  If so, sub-group the RAM session
    (still single-mode, just more sessions).  Decide against measured
    staging cost during implementation.
@@ -106,6 +121,17 @@ mode pick) → 5 (after the surface is real).
   dependency's data file).
 - `devices.yml` `supports_ram_mode: false` honored with a loud
   message; absent ⇒ both modes (back-compat).
+- **Transitive `requires_flash`:** a synthetic light library that
+  imports a `requires_flash` lib resolves to flash *and* the message
+  recommends it declare `requires_flash`; declaring it silences the
+  recommendation.
+- **OOM→learn:** a library forced to RAM that OOMs on stage/import
+  flips just its own suite to flash for the run + recommends the
+  declaration; the rest of the sweep is unaffected.
+- **Non-gating:** `--with-device-unit` exposes no coverage-threshold
+  flag; the unix-port/CPython coverage gate is unchanged.
+- Two device sessions (RAM group then flash group) on one board in
+  one run connect/teardown cleanly on the same serial port.
 
 ## Status
 
