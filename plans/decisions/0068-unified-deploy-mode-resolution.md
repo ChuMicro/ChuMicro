@@ -15,12 +15,20 @@ Decision 0047 flipped the default to flash, added the `[tool.chumicro] requires_
 
 ### 1. One resolver, one rule, no context flag
 
-A single deploy-mode policy — `resolve_deploy_mode(configured_mode, *, staged_files, device_caps, requires_flash_libs, force) -> (mode, message | None)` — owned by `chumicro-deploy` and consumed by both `Deployer` and `chumicro-pytest-device`.  It is applied per **resolution unit**: a single deploy for `Deployer`; a single library's test suite for the sweep (§3).  There is no context parameter — the same rule applies everywhere:
+A single deploy-mode policy — `resolve_deploy_mode(configured_mode, *, staged_files, device_caps, requires_flash_libs, force) -> (mode, message | None)` — owned by `chumicro-deploy` and consumed by both `Deployer` and `chumicro-pytest-device`.  It is applied per **resolution unit**: a single deploy for `Deployer`; a single library's test suite for the sweep (§3).  There is no context parameter and the rule is byte-identical everywhere — the only thing that varies by caller is the *scope* of the `staged_files` input it is given (see step 4):
 
 1. `force` set → that mode, no further policy (the "I know what I'm doing" escape hatch).
 2. Device declares `supports_ram_mode: false` (§2) and `ram` requested → flash.  A board that can't RAM can't RAM.
 3. Configured mode is `ram` **and** the resolution unit's library is `requires_flash` → flash.  It OOMs on *import* in RAM on a small board (Decision 0047); the import happens regardless of test shape.
-4. Configured mode is `ram` **and** the resolution unit's staged set contains a non-`.py` file → flash.  Applied uniformly — no "is this a pure unit test that happens not to open it" analysis.  Conservative (a library shipping a data file, e.g. `chumicro_sockets`'s `_ca_bundle.der`, runs flash even where its unit tests wouldn't read it) but simple, safe, and the cost is borne only by the few libraries that ship data files — the rest still ride RAM.
+4. Configured mode is `ram` **and** `staged_files` contains a non-`.py` file → flash.
+
+`staged_files` is the only input whose *scope* differs by caller — and that scoping, not a branch in the rule, is how the unit/functional distinction is handled:
+
+- **Functional / app-deploy callers pass the full dependency closure.**  They must: a `chumicro-requests` *functional* test does real HTTPS through `chumicro-sockets` and genuinely needs `sockets/_ca_bundle.der` on the device — if RAM silently drops it, that is the exact bug this decision fixes.  Functional/app code exercises dependency code paths.
+- **The unit-sweep caller passes only the library-under-test's own package src** (not the chumicro dependency closure).  Pure unit tests cannot reach a dependency's data-file code path by the Decision 0003 / 0016 runtime-boundary contract, so a dependency's data file silently dropped on RAM is harmless; scoping to own-src stops dependency-closure over-poisoning.  Without this, every sockets-dependent suite (`ntp` and any future light sockets user — the heavy ones are `requires_flash` anyway) would wrongly flip to flash merely because `sockets/src` ships `_ca_bundle.der`.  Only `chumicro-sockets`'s *own* unit suite flips (its own src ships the file) — the narrow, accepted cost.
+
+The staging path stages whole `src/` directories (library + chumicro dependency closure), not an AST-minimised file set, and a data file is `open()`-ed not `import`-ed so an import walker can't discover it anyway — which is why the scope is a caller decision, not something the resolver can infer.
+
 5. Otherwise → the configured mode unchanged (a RAM preference stays RAM).
 
 `configured_mode` is resolved first by the existing precedence: CLI `--deploy-mode` → per-device `deploy_mode` → `devices.yml` global `defaults.deploy_mode` → `DEFAULT_DEPLOY_MODE`.  The rule then gates that preference by board capability (2) and the unit's own requirements (3–4).  So a global `ram` preference *stays RAM* for every library that supports RAM on a board that supports RAM, and only the specific library suites that trip 2–4 fall to flash.
