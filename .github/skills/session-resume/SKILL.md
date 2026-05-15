@@ -82,7 +82,7 @@ Once confirmed, follow the punch list from the handoff (or from `## Now`'s detai
 
 When the handoff's punch list is done:
 
-- Migrate the `## Now` handoff-pointer entry to `## Done (recent)` as a one-line "resumed from `<YYYY-MM-DD>-<slug>` handoff" entry — verbose Done detail belongs on the punch-list bullets that pointed at the actual work, not on the pointer.  Drop the oldest `## Done (recent)` entry to stay under the 25 cap.
+- Migrate the `## Now` handoff-pointer entry to `## Done (recent)` as a one-line "resumed from `<YYYY-MM-DD>-<slug>` handoff" entry — verbose Done detail belongs on the punch-list bullets that pointed at the actual work, not on the pointer.  Drop the oldest `## Done (recent)` entry to stay under the 5 cap.
 - **Delete the handoff file** in the same commit (`git rm plans/handoffs/<file>`).  The handoff has served its purpose; durable signal was already lifted to ADRs / `patterns.md` / commit messages / AGENTS.md by the writer; what's left in the file is session-transition scaffolding that goes stale and clutters discovery once the work lands.  Git history preserves it for anyone who wants to read it later.
 - If the resume surfaced a fact worth keeping that the original handoff didn't anticipate (e.g. a wrong assumption, a discovered side-quest, a new open question, scope creep that warrants its own workstream), capture it in the appropriate canonical home **before** deleting the handoff.  The session-handoff skill's table of homes applies symmetrically here:
   - Reusable code shape → `plans/patterns.md`

@@ -1,6 +1,6 @@
 ---
 name: audit-workspace
-description: Code-quality audit at the mono-repo / ecosystem level. Looks for cross-library duplication, library-shape decisions (merge / split / delete candidates), speculative public API across the workspace, dependency-graph health, decision-ADR drift, and patterns that should be infrastructure. Use when the workspace as a whole has accumulated patterns nobody owns.
+description: Code-quality audit at the mono-repo / ecosystem level. Looks for cross-library duplication, library-shape candidates (merge / split / delete / promote), speculative public API across the workspace, dependency-graph health, decision-ADR drift, and patterns shared by 3+ libraries that should be hoisted to shared infrastructure. Use when the workspace has accumulated patterns nobody owns.
 ---
 
 # Workspace audit
@@ -21,7 +21,7 @@ Workspace-level cleanup operates on **library shapes**, not function shapes.  Th
 * **Are decisions consistent?**  When `chumicro-wifi` and `chumicro-mqtt` both face the same architectural question (e.g., how to handle reconnect backoff), they should answer it the same way — or the difference should be a documented Decision.
 * **Is the dependency graph clean?**  Libraries should depend downward (utility libs at the bottom, application-shaped libs at the top), not sideways or upward.
 * **Are there cross-cutting patterns nobody owns?**  When 3+ libraries each implement the same shape (e.g., a "service with check / handle methods" pattern), that pattern should live in a shared library or be documented as a contract.
-* **Is there speculative scope?**  Libraries / features built for "future users" who don't exist.  Per the user-memory note `feedback_no_speculative_public_api.md` — until something ships to real users, "public API" means "us using it."
+* **Is there speculative scope?**  Libraries / features built for "future users" who don't exist.  Per AGENTS.md → Workflow: until something ships to real users, "public API" means "us using it" — symbols with zero callers across this repo and the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo are dead code.
 
 The output of this audit is often a set of **proposals** (merge candidates, infrastructure proposals, decision ADRs) more than direct edits.  Each proposal should be small enough that the user can sign off on it without a separate design pass.
 
@@ -84,7 +84,7 @@ These cross-library invariants only show up at workspace scope.
   * Does the library's `pyproject.toml` `[tool.chumicro].platforms` declaration match what's actually shipped?
   * Are there libraries that target only one runtime by accident — runtime-specific code without a CPython fake, blocking host-side testing?
 
-* **Workbench-vs-library boundary** (Decisions [0032](../../../plans/decisions/0032-workbench-folder-promotion.md), [0052](../../../plans/decisions/0052-workbench-no-library-imports.md)) — `workbench/*/src/` packages must NOT `import chumicro_<libname>` from `libraries/`.  Strict.  Templates / on-device payloads embedded as bytes are fine; live imports are not.  Run `grep -rn "^import chumicro_\|^from chumicro_" workbench/*/src/` and verify each hit imports another *workbench* package, not a library.
+* **Workbench-vs-library boundary** (Decisions [0032](../../../plans/decisions/0032-workbench-host-tools.md), [0052](../../../plans/decisions/0052-workbench-no-library-imports.md)) — `workbench/*/src/` packages must NOT `import chumicro_<libname>` from `libraries/`.  Strict.  Templates / on-device payloads embedded as bytes are fine; live imports are not.  Run `grep -rn "^import chumicro_\|^from chumicro_" workbench/*/src/` and verify each hit imports another *workbench* package, not a library.
 
 * **Recovery layer** (Decision [0053](../../../plans/decisions/0053-recovery-layer-philosophy.md)) — every workbench tool that touches hardware must have a `<package>.recovery` module classifying failures into a closed-set enum + recovery plans.  Generic `raise Exception` in workbench code is a UX defect.  Concrete instances: Decisions [0033](../../../plans/decisions/0033-macos-circuitpy-deploy-hardening.md), [0039](../../../plans/decisions/0039-firmware-version-floor.md).  Audit each `workbench/<name>/` for a `recovery.py`; flag missing.
 
@@ -93,7 +93,7 @@ These cross-library invariants only show up at workspace scope.
 * **No speculative public API across the workspace** — apply the audit-library lens at workspace scope: every export in every library's `__init__.py` `__all__` should have at least one consumer in:
   * The mono-repo (other libraries, workbench, scripts, tests).
   * The workspace-template repo (`/Users/chuxor/circuitpython/ChuMicro-Workspace-Template/`).
-  Zero callers in both → delete candidate.  Per the user-memory note `feedback_no_speculative_public_api.md`.
+  Zero callers in both → delete candidate.  Per AGENTS.md → Workflow ("Public API today means us using it").
 
 * **Decision-ADR drift** — per `plans/decisions/README.md` and AGENTS.md:
   * Every `accepted` ADR should describe the *current* state.  Audit for ADRs whose body describes behavior the code no longer implements.
@@ -189,5 +189,6 @@ Run audits in this order across a release cycle:
 1. **`/audit-workspace`** first — produces the inventory + the workstream candidates.
 2. **`/audit-integration`** on each pair flagged by step 1 — confirms or refutes the boundary findings.
 3. **`/audit-library`** on each library individually — internal cleanup that's blocked or aided by the workspace decisions in step 1.
+4. **`/audit-embedded`** on each device library after step 3.  Per the audit-embedded body, the library pass shrinks surface first (dead code, single-use helpers, cargo-cult methods), which makes the embedded pass cleaner.  Skip for `workbench/*` packages — they're host-only.
 
 You'll often run them in the reverse order in practice (small fixes first), but the *thinking* benefits from the bigger-scope-first sequence.

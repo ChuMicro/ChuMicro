@@ -9,11 +9,11 @@ Use this procedure to generate or update `docs/guide.md` for a ChuMicro library.
 
 ## When to use
 
-- After implementing a new library (the scaffold generates placeholder comments — see `scripts/new_library_scaffold.py` `_GUIDE_TEMPLATE`)
+- After implementing a new library (the scaffold generates placeholder comments — see `workbench/workspace/src/chumicro_workspace/_payloads/library_template/guide.md.template`)
 - After adding significant new features to an existing library
 - When `guide.md` still contains placeholder comments from scaffolding
 
-Keep this document and `_GUIDE_TEMPLATE` in `scripts/new_library_scaffold.py` synchronized — they define the same section order and requirements.
+Keep this document and the scaffold template (`workbench/workspace/src/chumicro_workspace/_payloads/library_template/guide.md.template`, loaded by `workbench/workspace/src/chumicro_workspace/scaffold.py`) synchronized — they define the same section order and requirements.
 
 ## Inputs to read before generating
 
