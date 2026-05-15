@@ -108,6 +108,15 @@ from chumicro_workspace.cli.examples import (
     _resolve_deploy_example_modes as _resolve_deploy_example_modes,
 )
 from chumicro_workspace.cli.health import _add_health_parsers
+from chumicro_workspace.cli.quality import (
+    _add_quality_parsers,
+)
+from chumicro_workspace.cli.quality import (
+    _cmd_lint as _cmd_lint,
+)
+from chumicro_workspace.cli.quality import (
+    _cmd_test as _cmd_test,
+)
 from chumicro_workspace.cli.setup import _add_setup_parsers
 from chumicro_workspace.config_manifest import (
     ConfigManifestError,
@@ -127,78 +136,10 @@ from chumicro_workspace.install_libraries import (
     import_name_to_package,
 )
 from chumicro_workspace.pipeline import compose_runtime_config
-from chumicro_workspace.quality import load_quality_config
 
 # ---------------------------------------------------------------------------
 # Implemented commands
 # ---------------------------------------------------------------------------
-
-
-def _cmd_test(args: argparse.Namespace) -> int:
-    """Run the workspace's pytest suite.
-
-    Shells out to ``pytest`` so users get the standard pytest UX
-    (``-k``, ``-x``, ``-v``, etc.) without re-implementing argument
-    forwarding.  Extra args after ``--`` are passed through verbatim.
-
-    When ``workspace.yml``'s ``quality.coverage_threshold`` is set,
-    prepend ``--cov-fail-under=<n>`` so the workspace-level gate
-    kicks in.  User passthrough args (after ``--``) win over the
-    workspace default — pytest takes the last occurrence.
-    """
-    workspace = _resolve_workspace(args)
-    quality = load_quality_config(workspace.workspace_yaml)
-    quality_flags: list[str] = []
-    if quality.coverage_threshold is not None:
-        quality_flags.append(f"--cov-fail-under={quality.coverage_threshold}")
-    completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
-        [sys.executable, "-m", "pytest", *quality_flags, *args.pytest_args],
-        cwd=workspace.root,
-        check=False,
-    )
-    return completed.returncode
-
-
-def _cmd_preflight(args: argparse.Namespace) -> int:
-    """Run lint + tests as a single sanity gate.
-
-    Composition of :func:`_cmd_lint` then :func:`_cmd_test` — same
-    workspace, same ``quality:`` knobs from ``workspace.yml``
-    (``lint.enabled`` / ``lint.select`` / ``coverage_threshold``),
-    no extra args forwarded.  Aimed at "all the fast static checks
-    I'd want before pushing" — without CI, this is the gate the
-    user runs by hand.
-
-    Returns nonzero on the first failing step (short-circuit) so
-    a lint failure doesn't cost a test run.  Both steps respect
-    their disable knobs (``lint.enabled = false`` skips lint
-    silently; no equivalent disable for tests today).
-    """
-    workspace = _resolve_workspace(args)
-    print(f"preflight: {workspace.root}")
-
-    print("\npreflight: --- lint ---")
-    lint_args = argparse.Namespace(
-        workspace_dir=args.workspace_dir,
-        ruff_args=[],
-    )
-    lint_exit = _cmd_lint(lint_args)
-    if lint_exit != 0:
-        print(f"\npreflight: lint failed (exit {lint_exit})")
-        return lint_exit
-
-    print("\npreflight: --- test ---")
-    test_args = argparse.Namespace(
-        workspace_dir=args.workspace_dir,
-        pytest_args=[],
-    )
-    test_exit = _cmd_test(test_args)
-    if test_exit != 0:
-        print(f"\npreflight: tests failed (exit {test_exit})")
-        return test_exit
-
-    print("\npreflight: lint + tests both passed.")
-    return 0
 
 
 def _cmd_dump_config(args: argparse.Namespace) -> int:
@@ -307,92 +248,6 @@ def _cmd_config_validate(args: argparse.Namespace) -> int:
         for line in message.splitlines():
             print(f"  {line}")
     return 1 if failed else 0
-
-
-def _cmd_lint(args: argparse.Namespace) -> int:
-    """Run ``ruff check`` plus ``chumicro-checks`` across the workspace.
-
-    Picks up the workspace's ``[tool.ruff]`` config from
-    ``pyproject.toml`` automatically — the canonical workspace
-    template ships a ruff config that matches chumicro's own tone.
-    Extra args after ``--`` forward to ruff (e.g. ``--fix``,
-    ``--select`` overrides).
-
-    After ruff, runs ``chumicro-checks`` for the workspace-internal
-    rules ruff can't express.  Each rule self-scopes — silent
-    no-op in repos where its target paths don't exist — so most
-    don't fire in a user workspace; the upstream-derivative-leak
-    detector is the one that does.  ``chumicro-checks`` reads its
-    own ``[tool.chumicro-checks]`` config from ``pyproject.toml``.
-
-    No-op (exit 0 with a hint) when either ``ruff`` or
-    ``chumicro-checks`` isn't installed — keeps the command
-    discoverable in workspaces that haven't pulled the ``[dev]``
-    extra yet.
-
-    ``workspace.yml``'s ``quality.lint`` knobs flow through.
-    ``enabled = false`` skips the entire phase; ``tools`` selects
-    which tools run (default ``["ruff", "chumicro-checks"]``, drop
-    one to disable that tool only); ``select`` prepends a
-    ``--select <comma list>`` flag for ruff (chumicro-checks
-    ignores it — its rule selection is via its own config and
-    CLI flags).
-    """
-    workspace = _resolve_workspace(args)
-    quality = load_quality_config(workspace.workspace_yaml)
-    if not quality.lint.enabled:
-        print(
-            "lint: disabled in workspace.yml ([quality.lint] enabled = false).",
-        )
-        return 0
-    if not quality.lint.tools:
-        print(
-            "lint: no tools selected in workspace.yml ([quality.lint] tools = []).",
-        )
-        return 0
-    if "ruff" in quality.lint.tools:
-        try:
-            import ruff  # noqa: F401, PLC0415  — availability probe
-        except ImportError:
-            print(
-                "ruff is not installed in this venv.  Install the dev "
-                "extras with:\n"
-                "    .venv/bin/pip install -e .[dev]\n"
-                "or add ruff to your workspace's pyproject.toml deps.",
-            )
-            return 0
-        quality_flags: list[str] = []
-        if quality.lint.select:
-            quality_flags.extend(["--select", ",".join(quality.lint.select)])
-        ruff_completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
-            [
-                sys.executable, "-m", "ruff", "check",
-                *quality_flags, *args.ruff_args, ".",
-            ],
-            cwd=workspace.root,
-            check=False,
-        )
-        if ruff_completed.returncode != 0:
-            return ruff_completed.returncode
-    if "chumicro-checks" in quality.lint.tools:
-        try:
-            import chumicro_checks  # noqa: F401, PLC0415  — availability probe
-        except ImportError:
-            print(
-                "chumicro-checks is not installed in this venv.  Install "
-                "it (or the dev extras) to run the CHU0NN rules:\n"
-                "    .venv/bin/pip install chumicro-checks\n"
-                "or add it to your workspace's pyproject.toml dev deps.",
-            )
-            return 0
-        checks_completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
-            [sys.executable, "-m", "chumicro_checks", "--root", str(workspace.root)],
-            cwd=workspace.root,
-            check=False,
-        )
-        if checks_completed.returncode != 0:
-            return checks_completed.returncode
-    return 0
 
 
 #: Default tail-window duration (seconds) when ``repl <project>`` is
@@ -749,43 +604,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_deploy_example_parser(subparsers)
     _add_bootstrap_parser(subparsers)
 
-    # ----- test ----------------------------------------------------------
-    test_parser = subparsers.add_parser(
-        "test",
-        help="Run pytest in the workspace root.  Extra args pass through.",
-    )
-    _add_workspace_arg(test_parser)
-    test_parser.add_argument(
-        "pytest_args",
-        nargs=argparse.REMAINDER,
-        help="Args forwarded verbatim to pytest (place after `--`).",
-    )
-    test_parser.set_defaults(func=_cmd_test)
-
-    # ----- lint ----------------------------------------------------------
-    lint_parser = subparsers.add_parser(
-        "lint",
-        help="Run `ruff check` across the workspace.  Extra args pass through.",
-    )
-    _add_workspace_arg(lint_parser)
-    lint_parser.add_argument(
-        "ruff_args",
-        nargs=argparse.REMAINDER,
-        help="Args forwarded verbatim to ruff (place after `--`).",
-    )
-    lint_parser.set_defaults(func=_cmd_lint)
-
-    # ----- preflight -----------------------------------------------------
-    preflight_parser = subparsers.add_parser(
-        "preflight",
-        help=(
-            "Run lint + tests as a single sanity gate (the same shape "
-            "chumicro itself uses, scaled down for workspaces without "
-            "CI).  Respects workspace.yml's `quality:` knobs."
-        ),
-    )
-    _add_workspace_arg(preflight_parser)
-    preflight_parser.set_defaults(func=_cmd_preflight)
+    _add_quality_parsers(subparsers)
 
     # ----- dump-config ---------------------------------------------------
     dump_config_parser = subparsers.add_parser(

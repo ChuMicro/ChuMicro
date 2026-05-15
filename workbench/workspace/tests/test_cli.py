@@ -4751,8 +4751,8 @@ class TestCommandPreflight:
         def fake_test(args):  # noqa: ANN001
             calls.append("test")
             return 0
-        monkeypatch.setattr(cli, "_cmd_lint", fake_lint)
-        monkeypatch.setattr(cli, "_cmd_test", fake_test)
+        monkeypatch.setattr(cli.quality, "_cmd_lint",fake_lint)
+        monkeypatch.setattr(cli.quality, "_cmd_test",fake_test)
 
         exit_code = cli.main(["preflight", "--workspace-dir", str(root)])
         assert exit_code == 1
@@ -4768,10 +4768,10 @@ class TestCommandPreflight:
         root = seed_workspace(tmp_path)
         calls: list[str] = []
         monkeypatch.setattr(
-            cli, "_cmd_lint", lambda args: calls.append("lint") or 0,  # noqa: ARG005
+            cli.quality, "_cmd_lint", lambda args: calls.append("lint") or 0,  # noqa: ARG005
         )
         monkeypatch.setattr(
-            cli, "_cmd_test", lambda args: calls.append("test") or 0,  # noqa: ARG005
+            cli.quality, "_cmd_test", lambda args: calls.append("test") or 0,  # noqa: ARG005
         )
 
         exit_code = cli.main(["preflight", "--workspace-dir", str(root)])
@@ -4785,8 +4785,8 @@ class TestCommandPreflight:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = seed_workspace(tmp_path)
-        monkeypatch.setattr(cli, "_cmd_lint", lambda args: 0)  # noqa: ARG005
-        monkeypatch.setattr(cli, "_cmd_test", lambda args: 5)  # noqa: ARG005
+        monkeypatch.setattr(cli.quality, "_cmd_lint",lambda args: 0)  # noqa: ARG005
+        monkeypatch.setattr(cli.quality, "_cmd_test",lambda args: 5)  # noqa: ARG005
         exit_code = cli.main(["preflight", "--workspace-dir", str(root)])
         assert exit_code == 5
 
