@@ -109,15 +109,21 @@ class Deployer:
         """The target :class:`Device` this Deployer was constructed with."""
         return self._device
 
-    def _resolve_effective_device(
+    def _effective_device_for_source(
         self,
         source: FileSource,
         *,
         force_deploy_mode: str | None,
         on_preflight_message: Callable[[str], None] | None,
     ) -> Device:
-        """Apply the requires_flash pre-flight policy to pick the deploy
-        mode for this run.
+        """Return the effective :class:`Device` for deploying *source*.
+
+        The configured device is the starting point, but the deploy
+        *mode* is a policy decision that depends on the source — hence
+        the name takes ``_for_source``.  Two policies can force a
+        RAM-configured device to flash: a non-``.py`` data file in the
+        staged set, or a library in the graph declaring
+        ``[tool.chumicro] requires_flash = true``.
 
         Returns a :class:`Device` whose ``deploy_mode`` is the effective
         mode for this deploy.  The original ``self._device`` is never
@@ -231,7 +237,7 @@ class Deployer:
             if on_progress is not None:
                 on_progress(fraction, message)
 
-        effective_device = self._resolve_effective_device(
+        effective_device = self._effective_device_for_source(
             source,
             force_deploy_mode=force_deploy_mode,
             on_preflight_message=on_preflight_message,
