@@ -24,9 +24,12 @@ It catches regressions in the call shapes the CP adapter expects
 present back to ``chumicro-sockets`` callers.
 """
 
-#: Host-lane only — exercises a runtime-specific adapter through host
-#: fakes and asserts off-target behaviour; never staged to a device.
-__chumicro_host_only__ = True
+#: CPython-only lane: class-based pytest-style suite, not discoverable
+#: by the cross-runtime harness (which finds module-level test_* only).
+#: A temporary stopgap — harness class-discovery support is planned;
+#: this reverts to __chumicro_host_only__ (its true lane — it drives
+#: runtime-specific source through host fakes) when that lands.
+__chumicro_runtimes__ = ("cpython",)
 
 import sys
 

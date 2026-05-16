@@ -43,6 +43,15 @@ Within `tests/`, the lane is declared **in the file**, never inferred from its n
 
 Cross-runtime device-lane is the default; a file opts down explicitly. Filenames (including the legacy `_pytest` suffix on files that predate the marker, and the `test_{mp,cp}_*` host-lane files) are non-load-bearing human hints — collection never inspects them for lane.
 
+### Class-based tests + the zero-item guard
+
+The cross-runtime harness discovers **only module-level** `def test_*` functions (`_parse_test_functions` keeps `ast.FunctionDef`, ignores `ast.ClassDef`).  A `class TestX: def test_y(self)` suite is invisible to the `--target unix-port` and `--target device-unit` lanes — it runs only on plain CPython `pytest`.  This was silent until the on-device sweep exposed it.
+
+Two rules close the gap:
+
+- **No silent zero-item files.**  A device-lane `libraries/<name>/tests/test_*.py` collected for the unix-port / device-unit lane that yields zero discoverable test functions fails **loudly** at collection (`pytest.Collector.CollectError`, the Decision 0058 "no silent skips" principle at file granularity) — naming the remedy — instead of contributing nothing unnoticed.  Marker-excluded files (`__chumicro_runtimes__` / `__chumicro_host_only__`) are filtered before this check, so a declared opt-out is not a guard violation.
+- **Class-based suites declare the CPython lane (interim).**  Until the harness gains class-method discovery, a class-organized suite must declare `__chumicro_runtimes__ = ("cpython",)` — explicit, greppable, guard-satisfying.  Converting the ~800 affected methods to module-level functions is **not** the chosen path; harness class-support followed by reverting these interim markers is tracked in [`plans/workstreams/cross-runtime-harness-class-support.md`](../workstreams/cross-runtime-harness-class-support.md).  The marker carries a stopgap comment so the file's reader knows it is provisional.
+
 ### Pytest as the single front-running test surface
 
 Pytest is the only contributor-facing test command across all three runtimes.  Bare `pytest libraries/<name>/tests/` runs the CPython lane (root [`pyproject.toml`](../../pyproject.toml) + [`conftest.py`](../../conftest.py) handle import-mode + `functional_tests/` deselection).  `pytest libraries/<name>/tests/ --target unix-port --runtime micropython` (or `circuitpython`) runs the same files under the unix-port binary, with `chumicro-pytest-device` claiming the `test_*.py` collection (excluding `*_pytest.py`), dispatching each file through `UnixPortBackend` (lane filtered by in-file marker, not filename), parsing the worker's harness-format output back into pytest items, and applying the `[tool.chumicro].platforms` filter so libraries that don't target a runtime get deselected rather than run.

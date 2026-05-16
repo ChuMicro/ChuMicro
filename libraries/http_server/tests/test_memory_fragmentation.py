@@ -12,8 +12,10 @@ shows 0 bytes added per cycle on both clean and primed heaps.
 """
 
 import gc
+import sys
 
 from chumicro_http_server._wire import RequestParser, RequestParseState
+from chumicro_test_harness import skip
 
 # ---------------------------------------------------------------------------
 # Runtime capability detection
@@ -50,6 +52,21 @@ def _free_block_histogram(tiers=_FRAGMENTATION_TIERS):
 def _probe_workload_delta(workload, iterations,
                           leak_tolerance=4096,
                           tier_drop_tolerance=2):
+    if sys.implementation.name == "micropython" and sys.platform not in (
+        "linux",
+        "darwin",
+        "win32",
+    ):
+        # The free-block histogram allocates bytearrays until
+        # MemoryError across five size tiers — unbounded-time on a
+        # constrained MicroPython interpreter (it wedged a Lolin S2
+        # MP copy-mode sweep).  Covered on CPython, CircuitPython,
+        # and the fast MicroPython unix-port; loud-skip on a real
+        # MicroPython board.
+        skip(
+            "heap-fragmentation histogram is unbounded-time on a "
+            "constrained MicroPython device"
+        )
     if not _HAS_MEM_FREE:
         for _ in range(iterations):
             workload()
