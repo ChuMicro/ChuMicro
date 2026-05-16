@@ -107,6 +107,32 @@ devices:
         with pytest.raises(DeviceConfigError, match="invalid deploy_mode"):
             load_devices(devices_file)
 
+    def test_supports_ram_mode_false_honored(self, tmp_path) -> None:
+        devices_file = _write_yaml(tmp_path / "devices.yml", """
+devices:
+  - id: no-ram-board
+    runtime: micropython
+    address: /dev/ttyUSB0
+    supports_ram_mode: false
+""")
+        device = load_devices(devices_file)[0]
+        assert device.supports_ram_mode is False
+        # It's a known key, not swept into ``extra``.
+        assert "supports_ram_mode" not in device.extra
+
+    def test_invalid_supports_ram_mode_raises(self, tmp_path) -> None:
+        devices_file = _write_yaml(tmp_path / "devices.yml", """
+devices:
+  - id: bad-cap
+    runtime: micropython
+    address: /dev/ttyUSB0
+    supports_ram_mode: maybe
+""")
+        with pytest.raises(
+            DeviceConfigError, match="invalid supports_ram_mode",
+        ):
+            load_devices(devices_file)
+
     def test_non_dict_yaml_raises(self, tmp_path) -> None:
         devices_file = _write_yaml(tmp_path / "devices.yml", "- item\n")
         with pytest.raises(DeviceConfigError, match="YAML mapping"):
@@ -137,6 +163,8 @@ devices:
         assert device.serial_baudrate == 115200
         # Flash is the default when no deploy_mode is set.
         assert device.deploy_mode == "flash"
+        # Absent capability ⇒ RAM-capable (back-compatible).
+        assert device.supports_ram_mode is True
         assert device.setup_command is None
         assert device.description == ""
 

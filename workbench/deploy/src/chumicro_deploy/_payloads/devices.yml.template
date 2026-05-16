@@ -35,6 +35,12 @@ devices: []
   # - id: back-porch                                # USER-OWNED
   #   description: Pi Pico W on the back porch      # USER-OWNED
   #   runtime: micropython                          # USER-OWNED
+  #   # supports_ram_mode: false                    # USER-OWNED
+  #   #   Optional. Default true. Set false ONLY for a board that
+  #   #   cannot run RAM mode at all — a requested ram deploy then
+  #   #   switches to flash with a message. A board where RAM is
+  #   #   merely tight (e.g. Pi Pico W's 256 KB) should stay true;
+  #   #   tightness is handled per-library, not by disabling the board.
   #   address: /dev/cu.usbmodem1101                 # PROBED-ALWAYS
   #   hardware:                                     # HARDWARE-ONCE
   #     uid: ABCD0123

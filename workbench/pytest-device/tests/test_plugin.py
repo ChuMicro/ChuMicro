@@ -1765,3 +1765,28 @@ class TestSessionEffectiveDeployMode:
         second = pytest_device._session_effective_deploy_mode(session, device)
         assert first == second == "ram"
         assert calls["n"] == 1  # closure walked once, then memoized
+
+    def test_devices_yml_supports_ram_mode_false_forces_flash(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # A pure-.py closure would otherwise stay RAM; the per-device
+        # capability from devices.yml must still force flash loudly.
+        lib = tmp_path / "light-src"
+        lib.mkdir()
+        (lib / "__init__.py").write_text("X = 1\n")
+        monkeypatch.setattr(
+            pytest_device,
+            "_device_closure_source_dirs",
+            lambda _session, _device: [lib],
+        )
+        device = DeviceEntry(
+            identifier="no-ram-board",
+            runtime="circuitpython",
+            address="/dev/ttyUSB-cp",
+            deploy_mode="ram",
+            supports_ram_mode=False,
+        )
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+        with pytest.warns(UserWarning, match="does not support RAM mode"):
+            mode = pytest_device._session_effective_deploy_mode(session, device)
+        assert mode == "flash"

@@ -117,7 +117,8 @@ Supported fields today:
 | `description` | no | Free-form label for humans |
 | `connection_type` | no | Currently `serial` |
 | `serial_baudrate` | no | Serial baud rate; defaults to `115200` |
-| `deploy_mode` | no | Per-device override for `ram` or `flash` |
+| `deploy_mode` | no | Per-device *preference* override for `ram` or `flash` |
+| `supports_ram_mode` | no | Board *capability* (default `true`). Set `false` only for a board that cannot run RAM mode at all; a requested `ram` deploy then switches to `flash` with a message. Distinct from `deploy_mode`: preference is what you want, capability is what's possible. A board where RAM is merely tight (Pi Pico W's 256 KB) stays `true` — tightness is handled per-library via `requires_flash`, not by disabling the board |
 | `setup_command` | no | Reserved for future per-device setup hooks; currently parsed but not used by the transport layer |
 
 </details>
@@ -143,6 +144,8 @@ Use `ram` for day-to-day functional-test iteration. Use `flash` when a board can
 - `extra_files` staging on CircuitPython (CP RAM-mode deploy doesn't support `extra_files`, see [Decision 0056](../../plans/decisions/0056-transport-extra-files-staging.md))
 
 If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `flash` rather than chasing fallback paths like staging files via `/remote/` — they don't exist on CP RAM mode for a reason.
+
+You usually don't have to switch by hand for the common cases: a requested `ram` deploy automatically falls back to `flash`, with a printed explanation, when the staged set contains a non-`.py` data file, when any library in the dependency closure declares `requires_flash`, or when the device sets `supports_ram_mode: false`. The run continues in `flash` — it is never silently mis-deployed. Hand-setting `deploy_mode: flash` is still the right move when you simply know a board can't hold the RAM payload.
 
 ## Configure `secrets.toml`
 
