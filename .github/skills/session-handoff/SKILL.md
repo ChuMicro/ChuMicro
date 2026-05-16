@@ -11,6 +11,14 @@ Used when you're about to `/clear`, switch to a fresh session, or otherwise leav
 
 A handoff is a **faithful, complete state-transfer document** — as long as the session warrants. Not a tight summary. The next session should be able to pick up nearly fully informed by reading the handoff plus the warm-up ritual (`git --no-pager log --oneline -20` + `plans/next-up.md`).
 
+**Claim discipline (load-bearing).** A handoff is written by the most context-degraded agent in the cycle — near a context limit, after a long session, where recall and momentum have already produced errors. The resumer *will and should* try to falsify what you wrote. So tag every non-trivial claim inline so it can be:
+
+- `[VERIFIED: <how>]` — reproduced/observed this session; name the command, test, or file:line that proves it. A "verified" claim that the resumer can't reproduce means the *whole* handoff is suspect.
+- `[HYPOTHESIS: cheapest test = <…>]` — a belief you did not confirm. State the smallest experiment that would confirm/refute it so the resumer doesn't have to design it. Untagged claims read as fact and get built on — a wrong one propagates into the *next* handoff.
+- `[ASSUMED]` — taken on faith, not checked.
+
+Mark hardware / board / environment state **point-in-time** ("4 boards healthy *as of write — re-probe on resume*"); it is stale by the time anyone reads it. Flag any claim resting on training knowledge — especially version-specific or anything that post-dates the model cutoff — as `[VERIFY: web]`; training recall is not evidence and a web check is cheap.
+
 ## What belongs in a handoff vs. somewhere else
 
 The handoff is for things that don't fit in the existing homes. **Lift durable signal first**, then capture what's left.
@@ -92,9 +100,13 @@ Template — include only the sections that have content; drop empty sections ra
 
 <discoveries about the codebase, surprises, behaviors. If a discovery is durable cross-session signal, route it to the right home (table above) and link from here instead of duplicating.>
 
+## Riskiest assumption
+
+<the single belief this whole plan rests on, and what observation would invalidate it. If the resumer checks one thing first, this is it.>
+
 ## To re-research / verify next session
 
-<things needing eyes-on, hypotheses to check, missing data, follow-up questions for upstream>
+<things needing eyes-on. For each open hypothesis give the cheapest experiment that confirms/refutes it — don't make the resumer design it. Tag training-knowledge / post-cutoff / version-specific claims `[VERIFY: web]`.>
 
 ## Dead ends
 
@@ -106,7 +118,7 @@ Template — include only the sections that have content; drop empty sections ra
 
 ## Gotchas
 
-<workarounds applied, brittle assumptions, environmental quirks, anything that would bite future-me>
+<workarounds applied, brittle assumptions, environmental quirks, anything that would bite future-me. Mark hardware/board/env state point-in-time ("as of write — re-verify").>
 ```
 
 Length follows the session — a 30-minute exploratory session might produce 20 lines; a multi-hour debugging marathon might produce 200. Both are fine. Don't pad, don't truncate.
