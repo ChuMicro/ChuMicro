@@ -529,35 +529,12 @@ Open threads, none blocking:
    Ctrl-D-then-natural-boot?  The natural-boot path works and is
    verified; changing it trades a known-good path for control the
    deploy use case may not need.  A consideration, not a defect.
-3. `soft_reset()` is racey *in principle*: Ctrl-D reboot → fixed
-   0.5 s sleep → Ctrl-C ×2 → Ctrl-A is a timing assumption, not a
-   hard interrupt-before-`code.py`-runs.  It is *detected, not
-   silent* — `_enter_raw_repl` verifies the raw-REPL prompt and
-   raises (→ loud `pytest.fail`) on failure — and 0071 did not
-   introduce it (the shared primitive RAM/mount mode has used
-   per-file, and `deploy_files` leans on, long-term; empirically
-   14/14 in the confirming sweep).  Residual: the sweep's rsync
-   excludes preserve a stale app `code.py` from a prior
-   `deploy-example`/project deploy, which runs on every reset and,
-   if adversarial (hard-fault / `microcontroller.reset()` /
-   uninterruptible), makes the sweep *flaky* (loud-fail), not wrong.
-   Recommended hardening (user-proposed 2026-05-16): in the flash
-   sweep path, **before** `soft_reset()`, unlink `code.py`/`main.py`
-   from the CIRCUITPY drive and verify the dirent is actually gone
-   (poll until the board no longer sees them — a delete can take time
-   to commit on FAT/USB-MSC, the inverse of
-   `_wait_for_board_to_see_entrypoint`).  With no entrypoint present,
-   the Ctrl-D reboot drops straight to REPL and the race disappears
-   entirely — no "interrupt code.py before it runs" assumption.  This
-   is a targeted file unlink (the transport already owns FS ops via
-   `delete_files`), not the prohibited mount-state manipulation, and
-   is scoped to the flash sweep (RAM mode never touches flash; the
-   deploy path is already correct).  Deferred as its own
-   hardware-verified follow-up — 0071 is verified green (14/14, no
-   observed race), and bolting an unverified extra FS round-trip into
-   the hot path needs its own bench cycle, per the
-   don't-expand-speculatively guidance.  When picked up: implement +
-   re-run the instrumented Pico W CP sweep to confirm clean resets.
+
+(The `soft_reset()` stale-`code.py` race that was thread 3 here is
+resolved — Decision 0071's `clear_entrypoints()` removes any
+`code.py`/`main.py` and verifies it gone before the first reset, so
+no entrypoint is present to race.  `git log` on this file preserves
+the original analysis.)
 
 Related: Decision 0071, Decision 0068, Decision 0027 (the persistent
 raw-REPL harness execution model), Decision 0028.

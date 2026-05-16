@@ -454,6 +454,21 @@ class TransportProtocol(Protocol):
         """
         ...
 
+    def clear_entrypoints(self) -> None:
+        """Remove any persisted ``code.py`` / ``main.py`` and confirm
+        the removal committed before the caller soft-resets.
+
+        The on-device unit sweep calls this once per device before its
+        first :meth:`soft_reset`, so the reboot cannot race a stale
+        entrypoint a prior deploy left behind (a leftover ``code.py``
+        that hard-faults or resets would make the sweep flaky).
+        Filesystem transports unlink the files and verify they are
+        gone — flushing FAT first on CIRCUITPY so the deletion is on
+        the physical medium before the reboot re-reads it.  RAM/mount
+        transports never persist an entrypoint, so this is a no-op.
+        """
+        ...
+
     def wipe_filesystem(self) -> None:
         """Erase the device's user filesystem before the next deploy.
 

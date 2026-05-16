@@ -2824,6 +2824,61 @@ class TestListFilesInScopeAndDelete:
         )
         transport.delete_files([])  # no exception, no error
 
+
+class TestClearEntrypoints:
+    """CP transport's pre-soft-reset entrypoint clear (sweep race fix)."""
+
+    def test_ram_mode_is_no_op(self) -> None:
+        """RAM mode never persists an entrypoint → nothing to clear."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0", mode="ram", time=FakeTime(),
+        )
+        transport.clear_entrypoints()  # no drive resolve, no raise
+
+    def test_flash_mode_unlinks_code_and_main(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A stale code.py + main.py are both removed and verified gone."""
+        (tmp_path / "code.py").write_text("print('stale')")
+        (tmp_path / "main.py").write_text("print('stale')")
+        keeper = tmp_path / "lib"
+        keeper.mkdir()
+        (keeper / "thing.py").write_text("x = 1")
+        _plant_verifiable_circuitpy(tmp_path, monkeypatch)
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
+        )
+        transport.clear_entrypoints()
+        assert not (tmp_path / "code.py").exists()
+        assert not (tmp_path / "main.py").exists()
+        assert (keeper / "thing.py").exists()  # untouched
+
+    def test_flash_mode_absent_entrypoints_is_idempotent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """No code.py/main.py present → clears cleanly, no raise."""
+        _plant_verifiable_circuitpy(tmp_path, monkeypatch)
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
+        )
+        transport.clear_entrypoints()  # no raise
+
+    def test_flash_mode_missing_drive_returns_quietly(self) -> None:
+        """Unresolvable drive → no-op (soft_reset path handles it)."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            time=FakeTime(),
+            drive_scanner=lambda: [],
+        )
+        transport.clear_entrypoints()  # no raise
+
     def test_list_files_in_scope_auto_corrects_stale_drive_path(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
