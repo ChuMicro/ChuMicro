@@ -308,13 +308,37 @@ mode pick) → 5 (after the surface is real).
     verified correct earlier).  The defect is the per-library flash
     re-stage between libraries in one pytest session — rsync
     `--delete` on library switch + the next library's closure
-    re-stage isn't leaving each suite correctly staged (suspect: the
-    harness / shared-dep / test-support set not re-added after
-    `--delete`, or test-file staging keyed so only the first
-    library's land).  Bounded Phase-4 mechanism bug; debug the
-    `_bulk_stage_for_device` / per-library switch path.  The
-    "~16-lib RAM OOM" sub-question is retired: staging is per-library
-    (RAM: per-file restage + soft-reset), nothing stages all at once.
+    re-stage.  **Root-caused (Pi Pico W CP flash, reproduced 2×, not
+    transient) into two distinct issues:**
+
+    **(i) Sweep-scope / test-classification gap.**  The sweep assumes
+    every `libraries/<n>/tests/test_*.py` (non-`_pytest`) is a
+    cross-runtime *device* test.  False for a subset: the 6
+    `test_{mp,cp}_{adapter,*backend}.py` files are *host-side*
+    fake-injection unit tests that also assert the wrong-runtime
+    constructor raises (each has a
+    `test_runtime_acquisition_raises_*_on_cpython`).  They have no
+    `__chumicro_runtimes__` marker (pre-`device-unit`, "tests/ minus
+    `_pytest` runs on unix-port" was the only contract).  On a real
+    CP board they fail wholesale (MP-backend import).  A blanket
+    runtime marker is *wrong* — it would kill the deliberate
+    cpython-negative-path assertions.  Needs a classification
+    decision: how a host-only unit test opts out of the device-unit
+    sweep (parallel to how `_pytest.py` opts out), likely ADR-worthy.
+    Standalone-green libs are unaffected by this item.
+
+    **(ii) Full-scale session degradation.**  `runner/test_core`
+    (61/61 standalone, 90/90 with timing, 126/126 with kvstore) and
+    `wifi/test_wifi` (41/41 standalone) show `.FFFF…` — first test of
+    the file passes, rest fail — only deep into the full 254 s /
+    663-test Pico W flash sweep (~67 %+).  Signature = transport/board
+    dies mid-session at scale (FAT/flash churn from hundreds of rsync
+    `--delete`+restage cycles on the 491 KB drive, or heap/handle
+    exhaustion), not per-library and not (i).  Bounded but non-obvious
+    Phase-4 mechanism problem; needs a design approach (periodic
+    reconnect / board reset between libraries / chunking).  The
+    "~16-lib RAM OOM" sub-question is retired (staging is per-library);
+    this is the flash-session-at-scale analogue.
   - [ ] **4c — wifi RAM-on-CP hard-crash (post-0069).**  Separate
     from the staging gap: `wifi` under `--deploy-mode ram` on CP drops
     the USB CDC (board → safe mode; `reset-board` FS-wipe recovers it
