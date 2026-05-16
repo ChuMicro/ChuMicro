@@ -86,7 +86,11 @@ from .recovery import (
     recovery_plan_for,
 )
 from .result import DeployError, DeployResult
-from .runtime_marker import file_targets_runtime, read_runtime_marker
+from .runtime_marker import (
+    file_targets_runtime,
+    is_test_support_module,
+    read_runtime_marker,
+)
 from .skip_factories import (
     discover_factory_modules,
     read_skip_factories_marker,
@@ -147,6 +151,7 @@ __all__ = [
     "find_libraries_requiring_flash",
     "flash_firmware",
     "is_in_deploy_scope",
+    "is_test_support_module",
     "load_device_registry",
     "load_devices",
     "probe_device",

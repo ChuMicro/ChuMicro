@@ -34,7 +34,7 @@ from .protocol import (
     parse_probe_output,
     validate_entrypoint_in_files,
 )
-from .runtime_marker import file_targets_runtime
+from .runtime_marker import file_targets_runtime, is_test_support_module
 
 _CTRL_A = b"\x01"
 _CTRL_B = b"\x02"
@@ -126,6 +126,7 @@ def _walk_package_sources(
     source_directory: Path,
     *,
     target_runtime: str | None = None,
+    include_test_support: bool = False,
 ) -> list[tuple[str, str]]:
     """Return every ``.py`` under packages rooted at *source_directory*.
 
@@ -156,6 +157,7 @@ def _walk_package_sources(
                 package_directory,
                 package_directory.name,
                 target_runtime=target_runtime,
+                include_test_support=include_test_support,
             ),
         )
     return collected
@@ -166,6 +168,7 @@ def _walk_package_files(
     dotted_prefix: str,
     *,
     target_runtime: str | None = None,
+    include_test_support: bool = False,
 ) -> list[tuple[str, str]]:
     """Return ``.py`` entries inside *directory* with ``__init__.py`` last."""
     collected: list[tuple[str, str]] = []
@@ -178,12 +181,18 @@ def _walk_package_files(
                     _walk_package_files(
                         child, f"{dotted_prefix}.{child.name}",
                         target_runtime=target_runtime,
+                        include_test_support=include_test_support,
                     ),
                 )
         elif child.suffix == ".py":
             if not file_targets_runtime(
                 child, target_runtime=target_runtime,
             ):
+                continue
+            if is_test_support_module(child) and not include_test_support:
+                # Test-support fakes never ship to a product/app/
+                # functional deploy; only the on-device unit sweep
+                # passes include_test_support=True.
                 continue
             source_text = child.read_text(encoding="utf-8")
             if child.name == "__init__.py":
@@ -314,6 +323,11 @@ class CircuitpythonTransport:
         )
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
+        #: Set per :meth:`stage` call.  Only the on-device unit sweep
+        #: (``--target device-unit``) passes ``True`` so test-support
+        #: fakes reach the board; every product/app/functional deploy
+        #: leaves it ``False``.
+        self._include_test_support: bool = False
         #: True once ``stage()`` or the RAM-mode ``deploy_files`` path
         #: has prepared the transport for ``execute()`` calls.  Kept
         #: separate from ``_staged_sources`` so the deploy path does
@@ -417,6 +431,7 @@ class CircuitpythonTransport:
         *,
         extra_modules: list[Path] | None = None,
         extra_files: dict[str, bytes] | None = None,
+        include_test_support: bool = False,
     ) -> None:
         """Read source files into memory for inline execution.
 
@@ -463,6 +478,7 @@ class CircuitpythonTransport:
                 "or other on-device file.",
             )
 
+        self._include_test_support = include_test_support
         self._staged_sources = []
         # Collect library package sources (needed for both modes).
         for source_directory in source_dirs:
@@ -728,10 +744,12 @@ class CircuitpythonTransport:
             flash_drive.merge_packages(
                 source_directory, lib_staging,
                 target_runtime=self._target_runtime,
+                include_test_support=self._include_test_support,
             )
         flash_drive.merge_packages(
             harness_source, lib_staging,
             target_runtime=self._target_runtime,
+            include_test_support=self._include_test_support,
         )
 
         for test_file in test_files:
@@ -991,6 +1009,7 @@ class CircuitpythonTransport:
         self._staged_sources.extend(
             _walk_package_sources(
                 source_directory, target_runtime=self._target_runtime,
+                include_test_support=self._include_test_support,
             ),
         )
 

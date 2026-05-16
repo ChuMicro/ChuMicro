@@ -552,3 +552,25 @@ class TestImportGraphSourceTargetRuntime:
         assert "/lib/cp_only.py" not in files
         # cp_dependency was reachable only via cp_only — also dropped.
         assert "/lib/cp_dependency.py" not in files
+
+
+class TestDirectorySourceExcludesTestSupport:
+    """A `DirectorySource` (app / product deploy path) never carries a
+    test-support module onto the device.
+    """
+
+    def test_testing_module_dropped(self, tmp_path: Path) -> None:
+        root = tmp_path / "project"
+        package = root / "chumicro_demo"
+        package.mkdir(parents=True)
+        (root / "code.py").write_text("import chumicro_demo\n")
+        (package / "__init__.py").write_text("VALUE = 1\n")
+        (package / "testing.py").write_text(
+            "__chumicro_test_support__ = True\n\nclass FakeThing:\n    pass\n",
+        )
+        source = DirectorySource(root, entrypoint="/code.py")
+        files = source.files()
+        assert "/code.py" in files
+        assert "/chumicro_demo/__init__.py" in files
+        # The fake never ships to a product/app deploy.
+        assert "/chumicro_demo/testing.py" not in files

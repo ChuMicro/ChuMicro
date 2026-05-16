@@ -293,6 +293,7 @@ class TransportProtocol(Protocol):
         *,
         extra_modules: list[Path] | None = None,
         extra_files: dict[str, bytes] | None = None,
+        include_test_support: bool = False,
     ) -> None:
         """Prepare the host-side staging area and (mode-dependent) push to device.
 

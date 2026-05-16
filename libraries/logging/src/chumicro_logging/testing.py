@@ -7,13 +7,13 @@ and ``FailingHandler`` — that are useful when *downstream* libraries
 want to assert against logger output without writing one-off mocks.
 See ``docs/testing.md`` for worked examples.
 
-The helpers are not bundled to devices — the
-``__chumicro_runtimes__ = ("cpython",)`` marker below keeps this file
-out of every bundle and every device deploy.
+The helpers are test-support — the ``__chumicro_test_support__``
+marker below keeps this file out of every bundle and every product /
+app / functional device deploy (the on-device unit sweep stages it).
 """
 
 #: Source bundle / sdist only -- never lands on a device.
-__chumicro_runtimes__ = ("cpython",)
+__chumicro_test_support__ = True
 
 
 class RecordingHandler:

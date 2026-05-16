@@ -18,13 +18,15 @@ Example::
 This module hosts both the test fakes (``FakeWifi``,
 ``FakeWifiAdapter``) and the CPython-default adapter the production
 ``WifiService`` falls back to when no real runtime adapter applies.
-The ``__chumicro_runtimes__ = ("cpython",)`` marker below keeps the
-file out of every bundle and every device deploy, so the adapter is
-host-only — exactly where it's needed.
+The ``__chumicro_test_support__`` marker below keeps the file out of
+every bundle and every product / app / functional device deploy, so
+the fakes and the CPython-default adapter stay host-side — exactly
+where they're needed (the on-device unit sweep is the one path that
+stages it; CPython is a host-test seam, not a deploy target).
 """
 
 #: Source bundle / sdist only -- never lands on a device.
-__chumicro_runtimes__ = ("cpython",)
+__chumicro_test_support__ = True
 
 from chumicro_wifi._adapters.base import WifiAdapter
 from chumicro_wifi.config import WifiConfig

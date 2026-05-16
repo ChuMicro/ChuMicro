@@ -11,6 +11,7 @@ from chumicro_deploy.runtime_marker import (
     DEVICE_RUNTIMES,
     KNOWN_RUNTIMES,
     file_targets_runtime,
+    is_test_support_module,
     read_runtime_marker,
 )
 
@@ -123,3 +124,37 @@ class TestFileTargetsRuntime:
         file = tmp_path / "esp32.py"
         file.write_text('__chumicro_runtimes__ = ("micropython_esp32",)\n')
         assert file_targets_runtime(file, target_runtime=DEVICE_RUNTIMES)
+
+
+class TestIsTestSupportModule:
+    """``__chumicro_test_support__`` is read via AST, independent of
+    any runtime marker.
+    """
+
+    def test_true_when_marker_is_true(self, tmp_path: Path) -> None:
+        file = tmp_path / "testing.py"
+        file.write_text("__chumicro_test_support__ = True\n")
+        assert is_test_support_module(file) is True
+
+    def test_false_when_absent(self, tmp_path: Path) -> None:
+        file = tmp_path / "real.py"
+        file.write_text("VALUE = 1\n")
+        assert is_test_support_module(file) is False
+
+    def test_false_when_marker_is_false(self, tmp_path: Path) -> None:
+        file = tmp_path / "real.py"
+        file.write_text("__chumicro_test_support__ = False\n")
+        assert is_test_support_module(file) is False
+
+    def test_false_on_unparseable(self, tmp_path: Path) -> None:
+        file = tmp_path / "broken.py"
+        file.write_text("def (:\n")
+        assert is_test_support_module(file) is False
+
+    def test_independent_of_runtime_marker(self, tmp_path: Path) -> None:
+        # No runtime marker → universal for runtime filtering, yet
+        # still test-support for the deploy/bundle exclusion.
+        file = tmp_path / "testing.py"
+        file.write_text("__chumicro_test_support__ = True\n")
+        assert read_runtime_marker(file) is None
+        assert is_test_support_module(file) is True

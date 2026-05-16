@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from .protocol import validate_entrypoint_in_files
-from .runtime_marker import file_targets_runtime
+from .runtime_marker import file_targets_runtime, is_test_support_module
 from .skip_factories import (
     discover_factory_modules,
     read_skip_factories_marker,
@@ -156,9 +156,14 @@ class DirectorySource:
                 continue
             if any(part in self._excluded for part in file_path.relative_to(self._root).parts):
                 continue
-            if file_path.suffix == ".py" and not file_targets_runtime(
-                file_path, target_runtime=self._target_runtime,
+            if file_path.suffix == ".py" and (
+                not file_targets_runtime(
+                    file_path, target_runtime=self._target_runtime,
+                )
+                or is_test_support_module(file_path)
             ):
+                # Wrong-runtime, or a test-support module (testing.py
+                # fakes) that must never reach a product/app deploy.
                 continue
             relative_path = file_path.relative_to(self._root).as_posix()
             device_path = self._join_prefix(self._resource_prefix, relative_path)
@@ -369,8 +374,10 @@ class ImportGraphSource:
                 continue
             if not file_targets_runtime(
                 resolved_path, target_runtime=self._target_runtime,
-            ):
-                # Wrong-runtime module: drop it and don't walk its
+            ) or is_test_support_module(resolved_path):
+                # Wrong-runtime module, or a test-support module
+                # (testing.py fakes) that must never reach a
+                # product/app deploy: drop it and don't walk its
                 # imports — they are likely runtime-specific too.
                 continue
             device_path = self._device_path_for(module_name, resolved_path)
