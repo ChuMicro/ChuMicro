@@ -12,6 +12,12 @@ partial-implementation class isn't a socket) work on every runtime —
 they're true under both real Protocol and the stand-in.
 """
 
+#: CPython-only lane: class-based pytest-style suite, not discoverable
+#: by the cross-runtime harness (which finds module-level test_* only);
+#: A temporary stopgap — harness class-discovery support is planned;
+#: this marker reverts when that lands (do NOT convert to functions).
+__chumicro_runtimes__ = ("cpython",)
+
 from chumicro_sockets import TCPClientSocket
 from chumicro_sockets.testing import FakeSocket
 

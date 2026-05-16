@@ -14,6 +14,12 @@ CPython-only tests — real loopback sockets, real TLS handshakes,
 patching — live in the sibling ``test_factories_pytest.py``.
 """
 
+#: CPython-only lane: class-based pytest-style suite, not discoverable
+#: by the cross-runtime harness (which finds module-level test_* only);
+#: A temporary stopgap — harness class-discovery support is planned;
+#: this marker reverts when that lands (do NOT convert to functions).
+__chumicro_runtimes__ = ("cpython",)
+
 import sys
 
 import chumicro_sockets

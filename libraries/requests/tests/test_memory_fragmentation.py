@@ -40,8 +40,10 @@ staging).
 """
 
 import gc
+import sys
 
 from chumicro_requests import ParseState, ResponseParser
+from chumicro_test_harness import skip
 
 # ---------------------------------------------------------------------------
 # Runtime capability detection
@@ -144,6 +146,21 @@ def _probe_workload_delta(workload, iterations,
     On CPython (no ``mem_free``) the workload still runs as a
     smoke check but no heap assertions fire.
     """
+    if sys.implementation.name == "micropython" and sys.platform not in (
+        "linux",
+        "darwin",
+        "win32",
+    ):
+        # The free-block histogram allocates bytearrays until
+        # MemoryError across five size tiers — unbounded-time on a
+        # constrained MicroPython interpreter (it wedged a Lolin S2
+        # MP copy-mode sweep).  Covered on CPython, CircuitPython,
+        # and the fast MicroPython unix-port; loud-skip on a real
+        # MicroPython board.
+        skip(
+            "heap-fragmentation histogram is unbounded-time on a "
+            "constrained MicroPython device"
+        )
     if not _HAS_MEM_FREE:
         for _ in range(iterations):
             workload()

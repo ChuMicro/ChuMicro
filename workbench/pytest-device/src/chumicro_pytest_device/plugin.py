@@ -1141,12 +1141,30 @@ class DeviceTestFile(pytest.File):
             return
 
         if not function_names:
-            # AST found no module-level ``test_*`` functions.  Common
-            # for ``test_*.py`` files whose tests are nested inside an
-            # ``if _IS_CPYTHON:`` guard — the cross-runtime harness
-            # would report ``NO TESTS FOUND`` and the synthetic Run-file
-            # item would fail.  Yield nothing so the file is a no-op
-            # under this target instead.
+            # Reached here only when the file is NOT marker-excluded
+            # (the ``not targets`` branch above already handled
+            # ``__chumicro_runtimes__`` / host-only opt-outs): the file
+            # is meant to run on these targets, yet AST finds zero
+            # module-level ``test_*`` functions.  That is the silent
+            # class-based / pytest-style mis-categorization (Decision
+            # 0016: cross-runtime files use plain module-level
+            # functions; class-organized suites are CPython-only and
+            # must declare it).  Fail loudly instead of yielding a
+            # silent no-op, so the gap can't hide.
+            if _is_library_unit_test(self.path):
+                raise pytest.Collector.CollectError(
+                    f"{self.path} is collected for the cross-runtime / "
+                    "on-device lane but defines no module-level "
+                    "'def test_*' functions (its tests are class-based "
+                    "or pytest-style, which the cross-runtime harness "
+                    "does not discover).  Either convert the tests to "
+                    "module-level functions, or declare "
+                    "'__chumicro_runtimes__ = (\"cpython\",)' to make the "
+                    "CPython-only lane explicit.  A silent zero-test "
+                    "file is not allowed."
+                )
+            # Functional-test files (the other DeviceTestFile user)
+            # keep the prior no-op behaviour — out of scope here.
             return
 
         # Preserve the original "session has both runtimes ⇒ suffix names"
