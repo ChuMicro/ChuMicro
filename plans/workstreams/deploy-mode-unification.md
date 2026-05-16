@@ -272,13 +272,23 @@ mode pick) → 5 (after the surface is real).
     the plain CPython lane.  Running the unit suite on hardware needs
     a new collection mode (planned: `--target device-unit`), so 4a's
     on-hardware proof (ntp stays RAM) rides with 4d, not standalone.
-  - [ ] **4b — `device-unit` collection + `test-unit-on-device`
-    command + mode grouping.**  New `--target device-unit` routes
-    `tests/` to the device backend; `scripts/run.py` task resolves
-    per-library mode (own-src, RAM last-resort default,
-    `resolution_unit`=lib), groups by mode, runs one single-mode
-    session per (runtime, mode) group; `preflight --with-device-unit`
-    opt-in.  Next entry point.
+  - [x] **4b — `device-unit` collection + `test-unit-on-device`
+    command + mode grouping.**  New `--target device-unit` value
+    routes `libraries/*/tests` to the device backend (parallel to
+    `unix-port`; `--target device` stays functional-only).
+    `scripts/run.py test-unit-on-device` resolves per-library mode
+    (own-src `staged_files`, full-closure `requires_flash`,
+    `resolution_unit`=lib's pip name), groups libraries by resolved
+    mode, runs one single-mode `--deploy-mode` session per (runtime,
+    mode) group (flash group first), skips a runtime cleanly when no
+    device is configured.  `preflight --with-device-unit` opt-in,
+    serial after the functional tail.  Sweep last-resort preference is
+    RAM; **simplification of 0068 §1 precedence** — the sweep does not
+    inherit `devices.yml` `deploy_mode` (functional-tuned); it is
+    CLI-`--deploy-mode`-or-RAM, since the loader folds global→
+    per-device so "explicitly set" is unknowable and the sweep's whole
+    purpose is RAM validation.  4 dispatch + grouping tests; preflight
+    green.  Hardware end-to-end rides with 4d.
   - [ ] **4c — OOM→`requires_flash` learning + RAM sub-grouping.**
     Needs hardware; resolves the ~16-lib RAM-session OOM open
     sub-question by measurement.
