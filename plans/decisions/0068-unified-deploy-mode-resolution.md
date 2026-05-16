@@ -15,10 +15,11 @@ Decision 0047 flipped the default to flash, added the `[tool.chumicro] requires_
 
 ### 1. One resolver, one rule, no context flag
 
-A single deploy-mode policy — `resolve_deploy_mode(configured_mode, *, staged_files, device_caps, requires_flash_libs, force) -> (mode, message | None)` — owned by `chumicro-deploy` and consumed by both `Deployer` and `chumicro-pytest-device`.  It is applied per **resolution unit**: a single deploy for `Deployer`; a single library's test suite for the sweep (§3).  There is no context parameter and the rule is byte-identical everywhere.  Two inputs have different *scoping rules*, and that — not a branch — is the whole subtlety:
+A single deploy-mode policy — `resolve_deploy_mode(configured_mode, *, staged_files, device_caps, requires_flash_libs, resolution_unit, force) -> (mode, message | None)` — owned by `chumicro-deploy` and consumed by both `Deployer` and `chumicro-pytest-device`.  It is applied per **resolution unit**: a single deploy for `Deployer`; a single library's test suite for the sweep (§3).  There is no context parameter and the rule is byte-identical everywhere.  Three inputs are caller-scoped, and that — not a branch — is the whole subtlety:
 
 - `requires_flash_libs` is **always the full transitive import/dependency closure**, never just the resolution unit's own library (step 3).
 - `staged_files` is **caller-scoped** — full closure for functional/app-deploy, own-src for the unit sweep (step 4).
+- `resolution_unit` is the library a "declare `requires_flash`" recommendation should name (step 3), or `None` when there is no single owning library (an app deploy — the `Deployer` passes `None`, so its message is the plain switch with no recommendation).  It carries no mode logic; it only selects the message variant, which is why it is a caller input rather than something the resolver can infer.
 
 1. `force` set → that mode, no further policy (the "I know what I'm doing" escape hatch).
 2. Device declares `supports_ram_mode: false` (§2) and `ram` requested → flash.  A board that can't RAM can't RAM.

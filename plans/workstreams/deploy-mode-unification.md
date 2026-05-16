@@ -106,19 +106,25 @@ grep the symbol.
 
 ## Phases
 
-1. **Shared resolver.**  Lift the policy into one
-   `chumicro_deploy` function `resolve_deploy_mode(configured, *,
-   staged_files, device_caps, requires_flash_libs, force) ->
-   (mode, message|None)`.  `requires_flash_libs` is the **transitive
-   import/dependency closure** (not the unit's own lib) — importing a
-   flash-only dep OOMs regardless of test purity.  When the closure
-   forces flash but the unit's own library doesn't declare
-   `requires_flash`, the message recommends it add the declaration
-   (durable record; resolver never edits pyproject).  Re-point
-   `Deployer._effective_device_for_source` at it (behavior-preserving
-   for the CLI path).  Unit-test the resolution order exhaustively
-   (it already has 4 tests in `test_deployer.py` — migrate + extend),
-   including the transitive-undeclared-warn case.
+1. **Shared resolver. — DONE** (commit pending).  Policy lifted into
+   `chumicro_deploy.preflight.resolve_deploy_mode(configured_mode, *,
+   staged_files, device_caps, requires_flash_libs, resolution_unit,
+   force) -> (mode, message|None)`, exported from the package root
+   alongside the frozen `DeviceCaps(supports_ram_mode=True)`
+   capability struct (full §1 rule incl. the §2 capability branch
+   ships now; Phase 3 only feeds `devices.yml → DeviceCaps`).
+   `requires_flash_libs` is the **transitive import/dependency
+   closure** (not the unit's own lib) — importing a flash-only dep
+   OOMs regardless of test purity.  `resolution_unit` (the unit's own
+   library, or `None` for an app deploy) selects the message variant:
+   when the closure forces flash and the unit isn't itself flagged,
+   the message recommends it declare `requires_flash` (durable record;
+   resolver never edits pyproject).  `Deployer._effective_device_for_source`
+   re-pointed at it (passes `resolution_unit=None`,
+   `DeviceCaps()` — behavior-preserving; the 8 existing
+   `test_deployer.py` `TestPreflight*` tests stay green).  Exhaustive
+   pure-function coverage in `test_resolve_deploy_mode.py` (all 5
+   steps + non-RAM-capable board + the recommend variant).
 2. **pytest-device adopts it (functional path).**
    `resolve_effective_deploy_mode` delegates to the shared resolver,
    passing `staged_files` = the **full dependency closure**
@@ -211,7 +217,16 @@ mode pick) → 5 (after the surface is real).
 
 ## Status
 
-- [ ] **not started — Decision 0068 `accepted` + signed off
-  2026-05-15; ready to implement.**  Phase 1 is the entry point
-  (shared resolver); see the implementation map above before
-  starting.  No code written yet.
+- [x] **Phase 1 — shared resolver.**  `resolve_deploy_mode` +
+  `DeviceCaps` in `chumicro_deploy.preflight`, exported; Deployer
+  re-pointed (behavior-preserving, 8 `TestPreflight*` green); 19
+  pure-function tests.  Signature carries `resolution_unit`
+  (centralised recommend message; ADR §1 edited in place).
+- [ ] **Phase 2 — pytest-device adopts it (functional path).**  Next
+  entry point.  `resolve_effective_deploy_mode` delegates to the
+  shared resolver passing the full dependency closure as
+  `staged_files`.  Load-bearing regression on the 4-board matrix:
+  `--deploy-mode ram` + the sockets TLS matrix on CP must loudly
+  switch to flash and pass.  See the implementation map above.
+- [ ] Phases 3–5 — `devices.yml` capability → unit-sweep command →
+  docs/AGENTS.md.  Not started.

@@ -1,31 +1,153 @@
-"""Deploy-time pre-flight checks.
+"""Deploy-time mode resolution and the inputs it reads.
 
-Currently checks for libraries flagged as ``requires_flash`` in their
-``pyproject.toml``'s ``[tool.chumicro]`` block.  When the user
-requested RAM mode but the deploy graph contains a flagged library,
-the deployer auto-switches to flash mode for the run and prints a
-human-readable explanation — RAM-mode deploys exec each library's
-source inline and OOM on smaller boards once the deploy graph crosses
-a few hundred KB.
+The single deploy-mode policy lives here as :func:`resolve_deploy_mode`
+and is consumed by both ``chumicro-deploy`` (the CLI / app-deploy
+:class:`~chumicro_deploy.Deployer`) and ``chumicro-pytest-device`` (the
+on-device test path).  One rule, byte-identical for every caller — the
+unit/functional distinction is expressed only by how the caller scopes
+two inputs (``staged_files`` and ``resolution_unit``), never by a
+branch in the policy.
 
 Public API:
 
+* :func:`resolve_deploy_mode` — pure policy: given the configured mode
+  and the resolution unit's inputs, return the effective mode plus an
+  optional human-readable message when a requested RAM mode was
+  overridden to flash.
+* :class:`DeviceCaps` — static board capabilities the policy reads.
 * :func:`find_libraries_requiring_flash` — walks a list of host paths
   to find every unique containing ``pyproject.toml``, reads
   ``[tool.chumicro].requires_flash`` from each, returns the names
-  of the libraries flagged ``true``.
-
-The function is host-paths-in / library-names-out so callers can
-build the host-paths list from any source shape (an
-:class:`ImportGraphSource`'s ``host_paths()``, a hand-curated list
-for tests, etc.) and the result is a sorted list of pip-name-shaped
-strings ready to interpolate into a user-facing message.
+  of the libraries flagged ``true``.  Host-paths-in /
+  library-names-out so callers can build the list from any source
+  shape; the result is a sorted list of pip-name-shaped strings ready
+  to interpolate into a message.
 """
 
 from __future__ import annotations
 
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
+
+from .protocol import DeployMode
+
+
+@dataclass(frozen=True)
+class DeviceCaps:
+    """Static capabilities of a deploy target relevant to mode resolution.
+
+    There are exactly two deploy modes and flash is always available
+    (every board can write its own filesystem — it is the
+    production-shaped path), so the only real degree of freedom is
+    whether the board can run RAM mode at all.  A struct rather than a
+    bare bool so a second capability can be added later without
+    re-threading every resolver call site; today it carries one field
+    with no producer setting it ``False`` (no known board needs it).
+    """
+
+    supports_ram_mode: bool = True
+
+
+def resolve_deploy_mode(
+    configured_mode: str,
+    *,
+    staged_files: list[str],
+    device_caps: DeviceCaps,
+    requires_flash_libs: list[str],
+    resolution_unit: str | None,
+    force: str | None,
+) -> tuple[str, str | None]:
+    """Resolve the effective deploy mode for one resolution unit.
+
+    Pure policy — no I/O, no emission.  The caller computes the inputs
+    (the dependency-closure walk for *requires_flash_libs*, the staged
+    file set for *staged_files*), surfaces the returned message, and
+    applies the mode.  A *resolution unit* is one deploy for the
+    :class:`~chumicro_deploy.Deployer` or one library's test suite for
+    the on-device sweep.
+
+    Two inputs have opposite scoping rules, and that — not a branch —
+    is the whole subtlety:
+
+    * *requires_flash_libs* is **always the full transitive dependency
+      closure**.  ``requires_flash`` means "OOMs on import in RAM on a
+      small board"; the import happens regardless of test shape, so it
+      cannot be scoped down.
+    * *staged_files* is **caller-scoped**: the full closure for
+      functional / app-deploy callers (a functional test genuinely
+      uses a dependency's data file), the library-under-test's own
+      ``src`` only for the unit sweep (a pure unit test cannot reach a
+      dependency's data-file code path, so a dropped dependency asset
+      is harmless and must not poison every dependent suite).
+
+    *resolution_unit* is the library a "you should declare
+    ``requires_flash``" recommendation would name, or ``None`` for an
+    app deploy with no single owning library (then no recommendation
+    is emitted).
+
+    Returns ``(mode, message_or_None)``.  The message is non-``None``
+    only when a requested RAM mode was overridden to flash; the caller
+    emits it and continues — never a silent skip.
+
+    Resolution order:
+
+    1. *force* set → that mode, no message (the explicit "I know what
+       I'm doing" escape hatch).
+    2. RAM requested but *device_caps* says the board cannot RAM →
+       flash.
+    3. RAM requested and the dependency closure carries a
+       ``requires_flash`` library → flash.  When *resolution_unit* is
+       set and is not itself flagged, the message also recommends that
+       library declare ``requires_flash`` so future runs skip the
+       discovery (the resolver never edits ``pyproject.toml``).
+    4. RAM requested and *staged_files* contains a non-``.py`` data
+       file → flash.  RAM-mode CircuitPython is a raw-REPL ``exec()``
+       with no device filesystem, so the asset would be silently
+       dropped.
+    5. Otherwise → *configured_mode* unchanged (a RAM preference stays
+       RAM).
+    """
+    if force is not None:
+        return force, None
+
+    if configured_mode != DeployMode.RAM:
+        return configured_mode, None
+
+    if not device_caps.supports_ram_mode:
+        return DeployMode.FLASH, (
+            "chumicro-deploy: switching to flash mode — this device does "
+            "not support RAM mode."
+        )
+
+    if requires_flash_libs:
+        message = (
+            f"chumicro-deploy: switching to flash mode — "
+            f"{', '.join(requires_flash_libs)} declare `[tool.chumicro] "
+            f"requires_flash = true` (heavy parsers / state machines / "
+            f"recv buffers often OOM in RAM mode on smaller boards). "
+            f"Pass force_deploy_mode='ram' to bypass."
+        )
+        if resolution_unit is not None and resolution_unit not in requires_flash_libs:
+            message += (
+                f" {resolution_unit} pulls a flash-only library in via its "
+                f"dependency closure — declare `[tool.chumicro] "
+                f"requires_flash = true` in its pyproject.toml so future "
+                f"runs skip this discovery."
+            )
+        return DeployMode.FLASH, message
+
+    data_files = sorted(name for name in staged_files if not name.endswith(".py"))
+    if data_files:
+        return DeployMode.FLASH, (
+            f"chumicro-deploy: switching to flash mode — staged set "
+            f"includes non-.py data file(s) ({', '.join(data_files)}) "
+            f"that RAM-mode deploy cannot carry (raw-REPL exec has no "
+            f"device filesystem; the file(s) would be missing). "
+            f"Pass force_deploy_mode='ram' to bypass."
+        )
+
+    return configured_mode, None
 
 
 def find_libraries_requiring_flash(host_paths: list[Path]) -> list[str]:
