@@ -289,27 +289,33 @@ mode pick) → 5 (after the surface is real).
     per-device so "explicitly set" is unknowable and the sweep's whole
     purpose is RAM validation.  4 dispatch + grouping tests; preflight
     green.  Hardware end-to-end rides with 4d.
-  - [ ] **4c — OOM→`requires_flash` learning + RAM sub-grouping.**
-    **Hardware findings (Lolin S2 CP):** (1) Grouping is correct on
-    real hardware — `sockets`→flash (data file),
-    `http_server`/`mqtt`/`requests`/`websockets`→flash
-    (requires_flash, each recommended), 10 light libs incl. `ntp` →
-    one RAM session: 0068's grouping + non-poisoning acceptance
-    *observed met*.  (2) The "~16-lib RAM session OOM" framing was
-    wrong — the existing per-library staging (RAM: per-file restage +
-    soft-reset between) is reused untouched; nothing stages all libs
-    at once, so there is no bulk-OOM to sub-group around.  (3) The
-    real failure: the `wifi` cross-runtime unit suite under
-    `--deploy-mode ram` on CP **hard-crashes the board** (USB CDC
-    drops; `reset-board` FS-wipe does not recover it — needs a
-    physical replug → CircuitPython safe mode).  This is wifi-suite-
-    specific (reproduces running `wifi` alone, not a multi-lib
-    artifact).  Open: is this a wifi-suite-on-RAM-CP defect the sweep
-    correctly surfaced (0068 §3 "behavioral pass/fail … catches
-    real-silicon divergences"), or a device-unit RAM staging bug?
-    Needs a clean light-lib device-unit RAM run on a freshly
-    replugged board to disambiguate (timing 15/15 in RAM *functional*
-    earlier suggests the RAM transport itself is sound).
+  - [ ] **4b.1 — test-support staging gap → [Decision 0069](../decisions/0069-test-support-module-marker.md).**
+    Hardware run surfaced the real blocker: 21/37 cross-runtime unit
+    files import a `*.testing` fake; `testing.py` carried a *false*
+    `__chumicro_runtimes__=("cpython",)` marker used only as a deploy
+    lever, so the 0044 device filter stripped it and every fake-using
+    suite `ImportError`s on-device (unix-port passes — it stages
+    nothing).  Resolution accepted in 0069: drop the false marker, add
+    explicit `__chumicro_test_support__ = True` + an
+    `is_test_support_module()` reader; product/bundle deploys exclude
+    test-support, the `device-unit` sweep includes it via a
+    `stage(include_test_support=True)` scope.  Implement next:
+    11 `testing.py` files + reader + ~6 exclusion sites
+    (incl. `bundle_manager`) + the device-unit scope + a regression
+    test (testing.py in a device-unit stage, never in a bundle/app
+    deploy).  Grouping itself already verified correct on Lolin S2 CP
+    (sockets/`requires_flash`→flash, 10 light incl. `ntp`→RAM —
+    0068's grouping + non-poisoning acceptance *observed met*).  The
+    "~16-lib RAM OOM" sub-question is retired: staging is per-library
+    (RAM: per-file restage + soft-reset), nothing stages all at once.
+  - [ ] **4c — wifi RAM-on-CP hard-crash (post-0069).**  Separate
+    from the staging gap: `wifi` under `--deploy-mode ram` on CP drops
+    the USB CDC (board → safe mode; `reset-board` FS-wipe recovers it
+    once the crashing payload is gone).  Reproduces running `wifi`
+    alone.  Investigate only *after* 0069 lands (the `ImportError`
+    masks it today); report cause before fixing — may be a real
+    wifi-on-RAM-CP defect the sweep correctly surfaced (0068 §3) or a
+    raw-REPL payload issue.  Plus OOM→`requires_flash` learning.
   - [ ] **4d — sweep validation + scope decision.**  0068's stated
     Phase 4 acceptance is grouping + non-poisoning (observed in 4c
     finding 1), *not* every library's unit suite passing on silicon —

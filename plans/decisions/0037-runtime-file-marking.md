@@ -56,7 +56,7 @@ The repo's existing naming (`cp.py`, `mp_esp32.py`, `mp_rp2.py`, `cpython.py`, `
 
 ### 3. Test fakes consolidate into `testing.py`
 
-`testing.py` is the host-only test-fake module per Decision 0010.  It declares `__chumicro_runtimes__ = ("cpython",)` so the marker filter drops it from every bundle (CP-mpy, MP-mpy, universal source) and every host-side deploy path.  PyPI installs (sdist + wheel) ship it unchanged — that's the only legitimate consumer of the fakes.  Per-library `_adapters/fake.py` (and equivalent `_backends/fake.py` if any appear) folds into `testing.py`:
+`testing.py` is the test-fake module per Decision 0010.  It declares `__chumicro_test_support__ = True` (not a runtime marker — the fakes run on every runtime; see [Decision 0069](0069-test-support-module-marker.md)) so the deploy/bundle filter drops it from every bundle (CP-mpy, MP-mpy, universal source) and every product/app/functional device deploy.  The one exception is the on-device unit sweep (`--target device-unit`, Decision 0068), which includes test-support modules because the cross-runtime unit tests legitimately import the fakes.  PyPI installs (sdist + wheel) ship it unchanged — the fakes' other legitimate consumer.  Per-library `_adapters/fake.py` (and equivalent `_backends/fake.py` if any appear) folds into `testing.py`:
 
 - `chumicro_wifi._adapters.fake.FakeWifiAdapter` → `chumicro_wifi.testing.FakeWifiAdapter`
 - `chumicro_sockets._adapters.cpython` stays separate — it's a real CPython adapter (uses stdlib `socket` to talk to real servers from CPython hosts), not a host fake.
@@ -83,7 +83,7 @@ def _find_bundle_modules(
     # target_runtime=None             — legacy "no filter" (not used by bundle pipeline)
 ```
 
-`build_bundle` calls it three times (once per output bundle) with the appropriate target.  The universal source bundle passes `DEVICE_RUNTIMES` (frozenset of `{"circuitpython", "micropython"}`) so any file marked exclusively for `cpython` (notably `testing.py`) drops out — those files only land in the PyPI sdist / wheel, since `pip install` doesn't go through this pipeline.
+`build_bundle` calls it three times (once per output bundle) with the appropriate target.  The universal source bundle passes `DEVICE_RUNTIMES` (frozenset of `{"circuitpython", "micropython"}`) so any file marked exclusively for `cpython` drops out.  `testing.py` is dropped from every bundle by the separate test-support rule ([Decision 0069](0069-test-support-module-marker.md)), not by a runtime marker.  Both classes of dropped file still land in the PyPI sdist / wheel, since `pip install` doesn't go through this pipeline.
 
 ### 6. Examples follow the same marker-is-the-contract rule
 
@@ -106,4 +106,4 @@ The historical filename-prefix shortcut in `chumicro_workspace.example_verify` (
 - The runtime-selection gate code (`_select_adapter`, `_select_backend`, etc.) is unchanged.  It remains the runtime-side counterpart to the build-time bundle filter.
 - The marker declaration is plain Python — readable by humans, parseable by the bundle pipeline, and ignored by the runtime (just an unused module attribute).  No new tooling, no registry, no manifest.
 - `_adapters/fake.py` per library disappears in the same change; existing imports of `chumicro_*._adapters.fake.*` move to `chumicro_*.testing.*`.  Public API (`chumicro_wifi.testing.FakeWifi` etc.) is unchanged.
-- Users on PyPI (`pip install chumicro-foo` on any CPython host) get a complete install — every adapter, every backend, every fake.  Users on mip / circup get the bundle-filtered subset matching their device runtime, with `testing.py` and any other `("cpython",)`-marked files dropped.
+- Users on PyPI (`pip install chumicro-foo` on any CPython host) get a complete install — every adapter, every backend, every fake.  Users on mip / circup get the bundle-filtered subset matching their device runtime, with `("cpython",)`-marked files and test-support modules (`testing.py`, [Decision 0069](0069-test-support-module-marker.md)) dropped.
