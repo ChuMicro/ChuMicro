@@ -208,6 +208,18 @@ _WIPE_FILESYSTEM_SCRIPT: str = (
 _WIPE_REBOOT_SETTLE_SECONDS: float = 2.0
 
 
+#: Bounded retry for the subprocess reset path when a wedged board
+#: (e.g. one that hit ``ENOSPC`` mid-stage) has dropped and is
+#: re-enumerating its USB-CDC.  ``mpremote connect <port> reset`` then
+#: fails ``it may be in use by another program`` / ``device not
+#: configured`` for the re-enumeration window; without a settle that
+#: first transient failed the per-library reset and cascaded across
+#: the whole sweep.  The settle reuses the wipe-reboot value (2 s is
+#: comfortable on rp2 / esp32 in practice).
+_RESET_RETRY_ATTEMPTS: int = 4
+_RESET_RETRY_SETTLE_SECONDS: float = _WIPE_REBOOT_SETTLE_SECONDS
+
+
 def _parse_scope_listing(output: str) -> list[str]:
     """Extract device paths from the scope-listing script's stdout.
 
@@ -346,6 +358,14 @@ class MicropythonTransport:
         self._staging_path: Path | None = None
         self._serial: Any = None
         self._mounted: bool = False
+        #: Top-level device-root names written by the last copy-mode
+        #: :meth:`stage`.  ``mpremote fs cp`` is additive (no ``--delete``
+        #: analog, unlike the CircuitPython flash rsync), so a
+        #: multi-library sweep must delete the prior library's tree
+        #: before the next ``fs cp`` or the device LittleFS fills and
+        #: staging hits ``ENOSPC``.  Persists for the transport's life
+        #: (one transport per device across the whole sweep).
+        self._staged_device_entries: list[str] = []
         #: Selecting :class:`MicropythonTransport` means the deployment
         #: target is MicroPython, so files marked for another runtime
         #: via ``__chumicro_runtimes__`` are filtered out of the staging
@@ -465,11 +485,24 @@ class MicropythonTransport:
         if self.mode == "copy":
             # Subprocess `fs cp -r` — release the serial port if held.
             self._close_serial()
+            # `mpremote fs cp` only adds/overwrites — it has no
+            # `--delete` analog like the CircuitPython flash rsync.  A
+            # multi-library sweep re-stages per library, so without
+            # removing the prior library's tree the device LittleFS
+            # fills and `fs cp` hits ENOSPC (which then wedges the
+            # board's USB-CDC and cascades the sweep).  Delete exactly
+            # what the last stage() wrote, then record this stage's
+            # roots for the next switch.
+            if self._staged_device_entries:
+                self._remove_device_entries(self._staged_device_entries)
             self._run_mpremote([
                 "fs", "cp", "-r",
                 str(staging_path) + "/.",
                 ":",
             ])
+            self._staged_device_entries = sorted(
+                entry.name for entry in staging_path.iterdir()
+            )
         else:
             # Mount mode — open the persistent transport now and mount
             # the staging dir so every subsequent execute() reuses both.
@@ -550,10 +583,15 @@ class MicropythonTransport:
         Used between test groups so each group starts with a clean
         interpreter and an un-wrapped serial.  If no persistent
         transport is open, falls back to a subprocess ``mpremote
-        reset``.
+        reset`` with a bounded settle-and-retry: a prior hard failure
+        (e.g. a stage ``ENOSPC``) can wedge the board so its USB-CDC
+        re-enumerates, and the first ``mpremote connect ... reset``
+        then fails ``it may be in use by another program``.  Retrying
+        across that window keeps one library's failure from cascading
+        through every subsequent per-library reset.
         """
         if self._serial is None:
-            self._run_mpremote(["reset"])
+            self._subprocess_reset_with_retry()
             return
 
         # Umount while the device-side mount state is still live — after
@@ -585,10 +623,43 @@ class MicropythonTransport:
         self._close_serial()
         # Subprocess reset so we don't immediately try to grab the port
         # again — mpremote handles the whole open/reset/close cycle.
+        # The retry+settle rides out a USB-CDC re-enumeration on a
+        # wedged board and settles before returning, so the next
+        # per-library stage()/soft_reset() doesn't race the reboot —
+        # the window that turned one library's hard failure into a
+        # sweep-wide cascade.
         try:
-            self._run_mpremote(["reset"])
+            self._subprocess_reset_with_retry()
         except MicropythonTransportError:  # pragma: no cover - hardware-only
             pass
+
+    def _subprocess_reset_with_retry(self) -> None:
+        """Subprocess ``mpremote ... reset``, riding out re-enumeration.
+
+        A board wedged by a prior hard failure (e.g. a stage
+        ``ENOSPC``) drops its USB-CDC; ``mpremote connect <port>
+        reset`` then fails ``it may be in use by another program`` /
+        ``device not configured`` until it re-enumerates.  Settle and
+        retry across that window, and settle once more after the reset
+        reboots the board so the *next* port grab (the following
+        per-library ``stage()`` / ``soft_reset()``) doesn't land
+        mid-re-enumeration.  Raises only if every attempt fails — a
+        loud error beats the silent sweep-wide cascade.
+        """
+        last_error: Exception | None = None
+        for _attempt in range(_RESET_RETRY_ATTEMPTS):
+            try:
+                self._run_mpremote(["reset"])
+            except MicropythonTransportError as error:
+                last_error = error
+                self._time.sleep(_RESET_RETRY_SETTLE_SECONDS)
+                continue
+            self._time.sleep(_RESET_RETRY_SETTLE_SECONDS)
+            return
+        raise MicropythonTransportError(
+            f"reset of {self.address} failed after "
+            f"{_RESET_RETRY_ATTEMPTS} attempts: {last_error}",
+        )
 
     def reset_into_bootloader(self) -> bool:
         """Issue ``machine.bootloader()`` to drop into the UF2 bootloader.
@@ -1170,6 +1241,42 @@ class MicropythonTransport:
             self._run_mpremote(["fs", "rm", "-r", ":/lib"])
         except MicropythonTransportError:
             # /lib doesn't exist on the device — nothing to clean.
+            pass
+
+    def _remove_device_entries(self, entries: list[str]) -> None:
+        """Recursively remove top-level *entries* from the device root.
+
+        The copy-mode analog of the CircuitPython flash rsync
+        ``--delete``: ``mpremote fs cp`` never deletes, so the prior
+        library's staged tree must be cleared or a multi-library sweep
+        fills the device LittleFS.  One device-side script (one round
+        trip, authoritative) ``rmtree``s each entry, tolerating
+        already-absent paths.  Best-effort — a stray leftover is
+        cleaned by the next switch and the post-``fs cp`` free space is
+        the real guard; a hard failure here would mask the staging
+        operation it precedes.
+        """
+        listed = ", ".join(repr(name) for name in entries)
+        script = (
+            "import os\n"
+            "def _rm(p):\n"
+            "    try:\n"
+            "        for e in os.listdir(p):\n"
+            "            _rm(p + '/' + e)\n"
+            "        os.rmdir(p)\n"
+            "    except OSError:\n"
+            "        try:\n"
+            "            os.remove(p)\n"
+            "        except OSError:\n"
+            "            pass\n"
+            f"for _n in ({listed},):\n"
+            "    _rm(_n)\n"
+        )
+        try:
+            self._run_mpremote(["exec", script])
+        except MicropythonTransportError:  # pragma: no cover - hardware-only
+            # Leftovers are reclaimed on the next switch; never let a
+            # cleanup error stand in for the real staging result.
             pass
 
     def _run_mpremote(self, arguments: list[str]) -> subprocess.CompletedProcess:

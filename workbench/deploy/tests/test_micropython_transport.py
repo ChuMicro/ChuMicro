@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 from chumicro_deploy.micropython_transport import (
     _EXECUTE_IDLE_TIMEOUT,
+    _RESET_RETRY_ATTEMPTS,
+    _RESET_RETRY_SETTLE_SECONDS,
     MicropythonTransport,
     MicropythonTransportError,
 )
@@ -279,6 +281,107 @@ class TestStage:
 
         # Serial transport stays closed during copy-mode stage.
         assert serial.calls == []
+        # First stage has nothing prior to delete — only the fs cp.
+        assert not any("exec" in call[0] for call in runner.calls)
+        # The staged roots are recorded for the next switch to delete.
+        assert transport._staged_device_entries == sorted(
+            entry.name
+            for entry in Path(transport._staging_path).iterdir()
+        )
+
+        transport.disconnect()
+
+    def test_copy_mode_second_stage_deletes_prior_library_tree(
+        self, tmp_path,
+    ) -> None:
+        """``mpremote fs cp`` is additive; the prior library must be
+        removed before the next or the device LittleFS fills (ENOSPC).
+
+        Regression for the MP-copy sweep cascade: 9 libraries' trees
+        piled onto a Pi Pico W until ``requests`` hit ``No space left
+        on device``, which wedged the board and cascaded 139 failures.
+        """
+        lib_a = tmp_path / "lib_a"
+        (lib_a / "chumicro_a").mkdir(parents=True)
+        (lib_a / "chumicro_a" / "__init__.py").write_text("# a")
+        lib_b = tmp_path / "lib_b"
+        (lib_b / "chumicro_b").mkdir(parents=True)
+        (lib_b / "chumicro_b" / "__init__.py").write_text("# b")
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="copy",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([lib_a], [], harness_dir)
+        first_entries = list(transport._staged_device_entries)
+        assert "chumicro_a" in first_entries
+
+        transport.stage([lib_b], [], harness_dir)
+
+        # Second stage: an mpremote exec rm script naming the first
+        # stage's roots, issued *before* that stage's fs cp.
+        commands = [call[0] for call in runner.calls]
+        exec_index = next(
+            index for index, command in enumerate(commands)
+            if "exec" in command
+        )
+        second_fs_cp_index = max(
+            index for index, command in enumerate(commands)
+            if "cp" in command
+        )
+        assert exec_index < second_fs_cp_index
+        rm_script = commands[exec_index][-1]
+        for name in first_entries:
+            assert repr(name) in rm_script
+        assert "os.remove" in rm_script and "os.rmdir" in rm_script
+        # New roots recorded; chumicro_a is no longer tracked.
+        assert "chumicro_b" in transport._staged_device_entries
+        assert "chumicro_a" not in transport._staged_device_entries
+
+        transport.disconnect()
+
+    def test_copy_mode_prior_tree_delete_failure_does_not_mask_stage(
+        self, tmp_path,
+    ) -> None:
+        """A cleanup error must not stand in for the staging result.
+
+        Leftovers are reclaimed on the next switch and the post-cp free
+        space is the real guard; raising here would hide the staging
+        operation it precedes.
+        """
+        lib_a = tmp_path / "lib_a"
+        (lib_a / "chumicro_a").mkdir(parents=True)
+        (lib_a / "chumicro_a" / "__init__.py").write_text("# a")
+        lib_b = tmp_path / "lib_b"
+        (lib_b / "chumicro_b").mkdir(parents=True)
+        (lib_b / "chumicro_b" / "__init__.py").write_text("# b")
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        # First fs cp ok; the rm exec fails; the second fs cp ok.
+        runner = FakeRunner([
+            FakeSubprocessResult(),
+            FakeSubprocessResult(returncode=1, stderr="rm: device busy"),
+            FakeSubprocessResult(),
+        ])
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="copy",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([lib_a], [], harness_dir)
+        # No raise despite the rm failure.
+        transport.stage([lib_b], [], harness_dir)
+
+        assert "chumicro_b" in transport._staged_device_entries
 
         transport.disconnect()
 
@@ -531,12 +634,18 @@ class TestSoftReset:
     def test_soft_reset_without_serial_runs_subprocess(self) -> None:
         """soft_reset() without an open serial transport runs mpremote reset."""
         runner = FakeRunner()
-        transport = MicropythonTransport("/dev/ttyUSB0", runner=runner)
+        recorder = _RecordingTime()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0", runner=runner, time=recorder,
+        )
         transport.soft_reset()
 
         command = runner.calls[0][0]
         assert command[0].endswith("mpremote") or command[0].endswith("mpremote.exe")
         assert command[1:] == ["connect", "/dev/ttyUSB0", "reset"]
+        # One reset, one post-reset settle so the next per-library port
+        # grab doesn't race a re-enumerating USB-CDC.
+        assert recorder.sleeps == [_RESET_RETRY_SETTLE_SECONDS]
 
     def test_soft_reset_with_serial_umounts_then_re_enters_raw_repl(self, tmp_path) -> None:
         """soft_reset() with an open serial transport umounts, exits, then soft-resets.
@@ -642,12 +751,14 @@ class TestRecover:
         harness_dir.mkdir()
 
         runner = FakeRunner()
+        recorder = _RecordingTime()
         serial = FakeSerialTransport(address="/dev/ttyUSB0")
         transport = MicropythonTransport(
             "/dev/ttyUSB0",
             mode="mount",
             runner=runner,
             transport_factory=_factory_for(serial),
+            time=recorder,
         )
         transport.stage([source_dir], [], harness_dir)
 
@@ -656,10 +767,92 @@ class TestRecover:
         # Serial closed.
         assert "close" in [name for name, _ in serial.calls]
         assert transport._serial is None
-        # Subprocess reset issued.
+        # Subprocess reset issued, then a settle before returning so the
+        # next per-library stage()/soft_reset() doesn't race the reboot.
         assert any(call[0][-1] == "reset" for call in runner.calls)
+        assert recorder.sleeps == [_RESET_RETRY_SETTLE_SECONDS]
 
         transport.disconnect()
+
+    def test_recover_retries_reset_across_reenumeration_then_succeeds(
+        self, tmp_path,
+    ) -> None:
+        """A wedged board's first ``mpremote reset`` fails; recover retries.
+
+        Regression for the sweep-wide cascade: an ``ENOSPC`` mid-stage
+        wedges the USB-CDC, the first ``mpremote connect ... reset``
+        fails ``in use by another program``, and (pre-fix) every
+        subsequent per-library reset failed and pytest-failed the whole
+        sweep.  recover() must ride out the re-enumeration window.
+        """
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner([
+            FakeSubprocessResult(
+                returncode=1,
+                stderr=(
+                    "mpremote: failed to access /dev/ttyUSB0 "
+                    "(it may be in use by another program)"
+                ),
+            ),
+            FakeSubprocessResult(),  # second attempt succeeds
+        ])
+        recorder = _RecordingTime()
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+            time=recorder,
+        )
+        transport.stage([source_dir], [], harness_dir)
+
+        transport.recover()
+
+        reset_calls = [
+            call for call in runner.calls if call[0][-1] == "reset"
+        ]
+        assert len(reset_calls) == 2
+        # Settle after the failed attempt + settle after the successful
+        # reset — no exception, so no cascade.
+        assert recorder.sleeps == [
+            _RESET_RETRY_SETTLE_SECONDS,
+            _RESET_RETRY_SETTLE_SECONDS,
+        ]
+
+        transport.disconnect()
+
+    def test_subprocess_reset_raises_after_all_attempts_exhausted(self) -> None:
+        """If the port never frees, the reset raises loudly (never silent).
+
+        recover() swallows it (best-effort), but soft_reset()'s no-serial
+        path surfaces it so a genuinely unreachable board is a clear
+        failure, not a silently-skipped reset.
+        """
+        runner = FakeRunner([
+            FakeSubprocessResult(returncode=1, stderr="in use by another program")
+            for _ in range(_RESET_RETRY_ATTEMPTS)
+        ])
+        recorder = _RecordingTime()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0", runner=runner, time=recorder,
+        )
+
+        with pytest.raises(MicropythonTransportError, match="failed after"):
+            transport.soft_reset()
+
+        reset_calls = [
+            call for call in runner.calls if call[0][-1] == "reset"
+        ]
+        assert len(reset_calls) == _RESET_RETRY_ATTEMPTS
+        # One settle per failed attempt; none after (all failed).
+        assert recorder.sleeps == [
+            _RESET_RETRY_SETTLE_SECONDS,
+        ] * _RESET_RETRY_ATTEMPTS
 
 
 class TestDisconnect:
