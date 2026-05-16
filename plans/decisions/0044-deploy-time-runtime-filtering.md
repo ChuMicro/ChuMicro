@@ -25,7 +25,9 @@ def read_runtime_marker(path: Path) -> frozenset[str] | None: ...
 def file_targets_runtime(path: Path, *, target_runtime: str | None) -> bool: ...
 ```
 
-`target_runtime=None` means "no filter" — the legacy default kept for callers that haven't opted into a target.  Every other consumer passes a concrete runtime (transports, deploy CLIs) or a frozenset of acceptable runtimes (the universal source bundle in `bundle_manager`, see [Decision 0037 amendment 2026-05-04](0037-runtime-file-marking.md#2026-05-04--testingpy-exits-the-universal-source-bundle-too)).
+`target_runtime=None` means "no filter" — the legacy default kept for callers that haven't opted into a target.  Every other consumer passes a concrete runtime (transports, deploy CLIs) or a frozenset of acceptable runtimes (the universal source bundle in `bundle_manager`).
+
+Test-support modules (`testing.py`) are filtered by a *separate*, runtime-independent rule — `is_test_support_module()`, also in `chumicro_deploy.runtime_marker` ([Decision 0069](0069-test-support-module-marker.md)).  It is applied alongside the runtime filter at every boundary below: a file is dropped if the runtime marker excludes it **or** it is a test-support module.  The single exception is the on-device unit sweep (`--target device-unit`, [Decision 0068](0068-unified-deploy-mode-resolution.md)): `CircuitpythonTransport.stage()` / `MicropythonTransport.stage()` take an `include_test_support` flag (default `False`) that only the device-unit staging path sets `True`, because the cross-runtime unit tests legitimately import the fakes — exactly as unix-port already resolves them in place.
 
 ### Where filtering applies
 
@@ -49,7 +51,7 @@ Sub-runtime markers (`micropython_esp32`, `micropython_rp2`) fold into `"micropy
 
 ### What stays unchanged
 
-- **PyPI sdist / wheel** — built by `python -m build` (not `bundle_manager`); ships every file under `src/` including `testing.py` and every runtime adapter.  `pip install chumicro-foo` on a CPython host gets the complete library.
+- **PyPI sdist / wheel** — built by `python -m build` (not `bundle_manager`); ships every file under `src/` including `testing.py` (test-support) and every runtime adapter.  `pip install chumicro-foo` on a CPython host gets the complete library.
 - **circup / mip per-runtime bundles** — already filtered by `bundle_manager`, no change.
 - **`FileMapSource`** — caller already chose bytes; no walk to filter.
 - **Runtime selector code** — `_select_adapter` / `_select_backend` are unchanged.  They remain the device-side counterpart; the deploy filter is the host-side counterpart.
