@@ -289,23 +289,30 @@ mode pick) → 5 (after the surface is real).
     per-device so "explicitly set" is unknowable and the sweep's whole
     purpose is RAM validation.  4 dispatch + grouping tests; preflight
     green.  Hardware end-to-end rides with 4d.
-  - [ ] **4b.1 — test-support staging gap → [Decision 0069](../decisions/0069-test-support-module-marker.md).**
-    Hardware run surfaced the real blocker: 21/37 cross-runtime unit
-    files import a `*.testing` fake; `testing.py` carried a *false*
-    `__chumicro_runtimes__=("cpython",)` marker used only as a deploy
-    lever, so the 0044 device filter stripped it and every fake-using
-    suite `ImportError`s on-device (unix-port passes — it stages
-    nothing).  Resolution accepted in 0069: drop the false marker, add
-    explicit `__chumicro_test_support__ = True` + an
-    `is_test_support_module()` reader; product/bundle deploys exclude
-    test-support, the `device-unit` sweep includes it via a
-    `stage(include_test_support=True)` scope.  Implement next:
-    11 `testing.py` files + reader + ~6 exclusion sites
-    (incl. `bundle_manager`) + the device-unit scope + a regression
-    test (testing.py in a device-unit stage, never in a bundle/app
-    deploy).  Grouping itself already verified correct on Lolin S2 CP
-    (sockets/`requires_flash`→flash, 10 light incl. `ntp`→RAM —
-    0068's grouping + non-poisoning acceptance *observed met*).  The
+  - [x] **4b.1 — test-support staging gap → [Decision 0069](../decisions/0069-test-support-module-marker.md). DONE.**
+    21/37 cross-runtime unit files import a `*.testing` fake;
+    `testing.py`'s false `__chumicro_runtimes__=("cpython",)` marker
+    made the 0044 device filter strip it → every fake-using suite
+    `ImportError`d on-device.  0069 implemented (commit `03311b1d`):
+    explicit `__chumicro_test_support__` + `is_test_support_module()`
+    reader; product/bundle always-exclude, `device-unit` includes via
+    `stage(include_test_support=True)`.  **Verified on hardware** —
+    Pi Pico W CP `device-unit` flash: `timing` 29/29, `wifi` 41/41,
+    `runner` 61/61, all standalone green (was a mass ImportError).
+  - [ ] **4b.2 — multi-library session sequencing bug.**  Decisive
+    finding: *every library passes standalone* on the `device-unit`
+    flash path, but the full 15-library sweep session fails most
+    suites wholesale (e.g. `runner/test_core` 61/61 alone → all-FAIL
+    in the combined run; same for `wifi`).  Not per-library
+    conformance, not 0069, not the RAM grouping (Lolin S2 CP grouping
+    verified correct earlier).  The defect is the per-library flash
+    re-stage between libraries in one pytest session — rsync
+    `--delete` on library switch + the next library's closure
+    re-stage isn't leaving each suite correctly staged (suspect: the
+    harness / shared-dep / test-support set not re-added after
+    `--delete`, or test-file staging keyed so only the first
+    library's land).  Bounded Phase-4 mechanism bug; debug the
+    `_bulk_stage_for_device` / per-library switch path.  The
     "~16-lib RAM OOM" sub-question is retired: staging is per-library
     (RAM: per-file restage + soft-reset), nothing stages all at once.
   - [ ] **4c — wifi RAM-on-CP hard-crash (post-0069).**  Separate
