@@ -6,6 +6,7 @@
 
 - [ ] **Resume workspace-library-curation Phase 1 from session handoff** — see [`handoffs/2026-05-12-workspace-library-curation-design-resolved.md`](handoffs/2026-05-12-workspace-library-curation-design-resolved.md).
 - [ ] **deploy-mode-unification 4c/4d/Phase 5 remain** — 4b.2 resolved (Decisions 0070 + 0071, see Done). 4c (wifi RAM-on-CP hard-crash), 4d (sweep validation + scope decision), Phase 5 (docs + AGENTS) still open. Detail: [`workstreams/deploy-mode-unification.md`](workstreams/deploy-mode-unification.md).
+- [ ] **Resume MP-copy soft_reset defect from session handoff** — see [`handoffs/2026-05-16-mp-copy-reset-defect.md`](handoffs/2026-05-16-mp-copy-reset-defect.md). Decision 0071's per-library soft_reset breaks the MicroPython copy-mode sweep (port-in-use); MP mount + CP flash clean. Root cause + fix shape in [`open-questions.md`](open-questions.md).
 
 ## Next
 

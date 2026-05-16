@@ -538,3 +538,40 @@ the original analysis.)
 
 Related: Decision 0071, Decision 0068, Decision 0027 (the persistent
 raw-REPL harness execution model), Decision 0028.
+
+### Decision 0071 per-library soft_reset breaks the MicroPython copy-mode sweep
+
+**[VERIFIED]** on Pi Pico W MicroPython, `--deploy-mode flash`
+(= MP copy mode), 2026-05-16.  Decision 0071 added a per-library
+`transport.soft_reset()` to the plugin's `is_filesystem_mode` branch.
+On MP **copy** mode the transport's reset shells out to a subprocess —
+`mpremote connect <port> reset` — while the same `MicropythonTransport`
+still holds the persistent serial connection to that port.  Result:
+`mpremote: failed to access <port> (it may be in use by another
+program)` → `Device reset failed before staging library` →
+`OSError: [Errno 6] Device not configured` → every subsequent file
+cascades.  Sweep: 139 failed / 275 passed (runner 61, wifi 42,
+timing 23 — all cascade victims of the evicted transport, not real
+per-test failures).
+
+**Scope:** MP **copy** mode only.  MP **mount** mode (the normal MP
+sweep path — the sweep defaults to RAM/mount for MP) is **clean**:
+Lolin S2 MP mount = 376 passed / 0 failed same day.  CP flash is clean
+(Pico W CP 417/0).  So real-world MP sweep usage is unaffected; the
+defect is on the copy path that Decision 0071's `is_filesystem_mode`
+branch also drives but that this session only stress-tested.
+
+**Repro:** `.venv/bin/python scripts/run.py test-unit-on-device
+--runtime micropython --micropython-device pi-pico-w-micropython-board
+--deploy-mode flash` → first per-library `soft_reset` fails with the
+port-in-use error.
+
+**Fix shape (HYPOTHESIS — not implemented):** MP copy-mode reset must
+use the *persistent serial transport's* Ctrl-D soft-reset (the path
+mount mode already uses) instead of spawning a conflicting `mpremote
+… reset` subprocess; or close the persistent port before the
+subprocess reset and reopen after.  Cheapest test: make
+`MicropythonTransport.soft_reset()` route through the held serial
+connection in copy mode and re-run the repro.  Needs hardware
+re-verification.  Introduced by Decision 0071 (commit `00c460e6` /
+`8d3a4580` arc).  Related: Decision 0071, Decision 0028, Decision 0068.
