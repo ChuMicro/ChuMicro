@@ -539,39 +539,33 @@ the original analysis.)
 Related: Decision 0071, Decision 0068, Decision 0027 (the persistent
 raw-REPL harness execution model), Decision 0028.
 
-### Decision 0071 per-library soft_reset breaks the MicroPython copy-mode sweep
+### MP copy-mode sweep: device left dirty by a prior aborted run isn't self-healed on the first stage
 
-**[VERIFIED]** on Pi Pico W MicroPython, `--deploy-mode flash`
-(= MP copy mode), 2026-05-16.  Decision 0071 added a per-library
-`transport.soft_reset()` to the plugin's `is_filesystem_mode` branch.
-On MP **copy** mode the transport's reset shells out to a subprocess —
-`mpremote connect <port> reset` — while the same `MicropythonTransport`
-still holds the persistent serial connection to that port.  Result:
-`mpremote: failed to access <port> (it may be in use by another
-program)` → `Device reset failed before staging library` →
-`OSError: [Errno 6] Device not configured` → every subsequent file
-cascades.  Sweep: 139 failed / 275 passed (runner 61, wifi 42,
-timing 23 — all cascade victims of the evicted transport, not real
-per-test failures).
+**Surfaced 2026-05-16** while fixing the MP copy-mode cascade
+(Decision 0071, the additive-`fs cp` ENOSPC defect).  The fix tracks
+the previously-staged top-level tree per transport instance and
+deletes it before each `fs cp`.  `_staged_device_entries` starts
+**empty**, so the *first* `stage()` of a sweep does not clean
+whatever a prior aborted run left on the device — only the
+plugin's `clear_entrypoints()` (code.py/main.py only) runs at
+session start.
 
-**Scope:** MP **copy** mode only.  MP **mount** mode (the normal MP
-sweep path — the sweep defaults to RAM/mount for MP) is **clean**:
-Lolin S2 MP mount = 376 passed / 0 failed same day.  CP flash is clean
-(Pico W CP 417/0).  So real-world MP sweep usage is unaffected; the
-defect is on the copy path that Decision 0071's `is_filesystem_mode`
-branch also drives but that this session only stress-tested.
+Low probability now: ENOSPC cascades are fixed, so a completed
+sweep ends with only the last library's ~330 KB tree on an ~848 KB
+LittleFS, and a clean device is the normal precondition.  But a run
+aborted mid-sweep by a *real* test failure (recover() fires, run
+stops) leaves N libraries' trees; the next run's first stage won't
+clear them, and across repeated aborted runs accumulation could
+recur.
 
-**Repro:** `.venv/bin/python scripts/run.py test-unit-on-device
---runtime micropython --micropython-device pi-pico-w-micropython-board
---deploy-mode flash` → first per-library `soft_reset` fails with the
-port-in-use error.
+Options when/if it bites: (a) on the first copy-mode `stage()`
+(`_staged_device_entries` empty), wipe all `chumicro_*` + `test_*.py`
+at device root before `fs cp` — the sweep owns root, user files
+(`boot.py`) preserved by name pattern; (b) reuse
+`wipe_filesystem()` (LittleFS mkfs) as a session-start hook in the
+plugin's `is_filesystem_mode` first-library branch.  Not blocking —
+record-and-defer until an aborted-run accumulation is actually
+observed (adding it speculatively risks new bugs for no observed
+failure, same reasoning as the per-file-reset thread above).
 
-**Fix shape (HYPOTHESIS — not implemented):** MP copy-mode reset must
-use the *persistent serial transport's* Ctrl-D soft-reset (the path
-mount mode already uses) instead of spawning a conflicting `mpremote
-… reset` subprocess; or close the persistent port before the
-subprocess reset and reopen after.  Cheapest test: make
-`MicropythonTransport.soft_reset()` route through the held serial
-connection in copy mode and re-run the repro.  Needs hardware
-re-verification.  Introduced by Decision 0071 (commit `00c460e6` /
-`8d3a4580` arc).  Related: Decision 0071, Decision 0028, Decision 0068.
+Related: Decision 0071, Decision 0068, Decision 0028.
