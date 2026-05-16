@@ -3,6 +3,17 @@
 from io import BytesIO
 
 from chumicro_msgpack import pack, packb, unpack, unpackb
+
+# Tests that pin the *pure-subset* contract — exact wire bytes,
+# overflow rejection, out-of-subset decode rejection — assert against
+# ``_pure`` directly.  On a CircuitPython board the public ``packb`` /
+# ``unpackb`` resolve to the firmware's native ``msgpack`` C module,
+# which is full msgpack (not subset-constrained) by design (see
+# ``chumicro_msgpack.__init__``); ``_pure`` is the implementation that
+# owns the subset contract and behaves identically on every runtime,
+# so these checks stay meaningful on real hardware too.
+from chumicro_msgpack._pure import packb as _pure_packb
+from chumicro_msgpack._pure import unpackb as _pure_unpackb
 from chumicro_test_harness import raises
 
 # ---------------------------------------------------------------------------
@@ -75,8 +86,8 @@ def test_negative_fixint_boundary() -> None:
 
 def test_uint8_low() -> None:
     """128 should encode as uint8 (0xcc prefix)."""
-    assert unpackb(packb(128)) == 128
-    assert packb(128) == b"\xcc\x80"
+    assert _pure_unpackb(_pure_packb(128)) == 128
+    assert _pure_packb(128) == b"\xcc\x80"
 
 
 def test_uint8_high() -> None:
@@ -110,7 +121,7 @@ def test_uint32_low() -> None:
 def test_uint32_high() -> None:
     """2^32 - 1 is the upper bound of uint32 encoding."""
     value = 2**32 - 1
-    assert unpackb(packb(value)) == value
+    assert _pure_unpackb(_pure_packb(value)) == value
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +164,7 @@ def test_int32_low() -> None:
 def test_int32_high() -> None:
     """-2^31 is the lower bound of int32 encoding."""
     value = -(2**31)
-    assert unpackb(packb(value)) == value
+    assert _pure_unpackb(_pure_packb(value)) == value
 
 
 # ---------------------------------------------------------------------------
@@ -163,13 +174,13 @@ def test_int32_high() -> None:
 def test_int_too_large_raises() -> None:
     """Integers above 2^32 - 1 should raise OverflowError."""
     with raises(OverflowError):
-        packb(2**32)
+        _pure_packb(2**32)
 
 
 def test_int_too_negative_raises() -> None:
     """Integers below -2^31 should raise OverflowError."""
     with raises(OverflowError):
-        packb(-(2**31) - 1)
+        _pure_packb(-(2**31) - 1)
 
 
 # ---------------------------------------------------------------------------
@@ -434,7 +445,7 @@ def test_unpackb_memoryview() -> None:
 def test_unsupported_type_raises() -> None:
     """Packing an unsupported type should raise TypeError."""
     with raises(TypeError):
-        packb(object())
+        _pure_packb(object())
 
 
 def test_unknown_decode_byte_raises() -> None:
@@ -459,49 +470,49 @@ def test_float64_decode_raises() -> None:
     # 0xcb + 8 bytes of IEEE 754 binary64 for 1.0
     encoded = b"\xcb\x3f\xf0\x00\x00\x00\x00\x00\x00"
     with raises(ValueError):
-        unpackb(encoded)
+        _pure_unpackb(encoded)
 
 
 def test_uint64_decode_raises() -> None:
     """Decoding uint64 (0xcf) should raise ValueError naming uint64."""
     encoded = b"\xcf\x00\x00\x00\x01\x00\x00\x00\x00"  # 2**32
     with raises(ValueError):
-        unpackb(encoded)
+        _pure_unpackb(encoded)
 
 
 def test_int64_decode_raises() -> None:
     """Decoding int64 (0xd3) should raise ValueError naming int64."""
     encoded = b"\xd3\xff\xff\xff\xfe\xff\xff\xff\xff"  # -(2**32 + 1)
     with raises(ValueError):
-        unpackb(encoded)
+        _pure_unpackb(encoded)
 
 
 def test_bin32_decode_raises() -> None:
     """Decoding bin32 (0xc6) should raise ValueError naming bin32."""
     encoded = b"\xc6\x00\x00\x00\x00"  # zero-length bin32 header
     with raises(ValueError):
-        unpackb(encoded)
+        _pure_unpackb(encoded)
 
 
 def test_str32_decode_raises() -> None:
     """Decoding str32 (0xdb) should raise ValueError naming str32."""
     encoded = b"\xdb\x00\x00\x00\x00"  # zero-length str32 header
     with raises(ValueError):
-        unpackb(encoded)
+        _pure_unpackb(encoded)
 
 
 def test_array32_decode_raises() -> None:
     """Decoding array32 (0xdd) should raise ValueError naming array32."""
     encoded = b"\xdd\x00\x00\x00\x00"  # zero-length array32 header
     with raises(ValueError):
-        unpackb(encoded)
+        _pure_unpackb(encoded)
 
 
 def test_map32_decode_raises() -> None:
     """Decoding map32 (0xdf) should raise ValueError naming map32."""
     encoded = b"\xdf\x00\x00\x00\x00"  # zero-length map32 header
     with raises(ValueError):
-        unpackb(encoded)
+        _pure_unpackb(encoded)
 
 
 # ---------------------------------------------------------------------------

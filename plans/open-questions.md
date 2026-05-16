@@ -538,27 +538,3 @@ the original analysis.)
 
 Related: Decision 0071, Decision 0068, Decision 0027 (the persistent
 raw-REPL harness execution model), Decision 0028.
-
-### Function-level host-context tests in a device-lane file (kvstore/test_kvstore.py)
-
-Surfaced 2026-05-16 by the instrumented `device-unit` sweep, after
-[Decision 0070](decisions/0070-host-only-test-marker.md) excluded the
-file-level host-only files.  `libraries/kvstore/tests/test_kvstore.py`
-is a legitimate device-lane cross-runtime file, but three of its
-functions assert off-target behaviour — `test_explicit_nvm_string_
-raises_runtime_error_on_cpython`, `test_explicit_nvs_string_raises_
-runtime_error_on_cpython`, `test_explicit_littlefs_string_resolves_
-on_any_filesystem_runtime` — that is only true *off* the target board
-(a real CP board *can* acquire the backend, so the expected
-`RuntimeError` never raises and the test fails on-device).  This is
-the same root cause as Decision 0070 issue (i) but at **function**
-granularity: 0070's `__chumicro_host_only__` is a whole-file marker
-and cannot express "this file is device-lane except these three
-host-context functions."  Not blocking — it is 3 deterministic
-failures the sweep correctly surfaces as the file's *output*, not a
-mechanism defect (per Decision 0068 "behavioral pass/fail only").
-Options when addressed: a function-level skip via the loud-skip
-primitive guarded on a runtime check (Decision 0058); split the three
-into a sibling `__chumicro_host_only__` file; or accept them as
-known-failing sweep output.  Related: Decision 0070, Decision 0058,
-Decision 0068.

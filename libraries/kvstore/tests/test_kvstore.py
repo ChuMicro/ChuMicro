@@ -59,41 +59,9 @@ def test_concrete_backend_instance_accepted() -> None:
     assert store.capacity == 512
 
 
-def test_explicit_nvm_string_raises_runtime_error_on_cpython() -> None:
-    """``backend="nvm"`` without ``microcontroller`` raises a clear error.
-
-    The real CP NVM backend tries ``import microcontroller`` and
-    surfaces a ``RuntimeError`` with an injection hint when the import
-    fails.  Confirms the auto-resolver routes to ``CpNvmBackend``
-    rather than silently falling through to memory.
-    """
-    with raises(RuntimeError):
-        KVStore(backend="nvm")
-
-
-def test_explicit_nvs_string_raises_runtime_error_on_cpython() -> None:
-    """``backend="nvs"`` without ``esp32`` raises a clear error.
-
-    Same pattern as the CP NVM check above: the resolver routes to
-    ``MpNvsBackend`` whose default-arg path tries ``import esp32``
-    and surfaces a ``RuntimeError`` with an injection hint when the
-    import fails (CPython, MP unix-port without the esp32 stub).
-    """
-    with raises(RuntimeError):
-        KVStore(backend="nvs")
-
-
-def test_explicit_littlefs_string_resolves_on_any_filesystem_runtime() -> None:
-    """``backend="littlefs"`` constructs anywhere ``os`` is available.
-
-    The LittleFS backend talks to a generic filesystem shim
-    (``builtins.open`` + ``os.rename`` / ``remove`` / ``sync``); it
-    works on CPython, MicroPython, and (in principle) CircuitPython
-    once a writable filesystem is mounted.  The constructor should
-    succeed on CPython hosts even without a board.
-    """
-    store = KVStore(backend="littlefs")
-    assert store.backend_name == "littlefs"
+# The string-resolver host-context checks (nvm/nvs/littlefs without the
+# backing hardware) moved to test_kvstore_host.py — they assert
+# off-target behaviour and are excluded from the on-device sweep.
 
 
 # ---------------------------------------------------------------------------
