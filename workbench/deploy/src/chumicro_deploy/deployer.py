@@ -30,7 +30,11 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from .host_platform import check_rsync_available, check_supported_platform
-from .preflight import find_libraries_requiring_flash
+from .preflight import (
+    DeviceCaps,
+    find_libraries_requiring_flash,
+    resolve_deploy_mode,
+)
 from .protocol import DeployMode, Runtime
 from .result import DeployResult
 
@@ -120,85 +124,49 @@ class Deployer:
 
         The configured device is the starting point, but the deploy
         *mode* is a policy decision that depends on the source — hence
-        the name takes ``_for_source``.  Two policies can force a
-        RAM-configured device to flash: a non-``.py`` data file in the
-        staged set, or a library in the graph declaring
-        ``[tool.chumicro] requires_flash = true``.
+        the name takes ``_for_source``.  This method computes the
+        policy inputs (the staged file set, and the ``requires_flash``
+        closure when *source* exposes ``host_paths()``) and delegates
+        the decision to :func:`chumicro_deploy.resolve_deploy_mode`,
+        the one shared deploy-mode policy.  An app deploy has no single
+        owning library, so it passes ``resolution_unit=None`` (no
+        "declare requires_flash" recommendation) and the default
+        :class:`DeviceCaps` (every board this path targets can RAM —
+        the per-device capability is a registry concern the test path
+        threads in).
 
-        Returns a :class:`Device` whose ``deploy_mode`` is the effective
-        mode for this deploy.  The original ``self._device`` is never
-        mutated — when an override is needed, ``dataclasses.replace``
-        produces a fresh frozen copy.
-
-        Resolution order:
-
-        1. *force_deploy_mode* set: override to that value, no further
-           pre-flight.  This is the explicit "I know what I'm doing"
-           escape hatch.
-        2. ``self._device.deploy_mode != "ram"``: the device already
-           wants flash (or some future mode); nothing to switch.
-        3. Staged set contains any non-``.py`` data file: switch the
-           *whole* deploy to flash.  RAM-mode CircuitPython is a
-           raw-REPL ``exec()`` with no device filesystem — non-``.py``
-           files are silently dropped, so the asset would simply be
-           missing on-device.  All-or-nothing (no half-RAM/half-flash
-           dance); emit an explanation.
-        4. Source doesn't expose ``host_paths()``: we have no graph to
-           inspect — proceed in RAM mode silently
-           (:class:`~chumicro_deploy.sources.FileMapSource` is the
-           common case here).
-        5. No library in the graph carries ``[tool.chumicro]
-           requires_flash = true``: proceed in RAM mode silently.
-        6. At least one library is flagged: switch to flash mode and
-           emit a human-readable explanation through
-           *on_preflight_message* (or stderr when ``None``).
+        Returns a :class:`Device` whose ``deploy_mode`` is the
+        resolved mode.  ``self._device`` is never mutated — when the
+        mode changes, ``dataclasses.replace`` produces a fresh frozen
+        copy.  Any override message is surfaced through
+        *on_preflight_message* (or stderr when ``None``); the deploy
+        always continues, never silently skipped.
         """
+        host_paths_method = getattr(source, "host_paths", None)
+        requires_flash_libs = (
+            find_libraries_requiring_flash(host_paths_method())
+            if host_paths_method is not None
+            else []
+        )
 
-        def _emit(message: str) -> None:
+        mode, message = resolve_deploy_mode(
+            self._device.deploy_mode,
+            staged_files=list(source.files()),
+            device_caps=DeviceCaps(),
+            requires_flash_libs=requires_flash_libs,
+            resolution_unit=None,
+            force=force_deploy_mode,
+        )
+
+        if message is not None:
             if on_preflight_message is not None:
                 on_preflight_message(message)
             else:
                 print(message, file=sys.stderr)
 
-        if force_deploy_mode is not None:
-            if force_deploy_mode == self._device.deploy_mode:
-                return self._device
-            return dataclasses.replace(self._device, deploy_mode=force_deploy_mode)
-
-        if self._device.deploy_mode != DeployMode.RAM:
+        if mode == self._device.deploy_mode:
             return self._device
-
-        data_files = sorted(
-            name for name in source.files() if not name.endswith(".py")
-        )
-        if data_files:
-            _emit(
-                f"chumicro-deploy: switching to flash mode — staged set "
-                f"includes non-.py data file(s) ({', '.join(data_files)}) "
-                f"that RAM-mode deploy cannot carry (raw-REPL exec has no "
-                f"device filesystem; the file(s) would be missing). "
-                f"Pass force_deploy_mode='ram' to bypass.",
-            )
-            return dataclasses.replace(
-                self._device, deploy_mode=DeployMode.FLASH,
-            )
-
-        host_paths_method = getattr(source, "host_paths", None)
-        if host_paths_method is None:
-            return self._device
-
-        flagged = find_libraries_requiring_flash(host_paths_method())
-        if not flagged:
-            return self._device
-
-        _emit(
-            f"chumicro-deploy: switching to flash mode — "
-            f"{', '.join(flagged)} declare `[tool.chumicro] "
-            f"requires_flash = true` (heavy parsers / state machines / "
-            f"recv buffers often OOM in RAM mode on smaller boards). "
-            f"Pass force_deploy_mode='ram' to bypass.",
-        )
-        return dataclasses.replace(self._device, deploy_mode=DeployMode.FLASH)
+        return dataclasses.replace(self._device, deploy_mode=mode)
 
     def _run_deploy(
         self,

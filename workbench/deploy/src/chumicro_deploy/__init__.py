@@ -59,6 +59,11 @@ from .micropython_transport import (
     MicropythonTransport,
     MicropythonTransportError,
 )
+from .preflight import (
+    DeviceCaps,
+    find_libraries_requiring_flash,
+    resolve_deploy_mode,
+)
 from .probe import DeviceInfo, probe_device
 from .protocol import (
     DEPLOY_SCOPE_FILES,
@@ -105,6 +110,7 @@ __all__ = [
     "DeployResult",
     "Deployer",
     "Device",
+    "DeviceCaps",
     "DeviceConfigError",
     "DeviceDefaults",
     "DeviceEntry",
@@ -138,6 +144,7 @@ __all__ = [
     "detect_fskit_wedge",
     "discover_factory_modules",
     "file_targets_runtime",
+    "find_libraries_requiring_flash",
     "flash_firmware",
     "is_in_deploy_scope",
     "load_device_registry",
@@ -147,6 +154,7 @@ __all__ = [
     "read_runtime_marker",
     "read_skip_factories_marker",
     "recovery_plan_for",
+    "resolve_deploy_mode",
     "resolve_firmware_url",
     "resolve_ide_devices",
     "resolve_skip_targets",
