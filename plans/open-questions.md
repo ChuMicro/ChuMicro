@@ -569,3 +569,86 @@ observed (adding it speculatively risks new bugs for no observed
 failure, same reasoning as the per-file-reset thread above).
 
 Related: Decision 0071, Decision 0068, Decision 0028.
+
+### msgpack decode trust boundary — validating decoder vs. trusting decoder + CRC everywhere
+
+**Surfaced 2026-05-16** by the 16-agent adversarial sweep (4 independent
+agents + hand-verified).  `chumicro_msgpack.unpackb` silently accepts
+truncated, over-length, and trailing-garbage input and recurses
+unbounded: `unpackb(b'\xc4\xc8\x01\x02')` → `b'\x01\x02'` (claims 200
+bytes, returns 2); `unpackb(b'\x01\xff\xff\xff')` → `1` (3 trailing
+bytes dropped).  kvstore (`core.py:157,178`) and config
+(`runtime.py:22`) feed *persisted flash bytes* straight in; only the
+CP-NVM backend has a CRC — MP-NVS, LittleFS, and memory backends have
+none.  A power-loss-truncated payload decodes as a structurally-valid
+*wrong* dict, is adopted as live state, and overwrites the original on
+the next commit.
+
+**The question:** is `unpackb` contractually a *validating* decoder or a
+*trusting* one?  The embedded-cost gate argues trusting + cheap bounds:
+a full spec-validating decoder is ~100 lines + per-decode hot-path CPU,
+and integrity is far better served by a CRC frame (cheap, catches
+bit-flips a parser can't) than by a parser.  The realistic threat is
+**power-loss flash corruption**, not a network attacker — which makes
+"push integrity to a CRC on every persistence backend" both cheaper and
+*more* correct than hardening the parser.
+
+**Resolve into:** an ADR (or a Decision 0009/kvstore-charter amendment)
+stating (1) `unpackb` is a trusting decoder — safe against
+truncation/overrun/recursion-depth via ~15–20 cheap lines, **not** a
+spec validator; (2) every kvstore persistence backend MUST carry CRC
+framing.  Blocks Phase 1 item 1 of the audit-remediation workstream.
+
+Related: Decision 0009, the `audit-remediation-and-drift-mechanization`
+workstream.
+
+### Coverage-gate honesty — does 94 % mean what ADR 0009/0025 claims?
+
+**Surfaced 2026-05-16** (2 independent sweep agents, compounding).
+(a) CI's `test --all` passes no `--coverage-threshold`; no per-library
+`pyproject.toml` carries coverage config; enforcement is a single
+repo-wide ~85 % aggregate, so a 0 %-covered library ships green if the
+workspace average holds — Decision 0009's "enforces each library's
+threshold" is false on the CI path.  (b) The 94 % agent gate
+(`scripts/run.py:830`) is CPython-only; `sockets/_adapters/mp.py` (the
+code that runs on the shipped MP target) is blanket
+`# pragma: no cover - device only` (20 in sockets alone) and
+contributes nothing to the number ADR 0025 sells as the safety bar.
+
+**The question:** fix the gate (per-library threshold on CI; a separate
+device-adapter coverage signal) or correct ADR 0009/0025 to state
+plainly what 94 % does and does not cover?  The pragmas are individually
+defensible (you can't run MP `usocket` under CPython pytest) — the
+dishonesty is reporting the post-exclusion figure as the single
+advertised bar with no device-coverage signal anywhere.
+
+**Resolve into:** an ADR 0025 amendment with a "what 94 % does and
+doesn't cover" paragraph, plus a decision on whether CI gains a
+per-library threshold.  Blocks Phase 1 item 2 + Phase 4's
+coverage-honesty lint.
+
+Related: Decision 0009, Decision 0025.
+
+### Prose-lockstep → mechanization principle
+
+**Surfaced 2026-05-16.**  The sweep's meta-finding: every code rule
+mechanized by a CHU lint held at 0 violations across ~16 K LOC of
+library source; every contract guarded only by the AGENTS.md "docs in
+lockstep" prose rule drifted and shipped wrong (false TLS docstring,
+README example crashing on MP, "future work" docstring for shipped
+features, phantom CLI commands, coverage claim, CI lint that can't run
+the CHU rules).  Lockstep depends on agent diligence — the exact thing
+the project mechanized *code* rules to stop depending on.
+
+**The question:** should the project ratify that a drift class which
+*can* be linted *must* be — extending the CHU-rule philosophy from code
+shape to docs/CLI/coverage contracts?  If yes, Phase 4 of the
+audit-remediation workstream is its first implementation
+(doc-command-vs-registered, docstring-claims-vs-shipped,
+example-imports-resolve-cross-runtime, coverage-claim honesty).
+
+**Resolve into:** a new ADR (drift-mechanization as project policy)
+chartering Phase 4.  Not blocking Phases 1–3.
+
+Related: the `audit-remediation-and-drift-mechanization` workstream,
+the CHU-rule family in `workbench/checks/`.
