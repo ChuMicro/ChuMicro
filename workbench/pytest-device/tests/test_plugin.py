@@ -1445,8 +1445,9 @@ class TestPytestCollectionModifyItemsFeatures:
                     raise self._response
                 return self._response
 
-        class _StubTransportCache:
+        class _StubTransportCache(pytest_device._TransportCache):
             def __init__(self, features_by_device: dict[str, str | Exception]) -> None:
+                super().__init__()
                 self._features = features_by_device
 
             def get_transport(
@@ -1458,6 +1459,9 @@ class TestPytestCollectionModifyItemsFeatures:
         session.config = MagicMock()
         # The default getoption ('--deploy-mode') returns ``None``.
         session.config.getoption = lambda *_args, **_kwargs: None
+        # No collected items ⇒ the deploy-mode closure walk is a no-op
+        # and the configured mode passes straight through.
+        session.items = []
         session._device_transport_cache = _StubTransportCache(transport_features)
         # Drop the auto-spec attribute pre-set by MagicMock so the
         # plugin's own assignment to session._device_features_cache
@@ -1613,7 +1617,7 @@ class TestPytestCollectionModifyItemsFeatures:
                 probe_calls.append(self._identifier)
                 return self._output
 
-        class _CountingTransportCache:
+        class _CountingTransportCache(pytest_device._TransportCache):
             def get_transport(
                 self, device_entry: DeviceEntry, _deploy_mode: object,
             ) -> object:
@@ -1627,6 +1631,8 @@ class TestPytestCollectionModifyItemsFeatures:
         session = MagicMock(spec=pytest.Session)
         session.config = MagicMock()
         session.config.getoption = lambda *_args, **_kwargs: None
+        # No collected items ⇒ the deploy-mode closure walk is a no-op.
+        session.items = []
         session._device_transport_cache = _CountingTransportCache()
         del session._device_features_cache  # type: ignore[attr-defined]
 
@@ -1645,3 +1651,117 @@ class TestPytestCollectionModifyItemsFeatures:
         assert probe_calls == ["esp32-board"], (
             f"expected one probe per device, got {probe_calls}"
         )
+
+
+class TestStagedFileNames:
+    """``_staged_file_names`` enumerates closure files, skipping pycache."""
+
+    def test_collects_files_and_skips_pycache(self, tmp_path: Path) -> None:
+        source_dir = tmp_path / "pkg"
+        (source_dir / "__pycache__").mkdir(parents=True)
+        (source_dir / "mod.py").write_text("X = 1\n")
+        (source_dir / "_ca_bundle.der").write_bytes(b"\x30\x82")
+        (source_dir / "__pycache__" / "mod.cpython-313.pyc").write_bytes(b"\x00")
+        assert sorted(pytest_device._staged_file_names([source_dir])) == [
+            "_ca_bundle.der",
+            "mod.py",
+        ]
+
+    def test_empty_for_no_dirs(self) -> None:
+        assert pytest_device._staged_file_names([]) == []
+
+
+class TestDeviceClosureSourceDirs:
+    """The closure walk degrades safely when the session has no items."""
+
+    def test_no_items_yields_empty(self, tmp_path: Path) -> None:
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+        session.items = []
+        device = DeviceEntry(
+            identifier="d1", runtime="micropython", address="/dev/x",
+        )
+        assert pytest_device._device_closure_source_dirs(session, device) == []
+
+    def test_missing_items_attr_is_safe(self, tmp_path: Path) -> None:
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+        device = DeviceEntry(
+            identifier="d1", runtime="micropython", address="/dev/x",
+        )
+        # FakeSession has no ``items`` — the getattr guard must not raise.
+        assert pytest_device._device_closure_source_dirs(session, device) == []
+
+
+class TestSessionEffectiveDeployMode:
+    """Phase-2 delegation: the closure feeds the shared resolver, once."""
+
+    @staticmethod
+    def _ram_device() -> DeviceEntry:
+        return DeviceEntry(
+            identifier="cp-1",
+            runtime="circuitpython",
+            address="/dev/ttyUSB-cp",
+            deploy_mode="ram",
+        )
+
+    def test_data_file_in_closure_switches_to_flash_loudly(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        lib = tmp_path / "sockets-src"
+        lib.mkdir()
+        (lib / "__init__.py").write_text("")
+        (lib / "_ca_bundle.der").write_bytes(b"\x30\x82")
+        monkeypatch.setattr(
+            pytest_device,
+            "_device_closure_source_dirs",
+            lambda _session, _device: [lib],
+        )
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+
+        with pytest.warns(UserWarning, match="_ca_bundle.der"):
+            mode = pytest_device._session_effective_deploy_mode(
+                session, self._ram_device(),
+            )
+        assert mode == "flash"
+
+    def test_pure_python_closure_stays_ram_silently(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        recwarn: pytest.WarningsRecorder,
+    ) -> None:
+        lib = tmp_path / "light-src"
+        lib.mkdir()
+        (lib / "__init__.py").write_text("X = 1\n")
+        monkeypatch.setattr(
+            pytest_device,
+            "_device_closure_source_dirs",
+            lambda _session, _device: [lib],
+        )
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+        mode = pytest_device._session_effective_deploy_mode(
+            session, self._ram_device(),
+        )
+        assert mode == "ram"
+        assert len(recwarn) == 0
+
+    def test_resolution_is_memoized_per_device(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        lib = tmp_path / "light-src"
+        lib.mkdir()
+        (lib / "__init__.py").write_text("X = 1\n")
+        calls = {"n": 0}
+
+        def _counting(_session: object, _device: object) -> list[Path]:
+            calls["n"] += 1
+            return [lib]
+
+        monkeypatch.setattr(
+            pytest_device, "_device_closure_source_dirs", _counting,
+        )
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+        device = self._ram_device()
+        first = pytest_device._session_effective_deploy_mode(session, device)
+        second = pytest_device._session_effective_deploy_mode(session, device)
+        assert first == second == "ram"
+        assert calls["n"] == 1  # closure walked once, then memoized

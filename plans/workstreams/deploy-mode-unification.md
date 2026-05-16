@@ -125,16 +125,25 @@ grep the symbol.
    `test_deployer.py` `TestPreflight*` tests stay green).  Exhaustive
    pure-function coverage in `test_resolve_deploy_mode.py` (all 5
    steps + non-RAM-capable board + the recommend variant).
-2. **pytest-device adopts it (functional path).**
-   `resolve_effective_deploy_mode` delegates to the shared resolver,
-   passing `staged_files` = the **full dependency closure**
-   (`resolve_library_source_dirs` walk) so a cross-library functional
-   test that needs a dependency's data file (e.g. requests-functional
-   needing `sockets/_ca_bundle.der`) is correctly forced to flash, not
-   silently dropped.  Loud message, continue in flash — never
-   silent-skip.  Regression: a `--deploy-mode ram` run of the sockets
-   TLS matrix on CP must now loudly switch to flash and pass (today it
-   silently drops `_ca_bundle.der`).
+2. **pytest-device adopts it (functional path). — DONE** (commit
+   pending).  A session-scoped `_session_effective_deploy_mode`
+   (memoized per device on `_TransportCache`) combines the existing
+   precedence resolver with the shared `resolve_deploy_mode`, passing
+   `staged_files` = the **full dependency closure** of every
+   `DeviceTestItem` targeting the device (`_device_closure_source_dirs`
+   reuses `resolve_library_source_dirs`; `_staged_file_names` walks it,
+   skipping `__pycache__`) plus the closure-scoped `requires_flash`
+   set.  All four `get_transport` call sites (prepare, execute,
+   feature-probe, PR-summary) route through it, so the mode is decided
+   once from the whole closure *before* the per-device transport is
+   cached — no mid-session switching.  Loud `warnings.warn`, continue
+   in flash, never silent-skip.  Regression PASSED on the 4-board
+   canonical matrix (Lolin S2 + Pi Pico W × CP/MP): `--deploy-mode
+   ram` + the sockets TLS matrix loudly switches to flash and all 3
+   legs pass on every board (was a silent `_ca_bundle.der` drop).
+   Known cosmetic: the switch message is the Phase-1 CP-flavored
+   string ("raw-REPL exec…") emitted for MP too — correct in intent,
+   conservatively safe, one byte-identical message per 0068 §1.
 3. **`devices.yml` capability.**  Optional per-device boolean
    `supports_ram_mode` (default/absent ⇒ `true`; back-compatible).
    Resolver step 2.  Loader fold + schema doc + template + a
@@ -222,11 +231,18 @@ mode pick) → 5 (after the surface is real).
   re-pointed (behavior-preserving, 8 `TestPreflight*` green); 19
   pure-function tests.  Signature carries `resolution_unit`
   (centralised recommend message; ADR §1 edited in place).
-- [ ] **Phase 2 — pytest-device adopts it (functional path).**  Next
-  entry point.  `resolve_effective_deploy_mode` delegates to the
-  shared resolver passing the full dependency closure as
-  `staged_files`.  Load-bearing regression on the 4-board matrix:
-  `--deploy-mode ram` + the sockets TLS matrix on CP must loudly
-  switch to flash and pass.  See the implementation map above.
-- [ ] Phases 3–5 — `devices.yml` capability → unit-sweep command →
-  docs/AGENTS.md.  Not started.
+- [x] **Phase 2 — pytest-device adopts it (functional path).**
+  Session-scoped `_session_effective_deploy_mode` (memoized per device)
+  feeds the full dependency closure to the shared resolver; all four
+  `get_transport` call sites route through it.  Load-bearing
+  regression PASSED on the 4-board matrix (Lolin S2 + Pi Pico W ×
+  CP/MP): `--deploy-mode ram` + sockets TLS matrix loud-switches to
+  flash, 3/3 legs green per board.  7 contract tests; preflight green
+  (3900).
+- [ ] **Phase 3 — `devices.yml` `supports_ram_mode` capability.**
+  Next entry point.  Optional per-device boolean (absent ⇒ `true`),
+  fed into `DeviceCaps`; loader fold + schema doc + template +
+  commented example on the Pi Pico W entries.  The resolver branch
+  already exists (Phase 1) — Phase 3 only wires the input.
+- [ ] Phases 4–5 — on-device unit-sweep command → docs/AGENTS.md.
+  Not started.
