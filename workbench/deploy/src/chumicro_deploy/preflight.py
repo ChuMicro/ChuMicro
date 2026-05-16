@@ -102,9 +102,11 @@ def resolve_deploy_mode(
        library declare ``requires_flash`` so future runs skip the
        discovery (the resolver never edits ``pyproject.toml``).
     4. RAM requested and *staged_files* contains a non-``.py`` data
-       file → flash.  RAM-mode CircuitPython is a raw-REPL ``exec()``
-       with no device filesystem, so the asset would be silently
-       dropped.
+       file → flash.  RAM-mode deploy is not a persistent filesystem
+       write (CircuitPython is a raw-REPL ``exec()`` with no device
+       filesystem; MicroPython is a host mount), so a non-``.py``
+       asset is not reliably on the device — switch rather than risk a
+       silent drop.
     5. Otherwise → *configured_mode* unchanged (a RAM preference stays
        RAM).
     """
@@ -142,8 +144,7 @@ def resolve_deploy_mode(
         return DeployMode.FLASH, (
             f"chumicro-deploy: switching to flash mode — staged set "
             f"includes non-.py data file(s) ({', '.join(data_files)}) "
-            f"that RAM-mode deploy cannot carry (raw-REPL exec has no "
-            f"device filesystem; the file(s) would be missing). "
+            f"that RAM-mode deploy cannot reliably carry to the device. "
             f"Pass force_deploy_mode='ram' to bypass."
         )
 

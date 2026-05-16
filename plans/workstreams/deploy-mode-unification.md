@@ -141,9 +141,9 @@ grep the symbol.
    canonical matrix (Lolin S2 + Pi Pico W × CP/MP): `--deploy-mode
    ram` + the sockets TLS matrix loudly switches to flash and all 3
    legs pass on every board (was a silent `_ca_bundle.der` drop).
-   Known cosmetic: the switch message is the Phase-1 CP-flavored
-   string ("raw-REPL exec…") emitted for MP too — correct in intent,
-   conservatively safe, one byte-identical message per 0068 §1.
+   The data-file switch message was reworded runtime-agnostic (still
+   one byte-identical string per 0068 §1) so it no longer reads
+   CP-only ("raw-REPL exec") when emitted on MicroPython.
 3. **`devices.yml` capability.**  Optional per-device boolean
    `supports_ram_mode` (default/absent ⇒ `true`; back-compatible).
    Resolver step 2.  Loader fold + schema doc + template + a
