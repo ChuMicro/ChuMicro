@@ -34,7 +34,7 @@ def test_adapter_constructs_against_real_radio() -> None:
     """Default-arg construction picks up ``wifi.radio`` cleanly on CP."""
     adapter = CpWifiAdapter()
     assert adapter.name == "cp"
-    assert adapter._radio is wifi.radio  # noqa: SLF001 - test introspection
+    assert adapter.radio is wifi.radio
 
 
 def test_configure_sets_hostname_on_real_radio() -> None:
