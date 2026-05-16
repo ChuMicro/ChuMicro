@@ -1622,6 +1622,54 @@ class TestDeleteFiles:
             transport.delete_files(["/lib/old.py"])
 
 
+class TestClearEntrypoints:
+    """MP transport's pre-soft-reset entrypoint clear (sweep race fix)."""
+
+    def test_mount_mode_no_op(self) -> None:
+        """Mount (RAM) mode never persists an entrypoint to clear."""
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0", runner=runner, mode="mount",
+        )
+        transport.clear_entrypoints()  # no serial opened, no raise
+
+    def test_copy_mode_removes_and_verifies_entrypoints(self) -> None:
+        serial = FakeSerialTransport("/dev/ttyUSB0", exec_outputs=[b""])
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        transport.clear_entrypoints()
+        exec_calls = [call for call in serial.calls if call[0] == "exec_raw"]
+        assert len(exec_calls) == 1
+        script = exec_calls[0][1][0]
+        # Device-side remove + re-stat (authoritative; no host FAT lag).
+        assert "main.py" in script
+        assert "code.py" in script
+        assert "os.remove" in script
+        assert "os.stat" in script
+
+    def test_copy_mode_raises_on_exec_failure(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0",
+            raise_on_execute=RuntimeError("dropped"),
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        with pytest.raises(
+            MicropythonTransportError, match="clear_entrypoints",
+        ):
+            transport.clear_entrypoints()
+
+
 class _RecordingTime:
     """Fake ``time`` source — records sleep durations, no wall-clock wait."""
 

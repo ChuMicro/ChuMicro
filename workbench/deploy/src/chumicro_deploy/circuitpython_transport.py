@@ -1458,6 +1458,51 @@ class CircuitpythonTransport:
             except (OSError, FileNotFoundError):  # pragma: no cover — best-effort
                 pass
 
+    def clear_entrypoints(self) -> None:
+        """Unlink ``code.py`` / ``main.py`` and confirm they are gone.
+
+        Flash mode only — RAM mode never writes a persistent
+        entrypoint, so there is nothing to clear.  Host-side
+        ``pathlib.unlink`` (a directory-entry-only op — no FAT data
+        write, the same FAT-safe shape :meth:`delete_files` relies on),
+        then ``flush_volume`` so the deletion is on the physical medium
+        before the caller's soft-reboot re-reads FAT, then a bounded
+        poll that the drive no longer shows them.  Raises if an
+        entrypoint is still present after the flush + poll budget — a
+        loud failure is correct here: the caller is about to reboot and
+        a surviving ``code.py`` is exactly the race this removes.
+        """
+        if self.mode != "flash":
+            return
+        try:
+            drive = self._resolve_circuitpy_drive()
+            drive = self._verify_drive_for_board(drive)
+        except CircuitpythonTransportError:
+            # Drive not resolvable — nothing we can (or need to) clear;
+            # the soft_reset path handles a missing drive on its own.
+            return
+        targets = [drive / "code.py", drive / "main.py"]
+        for target in targets:
+            try:
+                target.unlink()
+            except (OSError, FileNotFoundError):  # already absent / hiccup
+                pass
+        flash_drive.flush_volume(drive, sleep=self._time.sleep)
+        for _attempt in range(_BOARD_FILE_VISIBLE_POLL_ATTEMPTS):
+            if not any(target.exists() for target in targets):
+                return
+            self._time.sleep(_BOARD_FILE_VISIBLE_POLL_INTERVAL)
+        still_present = [
+            target.name for target in targets if target.exists()
+        ]
+        if still_present:
+            raise CircuitpythonTransportError(
+                f"Could not clear stale entrypoint(s) {still_present} "
+                f"from {drive} before reset — a surviving code.py/main.py "
+                "would run on the soft-reboot.  Tap RESET and retry, or "
+                "reformat the drive (chumicro-workspace reset-board)."
+            )
+
     def wipe_filesystem(self) -> None:
         """Reformat the CIRCUITPY drive via ``storage.erase_filesystem()``.
 

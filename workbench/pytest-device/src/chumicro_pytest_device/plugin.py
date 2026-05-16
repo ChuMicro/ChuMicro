@@ -995,18 +995,32 @@ class DeviceBackend:
                 device_entry.identifier,
             )
             if current_library != item._library_name:  # noqa: SLF001
+                if current_library is None:
+                    # First library on this device: drop any stale
+                    # code.py/main.py a prior deploy left behind so the
+                    # soft_reset below cannot race a leftover entrypoint
+                    # (one that hard-faults or resets would make the
+                    # sweep flaky).  The sweep's rsync excludes these
+                    # and the harness never writes one, so a single
+                    # clear holds for the whole session.
+                    try:
+                        transport.clear_entrypoints()
+                    except Exception as error:
+                        pytest.fail(
+                            "Failed to clear stale entrypoint before "
+                            f"sweep: {error}",
+                        )
                 # The flash/copy sweep runs every library over one
                 # persistent interpreter.  Soft-reset *before* staging
                 # each library so it runs from a fresh VM (cleared
                 # sys.modules, full heap): without this, accumulated
                 # live modules exhaust a 264 KB board and larger test
-                # modules fail to exec (MemoryError).  soft_reset()
-                # interrupts any prior code.py and re-enters raw REPL,
-                # so the rsync + run happen from a known-clean state —
-                # the same fresh-interpreter guarantee mount/RAM mode
-                # already gets per file.  Reset before the first
-                # library too, so the run never inherits whatever VM
-                # state the board happened to boot with.
+                # modules fail to exec (MemoryError).  With the
+                # entrypoint cleared above, the reboot drops straight
+                # to a clean raw REPL — the same fresh-interpreter
+                # guarantee mount/RAM mode already gets per file.
+                # Reset before the first library too, so the run never
+                # inherits whatever VM state the board booted with.
                 try:
                     transport.soft_reset()
                 except Exception as error:

@@ -528,6 +528,12 @@ class FakeTransport:
         for path in paths:
             self.device_files.pop(path, None)
 
+    def clear_entrypoints(self) -> None:
+        """Drop the simulated ``code.py`` / ``main.py`` entrypoints."""
+        self.calls.append(("clear_entrypoints", ()))
+        for entrypoint in ("code.py", "main.py", "/code.py", "/main.py"):
+            self.device_files.pop(entrypoint, None)
+
     def wipe_filesystem(self) -> None:
         """Erase every simulated on-device file.
 

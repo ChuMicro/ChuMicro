@@ -921,6 +921,47 @@ class MicropythonTransport:
                 f"delete_files failed: {error}",
             ) from error
 
+    def clear_entrypoints(self) -> None:
+        """Remove ``main.py`` / ``code.py`` and confirm they are gone.
+
+        Copy mode only — mount (RAM) mode never writes a persistent
+        entrypoint.  Runs ``os.remove`` *on the device* (authoritative
+        immediately — unlike the CIRCUITPY host-FAT path there is no
+        flush lag) and, in the same raw-REPL script, re-``stat``s each
+        path so a still-present entrypoint raises on the device and
+        surfaces as a loud error.  The sweep calls this once before its
+        first :meth:`soft_reset` so the reboot cannot race a stale
+        entrypoint a prior deploy left behind.
+        """
+        if self.mode != "copy":
+            return
+        if self._mounted and self._serial is not None:
+            try:
+                self._serial.umount_local()
+            except Exception:  # pragma: no cover — best-effort cleanup
+                pass
+            self._mounted = False
+        self._ensure_serial()
+        script = (
+            "import os\n"
+            "for _p in ('main.py', 'code.py'):\n"
+            "    try:\n"
+            "        os.remove(_p)\n"
+            "    except OSError:\n"
+            "        pass\n"
+            "    try:\n"
+            "        os.stat(_p)\n"
+            "        raise RuntimeError('entrypoint still present: ' + _p)\n"
+            "    except OSError:\n"
+            "        pass\n"
+        )
+        try:
+            self._serial.exec_raw(script, timeout=30)
+        except Exception as error:
+            raise MicropythonTransportError(
+                f"clear_entrypoints failed: {error}",
+            ) from error
+
     def wipe_filesystem(self) -> None:
         """Reformat the LittleFS user partition and soft-reset the runtime.
 
