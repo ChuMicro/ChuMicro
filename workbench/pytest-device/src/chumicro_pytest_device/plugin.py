@@ -58,7 +58,7 @@ from chumicro_deploy import (
     resolve_deploy_mode,
     resolve_ide_devices,
 )
-from chumicro_deploy.runtime_marker import read_runtime_marker
+from chumicro_deploy.runtime_marker import is_host_only_test, read_runtime_marker
 from msgpack import packb
 
 from ._test_runner import (
@@ -995,6 +995,24 @@ class DeviceBackend:
                 device_entry.identifier,
             )
             if current_library != item._library_name:  # noqa: SLF001
+                # The flash/copy sweep runs every library over one
+                # persistent interpreter.  Soft-reset *before* staging
+                # each library so it runs from a fresh VM (cleared
+                # sys.modules, full heap): without this, accumulated
+                # live modules exhaust a 264 KB board and larger test
+                # modules fail to exec (MemoryError).  soft_reset()
+                # interrupts any prior code.py and re-enters raw REPL,
+                # so the rsync + run happen from a known-clean state —
+                # the same fresh-interpreter guarantee mount/RAM mode
+                # already gets per file.  Reset before the first
+                # library too, so the run never inherits whatever VM
+                # state the board happened to boot with.
+                try:
+                    transport.soft_reset()
+                except Exception as error:
+                    pytest.fail(
+                        f"Device reset failed before staging library: {error}",
+                    )
                 _bulk_stage_for_device(
                     item.session,
                     device_entry,
@@ -1552,14 +1570,21 @@ def _is_library_functional_test(file_path: Path) -> bool:
 def _is_library_unit_test(file_path: Path) -> bool:
     """Return ``True`` for ``libraries/<name>/tests/test_*.py`` paths.
 
-    Excludes ``test_*_pytest.py`` — those are CPython-only files
-    that opt out of the cross-runtime harness (they use pytest
-    fixtures or stdlib that MP / CP unix-port doesn't have).
+    Structural only — lane filtering layers on top of this and is
+    driven by in-file markers, not the filename.  A CPython-only file
+    declares ``__chumicro_runtimes__ = ("cpython",)`` and is excluded
+    from the unix-port / device-unit lanes by
+    :func:`_filter_targets_by_marker` (it still runs under plain
+    CPython pytest).  A host-only file declares
+    ``__chumicro_host_only__ = True`` and is excluded from the
+    on-device unit sweep by :func:`pytest_collect_file` /
+    :func:`pytest_pycollect_makemodule` (it still runs on the
+    unix-ports and CPython).  The marker is the contract; the filename
+    is never inspected for lane.
     """
     if not (
         file_path.suffix == ".py"
         and file_path.name.startswith("test_")
-        and not file_path.name.endswith("_pytest.py")
         and "tests" in file_path.parts
     ):
         return False
@@ -1638,6 +1663,13 @@ def pytest_pycollect_makemodule(
 
     AST-based discovery in :class:`DeviceTestFile` means the file is
     never executed on the host.
+
+    A ``__chumicro_host_only__`` file under ``--target device-unit``
+    is still claimed here (returns the empty :class:`_NoImportModule`,
+    so it yields nothing and is never imported on the host) — the
+    device-unit exclusion is enforced by :func:`pytest_collect_file`
+    returning ``None`` for it; the net effect is zero items for that
+    file on the sweep.
     """
     if _is_library_functional_test(module_path):
         return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
@@ -1662,11 +1694,18 @@ def pytest_collect_file(
 
     - ``libraries/<name>/functional_tests/test_*.py`` — always claimed,
       runs through the device-transport backend.
-    - ``libraries/<name>/tests/test_*.py`` (excluding ``*_pytest.py``)
-      — claimed under ``--target unix-port`` (unix-port subprocess
-      backend) and ``--target device-unit`` (device transport backend,
-      the on-device unit sweep).  Under the default ``--target device``
-      these files stay in the plain-pytest CPython lane.
+    - ``libraries/<name>/tests/test_*.py`` — claimed under
+      ``--target unix-port`` (unix-port subprocess backend) and
+      ``--target device-unit`` (device transport backend, the
+      on-device unit sweep).  Under the default ``--target device``
+      these files stay in the plain-pytest CPython lane.  A file
+      marked ``__chumicro_host_only__ = True`` is excluded from the
+      device-unit sweep here (it drives runtime-specific source
+      through host fakes and would ``ImportError`` on a board); it
+      still runs on the unix-ports and CPython.  A file marked
+      ``__chumicro_runtimes__ = ("cpython",)`` is collected but
+      yields nothing on the device/unix-port lanes via
+      :func:`_filter_targets_by_marker`.
 
     Workbench packages also keep hardware-gated tests under a
     ``functional_tests/`` directory, but those are plain host-side
@@ -1680,6 +1719,10 @@ def pytest_collect_file(
     if (
         _is_library_unit_test(file_path)
         and _collect_unit_tests_on_device_backend(parent.config)
+        and not (
+            _target_is_device_unit(parent.config)
+            and is_host_only_test(file_path)
+        )
     ):
         return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
     return None

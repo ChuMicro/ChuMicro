@@ -18,6 +18,9 @@ bound to an ephemeral port, with ``sendto`` / ``recvfrom_into`` /
 ``functional_tests/test_real_ntp.py``.
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import socket as stdlib_socket
 
 from chumicro_ntp.sockets_factory import chumicro_sockets_factory

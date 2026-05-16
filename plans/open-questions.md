@@ -492,40 +492,96 @@ Currently scripts use `print()` for warnings and status.  A unified
 filtering — but only makes sense if applied across all scripts, not
 piecemeal.  Parked for a rainy day.
 
-### How does a unit-test file opt out of the on-device sweep? (Decision 0068 Phase 4b.2 issue i)
+### Should every real-device file-write path reset-before-run, and at what granularity?
 
-The `device-unit` sweep assumes every `libraries/<n>/tests/test_*.py`
-(non-`_pytest`) is a cross-runtime *device* test.  The 6
-`test_{mp,cp}_{adapter,*backend}.py` files break that: they import a
-runtime-specific source module (e.g. `chumicro_kvstore._backends.mp_nvs`,
-correctly `__chumicro_runtimes__=("micropython",)`) which the
-Decision 0044 deploy filter *correctly* strips from a non-matching
-board → `ImportError` on device.  They are correct on unix-port/CPython
-(verified green there) and not on-device-eligible by construction (a
-matching real board would also fail their
-`test_runtime_acquisition_raises_*_on_cpython` since real `esp32`
-exists).  Need a classification mechanism for "unix-port/host lane
-only — not the device-unit sweep," parallel to how `*_pytest.py` is
-CPython-only.  Candidate: a per-file marker the `device-unit`
-collection honors (cf. Decision 0069's `__chumicro_test_support__`
-shape).  Likely its own ADR.  Workstream:
-[`deploy-mode-unification.md`](workstreams/deploy-mode-unification.md)
-4b.2(i).  Related: Decision 0068, Decision 0044, Decision 0037,
-Decision 0069.
+Surfaced 2026-05-16 while resolving Decision 0068 4b.2(ii)
+([Decision 0071](decisions/0071-per-library-soft-reset-flash-sweep.md)).
+The robust pattern for running code on a real board after a host-side
+file write is: soft-reset *before* the rsync (interrupting any prior
+`code.py` so the board is in a known-clean raw-REPL state with a fresh
+VM), disable autoreload, rsync, then run — fresh environment **and**
+retained execution control.  Verified cross-path map (read in code,
+this is the current state, not a proposal):
 
-### How does the on-device sweep survive a full-scale run on tier-floor flash? (Decision 0068 Phase 4b.2 issue ii)
+- **Project deploy** (`chumicro-workspace deploy` → `deploy_files`
+  flash) and **examples** (`deploy-example`): already correct, but via
+  the *other* shape — rsync, then Ctrl-D reboot, then `code.py` runs
+  *naturally* from the filesystem (host only captures serial, no
+  raw-REPL exec).  `circuitpython_transport.py` ~1377-1393.  Sound; not
+  at risk.
+- **Unit + functional sweep, flash**: Decision 0071 now soft-resets
+  *before staging each library* (the reset-before-rsync shape), fixing
+  the cross-library cumulative-`sys.modules` exhaustion.  Residual:
+  **no per-file reset within a library** in flash mode (RAM/mount mode
+  resets per file via `_should_soft_reset_before_stage`).  No evidence
+  of per-file state bleed today (the verified 4b.2(ii) failure was
+  purely cross-library); deferred deliberately rather than expanding
+  Decision 0071 speculatively.
 
-A full Pi Pico W CP `--deploy-mode flash` sweep (254 s, 663 tests)
-degrades partway: libraries that pass standalone (`runner/test_core`
-61/61, `wifi/test_wifi` 41/41) show `.FFFF…` (first test of a file
-passes, rest fail) from ~67 % onward — transport/board dies
-mid-session at scale.  Suspected: FAT/flash churn from hundreds of
-rsync `--delete`+restage cycles on the 491 KB drive, or
-heap/handle exhaustion.  Reproduced 2× (deterministic, not the
-transient evicted-transport state seen earlier).  Needs a design
-approach: periodic transport reconnect / soft-reset between
-libraries / chunk the sweep into sub-sessions / document a per-board
-library ceiling.  The retired "~16-lib RAM-session OOM" sub-question
-is the RAM-mode analogue of this.  Workstream:
-[`deploy-mode-unification.md`](workstreams/deploy-mode-unification.md)
-4b.2(ii).  Related: Decision 0068.
+Open threads, none blocking:
+
+1. Should flash-mode test runs also reset between *files* within a
+   library (mirror RAM mode), or is per-library + per-session-start
+   enough?  Decide if/when a per-file bleed actually surfaces — adding
+   it speculatively risks new bugs for no observed failure.
+2. Could project deploy adopt the reset-before-rsync-then-run-it-
+   ourselves shape (more host-side execution control) instead of
+   Ctrl-D-then-natural-boot?  The natural-boot path works and is
+   verified; changing it trades a known-good path for control the
+   deploy use case may not need.  A consideration, not a defect.
+3. `soft_reset()` is racey *in principle*: Ctrl-D reboot → fixed
+   0.5 s sleep → Ctrl-C ×2 → Ctrl-A is a timing assumption, not a
+   hard interrupt-before-`code.py`-runs.  It is *detected, not
+   silent* — `_enter_raw_repl` verifies the raw-REPL prompt and
+   raises (→ loud `pytest.fail`) on failure — and 0071 did not
+   introduce it (the shared primitive RAM/mount mode has used
+   per-file, and `deploy_files` leans on, long-term; empirically
+   14/14 in the confirming sweep).  Residual: the sweep's rsync
+   excludes preserve a stale app `code.py` from a prior
+   `deploy-example`/project deploy, which runs on every reset and,
+   if adversarial (hard-fault / `microcontroller.reset()` /
+   uninterruptible), makes the sweep *flaky* (loud-fail), not wrong.
+   Recommended hardening (user-proposed 2026-05-16): in the flash
+   sweep path, **before** `soft_reset()`, unlink `code.py`/`main.py`
+   from the CIRCUITPY drive and verify the dirent is actually gone
+   (poll until the board no longer sees them — a delete can take time
+   to commit on FAT/USB-MSC, the inverse of
+   `_wait_for_board_to_see_entrypoint`).  With no entrypoint present,
+   the Ctrl-D reboot drops straight to REPL and the race disappears
+   entirely — no "interrupt code.py before it runs" assumption.  This
+   is a targeted file unlink (the transport already owns FS ops via
+   `delete_files`), not the prohibited mount-state manipulation, and
+   is scoped to the flash sweep (RAM mode never touches flash; the
+   deploy path is already correct).  Deferred as its own
+   hardware-verified follow-up — 0071 is verified green (14/14, no
+   observed race), and bolting an unverified extra FS round-trip into
+   the hot path needs its own bench cycle, per the
+   don't-expand-speculatively guidance.  When picked up: implement +
+   re-run the instrumented Pico W CP sweep to confirm clean resets.
+
+Related: Decision 0071, Decision 0068, Decision 0027 (the persistent
+raw-REPL harness execution model), Decision 0028.
+
+### Function-level host-context tests in a device-lane file (kvstore/test_kvstore.py)
+
+Surfaced 2026-05-16 by the instrumented `device-unit` sweep, after
+[Decision 0070](decisions/0070-host-only-test-marker.md) excluded the
+file-level host-only files.  `libraries/kvstore/tests/test_kvstore.py`
+is a legitimate device-lane cross-runtime file, but three of its
+functions assert off-target behaviour — `test_explicit_nvm_string_
+raises_runtime_error_on_cpython`, `test_explicit_nvs_string_raises_
+runtime_error_on_cpython`, `test_explicit_littlefs_string_resolves_
+on_any_filesystem_runtime` — that is only true *off* the target board
+(a real CP board *can* acquire the backend, so the expected
+`RuntimeError` never raises and the test fails on-device).  This is
+the same root cause as Decision 0070 issue (i) but at **function**
+granularity: 0070's `__chumicro_host_only__` is a whole-file marker
+and cannot express "this file is device-lane except these three
+host-context functions."  Not blocking — it is 3 deterministic
+failures the sweep correctly surfaces as the file's *output*, not a
+mechanism defect (per Decision 0068 "behavioral pass/fail only").
+Options when addressed: a function-level skip via the loud-skip
+primitive guarded on a runtime check (Decision 0058); split the three
+into a sibling `__chumicro_host_only__` file; or accept them as
+known-failing sweep output.  Related: Decision 0070, Decision 0058,
+Decision 0068.

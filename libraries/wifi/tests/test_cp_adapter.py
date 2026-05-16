@@ -11,6 +11,10 @@ Hardware-side coverage (real ``wifi.radio`` against a real AP)
 lives under ``functional_tests/``.
 """
 
+#: Host-lane only — exercises a runtime-specific adapter through host
+#: fakes and asserts off-target behaviour; never staged to a device.
+__chumicro_host_only__ = True
+
 from chumicro_test_harness import raises
 from chumicro_wifi import WifiConfig
 from chumicro_wifi._adapters.cp import CpWifiAdapter

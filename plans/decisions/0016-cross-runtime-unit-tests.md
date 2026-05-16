@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-03`
-Related: Decision 0006 (supersedes), Decision 0010 (testability), Decision 0027 (device tests — `chumicro-pytest-device` plugin), Decision 0058 (loud-skip primitive + `__chumicro_runtimes__` / `__chumicro_features__` markers)
+Related: Decision 0006 (supersedes), Decision 0010 (testability), Decision 0027 (device tests — `chumicro-pytest-device` plugin), Decision 0058 (loud-skip primitive + `__chumicro_runtimes__` / `__chumicro_features__` markers), Decision 0070 (test-lane markers — replaces this decision's `_pytest` filename convention with in-file markers)
 
 ## Context
 
@@ -18,7 +18,7 @@ Each library has three test directories with clear, non-overlapping purposes:
 
 | Directory | Runner | Where it runs | Purpose |
 |---|---|---|---|
-| `tests/` | pytest — CPython directly; MP/CP unix-ports via `chumicro-pytest-device`'s `UnixPortBackend` | CPython, MP/CP unix-ports, real devices | Logic verification with fakes and plain asserts |
+| `tests/` | pytest — CPython directly; MP/CP unix-ports via `chumicro-pytest-device`'s `UnixPortBackend` | CPython + MP/CP unix-ports; real devices for device-lane files only (host-only files stop at the unix-ports — see lane markers below) | Logic verification with fakes and plain asserts |
 | `functional_tests/` | pytest via `chumicro-pytest-device`'s `DeviceBackend` | Real hardware only | Tests requiring real I/O: GPIO, WiFi, real-time |
 
 `tests/` keeps the standard Python name.  `device_tests/` is renamed to `functional_tests/`.
@@ -31,21 +31,21 @@ Unit test files that need to run on MicroPython/CircuitPython must not `import p
 - Plain `assert` statements
 - `raises()` from the test harness for exception checking
 
-The `import pytest` line is the portability boundary, enforced by file-name convention (below): the `chumicro-pytest-device` plugin's unix-port collection path excludes any `test_*_pytest.py` file, so pytest-using tests never reach the MP/CP worker.  Cross-runtime files land in worker subprocesses that have no pytest available.
+The `import pytest` line is the portability boundary, enforced by an **in-file marker** read AST-only by the `chumicro-pytest-device` plugin — not by the filename.  A pytest-using file declares `__chumicro_runtimes__ = ("cpython",)`; the plugin's unix-port / device-unit collection filters it out by that marker (`_filter_targets_by_marker`), so pytest-using tests never reach the MP/CP worker.  Cross-runtime files land in worker subprocesses that have no pytest available.
 
-### File naming convention
+### Test-lane markers
 
-Within `tests/`, cross-runtime and CPython-only tests coexist:
+Within `tests/`, the lane is declared **in the file**, never inferred from its name (the marker-is-the-contract principle of [Decision 0070](0070-host-only-test-marker.md), mirroring Decision 0037 §2):
 
-- `test_heartbeat.py` — cross-runtime (no pytest import, uses fakes)
-- `test_ticks.py` — cross-runtime (arithmetic, masking, overflow)
-- `test_ticks_pytest.py` — CPython-only (uses monkeypatch, pytest.raises)
+- *(no marker)* — cross-runtime device lane: runs on CPython + MP/CP unix-ports **and** real silicon (the default). E.g. `test_heartbeat.py`, `test_ticks.py`.
+- `__chumicro_runtimes__ = ("cpython",)` — CPython-only: pytest fixtures / host stdlib unavailable cross-runtime (e.g. `monkeypatch`, `tracemalloc`, loopback `socket`).
+- `__chumicro_host_only__ = True` — host lane: runs on CPython + MP/CP unix-ports but never real silicon (drives runtime-specific source through host fakes, asserts off-target behaviour). See [Decision 0070](0070-host-only-test-marker.md).
 
-Cross-runtime is the default.  Only files that require pytest get the `_pytest` suffix.
+Cross-runtime device-lane is the default; a file opts down explicitly. Filenames (including the legacy `_pytest` suffix on files that predate the marker, and the `test_{mp,cp}_*` host-lane files) are non-load-bearing human hints — collection never inspects them for lane.
 
 ### Pytest as the single front-running test surface
 
-Pytest is the only contributor-facing test command across all three runtimes.  Bare `pytest libraries/<name>/tests/` runs the CPython lane (root [`pyproject.toml`](../../pyproject.toml) + [`conftest.py`](../../conftest.py) handle import-mode + `functional_tests/` deselection).  `pytest libraries/<name>/tests/ --target unix-port --runtime micropython` (or `circuitpython`) runs the same files under the unix-port binary, with `chumicro-pytest-device` claiming the `test_*.py` collection (excluding `*_pytest.py`), dispatching each file through `UnixPortBackend`, parsing the worker's harness-format output back into pytest items, and applying the `[tool.chumicro].platforms` filter so libraries that don't target a runtime get deselected rather than run.
+Pytest is the only contributor-facing test command across all three runtimes.  Bare `pytest libraries/<name>/tests/` runs the CPython lane (root [`pyproject.toml`](../../pyproject.toml) + [`conftest.py`](../../conftest.py) handle import-mode + `functional_tests/` deselection).  `pytest libraries/<name>/tests/ --target unix-port --runtime micropython` (or `circuitpython`) runs the same files under the unix-port binary, with `chumicro-pytest-device` claiming the `test_*.py` collection (excluding `*_pytest.py`), dispatching each file through `UnixPortBackend` (lane filtered by in-file marker, not filename), parsing the worker's harness-format output back into pytest items, and applying the `[tool.chumicro].platforms` filter so libraries that don't target a runtime get deselected rather than run.
 
 `scripts/run.py test-micropython` / `test-circuitpython` / `test-all-runtimes` are thin wrappers — they resolve / auto-build the unix-port binary via `prepare-{micropython,circuitpython}` and delegate to the pytest invocation above.  IDE play buttons that target a single test function under the `--target unix-port` profile run through the same plugin path; nothing in the test-discovery layer is bespoke to `scripts/run.py`.
 
@@ -53,7 +53,7 @@ Pytest is the only contributor-facing test command across all three runtimes.  B
 
 [`support/test_harness/run_cross_runtime.py`](../../support/test_harness/run_cross_runtime.py) retains worker mode only — one invocation per test file as `<binary> support/test_harness/run_cross_runtime.py --worker <test_file>`, called by `UnixPortBackend`.  The harness's `chumicro_test_harness.discovery` module exposes `run_one_file`, `setup_source_paths`, `discover_source_roots`, and `_exec_as_namespace`; the prior manager-mode entry points (`run_all`, `_run_all_isolated`, `_run_all_inline`, `discover_tests`) were removed when the plugin took over orchestration.
 
-Cross-runtime test bodies import two helpers directly from `chumicro_test_harness`: `raises()` (a small context manager that checks for a specific exception type — the only pytest API the no-pytest-import rule would otherwise lose) and `skip()` (the loud-skip primitive — see [Decision 0058](0058-test-skips-must-be-loud.md)).  `monkeypatch` tests are inherently CPython-only: they simulate runtimes on CPython, which is pointless on the real runtime, so they get the `_pytest.py` suffix and stay in the CPython lane.
+Cross-runtime test bodies import two helpers directly from `chumicro_test_harness`: `raises()` (a small context manager that checks for a specific exception type — the only pytest API the no-pytest-import rule would otherwise lose) and `skip()` (the loud-skip primitive — see [Decision 0058](0058-test-skips-must-be-loud.md)).  `monkeypatch` tests are inherently CPython-only: they simulate runtimes on CPython, which is pointless on the real runtime, so they declare `__chumicro_runtimes__ = ("cpython",)` and stay in the CPython lane.
 
 ## Alternatives considered
 

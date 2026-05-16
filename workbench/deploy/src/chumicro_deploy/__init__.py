@@ -88,6 +88,7 @@ from .recovery import (
 from .result import DeployError, DeployResult
 from .runtime_marker import (
     file_targets_runtime,
+    is_host_only_test,
     is_test_support_module,
     read_runtime_marker,
 )
@@ -150,6 +151,7 @@ __all__ = [
     "file_targets_runtime",
     "find_libraries_requiring_flash",
     "flash_firmware",
+    "is_host_only_test",
     "is_in_deploy_scope",
     "is_test_support_module",
     "load_device_registry",

@@ -9,6 +9,10 @@ Hardware-side coverage (real ``microcontroller.nvm`` byte slab,
 power-cycle behavior) lives under ``functional_tests/``.
 """
 
+#: Host-lane only — exercises a runtime-specific backend through host
+#: fakes and asserts off-target behaviour; never staged to a device.
+__chumicro_host_only__ = True
+
 import binascii
 
 from chumicro_kvstore import KVStore, KVStoreCorrupt, KVStoreFull

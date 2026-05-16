@@ -19,6 +19,9 @@ exercised against fakes instead of real I/O — live in the sibling
 
 from __future__ import annotations
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import socket
 import ssl
 from datetime import UTC

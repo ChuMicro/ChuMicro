@@ -18,6 +18,9 @@ the whole class is skipped.
 
 from __future__ import annotations
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import socket
 import ssl
 import threading

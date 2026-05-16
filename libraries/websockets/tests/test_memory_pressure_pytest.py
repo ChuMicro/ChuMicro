@@ -28,6 +28,9 @@ contract (``handle`` returns quickly) keeps that decision in the
 user's hands.
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import gc
 import struct
 import tracemalloc

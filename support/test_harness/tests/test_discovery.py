@@ -185,7 +185,7 @@ def test_run_one_file_fails_on_import_errors(tmp_path, capsys):
     output = capsys.readouterr().out
     assert "FAIL" in output
     assert "import failed" in output
-    assert "test_<name>_pytest.py" in output
+    assert "__chumicro_runtimes__" in output
 
 
 def test_run_one_file_reports_load_errors(tmp_path, capsys):

@@ -15,6 +15,9 @@ to expose.
 
 from __future__ import annotations
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import importlib
 import sys
 import types

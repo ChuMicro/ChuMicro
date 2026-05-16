@@ -683,6 +683,28 @@ class TestPytestCollectFile:
         )
         assert result is None
 
+    def test_excludes_host_only_file_from_device_unit_sweep(
+        self, tmp_path: Path,
+    ) -> None:
+        """A ``__chumicro_host_only__`` file is not collected under
+        ``--target device-unit`` (it drives runtime-specific source
+        through host fakes and would ImportError on a board).  Returns
+        ``None`` before ``from_parent``, so a stub parent suffices.
+        """
+        host_only = (
+            tmp_path / "libraries" / "foo" / "tests" / "test_cp_adapter.py"
+        )
+        host_only.parent.mkdir(parents=True)
+        host_only.write_text("__chumicro_host_only__ = True\n")
+        parent = SimpleNamespace(
+            config=SimpleNamespace(
+                getoption=lambda name, default=None: (
+                    "device-unit" if name == "--target" else default
+                ),
+            ),
+        )
+        assert pytest_device.pytest_collect_file(parent, host_only) is None
+
 
 class TestIsLibraryUnitTest:
     """Tests for _is_library_unit_test path-shape classification."""
@@ -692,11 +714,18 @@ class TestIsLibraryUnitTest:
             Path("libraries/timing/tests/test_heartbeat.py"),
         ) is True
 
-    def test_excludes_pytest_only_suffix(self) -> None:
-        """``test_*_pytest.py`` files opt out of the cross-runtime harness."""
+    def test_pytest_suffix_is_not_structurally_excluded(self) -> None:
+        """The filename no longer decides the lane — the marker does.
+
+        A legacy ``_pytest.py`` name is still structurally a library
+        unit test; whether it runs on a given lane is decided by its
+        ``__chumicro_runtimes__`` / ``__chumicro_host_only__`` marker
+        downstream (``_filter_targets_by_marker`` / the collect hooks),
+        not by this path-shape check.
+        """
         assert pytest_device._is_library_unit_test(
             Path("libraries/timing/tests/test_ticks_pytest.py"),
-        ) is False
+        ) is True
 
     def test_excludes_functional_tests_path(self) -> None:
         assert pytest_device._is_library_unit_test(

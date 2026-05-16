@@ -299,53 +299,38 @@ mode pick) → 5 (after the surface is real).
     `stage(include_test_support=True)`.  **Verified on hardware** —
     Pi Pico W CP `device-unit` flash: `timing` 29/29, `wifi` 41/41,
     `runner` 61/61, all standalone green (was a mass ImportError).
-  - [ ] **4b.2 — multi-library session sequencing bug.**  Decisive
-    finding: *every library passes standalone* on the `device-unit`
-    flash path, but the full 15-library sweep session fails most
-    suites wholesale (e.g. `runner/test_core` 61/61 alone → all-FAIL
-    in the combined run; same for `wifi`).  Not per-library
-    conformance, not 0069, not the RAM grouping (Lolin S2 CP grouping
-    verified correct earlier).  The defect is the per-library flash
-    re-stage between libraries in one pytest session — rsync
-    `--delete` on library switch + the next library's closure
-    re-stage.  **Root-caused (Pi Pico W CP flash, reproduced 2×, not
-    transient) into two distinct issues:**
+  - [x] **4b.2 — split into two independent issues, both resolved.**
+    A controlled experiment (instrumented Pico W CP flash sweep,
+    `gc.mem_free()` probe at each library switch, before vs after the
+    (i) fix) disentangled what looked like one "sweep degrades at
+    scale" symptom into two unrelated defects — the handoff's
+    "independent" framing was correct and is now *verified*, not
+    assumed.
 
-    **(i) Sweep-scope / test-classification gap.**  Definitive root
-    cause (evidence): `test_mp_nvs_backend.py` on a CP device →
-    `ImportError: no module named 'chumicro_kvstore._backends.mp_nvs'`.
-    The test imports a runtime-specific source module
-    (`_backends/mp_nvs.py`, correctly `__chumicro_runtimes__=
-    ("micropython",)`) which the Decision 0044 filter *correctly*
-    strips from a CP board.  The 6 `test_{mp,cp}_{adapter,*backend}.py`
-    files pass on MP **and** CP unix-port and CPython (verified:
-    16/16, 16/16, 14/14) because unix-port stages nothing (runs in
-    place, no filter) and the fakes are runtime-agnostic.  The tests
-    are **not wrong** — they are correct for the unix-port/CPython
-    lane they were written for — but they are *not on-device-sweep-
-    eligible by construction*: a non-matching board correctly lacks
-    the imported runtime module, and a *matching* real board would
-    fail the file's own `test_runtime_acquisition_raises_*_on_cpython`
-    (real `esp32` exists ⇒ no raise).  The bug is the sweep's scope
-    assumption ("every `tests/test_*.py` non-`_pytest` is device-
-    eligible"), not the tests and not a missing runtime marker.
-    Needs a classification mechanism: how a unit-test file declares
-    "unix-port/host lane only — not the device-unit sweep" (parallel
-    to how `_pytest.py` is CPython-only).  Likely ADR-worthy.
-    Standalone-green libs are unaffected by this item.
+    **(i) Host-lane test-classification gap → [Decision 0070](../decisions/0070-host-only-test-marker.md) (accepted, implemented, hardware-verified).**
+    The 6 `test_{mp,cp}_{adapter,*backend}.py` files drive
+    runtime-specific source through host fakes and assert off-target
+    behaviour — host-lane by construction, never device-eligible.
+    0070: explicit `__chumicro_host_only__` marker (+ `("cpython",)`
+    reuse for the 14 ex-`_pytest` files), collection reads markers not
+    filenames.  Verified on hardware: removing these excluded **exactly
+    70** of 193 failures (run1 193 → run2 123); the remaining failures
+    were untouched, proving (ii) independent.
 
-    **(ii) Full-scale session degradation.**  `runner/test_core`
-    (61/61 standalone, 90/90 with timing, 126/126 with kvstore) and
-    `wifi/test_wifi` (41/41 standalone) show `.FFFF…` — first test of
-    the file passes, rest fail — only deep into the full 254 s /
-    663-test Pico W flash sweep (~67 %+).  Signature = transport/board
-    dies mid-session at scale (FAT/flash churn from hundreds of rsync
-    `--delete`+restage cycles on the 491 KB drive, or heap/handle
-    exhaustion), not per-library and not (i).  Bounded but non-obvious
-    Phase-4 mechanism problem; needs a design approach (periodic
-    reconnect / board reset between libraries / chunking).  The
-    "~16-lib RAM OOM" sub-question is retired (staging is per-library);
-    this is the flash-session-at-scale analogue.
+    **(ii) Cumulative-`sys.modules` MemoryError on the never-soft-reset
+    flash session → [Decision 0071](../decisions/0071-per-library-soft-reset-flash-sweep.md) (accepted, implemented).**
+    Not transport death, not FAT churn, not a leak.  The probe showed
+    free memory declining to a stable ~70 KB plateau (stable = all
+    *live* imported modules; `gc.collect()` reclaims nothing) and the
+    device erroring `MemoryError: memory allocation failed` in
+    `discovery._exec_as_namespace` — it cannot `exec()` the larger
+    test modules (`runner/test_core`, `wifi/test_wifi`, `msgpack`)
+    once 15 libraries' `sys.modules` have accumulated on one persistent
+    interpreter.  The plugin soft-resets between staging only in the
+    RAM/mount branch; CP-flash (CP's only viable sweep path — RAM-CP
+    crashes `wifi`, the 4c item) and MP-copy never did.  0071: issue
+    `transport.soft_reset()` between libraries in the `is_filesystem_mode`
+    branch, matching what mount/RAM already gets per file.
   - [ ] **4c — wifi RAM-on-CP hard-crash (post-0069).**  Separate
     from the staging gap: `wifi` under `--deploy-mode ram` on CP drops
     the USB CDC (board → safe mode; `reset-board` FS-wipe recovers it

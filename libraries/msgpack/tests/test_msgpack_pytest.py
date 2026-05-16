@@ -15,6 +15,9 @@ device-side ``chumicro_msgpack.unpackb`` must read.  If the contract
 breaks, host-encoded runtime configs become unreadable on the board.
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import pytest
 from chumicro_msgpack import packb
 from chumicro_test_harness import raises
