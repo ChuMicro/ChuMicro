@@ -24,6 +24,10 @@ It catches regressions in the call shapes the CP adapter expects
 present back to ``chumicro-sockets`` callers.
 """
 
+#: Host-lane only — exercises a runtime-specific adapter through host
+#: fakes and asserts off-target behaviour; never staged to a device.
+__chumicro_host_only__ = True
+
 import sys
 
 from chumicro_sockets import UnsupportedSSLConfigError

@@ -2205,18 +2205,36 @@ def _format_test_libraries_functional_command(
 
 
 def _library_has_cross_runtime_unit_suite(library_dir: Path) -> bool:
-    """True when ``library_dir/tests`` holds a cross-runtime unit file.
+    """True when ``library_dir/tests`` holds a device-unit-eligible file.
 
-    ``test_*_pytest.py`` files are CPython-only (they opt out of the
-    harness), so a directory of only those does not qualify.
+    A file is eligible for the on-device sweep when its in-file
+    markers put it in the device lane: not CPython-only
+    (``__chumicro_runtimes__ = ("cpython",)``) and not host-only
+    (``__chumicro_host_only__ = True``).  The lane is read via the
+    shared ``chumicro_deploy`` marker predicate — the same one the
+    pytest-device collector uses — so this orchestration pre-filter
+    and the collector never disagree (no duplicated filename rule).
     """
+    from chumicro_deploy import (  # noqa: PLC0415 — deferred heavy import
+        is_host_only_test,
+        read_runtime_marker,
+    )
+
     tests_dir = library_dir / "tests"
     if not tests_dir.is_dir():
         return False
-    return any(
-        path.name.startswith("test_") and not path.name.endswith("_pytest.py")
-        for path in tests_dir.glob("test_*.py")
-    )
+    for path in tests_dir.glob("test_*.py"):
+        if is_host_only_test(path):
+            continue
+        marker = read_runtime_marker(path)
+        if marker is not None and not any(
+            name == "circuitpython" or name.startswith("micropython")
+            for name in marker
+        ):
+            # CPython-only (no device runtime in the marker) — not swept.
+            continue
+        return True
+    return False
 
 
 def _library_pip_name(library_dir: Path) -> str:

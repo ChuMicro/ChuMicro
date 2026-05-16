@@ -9,6 +9,10 @@ Hardware-side coverage (real ``esp32.NVS`` namespace, power-cycle
 behavior) lives under ``functional_tests/``.
 """
 
+#: Host-lane only — exercises a runtime-specific backend through host
+#: fakes and asserts off-target behaviour; never staged to a device.
+__chumicro_host_only__ = True
+
 from chumicro_kvstore import KVStore, KVStoreFull
 from chumicro_kvstore._backends.mp_nvs import MpNvsBackend
 from chumicro_test_harness import raises

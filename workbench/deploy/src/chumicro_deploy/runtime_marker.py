@@ -20,6 +20,15 @@ filtered out of bundles and product / app / functional deploys, but
 staged by the on-device unit sweep.  :func:`is_test_support_module`
 reads it.
 
+A third marker — ``__chumicro_host_only__ = True`` — flags a
+``tests/test_*.py`` file as host-lane only: it runs on CPython and the
+MicroPython / CircuitPython unix-ports but never on real silicon (it
+drives runtime-specific source through host fakes and asserts
+off-target behaviour).  Orthogonal to runtime ABI — these files run on
+every host interpreter, so ``__chumicro_runtimes__`` cannot express
+them.  :func:`is_host_only_test` reads it; the on-device unit sweep
+excludes host-only files while the unix-port lane keeps them.
+
 The readers use :func:`ast.parse` (no execution) — runtime-specific
 files commonly import device-only modules at top level
 (``import wifi``, ``import esp32``) that fail on the host.
@@ -108,6 +117,45 @@ def is_test_support_module(python_file: Path) -> bool:
             target.id for target in node.targets if isinstance(target, ast.Name)
         ]
         if "__chumicro_test_support__" not in targets:
+            continue
+        return isinstance(node.value, ast.Constant) and node.value.value is True
+    return False
+
+
+def is_host_only_test(python_file: Path) -> bool:
+    """Return ``True`` when *python_file* declares ``__chumicro_host_only__``.
+
+    A host-only test file runs on CPython and the MicroPython /
+    CircuitPython unix-ports but never on real silicon: it exercises a
+    runtime-specific source module through host fakes and asserts
+    off-target behaviour (e.g. ``RuntimeError`` because the device
+    module is absent on the host).  The deploy filter would correctly
+    strip the imported runtime module on a non-matching board, and a
+    *matching* board would fail the off-target assertion — so these
+    files are not on-device-sweep-eligible by construction.
+
+    This is orthogonal to ``__chumicro_runtimes__`` (the files run on
+    every host interpreter, so no runtime subset describes them) and to
+    ``__chumicro_test_support__`` (that gates *shipping* of ``testing.py``
+    fakes; this gates *collection* of test files for the on-device
+    sweep).  The on-device unit sweep excludes host-only files; the
+    unix-port lane and plain CPython keep them.
+
+    The marker is a top-level ``__chumicro_host_only__ = True``
+    assignment.  Read via :func:`ast.parse` (no execution), matching
+    :func:`read_runtime_marker` and :func:`is_test_support_module`.
+    """
+    try:
+        tree = ast.parse(python_file.read_text(), filename=str(python_file))
+    except (OSError, SyntaxError):
+        return False  # Unreadable / unparseable → not host-only (fail-safe).
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [
+            target.id for target in node.targets if isinstance(target, ast.Name)
+        ]
+        if "__chumicro_host_only__" not in targets:
             continue
         return isinstance(node.value, ast.Constant) and node.value.value is True
     return False

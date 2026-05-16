@@ -12,6 +12,9 @@ socket) live in ``test_protocol.py`` — they're true under both the
 real Protocol and the stand-in.
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 from chumicro_sockets import TCPClientSocket
 from chumicro_sockets.testing import FakeSocket
 

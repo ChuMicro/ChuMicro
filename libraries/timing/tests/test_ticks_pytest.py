@@ -9,6 +9,9 @@ Cross-runtime arithmetic tests live in ``test_ticks.py``.
 
 from __future__ import annotations
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import sys
 from types import SimpleNamespace
 

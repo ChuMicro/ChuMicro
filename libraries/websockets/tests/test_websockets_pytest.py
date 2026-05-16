@@ -17,6 +17,9 @@ Live-board verified on Pi Pico W CP — see commit ``b7a98b8`` for the
 probe transcript.
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 from chumicro_websockets import _wire
 
 

@@ -20,6 +20,9 @@ The cross-runtime layers (``FakeUDPSocket`` + factory routing) live
 in the sibling ``test_udp.py``.
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import socket
 
 import pytest

@@ -30,6 +30,9 @@ becomes valuable; today FakeSocket coverage + the on-device
 functional tests (real broker over real wifi) are sufficient.
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import shutil
 import socket
 import subprocess

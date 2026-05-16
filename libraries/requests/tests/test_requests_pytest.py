@@ -12,6 +12,9 @@ socket on each board" — is exercised end-to-end on real hardware in
 ``functional_tests/test_real_get_tls.py`` (HTTPS).
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 from chumicro_requests.sockets_factory import chumicro_sockets_factory
 
 

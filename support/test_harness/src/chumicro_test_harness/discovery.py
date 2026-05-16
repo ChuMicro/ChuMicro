@@ -12,10 +12,12 @@ keeps the import footprint minimal so :func:`run_one_file` can
 execute under CPython, MicroPython unix-port, and CircuitPython
 unix-port.
 
-A non-``_pytest`` file that fails to import is a hard FAIL, not a
-silent SKIP — files that pull in pytest / unittest / tracemalloc
-must either be converted to cross-runtime or renamed to
-``test_<name>_pytest.py``.
+A file that fails to import is a hard FAIL, not a silent SKIP —
+files that pull in pytest / unittest / tracemalloc must either be
+converted to cross-runtime or declare ``__chumicro_runtimes__ =
+("cpython",)`` (CPython-only lane).  A file that drives
+runtime-specific source through host fakes declares
+``__chumicro_host_only__ = True`` instead.
 """
 
 import os
@@ -130,8 +132,10 @@ def run_one_file(test_file, root_dir="."):
     """Run a single test file in the current process; return shell exit code.
 
     An ImportError here is a hard FAIL, not a silent SKIP — the offending
-    file must either be converted to cross-runtime or renamed to
-    ``test_<name>_pytest.py``.
+    file must either be converted to cross-runtime or declare
+    ``__chumicro_runtimes__ = ("cpython",)`` (or
+    ``__chumicro_host_only__ = True`` if it drives runtime-specific
+    source through host fakes).
     """
     setup_source_paths(root_dir)
     print(f"== {test_file} ==")
@@ -140,7 +144,9 @@ def run_one_file(test_file, root_dir="."):
     except ImportError as error:
         print(
             f"FAIL {test_file} — import failed: {error} "
-            f"(rename to test_<name>_pytest.py if intentionally CPython-only)"
+            f"(declare __chumicro_runtimes__ = (\"cpython\",) if "
+            f"intentionally CPython-only, or __chumicro_host_only__ = "
+            f"True if it drives runtime-specific source via host fakes)"
         )
         return 1
     except Exception as error:

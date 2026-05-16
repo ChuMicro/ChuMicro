@@ -16,6 +16,9 @@ Pair with the on-board long-run perf runner at
 measurement against real hardware.
 """
 
+#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
 import gc
 import tracemalloc
 
