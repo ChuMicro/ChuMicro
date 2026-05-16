@@ -24,13 +24,14 @@ way the real client would.  Scripted entries are consumed FIFO; an
 empty queue raises :class:`HttpError` to surface "test forgot to
 enqueue a response" as a clear failure.
 
-This module is host-only — the ``__chumicro_runtimes__`` marker below
-keeps it out of every bundle and every device deploy, so it never
-lands on a microcontroller.
+This module is test-support — the ``__chumicro_test_support__``
+marker below keeps it out of every bundle and every product / app /
+functional device deploy, so it never lands on a shipped board (the
+on-device unit sweep is the one path that stages it).
 """
 
 #: Source bundle / sdist only -- never lands on a device.
-__chumicro_runtimes__ = ("cpython",)
+__chumicro_test_support__ = True
 
 from chumicro_requests._wire import (
     CaseInsensitiveDict,

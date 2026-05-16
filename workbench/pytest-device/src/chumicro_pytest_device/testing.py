@@ -99,6 +99,7 @@ class HotPathTransport:
         *,
         extra_modules: list[Path] | None = None,
         extra_files: dict[str, bytes] | None = None,
+        include_test_support: bool = False,
     ) -> None:
         self.calls.append(
             (

@@ -14,7 +14,13 @@ target) or a frozenset of runtimes (set-of-acceptable-targets — used by
 the source bundle to drop CPython-only files while keeping everything
 device-bound).
 
-The reader uses :func:`ast.parse` (no execution) — runtime-specific
+A separate, runtime-independent marker — ``__chumicro_test_support__
+= True`` — flags a library's ``testing.py`` fakes as test-support:
+filtered out of bundles and product / app / functional deploys, but
+staged by the on-device unit sweep.  :func:`is_test_support_module`
+reads it.
+
+The readers use :func:`ast.parse` (no execution) — runtime-specific
 files commonly import device-only modules at top level
 (``import wifi``, ``import esp32``) that fail on the host.
 """
@@ -72,6 +78,39 @@ def read_runtime_marker(python_file: Path) -> frozenset[str] | None:
                 names.append(element.value)
         return frozenset(names)
     return None
+
+
+def is_test_support_module(python_file: Path) -> bool:
+    """Return ``True`` when *python_file* declares ``__chumicro_test_support__``.
+
+    A test-support module (a library's ``testing.py`` fakes) exists
+    only to support tests and must never reach a shipped product.  It
+    is filtered out of every bundle and every product / app /
+    functional device deploy, independent of runtime — the fakes run
+    on every runtime (the cross-runtime unit suite executes them on
+    MicroPython and CircuitPython).  The on-device unit sweep
+    (``--target device-unit``) is the one path that stages them,
+    because the cross-runtime unit tests legitimately import the
+    fakes.
+
+    The marker is a top-level ``__chumicro_test_support__ = True``
+    assignment.  Read via :func:`ast.parse` (no execution), matching
+    :func:`read_runtime_marker`.
+    """
+    try:
+        tree = ast.parse(python_file.read_text(), filename=str(python_file))
+    except (OSError, SyntaxError):
+        return False  # Unreadable / unparseable → not test-support (fail-safe).
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [
+            target.id for target in node.targets if isinstance(target, ast.Name)
+        ]
+        if "__chumicro_test_support__" not in targets:
+            continue
+        return isinstance(node.value, ast.Constant) and node.value.value is True
+    return False
 
 
 def file_targets_runtime(

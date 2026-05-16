@@ -13,8 +13,10 @@ Example::
     store.simulate_corrupt()                 # force is_corrupt next load
 """
 
-#: Source bundle / sdist only -- never lands on a device.
-__chumicro_runtimes__ = ("cpython",)
+#: Test-support: PyPI sdist / wheel only -- bundles and product /
+#: app / functional device deploys exclude it; the on-device unit
+#: sweep is the one path that stages it.
+__chumicro_test_support__ = True
 
 from chumicro_kvstore._backends.memory import MemoryBackend
 from chumicro_kvstore.core import KVStore

@@ -20,8 +20,10 @@ tests will catch code that accidentally uses plain subtraction instead
 of ``ticks_diff``.
 """
 
-#: Source bundle / sdist only -- never lands on a device.
-__chumicro_runtimes__ = ("cpython",)
+#: Test-support: PyPI sdist / wheel only -- bundles and product /
+#: app / functional device deploys exclude it; the on-device unit
+#: sweep is the one path that stages it.
+__chumicro_test_support__ = True
 
 from chumicro_timing.ticks import TICKS_HALFPERIOD, TICKS_MAX, TICKS_PERIOD
 

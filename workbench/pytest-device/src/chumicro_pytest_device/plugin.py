@@ -1033,6 +1033,9 @@ class DeviceBackend:
                     extra_files=_encode_runtime_config_extra_files(
                         item.session.config,
                     ),
+                    include_test_support=_target_is_device_unit(
+                        item.session.config,
+                    ),
                 )
                 cache.mark_staged(staging_key)
 
@@ -1522,6 +1525,7 @@ def _bulk_stage_for_device(
         seen_test_files,
         _harness_source_dir(session),
         extra_files=_encode_runtime_config_extra_files(session.config),
+        include_test_support=_target_is_device_unit(session.config),
     )
 
 

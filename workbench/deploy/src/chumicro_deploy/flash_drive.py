@@ -42,7 +42,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .host_platform import install_hint_for_rsync
-from .runtime_marker import file_targets_runtime
+from .runtime_marker import file_targets_runtime, is_test_support_module
 
 
 class FlashDriveError(Exception):
@@ -181,6 +181,7 @@ def merge_packages(
     staging_destination: Path,
     *,
     target_runtime: str | None = None,
+    include_test_support: bool = False,
 ) -> None:
     """Copy top-level packages from a source directory to a staging dir.
 
@@ -214,6 +215,15 @@ def merge_packages(
                     directory_path / name, target_runtime=target_runtime,
                 ):
                     ignored.add(name)
+        for name in names:
+            if name in ignored or not name.endswith(".py"):
+                continue
+            if is_test_support_module(
+                Path(directory) / name,
+            ) and not include_test_support:
+                # Test-support fakes never reach a product/app deploy;
+                # only the on-device unit sweep opts in.
+                ignored.add(name)
         return ignored
 
     for child in sorted(source_directory.iterdir()):

@@ -60,6 +60,7 @@ from bundle_layout import (
 from chumicro_deploy.runtime_marker import (
     DEVICE_RUNTIMES,
     file_targets_runtime,
+    is_test_support_module,
 )
 from repo_layout import (
     GITHUB_ORG,
@@ -105,6 +106,7 @@ def _find_bundle_modules(
         for py_file in sorted(package_dir.rglob("*.py"))
         if "__pycache__" not in py_file.relative_to(package_dir).parts
         and file_targets_runtime(py_file, target_runtime=target_runtime)
+        and not is_test_support_module(py_file)
     ]
     return package_dir.name, package_dir, python_files
 

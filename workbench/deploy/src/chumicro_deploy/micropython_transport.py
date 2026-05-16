@@ -32,7 +32,7 @@ from .protocol import (
     parse_probe_output,
     validate_entrypoint_in_files,
 )
-from .runtime_marker import file_targets_runtime
+from .runtime_marker import file_targets_runtime, is_test_support_module
 
 if TYPE_CHECKING:  # pragma: no cover - type-only
     from mpremote.transport_serial import SerialTransport
@@ -352,6 +352,10 @@ class MicropythonTransport:
         #: tree.  Sub-runtime markers (``micropython_esp32`` /
         #: ``micropython_rp2``) fold into ``"micropython"``.
         self._target_runtime: str = "micropython"
+        #: Set per :meth:`stage` call.  Only the on-device unit sweep
+        #: passes ``True`` so test-support fakes reach the board
+        #: product/app/functional deploys leave it ``False``.
+        self._include_test_support: bool = False
 
     def connect(self) -> None:
         """Verify the device is reachable by running a no-op command.
@@ -371,6 +375,7 @@ class MicropythonTransport:
         *,
         extra_modules: list[Path] | None = None,
         extra_files: dict[str, bytes] | None = None,
+        include_test_support: bool = False,
     ) -> None:
         """Prepare a staging directory with library sources, tests, and harness.
 
@@ -400,6 +405,7 @@ class MicropythonTransport:
                 no equivalent of CircuitPython's ``UnsupportedExtraFilesError``
                 applies here.
         """
+        self._include_test_support = include_test_support
         # Drop any mount/tempdir left from a prior stage() on this
         # transport so re-staging is idempotent.
         if self._mounted and self._serial is not None:
@@ -1193,5 +1199,14 @@ class MicropythonTransport:
         if path.is_file() and path.suffix == ".py" and not file_targets_runtime(
             path, target_runtime=self._target_runtime,
         ):
+            return True
+        if (
+            path.is_file()
+            and path.suffix == ".py"
+            and is_test_support_module(path)
+            and not self._include_test_support
+        ):
+            # Test-support fakes never reach a product/app/functional
+            # deploy; only the on-device unit sweep opts in.
             return True
         return False

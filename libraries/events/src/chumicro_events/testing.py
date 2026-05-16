@@ -6,8 +6,9 @@ own ``handle`` is the natural drain point.  This module ships one
 helper that's broadly useful when downstream libraries want to assert
 against bus traffic without writing one-off mocks.
 
-Excluded from every bundle and every device deploy by the
-``__chumicro_runtimes__ = ("cpython",)`` marker below.
+Test-support: excluded from every bundle and every product / app /
+functional device deploy by the ``__chumicro_test_support__`` marker
+below (the on-device unit sweep is the one path that stages it).
 
 Usage::
 
@@ -23,7 +24,7 @@ Usage::
 """
 
 #: Source bundle / sdist only -- never lands on a device.
-__chumicro_runtimes__ = ("cpython",)
+__chumicro_test_support__ = True
 
 
 class RecordingSubscriber:
