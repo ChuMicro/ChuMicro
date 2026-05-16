@@ -5,7 +5,7 @@
 ## Now
 
 - [ ] **Resume workspace-library-curation Phase 1 from session handoff** — see [`handoffs/2026-05-12-workspace-library-curation-design-resolved.md`](handoffs/2026-05-12-workspace-library-curation-design-resolved.md).
-- [ ] **Resume deploy-mode-unification (Decision 0068) implementation from session handoff** — see [`handoffs/2026-05-15-deploy-mode-unification.md`](handoffs/2026-05-15-deploy-mode-unification.md).
+- [ ] **Resume deploy-mode-unification Phase 4b.2/4c/4d from session handoff** — see [`handoffs/2026-05-16-deploy-mode-unification-phase4.md`](handoffs/2026-05-16-deploy-mode-unification-phase4.md).  Two design questions are parked in [`open-questions.md`](open-questions.md) — read those first; both block implementation pending user choice.
 
 ## Next
 

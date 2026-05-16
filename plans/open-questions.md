@@ -491,3 +491,41 @@ Currently scripts use `print()` for warnings and status.  A unified
 `logging` setup would allow log levels, consistent formatting, and
 filtering — but only makes sense if applied across all scripts, not
 piecemeal.  Parked for a rainy day.
+
+### How does a unit-test file opt out of the on-device sweep? (Decision 0068 Phase 4b.2 issue i)
+
+The `device-unit` sweep assumes every `libraries/<n>/tests/test_*.py`
+(non-`_pytest`) is a cross-runtime *device* test.  The 6
+`test_{mp,cp}_{adapter,*backend}.py` files break that: they import a
+runtime-specific source module (e.g. `chumicro_kvstore._backends.mp_nvs`,
+correctly `__chumicro_runtimes__=("micropython",)`) which the
+Decision 0044 deploy filter *correctly* strips from a non-matching
+board → `ImportError` on device.  They are correct on unix-port/CPython
+(verified green there) and not on-device-eligible by construction (a
+matching real board would also fail their
+`test_runtime_acquisition_raises_*_on_cpython` since real `esp32`
+exists).  Need a classification mechanism for "unix-port/host lane
+only — not the device-unit sweep," parallel to how `*_pytest.py` is
+CPython-only.  Candidate: a per-file marker the `device-unit`
+collection honors (cf. Decision 0069's `__chumicro_test_support__`
+shape).  Likely its own ADR.  Workstream:
+[`deploy-mode-unification.md`](workstreams/deploy-mode-unification.md)
+4b.2(i).  Related: Decision 0068, Decision 0044, Decision 0037,
+Decision 0069.
+
+### How does the on-device sweep survive a full-scale run on tier-floor flash? (Decision 0068 Phase 4b.2 issue ii)
+
+A full Pi Pico W CP `--deploy-mode flash` sweep (254 s, 663 tests)
+degrades partway: libraries that pass standalone (`runner/test_core`
+61/61, `wifi/test_wifi` 41/41) show `.FFFF…` (first test of a file
+passes, rest fail) from ~67 % onward — transport/board dies
+mid-session at scale.  Suspected: FAT/flash churn from hundreds of
+rsync `--delete`+restage cycles on the 491 KB drive, or
+heap/handle exhaustion.  Reproduced 2× (deterministic, not the
+transient evicted-transport state seen earlier).  Needs a design
+approach: periodic transport reconnect / soft-reset between
+libraries / chunk the sweep into sub-sessions / document a per-board
+library ceiling.  The retired "~16-lib RAM-session OOM" sub-question
+is the RAM-mode analogue of this.  Workstream:
+[`deploy-mode-unification.md`](workstreams/deploy-mode-unification.md)
+4b.2(ii).  Related: Decision 0068.
