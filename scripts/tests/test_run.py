@@ -389,6 +389,7 @@ class TestMainDispatch:
                 {
                     "coverage_threshold": 94,
                     "with_functional": False,
+                    "with_device_unit": False,
                     "phase_workers": run._DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
                     "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                     "quiet": False,
@@ -505,6 +506,7 @@ class TestMainDispatch:
                 {
                     "coverage_threshold": None,
                     "with_functional": True,
+                    "with_device_unit": False,
                     "phase_workers": run._DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
                     "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
                     "quiet": False,
@@ -629,6 +631,50 @@ class TestMainDispatch:
                 "run.py", "test-libraries-functional",
                 "--device", "board-1",
             ])
+
+    def test_test_unit_on_device_without_flags_passes_none_values(
+        self, monkeypatch,
+    ) -> None:
+        command_calls, fake = _make_fake_command(return_value=53)
+        monkeypatch.setattr(run, "test_unit_on_device", fake)
+
+        result = run.main(["run.py", "test-unit-on-device"])
+
+        assert result == 53
+        assert command_calls == [
+            ((), {
+                "runtime": None,
+                "micropython_device": None,
+                "circuitpython_device": None,
+                "deploy_mode": None,
+                "library": None,
+            }),
+        ]
+
+    def test_test_unit_on_device_forwards_explicit_flags(
+        self, monkeypatch,
+    ) -> None:
+        command_calls, fake = _make_fake_command(return_value=57)
+        monkeypatch.setattr(run, "test_unit_on_device", fake)
+
+        result = run.main([
+            "run.py", "test-unit-on-device",
+            "--runtime", "circuitpython",
+            "--circuitpython-device", "cp-alt",
+            "--deploy-mode", "flash",
+            "--library", "ntp",
+        ])
+
+        assert result == 57
+        assert command_calls == [
+            ((), {
+                "runtime": "circuitpython",
+                "micropython_device": None,
+                "circuitpython_device": "cp-alt",
+                "deploy_mode": "flash",
+                "library": "ntp",
+            }),
+        ]
 
     def test_test_workbench_functional_without_filters_passes_none_values(
         self, monkeypatch,
@@ -1755,3 +1801,103 @@ class TestPreflightParallelDispatch:
         assert functional_calls == []
         out = capsys.readouterr().out
         assert "Preflight failed at: test-micropython" in out
+
+
+class TestUnitOnDeviceSweep:
+    """The on-device unit sweep resolves per-library mode (own-src
+    scoping) and runs one single-mode session per (runtime, mode).
+    """
+
+    @staticmethod
+    def _make_library(root: Path, name: str, *, ships_data_file: bool):
+        library_dir = root / name
+        source_dir = library_dir / "src" / f"chumicro_{name}"
+        source_dir.mkdir(parents=True)
+        (source_dir / "__init__.py").write_text("X = 1\n")
+        if ships_data_file:
+            (source_dir / "_ca_bundle.der").write_bytes(b"\x30\x82")
+        tests_dir = library_dir / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_it.py").write_text("def test_it():\n    assert True\n")
+        return library_dir
+
+    def test_groups_libraries_into_one_session_per_mode(
+        self, tmp_path: Path, monkeypatch,
+    ) -> None:
+        from types import SimpleNamespace
+
+        import chumicro_deploy
+        from chumicro_pytest_device import _test_runner
+
+        ntp = self._make_library(tmp_path, "ntp", ships_data_file=False)
+        sockets = self._make_library(tmp_path, "sockets", ships_data_file=True)
+
+        monkeypatch.setattr(
+            run, "discover_library_dirs", lambda: [ntp, sockets],
+        )
+        monkeypatch.setattr(
+            chumicro_deploy, "load_device_registry",
+            lambda **_kwargs: (
+                [SimpleNamespace(
+                    identifier="cp-1", supports_ram_mode=True,
+                )],
+                SimpleNamespace(circuitpython="cp-1", micropython=None),
+            ),
+        )
+        # Own-src scoping: closure is each library's own src only, so
+        # find_libraries_requiring_flash sees no flagged pyproject.
+        monkeypatch.setattr(
+            _test_runner, "resolve_library_source_dirs",
+            lambda library_dir, **_kwargs: [library_dir / "src"],
+        )
+        commands: list[list[str]] = []
+
+        def _fake_run_command(command, environment=None):  # noqa: ARG001
+            commands.append(command)
+            return 0
+
+        monkeypatch.setattr(run, "run_command", _fake_run_command)
+
+        result = run.test_unit_on_device(runtime="circuitpython")
+
+        assert result == 0
+        # ntp (clean own-src) → ram session; sockets (own-src ships
+        # _ca_bundle.der) → flash session.  Flash runs first.
+        assert len(commands) == 2
+        flash_command, ram_command = commands
+        assert "--deploy-mode" in flash_command
+        assert flash_command[flash_command.index("--deploy-mode") + 1] == "flash"
+        assert any("sockets/tests" in part for part in flash_command)
+        assert ram_command[ram_command.index("--deploy-mode") + 1] == "ram"
+        assert any("ntp/tests" in part for part in ram_command)
+        for command in commands:
+            assert command[command.index("--target") + 1] == "device-unit"
+            assert command[command.index("--runtime") + 1] == "circuitpython"
+            assert (
+                command[command.index("--circuitpython-device") + 1] == "cp-1"
+            )
+
+    def test_skips_runtime_with_no_configured_device(
+        self, tmp_path: Path, monkeypatch, capsys,
+    ) -> None:
+        from types import SimpleNamespace
+
+        import chumicro_deploy
+
+        ntp = self._make_library(tmp_path, "ntp", ships_data_file=False)
+        monkeypatch.setattr(run, "discover_library_dirs", lambda: [ntp])
+        monkeypatch.setattr(
+            chumicro_deploy, "load_device_registry",
+            lambda **_kwargs: (
+                [], SimpleNamespace(circuitpython=None, micropython=None),
+            ),
+        )
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda *_a, **_k: pytest.fail("must not run pytest"),
+        )
+
+        result = run.test_unit_on_device(runtime="circuitpython")
+
+        assert result == 0
+        assert "No circuitpython device configured" in capsys.readouterr().out

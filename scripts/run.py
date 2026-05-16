@@ -1458,6 +1458,7 @@ def preflight(
     circuitpython_binary: str | None = None,
     coverage_threshold: int | None = None,
     with_functional: bool = False,
+    with_device_unit: bool = False,
     phase_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
     quiet: bool = False,
@@ -1489,6 +1490,9 @@ def preflight(
     require a connected board.  Pass *with_functional* to append
     ``test-libraries-functional`` and ``test-workbench-functional``
     (running with ``devices.yml`` defaults) to the end of the sweep.
+    Pass *with_device_unit* to also append ``test-unit-on-device``
+    (the cross-runtime unit suite on connected boards) after that —
+    likewise serial, since it drives the same hardware.
     """
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
@@ -1620,6 +1624,15 @@ def preflight(
             if result != 0:
                 print(f"Preflight failed at: {step_name}")
                 return result
+
+    # The on-device unit sweep also drives the boards, so it runs
+    # serially here too — after functional, never concurrently.
+    if with_device_unit:
+        print("== test-unit-on-device ==")
+        result = test_unit_on_device()
+        if result != 0:
+            print("Preflight failed at: test-unit-on-device")
+            return result
 
     total_tests = _tally_pytest_counts(dispatcher.captured_outputs())
     if total_tests > 0:
@@ -2191,6 +2204,206 @@ def _format_test_libraries_functional_command(
     return " ".join(parts)
 
 
+def _library_has_cross_runtime_unit_suite(library_dir: Path) -> bool:
+    """True when ``library_dir/tests`` holds a cross-runtime unit file.
+
+    ``test_*_pytest.py`` files are CPython-only (they opt out of the
+    harness), so a directory of only those does not qualify.
+    """
+    tests_dir = library_dir / "tests"
+    if not tests_dir.is_dir():
+        return False
+    return any(
+        path.name.startswith("test_") and not path.name.endswith("_pytest.py")
+        for path in tests_dir.glob("test_*.py")
+    )
+
+
+def _library_pip_name(library_dir: Path) -> str:
+    """Return the library's ``[project].name`` (the requires_flash key).
+
+    Falls back to the ``chumicro-<dir>`` convention if the pyproject is
+    unreadable — only used to decide whether the resolution unit is
+    itself in the flagged set, so the convention is a safe default.
+    """
+    import tomllib  # noqa: PLC0415 — deferred; this task is rarely run
+
+    pyproject = library_dir / "pyproject.toml"
+    try:
+        with pyproject.open("rb") as handle:
+            name = tomllib.load(handle).get("project", {}).get("name")
+    except (OSError, tomllib.TOMLDecodeError):
+        name = None
+    return name or f"chumicro-{library_dir.name.replace('_', '-')}"
+
+
+def test_unit_on_device(
+    runtime: str | None = None,
+    micropython_device: str | None = None,
+    circuitpython_device: str | None = None,
+    deploy_mode: str | None = None,
+    library: str | None = None,
+) -> int:
+    """Run the cross-runtime *unit* suite on real boards (the sweep).
+
+    For each library, resolves the deploy mode through the one shared
+    policy with **own-src** ``staged_files`` scoping (a dependency's
+    data file must not poison a light dependent's suite) and the full
+    transitive ``requires_flash`` closure; then groups libraries by
+    resolved mode and runs each group as one single-mode
+    ``--target device-unit`` pytest session per runtime.  A light
+    library stays in the fast RAM session; a ``requires_flash`` or
+    data-file library lands in a flash session — only that library's
+    suite switches, not the whole sweep.
+
+    The sweep's last-resort mode preference is **RAM** (its purpose is
+    RAM-capable on-device validation; Decision 0047's flash-default
+    footgun does not apply to a deliberate dev sweep).  ``--deploy-mode``
+    overrides that preference; unlike the functional path the sweep
+    does not inherit ``devices.yml``'s ``deploy_mode`` (that is tuned
+    for app-shaped functional deploys).  Behavioral pass/fail only —
+    no coverage gating (``coverage.py`` cannot trace MP / CP bytecode).
+
+    Args:
+        runtime: ``micropython`` / ``circuitpython`` / ``both``
+            (default: both).
+        micropython_device: Override the MicroPython target device ID.
+        circuitpython_device: Override the CircuitPython target ID.
+        deploy_mode: Override the RAM preference for every library
+            (``ram`` / ``flash``); the per-library rule still applies.
+        library: Limit the sweep to one library's unit suite.
+
+    Returns:
+        ``0`` all-pass, ``1`` test failures, ``2`` configuration
+        problems.  Cleanly returns ``0`` when no board is configured
+        for a target runtime (matches the functional path).
+    """
+    from chumicro_deploy import (  # noqa: PLC0415 — deferred heavy import
+        DeviceCaps,
+        DeviceConfigError,
+        find_libraries_requiring_flash,
+        load_device_registry,
+        resolve_deploy_mode,
+    )
+    from chumicro_pytest_device._test_runner import (  # noqa: PLC0415
+        resolve_library_source_dirs,
+    )
+
+    libraries_root = ROOT / "libraries"
+    if library is not None:
+        candidate = libraries_root / library
+        if not _library_has_cross_runtime_unit_suite(candidate):
+            print(f"No cross-runtime unit suite for --library {library!r}.")
+            return 2
+        library_dirs = [candidate]
+    else:
+        library_dirs = [
+            directory
+            for directory in discover_library_dirs()
+            if _library_has_cross_runtime_unit_suite(directory)
+        ]
+    if not library_dirs:
+        print("No on-device unit suites to run.")
+        return 0
+
+    try:
+        devices, defaults = load_device_registry(workspace_root=ROOT)
+    except DeviceConfigError as error:
+        print(f"Skipping on-device unit sweep: {error}")
+        return 0
+    devices_by_id = {entry.identifier: entry for entry in devices}
+
+    if runtime in (None, "both"):
+        target_runtimes = ["micropython", "circuitpython"]
+    else:
+        target_runtimes = [runtime]
+    device_override = {
+        "micropython": micropython_device,
+        "circuitpython": circuitpython_device,
+    }
+
+    configured = deploy_mode or "ram"
+    worst_exit = 0
+    ran_anything = False
+
+    for target_runtime in target_runtimes:
+        device_id = device_override[target_runtime] or getattr(
+            defaults, target_runtime,
+        )
+        device_entry = devices_by_id.get(device_id) if device_id else None
+        if device_entry is None:
+            print(
+                f"No {target_runtime} device configured "
+                f"(devices.yml defaults.{target_runtime}); "
+                f"skipping its unit sweep.",
+            )
+            continue
+
+        device_capabilities = DeviceCaps(
+            supports_ram_mode=device_entry.supports_ram_mode,
+        )
+        libraries_by_mode: dict[str, list[Path]] = {}
+        for library_dir in library_dirs:
+            own_source = library_dir / "src"
+            own_files = [
+                path.name
+                for path in own_source.rglob("*")
+                if path.is_file() and "__pycache__" not in path.parts
+            ]
+            closure_dirs = resolve_library_source_dirs(
+                library_dir, libraries_root=libraries_root,
+            )
+            mode, message = resolve_deploy_mode(
+                configured,
+                staged_files=own_files,
+                device_caps=device_capabilities,
+                requires_flash_libs=find_libraries_requiring_flash(
+                    closure_dirs,
+                ),
+                resolution_unit=_library_pip_name(library_dir),
+                force=None,
+            )
+            if message is not None:
+                print(f"[{library_dir.name} → {target_runtime}] {message}")
+            libraries_by_mode.setdefault(mode, []).append(library_dir)
+
+        # Flash group before RAM so the slower, wear-incurring session
+        # runs first and a RAM-group failure isn't masked by flash I/O.
+        for session_mode in ("flash", "ram"):
+            group = libraries_by_mode.get(session_mode)
+            if not group:
+                continue
+            ran_anything = True
+            command = [
+                PYTHON, "-m", "pytest",
+                *[str(directory / "tests") for directory in group],
+                "--target", "device-unit",
+                "--runtime", target_runtime,
+                f"--{target_runtime}-device", device_entry.identifier,
+                "--deploy-mode", session_mode,
+                "--pr-summary",
+                "--pr-summary-command",
+                (
+                    f"python scripts/run.py test-unit-on-device "
+                    f"--runtime {target_runtime} "
+                    f"--deploy-mode {session_mode}"
+                ),
+            ]
+            print(
+                f"== on-device unit sweep: {target_runtime} / "
+                f"{session_mode} ({len(group)} libraries) ==",
+            )
+            exit_code = run_command(
+                command, environment=pythonpath_environment(),
+            )
+            worst_exit = worst_exit or exit_code
+
+    if not ran_anything:
+        print("No on-device unit sweep ran (no target devices).")
+        return 0
+    return worst_exit
+
+
 def test_workbench_functional(
     workbench: str | None = None,
     file_filter: str | None = None,
@@ -2477,6 +2690,14 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     preflight_parser.add_argument(
+        "--with-device-unit", action="store_true",
+        help=(
+            "also run test-unit-on-device (the cross-runtime unit "
+            "suite on connected boards) after the functional tail "
+            "(requires connected hardware)"
+        ),
+    )
+    preflight_parser.add_argument(
         "--phase-workers", type=int, metavar="N",
         default=_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
         help=(
@@ -2651,6 +2872,51 @@ def _build_parser() -> argparse.ArgumentParser:
     test_workbench_functional_parser.add_argument(
         "-x", "--exit-first", action="store_true",
         help="stop on first failure",
+    )
+
+    test_unit_on_device_parser = subparsers.add_parser(
+        "test-unit-on-device",
+        description=(
+            "Run the cross-runtime libraries/<name>/tests suite on real "
+            "boards.  Resolves each library's deploy mode (own-src "
+            "scoping, RAM-preferred), groups libraries by mode, and "
+            "runs one single-mode session per runtime: light libraries "
+            "ride a fast RAM session, requires_flash / data-file "
+            "libraries land in a flash session.  Behavioral pass/fail "
+            "only — no coverage gating."
+        ),
+        help=(
+            "run the cross-runtime unit suite on connected boards "
+            "(RAM-preferred, mode-grouped; the on-device unit sweep)"
+        ),
+    )
+    test_unit_on_device_parser.add_argument(
+        "--runtime",
+        choices=["micropython", "circuitpython", "both"],
+        help="runtime set to sweep (default: both)",
+    )
+    test_unit_on_device_parser.add_argument(
+        "--micropython-device",
+        help="override the MicroPython target device ID",
+    )
+    test_unit_on_device_parser.add_argument(
+        "--circuitpython-device",
+        help="override the CircuitPython target device ID",
+    )
+    test_unit_on_device_parser.add_argument(
+        "--deploy-mode",
+        dest="deploy_mode",
+        choices=["ram", "flash"],
+        default=None,
+        help=(
+            "override the RAM mode preference for every library "
+            "(the per-library requires_flash / data-file rule still "
+            "applies); default preference is ram"
+        ),
+    )
+    test_unit_on_device_parser.add_argument(
+        "--library",
+        help="limit the sweep to one library's unit suite",
     )
 
     check_version_parser = subparsers.add_parser(
@@ -2948,6 +3214,7 @@ def main(argv: list[str]) -> int:
             args.circuitpython_binary,
             coverage_threshold=args.coverage_threshold,
             with_functional=args.with_functional,
+            with_device_unit=args.with_device_unit,
             phase_workers=args.phase_workers,
             package_workers=args.package_workers,
             quiet=args.quiet,
@@ -2999,6 +3266,15 @@ def main(argv: list[str]) -> int:
             function_filter=args.function_filter,
             verbose=args.verbose,
             exit_first=args.exit_first,
+        )
+
+    if args.task == "test-unit-on-device":
+        return test_unit_on_device(
+            runtime=args.runtime,
+            micropython_device=args.micropython_device,
+            circuitpython_device=args.circuitpython_device,
+            deploy_mode=args.deploy_mode,
+            library=args.library,
         )
 
     if args.task == "build":

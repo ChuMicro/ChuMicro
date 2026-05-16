@@ -175,12 +175,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("chumicro", "ChuMicro device-test plugin")
     group.addoption(
         "--target",
-        choices=("device", "unix-port"),
+        choices=("device", "device-unit", "unix-port"),
         default="device",
         help=(
-            "execution backend: 'device' (chumicro-deploy transport) "
-            "or 'unix-port' (subprocess against a MicroPython / "
-            "CircuitPython unix-port binary)"
+            "execution backend: 'device' (functional_tests on a board "
+            "via the chumicro-deploy transport), 'device-unit' (the "
+            "cross-runtime libraries/<name>/tests suite on a board — "
+            "the on-device unit sweep), or 'unix-port' (that same unit "
+            "suite in a MicroPython / CircuitPython unix-port "
+            "subprocess)"
         ),
     )
     group.addoption(
@@ -1571,6 +1574,32 @@ def _target_is_unix_port(config: pytest.Config) -> bool:
     ) == "unix-port"
 
 
+def _target_is_device_unit(config: pytest.Config) -> bool:
+    """Return ``True`` when ``--target device-unit`` is in effect.
+
+    The on-device unit sweep: the cross-runtime
+    ``libraries/<name>/tests`` suite routed to the device transport
+    backend instead of the unix-port subprocess.  ``--target device``
+    stays functional-only; this is opt-in so existing functional runs
+    and IDE play buttons are unaffected.
+    """
+    return cast(
+        "str",
+        config.getoption("--target", default="device"),
+    ) == "device-unit"
+
+
+def _collect_unit_tests_on_device_backend(config: pytest.Config) -> bool:
+    """Route ``libraries/<name>/tests`` through the harness backend.
+
+    True under both ``unix-port`` (subprocess backend) and
+    ``device-unit`` (device transport backend).  Plain ``--target
+    device`` leaves the unit suite in the ordinary CPython lane that
+    bare ``pytest`` already covers.
+    """
+    return _target_is_unix_port(config) or _target_is_device_unit(config)
+
+
 class _NoImportModule(pytest.Module):
     """Stub Module that yields nothing without importing the file.
 
@@ -1596,11 +1625,12 @@ def pytest_pycollect_makemodule(
     for runtime-restricted files that ``import microcontroller`` /
     ``import wifi`` at top level.
 
-    Under ``--target unix-port`` we also claim
-    ``libraries/<name>/tests/`` files so the unix-port subprocess
-    backend gets them — without this, pytest's default Module factory
-    runs them as plain CPython tests, which is the lane bare ``pytest``
-    already covers.
+    Under ``--target unix-port`` *or* ``--target device-unit`` we also
+    claim ``libraries/<name>/tests/`` files so the harness backend
+    (unix-port subprocess, or the device transport for the on-device
+    unit sweep) gets them — without this, pytest's default Module
+    factory runs them as plain CPython tests, the lane bare ``pytest``
+    already covers.  Plain ``--target device`` leaves them there.
 
     AST-based discovery in :class:`DeviceTestFile` means the file is
     never executed on the host.
@@ -1611,7 +1641,7 @@ def pytest_pycollect_makemodule(
         )
     if (
         _is_library_unit_test(module_path)
-        and _target_is_unix_port(parent.config)
+        and _collect_unit_tests_on_device_backend(parent.config)
     ):
         return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
             parent, path=module_path,
@@ -1629,8 +1659,9 @@ def pytest_collect_file(
     - ``libraries/<name>/functional_tests/test_*.py`` — always claimed,
       runs through the device-transport backend.
     - ``libraries/<name>/tests/test_*.py`` (excluding ``*_pytest.py``)
-      — only claimed under ``--target unix-port``, runs through the
-      unix-port subprocess backend.  Under the default device target
+      — claimed under ``--target unix-port`` (unix-port subprocess
+      backend) and ``--target device-unit`` (device transport backend,
+      the on-device unit sweep).  Under the default ``--target device``
       these files stay in the plain-pytest CPython lane.
 
     Workbench packages also keep hardware-gated tests under a
@@ -1644,7 +1675,7 @@ def pytest_collect_file(
         return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
     if (
         _is_library_unit_test(file_path)
-        and _target_is_unix_port(parent.config)
+        and _collect_unit_tests_on_device_backend(parent.config)
     ):
         return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
     return None
