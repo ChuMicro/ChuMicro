@@ -68,7 +68,9 @@ _VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
 #: to manage zone-wise (``connection_type`` is always ``"serial"``
 #: today; carried for forward-compatibility with future transports).
 #: Anything outside this set falls into :attr:`DeviceEntry.extra`.
-_DEPLOY_ONLY_FIELDS: frozenset[str] = frozenset({"connection_type"})
+_DEPLOY_ONLY_FIELDS: frozenset[str] = frozenset(
+    {"connection_type", "supports_ram_mode"},
+)
 _KNOWN_KEYS: frozenset[str] = ALL_TOP_LEVEL_ENTRY_FIELDS | _DEPLOY_ONLY_FIELDS
 
 
@@ -99,6 +101,13 @@ class DeviceEntry:
     connection_type: str = "serial"
     serial_baudrate: int = 115200
     deploy_mode: str = DEFAULT_DEPLOY_MODE
+    #: Board *capability*, orthogonal to the ``deploy_mode``
+    #: *preference*: ``False`` only for a board that cannot run RAM
+    #: mode at all (none known today — the field exists so the schema
+    #: is stable when one appears).  RAM being merely *tight* (e.g. Pi
+    #: Pico W's 256 KB) is a per-library concern, not this.  Absent in
+    #: ``devices.yml`` ⇒ ``True`` (back-compatible).
+    supports_ram_mode: bool = True
     setup_command: str | None = None
     extra: dict = field(default_factory=dict)
 
@@ -179,6 +188,15 @@ def _validate_device(
             f"must be one of {_VALID_DEPLOY_MODES}"
         )
 
+    if "supports_ram_mode" in raw and not isinstance(
+        raw["supports_ram_mode"], bool,
+    ):
+        raise DeviceConfigError(
+            f"Device entry {index} ({raw['id']}): "
+            f"invalid supports_ram_mode {raw['supports_ram_mode']!r}, "
+            f"must be true or false"
+        )
+
     extra = {key: value for key, value in raw.items() if key not in _KNOWN_KEYS}
 
     return DeviceEntry(
@@ -189,6 +207,7 @@ def _validate_device(
         connection_type=raw.get("connection_type", "serial"),
         serial_baudrate=raw.get("serial_baudrate", 115200),
         deploy_mode=raw.get("deploy_mode", global_deploy_mode),
+        supports_ram_mode=raw.get("supports_ram_mode", True),
         setup_command=raw.get("setup_command"),
         extra=extra,
     )

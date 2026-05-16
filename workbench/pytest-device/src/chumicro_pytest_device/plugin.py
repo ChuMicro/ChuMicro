@@ -341,7 +341,9 @@ def _session_effective_deploy_mode(
     mode, message = resolve_deploy_mode(
         configured,
         staged_files=_staged_file_names(closure),
-        device_caps=DeviceCaps(),
+        device_caps=DeviceCaps(
+            supports_ram_mode=device_entry.supports_ram_mode,
+        ),
         requires_flash_libs=find_libraries_requiring_flash(closure),
         resolution_unit=None,
         force=None,

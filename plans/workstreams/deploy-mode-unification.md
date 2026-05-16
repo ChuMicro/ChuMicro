@@ -143,11 +143,24 @@ grep the symbol.
    legs pass on every board (was a silent `_ca_bundle.der` drop).
    The data-file switch message was reworded runtime-agnostic (still
    one byte-identical string per 0068 §1) so it no longer reads
-   CP-only ("raw-REPL exec") when emitted on MicroPython.
-3. **`devices.yml` capability.**  Optional per-device boolean
-   `supports_ram_mode` (default/absent ⇒ `true`; back-compatible).
-   Resolver step 2.  Loader fold + schema doc + template + a
-   commented-out example on the Pi Pico W entries.
+   CP-only ("raw-REPL exec") when emitted on MicroPython.  No
+   over-switch verified on hardware: a RAM-capable library (`timing`,
+   no data file, not `requires_flash`) + `--deploy-mode ram` stays
+   RAM on Lolin S2 CP *and* MP (15/15 each, no switch warning).
+3. **`devices.yml` capability. — DONE** (commit pending).  Optional
+   per-device boolean `supports_ram_mode` on `DeviceEntry`
+   (default/absent ⇒ `true`, back-compatible; non-bool ⇒
+   `DeviceConfigError`).  Added to the `default.py` loader's
+   `_DEPLOY_ONLY_FIELDS` (known key, not swept into `extra`) and
+   parsed/validated in `_validate_device`.  pytest-device's
+   `_session_effective_deploy_mode` now builds
+   `DeviceCaps(supports_ram_mode=device_entry.supports_ram_mode)` —
+   the resolver's step-2 branch (shipped in Phase 1) finally has a
+   real producer.  Schema documented in `device-testing.md` (incl. an
+   auto-switch note so the deploy-mode section isn't stale) + a
+   commented example in the shipped `devices.yml.template`
+   (`examples/devices.yml` is gitignored, not a committed surface).
+   4 new loader/wiring tests.
 4. **On-device unit-sweep command.**  `scripts/run.py
    test-unit-on-device` (final name TBD): cross-runtime unit suite on
    real boards.  Applies the §1 rule **per library suite**, passing
@@ -239,10 +252,17 @@ mode pick) → 5 (after the surface is real).
   CP/MP): `--deploy-mode ram` + sockets TLS matrix loud-switches to
   flash, 3/3 legs green per board.  7 contract tests; preflight green
   (3900).
-- [ ] **Phase 3 — `devices.yml` `supports_ram_mode` capability.**
-  Next entry point.  Optional per-device boolean (absent ⇒ `true`),
-  fed into `DeviceCaps`; loader fold + schema doc + template +
-  commented example on the Pi Pico W entries.  The resolver branch
-  already exists (Phase 1) — Phase 3 only wires the input.
-- [ ] Phases 4–5 — on-device unit-sweep command → docs/AGENTS.md.
-  Not started.
+- [x] **Phase 3 — `devices.yml` `supports_ram_mode` capability.**
+  Optional per-device boolean on `DeviceEntry` (absent ⇒ `true`,
+  back-compatible; non-bool ⇒ `DeviceConfigError`), threaded into
+  `DeviceCaps` by pytest-device so the Phase-1 resolver step-2 branch
+  has a producer.  Loader fold + `device-testing.md` schema +
+  template + Pi Pico W commented examples.  4 new tests; preflight
+  green.
+- [ ] **Phase 4 — on-device unit-sweep command.**  Next entry point.
+  `scripts/run.py test-unit-on-device`: cross-runtime unit suite on
+  real boards, §1 rule per library suite (own-src `staged_files`),
+  mode-grouped single-mode sessions, RAM-default, no coverage gate,
+  OOM→`requires_flash` learning, `preflight --with-device-unit`
+  opt-in.  See the implementation map + Phase 4 detail above.
+- [ ] Phase 5 — docs + AGENTS.md (after the command exists).
