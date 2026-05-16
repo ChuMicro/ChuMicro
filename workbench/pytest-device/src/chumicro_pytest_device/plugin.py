@@ -47,12 +47,15 @@ import pytest
 from chumicro_deploy import (
     DEFAULT_DEPLOY_MODE,
     DeployMode,
+    DeviceCaps,
     DeviceConfigError,
     DeviceDefaults,
     DeviceEntry,
     DeviceImplementation,
     TransportProtocol,
+    find_libraries_requiring_flash,
     load_device_registry,
+    resolve_deploy_mode,
     resolve_ide_devices,
 )
 from chumicro_deploy.runtime_marker import read_runtime_marker
@@ -260,6 +263,97 @@ def _session_deploy_mode_override(session: pytest.Session) -> str | None:
     )
 
 
+def _device_closure_source_dirs(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> list[Path]:
+    """Union of every test's library source closure for one device.
+
+    Walks the same dependency closure the staging path uses
+    (:func:`resolve_library_source_dirs`) for every ``DeviceTestItem``
+    targeting *device_entry*, deduplicated.  Deploy mode is
+    session-scoped (one cached transport per device), so the resolver
+    must see the whole device's closure up front — a functional test
+    that pulls a dependency's data file has to force the session to
+    flash *before* a RAM-mode transport gets cached.
+    """
+    closure: list[Path] = []
+    # ``getattr`` guard mirrors the feature pass: test stubs (FakeSession)
+    # don't populate ``items``; no items ⇒ empty closure ⇒ the resolver
+    # returns the configured mode unchanged.
+    for item in getattr(session, "items", ()):
+        if not isinstance(item, DeviceTestItem):
+            continue
+        target = item.target_device
+        if target is None or target.identifier != device_entry.identifier:
+            continue
+        for source_dir in resolve_library_source_dirs(
+            item.library_dir,
+            libraries_root=_libraries_root(session),
+            test_files=[item.test_file],
+        ):
+            if source_dir not in closure:
+                closure.append(source_dir)
+    return closure
+
+
+def _staged_file_names(source_dirs: list[Path]) -> list[str]:
+    """Every file the closure would stage, by name.
+
+    ``transport.stage`` copies whole ``src`` trees, so the resolver's
+    "any non-``.py`` data file" check must see them all.
+    ``__pycache__`` is build cruft the staging rsync never carries —
+    excluding it stops a stray ``.pyc`` being misread as a shipped
+    asset and wrongly forcing flash.
+    """
+    names: list[str] = []
+    for source_dir in source_dirs:
+        for path in source_dir.rglob("*"):
+            if path.is_file() and "__pycache__" not in path.parts:
+                names.append(path.name)
+    return names
+
+
+def _session_effective_deploy_mode(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> str:
+    """Resolve the device's deploy mode through the shared policy, once.
+
+    Combines the precedence resolution (CLI → per-device → global →
+    flash) with the one shared :func:`resolve_deploy_mode`, scoping
+    ``staged_files`` to the full dependency closure so a functional
+    test that needs a dependency's data file (e.g.
+    ``chumicro_sockets/_ca_bundle.der``) loudly switches the run to
+    flash instead of CircuitPython RAM mode silently dropping the
+    asset.  Memoized per device: the transport is cached per device so
+    the mode is fixed for the session, and the explanation prints
+    exactly once.
+    """
+    cache = _session_cache(session)
+    device_id = device_entry.identifier
+    memoized = cache.resolved_deploy_mode(device_id)
+    if memoized is not None:
+        return memoized
+
+    configured = resolve_effective_deploy_mode(
+        device_entry, _session_deploy_mode_override(session),
+    )
+    closure = _device_closure_source_dirs(session, device_entry)
+    mode, message = resolve_deploy_mode(
+        configured,
+        staged_files=_staged_file_names(closure),
+        device_caps=DeviceCaps(),
+        requires_flash_libs=find_libraries_requiring_flash(closure),
+        resolution_unit=None,
+        force=None,
+    )
+    if message is not None:
+        import warnings  # noqa: PLC0415 — only used on the override path
+
+        warnings.warn(f"Device {device_id!r}: {message}", stacklevel=2)
+    cache.set_resolved_deploy_mode(device_id, mode)
+    return mode
+
+
 def _session_pr_summary(
     session: pytest.Session,
 ) -> _PRSummaryCollector | None:
@@ -321,10 +415,7 @@ class _PRSummaryCollector:
         if device_id not in self._implementations:
             self._deploy_modes.setdefault(
                 device_id,
-                resolve_effective_deploy_mode(
-                    device,
-                    _session_deploy_mode_override(item.session),
-                ),
+                _session_effective_deploy_mode(item.session, device),
             )
             cache = _session_cache(item.session)
             transport = cache.peek_transport(device_id)
@@ -600,6 +691,13 @@ class _TransportCache:
         self._batch_results: dict[
             tuple[str, str, str], tuple[RunResult | None, str]
         ] = {}
+        #: Deploy mode resolved once per device (session-scoped — the
+        #: transport is cached per device, so the mode cannot change
+        #: mid-session).  The first resolution for a device computes it
+        #: from the full closure of every test targeting that device
+        #: and memoizes here; later calls reuse it, which also makes
+        #: any RAM→flash override message print exactly once.
+        self._resolved_deploy_mode: dict[str, str] = {}
 
     def get_transport(
         self, device_entry: DeviceEntry, deploy_mode: str | None,
@@ -656,6 +754,14 @@ class _TransportCache:
         """
         device_id, library_name, test_file_name = batch_key
         self._last_staged[device_id] = (library_name, test_file_name)
+
+    def resolved_deploy_mode(self, device_id: str) -> str | None:
+        """Return the memoized session deploy mode for a device, if any."""
+        return self._resolved_deploy_mode.get(device_id)
+
+    def set_resolved_deploy_mode(self, device_id: str, mode: str) -> None:
+        """Memoize the resolved session deploy mode for a device."""
+        self._resolved_deploy_mode[device_id] = mode
 
     def has_staged_file(self, device_id: str) -> bool:
         """Return whether the device has staged a RAM-mode file already.
@@ -804,7 +910,7 @@ class DeviceBackend:
         (matching the original behavior for that path).
         """
         cache = _session_cache(item.session)
-        deploy_mode = _session_deploy_mode_override(item.session)
+        deploy_mode = _session_effective_deploy_mode(item.session, device_entry)
 
         try:
             transport = cache.get_transport(device_entry, deploy_mode)
@@ -883,7 +989,7 @@ class DeviceBackend:
         cache = _session_cache(item.session)
         transport = cache.get_transport(
             device_entry,
-            _session_deploy_mode_override(item.session),
+            _session_effective_deploy_mode(item.session, device_entry),
         )
         # Run ALL tests in the file (no name_filter) to amortize the
         # per-invocation overhead.
@@ -1667,11 +1773,11 @@ def _deselect_items_missing_required_features(
     }
     if devices_to_probe:
         transport_cache = _session_cache(session)
-        deploy_mode = _session_deploy_mode_override(session)
         for device_id, device_entry in devices_to_probe.items():
             try:
                 transport = transport_cache.get_transport(
-                    device_entry, deploy_mode,
+                    device_entry,
+                    _session_effective_deploy_mode(session, device_entry),
                 )
                 output = transport.run_script(FEATURE_PROBE_SCRIPT)
             except Exception as error:  # noqa: BLE001 — graceful per-device fallback
