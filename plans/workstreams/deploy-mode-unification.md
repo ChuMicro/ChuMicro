@@ -311,20 +311,27 @@ mode pick) → 5 (after the surface is real).
     re-stage.  **Root-caused (Pi Pico W CP flash, reproduced 2×, not
     transient) into two distinct issues:**
 
-    **(i) Sweep-scope / test-classification gap.**  The sweep assumes
-    every `libraries/<n>/tests/test_*.py` (non-`_pytest`) is a
-    cross-runtime *device* test.  False for a subset: the 6
-    `test_{mp,cp}_{adapter,*backend}.py` files are *host-side*
-    fake-injection unit tests that also assert the wrong-runtime
-    constructor raises (each has a
-    `test_runtime_acquisition_raises_*_on_cpython`).  They have no
-    `__chumicro_runtimes__` marker (pre-`device-unit`, "tests/ minus
-    `_pytest` runs on unix-port" was the only contract).  On a real
-    CP board they fail wholesale (MP-backend import).  A blanket
-    runtime marker is *wrong* — it would kill the deliberate
-    cpython-negative-path assertions.  Needs a classification
-    decision: how a host-only unit test opts out of the device-unit
-    sweep (parallel to how `_pytest.py` opts out), likely ADR-worthy.
+    **(i) Sweep-scope / test-classification gap.**  Definitive root
+    cause (evidence): `test_mp_nvs_backend.py` on a CP device →
+    `ImportError: no module named 'chumicro_kvstore._backends.mp_nvs'`.
+    The test imports a runtime-specific source module
+    (`_backends/mp_nvs.py`, correctly `__chumicro_runtimes__=
+    ("micropython",)`) which the Decision 0044 filter *correctly*
+    strips from a CP board.  The 6 `test_{mp,cp}_{adapter,*backend}.py`
+    files pass on MP **and** CP unix-port and CPython (verified:
+    16/16, 16/16, 14/14) because unix-port stages nothing (runs in
+    place, no filter) and the fakes are runtime-agnostic.  The tests
+    are **not wrong** — they are correct for the unix-port/CPython
+    lane they were written for — but they are *not on-device-sweep-
+    eligible by construction*: a non-matching board correctly lacks
+    the imported runtime module, and a *matching* real board would
+    fail the file's own `test_runtime_acquisition_raises_*_on_cpython`
+    (real `esp32` exists ⇒ no raise).  The bug is the sweep's scope
+    assumption ("every `tests/test_*.py` non-`_pytest` is device-
+    eligible"), not the tests and not a missing runtime marker.
+    Needs a classification mechanism: how a unit-test file declares
+    "unix-port/host lane only — not the device-unit sweep" (parallel
+    to how `_pytest.py` is CPython-only).  Likely ADR-worthy.
     Standalone-green libs are unaffected by this item.
 
     **(ii) Full-scale session degradation.**  `runner/test_core`
