@@ -290,9 +290,35 @@ mode pick) → 5 (after the surface is real).
     purpose is RAM validation.  4 dispatch + grouping tests; preflight
     green.  Hardware end-to-end rides with 4d.
   - [ ] **4c — OOM→`requires_flash` learning + RAM sub-grouping.**
-    Needs hardware; resolves the ~16-lib RAM-session OOM open
-    sub-question by measurement.
-  - [ ] **4d — 4-board sweep validation.**  ntp stays RAM,
-    sockets/`requires_flash` → flash session, on Lolin S2 + Pi Pico W
-    × CP/MP.
+    **Hardware findings (Lolin S2 CP):** (1) Grouping is correct on
+    real hardware — `sockets`→flash (data file),
+    `http_server`/`mqtt`/`requests`/`websockets`→flash
+    (requires_flash, each recommended), 10 light libs incl. `ntp` →
+    one RAM session: 0068's grouping + non-poisoning acceptance
+    *observed met*.  (2) The "~16-lib RAM session OOM" framing was
+    wrong — the existing per-library staging (RAM: per-file restage +
+    soft-reset between) is reused untouched; nothing stages all libs
+    at once, so there is no bulk-OOM to sub-group around.  (3) The
+    real failure: the `wifi` cross-runtime unit suite under
+    `--deploy-mode ram` on CP **hard-crashes the board** (USB CDC
+    drops; `reset-board` FS-wipe does not recover it — needs a
+    physical replug → CircuitPython safe mode).  This is wifi-suite-
+    specific (reproduces running `wifi` alone, not a multi-lib
+    artifact).  Open: is this a wifi-suite-on-RAM-CP defect the sweep
+    correctly surfaced (0068 §3 "behavioral pass/fail … catches
+    real-silicon divergences"), or a device-unit RAM staging bug?
+    Needs a clean light-lib device-unit RAM run on a freshly
+    replugged board to disambiguate (timing 15/15 in RAM *functional*
+    earlier suggests the RAM transport itself is sound).
+  - [ ] **4d — sweep validation + scope decision.**  0068's stated
+    Phase 4 acceptance is grouping + non-poisoning (observed in 4c
+    finding 1), *not* every library's unit suite passing on silicon —
+    0068 is "behavioral pass/fail only", so per-library on-silicon
+    unit failures (`wifi`: 80 fail even in flash) are the sweep's
+    *output*, tracked separately, not a 0068 gate.  Remaining: a
+    clean grouping-validation pass on a light subset across the
+    4-board matrix once hardware is physically recovered; decide
+    whether per-library on-silicon conformance is in or out of this
+    workstream (leaning out — it is follow-up the sweep exists to
+    generate).
 - [ ] Phase 5 — docs + AGENTS.md (after the command exists).
