@@ -259,10 +259,30 @@ mode pick) → 5 (after the surface is real).
   has a producer.  Loader fold + `device-testing.md` schema +
   template + Pi Pico W commented examples.  4 new tests; preflight
   green.
-- [ ] **Phase 4 — on-device unit-sweep command.**  Next entry point.
-  `scripts/run.py test-unit-on-device`: cross-runtime unit suite on
-  real boards, §1 rule per library suite (own-src `staged_files`),
-  mode-grouped single-mode sessions, RAM-default, no coverage gate,
-  OOM→`requires_flash` learning, `preflight --with-device-unit`
-  opt-in.  See the implementation map + Phase 4 detail above.
+- Phase 4 split into sub-units (it is the largest; each commits
+  independently):
+  - [x] **4a — caller-scoped `staged_files`.**  pytest-device now
+    scopes `staged_files` to each library's own `src` when every
+    device item is a unit test (`_device_is_unit_sweep` /
+    `_device_own_source_dirs`), full closure for functional;
+    `requires_flash_libs` stays the full transitive closure in both.
+    6 new tests.  **Architectural finding:** `libraries/*/tests/`
+    routes to the device backend *only* under `--target unix-port`
+    today — `--target device` is functional-only, unit tests fall to
+    the plain CPython lane.  Running the unit suite on hardware needs
+    a new collection mode (planned: `--target device-unit`), so 4a's
+    on-hardware proof (ntp stays RAM) rides with 4d, not standalone.
+  - [ ] **4b — `device-unit` collection + `test-unit-on-device`
+    command + mode grouping.**  New `--target device-unit` routes
+    `tests/` to the device backend; `scripts/run.py` task resolves
+    per-library mode (own-src, RAM last-resort default,
+    `resolution_unit`=lib), groups by mode, runs one single-mode
+    session per (runtime, mode) group; `preflight --with-device-unit`
+    opt-in.  Next entry point.
+  - [ ] **4c — OOM→`requires_flash` learning + RAM sub-grouping.**
+    Needs hardware; resolves the ~16-lib RAM-session OOM open
+    sub-question by measurement.
+  - [ ] **4d — 4-board sweep validation.**  ntp stays RAM,
+    sockets/`requires_flash` → flash session, on Lolin S2 + Pi Pico W
+    × CP/MP.
 - [ ] Phase 5 — docs + AGENTS.md (after the command exists).

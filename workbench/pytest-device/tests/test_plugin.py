@@ -1790,3 +1790,137 @@ class TestSessionEffectiveDeployMode:
         with pytest.warns(UserWarning, match="does not support RAM mode"):
             mode = pytest_device._session_effective_deploy_mode(session, device)
         assert mode == "flash"
+
+
+class TestUnitSweepScoping:
+    """Caller-scoped staged_files: unit sweep = own-src; functional =
+    full closure; ``requires_flash`` is always the full transitive
+    closure regardless.
+    """
+
+    @staticmethod
+    def _device() -> DeviceEntry:
+        return DeviceEntry(
+            identifier="cp-1",
+            runtime="circuitpython",
+            address="/dev/ttyUSB-cp",
+            deploy_mode="ram",
+        )
+
+    def _item(self, device: DeviceEntry, library_dir: Path, test_rel: str):
+        from unittest.mock import Mock  # noqa: PLC0415
+
+        item = Mock(spec=pytest_device.DeviceTestItem)
+        item.target_device = device
+        item.library_dir = library_dir
+        item.test_file = library_dir / test_rel
+        return item
+
+    def _session(self, items: list[object]) -> object:
+        from types import SimpleNamespace  # noqa: PLC0415
+
+        return SimpleNamespace(items=items)
+
+    def test_is_unit_sweep_true_when_all_unit(self, tmp_path: Path) -> None:
+        device = self._device()
+        lib = tmp_path / "libraries" / "ntp"
+        session = self._session(
+            [self._item(device, lib, "tests/test_ntp.py")],
+        )
+        assert pytest_device._device_is_unit_sweep(session, device) is True
+
+    def test_is_unit_sweep_false_with_a_functional_item(
+        self, tmp_path: Path,
+    ) -> None:
+        device = self._device()
+        lib = tmp_path / "libraries" / "ntp"
+        session = self._session([
+            self._item(device, lib, "tests/test_ntp.py"),
+            self._item(device, lib, "functional_tests/test_real.py"),
+        ])
+        assert pytest_device._device_is_unit_sweep(session, device) is False
+
+    def test_is_unit_sweep_false_with_no_items(self) -> None:
+        device = self._device()
+        assert (
+            pytest_device._device_is_unit_sweep(self._session([]), device)
+            is False
+        )
+
+    def test_own_source_dirs_are_each_librarys_own_source(
+        self, tmp_path: Path,
+    ) -> None:
+        device = self._device()
+        ntp = tmp_path / "libraries" / "ntp"
+        sockets = tmp_path / "libraries" / "sockets"
+        (ntp / "src").mkdir(parents=True)
+        (sockets / "src").mkdir(parents=True)
+        session = self._session([
+            self._item(device, ntp, "tests/test_ntp.py"),
+            self._item(device, sockets, "tests/test_sockets.py"),
+        ])
+        assert pytest_device._device_own_source_dirs(session, device) == [
+            ntp / "src",
+            sockets / "src",
+        ]
+
+    def test_unit_sweep_dependency_data_file_does_not_poison(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Full closure carries sockets' _ca_bundle.der; ntp's own src
+        # is pure .py.  Under unit scoping the data file must NOT flip
+        # ntp to flash — the non-poisoning acceptance.
+        dep = tmp_path / "sockets-src"
+        dep.mkdir()
+        (dep / "_ca_bundle.der").write_bytes(b"\x30\x82")
+        own = tmp_path / "ntp-src"
+        own.mkdir()
+        (own / "__init__.py").write_text("X = 1\n")
+        monkeypatch.setattr(
+            pytest_device, "_device_closure_source_dirs",
+            lambda _s, _d: [dep, own],
+        )
+        monkeypatch.setattr(
+            pytest_device, "_device_is_unit_sweep", lambda _s, _d: True,
+        )
+        monkeypatch.setattr(
+            pytest_device, "_device_own_source_dirs", lambda _s, _d: [own],
+        )
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+        mode = pytest_device._session_effective_deploy_mode(
+            session, self._device(),
+        )
+        assert mode == "ram"
+
+    def test_unit_sweep_requires_flash_in_closure_still_flips(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Own src is clean .py, but a flash-only library sits in the
+        # transitive closure — requires_flash is always closure-scoped,
+        # so the suite still flips to flash even under unit scoping.
+        heavy = tmp_path / "libraries" / "requests"
+        heavy_source = heavy / "src"
+        heavy_source.mkdir(parents=True)
+        (heavy / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-requests"\nversion = "0.0.0"\n'
+            "\n[tool.chumicro]\nrequires_flash = true\n",
+        )
+        own = tmp_path / "light-src"
+        own.mkdir()
+        (own / "__init__.py").write_text("X = 1\n")
+        monkeypatch.setattr(
+            pytest_device, "_device_closure_source_dirs",
+            lambda _s, _d: [heavy_source, own],
+        )
+        monkeypatch.setattr(
+            pytest_device, "_device_is_unit_sweep", lambda _s, _d: True,
+        )
+        monkeypatch.setattr(
+            pytest_device, "_device_own_source_dirs", lambda _s, _d: [own],
+        )
+        session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
+        with pytest.warns(UserWarning, match="requires_flash"):
+            mode = pytest_device._session_effective_deploy_mode(
+                session, self._device(),
+            )
+        assert mode == "flash"

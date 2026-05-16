@@ -296,6 +296,56 @@ def _device_closure_source_dirs(
     return closure
 
 
+def _device_is_unit_sweep(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> bool:
+    """True when every test targeting *device_entry* is a unit test.
+
+    The cross-runtime *unit* suite (``libraries/<name>/tests``) and a
+    *functional* run (``libraries/<name>/functional_tests``) scope
+    ``staged_files`` differently: functional needs the full
+    dependency closure (it exercises a dependency's data-file code
+    path for real), the unit sweep needs the library's own ``src``
+    only (a pure unit test cannot reach a dependency's data file by the
+    runtime-boundary contract, so a dependency's data file must not
+    poison every dependent suite into flash).  A run is unit-scoped
+    only when *all* of the device's items are unit tests; any
+    functional item makes it closure-scoped (the safe direction).
+    """
+    items = [
+        item
+        for item in getattr(session, "items", ())
+        if isinstance(item, DeviceTestItem)
+        and item.target_device is not None
+        and item.target_device.identifier == device_entry.identifier
+    ]
+    return bool(items) and all(
+        _is_library_unit_test(item.test_file) for item in items
+    )
+
+
+def _device_own_source_dirs(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> list[Path]:
+    """Each tested library's *own* ``src`` dir (no dependency closure).
+
+    The unit-sweep ``staged_files`` scope: only ``chumicro_sockets``'s
+    own suite sees its ``_ca_bundle.der``; a light sockets *user*
+    (``ntp``) does not, so the data file does not flip it to flash.
+    """
+    own: list[Path] = []
+    for item in getattr(session, "items", ()):
+        if not isinstance(item, DeviceTestItem):
+            continue
+        target = item.target_device
+        if target is None or target.identifier != device_entry.identifier:
+            continue
+        source_dir = item.library_dir / "src"
+        if source_dir.is_dir() and source_dir not in own:
+            own.append(source_dir)
+    return own
+
+
 def _staged_file_names(source_dirs: list[Path]) -> list[str]:
     """Every file the closure would stage, by name.
 
@@ -319,14 +369,17 @@ def _session_effective_deploy_mode(
     """Resolve the device's deploy mode through the shared policy, once.
 
     Combines the precedence resolution (CLI → per-device → global →
-    flash) with the one shared :func:`resolve_deploy_mode`, scoping
-    ``staged_files`` to the full dependency closure so a functional
-    test that needs a dependency's data file (e.g.
-    ``chumicro_sockets/_ca_bundle.der``) loudly switches the run to
-    flash instead of CircuitPython RAM mode silently dropping the
-    asset.  Memoized per device: the transport is cached per device so
-    the mode is fixed for the session, and the explanation prints
-    exactly once.
+    flash) with the one shared :func:`resolve_deploy_mode`.  Two inputs
+    have opposite scoping: ``requires_flash_libs``
+    is *always* the full transitive closure (a flash-only dependency
+    OOMs on import regardless of test shape), while ``staged_files`` is
+    caller-scoped — the full closure for a functional run (it really
+    uses a dependency's data file) but the libraries' own ``src`` for
+    the unit sweep (a pure unit test can't reach a dependency's data
+    file, so ``sockets``'s ``_ca_bundle.der`` must not poison every
+    sockets-dependent suite).  Memoized per device: the transport is
+    cached per device so the mode is fixed for the session, and the
+    explanation prints exactly once.
     """
     cache = _session_cache(session)
     device_id = device_entry.identifier
@@ -338,9 +391,14 @@ def _session_effective_deploy_mode(
         device_entry, _session_deploy_mode_override(session),
     )
     closure = _device_closure_source_dirs(session, device_entry)
+    staged_dirs = (
+        _device_own_source_dirs(session, device_entry)
+        if _device_is_unit_sweep(session, device_entry)
+        else closure
+    )
     mode, message = resolve_deploy_mode(
         configured,
-        staged_files=_staged_file_names(closure),
+        staged_files=_staged_file_names(staged_dirs),
         device_caps=DeviceCaps(
             supports_ram_mode=device_entry.supports_ram_mode,
         ),
