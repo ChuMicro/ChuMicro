@@ -162,6 +162,31 @@ class TestAdd:
             _RegistryRunner(),
         ) == 1
 
+    def test_per_dep_deselect_declines_only_chosen(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Interactive per-dep prompt: decline sockets, keep timing."""
+        seed_workspace(tmp_path)
+        from chumicro_workspace.cli import library as lib_mod
+
+        monkeypatch.setattr(lib_mod, "_interactive", lambda args: True)
+        monkeypatch.setattr(
+            lib_mod, "_confirm",
+            lambda question: "chumicro_sockets" not in question,
+        )
+        code = cli.main(
+            ["library", "add", "chumicro_mqtt",
+             "--workspace-dir", str(tmp_path)],
+            env=cli.CliEnv(subprocess_runner=_RegistryRunner()),
+        )
+        assert code == 0
+        table = read_curated_libraries(tmp_path / "workspace.yml")
+        assert table["chumicro_mqtt"].declined is False
+        assert table["chumicro_timing"].declined is False
+        assert table["chumicro_sockets"].declined is True
+        assert (tmp_path / "libraries" / "chumicro_timing" / "src").is_dir()
+        assert not (tmp_path / "libraries" / "chumicro_sockets").exists()
+
 
 class TestRemove:
     def test_unknown_is_usage_error(self, tmp_path: Path):

@@ -56,6 +56,26 @@ def _confirm(question: str) -> bool:
     return answer in ("", "y", "yes")
 
 
+def _declined_transitive(
+    transitive: list[str], args: argparse.Namespace,
+) -> set[str]:
+    """Per-dependency deselect prompt for the transitive set.
+
+    Returns the deps the user declined.  Non-interactive (or an empty
+    set) keeps everything — the agent-runnable default (Decision
+    0066).  Interactive asks per dep so a user injecting a custom
+    transport can drop just ``chumicro_sockets`` without losing the
+    rest of the closure.
+    """
+    if not transitive or not _interactive(args):
+        return set()
+    print(
+        f"{args.name} pulls transitive chumicro deps: "
+        f"{', '.join(transitive)}",
+    )
+    return {dep for dep in transitive if not _confirm(f"  pull {dep}?")}
+
+
 def _recorded_version(
     workspace_root, package: str, *, floating: bool, pin: str | None,
 ) -> str:
@@ -114,12 +134,7 @@ def _cmd_library_add(args: argparse.Namespace) -> int:
         )
         return 1
 
-    transitive = closure[1:]
-    declined: set[str] = set()
-    if transitive and _interactive(args) and not _confirm(
-        f"Also pull transitive deps: {', '.join(transitive)}?",
-    ):
-        declined = set(transitive)
+    declined = _declined_transitive(closure[1:], args)
 
     table = read_curated_libraries(workspace.workspace_yaml)
     for name in closure:

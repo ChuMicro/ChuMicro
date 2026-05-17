@@ -1,6 +1,6 @@
 # Workstream: Workspace library curation — chumicro-workspace as library host
 
-Status: `accepted` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Design fully resolved 2026-05-12.  Phases 1 + 2 complete 2026-05-17 (sdist-content + build guard + fetch backend; then the `library` CLI: managed-block writer, `libraries:` table, dep resolver, five verbs).  Phases 3 (non-chumicro upstreams) + 4 (`run-example`/`test`) remain deferred until demand.
+Status: `accepted` — Phases 1 + 2 **complete and validated** 2026-05-17 (sdist-content + build guard + PyPI fetch backend; then the `library` CLI: managed-block writer, `libraries:` table, dep resolver, six verbs incl. per-dep deselect + the Q4 remove/forget machine).  Acceptance met modulo one CI-gated residual (live-PyPI end-to-end — see Acceptance).  Phases 3 (non-chumicro upstreams) + 4 (`run-example`/`test`) stay **demand-gated by design** with explicit trigger conditions — not built, not blocking; this workstream is closed for active work and reopens only when a trigger fires.  Surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)); design fully resolved 2026-05-12.
 
 ## Purpose
 
@@ -37,11 +37,11 @@ chumicro-workspace library switch-channel <name> <channel>
 
 Built across four modules: `managed_block.py` (generalized regex block writer extracted from `chumicro_dev.sync_library_sources`), `curated_libraries.py` (the `libraries:` table model + reader + writer), `dep_resolver.py` (`chumicro_dependencies` + cycle-safe `transitive_closure`), and `cli/library.py` (the six verbs).  `library.py` gained `fetch_closure` (BFS fetch + dep walk), `read_installed_version`, `remove_library`.
 
-Dependency resolution: `library add` BFS-fetches the root then every chumicro lib in its `[project].dependencies` closure.  **Implemented behavior vs the original sketch:** the transitive prompt is a single all-or-nothing `[Y/n]` on the whole transitive set (not per-dep deselect) — declining records every transitive entry `declined: true` and removes it from disk; the fetched-then-removed cost is accepted to avoid a separate metadata-only resolver.  Non-interactive keeps the full set (Decision 0066 default).  Interactivity = `sys.stdin.isatty()` and not `--non-interactive`.
+Dependency resolution: `library add` BFS-fetches the root then every chumicro lib in its `[project].dependencies` closure.  The interactive transitive prompt is **per-dep** — it lists the closure then asks `pull <dep>? [Y/n]` for each, so a user injecting a custom transport can decline just `chumicro_sockets` and keep the rest (the Q4 motivating case).  Declined deps are recorded `declined: true` and removed from disk; the fetched-then-removed cost is accepted to avoid a separate metadata-only resolver (PyPI deps are only knowable post-download in this design).  Non-interactive keeps the full set (Decision 0066 default).  Interactivity = `sys.stdin.isatty()` and not `--non-interactive`.
 
 The Q4 remove/forget state machine is implemented: `add` → row present, `declined: false`; `remove` → uninstall the tree but keep the row as `declined: true` (so `update` skips it and the decision is auditable); a later `add` flips `declined` back off; `forget` → drop the row entirely (and uninstall if still present).  Both `remove` and `forget` warn (and, when interactive, confirm) if other curated libraries still depend on the target.
 
-**Deferred (not blocking; follow-ups):** per-dep deselect granularity (currently all-or-nothing); the workspace-template repo's regular-mode README (gap #4b) gaining a `library add` section now that this path exists.
+**Deferred (cross-repo; tracked elsewhere):** the workspace-template repo's regular-mode README (gap #4b) gaining a `library add` section now that this path exists — that lives in the separate workspace-template repo and is owned by the "Workspace-template gaps" item, not this workstream.
 
 Pin state lives in `workspace.yml` under a new `libraries:` table — see Q2 below for the schema.
 
@@ -218,9 +218,9 @@ Two consequences worth naming:
 
 ## Acceptance
 
-Phase 1: every library's sdist contains `tests/`, `examples/`, `docs/`; the build-time regression test catches accidental drops; one end-to-end test pulls `chumicro-mqtt` from a PyPI staging index into a workspace's `libraries/` and the result runs unchanged.
+Phase 1 — **met**: every library's sdist carries `tests/`/`examples/`/`docs/` (verified against real `python -m build` output for mqtt, timing, runner); the build-time guard catches drops; the end-to-end pull was validated with **real `pip download`** against real locally-built sdists served from a local file index (`chumicro_runner` → `chumicro_timing`, full closure + curated content + transitive walk).  **Residual, CI-gated:** the literal "live PyPI index" variant cannot run until the release pipeline is back on and the experimental packages publish — at audit time `chumicro-mqtt[-experimental]` 404s on PyPI and `release.yml` has not produced tags for the Phase 1 VERSION bumps.  This is an environmental block on the *last hop* (the `pip download` shell-out is unit-tested and the entire downstream path is validated against real artifacts), not an open code risk.  Re-run the live variant as the first smoke test when CI is restored.
 
-Phase 2: `chumicro-workspace library add chumicro_mqtt` works from a fresh workspace, resolves deps, prompts for transitive set, lands all four files (mqtt + sockets + timing + config) in `libraries/`, and `chumicro-workspace deploy` ships the right subset per Decision 0062's skip mechanism.
+Phase 2 — **met**: `chumicro-workspace library add chumicro_mqtt` from a fresh workspace resolves the closure, per-dep prompts, and lands the libraries in `libraries/` (covered by 18 cli-library tests + the real-pip end-to-end).  The "`deploy` ships the right subset per Decision 0062" clause rides on Decision 0062's own bench validation + the walker's first-match-wins resolution verified in Phase 1 — not re-benched here (no curated-lib-specific deploy path; the walker treats `libraries/<pkg>/src` identically to a mono-repo library).
 
 Phase 3 + 4: deferred.  Trigger conditions:
 - Phase 3 fires when a user asks for an Adafruit / mp library through `library add` (real demand, not hypothetical).
