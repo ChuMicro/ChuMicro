@@ -101,10 +101,12 @@ is the one remaining hardware-gated step — see Status.
   RAM ceiling — `_exec_as_namespace` execs each test file as one
   namespace, and a large class module (`test_websockets.py`, 136 tests)
   exceeds the budget; small files pass on the Pico W too
-  (`test_integration` 10/10, `test_sockets_factory` 5/5).  This is the
-  sweep's legitimate output per the deploy-mode-unification 4d framing
-  (per-library on-silicon conformance is output, not a gate).  Recorded
-  as a harness follow-up below; the bench-free landing is unaffected.
+  (`test_integration` 10/10, `test_sockets_factory` 5/5).  The sweep
+  reports this without hard-failing `preflight` (deploy-mode-unification
+  4d), but per the revised Decision 0072 a Pico W per-file OOM on CP or
+  MP is a **tracked defect to fix by splitting**, not an accepted
+  end-state — see the required split backlog below.  The bench-free
+  landing is unaffected.
 
 ### On-device follow-up — two memory walls, one closed
 
@@ -141,30 +143,44 @@ on CP+MP.
      re-stage — the tree persists on the device FS), idempotent across
      the two `prepare()` calls per batch.  Default stays per-library
      (fast).  Plugin + `scripts/run.py` + 7 unit tests; preflight green.
-   - **Reactive split — documented, non-mechanized.**  No tests-per-file
-     cap or CHU lint; the ceiling is library-weight-dependent (coarse
-     Pico W CP measurement: heavy `_wire` libs ≈32–61 tests/file
-     fresh).  Caution + split-when-it-OOMs in `device-testing.md`;
-     `/audit-library` + `/audit-embedded` carry the cross-ref pointer.
-   Hardware: the mechanism is wired and unit-proven; on mqtt/websockets
+   - **Required split backlog — bench-iterated (revised 2026-05-17).**
+     Every cross-runtime test file must run green on a freshly-reset
+     Pi Pico W on **both** CP and MP; an over-ceiling file is a tracked
+     defect fixed by splitting, not an accepted PSRAM-only end-state.
+     Still no rigid universal cap or CHU lint — the ceiling is
+     library-weight-dependent and differs CP vs MP (coarse Pico W CP
+     data: ≈32 passes / ≈61 OOMs); the criterion is empirical per
+     library: split until that library's files all run green on a
+     freshly-reset Pico W on both runtimes.  `device-testing.md` +
+     `/audit-library` + `/audit-embedded` state this as a requirement.
+   Hardware: `--per-file` is wired and unit-proven; on mqtt/websockets
    the dominant wall is single files individually over the ceiling
-   (`test_client` 80, `test_websockets` 136) — the documented
-   reactive-split set, not an accumulation `--per-file` flips.  Its
-   payoff is realized paired with those splits.
-   - **First reactive split done (2026-05-17).**  `requests` test-quality
-     audit (Opus sub-agent) confirmed the suite is *not* over-tested
-     (redundancy ~2) and the real win is source cohesion:
+   (`test_client` 80, `test_websockets` 136) — these are the split
+   backlog, not an accumulation `--per-file` flips.
+   - **Concrete split backlog (bench-gated, per-library):**
+     `websockets/test_websockets.py` (136) + `test_client.py` (77) +
+     `test_server.py` (61); `http_server/test_http_server.py` (123);
+     `mqtt/test_client.py` (80); and `requests/test_wire.py` (89) +
+     `test_client.py` (83) — both still above the coarse Pico W OOM
+     datapoint *after* the cohesion split, so `requests` needs further
+     splitting.  Phase B: re-probe the 4 boards (handoff state is
+     point-in-time), per-library single-file ladder on a fresh Pico W
+     to find the real CP and MP ceilings, split source-module-shaped
+     then mechanically until green, per-library commits.
+   - **Source-cohesion split done (2026-05-17), not a fit fix.**
+     `requests` test-quality audit (Opus sub-agent) confirmed the suite
+     is *not* over-tested (redundancy ~2); the win was source cohesion —
      `test_requests.py` (2011 LOC, 172 tests, 22 classes) tested two
      source modules.  Split into `test_wire.py` (9 `_wire` classes, 89
-     tests) + `test_client.py` (13 `client` classes + the helper block +
-     the 2 helper classes, 83 tests).  Built from exact source ranges —
-     test bodies byte-identical; 172 preserved (CPython exact match),
-     ruff clean, MP+CP unix-port green, preflight green.  The audit's
-     "wire needs no helpers" was verified-and-corrected (`canned_response`
-     is used by one wire class — duplicated, a tiny pure builder, rather
-     than introduce a cross-runtime shared-helper module).  Remaining
-     websockets/http_server/mqtt_client splits stay **reactive** (do
-     them if/when they block a 256 KB sweep), not preemptive.
+     tests) + `test_client.py` (13 `client` classes + helper block + 2
+     helper classes, 83 tests).  Built from exact source ranges — test
+     bodies byte-identical; 172 preserved (CPython exact match), ruff
+     clean, MP+CP unix-port green, preflight green.  The audit's "wire
+     needs no helpers" was verified-and-corrected (`canned_response` is
+     used by one wire class — duplicated, a tiny pure builder, rather
+     than a cross-runtime shared-helper module).  This proves splitting
+     is lossless; it did **not** bring `requests` under the Pico W
+     ceiling — both halves still need further splitting in Phase B.
 
 Neither wall affects the bench-free landing or the PSRAM-board
 validation.
