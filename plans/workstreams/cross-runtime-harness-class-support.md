@@ -83,11 +83,40 @@ is the one remaining hardware-gated step — see Status.
   unix-port / minimal builds).  Validation moved above the import —
   pure string inspection, no behavior change on real boards, makes the
   docstring's "up front" promise true.
-- [ ] **Scope 4 (on-device) — hardware-gated.**  The `--target
-  device-unit` 4-board matrix sweep (Lolin S2 + Pi Pico W × CP/MP)
-  with the ~800 class methods now executing on silicon.  Rides with
-  the deploy-mode-unification 4d sweep — needs the bench.  Per-library
-  on-silicon conformance is the sweep's *output*, not a gate here.
+- [x] **Scope 4 (on-device) — 4-board confirmation.**  `--target
+  device-unit` `websockets` (5 reverted class files, 288 class-qualified
+  methods) across the canonical matrix in flash mode:
+  - Lolin S2 **CP** (PSRAM): **288 / 0 / 0**
+  - Lolin S2 **MP** (PSRAM): **288 / 0 / 0**
+  - Pi Pico W **CP** (264 KB): 15 / 274 — `MemoryError` in
+    `discovery._exec_as_namespace`
+  - Pi Pico W **MP** (264 KB): 91 / 197 — `MemoryError: allocating
+    14848 bytes`
+
+  Class discovery on real silicon is **validated**: the device executes
+  class-qualified `ClassName.test_method` names, and both PSRAM boards
+  run every reverted class method green on both runtimes.  The Pico W
+  failures are **not** a discovery defect or a regression (these methods
+  never ran on-device before): they are a 264 KB whole-module-`exec()`
+  RAM ceiling — `_exec_as_namespace` execs each test file as one
+  namespace, and a large class module (`test_websockets.py`, 136 tests)
+  exceeds the budget; small files pass on the Pico W too
+  (`test_integration` 10/10, `test_sockets_factory` 5/5).  This is the
+  sweep's legitimate output per the deploy-mode-unification 4d framing
+  (per-library on-silicon conformance is output, not a gate).  Recorded
+  as a harness follow-up below; the bench-free landing is unaffected.
+
+### On-device follow-up (not a blocker)
+
+`discovery._exec_as_namespace` execs a whole test file as a single
+namespace.  With class discovery now running ~800 previously-host-only
+methods on-device, a large class-based module no longer fits a 264 KB
+board's RAM in flash mode (Pi Pico W CP/MP).  PSRAM boards (Lolin S2)
+are unaffected.  Fix shape (future): per-class or chunked exec / staged
+import so a 136-test module doesn't allocate as one block.  Rides with
+the deploy-mode-unification on-device sweep work — same memory class as
+Decision 0071's cumulative-`sys.modules` finding, different axis
+(per-file module size vs. cross-library accumulation).
 
 ## Acceptance
 
@@ -95,15 +124,18 @@ is the one remaining hardware-gated step — see Status.
   class-based file yields the right item count under `--target
   unix-port` (verified: `mqtt/test_client.py` collects
   `TestBoundedRecvPerTick.test_*` etc.).  `--target device-unit`
-  rides with the hardware-gated sweep.
+  verified on silicon: device executes class-qualified
+  `ClassName.test_method` names, 288/288 green on both PSRAM boards.
 - [x] No `__chumicro_runtimes__ = ("cpython",)` whose only reason was
   class-shape; the 14 remaining are all genuine `*_pytest.py`.
 - [x] The loud guard still fires for a genuinely pytest-style file —
   `test_pytest_style_file_yields_nothing` documents the empty-list
   trigger; `test_finds_class_methods_qualified` /
   `test_skips_non_test_classes_and_helper_classes` cover discovery.
-- [ ] 4-board on-device matrix sweep green or with only triaged
-  failures — hardware-gated (see Status Scope 4 on-device).
+- [x] 4-board on-device matrix sweep with only triaged failures: both
+  PSRAM boards 288/0/0; both 264 KB Pico W boards' failures triaged to
+  the whole-module-`exec()` RAM ceiling (harness follow-up, not a
+  discovery defect — see Status Scope 4 on-device).
 
 ## Related
 
