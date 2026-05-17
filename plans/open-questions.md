@@ -566,6 +566,19 @@ Open threads, none blocking:
    execution model and touches Decision 0071's domain — needs an ADR
    for the `--per-file` mode; the split guidance is a style-guide
    addition, not a mechanized rule.
+
+   Sequencing: the ADR owns the policy *and* its authoritative doc home
+   (`docs/contributing/device-testing.md` / style guide) *and* the
+   cross-reference pointer to add into `/audit-library` +
+   `/audit-embedded` — neither audit skill is aware of this today, and
+   `/audit-library`'s reader-quality lens would not generate the
+   ceiling-driven splits for the right reason.  Do not edit the audit
+   skills before the policy lands (don't document a mechanism that
+   isn't decided).  Independent of this ADR: a normal test-quality
+   audit (redundancy / over-testing / cohesion, e.g. the genuine
+   `requests` `_wire`-vs-`client` two-module split) stands alone and
+   can proceed now — its splits help resident behavior once
+   `--per-file` lands and improve readability regardless.
 2. Could project deploy adopt the reset-before-rsync-then-run-it-
    ourselves shape (more host-side execution control) instead of
    Ctrl-D-then-natural-boot?  The natural-boot path works and is
