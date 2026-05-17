@@ -584,25 +584,40 @@ class _PRSummaryCollector:
 
 
 def _parse_test_functions(filepath: Path) -> list[str]:
-    """Use AST to discover test function names without importing.
+    """Use AST to discover test names without importing.
 
     Functional test files import device-only modules that are not
     available on the host, so we cannot import them.
+
+    Mirrors the on-device runner's discovery rules
+    (:func:`chumicro_test_harness.runner._iter_test_functions`):
+    module-level ``def test_*`` functions, plus ``test_*`` methods on
+    ``class Test*`` classes reported as ``ClassName.test_method`` — the
+    exact qualified-name format the runner produces, so single-test
+    name filters and per-item reporting line up between collection and
+    execution.
 
     Args:
         filepath: Path to the test file.
 
     Returns:
-        Sorted list of ``test_*`` function names defined at module
-        level.
+        Sorted list of test names: bare ``test_*`` for module-level
+        functions, ``ClassName.test_method`` for class methods.
     """
     source = filepath.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(filepath))
-    return sorted(
-        node.name
-        for node in ast.iter_child_nodes(tree)
-        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
-    )
+    names: list[str] = []
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+            names.append(node.name)
+        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+            names.extend(
+                f"{node.name}.{method.name}"
+                for method in ast.iter_child_nodes(node)
+                if isinstance(method, ast.FunctionDef)
+                and method.name.startswith("test_")
+            )
+    return sorted(names)
 
 
 def _resolve_library_dir(test_file: Path) -> Path:
@@ -1145,20 +1160,21 @@ class DeviceTestFile(pytest.File):
             # (the ``not targets`` branch above already handled
             # ``__chumicro_runtimes__`` / host-only opt-outs): the file
             # is meant to run on these targets, yet AST finds zero
-            # module-level ``test_*`` functions.  That is the silent
-            # class-based / pytest-style mis-categorization (Decision
-            # 0016: cross-runtime files use plain module-level
-            # functions; class-organized suites are CPython-only and
-            # must declare it).  Fail loudly instead of yielding a
-            # silent no-op, so the gap can't hide.
+            # ``test_*`` functions or ``Test*`` class methods.  The
+            # harness discovers both shapes, so a zero here means the
+            # file is pytest-style (fixtures / parametrize / bare
+            # ``import pytest``) the cross-runtime harness cannot run.
+            # Fail loudly instead of yielding a silent no-op, so the
+            # gap can't hide.
             if _is_library_unit_test(self.path):
                 raise pytest.Collector.CollectError(
                     f"{self.path} is collected for the cross-runtime / "
-                    "on-device lane but defines no module-level "
-                    "'def test_*' functions (its tests are class-based "
-                    "or pytest-style, which the cross-runtime harness "
-                    "does not discover).  Either convert the tests to "
-                    "module-level functions, or declare "
+                    "on-device lane but defines no discoverable tests "
+                    "(no module-level 'def test_*' and no 'class Test*' "
+                    "with 'test_*' methods — its tests are pytest-style, "
+                    "which the cross-runtime harness does not run).  "
+                    "Either rewrite the tests as plain functions or "
+                    "'class Test*' methods, or declare "
                     "'__chumicro_runtimes__ = (\"cpython\",)' to make the "
                     "CPython-only lane explicit.  A silent zero-test "
                     "file is not allowed."

@@ -11,12 +11,6 @@ this version does the same swap manually with ``setattr`` /
 ``try`` / ``finally`` so the tests run on the MP / CP unix-ports too.
 """
 
-#: CPython-only lane: class-based pytest-style suite, not discoverable
-#: by the cross-runtime harness (which finds module-level test_* only);
-#: A temporary stopgap — harness class-discovery support is planned;
-#: this marker reverts when that lands (do NOT convert to functions).
-__chumicro_runtimes__ = ("cpython",)
-
 import chumicro_sockets
 from chumicro_websockets.sockets_factory import chumicro_sockets_factory
 

@@ -11,12 +11,6 @@ the same one chumicro_mqtt's tests use, so the contract is exercised
 across two libraries.
 """
 
-#: CPython-only lane: class-based pytest-style suite, not discoverable
-#: by the cross-runtime harness (which finds module-level test_* only);
-#: A temporary stopgap — harness class-discovery support is planned;
-#: this marker reverts when that lands (do NOT convert to functions).
-__chumicro_runtimes__ = ("cpython",)
-
 from chumicro_requests import (
     CaseInsensitiveDict,
     HttpBusyError,

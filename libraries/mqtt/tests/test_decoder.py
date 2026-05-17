@@ -1,11 +1,5 @@
 """Tests for the streaming inbound packet decoder."""
 
-#: CPython-only lane: class-based pytest-style suite, not discoverable
-#: by the cross-runtime harness (which finds module-level test_* only);
-#: A temporary stopgap — harness class-discovery support is planned;
-#: this marker reverts when that lands (do NOT convert to functions).
-__chumicro_runtimes__ = ("cpython",)
-
 from chumicro_mqtt import MQTTProtocolError
 from chumicro_mqtt._wire import (
     PACKET_CONNACK,

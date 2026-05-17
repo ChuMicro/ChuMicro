@@ -7,12 +7,6 @@ auto-pong, auto-ping, timeouts, and close handshake are all
 exercised without a real TCP/TLS stack.
 """
 
-#: CPython-only lane: class-based pytest-style suite, not discoverable
-#: by the cross-runtime harness (which finds module-level test_* only);
-#: A temporary stopgap — harness class-discovery support is planned;
-#: this marker reverts when that lands (do NOT convert to functions).
-__chumicro_runtimes__ = ("cpython",)
-
 import struct
 
 from chumicro_test_harness.assertions import raises

@@ -2,25 +2,26 @@
 
 ## Why
 
-The cross-runtime test harness discovers only **module-level**
-`def test_*` functions: `_parse_test_functions`
-(`workbench/pytest-device/src/chumicro_pytest_device/plugin.py` ~L586)
-keeps `ast.FunctionDef` nodes whose name starts with `test_`, and
-ignores `ast.ClassDef`.  So `class TestX: def test_y(self)` suites are
-invisible to the `--target unix-port` and `--target device-unit`
-lanes — they ran only on plain CPython `pytest`.
+The host-side AST collector `_parse_test_functions`
+(`workbench/pytest-device/src/chumicro_pytest_device/plugin.py`) kept
+only `ast.FunctionDef` nodes, ignoring `ast.ClassDef`.  So
+`class TestX: def test_y(self)` suites were invisible to the `--target
+unix-port` and `--target device-unit` lanes — they ran only on plain
+CPython `pytest`.  The on-device runner (`runner._iter_test_functions`)
+*did* discover class methods; the gap was host-side collection only.
 
-This was silent until the on-device sweep (Decision 0068) exposed it.
-A loud collection guard now fails any device-lane
-`libraries/<n>/tests/test_*.py` that yields zero discoverable tests,
-so the gap can no longer hide.  As an interim measure, 16 class-based
-files carry `__chumicro_runtimes__ = ("cpython",)` to keep them in the
-CPython lane explicitly (greppable, guard-satisfying).
+The on-device sweep (Decision 0068) exposed it; a loud collection
+guard was added so a zero-discovery device-lane file can no longer
+hide, and ~16 class-based files carried an interim
+`__chumicro_runtimes__ = ("cpython",)` marker as a stopgap.
 
-**The intended end state is harness support for class-based tests, not
-converting ~800 tests to module-level functions.**  When the harness
-discovers class methods, the 16 interim markers are removed and those
-suites run cross-runtime + on-device as their location implies.
+**The chosen fix is harness support for class-based tests, not
+converting ~800 tests to module-level functions.**  This has landed
+for the bench-free path: the collector now emits `ClassName.test_method`
+qualified names (the format the runner already produces), the interim
+markers are reverted, and the suites pass cross-runtime on MP + CP
+unix-port.  The on-device (`--target device-unit`) 4-board confirmation
+is the one remaining hardware-gated step — see Status.
 
 ## Scope
 
@@ -54,18 +55,55 @@ suites run cross-runtime + on-device as their location implies.
    MP/CP unix-port and on-device; triage any genuine cross-runtime
    failures (the sweep's legitimate output).
 
+## Status
+
+- [x] **Scope 1 — discovery.**  The on-device runner
+  (`runner._iter_test_functions`) *already* discovered class methods
+  (fresh instance per test, `ClassName.test_method` qualified names) —
+  the gap was host-side only.  `_parse_test_functions` (plugin.py)
+  extended to walk top-level `class Test*` and emit the **identical**
+  `f"{class_name}.{attr}"` format, so collection items / single-test
+  name filters / per-item reporting line up with execution.  No
+  on-device runner change needed.
+- [x] **Scope 2 — fixture story.**  The pytest "hits" in the
+  revert-scope files were all comments pointing at sibling
+  `*_pytest.py` files; none import pytest or use fixtures.  The
+  genuine pytest-fixture suites stay `("cpython",)` (all 14 remaining
+  markers are `*_pytest.py`).
+- [x] **Scope 3 — markers reverted.**  16 files lost the
+  `("cpython",)` marker + stopgap comment; `sockets/tests/test_cp_adapter.py`
+  reverted to `__chumicro_host_only__ = True` (its true lane).
+- [x] **Scope 4 (unix-port) — bench-free cross-runtime triage.**
+  Full reverted set on MicroPython **and** CircuitPython unix-port:
+  882 passed / 4 legit skips / 0 fail per runtime.  One genuine
+  defect surfaced and fixed (the sweep's legitimate output):
+  `chumicro_sockets._adapters.cp.ssl_context_with_ca` did `import ssl`
+  *before* its documented "up front" PEM/DER validation, so the clear
+  ValueError was unreachable where the ssl/tls binding is absent (CP
+  unix-port / minimal builds).  Validation moved above the import —
+  pure string inspection, no behavior change on real boards, makes the
+  docstring's "up front" promise true.
+- [ ] **Scope 4 (on-device) — hardware-gated.**  The `--target
+  device-unit` 4-board matrix sweep (Lolin S2 + Pi Pico W × CP/MP)
+  with the ~800 class methods now executing on silicon.  Rides with
+  the deploy-mode-unification 4d sweep — needs the bench.  Per-library
+  on-silicon conformance is the sweep's *output*, not a gate here.
+
 ## Acceptance
 
-- `_parse_test_functions` (or its replacement) discovers `class Test*`
-  methods; a class-based file yields the right item count under
-  `--target unix-port` and `--target device-unit`.
-- The 16 markers + stopgap comments are gone; `grep` finds no
-  `__chumicro_runtimes__ = ("cpython",)` whose only reason was
-  class-shape.
-- The loud guard still fires for a genuinely empty/mis-shaped file
-  (regression test).
-- 4-board matrix sweep green or with only triaged, understood
-  per-test failures.
+- [x] `_parse_test_functions` discovers `class Test*` methods; a
+  class-based file yields the right item count under `--target
+  unix-port` (verified: `mqtt/test_client.py` collects
+  `TestBoundedRecvPerTick.test_*` etc.).  `--target device-unit`
+  rides with the hardware-gated sweep.
+- [x] No `__chumicro_runtimes__ = ("cpython",)` whose only reason was
+  class-shape; the 14 remaining are all genuine `*_pytest.py`.
+- [x] The loud guard still fires for a genuinely pytest-style file —
+  `test_pytest_style_file_yields_nothing` documents the empty-list
+  trigger; `test_finds_class_methods_qualified` /
+  `test_skips_non_test_classes_and_helper_classes` cover discovery.
+- [ ] 4-board on-device matrix sweep green or with only triaged
+  failures — hardware-gated (see Status Scope 4 on-device).
 
 ## Related
 
