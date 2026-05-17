@@ -209,19 +209,33 @@ on CP+MP.
      `chumicro_test_harness.skip` gated on `gc.mem_free()`, still run on
      PSRAM + CPython.  Decision 0072 §3 gained the intrinsic-allocation
      exception clause.
-   - **websockets MP green + http_server DONE CP+MP (2026-05-17).**
-     websockets Pico W **MP: 287/0/0** (same slices, both runtimes).
-     `http_server`: one 123-test file `test_http_server.py` (pre-fix
-     measure confirmed the staging fix works for it too — 124 OOM, **0
-     No-space**) → 7 lossless `test_http_*.py` slices (≤26); **Pico W
-     CP 122/0 + MP 122/0** (122 = 123 − 1 pre-existing loud conditional
-     skip, not split-induced).  mqtt `test_client.py` (80, incl.
-     `_CountingSocket` helper class — splitter extended to closure-
-     duplicate zero-test classes) → 5 lossless `test_client_*.py`
-     slices (≤19); other mqtt files (decoder/encoder/packets/state/
-     testing_helpers, all ≤20) need no split; unix-port green, bench
-     pending.  Remaining: bench mqtt CP+MP; re-measure `requests`
-     (test_wire 89 / test_client 83) on the fixed harness.
+   - **Phase B COMPLETE — all 4 libraries Pico W CP + MP green
+     (2026-05-17).**  Every over-ceiling file split losslessly
+     (deterministic AST splitter: byte-identical class bodies,
+     contiguous source-order runs, helper funcs *and* zero-test helper
+     classes closure-duplicated, counts preserved); validated on a
+     freshly `reset-board`-wiped Pi Pico W, both runtimes:
+     - **websockets** — `test_websockets`(136)/`test_client`(77)/`test_server`(61)
+       → 15 `test_wire_*`/`test_client_*`/`test_server_*` slices (≤26).
+       CP 287/0, MP 287/0.  `ecd27d6f`.
+     - **http_server** — `test_http_server`(123) → 7 `test_http_*`
+       slices (≤26).  CP 122/0, MP 122/0.  `44b4d830`.
+     - **mqtt** — `test_client`(80) → 5 `test_client_*` slices (≤19);
+       decoder/encoder/packets/state/testing_helpers (≤20) unsplit.
+       CP 159/0, MP 159/0.  `7b0dc62a`.
+     - **requests** — `test_client`(83) → 5 `test_client_*` slices
+       (≤19); **`test_wire`(89) NOT split — measured 89/0 on Pico W,
+       it fits**.  CP 171/0, MP 171/0.
+     Vindicates Decision 0072's "no rigid cap, library-weight-dependent,
+     measure-don't-assume": requests `_wire` is light enough that 89
+     tests/file fit, while websockets `_wire` OOMs ~30 — same nominal
+     surface, different resident weight.  Empirical ladder set the
+     websockets ceiling (30 OOM, ≤26 pass).  One intrinsic-allocation
+     test (`websockets test_unmasked_64bit_length`, ~64 KB > board
+     headroom) loud-skipped on the constrained tier per the Decision
+     0072 §3 exception, still validated on PSRAM + CPython.  `~1`
+     pre-existing loud conditional skip per library is not split-induced
+     (splitter asserts byte-identical bodies).
    - **Source-cohesion split done (2026-05-17), not a fit fix.**
      `requests` test-quality audit (Opus sub-agent) confirmed the suite
      is *not* over-tested (redundancy ~2); the win was source cohesion —
