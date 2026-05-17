@@ -542,11 +542,9 @@ class ResponseParser:
         self._max_body_bytes = max_body_bytes
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
-        # the cursor and only realloates the bytearray when at least
+        # the cursor and only reallocates the bytearray when at least
         # half of it has been consumed — amortizes the slice-reassign
         # idiom that used to fragment the heap on ESP32-class allocators.
-        # See on-device fragmentation tests in
-        # ``functional_tests/test_memory_fragmentation_on_device.py``.
         self._read_offset = 0
         self.state = ParseState.STATUS
         self.status_code = None
