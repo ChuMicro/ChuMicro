@@ -540,22 +540,32 @@ Open threads, none blocking:
    Leading resolution direction: an **opt-in `--per-file` device-unit
    mode** = soft-reset before each test file (each file gets a clean
    interpreter: `library + one file + harness`, no accumulation —
-   Decision 0071's per-library reset extended to per-file granularity)
-   **paired with a documented, measured tests-per-file budget** so a
-   single file's resident footprint fits 264 KB (and likely a CHU lint
-   enforcing the cap).  Per-file reset alone is insufficient — a file
-   already over budget OOMs solo; the budget is the load-bearing half,
-   and it gives the genuinely-oversized files (websockets 136,
-   requests 172) a *hardware-derived* reason to split, not an
-   aesthetic one.  Tradeoff: per-file reset adds seconds per file
-   (a full-library sweep is already ~minutes; per-file is materially
-   slower) — hence opt-in, with the fast accumulating path staying
-   default for PSRAM boards / small libraries.  This is the standard
+   Decision 0071's per-library reset extended to per-file
+   granularity), **plus a documented caution, not a rigid cap.**  No
+   hard tests-per-file number and no CHU lint: the ceiling is
+   library-weight-dependent, not universal, so a fixed number would be
+   wrong for most files and over-restrictive everywhere.  Instead a
+   style-guide note ("very large class-organized modules can exceed a
+   256 KB board's resident budget; if a file OOMs on the smallest
+   target, split it") and **reactive split on observed failure**.
+   Coarse on-device measurement (Pi Pico W CP, single file on a fresh
+   board, 2026-05-17): the heavy libraries' fresh per-file ceiling is
+   ≈32–61 tests (`sockets/test_factories` 32 passes; `websockets/test_server`
+   61 OOMs) — so for the *heavy* `_wire`-backed libraries a single
+   large class module does hit it, which makes the files already
+   observed OOMing (websockets 136, requests 172, http_server 123,
+   mqtt_client 80) the concrete reactive-split set, not a hypothetical.
+   Per-file reset is the enabling mechanism — without it even a
+   correctly-sized split file accumulates behind earlier files; with
+   it a reasonably-sized file fits.  Tradeoff: per-file reset adds
+   seconds per file (a full-library sweep is already ~minutes; per-file
+   is materially slower) — hence opt-in, with the fast accumulating
+   path staying default for PSRAM boards / small libraries.  Standard
    embedded-test-harness shape (MicroPython's own runner runs files
    independently for memory isolation).  Decision-worthy: changes the
-   execution model and adds a test-shape policy in Decision 0071's
-   domain — needs an ADR + an on-device measurement of the actual
-   per-file fresh ceiling to set the budget number.
+   execution model and touches Decision 0071's domain — needs an ADR
+   for the `--per-file` mode; the split guidance is a style-guide
+   addition, not a mechanized rule.
 2. Could project deploy adopt the reset-before-rsync-then-run-it-
    ourselves shape (more host-side execution control) instead of
    Ctrl-D-then-natural-boot?  The natural-boot path works and is
