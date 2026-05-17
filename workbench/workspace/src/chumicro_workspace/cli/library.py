@@ -1,8 +1,11 @@
 """``chumicro-workspace library`` subcommands — curated library host.
 
-``list`` / ``add`` / ``update`` / ``remove`` / ``switch-channel`` pull
-chumicro libraries from PyPI into the workspace's ``libraries/`` folder
-and maintain the ``libraries:`` table in ``workspace.yml``.  The heavy
+``list`` / ``add`` / ``update`` / ``remove`` / ``forget`` /
+``switch-channel`` pull chumicro libraries from PyPI into the
+workspace's ``libraries/`` folder and maintain the ``libraries:``
+table in ``workspace.yml``.  ``remove`` uninstalls but keeps the row
+as ``declined: true`` (so ``update`` skips it and the decision is
+auditable); ``forget`` drops the row entirely.  The heavy
 lifting (fetch, sdist unpack, dep walk) lives in
 :mod:`chumicro_workspace.library`; this module is the parser + the
 prompt/IO surface.
@@ -186,27 +189,34 @@ def _cmd_library_update(args: argparse.Namespace) -> int:
     return 0
 
 
+def _dependents_of(workspace, table, name: str) -> list[str]:
+    """Curated, non-declined libraries whose pyproject still needs *name*."""
+    return sorted(
+        other
+        for other, entry in table.items()
+        if other != name and not entry.declined
+        and name in chumicro_dependencies(
+            workspace.root / "libraries" / other / "pyproject.toml",
+        )
+    )
+
+
 def _cmd_library_remove(args: argparse.Namespace) -> int:
+    """Uninstall a library but keep its row as ``declined: true``.
+
+    The row is retained so ``update`` skips it and the decision is
+    auditable; ``library forget`` drops the row entirely.
+    """
     workspace = _resolve_workspace(args)
     table = read_curated_libraries(workspace.workspace_yaml)
     if args.name not in table:
-        print(
-            f"library remove: not curated: {args.name}",
-            file=sys.stderr,
-        )
+        print(f"library remove: not curated: {args.name}", file=sys.stderr)
         return 2
 
-    dependents = [
-        other
-        for other, entry in table.items()
-        if other != args.name and not entry.declined
-        and args.name in chumicro_dependencies(
-            workspace.root / "libraries" / other / "pyproject.toml",
-        )
-    ]
+    dependents = _dependents_of(workspace, table, args.name)
     if dependents:
         print(
-            f"warning: {', '.join(sorted(dependents))} still depend on "
+            f"warning: {', '.join(dependents)} still depend on "
             f"{args.name}; their deploy will fail without it.",
         )
         if _interactive(args) and not _confirm("Remove anyway?"):
@@ -214,9 +224,40 @@ def _cmd_library_remove(args: argparse.Namespace) -> int:
             return 0
 
     remove_library(workspace.root, args.name)
+    entry = table[args.name]
+    table[args.name] = CuratedLibrary(
+        args.name, entry.channel, entry.version, declined=True,
+    )
+    write_curated_libraries(workspace.workspace_yaml, table)
+    print(
+        f"Removed {args.name}; kept in workspace.yml as declined "
+        f"(use 'library forget {args.name}' to drop the record).",
+    )
+    return 0
+
+
+def _cmd_library_forget(args: argparse.Namespace) -> int:
+    """Delete a library's row entirely (and uninstall it if present)."""
+    workspace = _resolve_workspace(args)
+    table = read_curated_libraries(workspace.workspace_yaml)
+    if args.name not in table:
+        print(f"library forget: not curated: {args.name}", file=sys.stderr)
+        return 2
+
+    dependents = _dependents_of(workspace, table, args.name)
+    if dependents:
+        print(
+            f"warning: {', '.join(dependents)} still depend on "
+            f"{args.name}; their deploy will fail without it.",
+        )
+        if _interactive(args) and not _confirm("Forget anyway?"):
+            print("Aborted.")
+            return 0
+
+    remove_library(workspace.root, args.name)
     del table[args.name]
     write_curated_libraries(workspace.workspace_yaml, table)
-    print(f"Removed {args.name}.")
+    print(f"Forgot {args.name} (record removed).")
     return 0
 
 
@@ -335,12 +376,22 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
     update_parser.set_defaults(func=_cmd_library_update)
 
     remove_parser = verbs.add_parser(
-        "remove", help="Delete a curated library from the workspace.",
+        "remove",
+        help="Uninstall a library; keep its row as declined (audit trail).",
     )
     remove_parser.add_argument("name", help="Library to remove.")
     _add_workspace_arg(remove_parser)
     _add_non_interactive_arg(remove_parser)
     remove_parser.set_defaults(func=_cmd_library_remove)
+
+    forget_parser = verbs.add_parser(
+        "forget",
+        help="Drop a library's record entirely (uninstalls if present).",
+    )
+    forget_parser.add_argument("name", help="Library to forget.")
+    _add_workspace_arg(forget_parser)
+    _add_non_interactive_arg(forget_parser)
+    forget_parser.set_defaults(func=_cmd_library_forget)
 
     switch_parser = verbs.add_parser(
         "switch-channel", help="Move a library between stable/experimental.",

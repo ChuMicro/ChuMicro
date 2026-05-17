@@ -174,7 +174,7 @@ class TestRemove:
             _RegistryRunner(),
         ) == 2
 
-    def test_removes_and_warns_on_dependents(
+    def test_remove_uninstalls_but_keeps_declined_row(
         self, tmp_path: Path, capsys: pytest.CaptureFixture,
     ):
         seed_workspace(tmp_path)
@@ -197,9 +197,109 @@ class TestRemove:
         assert code == 0
         out = capsys.readouterr().out
         assert "still depend on chumicro_timing" in out
+        assert "library forget chumicro_timing" in out
+        table = read_curated_libraries(tmp_path / "workspace.yml")
+        # Row kept, flipped to declined; tree uninstalled.
+        assert table["chumicro_timing"].declined is True
+        assert not (tmp_path / "libraries" / "chumicro_timing").exists()
+
+    def test_update_skips_declined_then_add_flips_back(self, tmp_path: Path):
+        seed_workspace(tmp_path)
+        runner = _RegistryRunner(version="0.3.1")
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        _run(
+            [
+                "library", "remove", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        # update must not resurrect a declined entry.
+        _run(
+            [
+                "library", "update", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        assert not (tmp_path / "libraries" / "chumicro_timing").exists()
+        # add flips declined back off and reinstalls.
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        table = read_curated_libraries(tmp_path / "workspace.yml")
+        assert table["chumicro_timing"].declined is False
+        assert (tmp_path / "libraries" / "chumicro_timing" / "src").is_dir()
+
+
+class TestForget:
+    def test_unknown_is_usage_error(self, tmp_path: Path):
+        seed_workspace(tmp_path)
+        assert _run(
+            [
+                "library", "forget", "chumicro_mqtt",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            _RegistryRunner(),
+        ) == 2
+
+    def test_forget_drops_row_and_uninstalls(self, tmp_path: Path):
+        seed_workspace(tmp_path)
+        runner = _RegistryRunner()
+        _run(
+            [
+                "library", "add", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        code = _run(
+            [
+                "library", "forget", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        assert code == 0
         table = read_curated_libraries(tmp_path / "workspace.yml")
         assert "chumicro_timing" not in table
         assert not (tmp_path / "libraries" / "chumicro_timing").exists()
+
+    def test_forget_a_declined_entry(self, tmp_path: Path):
+        """The documented path: remove -> declined, then forget."""
+        seed_workspace(tmp_path)
+        runner = _RegistryRunner()
+        for verb in ("add", "remove"):
+            _run(
+                [
+                    "library", verb, "chumicro_timing",
+                    "--workspace-dir", str(tmp_path), "--non-interactive",
+                ],
+                runner,
+            )
+        assert read_curated_libraries(
+            tmp_path / "workspace.yml",
+        )["chumicro_timing"].declined is True
+        _run(
+            [
+                "library", "forget", "chumicro_timing",
+                "--workspace-dir", str(tmp_path), "--non-interactive",
+            ],
+            runner,
+        )
+        assert "chumicro_timing" not in read_curated_libraries(
+            tmp_path / "workspace.yml",
+        )
 
 
 class TestSwitchChannel:
