@@ -235,6 +235,18 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=None,
         help="command string to render inside the PR block",
     )
+    group.addoption(
+        "--per-file",
+        action="store_true",
+        default=False,
+        help=(
+            "flash/copy device-unit only: soft-reset before each test "
+            "*file* (not just each library), so a large class-organized "
+            "module runs on a fresh interpreter.  Opt-in — the default "
+            "per-library reset is faster and enough for PSRAM boards / "
+            "small libraries; use this for large suites on a 256 KB board"
+        ),
+    )
 
 
 def _session_cache(session: pytest.Session) -> _TransportCache:
@@ -435,6 +447,11 @@ def _session_backend(session: pytest.Session) -> Backend:
     backend = getattr(session, "_backend", None)
     assert backend is not None, "pytest_sessionstart must run before backend access"
     return cast("Backend", backend)
+
+
+def _session_per_file(session: pytest.Session) -> bool:
+    """Return whether ``--per-file`` opt-in per-file reset is set."""
+    return bool(session.config.getoption("--per-file", default=False))
 
 
 class _PRSummaryCollector:
@@ -764,6 +781,12 @@ class _TransportCache:
         #: different library runs, the next stage rsync uses
         #: ``--delete`` to clean the prior library off the drive.
         self._staged_library: dict[str, str] = {}
+        #: Batch keys that have already had their ``--per-file`` soft
+        #: reset issued.  ``prepare()`` runs twice per file batch
+        #: (DevicePrepareItem then DeviceRunFileItem); without this the
+        #: per-file reset would fire twice.  Mirrors how
+        #: ``_staged_library`` makes the per-library reset idempotent.
+        self._per_file_reset_done: set[tuple[str, str, str]] = set()
         #: Cached batch results keyed by (device_id, library, file).
         #: Value is (parsed_result_or_None, raw_output_or_error).
         self._batch_results: dict[
@@ -917,6 +940,25 @@ class _TransportCache:
         """
         self._staged_library[device_id] = library_name
 
+    def per_file_reset_pending(self, batch_key: tuple[str, str, str]) -> bool:
+        """Return whether this file batch still needs its ``--per-file`` reset.
+
+        ``prepare()`` runs twice per file batch (DevicePrepareItem then
+        DeviceRunFileItem); only the first should soft-reset.
+
+        Args:
+            batch_key: ``(device_id, library_name, test_file_name)``.
+        """
+        return batch_key not in self._per_file_reset_done
+
+    def mark_per_file_reset(self, batch_key: tuple[str, str, str]) -> None:
+        """Record that this file batch has had its ``--per-file`` reset.
+
+        Args:
+            batch_key: ``(device_id, library_name, test_file_name)``.
+        """
+        self._per_file_reset_done.add(batch_key)
+
     def invalidate_device(self, device_id: str) -> None:
         """Drop all cached state for a device after a fatal transport error.
 
@@ -939,6 +981,9 @@ class _TransportCache:
                 pass
         self._last_staged.pop(device_id, None)
         self._staged_library.pop(device_id, None)
+        self._per_file_reset_done = {
+            key for key in self._per_file_reset_done if key[0] != device_id
+        }
 
     def disconnect_all(self) -> None:
         """Disconnect all cached transports.
@@ -1052,6 +1097,26 @@ class DeviceBackend:
                     device_entry.identifier,
                     item._library_name,  # noqa: SLF001
                 )
+            elif _session_per_file(item.session):
+                # Same library, ``--per-file``: give *this file* a fresh
+                # interpreter too.  The library's whole tree is already
+                # on the device FS from the per-library bulk stage above
+                # and a soft reset is a VM-only Ctrl-D reboot (the FS
+                # persists), so no re-stage is needed — the wall here is
+                # one large class module's resident defs + the library +
+                # the harness exceeding a 256 KB board, not filesystem
+                # state.  Idempotent: prepare() runs twice per file batch
+                # (DevicePrepareItem then DeviceRunFileItem).
+                batch_key = item._batch_key(device_entry)  # noqa: SLF001
+                if cache.per_file_reset_pending(batch_key):
+                    try:
+                        transport.soft_reset()
+                    except Exception as error:
+                        pytest.fail(
+                            "Device reset failed before test file "
+                            f"(--per-file): {error}",
+                        )
+                    cache.mark_per_file_reset(batch_key)
         else:
             staging_key = item._batch_key(device_entry)  # noqa: SLF001
             if cache.needs_staging(staging_key):
