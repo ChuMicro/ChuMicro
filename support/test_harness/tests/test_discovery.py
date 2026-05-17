@@ -133,6 +133,76 @@ def test_exec_as_namespace_sets_dunder_name(tmp_path):
     assert ns.__package__ == "mypkg"
 
 
+def test_exec_chunked_matches_whole_file_semantics(tmp_path):
+    """Chunked exec yields a namespace identical to the whole-file path.
+
+    A preamble import + helper used by a later class, a decorated
+    function, and cross-statement name references must all resolve via
+    the shared globals exactly as a single exec would.
+    """
+    source = (
+        "import math\n"
+        "\n"
+        "BASE = 10\n"
+        "\n"
+        "def _double(value):\n"
+        "    return value * 2\n"
+        "\n"
+        "def deco(func):\n"
+        "    func.tagged = True\n"
+        "    return func\n"
+        "\n"
+        "@deco\n"
+        "def tagged_fn():\n"
+        "    return 'tagged'\n"
+        "\n"
+        "class TestThing:\n"
+        "    def test_uses_preamble(self):\n"
+        "        return _double(BASE) + int(math.sqrt(16))\n"
+    )
+    script = tmp_path / "mod.py"
+    script.write_text(source)
+
+    whole = discovery._exec_as_namespace(str(script))
+    # Decorator-aware boundaries (1-based): import, BASE, _double, deco,
+    # the @deco line, class.
+    chunked = discovery._exec_as_namespace(
+        str(script), chunk_boundaries=[1, 3, 5, 8, 12, 16]
+    )
+
+    assert chunked.BASE == whole.BASE == 10
+    assert chunked.tagged_fn.tagged is True
+    assert chunked.TestThing().test_uses_preamble() == 24
+    assert whole.TestThing().test_uses_preamble() == 24
+
+
+def test_exec_chunked_preserves_line_numbers(tmp_path):
+    """A failure in a late chunk reports its real source line.
+
+    The newline left-pad must keep tracebacks pointing at the original
+    file line, not the chunk-relative line.
+    """
+    source = (
+        "X = 1\n"          # line 1
+        "\n"                # line 2
+        "def boom():\n"     # line 3
+        "    raise RuntimeError('kaboom')\n"  # line 4
+    )
+    script = tmp_path / "mod.py"
+    script.write_text(source)
+
+    ns = discovery._exec_as_namespace(str(script), chunk_boundaries=[1, 3])
+    try:
+        ns.boom()
+    except RuntimeError as error:
+        tb = error.__traceback__
+        while tb.tb_next is not None:
+            tb = tb.tb_next
+        assert tb.tb_lineno == 4
+    else:  # pragma: no cover - the call always raises
+        raise AssertionError("expected RuntimeError")
+
+
 # ---------------------------------------------------------------------------
 # run_one_file — the worker entry point used by the pytest plugin's
 # UnixPortBackend (spawns one subprocess per test file).
