@@ -1042,15 +1042,80 @@ class DeviceBackend:
                 f"Transport connection failed: {error}",
             ) from error
 
-        # Flash/copy modes persist files on the device filesystem,
-        # so we bulk-stage one library's sources + test files per
-        # rsync.  Per-library scope keeps the drive working-set
-        # bounded — Pi Pico W CIRCUITPY drives are 491 KB; staging
-        # every library at once overflows.  When switching libraries
-        # the next rsync ``--delete`` cleans the prior library off.
-        # RAM mode embeds source inline, so it re-stages per file.
+        # Flash/copy modes persist files on the device filesystem.
+        # Default (no ``--per-file``): bulk-stage one library's whole
+        # test suite + src per rsync (fewest rsyncs; fits the ample
+        # flash of PSRAM boards).  ``--per-file``: stage one test file
+        # at a time, because a heavy library's *entire* suite + src +
+        # harness overflows a 491 KB Pi Pico W drive.  Either way
+        # per-library/per-file scope keeps the working-set bounded and
+        # rsync ``--delete`` cleans the prior library/file off.  RAM
+        # mode embeds source inline, so it re-stages per file.
         is_filesystem_mode = transport.mode not in ("ram", "mount")
-        if is_filesystem_mode:
+        if is_filesystem_mode and _session_per_file(item.session):
+            # ``--per-file`` flash: stage exactly *one* test file at a
+            # time (this file + the library src + the harness), with a
+            # fresh-VM soft reset before each file.  The bulk path
+            # below stages a library's *entire* test suite in one
+            # rsync; a heavy library's full suite + src + harness
+            # exceeds a 491 KB Pi Pico W CIRCUITPY drive (rsync then
+            # fails ``No space left on device`` before any test runs).
+            # rsync ``--delete`` keeps the drive at src + harness +
+            # this one file (~bounded, fits 491 KB) and cleans the
+            # prior file — and the prior library — off.  Re-pushing
+            # src + harness per file is the deliberate cost: ``--per-
+            # file`` exists for the constrained board, where fitting
+            # the drive matters more than rsync count.  Idempotent:
+            # prepare() runs twice per file batch (DevicePrepareItem
+            # then DeviceRunFileItem) — the pending check fires the
+            # reset+stage exactly once.
+            batch_key = item._batch_key(device_entry)  # noqa: SLF001
+            if cache.per_file_reset_pending(batch_key):
+                if cache.current_staged_library(
+                    device_entry.identifier,
+                ) is None:
+                    # First file on this device: drop any stale
+                    # code.py/main.py a prior deploy left behind so the
+                    # soft_reset cannot race a leftover entrypoint.
+                    # Once cleared it stays cleared (the sweep's rsync
+                    # excludes entrypoints; the harness never writes
+                    # one).
+                    try:
+                        transport.clear_entrypoints()
+                    except Exception as error:
+                        pytest.fail(
+                            "Failed to clear stale entrypoint before "
+                            f"sweep: {error}",
+                        )
+                try:
+                    transport.soft_reset()
+                except Exception as error:
+                    pytest.fail(
+                        "Device reset failed before test file "
+                        f"(--per-file): {error}",
+                    )
+                source_dirs = resolve_library_source_dirs(
+                    item.library_dir,
+                    libraries_root=_libraries_root(item.session),
+                    test_files=[item.test_file],
+                )
+                transport.stage(
+                    source_dirs,
+                    [item.test_file],
+                    _harness_source_dir(item.session),
+                    extra_files=_encode_runtime_config_extra_files(
+                        item.session.config,
+                    ),
+                    include_test_support=_target_is_device_unit(
+                        item.session.config,
+                    ),
+                )
+                cache.mark_library_staged(
+                    device_entry.identifier,
+                    item._library_name,  # noqa: SLF001
+                )
+                cache.mark_per_file_reset(batch_key)
+        elif is_filesystem_mode:
             current_library = cache.current_staged_library(
                 device_entry.identifier,
             )
@@ -1097,26 +1162,6 @@ class DeviceBackend:
                     device_entry.identifier,
                     item._library_name,  # noqa: SLF001
                 )
-            elif _session_per_file(item.session):
-                # Same library, ``--per-file``: give *this file* a fresh
-                # interpreter too.  The library's whole tree is already
-                # on the device FS from the per-library bulk stage above
-                # and a soft reset is a VM-only Ctrl-D reboot (the FS
-                # persists), so no re-stage is needed — the wall here is
-                # one large class module's resident defs + the library +
-                # the harness exceeding a 256 KB board, not filesystem
-                # state.  Idempotent: prepare() runs twice per file batch
-                # (DevicePrepareItem then DeviceRunFileItem).
-                batch_key = item._batch_key(device_entry)  # noqa: SLF001
-                if cache.per_file_reset_pending(batch_key):
-                    try:
-                        transport.soft_reset()
-                    except Exception as error:
-                        pytest.fail(
-                            "Device reset failed before test file "
-                            f"(--per-file): {error}",
-                        )
-                    cache.mark_per_file_reset(batch_key)
         else:
             staging_key = item._batch_key(device_entry)  # noqa: SLF001
             if cache.needs_staging(staging_key):

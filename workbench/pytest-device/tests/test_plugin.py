@@ -1145,12 +1145,13 @@ class TestPerFileReset:
         # Only the library-switch reset (first library on the device).
         assert len(resets) == 1
 
-    def test_per_file_resets_before_each_same_library_file(
+    def test_per_file_stages_one_file_at_a_time_with_fresh_reset(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
-        """``--per-file``: each same-library file gets a fresh interpreter,
-        idempotently across the two prepare() calls per batch, with no
-        extra bulk stage (the tree persists on the device FS)."""
+        """``--per-file`` flash: each file is staged on its own (this
+        file + src + harness, never the whole suite) onto a fresh-VM
+        interpreter, idempotently across the two prepare() calls per
+        batch, and never via the bulk-stage-whole-suite path."""
         self._enable_per_file(hot_path_session)
         device = hot_path_device()
         transport = HotPathTransport(mode="flash")
@@ -1159,6 +1160,12 @@ class TestPerFileReset:
         monkeypatch.setattr(
             pytest_device, "_bulk_stage_for_device",
             lambda *args, **kwargs: bulk_calls.append(1),
+        )
+        monkeypatch.setattr(
+            pytest_device, "resolve_library_source_dirs",
+            lambda library_dir, *, libraries_root=None, test_files=None: [
+                library_dir / "src",
+            ],
         )
 
         first = _make_functional_test_file(tmp_path, "alpha")
@@ -1170,12 +1177,18 @@ class TestPerFileReset:
 
         resets = [call for call in transport.calls if call[0] == "soft_reset"]
         clears = [call for call in transport.calls if call[0] == "clear_entrypoints"]
-        # 1 library-switch reset + exactly 1 per-file reset for the
-        # second file (idempotent — not 2 despite the double prepare()).
+        stages = [call for call in transport.calls if call[0] == "stage"]
+        # One fresh-VM reset per file (2 files); idempotent — not 4
+        # despite the double prepare() of the second file.
         assert len(resets) == 2
+        # Entrypoint cleared exactly once for the device (first file).
         assert len(clears) == 1
-        # Per-file reset does NOT re-stage; only the library switch did.
-        assert len(bulk_calls) == 1
+        # The bulk-stage-whole-suite path is never taken under
+        # ``--per-file`` — that path is what overflows a 491 KB drive.
+        assert len(bulk_calls) == 0
+        # Exactly one stage per file, each staging *only* that file.
+        assert len(stages) == 2
+        assert [call[1][1] for call in stages] == [[first], [second]]
 
     def test_cache_per_file_reset_idempotency_and_invalidation(self) -> None:
         """The cache marker is one-shot per batch key and device-scoped."""
