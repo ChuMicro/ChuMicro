@@ -183,7 +183,7 @@ The mono-repo itself has workspace shape (`workspace.yml` + `devices.yml` at roo
 | Command | Purpose |
 |---------|---------|
 | `setup` | Install deps + regenerate IDE configs |
-| `preflight` | Full CI mirror (lint + build + docs + unit tests on all runtimes + checks). `--with-functional` adds hardware-gated tests |
+| `preflight` | Full CI mirror (lint + build + docs + unit tests on all runtimes + checks). `--with-functional` adds hardware-gated functional tests; `--with-device-unit` appends the on-device unit sweep |
 | `test` | CPython unit tests (changed packages by default; `--all` for full sweep) |
 | `lint` | Ruff across the workspace |
 | `build` | Build publishable packages |
@@ -192,6 +192,7 @@ The mono-repo itself has workspace shape (`workspace.yml` + `devices.yml` at roo
 | `test-micropython` / `test-circuitpython` | One runtime |
 | `test-functional` | All hardware-gated suites (libraries + workbench) |
 | `test-libraries-functional` / `test-workbench-functional` | Scoped functional runs |
+| `test-unit-on-device` | Cross-runtime *unit* suite on real boards (the on-device sweep): per-library mode resolution, RAM-preferred, mode-grouped; behavioral pass/fail only (no coverage gate). `--per-file` resets per file for 256 KB boards; per-library on-silicon failures are the sweep's output, not a gate |
 | `test-scripts` | Scripts infrastructure tests |
 | `prepare-micropython` / `prepare-circuitpython` / `prepare-mpy-cross` | Build / pin runtime sources under `.tools/` (gitignored) |
 | `verify-examples` | Import-check example scripts |

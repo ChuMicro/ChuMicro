@@ -237,6 +237,13 @@ mode pick) → 5 (after the surface is real).
 - Two device sessions (RAM group then flash group) on one board in
   one run connect/teardown cleanly on the same serial port.
 
+**Workstream COMPLETE (2026-05-17).** Phases 1–5 landed; 4b.2
+resolved (Decisions 0070 + 0071); 4c falsified (no `wifi`-on-CP-RAM
+hard fault on current code); 4d done (grouping + non-poisoning
+verified on silicon, scope decided out). The on-device unit sweep
+ships with `--per-file` (Decision 0072). Archive-ready; left in place
+to avoid churning the inbound links from Decisions 0068/0070/0071/0072.
+
 ## Status
 
 - [x] **Phase 1 — shared resolver.**  `resolve_deploy_mode` +
@@ -365,6 +372,12 @@ mode pick) → 5 (after the surface is real).
     (websockets 136 etc.) are exactly what the sweep exists to surface,
     owned by Decision 0072, consistent with how every prior on-silicon
     failure in this campaign was treated.
-- [ ] Phase 5 — docs + AGENTS.md (the only remaining piece — the
-  command + `devices.yml` `supports_ram_mode` schema + the supported
-  matrix; 4c/4d are closed).
+- [x] **Phase 5 — docs + AGENTS.md (2026-05-17).**  AGENTS command
+  table gains `test-unit-on-device` (+ the `--with-device-unit`
+  preflight flag and the "per-library on-silicon failure = sweep
+  output, not a gate" rule); `device-testing.md` gains an "On-device
+  unit sweep" section (functional-vs-unit distinction, per-library
+  RAM-preferred resolution, dependency-closure non-poisoning, mode
+  grouping, no coverage gating, `--with-device-unit`); cheat-sheet
+  gains the command rows.  `devices.yml` `supports_ram_mode` schema
+  was already documented in Phase 3.  Preflight green (3936).

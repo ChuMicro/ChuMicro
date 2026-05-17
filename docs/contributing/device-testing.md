@@ -147,6 +147,24 @@ If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `f
 
 You usually don't have to switch by hand for the common cases: a requested `ram` deploy automatically falls back to `flash`, with a printed explanation, when the staged set contains a non-`.py` data file, when any library in the dependency closure declares `requires_flash`, or when the device sets `supports_ram_mode: false`. The run continues in `flash` — it is never silently mis-deployed. Hand-setting `deploy_mode: flash` is still the right move when you simply know a board can't hold the RAM payload.
 
+## On-device unit sweep (`test-unit-on-device`)
+
+The *functional* tests above (`libraries/<name>/functional_tests/`) exercise real I/O on a board. The **on-device unit sweep** is different: it runs each library's *cross-runtime unit suite* (`libraries/<name>/tests/`) — the same suite that runs on the unix ports — on real silicon, to catch behaviour that only differs on a real MCU's MicroPython / CircuitPython.
+
+```bash
+python scripts/run.py test-unit-on-device                 # both runtimes, all libraries
+python scripts/run.py test-unit-on-device --library timing # one library
+python scripts/run.py test-unit-on-device --runtime micropython
+```
+
+It is **not** part of the default `preflight`. Opt in with `python scripts/run.py preflight --with-device-unit` (parallel to `--with-functional`). When no board is configured for a runtime, that runtime is skipped cleanly rather than failing.
+
+**Per-library mode resolution, RAM-preferred.** The sweep exists to validate RAM-capable libraries on silicon, so its last-resort preference is `ram` (not the `flash` default the functional path uses). Each library is resolved through the one shared deploy-mode policy with **own-source** scoping: a library that declares `requires_flash`, or ships a non-`.py` data file, switches to `flash` — but only *that* library, not the whole sweep. A library is not poisoned by a dependency's data file: `chumicro_ntp` depends on `chumicro_sockets` (which ships `_ca_bundle.der`) yet stays in the RAM group, because its own source has no data file and a pure unit test never reaches the dependency's bundle path.
+
+**Mode grouping.** Libraries are grouped by resolved mode and each group runs as one single-mode session per runtime (the flash group first). A `ram`-preferred run on a RAM-capable board therefore becomes a fast RAM session over the light libraries plus a flash session over the `requires_flash` / data-file ones — no per-library transport churn.
+
+**Behavioral pass/fail only.** `coverage.py` cannot trace MicroPython / CircuitPython bytecode, so the sweep takes no `--coverage-threshold`; the per-library coverage gate stays a unix-port / CPython concern. A per-library failure *on silicon* is the sweep's **output**, not a quality gate — it is exactly what the sweep exists to surface (e.g. a large module that `MemoryError`s a 256 KB board; see below). Treat it as a finding to triage, not a red `preflight`.
+
 ### Large test modules on a 256 KB board
 
 The on-device unit sweep runs each cross-runtime test *file* through one device interpreter. On a 256 KB board (Pi Pico W) a very large class-organized module — the library it imports, plus that file's full set of test classes resident at once — can exhaust RAM with a `MemoryError` while importing the library, even on a freshly reset board. PSRAM boards (Lolin S2) are unaffected.
