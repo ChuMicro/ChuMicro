@@ -22,12 +22,12 @@ Key mechanics:
 1. Each pytest run targets a single library's `tests/` directory.
 2. `PYTHONPATH` is set to include all `src/` directories (via `_pythonpath_env()`), so cross-library imports work.
 3. `COVERAGE_FILE` is set per-run so coverage data doesn't collide.
-4. Each library must independently meet the coverage threshold (configured in `pyproject.toml`).  When `-k` filtering is active or `--no-cov` is set, per-library gates are skipped since filtering naturally reduces coverage.
+4. Per-library coverage gating fires **only when `--coverage-threshold N` is explicitly passed**: each per-package subprocess then gets its own `--cov-fail-under=N`, so a single library below the bar fails the run.  With no `--coverage-threshold` flag (the bare `run.py test` / CI `test --all` path) **no per-library gate is added** — the per-run coverage files are merged with `coverage combine` and a single repo-wide `[tool.coverage.report] fail_under = 85` aggregate (root `pyproject.toml`) applies.  No per-library `pyproject.toml` carries its own coverage config.  When `-k` filtering is active or `--no-cov` is set, per-library gates are skipped since filtering naturally reduces coverage.  The dual-threshold contract — who passes `--coverage-threshold` and at what value — is [Decision 0025](0025-dual-coverage-thresholds.md).
 5. Exit code 5 (no tests collected) is treated as success — it occurs when `-k` filters match nothing in a particular library.
 
 ## Consequences
 
-- `python scripts/run.py test` is the commit-gating path: it enforces each library's coverage threshold (configured in its `pyproject.toml`), parallelizes per-package, and is what CI runs.
+- `python scripts/run.py test` is the commit-gating path: it parallelizes per-package and is what CI runs.  It gates each library independently against the coverage bar **only when `--coverage-threshold` is passed** (the agent path — see [Decision 0025](0025-dual-coverage-thresholds.md)); the bare CI `test --all` invocation passes no threshold, so coverage is enforced as a single post-`combine` repo-wide 85 % aggregate, not per-library.
 - Bare `pytest` from the repo root is also supported, for IDE Testing-panel discovery and ad-hoc development. The root `pyproject.toml` + `conftest.py` discover source roots, set `--import-mode=importlib` (so workbench packages can share unqualified test-module names like `test_cli.py` across `workbench/deploy/tests/` and `workbench/repl/tests/` without colliding), route `functional_tests/` to the `chumicro-pytest-device` plugin, and deselect hardware tests on default sweeps. This path does not gate coverage.
 - Libraries can use `__init__.py` in `tests/` and relative imports if desired.
 - Shared test fakes ship with their library (e.g., `chumicro_timing.testing.FakeTicks`) and are importable from any library's tests.

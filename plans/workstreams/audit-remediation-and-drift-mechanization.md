@@ -63,23 +63,34 @@ take the complete fix there.
 
 ---
 
-## Phase 0 — Decide before coding
+## Phase 0 — Decide before coding — RESOLVED 2026-05-17
 
-Three findings are structural decisions, not bugs.  They become
-open-questions entries now (filed 2026-05-16) and resolve into ADR
-edits/new ADRs before Phases 1/4 build on them:
+Three findings were structural decisions, not bugs.  All three resolved:
 
-1. **msgpack decode trust boundary** — is `unpackb` a validating or a
-   trusting decoder, and must every persistence backend carry CRC
-   framing?  (Resolution shapes Phase 1 item 1.)
-2. **Coverage-gate honesty** — ADR 0009/0025 claim per-library +
-   on-device enforcement the measurement doesn't deliver (CI enforces a
-   repo-wide aggregate; 94 % is CPython-only with device adapters
-   `# pragma: no cover`'d out).  Either fix the gate or correct the
-   ADRs.  (Shapes Phase 1 item 2 and Phase 4.)
-3. **Prose-lockstep → mechanization principle** — ratify (likely as an
-   ADR) that drift classes which can be linted *must* be, mirroring the
-   CHU-rule philosophy for code.  (Charters Phase 4.)
+1. **msgpack decode trust boundary** → **[Decision 0073](../decisions/0073-msgpack-decode-trust-boundary.md)**
+   (accepted).  `unpackb` is a *trusting* decoder, hardened with
+   ~15–20 cheap lines against truncation / over-length /
+   trailing-garbage / unbounded recursion; **not** a spec validator.
+   The audit's "CRC on every backend" is **not adopted** — Decision
+   0034's per-substrate model (CRC only on raw-flash CP-NVM; NVS
+   atomic-commit + LittleFS atomic-rename close torn-write) is
+   confirmed, not amended.  → Phase 1 item 1 narrows to the decoder
+   hardening only; no `_backends/` change.
+2. **Coverage-gate honesty** → **correct the ADRs + document residual**.
+   [Decision 0009](../decisions/0009-per-library-test-runs.md) and
+   [Decision 0025](../decisions/0025-dual-coverage-thresholds.md) edited
+   in place: per-library gating fires only when `--coverage-threshold`
+   is passed (bare CI `test --all` = post-`combine` repo-wide 85 %
+   aggregate, no per-library `pyproject.toml` coverage config); 94 % is
+   a CPython-reachable, post-`# pragma` figure with no device-execution
+   signal.  AGENTS.md corrected.  Closing the gap (per-library CI
+   threshold + a device-adapter coverage signal) stays as Phase 1
+   item 2 — the ADRs now make the scope honest, they do not claim it
+   closed.
+3. **Prose-lockstep → mechanization principle** → **[Decision 0074](../decisions/0074-drift-mechanization-as-project-policy.md)**
+   (accepted): a drift class that *can* be deterministically linted
+   *must* be.  Charters Phase 4; AGENTS.md "docs in lockstep" rule
+   reframed as the backstop for the un-mechanizable remainder.
 
 ## Phase 1 — Stop-the-bleeding (Critical / enforcement-not-running)
 
@@ -90,14 +101,17 @@ edits/new ADRs before Phases 1/4 build on them:
    - Complete fix **rejected**: full spec-validating decoder, per-type
      checks everywhere (~100 lines + per-decode CPU on the hot path —
      the *wrong* fix here).
-   - Chosen (~15–20 lines): length-vs-remaining check at each
-     length-prefixed read + a recursion-depth int counter +
-     reject-trailing-bytes in `unpackb` **top-level only** (not in the
-     recursive core).  **Push integrity to the cheap layer**: require
-     the CRC frame (already in CP-NVM) on the MP-NVS / LittleFS /
-     memory kvstore backends.
-   - Residual (documented): `unpackb` is a *trusting* decoder — safe
-     against truncation/overrun/depth, **not** a spec validator.
+   - Chosen (~15–20 lines, per Decision 0073): length-vs-remaining
+     check at each length-prefixed read + a recursion-depth int counter
+     + reject-trailing-bytes in `unpackb` **top-level only** (not in the
+     recursive core).  This closes the decode-garbage-as-valid bug at
+     the codec layer on **every** backend.
+   - CRC-everywhere **dropped** (Decision 0073 / 0034): the CRC stays
+     per-substrate (raw-flash CP-NVM only; NVS + LittleFS are
+     substrate-atomic).  No `_backends/` change in this phase.
+   - Residual (documented in the library's docs/guide + `unpackb`
+     docstring, not only the ADR): `unpackb` is a *trusting* decoder —
+     safe against truncation/overrun/depth, **not** a spec validator.
 2. **CI lint cannot run the CHU rules** — `.github/workflows/ci.yml`
    lint job installs only `ruff`; `scripts/run.py:498` (`run.py lint`)
    calls `python -m chumicro_checks`, never installed on that runner.
@@ -188,6 +202,10 @@ item 2).  Phase 3 and Phase 4 can overlap once Phase 0 lands.
 
 ## Status
 
-Opened 2026-05-16.  Phase 0 open-questions entries filed (msgpack trust
-boundary, coverage-gate honesty, prose-lockstep mechanization).  No code
-phase started — proposal awaiting prioritization.
+Opened 2026-05-16.  **Phase 0 RESOLVED 2026-05-17** — Decision 0073
+(msgpack trusting decoder, per-substrate CRC confirmed), Decisions
+0009 + 0025 corrected in place (coverage honesty) + AGENTS.md, Decision
+0074 (drift-mechanization as policy, charters Phase 4).  Open-questions
+threads deleted.  Phases 1–4 unblocked; no Phase-1 code started.  Next:
+Phase 1 (msgpack decoder hardening — decoder-only per 0073; CI-lint CHU
+gap; release-not-gated-on-CI).
