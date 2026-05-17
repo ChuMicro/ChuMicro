@@ -521,9 +521,41 @@ this is the current state, not a proposal):
 Open threads, none blocking:
 
 1. Should flash-mode test runs also reset between *files* within a
-   library (mirror RAM mode), or is per-library + per-session-start
-   enough?  Decide if/when a per-file bleed actually surfaces — adding
-   it speculatively risks new bugs for no observed failure.
+   library?  **Forcing function arrived (2026-05-17).**  Cross-runtime
+   class discovery now runs large class-organized test modules
+   on-device that never ran there before.  On a 264 KB board (Pi Pico
+   W CP/MP) in flash device-unit this surfaced **two memory walls**
+   (PSRAM Lolin S2 hits neither — websockets 288/0/0):
+
+   - *Compile transient* — **closed** (commit `4fef7f63`): host
+     AST-computed top-level chunk boundaries + device per-statement
+     `exec` (`discovery._exec_chunked`), bounding the compile peak.
+   - *Resident co-residency* — **open**: one large test module
+     (`test_websockets.py`, 136 tests) + the library + the harness
+     exceeds 264 KB *resident*, even on a freshly reset board running
+     that file alone.  Not Decision 0071 cumulative `sys.modules`
+     (single-file-fresh still OOMs); not a compile problem (chunking
+     got us past compile).
+
+   Leading resolution direction: an **opt-in `--per-file` device-unit
+   mode** = soft-reset before each test file (each file gets a clean
+   interpreter: `library + one file + harness`, no accumulation —
+   Decision 0071's per-library reset extended to per-file granularity)
+   **paired with a documented, measured tests-per-file budget** so a
+   single file's resident footprint fits 264 KB (and likely a CHU lint
+   enforcing the cap).  Per-file reset alone is insufficient — a file
+   already over budget OOMs solo; the budget is the load-bearing half,
+   and it gives the genuinely-oversized files (websockets 136,
+   requests 172) a *hardware-derived* reason to split, not an
+   aesthetic one.  Tradeoff: per-file reset adds seconds per file
+   (a full-library sweep is already ~minutes; per-file is materially
+   slower) — hence opt-in, with the fast accumulating path staying
+   default for PSRAM boards / small libraries.  This is the standard
+   embedded-test-harness shape (MicroPython's own runner runs files
+   independently for memory isolation).  Decision-worthy: changes the
+   execution model and adds a test-shape policy in Decision 0071's
+   domain — needs an ADR + an on-device measurement of the actual
+   per-file fresh ceiling to set the budget number.
 2. Could project deploy adopt the reset-before-rsync-then-run-it-
    ourselves shape (more host-side execution control) instead of
    Ctrl-D-then-natural-boot?  The natural-boot path works and is
