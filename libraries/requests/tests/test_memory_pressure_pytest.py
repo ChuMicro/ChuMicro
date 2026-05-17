@@ -159,10 +159,13 @@ class TestResponseParserManyHeadersNoLeak:
     def test_many_headers_no_growth(self) -> None:
         """50-header responses should not accumulate heap across 200 cycles.
 
-        Each header line triggers a ``self._buffer = bytearray(self._buffer[crlf+2:])``
-        reassignment in :meth:`ResponseParser._try_parse_headers` —
-        the highest-churn allocation path in the parser.  Detects any
-        retained reference into the per-header bytearrays.
+        Many-header responses drive the parser's read-cursor +
+        periodic compaction path hard: each header line advances
+        ``ResponseParser._read_offset`` and, once half the staging
+        buffer is consumed, triggers the in-place
+        ``self._buffer[:offset] = b""`` compaction.  Guards against
+        any retained reference into the staging buffer across that
+        repeated consume/compact cycle.
         """
         response = _build_response(body_size=64, header_count=50)
 
