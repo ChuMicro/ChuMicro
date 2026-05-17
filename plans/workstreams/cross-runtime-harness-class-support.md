@@ -157,16 +157,36 @@ on CP+MP.
    the dominant wall is single files individually over the ceiling
    (`test_client` 80, `test_websockets` 136) — these are the split
    backlog, not an accumulation `--per-file` flips.
-   - **Concrete split backlog (bench-gated, per-library):**
-     `websockets/test_websockets.py` (136) + `test_client.py` (77) +
-     `test_server.py` (61); `http_server/test_http_server.py` (123);
-     `mqtt/test_client.py` (80); and `requests/test_wire.py` (89) +
-     `test_client.py` (83) — both still above the coarse Pico W OOM
-     datapoint *after* the cohesion split, so `requests` needs further
-     splitting.  Phase B: re-probe the 4 boards (handoff state is
-     point-in-time), per-library single-file ladder on a fresh Pico W
-     to find the real CP and MP ceilings, split source-module-shaped
-     then mechanically until green, per-library commits.
+   - **Root cause found + fixed 2026-05-17 — it was a staging defect,
+     not (only) a RAM ceiling.**  Bench investigation: websockets CP
+     `--per-file` failed *all 299* tests with rsync `No space left on
+     device` on a library src file, *before any test executed*, on a
+     **freshly `reset-board`-wiped** Pico W.  The stale-flash-junk
+     theory was **falsified** — the clean board overflowed too.  Real
+     cause: the per-file path still routed the first file of each
+     library through `_bulk_stage_for_device`, which rsyncs the
+     library's *entire* test suite + src + harness in one pass; a heavy
+     library's full suite exceeds the ~491 KB Pi Pico W CIRCUITPY
+     drive.  "We test one file at a time but uploaded all files at
+     once."  **Fixed** in `plugin.py` (`is_filesystem_mode and
+     _session_per_file` branch): `--per-file` now stages exactly one
+     test file at a time (file + src + harness), rsync `--delete`
+     bounding the drive; default bulk path unchanged for PSRAM.  Decision
+     0072 §2 corrected (the "wall 2 is purely RAM" framing was
+     incomplete — the binding wall a heavy library hits first on Pico W
+     flash is drive capacity).  Diagnostic lesson: read the rsync error
+     text, not the `F` pattern (cost two ~25-min runs reasoning from the
+     pattern).
+   - **Split backlog is now unknown until re-measured on the fixed
+     harness.**  The flash wall is gone; only a genuine single-file RAM
+     ceiling (one file's resident defs + lib + harness > 256 KB on a
+     fresh VM) would now force a split — and that has *never been
+     cleanly measured* because flash failed first.  Phase B next: with
+     the fix, re-run websockets CP per-file on a clean Pico W, read
+     which (if any) files hit a real `MemoryError`, then ladder/split
+     only those, per library, CP **and** MP.  The earlier list
+     (websockets/http_server/mqtt/requests) is a *candidate* set, not a
+     confirmed backlog.
    - **Source-cohesion split done (2026-05-17), not a fit fix.**
      `requests` test-quality audit (Opus sub-agent) confirmed the suite
      is *not* over-tested (redundancy ~2); the win was source cohesion —
