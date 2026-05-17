@@ -2261,6 +2261,7 @@ def test_unit_on_device(
     circuitpython_device: str | None = None,
     deploy_mode: str | None = None,
     library: str | None = None,
+    per_file: bool = False,
 ) -> int:
     """Run the cross-runtime *unit* suite on real boards (the sweep).
 
@@ -2290,6 +2291,11 @@ def test_unit_on_device(
         deploy_mode: Override the RAM preference for every library
             (``ram`` / ``flash``); the per-library rule still applies.
         library: Limit the sweep to one library's unit suite.
+        per_file: Soft-reset before each test *file* (not just each
+            library) in flash/copy sessions, so a large class-organized
+            module runs on a fresh interpreter.  Opt-in — slower; for
+            large suites on a 256 KB board.  No-op for RAM sessions
+            (they already reset per file).
 
     Returns:
         ``0`` all-pass, ``1`` test failures, ``2`` configuration
@@ -2405,8 +2411,11 @@ def test_unit_on_device(
                     f"python scripts/run.py test-unit-on-device "
                     f"--runtime {target_runtime} "
                     f"--deploy-mode {session_mode}"
+                    + (" --per-file" if per_file else "")
                 ),
             ]
+            if per_file:
+                command.append("--per-file")
             print(
                 f"== on-device unit sweep: {target_runtime} / "
                 f"{session_mode} ({len(group)} libraries) ==",
@@ -2936,6 +2945,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--library",
         help="limit the sweep to one library's unit suite",
     )
+    test_unit_on_device_parser.add_argument(
+        "--per-file",
+        dest="per_file",
+        action="store_true",
+        help=(
+            "soft-reset before each test file (not just each library) "
+            "in flash/copy sessions, so a large class-organized module "
+            "runs on a fresh interpreter; opt-in, slower, for large "
+            "suites on a 256 KB board (no-op for RAM sessions)"
+        ),
+    )
 
     check_version_parser = subparsers.add_parser(
         "check-version", help="check VERSION enforcement for changed libraries",
@@ -3293,6 +3313,7 @@ def main(argv: list[str]) -> int:
             circuitpython_device=args.circuitpython_device,
             deploy_mode=args.deploy_mode,
             library=args.library,
+            per_file=args.per_file,
         )
 
     if args.task == "build":

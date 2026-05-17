@@ -648,6 +648,7 @@ class TestMainDispatch:
                 "circuitpython_device": None,
                 "deploy_mode": None,
                 "library": None,
+                "per_file": False,
             }),
         ]
 
@@ -673,8 +674,22 @@ class TestMainDispatch:
                 "circuitpython_device": "cp-alt",
                 "deploy_mode": "flash",
                 "library": "ntp",
+                "per_file": False,
             }),
         ]
+
+    def test_test_unit_on_device_forwards_per_file(
+        self, monkeypatch,
+    ) -> None:
+        command_calls, fake = _make_fake_command(return_value=58)
+        monkeypatch.setattr(run, "test_unit_on_device", fake)
+
+        result = run.main([
+            "run.py", "test-unit-on-device", "--per-file",
+        ])
+
+        assert result == 58
+        assert command_calls[0][1]["per_file"] is True
 
     def test_test_workbench_functional_without_filters_passes_none_values(
         self, monkeypatch,

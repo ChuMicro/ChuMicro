@@ -1101,6 +1101,94 @@ class TestEnsurePrepared:
         assert "not reachable" in cached[1]
 
 
+class TestPerFileReset:
+    """Tests for the opt-in ``--per-file`` device-unit reset."""
+
+    @staticmethod
+    def _enable_per_file(session) -> None:
+        session.config.getoption = (  # type: ignore[method-assign]
+            lambda name, default=None: True if name == "--per-file" else default
+        )
+
+    @staticmethod
+    def _second_same_library_file(tmp_path: Path) -> Path:
+        second = tmp_path / "alpha" / "functional_tests" / "test_y.py"
+        second.write_text("def test_other(): pass\n")
+        return second
+
+    def test_session_per_file_reads_option(
+        self, hot_path_session,
+    ) -> None:
+        """``_session_per_file`` is False by default, True when set."""
+        assert pytest_device._session_per_file(hot_path_session) is False
+        self._enable_per_file(hot_path_session)
+        assert pytest_device._session_per_file(hot_path_session) is True
+
+    def test_default_resets_per_library_only(
+        self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
+    ) -> None:
+        """Without ``--per-file``, a second same-library file does not reset."""
+        device = hot_path_device()
+        transport = HotPathTransport(mode="flash")
+        prime_transport_cache(hot_path_cache, device, transport)
+        monkeypatch.setattr(
+            pytest_device, "_bulk_stage_for_device",
+            lambda *args, **kwargs: None,
+        )
+
+        first = _make_functional_test_file(tmp_path, "alpha")
+        second = self._second_same_library_file(tmp_path)
+        make_prepare_item(hot_path_session, device, first)._ensure_prepared(device)
+        make_prepare_item(hot_path_session, device, second)._ensure_prepared(device)
+
+        resets = [call for call in transport.calls if call[0] == "soft_reset"]
+        # Only the library-switch reset (first library on the device).
+        assert len(resets) == 1
+
+    def test_per_file_resets_before_each_same_library_file(
+        self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
+    ) -> None:
+        """``--per-file``: each same-library file gets a fresh interpreter,
+        idempotently across the two prepare() calls per batch, with no
+        extra bulk stage (the tree persists on the device FS)."""
+        self._enable_per_file(hot_path_session)
+        device = hot_path_device()
+        transport = HotPathTransport(mode="flash")
+        prime_transport_cache(hot_path_cache, device, transport)
+        bulk_calls: list = []
+        monkeypatch.setattr(
+            pytest_device, "_bulk_stage_for_device",
+            lambda *args, **kwargs: bulk_calls.append(1),
+        )
+
+        first = _make_functional_test_file(tmp_path, "alpha")
+        second = self._second_same_library_file(tmp_path)
+        make_prepare_item(hot_path_session, device, first)._ensure_prepared(device)
+        second_item = make_prepare_item(hot_path_session, device, second)
+        second_item._ensure_prepared(device)
+        second_item._ensure_prepared(device)  # 2nd prepare() of the batch.
+
+        resets = [call for call in transport.calls if call[0] == "soft_reset"]
+        clears = [call for call in transport.calls if call[0] == "clear_entrypoints"]
+        # 1 library-switch reset + exactly 1 per-file reset for the
+        # second file (idempotent — not 2 despite the double prepare()).
+        assert len(resets) == 2
+        assert len(clears) == 1
+        # Per-file reset does NOT re-stage; only the library switch did.
+        assert len(bulk_calls) == 1
+
+    def test_cache_per_file_reset_idempotency_and_invalidation(self) -> None:
+        """The cache marker is one-shot per batch key and device-scoped."""
+        cache = pytest_device._TransportCache()
+        key = ("dev-1", "alpha", "test_y.py")
+        assert cache.per_file_reset_pending(key) is True
+        cache.mark_per_file_reset(key)
+        assert cache.per_file_reset_pending(key) is False
+        cache.invalidate_device("dev-1")
+        # After a transport eviction the next genuine reconnect resets.
+        assert cache.per_file_reset_pending(key) is True
+
+
 class TestEnsureBatchResult:
     """Tests for DeviceRuntimeItem._ensure_batch_result."""
 

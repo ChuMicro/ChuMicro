@@ -15,6 +15,8 @@ A "library" is one publishable package — one `pyproject.toml` + `src/<name>/` 
 
 **Sibling audits.** Embedded-systems concerns (flash, RAM-at-import, fragmentation, `const()` / `memoryview` reality on the device) route to `/audit-embedded` — same target library, different lens.  Cross-library concerns escalate to `/audit-integration`; ecosystem concerns to `/audit-workspace`.
 
+**Test-file split is sometimes hardware-driven, not readability.** Before flagging a large `tests/test_*.py` as a peer-LOC outlier to split: a very large class-organized module that `MemoryError`s the on-device unit sweep on a 256 KB board is a *reactive* split governed by [Decision 0072](../../../plans/decisions/0072-large-test-modules-on-constrained-boards.md) (one test file per source module; see [device-testing.md](../../../docs/contributing/device-testing.md#large-test-modules-on-a-256-kb-board)). Cite that rationale when it applies, not a readability one; the threshold is library-weight-dependent, not a fixed line count.
+
 Argument: the library name (matches the folder under `libraries/` or `workbench/`).  Example: `/audit-library wifi`, `/audit-library deploy`, `/audit-library workspace`.
 
 ## Audit philosophy

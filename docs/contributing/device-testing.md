@@ -147,6 +147,15 @@ If a multi-stack test fails under `ram`, switch the device's `deploy_mode` to `f
 
 You usually don't have to switch by hand for the common cases: a requested `ram` deploy automatically falls back to `flash`, with a printed explanation, when the staged set contains a non-`.py` data file, when any library in the dependency closure declares `requires_flash`, or when the device sets `supports_ram_mode: false`. The run continues in `flash` — it is never silently mis-deployed. Hand-setting `deploy_mode: flash` is still the right move when you simply know a board can't hold the RAM payload.
 
+### Large test modules on a 256 KB board
+
+The on-device unit sweep runs each cross-runtime test *file* through one device interpreter. On a 256 KB board (Pi Pico W) a very large class-organized module — the library it imports, plus that file's full set of test classes resident at once — can exhaust RAM with a `MemoryError` while importing the library, even on a freshly reset board. PSRAM boards (Lolin S2) are unaffected.
+
+Two levers, per [Decision 0072](../../plans/decisions/0072-large-test-modules-on-constrained-boards.md):
+
+- `scripts/run.py test-unit-on-device --per-file` (or `pytest ... --per-file`) soft-resets the interpreter before *each* test file, not just each library, so a file never inherits a sibling's resident state. Opt-in — it adds a reboot per file, so the default per-library reset stays the fast path for PSRAM boards and small libraries.
+- There is no fixed tests-per-file cap (the ceiling is library-weight-dependent — heavier libraries hit it sooner). If a single file still `MemoryError`s on the smallest target even with `--per-file`, **split it to mirror its source module** (one test file per source module). That is a hardware-driven split, not a style preference.
+
 ## Configure `secrets.toml`
 
 Credentials and device-bound defaults that every functional test inherits at deploy time, in one gitignored file.  Materialized by `setup` with placeholder values for `wifi.ssid` and `mqtt.broker.host`.

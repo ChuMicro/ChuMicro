@@ -127,27 +127,33 @@ on CP+MP.
    (no PEP 448 set unpacking — this runs on-device).  Verified: the
    device now compiles the big module and proceeds into execution.
 
-2. **Resident co-residency — OPEN, deferred (Decision-worthy).**  Past
-   compile, the OOM moves to `chumicro_websockets/__init__.py:11` —
-   importing the library while the 136-test module's defs (17 classes)
-   are resident.  Small files importing the same library pass on the
-   Pico W (`test_integration` 10/10, `test_sockets_factory` 5/5); the
-   resident cost scales with test count.  A single big file on a
-   *freshly reset* board still OOMs, so this is **not** cumulative
-   `sys.modules` (Decision 0071) — it is genuine co-residency of one
-   large test module + the library + the harness exceeding 264 KB.
-   Chunked *compile* cannot fix a *resident* ceiling.  The real fix is
-   sub-batch execution (run a file's tests in groups with a soft-reset
-   between, re-importing the library per batch so not all defs are
-   resident at once) — exactly `plans/open-questions.md` thread 1
-   (per-file flash reset), deliberately deferred by Decision 0071.
-   It needs its own design pass; not cowboyed here.
+2. **Resident co-residency — RESOLVED by [Decision 0072](../decisions/0072-large-test-modules-on-constrained-boards.md).**  Past
+   compile, the OOM moves to importing the library while one large
+   test module's defs are resident.  A single big file on a *freshly
+   reset* board still OOMs, so this is **not** cumulative `sys.modules`
+   (Decision 0071) — genuine co-residency of one large test module +
+   the library + the harness exceeding 256 KB.  Chunked *compile*
+   cannot fix a *resident* ceiling.  Resolution (Decision 0072):
+   - **Opt-in `--per-file` reset — implemented.**  `scripts/run.py
+     test-unit-on-device --per-file` / `pytest ... --per-file`
+     soft-resets the interpreter before each test *file* (Decision
+     0071's per-library reset extended to per-file granularity, no
+     re-stage — the tree persists on the device FS), idempotent across
+     the two `prepare()` calls per batch.  Default stays per-library
+     (fast).  Plugin + `scripts/run.py` + 7 unit tests; preflight green.
+   - **Reactive split — documented, non-mechanized.**  No tests-per-file
+     cap or CHU lint; the ceiling is library-weight-dependent (coarse
+     Pico W CP measurement: heavy `_wire` libs ≈32–61 tests/file
+     fresh).  Caution + split-when-it-OOMs in `device-testing.md`;
+     `/audit-library` + `/audit-embedded` carry the cross-ref pointer.
+   Hardware: the mechanism is wired and unit-proven; on mqtt/websockets
+   the dominant wall is single files individually over the ceiling
+   (`test_client` 80, `test_websockets` 136) — the documented
+   reactive-split set, not an accumulation `--per-file` flips.  Its
+   payoff is realized paired with those splits (next).
 
 Neither wall affects the bench-free landing or the PSRAM-board
-validation.  Wall 2's status (pursue the sub-batch design vs. accept a
-documented 264 KB ceiling for very large class modules, per the
-deploy-mode-unification 4d "sweep output, not a gate" framing) is an
-open call surfaced to the user.
+validation.
 
 ## Acceptance
 
