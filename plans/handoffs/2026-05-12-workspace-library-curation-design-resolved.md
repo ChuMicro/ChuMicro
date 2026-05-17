@@ -1,5 +1,22 @@
 # Handoff 2026-05-12 — workspace-library-curation design fully resolved, Phase 1 implementation pending
 
+## Audit 2026-05-17 (252 commits later — resume-ready, with corrections)
+
+Validated against ground truth before any cold resume: `eb2d7543`, the
+workstream-as-source-of-truth, Decision 0062 (`accepted`),
+`release.yml`'s publish-on-VERSION-bump trigger, and the
+`sources._resolve_module` walker seam all still hold. **Q1's
+load-bearing premise is intact** — all 15 libraries still
+`include = ["src/", "VERSION", "README.md"]`; no Phase 1 work started;
+"nothing partial" still true. One **material drift**: `ef4f8e1f`
+declared `[test]` extras across all 15 libraries' `pyproject.toml`
+*after* this handoff — Q1's "sdist ships `tests/`" now means a curated
+consumer who wants to run the shipped tests installs
+`chumicro-<lib>[test]`; the build-time regression test should also
+assert the `[test]` extra is declared, and the design note should say
+so. Trivial drift: `patch_experimental` is line 606, not ~604. The
+`.idea/chumicro.iml` gotcha below is **stale** — strike it.
+
 ## What this session was about
 
 User picked up the `workspace-library-curation` workstream (chartered earlier the same day as a Tier 2 follow-up to Decision 0062).  Goal: drive the four open design questions in the workstream doc to resolution so Phase 1 implementation can start.  All four questions answered through iterative back-and-forth; design committed as `eb2d7543`.
@@ -79,6 +96,7 @@ None blocking.  User gave green light on the full design; Phase 1 is unblocked. 
 
 ## Gotchas
 
-- **`.idea/chumicro.iml` is dirty in the working tree** — PyCharm rewrote it during the session: stripped the managed-file header comment, added a `.scratch/fresh-clone-test/chumicro/.venv` excludeFolder, dropped the trailing newline.  Pre-existing, unrelated to design work.  Run `python scripts/run.py sync-ide` from the main checkout (not a worktree — see CLAUDE.md memory) to restore the managed shape.  Did not include it in `eb2d7543`.
+- ~~`.idea/chumicro.iml` is dirty in the working tree~~ **STALE (2026-05-17 audit)** — that was a 2026-05-12 session-transient PyCharm artifact; the tree is clean 252 commits later. Ignore this gotcha.
+- **`[test]` extras now exist (post-handoff, `ef4f8e1f`)** — Q1's "extend each library's sdist `include` to ship `tests/`" must reconcile with the per-library `[test]` optional-dependency extra: shipping the test files is necessary but not sufficient to *run* them off a curated install; the consumer needs `chumicro-<lib>[test]`. Fold this into the Q1 design note and the build-time sdist regression test (assert both the `tests/` content *and* the `[test]` extra) when Phase 1 starts.
 - **`version: HEAD` is a sentinel, not a PyPI version string** — when implementing the resolver, detect `HEAD` before passing to PyPI's version resolver.  PyPI doesn't recognize "HEAD" as a version; the resolver should translate `HEAD` → `latest` for the channel's package.
 - **Phase 1 changes 15 library `pyproject.toml` files** — that's a VERSION bump per library (sdist content change is a publish-affecting change).  Either bundle all 15 into one VERSION-bump commit per library, or take a more deliberate approach with a workstream-wide release pass.  Worth deciding before the edits land so the publish chain doesn't churn.
