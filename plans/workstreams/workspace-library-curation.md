@@ -35,11 +35,13 @@ chumicro-workspace library remove <name>                      # warns if other l
 chumicro-workspace library switch-channel <name> <channel>
 ```
 
-Built across four modules: `managed_block.py` (generalized regex block writer extracted from `chumicro_dev.sync_library_sources`), `curated_libraries.py` (the `libraries:` table model + reader + writer), `dep_resolver.py` (`chumicro_dependencies` + cycle-safe `transitive_closure`), and `cli/library.py` (the five verbs).  `library.py` gained `fetch_closure` (BFS fetch + dep walk), `read_installed_version`, `remove_library`.
+Built across four modules: `managed_block.py` (generalized regex block writer extracted from `chumicro_dev.sync_library_sources`), `curated_libraries.py` (the `libraries:` table model + reader + writer), `dep_resolver.py` (`chumicro_dependencies` + cycle-safe `transitive_closure`), and `cli/library.py` (the six verbs).  `library.py` gained `fetch_closure` (BFS fetch + dep walk), `read_installed_version`, `remove_library`.
 
 Dependency resolution: `library add` BFS-fetches the root then every chumicro lib in its `[project].dependencies` closure.  **Implemented behavior vs the original sketch:** the transitive prompt is a single all-or-nothing `[Y/n]` on the whole transitive set (not per-dep deselect) — declining records every transitive entry `declined: true` and removes it from disk; the fetched-then-removed cost is accepted to avoid a separate metadata-only resolver.  Non-interactive keeps the full set (Decision 0066 default).  Interactivity = `sys.stdin.isatty()` and not `--non-interactive`.
 
-**Deferred (not blocking; follow-ups):** per-dep deselect granularity (currently all-or-nothing); the `declined`-flip-on-`remove` + a `library forget` verb from the Q4 sketch (`remove` currently deletes the entry outright); the workspace-template repo's regular-mode README (gap #4b) gaining a `library add` section now that this path exists.
+The Q4 remove/forget state machine is implemented: `add` → row present, `declined: false`; `remove` → uninstall the tree but keep the row as `declined: true` (so `update` skips it and the decision is auditable); a later `add` flips `declined` back off; `forget` → drop the row entirely (and uninstall if still present).  Both `remove` and `forget` warn (and, when interactive, confirm) if other curated libraries still depend on the target.
+
+**Deferred (not blocking; follow-ups):** per-dep deselect granularity (currently all-or-nothing); the workspace-template repo's regular-mode README (gap #4b) gaining a `library add` section now that this path exists.
 
 Pin state lives in `workspace.yml` under a new `libraries:` table — see Q2 below for the schema.
 
