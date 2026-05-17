@@ -92,6 +92,54 @@ class TestBuildBootstrap:
         script = device_testing.build_bootstrap("test_x.py")
         assert "name_filter=None" in script
 
+    def test_chunk_boundaries_none_by_default(self) -> None:
+        """No boundaries ⇒ the device keeps the single whole-file exec."""
+        script = device_testing.build_bootstrap("test_x.py")
+        assert "chunk_boundaries=None" in script
+
+    def test_chunk_boundaries_embedded_when_set(self) -> None:
+        """Boundaries are embedded as a literal list for the device."""
+        script = device_testing.build_bootstrap(
+            "test_x.py", chunk_boundaries=[1, 7, 40]
+        )
+        assert "chunk_boundaries=[1, 7, 40]" in script
+        compile(script, "<bootstrap>", "exec")
+
+
+class TestChunkBoundariesFor:
+    """Tests for chunk_boundaries_for (host-side AST segmentation)."""
+
+    def test_decorator_aware_start_lines(self, tmp_path: Path) -> None:
+        """A decorated def starts at its decorator, not the def line."""
+        source = (
+            "import os\n"          # 1
+            "\n"                    # 2
+            "def deco(f):\n"        # 3
+            "    return f\n"        # 4
+            "\n"                    # 5
+            "@deco\n"               # 6
+            "def thing():\n"        # 7
+            "    return 1\n"        # 8
+        )
+        path = tmp_path / "m.py"
+        path.write_text(source)
+        assert device_testing.chunk_boundaries_for(path) == [1, 3, 6]
+
+    def test_future_import_disables_chunking(self, tmp_path: Path) -> None:
+        """A __future__ import ⇒ None (each chunk compiles alone)."""
+        path = tmp_path / "m.py"
+        path.write_text(
+            "from __future__ import annotations\n\n"
+            "def a():\n    pass\n\ndef b():\n    pass\n"
+        )
+        assert device_testing.chunk_boundaries_for(path) is None
+
+    def test_single_statement_returns_none(self, tmp_path: Path) -> None:
+        """Fewer than two top-level statements ⇒ nothing to split."""
+        path = tmp_path / "m.py"
+        path.write_text("class TestOnly:\n    def test_a(self):\n        pass\n")
+        assert device_testing.chunk_boundaries_for(path) is None
+
 
 class TestCreateTransport:
     """Tests for build_transport_for_entry deploy mode routing."""

@@ -106,17 +106,48 @@ is the one remaining hardware-gated step — see Status.
   (per-library on-silicon conformance is output, not a gate).  Recorded
   as a harness follow-up below; the bench-free landing is unaffected.
 
-### On-device follow-up (not a blocker)
+### On-device follow-up — two memory walls, one closed
 
-`discovery._exec_as_namespace` execs a whole test file as a single
-namespace.  With class discovery now running ~800 previously-host-only
-methods on-device, a large class-based module no longer fits a 264 KB
-board's RAM in flash mode (Pi Pico W CP/MP).  PSRAM boards (Lolin S2)
-are unaffected.  Fix shape (future): per-class or chunked exec / staged
-import so a 136-test module doesn't allocate as one block.  Rides with
-the deploy-mode-unification on-device sweep work — same memory class as
-Decision 0071's cumulative-`sys.modules` finding, different axis
-(per-file module size vs. cross-library accumulation).
+Investigating the Pico W OOM (bench, boards live) found **two distinct
+memory walls** for a large class-organized module on a 264 KB board in
+flash mode.  PSRAM boards (Lolin S2) hit neither — websockets 288/0/0
+on CP+MP.
+
+1. **Compile transient — CLOSED.**  `discovery._exec_as_namespace` fed
+   the whole 1212-LOC source to one `exec()`; MicroPython /
+   CircuitPython compile the entire argument at once, and that peak
+   exceeded the Pico W.  Fixed: the host (`_test_runner.chunk_boundaries_for`,
+   CPython `ast`, decorator-aware) computes top-level statement start
+   lines and the device exec's the file in per-statement chunks into
+   one shared namespace (`discovery._exec_chunked`), bounding the
+   compile peak to the largest single statement.  Newline-left-padded
+   so tracebacks keep real line numbers; `None` boundaries keep the
+   single whole-file exec (CPython / unix-port unaffected); a
+   `from __future__` import or <2 statements disables it.  MP-safe
+   (no PEP 448 set unpacking — this runs on-device).  Verified: the
+   device now compiles the big module and proceeds into execution.
+
+2. **Resident co-residency — OPEN, deferred (Decision-worthy).**  Past
+   compile, the OOM moves to `chumicro_websockets/__init__.py:11` —
+   importing the library while the 136-test module's defs (17 classes)
+   are resident.  Small files importing the same library pass on the
+   Pico W (`test_integration` 10/10, `test_sockets_factory` 5/5); the
+   resident cost scales with test count.  A single big file on a
+   *freshly reset* board still OOMs, so this is **not** cumulative
+   `sys.modules` (Decision 0071) — it is genuine co-residency of one
+   large test module + the library + the harness exceeding 264 KB.
+   Chunked *compile* cannot fix a *resident* ceiling.  The real fix is
+   sub-batch execution (run a file's tests in groups with a soft-reset
+   between, re-importing the library per batch so not all defs are
+   resident at once) — exactly `plans/open-questions.md` thread 1
+   (per-file flash reset), deliberately deferred by Decision 0071.
+   It needs its own design pass; not cowboyed here.
+
+Neither wall affects the bench-free landing or the PSRAM-board
+validation.  Wall 2's status (pursue the sub-batch design vs. accept a
+documented 264 KB ceiling for very large class modules, per the
+deploy-mode-unification 4d "sweep output, not a gate" framing) is an
+open call surfaced to the user.
 
 ## Acceptance
 

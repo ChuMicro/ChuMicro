@@ -25,6 +25,11 @@ import sys
 
 from chumicro_test_harness.runner import run_module
 
+try:
+    import gc as _gc
+except ImportError:  # pragma: no cover - gc may be absent on some CPython configs.
+    _gc = None
+
 
 def _is_dir(path):
     """Return True if *path* is an existing directory.
@@ -100,7 +105,53 @@ class _Namespace:
     pass
 
 
-def _exec_as_namespace(file_path, name="__main__", package=""):
+def _exec_chunked(source, boundaries, namespace):
+    """Exec *source* in top-level-statement chunks into *namespace*.
+
+    Splitting a module at top-level statement boundaries and exec'ing
+    each piece into the *same* globals dict, in source order, is
+    semantically identical to exec'ing the whole module — name
+    resolution goes through the shared dict either way.  What it buys
+    is a bounded *compile* transient: MicroPython / CircuitPython
+    compile the whole ``exec`` argument at once, and that peak (not the
+    resulting objects) is what exhausts a 256 KB board on a large
+    class-organized test module.  Chunking caps the peak at the
+    largest single top-level statement.
+
+    Each chunk is left-padded with newlines so its statements keep
+    their original line numbers — tracebacks still point at the real
+    source line.
+
+    Args:
+        source: Full file source text.
+        boundaries: 1-based start lines of top-level statements
+            (decorator-aware), computed host-side via ``ast``.
+        namespace: The shared exec globals dict.
+    """
+    lines = source.split("\n")
+    # Line 1 anchors the module preamble (docstring / imports before
+    # the first statement); the rest are statement starts.  Built with
+    # plain list ops — MicroPython / CircuitPython lack PEP 448 set
+    # unpacking, and this module runs on-device.
+    candidates = [1]
+    for line in boundaries:
+        if line > 1:
+            candidates.append(line)
+    starts = []
+    for value in sorted(candidates):
+        if not starts or starts[-1] != value:
+            starts.append(value)
+    for index in range(len(starts)):
+        begin = starts[index] - 1
+        end = starts[index + 1] - 1 if index + 1 < len(starts) else len(lines)
+        chunk = "\n" * begin + "\n".join(lines[begin:end])
+        if chunk.strip():
+            exec(chunk, namespace)
+        if _gc is not None:
+            _gc.collect()
+
+
+def _exec_as_namespace(file_path, name="__main__", package="", chunk_boundaries=None):
     """Execute a ``.py`` file and return a namespace object with its globals.
 
     Uses ``exec()`` rather than the standard import machinery because
@@ -112,6 +163,12 @@ def _exec_as_namespace(file_path, name="__main__", package=""):
         file_path: Path to the Python file to execute.
         name: Value for ``__name__`` in the exec namespace.
         package: Value for ``__package__`` in the exec namespace.
+        chunk_boundaries: Optional 1-based top-level statement start
+            lines (computed host-side via ``ast``).  When provided the
+            file is exec'd in per-statement chunks to bound the compile
+            transient on RAM-constrained boards; ``None`` keeps the
+            single whole-file ``exec`` (CPython / unix-port, where RAM
+            is ample and one compile is faster).
 
     Returns:
         Namespace object with the file's globals as attributes.
@@ -120,7 +177,11 @@ def _exec_as_namespace(file_path, name="__main__", package=""):
     # like a real module to any code that inspects __name__ or __package__.
     namespace = {"__name__": name, "__file__": file_path, "__package__": package}
     with open(file_path) as source_file:
-        exec(source_file.read(), namespace)
+        source = source_file.read()
+    if chunk_boundaries:
+        _exec_chunked(source, chunk_boundaries, namespace)
+    else:
+        exec(source, namespace)
     # Convert dict → attribute object so run_module can use dir()/getattr().
     result = _Namespace()
     for key in namespace:

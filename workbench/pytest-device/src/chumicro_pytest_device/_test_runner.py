@@ -50,9 +50,40 @@ def _library_name_from_module(module_name: str) -> str | None:
     return module_name.removeprefix("chumicro_").split(".", 1)[0]
 
 
+def chunk_boundaries_for(source_path: Path) -> list[int] | None:
+    """Return 1-based top-level statement start lines, or ``None``.
+
+    Computed host-side (CPython has ``ast``; the boards do not) so the
+    device can exec a large test module in per-statement chunks and
+    keep its compile transient bounded.  Decorator-aware: a decorated
+    class/def starts at its first decorator, so the decorator and the
+    statement it decorates land in the same chunk.
+
+    Returns ``None`` — keep the single whole-file ``exec`` — when
+    chunking would be unsafe or pointless: a ``from __future__`` import
+    (each chunk compiles independently, so a future statement cannot
+    govern later chunks) or fewer than two top-level statements
+    (nothing to split).
+    """
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    starts: list[int] = []
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == "__future__":
+            return None
+        start = node.lineno
+        decorators = getattr(node, "decorator_list", [])
+        if decorators:
+            start = min(start, decorators[0].lineno)
+        starts.append(start)
+    if len(starts) < 2:
+        return None
+    return sorted(starts)
+
+
 def build_bootstrap(
     test_filename: str,
     name_filter: str | None = None,
+    chunk_boundaries: list[int] | None = None,
 ) -> str:
     """Generate a bootstrap script for the on-device test harness.
 
@@ -63,15 +94,20 @@ def build_bootstrap(
         test_filename: Name of the test file (e.g.
             ``test_heartbeat_ticks.py``).
         name_filter: Optional name filter to pass to ``run_module``.
+        chunk_boundaries: Optional top-level statement start lines; when
+            set, the device exec's the file in chunks (RAM-constrained
+            boards).  ``None`` keeps the single whole-file exec.
 
     Returns:
         Python source code string for the bootstrap script.
     """
     filter_repr = repr(name_filter) if name_filter else "None"
+    boundaries_repr = repr(chunk_boundaries) if chunk_boundaries else "None"
     return (
         "from chumicro_test_harness.runner import run_module\n"
         "from chumicro_test_harness.discovery import _exec_as_namespace\n"
-        f"module = _exec_as_namespace('{test_filename}')\n"
+        f"module = _exec_as_namespace('{test_filename}', "
+        f"chunk_boundaries={boundaries_repr})\n"
         f"run_module(module, name_filter={filter_repr})\n"
     )
 
@@ -251,6 +287,7 @@ def build_device_bootstrap(
     return build_bootstrap(
         test_file.name,
         name_filter=function_filter,
+        chunk_boundaries=chunk_boundaries_for(test_file),
     )
 
 
