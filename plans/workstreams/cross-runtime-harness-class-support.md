@@ -194,15 +194,23 @@ on CP+MP.
      co-residency wall.  **websockets CP per-file ceiling: between 12
      (full pass) and ~30 tests/file** (websockets is `_wire`-heavy, so
      lower than the coarse sockets-weight ≈32–61 datapoint).
-   - **Confirmed split backlog (websockets CP).**  Over the ceiling:
-     `test_client.py` (77), `test_server.py` (73), `test_websockets.py`
-     (136) — split into source-module-shaped sub-files at ≲~12–15
-     tests/file (the safe datapoint), lossless, then re-validate on a
-     fresh Pico W CP **and** MP.  Under: `test_integration.py` (12),
-     `test_sockets_factory.py` (7) — leave.  http_server / mqtt /
-     requests still need the same fixed-harness per-library measurement
-     (their ceilings/backlogs are not yet confirmed — re-measure, do
-     not assume from pre-fix numbers).
+   - **websockets split DONE + Pico W CP green (2026-05-17).**  The
+     three over-ceiling files split losslessly (byte-identical class
+     bodies, deterministic AST splitter, counts preserved): `test_websockets.py`
+     (136) → 7 `test_wire_*.py`; `test_client.py` (77) → 4
+     `test_client_*.py`; `test_server.py` (61, *not* the 73 misstated
+     earlier) → 4 `test_server_*.py`.  Ladder result fixed the slice
+     size empirically: a 30-test slice OOM'd, ≤26 passed → final slices
+     ≤26.  **Pico W CP: 287 passed, 0 failed, 0 errors**, all 15 slices
+     under the resident ceiling.  One **intrinsic-allocation** holdout:
+     `test_unmasked_64bit_length` needs ~64 KB contiguous (4× the
+     library's 16 KB `DEFAULT_MAX_MESSAGE_BYTES`) — not co-residency a
+     split fixes; loud-skipped on the 264 KB tier via
+     `chumicro_test_harness.skip` gated on `gc.mem_free()`, still run on
+     PSRAM + CPython.  Decision 0072 §3 gained the intrinsic-allocation
+     exception clause.  Remaining: Pico W **MP** validation of these
+     splits, then `http_server` / `mqtt` / `requests` (re-measure per
+     library on the fixed harness — do not assume pre-fix numbers).
    - **Source-cohesion split done (2026-05-17), not a fit fix.**
      `requests` test-quality audit (Opus sub-agent) confirmed the suite
      is *not* over-tested (redundancy ~2); the win was source cohesion —
