@@ -177,16 +177,32 @@ on CP+MP.
      flash is drive capacity).  Diagnostic lesson: read the rsync error
      text, not the `F` pattern (cost two ~25-min runs reasoning from the
      pattern).
-   - **Split backlog is now unknown until re-measured on the fixed
-     harness.**  The flash wall is gone; only a genuine single-file RAM
-     ceiling (one file's resident defs + lib + harness > 256 KB on a
-     fresh VM) would now force a split — and that has *never been
-     cleanly measured* because flash failed first.  Phase B next: with
-     the fix, re-run websockets CP per-file on a clean Pico W, read
-     which (if any) files hit a real `MemoryError`, then ladder/split
-     only those, per library, CP **and** MP.  The earlier list
-     (websockets/http_server/mqtt/requests) is a *candidate* set, not a
-     confirmed backlog.
+   - **Fix validated on hardware (2026-05-17, `e7bf93b8`).**  websockets
+     CP `--per-file` on a clean Pico W: **74 s, zero `No space left`**
+     (was 26 min, all-fail).  The flash wall is gone; the genuine RAM
+     resident ceiling is now cleanly measured for the first time
+     (`MemoryError: allocating 1256 bytes` — heap right at the edge):
+     - `test_integration.py` (12 tests) — **all pass** ✓
+     - `test_sockets_factory.py` (7) — **all pass** ✓
+     - `test_client.py` (77) — 1 passes, rest OOM
+     - `test_server.py` (73) — 1 passes, rest OOM
+     - `test_websockets.py` (136) — 1 passes, rest OOM
+
+     Pattern: file imports + first test run just fit; the module's
+     resident defs + library + harness then exhaust the heap, every
+     later test OOMs.  This is exactly Decision 0072 §3's resident
+     co-residency wall.  **websockets CP per-file ceiling: between 12
+     (full pass) and ~30 tests/file** (websockets is `_wire`-heavy, so
+     lower than the coarse sockets-weight ≈32–61 datapoint).
+   - **Confirmed split backlog (websockets CP).**  Over the ceiling:
+     `test_client.py` (77), `test_server.py` (73), `test_websockets.py`
+     (136) — split into source-module-shaped sub-files at ≲~12–15
+     tests/file (the safe datapoint), lossless, then re-validate on a
+     fresh Pico W CP **and** MP.  Under: `test_integration.py` (12),
+     `test_sockets_factory.py` (7) — leave.  http_server / mqtt /
+     requests still need the same fixed-harness per-library measurement
+     (their ceilings/backlogs are not yet confirmed — re-measure, do
+     not assume from pre-fix numbers).
    - **Source-cohesion split done (2026-05-17), not a fit fix.**
      `requests` test-quality audit (Opus sub-agent) confirmed the suite
      is *not* over-tested (redundancy ~2); the win was source cohesion —
