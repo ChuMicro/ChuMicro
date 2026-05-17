@@ -521,9 +521,17 @@ this is the current state, not a proposal):
 Open threads, none blocking:
 
 1. Should flash-mode test runs also reset between *files* within a
-   library?  **Forcing function arrived (2026-05-17).**  Cross-runtime
-   class discovery now runs large class-organized test modules
-   on-device that never ran there before.  On a 264 KB board (Pi Pico
+   library?  **Resolved → [Decision 0072](decisions/0072-large-test-modules-on-constrained-boards.md)**
+   (2026-05-17): wall 1 (compile transient) closed via chunked exec;
+   wall 2 (resident co-residency of a large class module + library +
+   harness on a 256 KB board) resolved by an opt-in `--per-file` reset
+   mode + a documented non-mechanized reactive-split caution.  The ADR
+   is the durable record; implementation of `--per-file` is tracked in
+   the cross-runtime-harness workstream.  `git log` on this file
+   preserves the full two-wall investigation that produced the ADR.
+   Original analysis kept below only until `--per-file` lands:
+
+   On a 264 KB board (Pi Pico
    W CP/MP) in flash device-unit this surfaced **two memory walls**
    (PSRAM Lolin S2 hits neither — websockets 288/0/0):
 
