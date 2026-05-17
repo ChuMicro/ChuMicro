@@ -150,7 +150,21 @@ on CP+MP.
    the dominant wall is single files individually over the ceiling
    (`test_client` 80, `test_websockets` 136) — the documented
    reactive-split set, not an accumulation `--per-file` flips.  Its
-   payoff is realized paired with those splits (next).
+   payoff is realized paired with those splits.
+   - **First reactive split done (2026-05-17).**  `requests` test-quality
+     audit (Opus sub-agent) confirmed the suite is *not* over-tested
+     (redundancy ~2) and the real win is source cohesion:
+     `test_requests.py` (2011 LOC, 172 tests, 22 classes) tested two
+     source modules.  Split into `test_wire.py` (9 `_wire` classes, 89
+     tests) + `test_client.py` (13 `client` classes + the helper block +
+     the 2 helper classes, 83 tests).  Built from exact source ranges —
+     test bodies byte-identical; 172 preserved (CPython exact match),
+     ruff clean, MP+CP unix-port green, preflight green.  The audit's
+     "wire needs no helpers" was verified-and-corrected (`canned_response`
+     is used by one wire class — duplicated, a tiny pure builder, rather
+     than introduce a cross-runtime shared-helper module).  Remaining
+     websockets/http_server/mqtt_client splits stay **reactive** (do
+     them if/when they block a 256 KB sweep), not preemptive.
 
 Neither wall affects the bench-free landing or the PSRAM-board
 validation.
