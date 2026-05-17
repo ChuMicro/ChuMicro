@@ -632,3 +632,28 @@ observed (adding it speculatively risks new bugs for no observed
 failure, same reasoning as the per-file-reset thread above).
 
 Related: Decision 0071, Decision 0068, Decision 0028.
+
+### Re-run the live-PyPI `library add` smoke test once CI/publishing is back on
+
+`workspace-library-curation` Phases 1 + 2 are complete and validated,
+with one environmentally-blocked residual: the fetch backend's last
+hop — a real `pip download` resolving `chumicro-<lib>[-experimental]`
+from a *live* index — has never run, because the release pipeline has
+been off and nothing is on PyPI (`chumicro-mqtt` 404s; no release
+tags for the Phase 1 VERSION bumps).
+
+It is validated as far as is possible offline: real `pip download`
+against real locally-built sdists served from a local file index
+(`chumicro_runner` → `chumicro_timing`, full transitive walk +
+curated-content checks), plus 18 cli-library tests.  The unproven
+delta is purely "does pip resolve and pull the *published*
+distribution" — a thin, unit-tested shell-out.
+
+Action when CI returns: (1) confirm `release.yml` publishes the
+experimental packages on the next `libraries/*/VERSION` bump; (2) run
+`chumicro-workspace library add chumicro_mqtt` against the live index
+from a scratch workspace and confirm the closure lands and imports;
+(3) drop this entry.  Not a code risk — a deferred final smoke test.
+
+Related: workstream `workspace-library-curation`, `release.yml`,
+Decision 0062.
