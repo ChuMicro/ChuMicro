@@ -331,23 +331,40 @@ mode pick) → 5 (after the surface is real).
     crashes `wifi`, the 4c item) and MP-copy never did.  0071: issue
     `transport.soft_reset()` between libraries in the `is_filesystem_mode`
     branch, matching what mount/RAM already gets per file.
-  - [ ] **4c — wifi RAM-on-CP hard-crash (post-0069).**  Separate
-    from the staging gap: `wifi` under `--deploy-mode ram` on CP drops
-    the USB CDC (board → safe mode; `reset-board` FS-wipe recovers it
-    once the crashing payload is gone).  Reproduces running `wifi`
-    alone.  Investigate only *after* 0069 lands (the `ImportError`
-    masks it today); report cause before fixing — may be a real
-    wifi-on-RAM-CP defect the sweep correctly surfaced (0068 §3) or a
-    raw-REPL payload issue.  Plus OOM→`requires_flash` learning.
-  - [ ] **4d — sweep validation + scope decision.**  0068's stated
-    Phase 4 acceptance is grouping + non-poisoning (observed in 4c
-    finding 1), *not* every library's unit suite passing on silicon —
-    0068 is "behavioral pass/fail only", so per-library on-silicon
-    unit failures (`wifi`: 80 fail even in flash) are the sweep's
-    *output*, tracked separately, not a 0068 gate.  Remaining: a
-    clean grouping-validation pass on a light subset across the
-    4-board matrix once hardware is physically recovered; decide
-    whether per-library on-silicon conformance is in or out of this
-    workstream (leaning out — it is follow-up the sweep exists to
-    generate).
-- [ ] Phase 5 — docs + AGENTS.md (after the command exists).
+  - [x] **4c — wifi RAM-on-CP hard-crash: FALSIFIED (2026-05-17, bench).**
+    The hypothesised `wifi`-on-CP-RAM hard fault (USB-CDC drop → safe
+    mode) **does not exist on current code**.  Verified post-0069 /
+    0071 / 0072: `wifi` under `--deploy-mode ram` on CP passes **41/0**
+    running alone on *both* the Lolin S2 (PSRAM) **and** the Pi Pico W
+    (264 KB), and **39/0** in the full cumulative Pico W CP RAM sweep
+    (running after `ntp` itself OOM'd).  Zero hard-fault / safe-mode /
+    "could not enter raw repl" / USB-CDC-drop signatures anywhere in
+    the full-sweep log; the board probes healthy immediately after.
+    A genuine library/firmware defect would fault on both boards — it
+    faults on neither.  Root cause of the original symptom: the
+    pre-0069 `testing.py` `("cpython",)` marker made `wifi`'s
+    fake-using test files `ImportError` on-device (the workstream's own
+    "the `ImportError` masks it today; investigate after 0069" note);
+    Decision 0069 removed the mask and there is no crash behind it.
+    The one real CP-RAM-Pico-W limitation is the `ntp` cumulative
+    inline-bootstrap `MemoryError` (`ntp/test_ntp.py` 0/37 in the
+    10-lib RAM group) — a *clean, recoverable* OOM, the Decision 0072
+    resident-ceiling class, **not** a hard fault and **not** a `wifi`
+    bug.  Nothing to fix; the OOM→`requires_flash` learning is moot
+    here (the resolver already auto-switched the heavy libs — see 4d).
+  - [x] **4d — sweep validation + scope decision: DONE (2026-05-17).**
+    The full Pico W CP run verified 0068's grouping + dependency-closure
+    non-poisoning **on silicon**: the resolver auto-switched the
+    `requires_flash` libs (`http_server`/`mqtt`/`requests`/`websockets`)
+    and the data-file lib (`sockets`, `_ca_bundle.der`) into a flash
+    group and kept the 10 light libs in a RAM group; `ntp` stayed in
+    the RAM group (depends on `sockets` but its own-src has no data
+    file — not poisoned).  Scope decision **resolved: out.**
+    Per-library on-silicon conformance is the sweep's *output*, not a
+    0068 gate — the `ntp` RAM OOM and the flash-group resident OOMs
+    (websockets 136 etc.) are exactly what the sweep exists to surface,
+    owned by Decision 0072, consistent with how every prior on-silicon
+    failure in this campaign was treated.
+- [ ] Phase 5 — docs + AGENTS.md (the only remaining piece — the
+  command + `devices.yml` `supports_ram_mode` schema + the supported
+  matrix; 4c/4d are closed).
