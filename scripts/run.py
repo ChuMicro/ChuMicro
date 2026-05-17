@@ -1234,6 +1234,20 @@ def build(
     if result != 0:
         return result
 
+    from sdist_content import check_all_library_sdists
+
+    library_dirs = [
+        ROOT / package
+        for package in packages
+        if package.startswith("libraries/")
+    ]
+    sdist_problems = check_all_library_sdists(library_dirs)
+    if sdist_problems:
+        print("Library sdist content check failed:")
+        for problem in sdist_problems:
+            print(f"  - {problem}")
+        return 1
+
     print(f"Built {len(packages)} package(s): {', '.join(packages)}")
     return 0
 

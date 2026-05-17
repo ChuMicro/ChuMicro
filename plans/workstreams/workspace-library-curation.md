@@ -1,6 +1,6 @@
 # Workstream: Workspace library curation — chumicro-workspace as library host
 
-Status: `proposed` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Design fully resolved 2026-05-12; Phase 1 unblocked, implementation pending.
+Status: `accepted` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Design fully resolved 2026-05-12.  Phase 1 in progress: sdist-content extension + build-time guard landed 2026-05-17; PyPI fetch backend pending.
 
 ## Purpose
 
@@ -20,9 +20,9 @@ Make the existing PyPI sdists carry full library content, then ship a fetch path
 
 Implementation:
 
-- **Each library's `pyproject.toml`**: extend `[tool.hatch.build.targets.sdist].include` from `["src/", "VERSION", "README.md"]` to `["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]`.  Fifteen one-line edits.
-- **Build-time regression test**: `scripts/run.py build` fails if the produced sdist for any library is missing `tests/`, `examples/`, or `docs/`.  Prevents a future contributor accidentally dropping them.
-- **`chumicro_workspace.library` module**: PyPI fetch backend.  `pip download --no-deps --no-binary :all: chumicro-<lib>==<version> -d <staging>`, unpack the tarball, copy `src/`, `tests/`, `examples/`, `docs/`, `pyproject.toml`, `VERSION`, `README.md` into `libraries/<name>/`.
+- **Each library's `pyproject.toml`** — *landed*: `[tool.hatch.build.targets.sdist].include` extended to `["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]` across all 15 libraries, each with a lockstep patch VERSION bump (sdist content is publish-affecting; `release.yml` auto-publishes each to `chumicro-<lib>-experimental`).
+- **Build-time regression test** — *landed*: `scripts/sdist_content.py` runs inside `scripts/run.py build` and fails the build if any library sdist is missing `tests/`/`examples/`/`docs/` *or* if its `pyproject.toml` dropped the `[test]` extra (a curated consumer needs `chumicro-<lib>[test]` to run the shipped tests — shipping the files is necessary but not sufficient).
+- **`chumicro_workspace.library` module** — *pending*: PyPI fetch backend.  `pip download --no-deps --no-binary :all: chumicro-<lib>==<version> -d <staging>`, unpack the tarball, copy `src/`, `tests/`, `examples/`, `docs/`, `pyproject.toml`, `VERSION`, `README.md` into `libraries/<name>/`.  The `version: HEAD` sentinel resolves to the channel package's latest (PyPI has no "HEAD" version).
 - **No `bundle_manager.py` change**, no new bundle-repo subtree.  Bundle repos stay focused on deployment artifacts (circup zips + `mpy6/` for the `mip`/`circup` happy path).
 
 ### Phase 2 — `chumicro-workspace library` CLI surface
