@@ -41,7 +41,23 @@ Pin state lives in `workspace.yml` under a new `libraries:` table — see Q2 bel
 
 **Landing location** — `chumicro_workspace`'s CLI is now a package (`workbench/workspace/src/chumicro_workspace/cli/` with `__init__.py` + `_common.py` + `setup.py` + `devices.py`).  The `library` subcommand surface lands as a new `cli/library.py` module following the same shape as `cli/setup.py` and `cli/devices.py` — subparser builder + `_cmd_<verb>` functions + thin handoff into a `chumicro_workspace.library` core module.  Subparser registration in `cli/__init__.py`'s `build_parser`.
 
-**Agent-runnable surface** — the transitive-deps prompt is an interactive seam, so per [Decision 0066](../decisions/0066-agent-runnable-clis.md) the subcommand needs `--non-interactive` behavior.  When non-interactive: `library add` must not prompt; it either installs the full transitive set (recommended default) or fails with a distinct exit code naming the unresolved choice.  The decline-all-transitive option (`--decline-transitive` or similar) can be added later if a real workflow needs it.  TTY auto-detection via `sys.stdin.isatty()` matches the rest of the workbench CLI.
+**Agent-runnable surface** — the transitive-deps prompt is an interactive seam, so per [Decision 0066](../decisions/0066-agent-runnable-clis.md) the subcommand needs `--non-interactive` behavior.  When non-interactive: `library add` must not prompt; it either installs the full transitive set (recommended default) or fails with a distinct exit code naming the unresolved choice.  The decline-all-transitive option (`--decline-transitive` or similar) can be added later if a real workflow needs it.  Interactivity defaults to `sys.stdin.isatty()` with `--non-interactive` as the explicit override (Decision 0066 §1–2) — `cli/examples.py` (`non_interactive = not sys.stdin.isatty()`) and `cli/devices.py` (`args.non_interactive` + exit-2 on missing required arg) are the two precedents to mirror.
+
+#### `switch-channel <name> <channel>` semantics
+
+Flip an already-curated library between `stable` and `experimental` and re-fetch from the new channel's PyPI distribution.  Defined precisely (it is the verb most likely to be implemented loosely):
+
+1. `<name>` not in the `libraries:` table → exit 2, "not curated; use `library add`".  `<channel>` ∉ {stable, experimental} → exit 2.  Already on `<channel>` → idempotent no-op, exit 0.
+2. **Re-resolve the version — do not carry the pin across channels.**  A stable pin (`0.10.2`) is not a valid version of the `-experimental` distribution (dev-tagged `0.10.3.dev4`).  Default: resolve the new channel's latest and re-pin.  A `--floating` entry (`version: HEAD`) stays `HEAD`.
+3. `fetch_library(name, channel=<new>, version=<resolved|HEAD>, …)` replaces `libraries/<name>/` in place; update the entry's `channel:`/`version:`.  `declined: true` entries have nothing on disk — update the recorded channel only, no fetch, exit 0 with a note.
+4. **Blast radius is the named library only** — switch-channel does not cascade to transitive deps (mirrors the Q3 rule that `--channel` on `add` does not leak to deps).  If the new channel's `pyproject.toml` changed the chumicro dep set, warn and point at `library update`; do not silently auto-pull.
+5. Implementation economy: switch-channel ≈ `add` with the channel flipped, version re-resolution forced, and the transitive prompt skipped — it can be a thin wrapper over the shared `add` core, not a parallel code path.
+
+#### Phase 2 readiness (validated against code 2026-05-17)
+
+- **`workspace.yml` writer strategy — decided.** `chumicro_dev.sync_library_sources` deliberately does *not* round-trip through ruamel (ruamel drops the file's leading comment header when no key anchors it); it does marker-comment + single-regex *block* replacement, preserving every other byte.  The `libraries:` table follows the same pattern: a CLI-managed marked block, read-modify-rewrite the whole block from in-memory desired state (the CLI is its sole writer).  `_LIB_SOURCES_BLOCK_RE` hard-codes the `library_sources:` key — Phase 2 should generalize it to a shared `sync_managed_block(workspace_yaml, key, marker, body_lines)` helper rather than copy-paste the regex.  Consequence: inline user comments *inside* the managed `libraries:` block are not preserved across rewrites — document it as CLI-owned, same contract as `library_sources:`.
+- **No transitive-dep resolver exists.** Nothing walks `[project].dependencies` for `chumicro-*` today (`install_libraries.py` does an *import*-AST walk, not a dependency walk; `config_manifest.py` shows the `tomllib.load` + dict-navigate idiom to copy).  Phase 2 builds this fresh: after `fetch_library` lands the sdist, read its `pyproject.toml`, filter `[project].dependencies` for `chumicro-*`, recurse.
+- **No `libraries:` table and no `schema_version` field exist** anywhere in `workspace.yml` or its loaders today — the additive-sibling-table assumption holds with zero structural conflict.
 
 ### Phase 3 — Non-chumicro upstreams (Adafruit, micropython-lib)
 
@@ -184,11 +200,9 @@ Two consequences worth naming:
 
 ## Remaining open items
 
-These are now Phase-1 implementation details, not design questions:
-
-- **Walker integration** — when curated mode writes to `libraries/<name>/src/`, the deploy walker's search-path order must put `libraries/` ahead of any sibling chumicro checkout for libraries not in dev-mode override.  Verify against `chumicro_deploy.sources._resolve_module` semantics during Phase 1.
-- **`workspace.yml` schema bump** — does adding the `libraries:` table need a `schema_version` field in `workspace.yml`, or can the CLI tolerate its absence (legacy workspaces) by treating it as `{}`?  Latter is cheaper; pick during Phase 2 CLI scaffolding.
-- **sdist regression-test placement** — build-time check inside `scripts/run.py build`, or publish-time check inside `release.yml`?  Recommend build-time so a contributor sees the failure before push; publish-time stays as a backstop.
+- **Walker integration** — *resolved (Phase 1)*: `chumicro_deploy.sources._resolve_module` iterates `_search_paths` first-match-wins; search-path order is whatever generated the `library_sources:` mapping, so curated-vs-dev resolution is purely a `library_sources:` generation concern (dev mode points the key at the sibling checkout; curated mode at `libraries/<pkg>/src`).  No walker change needed.
+- **`workspace.yml` schema bump** — *resolved*: no `schema_version` field.  `workspace.yml` has no version field today and the `libraries:` table is purely additive; the CLI treats a missing `libraries:` key as `{}` (legacy/clean workspaces).  Introducing a schema version now would be speculative — defer until a genuinely breaking schema change forces it.
+- **sdist regression-test placement** — *resolved (Phase 1)*: build-time, in `scripts/run.py build` (`scripts/sdist_content.py`), so a contributor sees the failure before push.  A publish-time backstop in `release.yml` was not added — the build-time gate runs in CI's preflight, which gates merge to main, which is what triggers publish; a separate publish-time check would be redundant.
 
 ## Out of scope
 
