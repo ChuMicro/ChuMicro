@@ -33,8 +33,11 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
+
+from chumicro_workspace.dep_resolver import chumicro_dependencies
 
 #: Trees the curated copy must carry.  ``src/`` is what the deploy
 #: walker needs; ``tests/``/``examples/``/``docs/`` make the curated
@@ -218,3 +221,66 @@ def _replace_tree(source_root: Path, destination: Path) -> None:
         shutil.copytree(source_root / tree, destination / tree)
     for name in COPIED_FILES:
         shutil.copy2(source_root / name, destination / name)
+
+
+def remove_library(workspace_root: Path, package: str) -> bool:
+    """Delete a curated library's tree.  Returns True if it existed."""
+    target = workspace_root / "libraries" / package
+    if not target.exists():
+        return False
+    shutil.rmtree(target)
+    return True
+
+
+def read_installed_version(workspace_root: Path, package: str) -> str | None:
+    """Return the VERSION of a curated library on disk, or None if absent."""
+    version_file = workspace_root / "libraries" / package / "VERSION"
+    if not version_file.is_file():
+        return None
+    return version_file.read_text(encoding="utf-8").strip() or None
+
+
+def fetch_closure(
+    root: str,
+    *,
+    channel: str = "stable",
+    version: str = HEAD,
+    workspace_root: Path,
+    subprocess_runner: Callable[..., subprocess.CompletedProcess] = (
+        subprocess.run
+    ),
+) -> list[str]:
+    """Fetch *root* and every chumicro library it transitively needs.
+
+    Breadth-first from *root*: fetch a library, read its
+    ``[project].dependencies`` for chumicro entries, enqueue the
+    unseen ones.  *root* is fetched at the requested *version*; each
+    transitive dependency tracks its channel's latest (an unpinned
+    fetch) — channel does not leak, version pins are per-library.
+
+    Returns the closure as import names in BFS order (root first).
+    Cycle-safe.  Raises :class:`LibraryFetchError` from the first
+    fetch that fails (the partially-fetched libraries stay on disk;
+    the caller decides whether to roll back).
+    """
+    seen: set[str] = set()
+    ordered: list[str] = []
+    queue: list[str] = [root]
+    while queue:
+        name = queue.pop(0)
+        if name in seen:
+            continue
+        seen.add(name)
+        ordered.append(name)
+        fetch_library(
+            name,
+            channel=channel,
+            version=version if name == root else HEAD,
+            workspace_root=workspace_root,
+            subprocess_runner=subprocess_runner,
+        )
+        pyproject = workspace_root / "libraries" / name / "pyproject.toml"
+        for dependency in chumicro_dependencies(pyproject):
+            if dependency not in seen:
+                queue.append(dependency)
+    return ordered
