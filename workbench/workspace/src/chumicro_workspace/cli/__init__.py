@@ -91,6 +91,7 @@ from chumicro_workspace.cli.firmware import (
 )
 from chumicro_workspace.cli.health import _add_health_parsers
 from chumicro_workspace.cli.install_libraries import _add_install_libraries_parser
+from chumicro_workspace.cli.library import _add_library_parsers
 from chumicro_workspace.cli.quality import (
     _add_quality_parsers,
 )
@@ -150,6 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_firmware_parsers(subparsers)
     _add_install_libraries_parser(subparsers)
+    _add_library_parsers(subparsers)
     _add_upgrade_firmware_parser(subparsers)
 
     return parser

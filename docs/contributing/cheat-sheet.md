@@ -100,6 +100,7 @@ Bare `pytest` from the repo root is the everyday command for iteration — fast,
 | On-device unit sweep, per-file reset (256 KB boards / large suites) | `python scripts/run.py test-unit-on-device --per-file` |
 | Full CI mirror + the on-device unit sweep | `python scripts/run.py preflight --with-device-unit` |
 | Wipe a wedged board (last-resort) | `chumicro-workspace reset-board --device <id> --yes` |
+| Curate a library + its deps from PyPI | `chumicro-workspace library add chumicro_mqtt` |
 
 Both `pytest libraries/<name>/functional_tests/` and `python scripts/run.py test-libraries-functional` go through the same `chumicro-pytest-device` plugin — the bare-pytest form is what IDE play buttons use, the runner form is the commit-gating wrapper. See [device-testing.md](device-testing.md) for the `--runtime` / `--deploy-mode` flag matrix.
 

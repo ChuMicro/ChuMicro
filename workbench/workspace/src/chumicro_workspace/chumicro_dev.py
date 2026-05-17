@@ -38,9 +38,10 @@ dev-and-regular-mode-gaps audit.
 
 from __future__ import annotations
 
-import re
 import tomllib
 from pathlib import Path
+
+from chumicro_workspace.managed_block import sync_managed_block
 
 #: Filename consulted in the workspace root.  Same name the template's
 #: ``run.py`` reads — keeps the user's mental model "one toml controls
@@ -55,31 +56,6 @@ CHUMICRO_DEV_FILENAME = "chumicro-dev.toml"
 MANAGED_MARKER = (
     "managed by chumicro-workspace setup — chumicro-dev.toml mode"
 )
-
-#: Match a top-level ``library_sources:`` block plus its indented
-#: children, optionally preceded by our managed-marker comment line.
-#:
-#: ``(?m)^`` anchors at line starts so we don't catch
-#: ``library_sources:`` references inside comments or nested under
-#: another key.  The ``(?:# {marker}\n)?`` prefix is optional — when
-#: the file has the marker (re-runs in dev mode), the match starts
-#: at the marker line and the whole block (marker + key + children)
-#: gets replaced atomically; when the file has a bare
-#: ``library_sources:`` (legacy / non-dev-mode user content), the
-#: match starts at the key line and just the bare block gets
-#: replaced.  Either way, ``re.search`` returns the longer match
-#: at the earliest line.
-#:
-#: Used for string-level surgery in :func:`sync_library_sources` —
-#: see that function's docstring for why we don't round-trip
-#: through ruamel.
-_LIB_SOURCES_BLOCK_RE = re.compile(
-    r"(?m)^"
-    r"(?:\# " + re.escape(MANAGED_MARKER) + r"\n)?"
-    r"library_sources:[ \t]*\n"
-    r"(?:[ \t]+[^\n]*\n)*",
-)
-
 
 def read_chumicro_dev_path(workspace_root: Path) -> Path | None:
     """Resolve the sibling chumicro path declared in ``chumicro-dev.toml``.
@@ -170,30 +146,13 @@ def sync_library_sources(
 ) -> bool:
     """Write or replace the managed ``library_sources:`` block in *workspace_yaml*.
 
-    Returns ``True`` when the file was modified, ``False`` when the
-    existing block already matched the desired state (idempotent
-    re-run).
-
-    Implementation note — string-level surgery, parser-independent:
-
-    The previous implementation round-tripped the entire
-    ``workspace.yml`` through ruamel-rt, which dropped the file's
-    leading comment header on the first sync against an
-    all-comments-no-keys starter (ruamel attaches comments to keys;
-    a leading header with no key under it has nothing to anchor to).
-    This rewrite instead locates the existing managed block (the
-    optional marker comment + ``library_sources:`` key + indented
-    children) via a single regex against the raw bytes, replaces it
-    byte-identically, and leaves every other byte of the file
-    untouched — comments, blank lines, quoting, indentation
-    choices.
-
-    The managed block REPLACES any existing top-level
-    ``library_sources:``, with or without our marker comment — the
-    contract is "dev mode owns this key when ``chumicro-dev.toml``
-    is present."  Decoupled from ruamel; tightly coupled to YAML's
-    indent-based block syntax.  A future migration to TOML would
-    need a different block-finder (the regex pattern is YAML-shaped).
+    Returns ``True`` when the file was modified, ``False`` on an
+    idempotent re-run.  The block REPLACES any existing top-level
+    ``library_sources:`` (with or without our marker) — the contract
+    is "dev mode owns this key when ``chumicro-dev.toml`` is present."
+    Every byte outside the block is preserved; see
+    :mod:`chumicro_workspace.managed_block` for why this is raw-text
+    surgery rather than a ruamel round-trip.
 
     Paths in *libraries* are written relative to the workspace root
     when possible (sibling-checkout case produces
@@ -207,48 +166,10 @@ def sync_library_sources(
             from :func:`discover_chumicro_libraries`.
     """
     workspace_dir = workspace_yaml.parent
-
-    new_block_lines = [
-        f"# {MANAGED_MARKER}",
-        "library_sources:",
+    child_lines = [
+        f"  {name}: {_relative_to_or_absolute(libraries[name], workspace_dir)}"
+        for name in sorted(libraries)
     ]
-    for name in sorted(libraries):
-        rel_path = _relative_to_or_absolute(libraries[name], workspace_dir)
-        new_block_lines.append(f"  {name}: {rel_path}")
-    new_block = "\n".join(new_block_lines) + "\n"
-
-    existing_text = (
-        workspace_yaml.read_text(encoding="utf-8")
-        if workspace_yaml.is_file()
-        else ""
+    return sync_managed_block(
+        workspace_yaml, "library_sources", MANAGED_MARKER, child_lines,
     )
-
-    match = _LIB_SOURCES_BLOCK_RE.search(existing_text)
-    if match is not None:
-        # The regex already absorbs the optional marker line above
-        # ``library_sources:`` — match.start() is the start of the
-        # marker when present, the start of ``library_sources:``
-        # otherwise.  Atomic replacement either way.
-        if match.group(0) == new_block:
-            return False
-        new_text = (
-            existing_text[:match.start()]
-            + new_block
-            + existing_text[match.end():]
-        )
-    else:
-        # No existing block — append.  Add a separating blank line
-        # before the new block when the existing tail isn't already
-        # a blank line (so re-runs against an empty file produce
-        # ``new_block`` alone, but re-runs against a populated file
-        # leave a visible separator from the previous content).
-        prefix = existing_text
-        if prefix and not prefix.endswith("\n"):
-            prefix += "\n"
-        if prefix and not prefix.endswith("\n\n"):
-            prefix += "\n"
-        new_text = prefix + new_block
-
-    workspace_yaml.parent.mkdir(parents=True, exist_ok=True)
-    workspace_yaml.write_text(new_text, encoding="utf-8")
-    return True

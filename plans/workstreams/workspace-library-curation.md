@@ -1,6 +1,6 @@
 # Workstream: Workspace library curation — chumicro-workspace as library host
 
-Status: `accepted` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Design fully resolved 2026-05-12.  Phase 1 complete 2026-05-17 (sdist-content extension + build-time guard + PyPI fetch backend).  Phase 2 (CLI surface) is next.
+Status: `accepted` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Design fully resolved 2026-05-12.  Phases 1 + 2 complete 2026-05-17 (sdist-content + build guard + fetch backend; then the `library` CLI: managed-block writer, `libraries:` table, dep resolver, five verbs).  Phases 3 (non-chumicro upstreams) + 4 (`run-example`/`test`) remain deferred until demand.
 
 ## Purpose
 
@@ -25,7 +25,7 @@ Implementation:
 - **`chumicro_workspace.library` module** — *landed*: PyPI fetch backend (`fetch_library` + `channel_distribution` + `classify_pip_failure`).  `pip download --no-deps --no-binary :all:` (injected `subprocess_runner`), safe-extract the sdist (manual `..`/absolute-member rejection — `tarfile`'s `data` filter is 3.12+ and this package targets 3.11), validate the four required trees + metadata files, replace `libraries/<package>/`.  `version: HEAD` → unpinned download (PyPI has no "HEAD"; the channel's latest already tracks main).  Closed-set `LibraryFetchFailureKind` + classifier; the per-kind user prose + retry coaching loop land with the Phase 2 CLI.
 - **No `bundle_manager.py` change**, no new bundle-repo subtree.  Bundle repos stay focused on deployment artifacts (circup zips + `mpy6/` for the `mip`/`circup` happy path).
 
-### Phase 2 — `chumicro-workspace library` CLI surface
+### Phase 2 — `chumicro-workspace library` CLI surface — *landed 2026-05-17*
 
 ```
 chumicro-workspace library list                               # available + installed + version + channel
@@ -35,7 +35,11 @@ chumicro-workspace library remove <name>                      # warns if other l
 chumicro-workspace library switch-channel <name> <channel>
 ```
 
-Dependency resolution: `library add` reads the target library's `pyproject.toml` and recursively pulls `chumicro-*` deps.  Before pulling the transitive set, prompts the user with the dep tree so they can deselect (e.g. omit `chumicro-sockets` because they're injecting a custom transport — paired with `__chumicro_skip_factories__` in the entrypoint per Decision 0062).
+Built across four modules: `managed_block.py` (generalized regex block writer extracted from `chumicro_dev.sync_library_sources`), `curated_libraries.py` (the `libraries:` table model + reader + writer), `dep_resolver.py` (`chumicro_dependencies` + cycle-safe `transitive_closure`), and `cli/library.py` (the five verbs).  `library.py` gained `fetch_closure` (BFS fetch + dep walk), `read_installed_version`, `remove_library`.
+
+Dependency resolution: `library add` BFS-fetches the root then every chumicro lib in its `[project].dependencies` closure.  **Implemented behavior vs the original sketch:** the transitive prompt is a single all-or-nothing `[Y/n]` on the whole transitive set (not per-dep deselect) — declining records every transitive entry `declined: true` and removes it from disk; the fetched-then-removed cost is accepted to avoid a separate metadata-only resolver.  Non-interactive keeps the full set (Decision 0066 default).  Interactivity = `sys.stdin.isatty()` and not `--non-interactive`.
+
+**Deferred (not blocking; follow-ups):** per-dep deselect granularity (currently all-or-nothing); the `declined`-flip-on-`remove` + a `library forget` verb from the Q4 sketch (`remove` currently deletes the entry outright); the workspace-template repo's regular-mode README (gap #4b) gaining a `library add` section now that this path exists.
 
 Pin state lives in `workspace.yml` under a new `libraries:` table — see Q2 below for the schema.
 
