@@ -163,16 +163,16 @@ It is **not** part of the default `preflight`. Opt in with `python scripts/run.p
 
 **Mode grouping.** Libraries are grouped by resolved mode and each group runs as one single-mode session per runtime (the flash group first). A `ram`-preferred run on a RAM-capable board therefore becomes a fast RAM session over the light libraries plus a flash session over the `requires_flash` / data-file ones — no per-library transport churn.
 
-**Behavioral pass/fail only.** `coverage.py` cannot trace MicroPython / CircuitPython bytecode, so the sweep takes no `--coverage-threshold`; the per-library coverage gate stays a unix-port / CPython concern. A per-library failure *on silicon* is the sweep's **output**, not a quality gate — it is exactly what the sweep exists to surface (e.g. a large module that `MemoryError`s a 256 KB board; see below). Treat it as a finding to triage, not a red `preflight`.
+**Behavioral pass/fail only.** `coverage.py` cannot trace MicroPython / CircuitPython bytecode, so the sweep takes no `--coverage-threshold`; the per-library coverage gate stays a unix-port / CPython concern. A per-library failure *on silicon* is the sweep's **output**, not a `preflight`-gating quality check — the run completes and reports rather than turning `preflight` red. "Output, not a gate" governs how the sweep *runs*; it does not make the finding acceptable. A `MemoryError` from a large module on the Pi Pico W is a tracked defect to fix by splitting (see below), not an accepted end-state.
 
-### Large test modules on a 256 KB board
+### Every test file must run green on a freshly-reset Pi Pico W (CP + MP)
 
-The on-device unit sweep runs each cross-runtime test *file* through one device interpreter. On a 256 KB board (Pi Pico W) a very large class-organized module — the library it imports, plus that file's full set of test classes resident at once — can exhaust RAM with a `MemoryError` while importing the library, even on a freshly reset board. PSRAM boards (Lolin S2) are unaffected.
+The on-device unit sweep runs each cross-runtime test *file* through one device interpreter. On the 264 KB Pi Pico W a very large class-organized module — the library it imports, plus that file's full set of test classes resident at once — can exhaust RAM with a `MemoryError` even on a freshly reset board running that file alone. PSRAM boards (Lolin S2) mask this; the Pico W under **both** CircuitPython and MicroPython is a distinct memory HAL, and it is the board class these libraries exist for.
 
-Two levers, per [Decision 0072](../../plans/decisions/0072-large-test-modules-on-constrained-boards.md):
+**Requirement, per [Decision 0072](../../plans/decisions/0072-large-test-modules-on-constrained-boards.md):** every cross-runtime test file must run green on a freshly-reset Pi Pico W on CP **and** MP. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting — not left to run on PSRAM only.
 
-- `scripts/run.py test-unit-on-device --per-file` (or `pytest ... --per-file`) soft-resets the interpreter before *each* test file, not just each library, so a file never inherits a sibling's resident state. Opt-in — it adds a reboot per file, so the default per-library reset stays the fast path for PSRAM boards and small libraries.
-- There is no fixed tests-per-file cap (the ceiling is library-weight-dependent — heavier libraries hit it sooner). If a single file still `MemoryError`s on the smallest target even with `--per-file`, **split it to mirror its source module** (one test file per source module). That is a hardware-driven split, not a style preference.
+- `scripts/run.py test-unit-on-device --per-file` (or `pytest ... --per-file`) soft-resets the interpreter before *each* test file, not just each library, so a file never inherits a sibling's resident state. This is the mechanism the requirement runs on; it adds a reboot per file, so the default per-library reset stays the fast path for PSRAM boards and small libraries.
+- A file still `MemoryError`-ing alone on a fresh Pico W **must be split** until each sub-file fits — mirroring source modules where one exists, then mechanically (lossless: test bodies stay byte-identical). There is no fixed tests-per-file cap: the ceiling is library-weight-dependent and differs CP vs MP, so the target is found empirically per library on the bench — split until that library's files all run green on a freshly-reset Pico W on both runtimes.
 
 ## Configure `secrets.toml`
 
