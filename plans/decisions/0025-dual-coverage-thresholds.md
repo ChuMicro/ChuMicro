@@ -44,6 +44,32 @@ Agent instructions in `AGENTS.md` and the `task-checkpoint` skill require
 CI enforces the human baseline (85 %) so that PRs from any contributor pass
 the same minimum bar.  Agent tooling raises the bar on the agent side.
 
+### What 94 % does and does not cover
+
+The 94 % figure is honest only with its scope stated:
+
+- It is **CPython-only**.  Tests run under CPython pytest; the
+  per-runtime device adapters that actually execute on the shipped
+  targets — e.g. `sockets/_adapters/mp.py`, the CircuitPython
+  `microcontroller.nvm` path — are blanket `# pragma: no cover - device
+  only` because their imports don't exist under CPython.  ~20 such
+  pragmas in `sockets` alone.  Those modules contribute **nothing** to
+  the 94 %.
+- It is therefore a **post-exclusion** number: 94 % of the
+  CPython-reachable lines, not 94 % of shipped code.  There is no
+  device-execution coverage signal anywhere in the gate today.
+- On the **CI path** there is no per-library 94 % gate at all (CI
+  passes no `--coverage-threshold` — see [Decision 0009](0009-per-library-test-runs.md));
+  the 94 % bar exists only when an agent or `preflight --coverage-threshold 94`
+  passes it, and even then gates each library against the
+  CPython-reachable subset.
+
+The individual pragmas are defensible — you cannot run MicroPython
+`usocket` under CPython pytest.  What this ADR forbids is presenting the
+post-exclusion CPython figure as *the* advertised safety bar with no
+device-coverage signal beside it.  Any doc or claim that cites 94 % as
+the coverage guarantee must carry this scope, or be wrong.
+
 ## Consequences
 
 - `pyproject.toml` `fail_under` is set to 85.
@@ -53,3 +79,11 @@ the same minimum bar.  Agent tooling raises the bar on the agent side.
   they didn't touch.
 - Human contributors benefit from a lower barrier to entry.
 - The open question "Should the coverage gate be higher?" is resolved.
+- 94 % is contractually a **CPython-reachable, post-pragma** figure with
+  no device-execution coverage signal.  Closing that gap (a
+  device-adapter coverage source, and/or a per-library threshold on the
+  CI path) is tracked as the `audit-remediation-and-drift-mechanization`
+  workstream's Phase 1 item 2 — this ADR makes the current scope honest;
+  it does not claim the gap is closed.
+- The honesty of any coverage claim against this scope is itself a
+  Phase 4 mechanized check ([Decision 0074](0074-drift-mechanization-as-project-policy.md)).
