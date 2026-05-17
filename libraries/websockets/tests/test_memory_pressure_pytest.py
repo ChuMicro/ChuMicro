@@ -19,9 +19,7 @@ heap-fragmentation measurement against real hardware.
 Why the library itself never calls ``gc.collect()``: fragmentation
 is prevented by design (pre-allocated recv + frame-parser buffers,
 bounded TX queue, no per-message data-structure growth in steady
-state) and caught by tests — leaks here, fragmentation in
-:mod:`chumicro_websockets.tests.test_memory_fragmentation` (when
-present) and on-device functional tests.  A library calling
+state) and host-side leaks are caught here.  A library calling
 ``gc.collect()`` invisibly inside ``handle()`` would impose its
 collect cadence on every other task in the system; the runner
 contract (``handle`` returns quickly) keeps that decision in the

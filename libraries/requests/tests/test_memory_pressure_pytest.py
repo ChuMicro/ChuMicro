@@ -6,14 +6,15 @@ each measurement.  They catch Python-level leaks in
 :class:`ResponseParser` — accumulating list/dict references,
 buffer growth that doesn't release across cycles, retained closures.
 
-These don't replicate device-level fragmentation (CP / MP allocators
-differ from CPython); :mod:`test_memory_fragmentation` covers that
-on the MicroPython / CircuitPython unix-port runners.
+These don't replicate device-level heap fragmentation — CP / MP
+allocators differ from CPython, and dedicated soak measurement of
+that belongs in the planned resource-benchmarking harness, not the
+unit suite.
 
 Why the library itself never calls ``gc.collect()``: fragmentation is
 prevented by design (parser tears down per-request, no module-level
-or per-instance accumulation, bounded body cap) and caught by tests
-— leaks here, heap shape in :mod:`test_memory_fragmentation`.  A
+or per-instance accumulation, bounded body cap) and host-side leaks
+are caught here.  A
 library calling ``gc.collect()`` invisibly inside ``handle()`` would
 impose its collect cadence on every other task in the system; the
 runner contract (``handle`` returns quickly) keeps that decision in
