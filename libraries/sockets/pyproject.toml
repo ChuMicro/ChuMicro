@@ -49,7 +49,7 @@ path = "VERSION"
 pattern = "(?P<version>\\S+)"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/", "VERSION", "README.md"]
+include = ["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]
 exclude = [".gitignore"]
 
 [tool.hatch.build.targets.wheel]
