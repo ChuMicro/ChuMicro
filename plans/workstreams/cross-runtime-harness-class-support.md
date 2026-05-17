@@ -208,9 +208,20 @@ on CP+MP.
      split fixes; loud-skipped on the 264 KB tier via
      `chumicro_test_harness.skip` gated on `gc.mem_free()`, still run on
      PSRAM + CPython.  Decision 0072 §3 gained the intrinsic-allocation
-     exception clause.  Remaining: Pico W **MP** validation of these
-     splits, then `http_server` / `mqtt` / `requests` (re-measure per
-     library on the fixed harness — do not assume pre-fix numbers).
+     exception clause.
+   - **websockets MP green + http_server DONE CP+MP (2026-05-17).**
+     websockets Pico W **MP: 287/0/0** (same slices, both runtimes).
+     `http_server`: one 123-test file `test_http_server.py` (pre-fix
+     measure confirmed the staging fix works for it too — 124 OOM, **0
+     No-space**) → 7 lossless `test_http_*.py` slices (≤26); **Pico W
+     CP 122/0 + MP 122/0** (122 = 123 − 1 pre-existing loud conditional
+     skip, not split-induced).  mqtt `test_client.py` (80, incl.
+     `_CountingSocket` helper class — splitter extended to closure-
+     duplicate zero-test classes) → 5 lossless `test_client_*.py`
+     slices (≤19); other mqtt files (decoder/encoder/packets/state/
+     testing_helpers, all ≤20) need no split; unix-port green, bench
+     pending.  Remaining: bench mqtt CP+MP; re-measure `requests`
+     (test_wire 89 / test_client 83) on the fixed harness.
    - **Source-cohesion split done (2026-05-17), not a fit fix.**
      `requests` test-quality audit (Opus sub-agent) confirmed the suite
      is *not* over-tested (redundancy ~2); the win was source cohesion —
