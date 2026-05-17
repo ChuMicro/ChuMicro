@@ -1,6 +1,6 @@
 # Workstream: Workspace library curation — chumicro-workspace as library host
 
-Status: `accepted` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Design fully resolved 2026-05-12.  Phase 1 in progress: sdist-content extension + build-time guard landed 2026-05-17; PyPI fetch backend pending.
+Status: `accepted` — surfaced 2026-05-12 during the DI audit (Tier 2 follow-up to [Decision 0062](../decisions/0062-entrypoint-factory-skip.md)).  Design fully resolved 2026-05-12.  Phase 1 complete 2026-05-17 (sdist-content extension + build-time guard + PyPI fetch backend).  Phase 2 (CLI surface) is next.
 
 ## Purpose
 
@@ -22,7 +22,7 @@ Implementation:
 
 - **Each library's `pyproject.toml`** — *landed*: `[tool.hatch.build.targets.sdist].include` extended to `["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]` across all 15 libraries, each with a lockstep patch VERSION bump (sdist content is publish-affecting; `release.yml` auto-publishes each to `chumicro-<lib>-experimental`).
 - **Build-time regression test** — *landed*: `scripts/sdist_content.py` runs inside `scripts/run.py build` and fails the build if any library sdist is missing `tests/`/`examples/`/`docs/` *or* if its `pyproject.toml` dropped the `[test]` extra (a curated consumer needs `chumicro-<lib>[test]` to run the shipped tests — shipping the files is necessary but not sufficient).
-- **`chumicro_workspace.library` module** — *pending*: PyPI fetch backend.  `pip download --no-deps --no-binary :all: chumicro-<lib>==<version> -d <staging>`, unpack the tarball, copy `src/`, `tests/`, `examples/`, `docs/`, `pyproject.toml`, `VERSION`, `README.md` into `libraries/<name>/`.  The `version: HEAD` sentinel resolves to the channel package's latest (PyPI has no "HEAD" version).
+- **`chumicro_workspace.library` module** — *landed*: PyPI fetch backend (`fetch_library` + `channel_distribution` + `classify_pip_failure`).  `pip download --no-deps --no-binary :all:` (injected `subprocess_runner`), safe-extract the sdist (manual `..`/absolute-member rejection — `tarfile`'s `data` filter is 3.12+ and this package targets 3.11), validate the four required trees + metadata files, replace `libraries/<package>/`.  `version: HEAD` → unpinned download (PyPI has no "HEAD"; the channel's latest already tracks main).  Closed-set `LibraryFetchFailureKind` + classifier; the per-kind user prose + retry coaching loop land with the Phase 2 CLI.
 - **No `bundle_manager.py` change**, no new bundle-repo subtree.  Bundle repos stay focused on deployment artifacts (circup zips + `mpy6/` for the `mip`/`circup` happy path).
 
 ### Phase 2 — `chumicro-workspace library` CLI surface
