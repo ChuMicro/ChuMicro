@@ -65,11 +65,22 @@ class TestParseTestFunctions:
         names = pytest_device._parse_test_functions(test_file)
         assert names == []
 
-    def test_skips_class_methods(self, tmp_path: Path) -> None:
-        """Should not include test_* methods inside classes."""
+    def test_finds_class_methods_qualified(self, tmp_path: Path) -> None:
+        """Class test methods are reported as ``ClassName.test_method``.
+
+        The qualified-name format must match the on-device runner's
+        ``f"{class_name}.{attr}"`` so single-test filters and per-item
+        reporting line up between collection and execution.
+        """
         source = textwrap.dedent("""\
             class TestSomething:
-                def test_inside_class(self):
+                def helper(self):
+                    pass
+
+                def test_alpha(self):
+                    pass
+
+                def test_beta(self):
                     pass
 
             def test_top_level():
@@ -79,12 +90,84 @@ class TestParseTestFunctions:
         test_file.write_text(source)
 
         names = pytest_device._parse_test_functions(test_file)
-        assert names == ["test_top_level"]
+        assert names == [
+            "TestSomething.test_alpha",
+            "TestSomething.test_beta",
+            "test_top_level",
+        ]
+
+    def test_skips_non_test_classes_and_helper_classes(
+        self, tmp_path: Path
+    ) -> None:
+        """Only ``class Test*`` contributes; helpers and fakes do not.
+
+        Mirrors the runner's ``name.startswith("Test")`` gate so an
+        underscore-prefixed fake (``_FakeModule``) or a non-Test class
+        never yields phantom items.
+        """
+        source = textwrap.dedent("""\
+            class _FakeModule:
+                def test_not_a_real_test(self):
+                    pass
+
+            class Helper:
+                def test_also_not_collected(self):
+                    pass
+
+            class TestReal:
+                def test_collected(self):
+                    pass
+        """)
+        test_file = tmp_path / "test_helpers_and_real.py"
+        test_file.write_text(source)
+
+        names = pytest_device._parse_test_functions(test_file)
+        assert names == ["TestReal.test_collected"]
+
+    def test_ignores_nested_helper_functions_in_class(
+        self, tmp_path: Path
+    ) -> None:
+        """Only direct ``test_*`` methods count, not nested closures."""
+        source = textwrap.dedent("""\
+            class TestThing:
+                def test_outer(self):
+                    def test_inner_closure():
+                        pass
+                    test_inner_closure()
+        """)
+        test_file = tmp_path / "test_nested.py"
+        test_file.write_text(source)
+
+        names = pytest_device._parse_test_functions(test_file)
+        assert names == ["TestThing.test_outer"]
 
     def test_empty_file(self, tmp_path: Path) -> None:
         """An empty file should return no test functions."""
         test_file = tmp_path / "test_empty.py"
         test_file.write_text("")
+
+        names = pytest_device._parse_test_functions(test_file)
+        assert names == []
+
+    def test_pytest_style_file_yields_nothing(self, tmp_path: Path) -> None:
+        """A fixture-only pytest-style file yields no discoverable tests.
+
+        This is the input that makes ``DeviceTestFile.collect`` raise its
+        loud zero-test guard: no module-level ``def test_*`` and no
+        ``class Test*`` methods the cross-runtime harness can run.
+        """
+        source = textwrap.dedent("""\
+            import pytest
+
+            @pytest.fixture
+            def thing():
+                return 1
+
+            def helper(thing):
+                return thing + 1
+        """)
+        test_file = tmp_path / "test_fixtures_only.py"
+        test_file.write_text(source)
 
         names = pytest_device._parse_test_functions(test_file)
         assert names == []

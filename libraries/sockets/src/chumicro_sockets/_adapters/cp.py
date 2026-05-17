@@ -321,8 +321,10 @@ def ssl_context_with_ca(ca_pem):
         ValueError: input is not PEM (no ``-----BEGIN CERTIFICATE-----``
             marker) — e.g. a DER blob, which CP cannot accept.
     """
-    import ssl  # noqa: PLC0415 — CP-only import
-
+    # Validate before importing ssl: the PEM check is pure string
+    # inspection, and raising the clear error must not depend on the
+    # ssl/tls binding being importable (it is absent on the CP
+    # unix-port and on minimal builds).
     if isinstance(ca_pem, (bytes, bytearray)):
         if b"-----BEGIN CERTIFICATE-----" not in bytes(ca_pem):
             raise ValueError(
@@ -339,6 +341,8 @@ def ssl_context_with_ca(ca_pem):
             "binding cannot accept DER.  Convert to PEM, or pass DER "
             "only on MicroPython / CPython.",
         )
+    import ssl  # noqa: PLC0415 — CP-only import
+
     context = ssl.create_default_context()
     context.load_verify_locations(cadata=ca_pem)
     return context

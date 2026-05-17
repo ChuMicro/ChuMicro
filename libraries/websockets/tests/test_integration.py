@@ -20,12 +20,6 @@ Proves the slice 1/2/3 components fit together:
 * Bidirectional traffic in the same tick survives intact.
 """
 
-#: CPython-only lane: class-based pytest-style suite, not discoverable
-#: by the cross-runtime harness (which finds module-level test_* only);
-#: A temporary stopgap — harness class-discovery support is planned;
-#: this marker reverts when that lands (do NOT convert to functions).
-__chumicro_runtimes__ = ("cpython",)
-
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     CLOSE_GOING_AWAY,

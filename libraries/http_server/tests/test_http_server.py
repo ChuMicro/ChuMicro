@@ -10,12 +10,6 @@ real connection, parses the request, runs the handler, writes the
 response back to the FakeSocket's `sent` buffer where tests assert.
 """
 
-#: CPython-only lane: class-based pytest-style suite, not discoverable
-#: by the cross-runtime harness (which finds module-level test_* only);
-#: A temporary stopgap — harness class-discovery support is planned;
-#: this marker reverts when that lands (do NOT convert to functions).
-__chumicro_runtimes__ = ("cpython",)
-
 from chumicro_http_server import (
     DEFAULT_BODY_BUFFER_SIZE,
     CaseInsensitiveDict,
