@@ -38,6 +38,7 @@ from chumicro_deploy.micropython_transport import (
     MicropythonTransport,
     MicropythonTransportError,
 )
+from chumicro_deploy.testing import FakeTime
 
 # ---------------------------------------------------------------------------
 # FakeTransport — host-side stub used by every other transport's tests.
@@ -262,7 +263,12 @@ def mp_copy_transport():
     transport instance is garbage-collected after the test exits.
     Forcing cleanup in the fixture's teardown phase is deterministic.
     """
-    transport = MicropythonTransport(address="/dev/null", mode="copy")
+    # FakeTime so the first copy-mode stage's mkfs-wipe settle is
+    # instant — otherwise every copy-mode staging test eats a real
+    # multi-second sleep.
+    transport = MicropythonTransport(
+        address="/dev/null", mode="copy", time=FakeTime(),
+    )
     yield transport
     if transport._staging_dir is not None:
         transport._staging_dir.cleanup()

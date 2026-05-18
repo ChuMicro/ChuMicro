@@ -376,6 +376,12 @@ class MicropythonTransport:
         #: passes ``True`` so test-support fakes reach the board
         #: product/app/functional deploys leave it ``False``.
         self._include_test_support: bool = False
+        #: The first copy-mode :meth:`stage` mkfs-wipes the board so the
+        #: sweep never inherits residue from a prior run/session/killed
+        #: deploy (``fs cp`` is additive — that residue would accumulate
+        #: to ``ENOSPC``).  In-process incremental cleanup handles every
+        #: stage after this one.
+        self._did_initial_wipe: bool = False
 
     def connect(self) -> None:
         """Verify the device is reachable by running a no-op command.
@@ -486,14 +492,18 @@ class MicropythonTransport:
             # Subprocess `fs cp -r` — release the serial port if held.
             self._close_serial()
             # `mpremote fs cp` only adds/overwrites — it has no
-            # `--delete` analog like the CircuitPython flash rsync.  A
-            # multi-library sweep re-stages per library, so without
-            # removing the prior library's tree the device LittleFS
-            # fills and `fs cp` hits ENOSPC (which then wedges the
-            # board's USB-CDC and cascades the sweep).  Delete exactly
-            # what the last stage() wrote, then record this stage's
-            # roots for the next switch.
-            if self._staged_device_entries:
+            # `--delete` analog like the CircuitPython flash rsync, so
+            # stale trees must be cleared or LittleFS fills and `fs cp`
+            # hits ENOSPC (wedging USB-CDC and cascading the sweep).
+            # First copy-mode stage: the board may carry residue from a
+            # prior run/session/killed deploy that no in-process tracking
+            # knows about — mkfs once (authoritative; recovers the full
+            # block budget) so a clean run is actually clean.  Every
+            # later stage clears exactly what the previous one wrote.
+            if not self._did_initial_wipe:
+                self.wipe_filesystem()
+                self._did_initial_wipe = True
+            elif self._staged_device_entries:
                 self._remove_device_entries(self._staged_device_entries)
             self._run_mpremote([
                 "fs", "cp", "-r",
