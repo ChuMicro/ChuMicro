@@ -516,6 +516,91 @@ def test_map32_decode_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Malformed framing — the trusting-decoder hardening.
+# unpackb must raise ValueError, never return a silently-wrong result,
+# on truncation / over-length / trailing-garbage / unbounded nesting.
+# Asserted against _pure (the contract owner on every runtime).
+# ---------------------------------------------------------------------------
+
+def test_truncated_bin8_raises() -> None:
+    """A bin8 claiming more bytes than remain raises, not a short read.
+
+    The audit case: 0xc4 + length 0xc8 (200) but only 2 payload bytes.
+    Pre-hardening this returned the 2 available bytes.
+    """
+    with raises(ValueError):
+        _pure_unpackb(b"\xc4\xc8\x01\x02")
+
+
+def test_truncated_str8_raises() -> None:
+    """A str8 claiming more bytes than remain raises."""
+    with raises(ValueError):
+        _pure_unpackb(b"\xd9\x10ab")  # claims 16 bytes, supplies 2
+
+
+def test_truncated_fixstr_raises() -> None:
+    """A fixstr claiming more bytes than remain raises."""
+    with raises(ValueError):
+        _pure_unpackb(b"\xa5ab")  # fixstr length 5, supplies 2
+
+
+def test_truncated_bin16_raises() -> None:
+    """A bin16 whose payload is short raises (length prefix is intact)."""
+    with raises(ValueError):
+        _pure_unpackb(b"\xc5\x00\x10ab")  # claims 16 bytes, supplies 2
+
+
+def test_trailing_bytes_raises() -> None:
+    """Bytes left after one complete object raise at the top level.
+
+    The audit case: 0x01 decodes as int 1, leaving 3 trailing bytes
+    that were silently dropped pre-hardening.
+    """
+    with raises(ValueError):
+        _pure_unpackb(b"\x01\xff\xff\xff")
+
+
+def test_overlong_fixarray_raises() -> None:
+    """A fixarray claiming more elements than bytes remain raises."""
+    with raises(ValueError):
+        _pure_unpackb(b"\x9f")  # fixarray length 15, no element bytes
+
+
+def test_overlong_fixmap_raises() -> None:
+    """A fixmap claiming more pairs than bytes remain raises."""
+    with raises(ValueError):
+        _pure_unpackb(b"\x8f")  # fixmap length 15, no pair bytes
+
+
+def test_overlong_array16_raises() -> None:
+    """An array16 claiming more elements than bytes remain raises."""
+    with raises(ValueError):
+        _pure_unpackb(b"\xdc\xff\xff")  # array16 length 65535, no elements
+
+
+def test_nesting_too_deep_raises() -> None:
+    """Nesting past the decoder's depth bound raises rather than faulting."""
+    # 33 nested single-element arrays — one past _MAX_DEPTH (32).
+    with raises(ValueError):
+        _pure_unpackb(b"\x91" * 33 + b"\x00")
+
+
+def test_moderate_nesting_still_roundtrips() -> None:
+    """The depth bound is well above realistic nesting — 8 deep is fine."""
+    value = 0
+    for _ in range(8):
+        value = [value]
+    assert _pure_unpackb(_pure_packb(value)) == [[[[[[[[0]]]]]]]]
+
+
+def test_exact_buffer_no_trailing_roundtrips() -> None:
+    """A buffer holding exactly one object (no slack) still decodes."""
+    assert _pure_unpackb(_pure_packb({"a": [1, 2], "b": "x"})) == {
+        "a": [1, 2], "b": "x",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Realistic embedded scenario
 # ---------------------------------------------------------------------------
 

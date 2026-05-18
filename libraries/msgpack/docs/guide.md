@@ -68,6 +68,17 @@ print(original)  # [1, 'hello', None, True]
 
 `unpackb` accepts `bytes`, `bytearray`, and `memoryview`, so you can decode directly from a pre-allocated buffer without copying.
 
+## Decoding corrupt or untrusted input
+
+`unpackb` is a *trusting* decoder, not a spec validator. It is safe against malformed *framing* — truncated, over-length, or trailing-garbage input, and nesting deeper than 32 levels, all raise `ValueError` instead of returning a silently-wrong value. This matters for flash-backed config and kvstore, where a power-loss-truncated payload must fail loudly rather than decode as a structurally-valid wrong dict.
+
+What it does **not** do is check that a structurally-valid payload has the type shape you expect — a packed `{"port": "80"}` decodes fine when your code wants `{"port": 80}`. Code persisting corruption- or attacker-reachable bytes still owns type-shape validation of what comes back.
+
+Two boundary notes:
+
+- The hardening lives in the pure-Python decoder, which is what runs on CPython, MicroPython, and CircuitPython boards *without* the native `msgpack` module. On CircuitPython boards that ship the native C `msgpack`, decoding goes through the firmware's decoder, whose framing behavior is its own.
+- Truncation that lands on a fixed-width primitive or a length prefix surfaces as `ValueError("buffer too small")` (from `struct`) rather than the framing message — still loud, still never a silent short read.
+
 ## Integer keys for compact storage
 
 When storing settings in NVM or sleep memory, use integer keys instead of strings.  Integer keys encode in 1 byte (vs. multiple bytes for quoted strings), saving space on every entry:
