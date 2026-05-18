@@ -115,19 +115,52 @@ CHU019, and the **first batch** (0035 → superseded-by-0036; 0004 →
 inert; 0006 / 0008 → marker-renamed; fix the lone inbound link
 `0009 → 0008`). 0005 left as a flagged candidate here.
 
-**Phase 1 — drift edits (class B).** Five in-place body rewrites.
-Independent; can be one commit or split by ADR.
+**Phase 1 — drift edits (class B). DONE — mostly phantom.**
+Verification against the actual ADR bodies (not the sub-agent
+reports, which described the *relationship* not the file state)
+found 0047 §3, 0016's `_pytest`/directory paragraphs, 0037 §3, and
+0048 §3 were **already maintained in place** when their superseders
+landed — each already carries the current rule + an inline forward
+cross-link. The only genuine gap was the missing *upward* link: 0049
+(the umbrella) cited 0003/0016 but neither cited up to 0049. Fixed:
+0003 gained a `Related:` + one Context clause naming Decision 0049 as
+the founding principle; 0016 gained a proportionate `Related:`
+pointer (its body already explains the three-runtime model). No
+status changes — all stay `accepted`.
 
-**Phase 2 — 0017 split (class D).** Slim ADR + relocate forensics to
-`docs/troubleshooting/circuitpython-ringio.md`. Update inbound refs.
+**Phase 2 — 0017 split (class D). DONE.** 0017 slimmed from ~149 to
+~45 lines (Context / Decision incl. the "why not the coverage
+variant" rejected-alternative / Consequences). Forensics relocated to
+[`../../docs/troubleshooting/circuitpython-ringio.md`](../../docs/troubleshooting/circuitpython-ringio.md),
+listed in that directory's README (Guides + Related-ADR, mirroring
+the 0033 ↔ macos-circuitpy precedent). 0017 stays `accepted` and
+keeps its filename, so the `scripts/prepare_circuitpython.py` comment
+ref and CHU019 are unaffected.
 
-**Phase 3 — 0005 disposition.** After user sign-off: archive-inert or
-keep. Cross-refs from 0003 / 0016 if archived.
+**Phase 3 — 0005 disposition. DONE — archived inert.** Verified
+inert: an explicitly provisional early-phase Windows-host intent,
+never operationalized (no live setup doc adopted "native CPython +
+WSL2"; only an *archived* workstream restates it), and the current
+posture moved past it (deploy hard-refuses native Windows; docs say
+Windows unsupported). No successor ADR → not `superseded`. Renamed
+`0005-INERT-...`, `Status:` stays `accepted`, `Archived:` field
+added; the one inbound link (an archived workstream) fixed.
 
-Phase 0 is the load-bearing one and the only one the user explicitly
-asked for. Phases 1–3 are the backlog it surfaces; none blocking.
+Phase 0 was the load-bearing one and the only one the user explicitly
+asked for; Phases 1–3 are the backlog it surfaced, now cleared. The
+class-E ADRs (0056 / 0012 / 0026) are deliberately left as-is — the
+note stands: stop *creating* that class, don't churn history to tidy
+it. Class-F polish DONE: 0031's Consequences gained a one-line forward-ref
+to Decision 0043 (UDP extends the TCP/TLS charter, doesn't replace
+it); 0042's `Related:` now lists 0062/0063 (its body already cited
+0062 three times — only the header back-pointer was missing). No
+status changes.
 
 ## Status
 
-Opened 2026-05-18. Phase 0 in progress. Phases 1–3 pending, not
-blocking anything.
+Opened 2026-05-18. Phase 0 shipped (commit `de2d96dd`). Phases 1–3
+complete in the working tree, **uncommitted** — the user is
+orchestrating one combined commit with handoff notes alongside a
+concurrent agent's work; this workstream's remaining edits (the
+0003/0016 `Related:`+clause, the 0017 split + new troubleshooting
+doc, the 0005 inert rename) ride in that commit. Nothing blocking.

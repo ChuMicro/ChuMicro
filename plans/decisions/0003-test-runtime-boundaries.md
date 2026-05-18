@@ -2,11 +2,11 @@
 
 Status: `accepted`
 Date: `2026-03-28`
-Related: Decision 0010 (testability), Decision 0016 (cross-runtime unit tests), Decision 0027 (device tests)
+Related: Decision 0049 (three-runtime trinity — the founding principle this pyramid rests on), Decision 0010 (testability), Decision 0016 (cross-runtime unit tests), Decision 0027 (device tests)
 
 ## Context
 
-Most development and CI must happen on CPython, but the libraries ultimately target MicroPython and CircuitPython semantics on constrained hardware.
+Most development and CI must happen on CPython, but the libraries ultimately target MicroPython and CircuitPython semantics on constrained hardware.  CPython is the host-test seam, not a deployment target — the principle this pyramid rests on, stated in full by [Decision 0049](0049-three-runtime-trinity.md).
 
 ## Decision
 
