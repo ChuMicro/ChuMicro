@@ -236,11 +236,24 @@ The convergence deltas (the actual Phase 2 work):
    deduped — the regression class is now structurally impossible.
    CLI surface change (`repl <project>` retired) is intentional and
    user-approved.
-4. **Empty-dir reaping** (Phase-1 repl root-cause seam). CP
-   `_list_scope_on_drive`+`delete_files` deletes files only, leaving
-   `/lib/<pkg>/` husks (stale `import <pkg>` fails mid-package). MP's
-   wholesale `rm -r :/lib` already avoids this; CP must prune empty
-   dirs. Directory pruning is part of the keep-set spec.
+4. **Empty-dir reaping** (Phase-1 repl root-cause seam). **DONE
+   2026-05-18 (Commit 1b).** CP `delete_files` now sweeps the whole
+   `/lib/**` scope bottom-up after unlinking and `rmdir`s every empty
+   directory (rsync `--delete` semantics; `rmdir` only removes empties
+   so live packages are untouched, lib root preserved). Bench-verified
+   Pico W CP: a `wifi_only`→`hello_world` shrink deleted the stale
+   `chumicro_msgpack`/`runner`/`wifi`(+`_adapters`) files and reaped
+   every now-empty package dir *including* pre-existing husks —
+   `/lib` collapsed to just `chumicro_timing/`. 2 unit tests
+   (reap-emptied-pkg + keep-dir-with-live-files). **Known narrow
+   limitation, deferred to Commit 2:** reaping sits inside
+   `delete_files`, which early-returns when no file is stale, so a
+   *zero-stale* deploy won't sweep a lingering husk. It prevents *new*
+   husks unconditionally (any deploy that empties a package reaps it
+   same-call) — the regression class — and a real `--delete` runs
+   every deploy regardless; making the sweep unconditional belongs in
+   Commit 2's one-clean-primitive restructure, not bolted onto
+   `delete_files`. MP's wholesale `rm -r :/lib` already avoids husks.
 5. **Entrypoint always payload + post-stage fork.** Project `app.py`→
    shim, example file→shim, test file→shim, so `code.py` leaves the
    exclude set and the rsync is byte-identical across contexts. The
@@ -255,8 +268,9 @@ The convergence deltas (the actual Phase 2 work):
 *Sequencing (user-decided 2026-05-18): seams first, then convergence.*
 **Commit 1a — DONE 2026-05-18:** delta 3 by elimination
 (`repl <project>` retired → `deploy --tail`); bench-verified Pico W
-CP. **Commit 1b — next:** delta 4 (empty-dir reaping), the remaining
-seam. **Commit 2** = deltas
+CP. **Commit 1b — DONE 2026-05-18:** delta 4 (empty-dir reaping),
+bench-verified Pico W CP. **Commit 1 (the seams) complete.**
+**Commit 2 — next:** deltas
 1+2+5+6 (default-flip, keep-set convergence incl. `settings.toml`
 evict-with-warning + `_chu_kv.msgpack` add + the two-site collapse,
 entrypoint-as-payload, MP mechanics) — the every-deploy-visible policy

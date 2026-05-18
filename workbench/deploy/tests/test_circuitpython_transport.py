@@ -2810,6 +2810,64 @@ class TestListFilesInScopeAndDelete:
         assert not target.exists()
         assert keeper.exists()
 
+    def test_delete_reaps_emptied_package_dirs_not_lib_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """An emptied `/lib/<pkg>/` is pruned; live siblings + lib root stay.
+
+        Regression: unlink removes files but not directories, so a
+        package whose every file was stale left an empty husk — a
+        stale `import <pkg>` then failed mid-package instead of
+        cleanly.  The diff path must reap the husk (rsync --delete
+        would have).
+        """
+        lib = tmp_path / "lib"
+        (lib / "pkg" / "nested").mkdir(parents=True)
+        (lib / "pkg" / "__init__.py").write_text("# pkg")
+        (lib / "pkg" / "nested" / "deep.py").write_text("# deep")
+        (lib / "keep").mkdir()
+        (lib / "keep" / "__init__.py").write_text("# survives")
+
+        _plant_verifiable_circuitpy(tmp_path, monkeypatch)
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
+        )
+        transport.delete_files([
+            "/lib/pkg/__init__.py",
+            "/lib/pkg/nested/deep.py",
+        ])
+        # Husk + its nested empty dir reaped, deepest-first.
+        assert not (lib / "pkg" / "nested").exists()
+        assert not (lib / "pkg").exists()
+        # The scope root is never removed, and a package that still
+        # holds a live file is left untouched.
+        assert lib.is_dir()
+        assert (lib / "keep" / "__init__.py").exists()
+
+    def test_delete_keeps_dir_that_still_has_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """rmdir only removes empty dirs — a partially-cleared pkg stays."""
+        lib = tmp_path / "lib"
+        (lib / "pkg").mkdir(parents=True)
+        (lib / "pkg" / "gone.py").write_text("# stale")
+        (lib / "pkg" / "stays.py").write_text("# live")
+
+        _plant_verifiable_circuitpy(tmp_path, monkeypatch)
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
+        )
+        transport.delete_files(["/lib/pkg/gone.py"])
+        assert not (lib / "pkg" / "gone.py").exists()
+        assert (lib / "pkg").is_dir()
+        assert (lib / "pkg" / "stays.py").exists()
+
     def test_flash_mode_delete_with_empty_paths_returns_immediately(
         self, tmp_path: Path,
     ) -> None:
