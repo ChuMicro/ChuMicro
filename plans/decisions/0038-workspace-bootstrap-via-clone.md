@@ -52,16 +52,17 @@ The folder `workbench/workspace-runtime/` becomes `workbench/workspace/`. The Py
 
 VERSION stays at 0.0.0; nothing was published under the old name.
 
-### 3. `init` and `update` fold into `chumicro-workspace`
+### 3. `update` folds into `chumicro-workspace`; creation stays clone-only
 
-`chumicro-workspace-template` (the workbench package, not the repo) is deleted. Its public surface — `init`, `update`, three-zone manifest — moves into `chumicro-workspace` as subcommands:
+**Invariant: no CLI command may materialize a workspace on disk.** The user clones the template repo (`git clone`, or GitHub "Use this template") and runs `python3 run.py setup`. Workspace creation is not a command — see [Decision 0075](0075-retire-init-creation-is-clone-only.md).
 
-- `chumicro-workspace init <target> [--from <git-url>] [--ref <ref>]` clones a template repo to *target*, runs `rm -rf .git`, runs `git init`. Defaults `--from` to `https://github.com/ChuMicro/ChuMicro-Workspace-Template`. Thin wrapper; the *real* canonical bootstrap path is the documented `git clone` recipe.
-- `chumicro-workspace update [<target>] [--from <git-url>] [--ref <ref>]` fetches the template upstream into a temp clone and re-flows files in the `Zone.TOOL_OWNED` slice (using the same three-zone manifest from Decision 0029 §9, generalized to the whole tree). User-owned and init-only zones are skipped.
+`chumicro-workspace-template` (the workbench package, not the repo) is deleted. Its re-sync surface — `update` and the ownership manifest — moves into `chumicro-workspace`:
 
-The three-zone manifest lives inside `chumicro-workspace` (carried over from `chumicro_workspace_template.manifest`) so the package can classify upstream files without having to read a manifest from the template repo. The classification is logically owned by the *tooling*, not by individual templates — every template a user might fork shares the same workspace shape.
+- `chumicro-workspace update [<target>] [--from <git-url>] [--ref <ref>]` fetches the template upstream into a temp clone and re-flows files in the `Zone.TOOL_OWNED` slice. User-owned files are skipped. This is the sole supported way to pull template evolution into an existing workspace.
 
-**Rejected:** retire `init` / `update` entirely and document only the `git clone` recipe. The recipe remains the primary path, but `update` (re-flow tool-owned files when the template evolves) is genuine work that benefits from a single command. `init` as a thin wrapper costs almost nothing and gives users a forkable name to invoke when they don't want to remember the recipe.
+The ownership manifest lives inside `chumicro-workspace` (carried over from `chumicro_workspace_template.manifest`) so the package can classify upstream files without reading a manifest from the template repo. The classification is logically owned by the *tooling*, not by individual templates — every template a user might fork shares the same workspace shape. Two zones: `TOOL_OWNED` (re-flowed by `update`) and `USER_OWNED` (everything else, left alone); [Decision 0075](0075-retire-init-creation-is-clone-only.md) records the collapse from the original three.
+
+This section originally also folded in an `init` subcommand — a clone + `.git`-strip + `git init` wrapper — and **rejected** the stricter ask ("retire `init`/`update`, document only the clone recipe") for convenience, on the reasoning that "`init` as a thin wrapper costs almost nothing." That narrowing was the defect. The rule as written ("clone, not pip-installed scaffolder") named the mechanism; a clone-based `init` CLI satisfied that wording while doing exactly what the unwritten invariant forbade — a command that creates a workspace. `init` was removed in [Decision 0075](0075-retire-init-creation-is-clone-only.md); the invariant stated above is the rule that should have been recorded here. This is the worked cautionary case in [`plans/decisions/README.md`](README.md) — "state the principle, not the mechanism."
 
 ### 4. The `_payloads/default_template/` tree migrates into the new repo, with templated config files
 

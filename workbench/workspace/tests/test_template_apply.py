@@ -1,7 +1,14 @@
-"""Tests for template init / update / materialize orchestration."""
+"""Tests for template clone / update / materialize orchestration.
+
+Workspaces are created by cloning the template repo directly (there
+is no scaffolding CLI command), so the update tests below stand a
+workspace up with :func:`_clone_template`, which mirrors the README's
+Option A: ``git clone`` then decouple from upstream.
+"""
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -10,7 +17,6 @@ import pytest
 from chumicro_workspace.template_apply import (
     DEFAULT_TEMPLATE_URL,
     ApplyAction,
-    init,
     materialize_workspace_templates,
     update,
 )
@@ -24,7 +30,8 @@ def fake_template_repo(tmp_path: Path) -> Path:
     """A local git repo populated like the canonical workspace template.
 
     Layout mirrors the ChuMicro-Workspace-Template repo: tool-owned
-    files at the root, init-only `README.md`.  `workspace.yml` /
+    files at the root, a tracked but user-editable `README.md`.
+    `workspace.yml` /
     `secrets.toml` / `devices.yml` are gitignored — setup
     materializes them from the canonical workspace templates.
 
@@ -38,7 +45,7 @@ def fake_template_repo(tmp_path: Path) -> Path:
     (repo / "pyproject.toml").write_text(
         '[project]\nname = "my-workspace"\n',
     )
-    (repo / "README.md").write_text("# init-only readme\n")
+    (repo / "README.md").write_text("# clone-seeded readme\n")
     (repo / ".gitignore").write_text(
         ".venv/\n/workspace.yml\n/secrets.toml\n/devices.yml\n",
     )
@@ -66,71 +73,25 @@ def _git(*args: str, cwd: Path) -> None:
     )
 
 
+def _clone_template(template_repo: Path, target: Path) -> None:
+    """Stand up a workspace the way a real user does.
+
+    Mirrors the template README's Option A: ``git clone`` the
+    template, then decouple from upstream (strip ``.git``, fresh
+    ``git init``).  There is deliberately no ``init`` CLI command —
+    this helper is what ``update``'s callers look like in the wild.
+    """
+    _git("clone", "--depth", "1", str(template_repo), str(target),
+         cwd=target.parent)
+    shutil.rmtree(target / ".git")
+    _git("init", "-b", "main", cwd=target)
+
+
 def _files(report_iter: Iterable[tuple[str, str]]) -> dict[str, str]:
     return dict(report_iter)
 
 
-class TestInit:
-    def test_clones_template_into_target(
-        self, fake_template_repo: Path, tmp_path: Path,
-    ) -> None:
-        target = tmp_path / "my-house"
-        report = init(target, template_url=str(fake_template_repo))
-        assert (target / "run.py").is_file()
-        # workspace.yml / secrets.toml / devices.yml at root are
-        # gitignored — init clones what's tracked; setup materializes
-        # the rest from the canonical workspace templates.
-        assert not (target / "workspace.yml").is_file()
-        assert not (target / "secrets.toml").is_file()
-        assert not (target / "devices.yml").is_file()
-        # Tracked tool-owned + init-only files reported as WRITTEN.
-        actions = _files(report)
-        assert actions["run.py"] == ApplyAction.WRITTEN
-        assert actions["AGENTS.md"] == ApplyAction.WRITTEN
-        assert actions["README.md"] == ApplyAction.WRITTEN
-
-    def test_strips_dot_git_and_reinitializes(
-        self, fake_template_repo: Path, tmp_path: Path,
-    ) -> None:
-        target = tmp_path / "my-house"
-        init(target, template_url=str(fake_template_repo))
-        assert (target / ".git").is_dir()
-        # Fresh `git init` — no remotes, no history (a single empty branch).
-        completed = subprocess.run(  # noqa: S603 — args fully controlled
-            ["git", "log", "--oneline"],
-            cwd=str(target),
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-        assert completed.stdout.strip() == ""
-
-    def test_refuses_non_empty_target_without_force(
-        self, fake_template_repo: Path, tmp_path: Path,
-    ) -> None:
-        target = tmp_path / "my-house"
-        target.mkdir()
-        (target / "existing.txt").write_text("already here\n")
-        with pytest.raises(FileExistsError):
-            init(target, template_url=str(fake_template_repo))
-        # Existing file untouched.
-        assert (target / "existing.txt").read_text() == "already here\n"
-
-    def test_force_clears_target_then_clones(
-        self, fake_template_repo: Path, tmp_path: Path,
-    ) -> None:
-        target = tmp_path / "my-house"
-        target.mkdir()
-        (target / "existing.txt").write_text("will be wiped\n")
-        init(target, template_url=str(fake_template_repo), force=True)
-        assert not (target / "existing.txt").exists()
-        assert (target / "run.py").is_file()
-
-    def test_unreachable_template_url_raises(self, tmp_path: Path) -> None:
-        target = tmp_path / "my-house"
-        with pytest.raises(RuntimeError, match="git clone failed"):
-            init(target, template_url="/nonexistent/path/to/repo")
-
+class TestDefaultTemplateUrl:
     def test_default_url_is_canonical_chumicro_template(self) -> None:
         # Smoke check on the constant — no network call.
         assert DEFAULT_TEMPLATE_URL.endswith("ChuMicro-Workspace-Template")
@@ -142,7 +103,7 @@ class TestUpdate:
         self, fake_template_repo: Path, tmp_path: Path,
     ) -> None:
         target = tmp_path / "my-house"
-        init(target, template_url=str(fake_template_repo))
+        _clone_template(fake_template_repo, target)
         # Mutate one tool-owned file in the workspace.
         (target / "run.py").write_text("# user mucked with this\n")
         report = update(target, template_url=str(fake_template_repo))
@@ -161,8 +122,8 @@ class TestUpdate:
         user's content stays put.
         """
         target = tmp_path / "my-house"
-        init(target, template_url=str(fake_template_repo))
-        # User materializes / fills in secrets.toml after init.
+        _clone_template(fake_template_repo, target)
+        # User materializes / fills in secrets.toml after cloning.
         (target / "workspace.yml").write_text("# machinery only\n")
         (target / "secrets.toml").write_text('[wifi]\npassword = "user-edited"\n')
         report = update(target, template_url=str(fake_template_repo))
@@ -179,25 +140,31 @@ class TestUpdate:
         self, fake_template_repo: Path, tmp_path: Path,
     ) -> None:
         target = tmp_path / "my-house"
-        init(target, template_url=str(fake_template_repo))
+        _clone_template(fake_template_repo, target)
         report = update(target, template_url=str(fake_template_repo))
         actions = _files(report)
-        # Every tool-owned file should report UNCHANGED post-init since
-        # init wrote them straight from the same source.
+        # Every tool-owned file should report UNCHANGED post-clone since
+        # the clone seeded them straight from the same source.
         assert actions["run.py"] == ApplyAction.UNCHANGED
         assert actions["AGENTS.md"] == ApplyAction.UNCHANGED
         assert actions["pyproject.toml"] == ApplyAction.UNCHANGED
 
-    def test_skips_init_only_files(
+    def test_skips_user_edited_readme(
         self, fake_template_repo: Path, tmp_path: Path,
     ) -> None:
         target = tmp_path / "my-house"
-        init(target, template_url=str(fake_template_repo))
+        _clone_template(fake_template_repo, target)
         (target / "README.md").write_text("# my custom readme\n")
         report = update(target, template_url=str(fake_template_repo))
         actions = _files(report)
         assert actions["README.md"] == ApplyAction.SKIPPED
         assert (target / "README.md").read_text() == "# my custom readme\n"
+
+    def test_unreachable_template_url_raises(self, tmp_path: Path) -> None:
+        target = tmp_path / "my-house"
+        target.mkdir()
+        with pytest.raises(RuntimeError, match="git clone failed"):
+            update(target, template_url="/nonexistent/path/to/repo")
 
     def test_missing_target_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):

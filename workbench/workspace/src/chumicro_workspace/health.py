@@ -79,7 +79,7 @@ def check_workspace_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             label="WORKSPACE.YML",
             level=HealthLevel.ERROR,
             message=f"missing at {workspace.workspace_yaml}",
-            hint="run `chumicro-workspace init` to scaffold the workspace.",
+            hint="run `python3 run.py setup` to materialize it.",
         )
     # Import outside the `try` so pyright can prove `YAMLError` is bound on
     # the `except` arm — an import failure inside the try would short-circuit

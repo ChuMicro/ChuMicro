@@ -84,7 +84,7 @@ workspace.yml ──────────────────► projects
 
 | Group | Commands |
 |---|---|
-| **Bootstrap / setup** | `init`, `setup`, `update`, `bootstrap` |
+| **Bootstrap / setup** | `setup`, `update`, `bootstrap` (workspaces are *created* by cloning the template repo, not a command) |
 | **Authoring** | `new <path>` (project), `new --library <name>` (chumicro-style library) |
 | **Config** | `dump-config <project>`, `config-validate <project>` |
 | **Devices** | `add-device`, `probe`, `discover`, `devices`, `rename --device` |
