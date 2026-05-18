@@ -49,6 +49,12 @@ from chumicro_workspace.workspace import (
     WorkspaceLayout,
 )
 
+#: Tail-window default (seconds) for ``deploy --tail`` with no explicit
+#: value.  Covers "deploy a heartbeat project, watch a few cycles
+#: confirm it booted" without the user having to pick a number.
+_DEFAULT_TAIL_SECONDS = 30.0
+
+
 # ---------------------------------------------------------------------------
 # Deploy-runner construction
 # ---------------------------------------------------------------------------
@@ -225,6 +231,72 @@ def _resolve_deploy_layout(
         "\n"
         "  Fix: name your script code.py (CP) or main.py (MP), OR\n"
         "       wrap your top-level code in `def run(): ...` in app.py.",
+    )
+
+
+def resolve_project_deploy_source(
+    *,
+    project_dir: Path,
+    workspace: WorkspaceLayout,
+    device: Device,
+    user_boot_shim: bool = False,
+    user_import_graph: bool = False,
+    user_entrypoint: str | None = None,
+    target_runtime: str | None = None,
+) -> tuple[str, object]:
+    """Resolve ``(layout_label, FileSource)`` for a project deploy.
+
+    The single owner of project → on-device-source policy: one
+    mechanism, one source policy.  Every command that puts a
+    *project* on a board routes through this so the project stages
+    identically regardless of which command invoked it.
+    ``deploy`` passes its ``--boot-shim`` / ``--import-graph`` /
+    ``--entrypoint`` / ``--target-runtime`` flags through; ``repl``
+    (and any other front-end) passes nothing and gets the same
+    auto-detected layout ``deploy`` would.
+
+    Raises:
+        _DeployLayoutError: project shape doesn't match the target
+            runtime's entrypoint convention.  Callers surface the
+            instance's str as the user-facing message — a malformed
+            project is refused identically on every path, never
+            silently shipped as a library-less boot deploy.
+    """
+    target = target_runtime or str(device.transport)
+    layout_choice = _resolve_deploy_layout(
+        project_dir=project_dir,
+        target_entrypoint=device.effective_entrypoint,
+        user_passed_boot_shim=user_boot_shim,
+        user_passed_import_graph=user_import_graph,
+    )
+    if layout_choice.boot_shim and layout_choice.import_graph:
+        return "boot-shim+import-graph", project_boot_with_import_graph_source(
+            project_dir,
+            workspace=workspace,
+            entrypoint_filename=device.effective_entrypoint,
+            target_runtime=target,
+        )
+    if layout_choice.boot_shim:
+        return "boot-shim", project_boot_source(
+            project_dir,
+            workspace=workspace,
+            entrypoint_filename=device.effective_entrypoint,
+            target_runtime=target,
+        )
+    if layout_choice.import_graph:
+        device_entrypoint = user_entrypoint or f"/{device.effective_entrypoint}"
+        return "import-graph", project_import_graph_source(
+            project_dir,
+            workspace=workspace,
+            entrypoint_filename=device.effective_entrypoint,
+            device_entrypoint=device_entrypoint,
+            target_runtime=target,
+        )
+    return "flat", project_directory_source(
+        project_dir,
+        secrets_toml=workspace.secrets_toml,
+        entrypoint=(user_entrypoint or f"/{device.effective_entrypoint}"),
+        target_runtime=target,
     )
 
 
@@ -415,7 +487,20 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         print(f"deploy: {plan_error}", file=sys.stderr)
         return 2
 
+    if args.tail is not None:
+        target_count = sum(len(devices) for _n, _d, devices in deploy_plan)
+        if target_count != 1:
+            print(
+                "deploy: --tail follows one board's output, so it needs "
+                "exactly one (project, device) target; this plan resolves "
+                f"to {target_count}.  Drop --tail, or narrow to a single "
+                "project and --device.",
+                file=sys.stderr,
+            )
+            return 2
+
     exit_code = 0
+    tail_target: Device | None = None
     for project_name, project_dir, devices in deploy_plan:
         if len(deploy_plan) > 1:
             print(f"\ndeploy: === {project_name} ===")
@@ -424,71 +509,26 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 print(
                     f"deploy: --- {device.transport}@{device.address} ---",
                 )
-            # Every staging path filters out files marked
-            # ``__chumicro_runtimes__`` for a different runtime.
-            # ``--target-runtime`` overrides; otherwise the device's
-            # configured runtime drives the filter.
-            target_runtime = args.target_runtime or str(device.transport)
-            # Resolve deploy layout from project shape + user flags.
-            # Project shape determines the auto-detected mode:
-            #
-            # * ``code.py`` at root    → plain (CP entrypoint, user-owned).
-            # * ``main.py`` at root    → plain (MP entrypoint, user-owned).
-            # * ``app.py`` with run()  → boot-shim + import-graph (deploy
-            #   synthesises ``/code.py`` or ``/main.py`` and ships imported
-            #   libraries from ``library_sources`` and ``shared/``).
-            # * Runtime mismatch (e.g. ``code.py`` only, but target is MP)
-            #   surfaces as a user error before any bytes leave the host.
+            # Source policy (layout resolution + the four source
+            # factories) lives in one owner, the single mechanism that
+            # places a project on a board — no command owns a second.
+            # `--target-runtime` overrides the device's runtime;
+            # `_resolve_deploy_layout` raises on a project/runtime
+            # entrypoint mismatch before any bytes leave the host.
             try:
-                layout_choice = _resolve_deploy_layout(
+                layout, source = resolve_project_deploy_source(
                     project_dir=project_dir,
-                    target_entrypoint=device.effective_entrypoint,
-                    user_passed_boot_shim=args.boot_shim,
-                    user_passed_import_graph=args.import_graph,
+                    workspace=workspace,
+                    device=device,
+                    user_boot_shim=args.boot_shim,
+                    user_import_graph=args.import_graph,
+                    user_entrypoint=args.entrypoint,
+                    target_runtime=args.target_runtime,
                 )
             except _DeployLayoutError as layout_error:
                 print(f"deploy: {layout_error}", file=sys.stderr)
                 exit_code = 2
                 continue
-
-            if layout_choice.boot_shim and layout_choice.import_graph:
-                layout = "boot-shim+import-graph"
-                source = project_boot_with_import_graph_source(
-                    project_dir,
-                    workspace=workspace,
-                    entrypoint_filename=device.effective_entrypoint,
-                    target_runtime=target_runtime,
-                )
-            elif layout_choice.boot_shim:
-                layout = "boot-shim"
-                source = project_boot_source(
-                    project_dir,
-                    workspace=workspace,
-                    entrypoint_filename=device.effective_entrypoint,
-                    target_runtime=target_runtime,
-                )
-            elif layout_choice.import_graph:
-                layout = "import-graph"
-                device_entrypoint = (
-                    args.entrypoint or f"/{device.effective_entrypoint}"
-                )
-                source = project_import_graph_source(
-                    project_dir,
-                    workspace=workspace,
-                    entrypoint_filename=device.effective_entrypoint,
-                    device_entrypoint=device_entrypoint,
-                    target_runtime=target_runtime,
-                )
-            else:
-                layout = "flat"
-                source = project_directory_source(
-                    project_dir,
-                    secrets_toml=workspace.secrets_toml,
-                    entrypoint=(
-                        args.entrypoint or f"/{device.effective_entrypoint}"
-                    ),
-                    target_runtime=target_runtime,
-                )
             if args.dry_run:
                 print(_render_dry_run_summary(
                     project_name=project_name,
@@ -519,6 +559,21 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             if not result.success:
                 _emit_failure_hints(result)
                 exit_code = 1
+            else:
+                tail_target = device
+
+    if args.tail is not None and tail_target is not None and exit_code == 0:
+        # One deploy path; the watch is a flag on it — not a second
+        # deploy path inside `repl`.  repl owns only the interactive /
+        # standalone-tail surface now.
+        from chumicro_repl import tail  # noqa: PLC0415
+
+        return int(tail(
+            tail_target,
+            args.tail,
+            fail_on_traceback=args.fail_on_traceback,
+            output=sys.stdout,
+        ))
     return exit_code
 
 
@@ -739,6 +794,32 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
             "the device's configured runtime — files marked for a "
             "different runtime via __chumicro_runtimes__ are filtered "
             "out.  Set this to override the auto-derived value."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--tail",
+        nargs="?",
+        type=float,
+        const=_DEFAULT_TAIL_SECONDS,
+        default=None,
+        metavar="SECONDS",
+        help=(
+            "After a successful deploy, tail the board's serial output "
+            f"for SECONDS (default {_DEFAULT_TAIL_SECONDS:g} when the "
+            "value is omitted), then exit.  Replaces the old "
+            "`repl <project>` deploy-then-watch shortcut — one deploy "
+            "path, the watch is a flag on it.  Requires exactly one "
+            "(project, device) target."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--no-fail-on-traceback",
+        dest="fail_on_traceback",
+        action="store_false",
+        default=True,
+        help=(
+            "With --tail: do not exit non-zero when a traceback is "
+            "detected in the tailed output."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)

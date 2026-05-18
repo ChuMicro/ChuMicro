@@ -1367,13 +1367,19 @@ class TestDeployFailureHints:
         captured_stderr = capsys.readouterr().err
         assert "--- hints ---" not in captured_stderr
 
-    def test_repl_with_project_failure_prints_hint(
+    def test_deploy_tail_failure_skips_tail_and_hints(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """`repl <project>` deploy failures route through the same hint pass."""
+        """`deploy --tail` failures route through the hint pass, no tail.
+
+        `deploy --tail` is the one deploy-then-watch path (the old
+        `repl <project>` shortcut, retired).  A failed deploy must
+        not fall through to tail and must surface the same coached
+        hints any `deploy` failure does.
+        """
         root = seed_workspace(tmp_path)
         project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text("def run(): pass\n")
@@ -1395,7 +1401,7 @@ class TestDeployFailureHints:
         )
 
         exit_code = cli.main([
-            "repl", "--workspace-dir", str(root), "back-porch",
+            "deploy", "--workspace-dir", str(root), "back-porch", "--tail",
         ])
         assert exit_code == 1
         captured_stderr = capsys.readouterr().err
@@ -2666,8 +2672,15 @@ class TestProbe:
 # ---------------------------------------------------------------------------
 
 
-class TestReplWithProject:
-    """`repl <project>` deploys then tails in one command."""
+class TestDeployTail:
+    """`deploy <project> --tail` deploys then tails in one command.
+
+    This is the one deploy-then-watch path.  The old
+    `repl <project>` shortcut owned a *second* deploy orchestration
+    that drifted and shipped a board-dead library regression; it was
+    retired and the convenience moved onto `deploy` as a flag, so
+    exactly one mechanism puts code on a board.
+    """
 
     def test_deploys_then_tails(
         self,
@@ -2690,31 +2703,82 @@ class TestReplWithProject:
         monkeypatch.setattr(chumicro_repl, "tail", fake_tail)
 
         exit_code = cli.main([
-            "repl", "--workspace-dir", str(root), "back-porch",
+            "deploy", "--workspace-dir", str(root), "back-porch", "--tail",
         ])
         assert exit_code == 0
-        # Default tail window applied since --tail wasn't given.
+        # `--tail` with no value applies the default window.
         assert captured["seconds"] == 30.0
-        # Deploy ran via the boot-shim source: shim + project at root.
         deploy_calls = [
             call for call in transport.calls if call[0] == "deploy_files"
         ]
         assert len(deploy_calls) == 1
         files, _entrypoint, _follow = deploy_calls[0][1]
-        # Project's app.py at the device root (no /lib/projects/ prefix).
+        # seed_project ships code.py + main.py → flat layout; project
+        # files land at the device root.
         assert "/app.py" in files
-        # Synthesised shim at runtime-matching path (seed defaults to MP).
         assert "/main.py" in files
-        # Legacy multi-project artefacts must not appear.
         assert "/active.py" not in files
         assert not any(path.startswith("/lib/projects/") for path in files)
+
+    def test_deploy_tail_ships_imported_libraries(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Regression lock: the deploy-then-watch path ships imports.
+
+        The retired `repl <project>` hardcoded `project_boot_source`
+        (shim + project files, ZERO library payload), so on an
+        app.py+import project `deploy_diff` wholesale-deleted the
+        prior deploy's `/lib/<pkg>/` tree and left the board dead
+        (bench-reproduced on Pico W CP).  `deploy --tail` routes
+        through `resolve_project_deploy_source` like every deploy, so
+        an app.py+run() project auto-resolves boot-shim+import-graph
+        and the imported module reaches `/lib/`.  There is no second
+        path to drift.
+        """
+        root = seed_workspace(tmp_path)
+        shared = root / "shared"
+        shared.mkdir()
+        (shared / "external_lib.py").write_text("def helper(): pass\n")
+        # app.py + run() with NO code.py/main.py → auto
+        # boot-shim+import-graph (the shape the regression hit).
+        project_dir = root / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "project_config.toml").write_text(
+            "[wifi]\nssid = 'HomeNet'\n",
+        )
+        (project_dir / "app.py").write_text(
+            "import external_lib\ndef run(): print('back-porch')\n",
+        )
+
+        transport = FakeTransport(execute_output="back-porch\n")
+        _install_fake_transport(monkeypatch, transport)
+
+        import chumicro_repl
+        monkeypatch.setattr(chumicro_repl, "tail", lambda *args, **kwargs: 0)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch", "--tail",
+        ])
+        assert exit_code == 0
+        deploy_calls = [
+            call for call in transport.calls if call[0] == "deploy_files"
+        ]
+        assert len(deploy_calls) == 1
+        files, _entrypoint, _follow = deploy_calls[0][1]
+        # Boot-shim layer (seed defaults to MP → /main.py shim).
+        assert "/main.py" in files
+        assert "/app.py" in files
+        # The fix: the import-graph contribution reaches the device.
+        assert "/lib/external_lib.py" in files
 
     def test_explicit_tail_seconds(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """`--tail SECONDS <project>` overrides the 30s default."""
+        """`deploy <project> --tail 5` overrides the default window."""
         root = seed_workspace(tmp_path)
         project_dir = seed_project(root, name="back-porch")
         (project_dir / "app.py").write_text("def run(): print('back-porch')\n")
@@ -2731,8 +2795,8 @@ class TestReplWithProject:
         monkeypatch.setattr(chumicro_repl, "tail", fake_tail)
 
         exit_code = cli.main([
-            "repl", "--workspace-dir", str(root),
-            "--tail", "5", "back-porch",
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--tail", "5",
         ])
         assert exit_code == 0
         assert captured["seconds"] == 5.0
@@ -2755,18 +2819,18 @@ class TestReplWithProject:
         )
 
         exit_code = cli.main([
-            "repl", "--workspace-dir", str(root),
-            "garage/sensors/door_open",
+            "deploy", "--workspace-dir", str(root),
+            "garage/sensors/door_open", "--tail",
         ])
         assert exit_code == 0
         deploy_calls = [
             call for call in transport.calls if call[0] == "deploy_files"
         ]
         files, _entrypoint, _follow = deploy_calls[0][1]
-        # Project files land at the device root regardless of host-side
-        # nesting depth — F5 dropped the /lib/projects/<name>/ namespace.
+        # Slash-form project name resolves; files land at the device
+        # root regardless of host-side nesting depth.
         assert "/app.py" in files
-        assert "/main.py" in files  # synthesised shim
+        assert "/main.py" in files
         assert "/active.py" not in files
         assert not any(path.startswith("/lib/projects/") for path in files)
 
@@ -2800,19 +2864,55 @@ class TestReplWithProject:
         monkeypatch.setattr(chumicro_repl, "tail", fake_tail)
 
         exit_code = cli.main([
-            "repl", "--workspace-dir", str(root), "back-porch",
+            "deploy", "--workspace-dir", str(root), "back-porch", "--tail",
         ])
         assert exit_code == 1
         assert tail_called[0] is False
         assert "deploy-failed" in capsys.readouterr().err
 
-    def test_missing_project_raises(self, tmp_path: Path) -> None:
+    def test_tail_requires_single_target(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """`--tail` follows one board — multi-target plans are refused.
+
+        The guard runs before any transport, so two registered
+        devices + `--all-devices` is enough to exercise it.
+        """
+        root = seed_workspace(tmp_path)
+        (root / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython: board-a\n"
+            "devices:\n"
+            "  - id: board-a\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake-a\n"
+            "  - id: board-b\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake-b\n",
+        )
+        project_dir = seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--all-devices", "--tail", "--non-interactive",
+        ])
+        assert exit_code == 2
+        assert "exactly one" in capsys.readouterr().err
+
+    def test_repl_no_longer_accepts_a_project(
+        self, tmp_path: Path,
+    ) -> None:
+        """CLI surface lock: `repl <project>` was retired.
+
+        repl owns only interactive / tail; deploy-then-watch is
+        `deploy <project> --tail`.  A stray positional must be a
+        clean argparse rejection, not a silent second deploy path.
+        """
         root = seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
-            cli.main([
-                "repl", "--workspace-dir", str(root), "ghost",
-            ])
-        assert "ghost" in str(caught.value)
+            cli.main(["repl", "--workspace-dir", str(root), "back-porch"])
+        # argparse "unrecognized arguments" exits 2.
+        assert caught.value.code == 2
 
 
 class TestRepl:
