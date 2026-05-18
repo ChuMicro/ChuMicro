@@ -11,7 +11,7 @@
 # This file is gitignored — it will not be committed.
 
 defaults:
-  # Pin which device id each runtime defaults to when no --device-id
+  # Pin which device id each runtime defaults to when no --device
   # flag is passed.  Filled by `add-device` on first registration.
   micropython: null
   circuitpython: null

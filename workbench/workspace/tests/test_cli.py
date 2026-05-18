@@ -6,7 +6,6 @@ Covers command parsing, dispatch routing, the implemented commands
 """
 
 import argparse
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -65,7 +64,7 @@ class TestParser:
     """Each documented command must register on the top-level parser."""
 
     EXPECTED_COMMANDS = (
-        "setup", "init", "update", "new", "add-device", "probe",
+        "setup", "update", "new", "add-device", "probe",
         "discover", "devices", "deploy", "projects", "status", "doctor",
         "demo", "bootstrap", "test", "repl",
         "rename", "install-firmware", "upgrade-firmware",
@@ -158,65 +157,8 @@ class TestSetup:
 
 
 # ---------------------------------------------------------------------------
-# init / update
+# update
 # ---------------------------------------------------------------------------
-
-
-class TestInitCommand:
-    def test_clones_local_template_repo(
-        self,
-        tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        upstream = tmp_path / "upstream"
-        upstream.mkdir()
-        (upstream / "run.py").write_text("# tool-owned shim\n")
-        subprocess.run(  # noqa: S603 — args fully controlled
-            ["git", "init", "-b", "main"], cwd=str(upstream), check=True,
-            capture_output=True,
-        )
-        subprocess.run(  # noqa: S603 — args fully controlled
-            ["git", "add", "-A"], cwd=str(upstream), check=True,
-            capture_output=True,
-        )
-        subprocess.run(  # noqa: S603 — args fully controlled
-            [
-                "git",
-                "-c", "user.email=test@example.com",
-                "-c", "user.name=Test",
-                "commit", "-m", "initial",
-            ],
-            cwd=str(upstream), check=True, capture_output=True,
-        )
-
-        target = tmp_path / "house"
-        exit_code = cli.main([
-            "init", str(target), "--from", str(upstream),
-        ])
-        assert exit_code == 0
-        assert (target / "run.py").is_file()
-        # Decoupled from upstream — fresh git init, no log entries.
-        log = subprocess.run(  # noqa: S603 — args fully controlled
-            ["git", "log", "--oneline"],
-            cwd=str(target), capture_output=True, text=True, check=False,
-        )
-        assert log.stdout.strip() == ""
-        captured = capsys.readouterr()
-        assert "next: cd" in captured.out and "run.py setup" in captured.out
-
-    def test_refuses_non_empty_target_without_force(
-        self,
-        tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        target = tmp_path / "house"
-        target.mkdir()
-        (target / "leftover.txt").write_text("data\n")
-        exit_code = cli.main([
-            "init", str(target), "--from", "/nonexistent",
-        ])
-        assert exit_code == 1
-        assert "--force" in capsys.readouterr().err
 
 
 class TestUpdateCommand:

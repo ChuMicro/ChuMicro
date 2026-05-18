@@ -1,4 +1,4 @@
-"""Tests for the three-zone manifest classification."""
+"""Tests for the two-zone manifest classification."""
 
 from __future__ import annotations
 
@@ -52,8 +52,15 @@ class TestClassify:
             "README.md",
         ],
     )
-    def test_init_only_paths(self, path: str) -> None:
-        assert classify(path) is Zone.INIT_ONLY
+    def test_tracked_but_user_editable_files_are_user_owned(
+        self, path: str,
+    ) -> None:
+        """`.gitignore` / `README.md` are tracked in the template (so
+        the clone seeds them) but the user is meant to edit them — they
+        must classify as user-owned so ``update`` never re-flows them.
+        Guards against a tool-owned prefix accidentally swallowing them.
+        """
+        assert classify(path) is Zone.USER_OWNED
 
     def test_unknown_top_level_falls_through_to_user(self) -> None:
         # User adds a file we don't know about — err on safe side.
@@ -67,7 +74,7 @@ class TestClassify:
         assert classify("projects/_template/app.py") is Zone.TOOL_OWNED
         assert classify("projects/back-porch/app.py") is Zone.USER_OWNED
 
-    def test_workspace_yml_user_owned_not_init_only(self) -> None:
+    def test_workspace_yml_user_owned(self) -> None:
         """Gitignored ``workspace.yml`` is the materialized output of
         the canonical template; ``update`` must never touch it.
         Same for ``secrets.toml``."""

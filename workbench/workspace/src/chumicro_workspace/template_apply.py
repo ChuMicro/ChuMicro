@@ -1,8 +1,10 @@
-"""Init / update / materialize-workspace-templates orchestration.
+"""Update / materialize-workspace-templates orchestration.
 
-`chumicro-workspace` `init` clones a workspace template repo into a
-target directory.  `update` fetches a fresh copy of the template
-upstream and re-flows tool-owned files (the zones defined in
+Workspaces are *created* by cloning the template repo directly (see
+the template's README — ``git clone`` or GitHub "Use this template");
+there is deliberately no CLI command that scaffolds a new workspace.
+`update` fetches a fresh copy of the template upstream and re-flows
+tool-owned files (the zones defined in
 :mod:`chumicro_workspace.template_zones`) without touching
 user-owned ones.  `materialize_workspace_templates` fills in the
 canonical first-write text for ``devices.yml`` / ``workspace.yml`` /
@@ -12,7 +14,6 @@ canonical first-write text for ``devices.yml`` / ``workspace.yml`` /
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -26,8 +27,8 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
     from collections.abc import Iterable
 
 
-#: Canonical workspace template repo.  Used as the default ``--from``
-#: for ``init`` and ``update``.  Override via flag for forks.
+#: Canonical workspace template repo.  Used as the default upstream
+#: for ``update`` (override via ``--from`` for forks).
 DEFAULT_TEMPLATE_URL = (
     "https://github.com/ChuMicro/ChuMicro-Workspace-Template"
 )
@@ -39,10 +40,8 @@ DEFAULT_TEMPLATE_URL = (
 
 
 class ApplyAction(StrEnum):
-    """What happened to one file during an init / update / materialize pass."""
+    """What happened to one file during an update / materialize pass."""
 
-    #: File landed in the target on a fresh `init`.
-    WRITTEN = "written"
     #: Zone-skipped (user-owned on update) or already existed.
     SKIPPED = "skipped"
     #: Tool-owned, rewritten by `update` because bytes changed.
@@ -74,51 +73,6 @@ class ApplyReport:
 # ---------------------------------------------------------------------------
 
 
-def init(
-    target: Path,
-    *,
-    template_url: str = DEFAULT_TEMPLATE_URL,
-    git_reference: str | None = None,
-    force: bool = False,
-) -> ApplyReport:
-    """Clone the workspace template into *target*.
-
-    Runs ``git clone --depth 1`` (with ``--branch <git_reference>`` when
-    *git_reference* is given), removes the cloned ``.git``, and runs
-    ``git init`` so the user's workspace starts as a fresh
-    repository decoupled from the template upstream.
-
-    Args:
-        target: Workspace directory.  Must not exist or must be
-            empty unless ``force=True`` is passed.
-        template_url: Git URL to clone from.  Defaults to the
-            canonical ChuMicro template.
-        git_reference: Branch or tag to clone.  ``None`` (default) lets
-            git pick the remote's HEAD.
-        force: Allow cloning into a non-empty target by clearing
-            it first.  Caller's responsibility to confirm intent.
-
-    Returns:
-        :class:`ApplyReport` listing the files copied (one
-        ``WRITTEN`` per tracked file in the cloned tree).
-    """
-    if target.exists() and any(target.iterdir()):
-        if not force:
-            raise FileExistsError(
-                f"target {target} is not empty (pass force=True to override)",
-            )
-        for entry in target.iterdir():
-            if entry.is_dir() and not entry.is_symlink():
-                shutil.rmtree(entry)
-            else:
-                entry.unlink()
-    target.mkdir(parents=True, exist_ok=True)
-    _git_clone(template_url, target, git_reference=git_reference, depth=1)
-    _strip_dot_git(target)
-    _git_init(target)
-    return _report_init_files(target)
-
-
 def update(
     target: Path,
     *,
@@ -133,7 +87,7 @@ def update(
 
     * Tool-owned: writes the upstream bytes (REFRESHED if changed,
       UNCHANGED if identical).
-    * User-owned and init-only: skipped (SKIPPED).
+    * User-owned and clone-seeded: skipped (SKIPPED).
 
     Args:
         target: Existing workspace root.
@@ -230,28 +184,6 @@ def _git_clone(
         )
 
 
-def _git_init(target: Path) -> None:
-    """Run ``git init`` inside *target*."""
-    completed = subprocess.run(  # noqa: S603 — args fully controlled
-        ["git", "init"],
-        cwd=str(target),
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(
-            f"git init failed: {completed.stderr.strip() or completed.stdout.strip()}",
-        )
-
-
-def _strip_dot_git(target: Path) -> None:
-    """Remove ``<target>/.git`` so the cloned workspace decouples from upstream."""
-    dot_git = target / ".git"
-    if dot_git.exists():
-        shutil.rmtree(dot_git)
-
-
 def _walk_tracked_files(root: Path) -> list[Path]:
     """Return every regular file under *root* in deterministic order.
 
@@ -266,12 +198,3 @@ def _walk_tracked_files(root: Path) -> list[Path]:
             continue
         files.append(entry)
     return files
-
-
-def _report_init_files(target: Path) -> ApplyReport:
-    """Build a :class:`ApplyReport` listing every file under *target*."""
-    report = ApplyReport()
-    for entry in _walk_tracked_files(target):
-        relative = entry.relative_to(target).as_posix()
-        report.add(relative, ApplyAction.WRITTEN)
-    return report

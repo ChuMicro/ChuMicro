@@ -1,20 +1,21 @@
-"""Three-zone classification for workspace files.
+"""Two-zone classification for workspace files.
 
-Every file under the workspace tree falls into one of three zones:
+Workspaces are created by cloning the template repo directly (there
+is no scaffolding CLI command); these zones govern only what
+`update` re-syncs into an existing workspace:
 
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
   `pyproject.toml`, `projects/_template/`, `examples/`
   (reading-material demos shipped from the canonical template), and
-  the agent-skill documents under `.github/skills/`.  `init` writes
-  them; `update` rewrites them so newer template releases flow in.
+  the agent-skill documents under `.github/skills/`.  `update`
+  rewrites these so newer template releases flow in.
 
-* **User-owned** — `projects/<each-real-project>/`, `devices.yml`,
-  `shared/`, `packages/`, `workspace.yml` and `secrets.toml`
-  (gitignored — carry the user's credentials).  `init` writes the
-  starter version (only if absent); `update` never touches them.
-
-* **Init-only** — `.gitignore`, `README.md`.  `init` writes if
-  absent; `update` skips so user edits survive.
+* **User-owned** — everything else, and it's the default: anything
+  not explicitly tool-owned is left alone by `update`.  Covers
+  `projects/<each-real-project>/`, `devices.yml`, `shared/`,
+  `packages/`, `workspace.yml`, `secrets.toml`, and tracked-but-
+  user-editable files like `README.md` / `.gitignore` (the README
+  title is meant to be renamed; users add their own ignore lines).
 
 The classification is computed against the *target* path (the path
 relative to the workspace root after the dotfile rename, when one
@@ -29,11 +30,10 @@ from pathlib import PurePosixPath
 
 
 class Zone(Enum):
-    """Three ownership zones; see module docstring."""
+    """Two ownership zones; see module docstring."""
 
     TOOL_OWNED = "tool-owned"
     USER_OWNED = "user-owned"
-    INIT_ONLY = "init-only"
 
 
 #: Files / paths that are tool-owned.  ``update`` rewrites them.
@@ -66,13 +66,6 @@ USER_OWNED_PREFIXES: tuple[str, ...] = (
     "packages/",
 )
 
-#: Files / paths that are init-only.  ``init`` writes if absent;
-#: ``update`` skips so user edits survive.
-INIT_ONLY_PATHS: frozenset[str] = frozenset({
-    ".gitignore",
-    "README.md",
-})
-
 
 def classify(target_path: str) -> Zone:
     """Return the zone *target_path* falls into.
@@ -82,25 +75,23 @@ def classify(target_path: str) -> Zone:
 
     Lookup order: exact-match user-owned (so a materialized
     ``workspace.yml`` is never clobbered by ``update``), user-owned
-    prefixes (``shared/`` / ``packages/``), exact-match init-only,
-    exact-match tool-owned, tool-owned prefixes
-    (``projects/_template/``).  Anything that falls through —
-    typically ``projects/<a-real-project>/...`` files the user
-    created post-init — counts as user-owned.
+    prefixes (``shared/`` / ``packages/``), exact-match tool-owned,
+    tool-owned prefixes (``projects/_template/``).  Anything that
+    falls through — `README.md`, `.gitignore`, and
+    ``projects/<a-real-project>/...`` files the user created
+    post-clone — counts as user-owned.
     """
     posix = PurePosixPath(target_path).as_posix()
     if posix in USER_OWNED_PATHS:
         return Zone.USER_OWNED
     if any(posix.startswith(prefix) for prefix in USER_OWNED_PREFIXES):
         return Zone.USER_OWNED
-    if posix in INIT_ONLY_PATHS:
-        return Zone.INIT_ONLY
     if posix in TOOL_OWNED_PATHS:
         return Zone.TOOL_OWNED
     if any(posix.startswith(prefix) for prefix in TOOL_OWNED_PREFIXES):
         return Zone.TOOL_OWNED
     # Default for unrecognized paths is user-owned — `projects/<my-project>/...`
-    # post-init falls through here, and any custom files the user
+    # post-clone falls through here, and any custom files the user
     # adds at the workspace root.  We err on the side of "don't
     # touch" for `update`.
     return Zone.USER_OWNED

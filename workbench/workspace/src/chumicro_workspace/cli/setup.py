@@ -1,11 +1,11 @@
-"""``setup`` / ``init`` / ``update`` / ``new`` subcommands.
+"""``setup`` / ``update`` / ``new`` subcommands.
 
-Workspace lifecycle entry points.  ``init`` clones a workspace template
-into a fresh directory; ``setup`` runs the editable install + template
-materialization on an existing workspace; ``update`` re-flows
-tool-owned template files from upstream; ``new`` scaffolds individual
-projects (or library / workbench packages) inside an already-set-up
-workspace.
+Workspace lifecycle entry points.  Workspaces are created by cloning
+the template repo directly (no scaffolding command).  ``setup`` runs
+the editable install + template materialization on a freshly cloned
+workspace; ``update`` re-flows tool-owned template files from
+upstream; ``new`` scaffolds individual projects (or library /
+workbench packages) inside an already-set-up workspace.
 """
 
 from __future__ import annotations
@@ -194,32 +194,6 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_init(args: argparse.Namespace) -> int:
-    """Clone the workspace template into a target directory."""
-    template_url = args.template_url or DEFAULT_TEMPLATE_URL
-    try:
-        report = template_apply.init(
-            args.target,
-            template_url=template_url,
-            git_reference=args.git_reference,
-            force=args.force,
-        )
-    except FileExistsError as error:
-        print(f"init: {error}", file=sys.stderr)
-        print(
-            "Pass --force to clear the target directory and reclone.",
-            file=sys.stderr,
-        )
-        return 1
-    except RuntimeError as error:
-        print(f"init: {error}", file=sys.stderr)
-        return 2
-    written = report.count(ApplyAction.WRITTEN)
-    print(f"init: cloned {template_url} into {args.target} ({written} files)")
-    print(f"next: cd {args.target} && python3 run.py setup")
-    return 0
-
-
 def _cmd_update(args: argparse.Namespace) -> int:
     """Re-flow tool-owned template files from the canonical upstream."""
     workspace = _resolve_workspace(args)
@@ -339,8 +313,9 @@ def _resolve_new_source(
         if not template.is_dir():
             raise SystemExit(
                 f"error: template {template} not found — run "
-                "`chumicro-workspace init` to clone the canonical "
-                "template, or create `projects/_template/` by hand.",
+                "`python3 run.py update` to re-flow it from the "
+                "canonical template, or create `projects/_template/` "
+                "by hand.",
             )
         return template
     candidate = (workspace.root / from_path).resolve()
@@ -453,41 +428,19 @@ def _cmd_new(args: argparse.Namespace) -> int:
 
 
 def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
-    """Register ``setup`` / ``init`` / ``update`` / ``new`` subparsers."""
+    """Register ``setup`` / ``update`` / ``new`` subparsers.
+
+    Workspace *creation* is intentionally not a CLI command — users
+    clone the template repo directly (``git clone`` or GitHub "Use
+    this template"); ``update`` is the supported way to re-sync an
+    existing workspace's tool-owned files with the template.
+    """
     setup_parser = subparsers.add_parser(
         "setup",
         help="Install dependencies and materialize template files.",
     )
     _add_workspace_arg(setup_parser)
     setup_parser.set_defaults(func=_cmd_setup)
-
-    init_parser = subparsers.add_parser(
-        "init",
-        help="Clone the workspace template into a target directory.",
-    )
-    init_parser.add_argument(
-        "target",
-        type=Path,
-        help="Workspace directory to create.",
-    )
-    init_parser.add_argument(
-        "--from",
-        dest="template_url",
-        default=None,
-        help="Template git URL (defaults to the canonical ChuMicro template).",
-    )
-    init_parser.add_argument(
-        "--ref",
-        dest="git_reference",
-        default=None,
-        help="Branch or tag to clone (defaults to the remote's HEAD).",
-    )
-    init_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Clear the target before cloning if non-empty.",
-    )
-    init_parser.set_defaults(func=_cmd_init)
 
     update_parser = subparsers.add_parser(
         "update",
