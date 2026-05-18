@@ -127,6 +127,7 @@ The README is the source of truth for these rules; mirror its language when in d
 - [ ] `AGENTS.md` updated if the decision adds hard rules or pitfalls
 - [ ] Referenced from related decisions if applicable
 - [ ] If the decision resolves an open question, update `plans/open-questions.md`
+- [ ] If the decision encodes a requested constraint, the rule states the invariant — not the mechanism that prompted it
 
 ### 8. Close out
 
@@ -138,3 +139,4 @@ Follow the [`task-checkpoint`](../task-checkpoint/SKILL.md) skill — preflight,
 - Write in present tense ("Libraries must..." not "Libraries should...").
 - Include code snippets only when they clarify a contract or API.
 - Name the alternatives that were considered and why they were rejected — this is the most valuable part for future readers.
+- **State the principle, not the mechanism.** When the decision encodes a constraint someone asked for, the rule sentence must name the invariant, not the implementation that motivated it ("no CLI may materialize a workspace", not "no pip-installed scaffolder"). A `Rejected:` bullet that sets aside the stricter thing actually requested, for convenience, is the narrowing happening in real time — challenge it before the ADR lands. Source of truth + the worked cautionary case (Decision 0038's `init`): [`plans/decisions/README.md`](../../../plans/decisions/README.md).
