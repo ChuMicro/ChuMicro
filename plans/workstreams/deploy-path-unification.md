@@ -161,23 +161,85 @@ from 0038/0075).
   but not the now-empty package directories.
 
 **Phase 2 — Unify the write path.** One stage + `rsync --delete` + the
-closed keep set for project/example/test. Make the entrypoint *always*
-part of the staged payload (project `app.py`→shim, example file→shim,
-test file→shim) so `code.py` drops out of the exclude set entirely and
-the rsync call is byte-identical across contexts. Extract the
-irreducible post-stage step (soft-reboot+tail vs harness-exec+collect)
-as an explicit strategy. Resolve **MP keep-set mechanics**: `lfs mkfs`
-has no `--exclude`; preserve `{boot_out.txt, boot.py, _chu_kv.msgpack}`
-via read-before-mkfs/restore or a scoped delete, not full reformat.
-Two concrete inputs from the repl root-cause (Phase 1): (a) `repl`'s
-project path must call the *same* layout-resolution + source as
-`deploy` (not its own hardcoded `project_boot_source`) — the single
-source-selection owner is the unification's load-bearing seam, proven
-by this regression; (b) clean-slate must also reap now-empty package
-directories — the bench showed `deploy_diff`'s file-only delete leaves
-`/lib/<pkg>/` husks (a stale `import <pkg>` then fails mid-package, not
-cleanly), so the `rsync --delete` primitive's directory pruning is
-part of the keep-set spec, not an afterthought.
+closed keep set for project/example/test, entrypoint always staged as
+payload, the post-stage step the one explicit fork.
+
+*The mechanism already exists — Phase 2 is policy convergence, not a
+rebuild.* `example-sweep-stability` shipped (2026-05-10) the `clean:
+bool` kwarg plumbed end-to-end: `Deployer.deploy`/`deploy_files` → CP
+`flash_drive.rsync(delete=clean)` + MP `_clean_device_lib` (wholesale
+`rm -r :/lib` before `fs cp`; mount-mode no-op by design), with a
+`{settings.toml, boot.py, boot_out.txt}` clean-exclude tuple at CP+MP
+parity, `deploy-example` passing `clean=True`, `--no-clean` to opt out.
+The `boot_out.txt`-stranding incident there (clean rsync wiped it; CP
+only rewrites it on hard reset, not the deploy soft-reboot; loss →
+multi-board UID mis-match → silent wrong-drive landing) is **bench
+proof for [Decision 0077](../decisions/0077-one-device-staging-path.md)'s
+keep set** — do not regress it. Verified in code: `deployer.py:265`
+`clean=False` default; `circuitpy_drive.py:_list_scope_on_drive` scopes
+`settings.toml` *out* (a second place it's protected, independent of
+the exclude tuple).
+
+The convergence deltas (the actual Phase 2 work):
+
+1. **Flip the default.** `clean=False` → clean-slate default;
+   `--no-clean` becomes the single `--no-wipe` opt-out (0077). Every
+   context (project/example/test) inherits it; per-context callers stop
+   choosing. Behavior-visible change on *every* `chumicro-workspace
+   deploy` — the headline risk to flag.
+2. **Converge the keep set to 0077's closed `{boot_out.txt, boot.py,
+   _chu_kv.msgpack}`.** `boot_out.txt`+`boot.py` already excluded
+   (keep). **Add `_chu_kv.msgpack`** — currently *not* preserved (MP
+   non-NVS kvstore data is wiped on a clean deploy: a real gap).
+   **Evict `settings.toml` from both protection sites** (the
+   clean-exclude tuple *and* `_list_scope_on_drive`'s out-of-scope
+   omission) — 0077's deliberate, contentious call (board-resident
+   `settings.toml` = competing wifi authority, Decision 0057). This
+   *reverses* a deliberate `example-sweep-stability` decision; it is
+   the highest-friction delta and gated on user confirmation before
+   code. `runtime_config.msgpack` is **payload, not keep-set** (re-staged
+   every deploy via `WithRuntimeConfig`; correctly absent from 0077's
+   set — noted so a reader doesn't read it as a missing entry).
+3. **Single source-selection owner** (Phase-1 repl root-cause seam).
+   `repl`/example must route through `deploy`'s layout resolution +
+   source, not own a hardcoded `project_boot_source`. This is the
+   load-bearing seam — the regression proved a second source policy is
+   the disease.
+4. **Empty-dir reaping** (Phase-1 repl root-cause seam). CP
+   `_list_scope_on_drive`+`delete_files` deletes files only, leaving
+   `/lib/<pkg>/` husks (stale `import <pkg>` fails mid-package). MP's
+   wholesale `rm -r :/lib` already avoids this; CP must prune empty
+   dirs. Directory pruning is part of the keep-set spec.
+5. **Entrypoint always payload + post-stage fork.** Project `app.py`→
+   shim, example file→shim, test file→shim, so `code.py` leaves the
+   exclude set and the rsync is byte-identical across contexts. The
+   irreducible post-stage step (soft-reboot+tail vs harness-exec+
+   collect) is an explicit strategy, not a hidden coupling.
+6. **MP keep-set mechanics.** `lfs mkfs` has no `--exclude`; the
+   `{boot_out.txt, boot.py, _chu_kv.msgpack}` set survives via
+   read-before-mkfs/restore or scoped delete (the existing
+   `_clean_device_lib` scoped `rm -r :/lib` already is the scoped-delete
+   shape — extend its survive-set, don't switch to mkfs).
+
+Constraints Phase 2 must honor (cross-workstream, verified):
+
+- **`cross-runtime-harness-class-support` `--per-file`** (Decision
+  0072, implemented) re-stages per library through
+  `_bulk_stage_for_device`; its bench finding that `--per-file` ENOSPC-
+  failed all 299 tests on a *stale* flash but passed on a freshly
+  `reset-board`-wiped Pico W is **further evidence for clean-slate
+  default** — Phase 2's flip helps it; do not break per-file/per-library
+  staging isolation.
+- **`deploy-mode-unification` (COMPLETE)** owns the RAM/flash *mode*
+  axis (orthogonal — 0077 says so). Its pytest-device per-library
+  `rsync --delete` + soft-reset isolation (`plugin.py
+  _bulk_stage_for_device`) is the *already-correct policy* the CLI path
+  is converging toward — reuse, do not rebuild. Mount-mode `clean`
+  no-op is by design (transient); preserve.
+- **`walker-unresolved-import-failure` (open, `proposed`)** shares the
+  `sources.py`/`ImportGraphSource` neighborhood the single-source-owner
+  change touches. Independent defect (the repl↔walker link was
+  falsified on-device); cross-reference, do not absorb or block on it.
 
 **Phase 3 — Collapse the commands.** `deploy-example` → thin front-end
 over `deploy` (resolve example → ephemeral project → same `deploy` →
