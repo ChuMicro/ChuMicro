@@ -249,8 +249,18 @@ the `# noqa: CHU0NN` + one-line-why escape valve.
   `chumicro_requests.client` "TLS/POST/JSON/redirects … future work"
   class.  0 findings on main (validates the Phase 3 requests fix).
   `workbench/checks` 0.5.0→0.6.0.
-- ⏳ example-script imports resolve on every declared runtime (CHU016 —
-  catches the README MP-crash class)
+- ✅ **CHU016** example imports resolve on every declared runtime —
+  DONE 2026-05-18.  Closes the gap `verify_examples` leaves: it skips
+  every platform built-in for hardware-marked files, so a dual-runtime
+  example with an unguarded module-top-level `import board` (CP-only)
+  passes that gate then crashes on MicroPython.  CHU016 flags a
+  module-body-level import of a runtime-exclusive module when
+  `__chumicro_runtimes__` also declares the runtime it's absent on;
+  guarded (`if sys.implementation.name == …`), function-local, and
+  `try`-wrapped imports are module-body-*nested* and not flagged, so
+  the established correct pattern passes.  Conservative CP-only / MP-
+  only module sets.  0 findings on main (validates the examples are
+  correctly guarded).  `workbench/checks` 0.6.0→0.7.0.
 - ⏳ coverage-claim honesty (CHU017 — Decision 0074 flags it
   judgement-adjacent; reassess tractability at that point)
 

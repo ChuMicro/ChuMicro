@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **The workspace lint rules ruff can't express — for ChuMicro mono-repos and downstream workspaces.**
 
-A small CLI + rule set (`CHU001`–`CHU015`) covering descriptive names, mono-repo-vs-published-tree isolation, workbench-doesn't-import-libraries, silent test skips, plans-doc brevity, command-table parity, docstring-capability honesty, and other policies that ruff doesn't have a check for.  Drop it on any CPython 3.11+ workspace; rules silently no-op in repos where their target paths don't exist, so it's safe in the mono-repo, the workspace-template, or a downstream user workspace alike.
+A small CLI + rule set (`CHU001`–`CHU016`) covering descriptive names, mono-repo-vs-published-tree isolation, workbench-doesn't-import-libraries, silent test skips, plans-doc brevity, command-table parity, docstring-capability honesty, cross-runtime example imports, and other policies that ruff doesn't have a check for.  Drop it on any CPython 3.11+ workspace; rules silently no-op in repos where their target paths don't exist, so it's safe in the mono-repo, the workspace-template, or a downstream user workspace alike.
 
 <br clear="left">
 
@@ -54,6 +54,7 @@ Each rule walks the paths it targets and silently no-ops in repos where those pa
 | `CHU013` | No mid-tick `ticks_ms` refetch — use the runner-supplied `now_ms` |
 | `CHU014` | Workspace CLI command-table parity — no phantom/hidden commands |
 | `CHU015` | Module-docstring "future work" claims must match shipped symbols |
+| `CHU016` | Example imports must resolve on every declared runtime |
 
 ### Configuration
 
