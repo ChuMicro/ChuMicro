@@ -7,7 +7,8 @@ revalidation. Research + decisions captured here. The design/unification
 work is still **ADR-before-code** (user directive: research/decide
 first). Phase 1 is the exception by its own charter (independent
 regressions, no design dependency) — the preflight regression is fixed
-(2026-05-18); the repl regression remains as a Phase 2 root-cause input.
+(2026-05-18) and the repl regression is root-caused (2026-05-18) and
+written up as a Phase 2 input; Phase 1 is closed.
 
 ## The meta-finding (drives the shape of this workstream)
 
@@ -125,11 +126,39 @@ from 0038/0075).
   affected — the dead gate was the shipped regular-mode wrapper only.
   The lint+test guard for later phases is restored. workspace
   0.31.0→0.31.1.
-- `repl <project>` ships a broken `chumicro_timing` (on-device
-  `ImportError: no module named 'chumicro_timing.ticks_add'`,
-  deterministic, leaves the board dead) while plain `deploy` of the
-  same project runs. This is itself an axis-1/2 divergence symptom
-  (repl's deploy path ≠ deploy's) — root-cause feeds Phase 2.
+- `repl <project>` leaves the board dead with `ImportError: no module
+  named 'chumicro_timing.ticks_add'` while plain `deploy` of the same
+  project runs. **Root-caused 2026-05-18 (static + bench, Pico W CP,
+  `hello_world`) — feeds Phase 2, no isolated patch.** Mechanism:
+  `cli/repl.py` unconditionally uses `project_boot_source`, whose
+  `_BootShimSource.files()` is shim + project files only — **zero
+  library payload** (no import-graph walk, no `library_sources`, no
+  `/lib/`). `cli/deploy.py` instead runs `_resolve_deploy_layout()` and
+  for the standard `app.py`+`run()` shape auto-selects
+  `project_boot_with_import_graph_source` (boot-shim **+**
+  `ImportGraphSource` → ships `chumicro_timing` under `/lib/`). Both go
+  through `deploy_diff`, which deletes `list_files_in_scope() − source`;
+  CP-flash scope (`_list_scope_on_drive`) is **all of `/lib/**`
+  recursively**, so repl's library-less source makes the *entire*
+  `/lib/chumicro_timing/` tree a prior `deploy` placed stale and
+  wholesale-deletes it (bench: logged `removed stale
+  /lib/chumicro_timing/{__init__,heartbeat,ticks}.py`; dir left an
+  empty husk; `ImportError` every boot). The submodule-shaped error
+  string is just CP's phrasing for `from chumicro_timing import
+  ticks_add` when the whole package is absent — **falsified**: not a
+  partial tree, and *not* linked to the separate deploy-walker
+  silent-skip item (red herring from the error string). Secondary,
+  noted not fixed here: repl's `_emit_failure_hints` misclassifies this
+  as "library not installed in this venv — run `python run.py setup`"
+  (the library is fine; repl's own path deleted it on-device). The
+  naive fix — teach repl to resolve the layout like `deploy` — is
+  exactly the per-context source-selection divergence
+  [Decision 0077](../decisions/0077-one-device-staging-path.md) forbids;
+  Phase 2 makes repl deploy *through* the one staging path rather than
+  owning a second source policy. Corroborating axis-1 evidence seen on
+  the same drive: additive orphans (`test_ntp.py` at root, empty
+  `chumicro_config/` package dirs) — `deploy_diff` deletes stale files
+  but not the now-empty package directories.
 
 **Phase 2 — Unify the write path.** One stage + `rsync --delete` + the
 closed keep set for project/example/test. Make the entrypoint *always*
@@ -140,6 +169,15 @@ irreducible post-stage step (soft-reboot+tail vs harness-exec+collect)
 as an explicit strategy. Resolve **MP keep-set mechanics**: `lfs mkfs`
 has no `--exclude`; preserve `{boot_out.txt, boot.py, _chu_kv.msgpack}`
 via read-before-mkfs/restore or a scoped delete, not full reformat.
+Two concrete inputs from the repl root-cause (Phase 1): (a) `repl`'s
+project path must call the *same* layout-resolution + source as
+`deploy` (not its own hardcoded `project_boot_source`) — the single
+source-selection owner is the unification's load-bearing seam, proven
+by this regression; (b) clean-slate must also reap now-empty package
+directories — the bench showed `deploy_diff`'s file-only delete leaves
+`/lib/<pkg>/` husks (a stale `import <pkg>` then fails mid-package, not
+cleanly), so the `rsync --delete` primitive's directory pruning is
+part of the keep-set spec, not an afterthought.
 
 **Phase 3 — Collapse the commands.** `deploy-example` → thin front-end
 over `deploy` (resolve example → ephemeral project → same `deploy` →
@@ -215,9 +253,11 @@ Opened 2026-05-18. **Phase 0 done** —
 `proposed` (invariant confirmed by the transport audit above; promotes
 to `accepted` at Phase 2). **Phase 1 done** — preflight `_env`
 regression fixed 2026-05-18; the repl `chumicro_timing` regression
-remains open as a Phase 2 root-cause input. Phases 2–5 pending. The
-structural code change is Phase 2 (still ADR-before-code: 0077 is the
-gate, now written). Companion *completed* work this session
+root-caused 2026-05-18 (static + bench, Pico W CP) and written up as a
+Phase 2 input (no isolated patch — the fix is the unified source path).
+Phases 2–5 pending. The structural code change is Phase 2 (still
+ADR-before-code: 0077 is the gate, now written; Phase 1 fully closed —
+both regressions resolved/root-caused, Phase 2 has its concrete seam). Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
 template `--device`/ruamel fixes) shipped on `main` of both repos and
 is recorded in `next-up.md` `## Done (recent)`; it is the context
