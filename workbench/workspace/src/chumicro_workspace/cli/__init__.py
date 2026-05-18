@@ -7,22 +7,12 @@ repos vendor a tiny ``run.py`` shim that simply calls
 (``python run.py deploy back-porch``, ``python run.py repl``, etc.)
 routes through this dispatcher.
 
-Commands are shipped at three depths:
-
-* **Implemented** — full behavior wired to the underlying library
-  (``deploy``, ``probe``, ``devices``, ``repl``, ``new``,
-  ``install-firmware`` / ``upgrade-firmware``, ``discover``,
-  ``test``, ``setup``).
-* **Stubbed for a planned slice** — registered with help text and a
-  clear "implemented in Slice X" error so the dispatcher contract is
-  stable before the implementation lands (``add-device``, ``rename``,
-  ``sim``, ``env``, ``use``, ``sync``, ``upgrade``).
-
-Stubs raise :exc:`NotImplementedError` carrying a one-line pointer to
-the slice or workstream phase that will land them.  CLI invocation
-catches the exception and exits 2 with a descriptive message — the
-test suite asserts on that exit code so the rollout sequence stays
-visible.
+Every subcommand is registered on a single argparse dispatcher and
+wired straight to the underlying ``chumicro_workspace`` /
+``chumicro_deploy`` / ``chumicro_repl`` API — there are no stub
+tiers.  ``chumicro-workspace --help`` is the authoritative command
+list; this module only assembles the parser and routes each
+subcommand to its handler.
 """
 
 from __future__ import annotations

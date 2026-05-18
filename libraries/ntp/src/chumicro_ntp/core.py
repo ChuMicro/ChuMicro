@@ -164,9 +164,9 @@ class NTPClient:
               packet to *address* (a ``(host, port)`` tuple).
               Raises ``OSError(EAGAIN | EWOULDBLOCK)`` when the send
               buffer is full.
-            * ``recvfrom(nbytes: int) -> (bytes, address)`` — reads
-              up to *nbytes*.  Raises
-              ``OSError(EAGAIN | EWOULDBLOCK)`` on no data.
+            * ``recvfrom_into(buffer) -> (nbytes, address)`` — reads
+              into *buffer*, returning the byte count and sender.
+              Raises ``OSError(EAGAIN | EWOULDBLOCK)`` on no data.
             * ``close() -> None``
             * ``setblocking(flag: bool) -> None`` — best-effort;
               absence is tolerated.

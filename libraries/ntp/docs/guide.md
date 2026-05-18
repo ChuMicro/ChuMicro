@@ -64,7 +64,7 @@ to Unix-epoch seconds — feed it into `time.gmtime` (CPython) /
 | Method | Contract |
 |---|---|
 | `sendto(payload, address) -> int` | Sends `payload` (a `bytes`) to `address` (a `(host, port)` tuple).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full. |
-| `recvfrom(nbytes) -> (bytes, address)` | Reads up to `nbytes`.  Raises `OSError(EAGAIN \| EWOULDBLOCK)` on no data. |
+| `recvfrom_into(buffer) -> (nbytes, address)` | Reads into `buffer`, returning the byte count and sender.  Raises `OSError(EAGAIN \| EWOULDBLOCK)` on no data. |
 | `close() -> None` | Releases the socket. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
