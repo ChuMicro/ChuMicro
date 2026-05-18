@@ -154,6 +154,7 @@ def _cmd_preflight(args: argparse.Namespace) -> int:
     lint_args = argparse.Namespace(
         workspace_dir=args.workspace_dir,
         ruff_args=[],
+        _env=args._env,
     )
     lint_exit = _cmd_lint(lint_args)
     if lint_exit != 0:
@@ -164,6 +165,7 @@ def _cmd_preflight(args: argparse.Namespace) -> int:
     test_args = argparse.Namespace(
         workspace_dir=args.workspace_dir,
         pytest_args=[],
+        _env=args._env,
     )
     test_exit = _cmd_test(test_args)
     if test_exit != 0:

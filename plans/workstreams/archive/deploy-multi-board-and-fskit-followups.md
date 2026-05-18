@@ -1,6 +1,6 @@
 # Workstream: Multi-board CP deploy + FSKit recovery follow-ups
 
-Status: **partly shipped.**  Items 1, 2, 3, 4 + the `doctor --fix-fskit-wedge` wrapper landed 2026-05-09; Item 6 considered and dropped.  Item 5 (end-to-end bench validation of the recovery command) is deferred to the next natural FSKit-wedge occurrence — try-on-demand didn't reproduce.  Each item below names the *evidence*, the *current thinking*, and (for Item 5) *what the next session should verify when the wedge surfaces*.
+Status: **archived 2026-05-18 — shipped except Item 5, which is recurrence-gated.**  Items 1, 2, 3, 4 + the `doctor --fix-fskit-wedge` wrapper landed 2026-05-09; Item 6 considered and dropped.  Item 5 (end-to-end bench validation of the recovery command) needs a real FSKit wedge and try-on-demand didn't reproduce; the wedge has not recurred since (CP deploys stable), so this workstream is parked.  The Item 5 checklist below is the runbook — *when `chumicro-workspace doctor` next reports `MACOS FSKIT ✗`, work through Item 5 and mark it `DONE` in place.*  Nothing here is actionable until then; the shipped recovery path (`doctor --fix-fskit-wedge` + [`docs/troubleshooting/macos-circuitpy.md`](../../../docs/troubleshooting/macos-circuitpy.md)) covers users in the meantime.  Each item below names the *evidence*, the *current thinking*, and (for Item 5) *what to verify when the wedge surfaces*.
 
 ## For the new session — pickup checklist
 

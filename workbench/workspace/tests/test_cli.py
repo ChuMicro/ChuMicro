@@ -4816,6 +4816,27 @@ class TestCommandPreflight:
         exit_code = cli.main(["preflight", "--workspace-dir", str(root)])
         assert exit_code == 5
 
+    def test_real_composition_propagates_env_to_lint_and_test(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        # The three tests above stub _cmd_lint / _cmd_test, so the
+        # synthetic Namespaces _cmd_preflight builds for them were never
+        # exercised — a missing `_env` on those Namespaces shipped as a
+        # deterministic `AttributeError` (preflight gate dead).  This runs
+        # the real composition so the propagation stays covered: both
+        # sub-commands must shell out through the injected runner.
+        root = seed_workspace(tmp_path)
+        runner = FakeSubprocessRunner()
+        exit_code = cli.main(
+            ["preflight", "--workspace-dir", str(root)],
+            env=cli.CliEnv(subprocess_runner=runner),
+        )
+        assert exit_code == 0
+        invoked = [call.args for call in runner.calls]
+        assert [sys.executable, "-m", "ruff", "check", "."] in invoked
+        assert [sys.executable, "-m", "pytest"] in invoked
+
 
 class TestCommandDumpConfig:
     """dump-config prints the merged config (workspace + overlay + project) for a project."""
