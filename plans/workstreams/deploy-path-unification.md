@@ -3,8 +3,11 @@
 One mechanism puts code on a board. Today there are several, drifting.
 
 Opened 2026-05-18, out of a full `ChuMicro-Workspace-Template`
-revalidation. Research + decisions captured here; **no code changed
-yet** (user directive: research/decide first, ADR before build).
+revalidation. Research + decisions captured here. The design/unification
+work is still **ADR-before-code** (user directive: research/decide
+first). Phase 1 is the exception by its own charter (independent
+regressions, no design dependency) — the preflight regression is fixed
+(2026-05-18); the repl regression remains as a Phase 2 root-cause input.
 
 ## The meta-finding (drives the shape of this workstream)
 
@@ -104,11 +107,18 @@ never preserved (incl. removing it from `FUNCTIONAL_TEST_EXTRA_EXCLUDES`
 0038/0075).
 
 **Phase 1 — Independent regressions (no design dependency; do first).**
-- `chumicro-workspace preflight` dies `AttributeError: 'Namespace'
-  object has no attribute '_env'` at `cli/quality.py:104` —
-  `_cmd_preflight` calls `_cmd_lint` with a namespace missing `_env`.
-  The documented lint+test gate is dead; fixing it restores the guard
-  protecting every later phase.
+- ~~`chumicro-workspace preflight` dies `AttributeError: 'Namespace'
+  object has no attribute '_env'` at `cli/quality.py:104`~~ **DONE
+  2026-05-18.** `_cmd_preflight` built synthetic `Namespace`s for its
+  `_cmd_lint` / `_cmd_test` sub-calls that dropped `_env`. Root cause it
+  shipped: the three `TestCommandPreflight` tests stub both
+  sub-commands, so the synthetic namespaces were never exercised. Fix:
+  carry `_env=args._env` into both namespaces + a regression test that
+  runs the real composition through an injected `CliEnv` runner.
+  `scripts/run.py preflight` is a separate implementation and was never
+  affected — the dead gate was the shipped regular-mode wrapper only.
+  The lint+test guard for later phases is restored. workspace
+  0.31.0→0.31.1.
 - `repl <project>` ships a broken `chumicro_timing` (on-device
   `ImportError: no module named 'chumicro_timing.ticks_add'`,
   deterministic, leaves the board dead) while plain `deploy` of the
@@ -180,7 +190,7 @@ regression guard that makes the invariant durable.
   don't absorb.
 - General deploy reliability / FSKit wedges —
   [`workbench-deploy-reliability.md`](workbench-deploy-reliability.md)
-  and [`deploy-multi-board-and-fskit-followups.md`](deploy-multi-board-and-fskit-followups.md).
+  and [`archive/deploy-multi-board-and-fskit-followups.md`](archive/deploy-multi-board-and-fskit-followups.md).
 - Publishing chumicro to PyPI — a release decision, not a path-
   unification task (see "depended-on" above).
 
