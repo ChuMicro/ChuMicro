@@ -168,15 +168,19 @@ _OUT_OF_SUBSET = {
 # nesting — but is not a per-type spec validator; a
 # structurally-valid payload of the wrong shape is the caller's
 # contract.  Nesting deeper than _MAX_DEPTH raises rather than
-# exhausting the interpreter C stack on a 256 KB board.  32 is far
-# above any realistic persisted config / kvstore payload (those nest
-# 2–4 deep) yet shallow enough that hitting the bound itself doesn't
-# risk a stack fault on the smallest supported board.  struct-prefixed
-# reads need no check here: MicroPython/CircuitPython struct.unpack_from
-# already raises ValueError("buffer too small") on a short buffer, so
-# only the slice-based str/bin reads (memoryview slicing truncates
-# silently) and the container loops need an explicit length guard.
-_MAX_DEPTH = 32
+# exhausting the interpreter stack on a 256 KB board.  The bound is
+# bench-set, not analytical: a Pi Pico W under MicroPython faults
+# (pystack exhausted) at 17 nested containers and survives 16, so the
+# guard must trip well below that on the smallest supported board.  8
+# fires the guard ~18 frames deep — comfortably under the measured
+# ~32-frame ceiling, with headroom for caller frames — while still
+# being 2x any realistic persisted config / kvstore payload (those
+# nest 2–4 deep).  struct-prefixed reads need no check here:
+# MicroPython/CircuitPython struct.unpack_from already raises
+# ValueError("buffer too small") on a short buffer, so only the
+# slice-based str/bin reads (memoryview slicing truncates silently)
+# and the container loops need an explicit length guard.
+_MAX_DEPTH = 8
 _MALFORMED = "malformed msgpack: truncated or over-length framing"
 
 

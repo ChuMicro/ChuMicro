@@ -515,6 +515,31 @@ code that passed CPython tests, the usual suspects:
 
 Related: Decision 0003, Decision 0016, Decision 0049.
 
+## Recursion-depth bounds are bench-set, never analytical
+
+Any recursive code in `libraries/*/src/` (decoders, parsers, tree
+walkers) needs a depth guard so a deeply-nested *corrupt or hostile*
+input raises a clean `ValueError` instead of a `RuntimeError: pystack
+exhausted` (MicroPython) / hard fault.  The guard constant cannot be
+reasoned about — it must be measured on the **worst board, Pico W under
+MicroPython**, which has the smallest pystack of the supported set.
+
+Measured datum (`chumicro_msgpack` pure decoder, ~2 Python frames per
+nesting level — `_decode` + `_decode_array`): Pico W MP **survives 16
+nested containers, faults at 17** (~32 frames is the ceiling).  An
+analytical guess of 32 was 2× too high — the guard would never fire
+before the stack died.  The shipped bound is `_MAX_DEPTH = 8` (guard
+trips ~18 frames deep, well under the ceiling, with caller-frame
+headroom, still 2× realistic persisted config/kvstore nesting of 2–4).
+
+Procedure when adding recursive library code: deploy a probe via the
+on-device sweep (a temp test that decodes increasing nesting in a
+`try/except` and `print`s the last-OK depth), read the silicon limit
+on Pico W MP, set the guard well below it, then delete the probe.  The
+guard's own too-deep test recurses only to `bound + 1`, so a low bound
+also keeps that test from stressing the device stack.  Don't trust the
+CPython/unix-port limit — it is far higher and will mislead.
+
 ## Missing builtins on MicroPython 1.28
 
 MicroPython 1.28 doesn't ship every CPython exception builtin.  In

@@ -579,18 +579,23 @@ def test_overlong_array16_raises() -> None:
 
 
 def test_nesting_too_deep_raises() -> None:
-    """Nesting past the decoder's depth bound raises rather than faulting."""
-    # 33 nested single-element arrays — one past _MAX_DEPTH (32).
+    """Nesting past the decoder's depth bound raises ValueError, not a stack fault.
+
+    The bound (8) is well below where a Pi Pico W under MicroPython
+    exhausts pystack (17 nested), so the guard fires first on every
+    supported board — bench-confirmed on the 4-board matrix.
+    """
+    # 9 nested single-element arrays — one past _MAX_DEPTH (8).
     with raises(ValueError):
-        _pure_unpackb(b"\x91" * 33 + b"\x00")
+        _pure_unpackb(b"\x91" * 9 + b"\x00")
 
 
 def test_moderate_nesting_still_roundtrips() -> None:
-    """The depth bound is well above realistic nesting — 8 deep is fine."""
+    """The depth bound is above realistic nesting — 4 deep roundtrips fine."""
     value = 0
-    for _ in range(8):
+    for _ in range(4):
         value = [value]
-    assert _pure_unpackb(_pure_packb(value)) == [[[[[[[[0]]]]]]]]
+    assert _pure_unpackb(_pure_packb(value)) == [[[[0]]]]
 
 
 def test_exact_buffer_no_trailing_roundtrips() -> None:

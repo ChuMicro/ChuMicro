@@ -98,13 +98,19 @@ Three findings were structural decisions, not bugs.  All three resolved:
    - Landed: `_bounded_end` length-vs-remaining guard on the 5 silent
      slice reads (fixstr/str8/str16/bin8/bin16), a one-byte-per-element
      container-length sanity in `_decode_array`/`_decode_map`, a
-     `depth` int threaded through the recursive core (`_MAX_DEPTH = 32`
-     — chosen low: realistic config/kvstore nests 2–4, and the guard
-     test itself recurses to the bound on a 264 KB board), and a
+     `depth` int threaded through the recursive core (**`_MAX_DEPTH = 8`,
+     bench-set not analytical**: the first guess of 32 was 2x too high
+     — Pico W under MicroPython faults `pystack exhausted` at 17 nested
+     containers / survives 16, so a guard at 32 was never reachable; 8
+     fires ~18 frames deep, under the measured ~32-frame ceiling, still
+     2x realistic config/kvstore nesting of 2–4), and a
      top-level-only trailing-bytes reject in `unpackb`.  `struct`
      reads left unwrapped — MP/CP `struct.unpack_from` already raises
      `ValueError("buffer too small")` (verified vs both C sources), so
-     wrapping them would be the rejected over-fix.  11 cross-runtime
+     wrapping them would be the rejected over-fix.  Validated **4/4**
+     on-device (Lolin S2 + Pico W, CP + MP); the depth test failed
+     Pico W MP at `_MAX_DEPTH=32` and PASSes on all four at 8.
+     11 cross-runtime
      tests; residual documented in the `unpackb` docstring + guide.
    - **Load-bearing caller follow-through (same commit):** hardening
      `unpackb` to *raise* broke two documented contracts that the
