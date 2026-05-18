@@ -223,18 +223,27 @@ corrections).
 ## Phase 4 — Mechanize the drift (the load-bearing structural fix)
 
 New CHU-style checks in `workbench/checks/` so Phase 3's class can't
-recur (host-side — no flash budget):
+recur (host-side — no flash budget).  One lint per commit; each ships
+the `# noqa: CHU0NN` + one-line-why escape valve.
 
-- doc-command-vs-registered-subcommand parity (catches phantom/hidden
-  CLI commands)
-- module-docstring "future work"/capability claims vs shipped symbols
-- example-script imports resolve on every declared runtime (catches the
-  README MP-crash class)
-- coverage-claim honesty (the ADR 0009/0025 measurement gap, once
-  Phase 0 item 2 decides the contract)
-
-Each ships with the `# noqa: CHU0NN` + one-line-why escape valve, per
-the existing CHU-rule philosophy.
+- ✅ **CHU014** doc-command↔registered-subcommand parity — DONE
+  2026-05-18.  AST-extracts `subparsers.add_parser("name")` (receiver
+  typed `argparse._SubParsersAction`; nested `verbs.add_parser` for
+  sub-verbs excluded) vs the README `| Group | Commands |` table's
+  command-shaped backtick tokens.  Flags phantom (documented, not
+  registered) + hidden (registered, not documented).  Found + fixed a
+  real GFM bug while validating against the live repo: cells contain
+  escaped pipes (`list\|add\|…`) that a naive `split("|")` shreds —
+  the rule splits on unescaped pipe only (regression test).  0
+  findings on current main (validates the Phase 3 README fix was
+  complete).  README rule catalog brought current (was stale at
+  CHU012; CHU002–005/013/014 added).  `workbench/checks` 0.4.1→0.5.0.
+- ⏳ module-docstring "future work"/capability claims vs shipped
+  symbols (CHU015 — next)
+- ⏳ example-script imports resolve on every declared runtime (CHU016 —
+  catches the README MP-crash class)
+- ⏳ coverage-claim honesty (CHU017 — Decision 0074 flags it
+  judgement-adjacent; reassess tractability at that point)
 
 ## Explicitly NOT in this workstream
 

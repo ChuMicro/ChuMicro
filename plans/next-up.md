@@ -4,7 +4,7 @@
 
 ## Now
 
-_(nothing in flight — see `## Next`)_
+- [ ] **Audit remediation — Phase 4: mechanize the drift class** (in flight 2026-05-18) — the load-bearing phase per [Decision 0074](decisions/0074-drift-mechanization-as-project-policy.md): four new `chumicro-checks` rules so the Phase 3 drift can't recur.  One lint per commit, sequenced by value/tractability: **CHU014** doc-command↔registered-subcommand parity (just hand-fixed an instance) → **CHU015** docstring "future work" vs shipped symbols → **CHU016** example imports resolve per declared runtime → **CHU017** coverage-claim honesty (judgement-adjacent — reassess at that point).  Each ships the `# noqa: CHU0NN` + one-line-why escape valve.  Detail: [`workstreams/audit-remediation-and-drift-mechanization.md`](workstreams/audit-remediation-and-drift-mechanization.md).
 
 ## Next
 
