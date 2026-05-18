@@ -657,3 +657,42 @@ from a scratch workspace and confirm the closure lands and imports;
 
 Related: workstream `workspace-library-curation`, `release.yml`,
 Decision 0062.
+
+### `add-device --force` is an update, not a reset — no full-replace path exists
+
+**Surfaced 2026-05-18** during a `devices.yml` lifecycle audit.  Today
+`add-device --force` deliberately keeps every user-owned field
+(`id`, `description`, `deploy_mode`, ...) and only refreshes the
+probed/hardware zones (`cli/devices.py` re-probe branch +
+`devices_yaml.py:update_device_*`).  That is the right semantics for
+*update*, but there is no command that fully resets a device entry
+(or the whole `devices.yml`) back to a clean probed state.  A
+corrupted or stale entry can only be hand-deleted; `reset-board`
+wipes board flash, not the registry, and template materialization
+never overwrites an existing file.
+
+**Open:** what shape should a true reset take — a separate
+`add-device --reset` flag, a distinct `reset-device` subcommand, or a
+registry-level `--reset` that re-seeds `devices.yml` from template?
+`--force` stays update-only either way; the question is the verb and
+the blast radius (single entry vs whole file) and how it interacts
+with the user-owned zone the no-clobber guarantee protects.
+
+Related: Decision 0027, Decision 0057.
+
+### `add-device` registers one board per call — no batch/multi-select
+
+**Surfaced 2026-05-18** during the same audit.  `_resolve_serial_port`
+picks exactly one port (auto-pick if one, numbered prompt if many);
+there is no "register all detected boards" or multi-select.  Onboarding
+a four-board matrix is four invocations.
+
+**Open:** add batch registration owned by `chumicro_deploy` (the file's
+owner) and forwarded through the `chumicro-workspace add-device` CLI —
+e.g. `--all` to probe+register every detected port, or a multi-select
+prompt.  Design points: id derivation when probing several boards at
+once (the suggested-id collision suffix already exists), partial
+failure (one board un-probable) not aborting the rest, and keeping the
+write atomic across the batch (one `dump_devices`, not N).
+
+Related: Decision 0027.

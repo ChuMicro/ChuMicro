@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from chumicro_deploy import Device
-from chumicro_deploy.config.default import load_devices_yml
+from chumicro_deploy.config.default import load_devices_yml, load_devices_yml_raw
 from chumicro_deploy.config.devices_yaml import (
-    find_device,
+    list_device_ids,
     load_devices,
 )
 from serial.tools import list_ports
@@ -129,36 +129,28 @@ def _find_devices_yml_entry_for_args(
 ) -> Mapping[str, Any] | None:
     """Locate the raw ``devices.yml`` entry matching *args*' selectors.
 
-    Mirrors :func:`chumicro_deploy.config.default.load_devices_yml`'s
-    resolution order — explicit ``--device id`` wins outright, then
-    ``--runtime`` picks ``defaults.<runtime>``, finally a single
-    runtime default in the file picks itself.  Returns the matching
-    raw dict (with comments + key order intact since it comes from
-    :func:`load_devices`) or ``None`` when nothing matches.
-
-    Distinct from :func:`_resolve_device` because the
-    ``firmware_source`` / ``hardware`` fields aren't on the
-    :class:`Device` dataclass — they live in the raw entry.
+    Thin policy wrapper over
+    :func:`chumicro_deploy.config.default.load_devices_yml_raw` — the
+    devices.yml owner does the ``--device id`` / ``--runtime`` /
+    single-default resolution; this only adds the workspace-side
+    None-on-miss policy (``install-firmware`` treats a missing entry
+    as "fall back to --url", not an error).  Returns the raw entry
+    dict for ``hardware`` / ``firmware_source`` access (those keys
+    aren't on the :class:`Device` dataclass) or ``None``.
     """
     if not workspace.devices_yaml.is_file():
         return None
-    data = load_devices(workspace.devices_yaml)
-    if args.device_id is not None:
-        return find_device(data, args.device_id)
-    defaults = data.get("defaults") or {}
-    runtime = getattr(args, "runtime", None)
-    if runtime is not None:
-        default_id = defaults.get(runtime)
-        if default_id is not None:
-            return find_device(data, default_id)
-    candidates = [
-        defaults.get("micropython"),
-        defaults.get("circuitpython"),
-    ]
-    picks = [candidate for candidate in candidates if candidate]
-    if len(picks) == 1:
-        return find_device(data, picks[0])
-    return None
+    # Preserve the original precedence — an explicit id wins and
+    # suppresses the runtime hint — so the two never collide into
+    # load_devices_yml_raw's mutual-exclusion error.
+    device_id = args.device_id
+    runtime = None if device_id is not None else getattr(args, "runtime", None)
+    try:
+        return load_devices_yml_raw(
+            workspace.devices_yaml, device_id=device_id, runtime=runtime,
+        )
+    except (ValueError, FileNotFoundError):
+        return None
 
 
 def _resolve_device(workspace: WorkspaceLayout, args: argparse.Namespace) -> Device:
@@ -189,15 +181,14 @@ def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
             f"error: {workspace.devices_yaml} not found — run "
             "'add-device' to register a board first.",
         )
-    raw = load_devices(workspace.devices_yaml)
-    entries = raw.get("devices", []) or []
-    if not entries:
+    device_ids = list_device_ids(load_devices(workspace.devices_yaml))
+    if not device_ids:
         raise SystemExit(
             f"error: {workspace.devices_yaml} has no devices to deploy to.",
         )
     return [
-        load_devices_yml(workspace.devices_yaml, device_id=entry["id"])
-        for entry in entries
+        load_devices_yml(workspace.devices_yaml, device_id=device_id)
+        for device_id in device_ids
     ]
 
 

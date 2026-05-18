@@ -20,7 +20,7 @@ The schema (stable subset that the loader accepts):
         address: /dev/cu.usbmodem213101
         serial_baudrate: 115200
         deploy_mode: ram              # optional; falls back to defaults.deploy_mode
-        # description, setup_command, and other keys are tolerated
+        # description and other keys are tolerated
         # but ignored by this loader.
 
 Required fields per device: ``id``, ``runtime``, ``address``.
@@ -78,7 +78,7 @@ _KNOWN_KEYS: frozenset[str] = ALL_TOP_LEVEL_ENTRY_FIELDS | _DEPLOY_ONLY_FIELDS
 # Validated registry shape
 #
 # Sits one level above :class:`Device`: a registry record with
-# description, setup_command, and arbitrary extra metadata that
+# description and arbitrary extra metadata that
 # orchestration layers (IDE-test orchestrators, project-workspace
 # template loaders) carry alongside the deploy-relevant fields.
 # :class:`Device` is the transport-construction primitive;
@@ -108,7 +108,6 @@ class DeviceEntry:
     #: Pico W's 256 KB) is a per-library concern, not this.  Absent in
     #: ``devices.yml`` ⇒ ``True`` (back-compatible).
     supports_ram_mode: bool = True
-    setup_command: str | None = None
     extra: dict = field(default_factory=dict)
 
 
@@ -208,7 +207,6 @@ def _validate_device(
         serial_baudrate=raw.get("serial_baudrate", 115200),
         deploy_mode=raw.get("deploy_mode", global_deploy_mode),
         supports_ram_mode=raw.get("supports_ram_mode", True),
-        setup_command=raw.get("setup_command"),
         extra=extra,
     )
 
@@ -408,43 +406,23 @@ def _normalize_device_entry(
     return normalized
 
 
-def load_devices_yml(
-    path: Path | str,
+def _resolve_raw_entry(
+    yaml_path: Path,
     *,
-    device_id: str | None = None,
-    runtime: str | None = None,
-) -> Device:
-    """Load one device from a ``devices.yml`` file.
+    device_id: str | None,
+    runtime: str | None,
+) -> tuple[dict[str, Any], str | None]:
+    """Resolve one raw ``devices.yml`` entry by the precedence rules.
 
-    Resolution precedence:
+    The single owner of devices.yml selection logic.  Both
+    :func:`load_devices_yml` (returns a :class:`Device`) and
+    :func:`load_devices_yml_raw` (returns the entry dict) delegate
+    here so the resolution order lives in exactly one place — no
+    consumer reimplements ``device_id → defaults.<runtime> →
+    single-default`` for itself.
 
-    1. *device_id* — wins outright.
-    2. *runtime* — picks ``defaults.<runtime>`` when *device_id* is
-       ``None``.  Lets a caller that owns one runtime (e.g.
-       ``chumicro-repl`` opening one session) disambiguate a
-       ``defaults:`` block that has both runtimes set without
-       requiring the user to memorize the device id.
-    3. Single-default fallback — when both *device_id* and *runtime*
-       are ``None``, exactly one runtime default in the file picks
-       itself; otherwise raises.
-
-    *device_id* and *runtime* are mutually exclusive: passing both
-    raises so the caller cannot accidentally override a specific id
-    with a runtime hint.
-
-    Args:
-        path: Filesystem path to the YAML file.
-        device_id: Which entry to return.
-        runtime: One of ``"circuitpython"`` or ``"micropython"``.
-
-    Returns:
-        A :class:`Device` corresponding to the selected entry.
-
-    Raises:
-        FileNotFoundError: The YAML file does not exist.
-        ValueError: The file has no matching device, the
-            ``device_id`` is not among the entries, or
-            ``runtime`` is not one of the supported names.
+    Returns ``(chosen_entry, default_deploy_mode)``.  Raises as
+    documented on :func:`load_devices_yml`.
     """
     if device_id is not None and runtime is not None:
         raise ValueError(
@@ -452,7 +430,6 @@ def load_devices_yml(
             "exclusive — pass one or neither, not both."
         )
 
-    yaml_path = Path(path)
     entries, defaults = load_raw_entries(yaml_path)
     default_deploy_mode = defaults.get("deploy_mode")
     if not entries:
@@ -512,7 +489,73 @@ def load_devices_yml(
             )
         chosen = entries_by_id[fallback_id]
 
+    return chosen, default_deploy_mode
+
+
+def load_devices_yml(
+    path: Path | str,
+    *,
+    device_id: str | None = None,
+    runtime: str | None = None,
+) -> Device:
+    """Load one device from a ``devices.yml`` file.
+
+    Resolution precedence:
+
+    1. *device_id* — wins outright.
+    2. *runtime* — picks ``defaults.<runtime>`` when *device_id* is
+       ``None``.  Lets a caller that owns one runtime (e.g.
+       ``chumicro-repl`` opening one session) disambiguate a
+       ``defaults:`` block that has both runtimes set without
+       requiring the user to memorize the device id.
+    3. Single-default fallback — when both *device_id* and *runtime*
+       are ``None``, exactly one runtime default in the file picks
+       itself; otherwise raises.
+
+    *device_id* and *runtime* are mutually exclusive: passing both
+    raises so the caller cannot accidentally override a specific id
+    with a runtime hint.
+
+    Args:
+        path: Filesystem path to the YAML file.
+        device_id: Which entry to return.
+        runtime: One of ``"circuitpython"`` or ``"micropython"``.
+
+    Returns:
+        A :class:`Device` corresponding to the selected entry.
+
+    Raises:
+        FileNotFoundError: The YAML file does not exist.
+        ValueError: The file has no matching device, the
+            ``device_id`` is not among the entries, or
+            ``runtime`` is not one of the supported names.
+    """
+    chosen, default_deploy_mode = _resolve_raw_entry(
+        Path(path), device_id=device_id, runtime=runtime,
+    )
     normalized = _normalize_device_entry(
         chosen, default_deploy_mode=default_deploy_mode,
     )
     return Device.from_dict(normalized)
+
+
+def load_devices_yml_raw(
+    path: Path | str,
+    *,
+    device_id: str | None = None,
+    runtime: str | None = None,
+) -> dict[str, Any]:
+    """Resolve one device and return its raw ``devices.yml`` entry.
+
+    Identical resolution to :func:`load_devices_yml` (same precedence,
+    same errors) but returns the unmapped entry dict — including
+    ``hardware`` and other keys the :class:`Device` dataclass drops —
+    for consumers that need fields off the schema, not the transport
+    facade (firmware-URL derivation reads ``hardware.firmware_source``).
+    Keeps selection logic owned here instead of reimplemented by the
+    caller.
+    """
+    chosen, _ = _resolve_raw_entry(
+        Path(path), device_id=device_id, runtime=runtime,
+    )
+    return chosen
