@@ -1457,6 +1457,34 @@ class CircuitpythonTransport:
                 target.unlink()
             except (OSError, FileNotFoundError):  # pragma: no cover — best-effort
                 pass
+        # Reap empty directories under /lib/.  unlink removes files but
+        # not dirs, so a package whose every file was stale leaves an
+        # empty `/lib/<pkg>/` husk — worse than nothing: a stale
+        # `import <pkg>` then fails *mid-package* (dir present, __init__
+        # gone) instead of cleanly.  rsync --delete prunes empty dirs;
+        # the diff path must match that.  Sweep the whole scope, not
+        # just this run's deletions, so pre-existing husks (e.g. from a
+        # deploy before this reaping landed) also get cleaned — exactly
+        # what a real --delete pass would do.  Bottom-up so nested
+        # husks collapse; rmdir only removes an *empty* dir, so a live
+        # package is never touched; lib root itself is left in place.
+        lib_root = drive / "lib"
+        if lib_root.is_dir():
+            directories = [
+                entry for entry in lib_root.rglob("*") if entry.is_dir()
+            ]
+            # Deepest first so an emptied `<pkg>/_adapters/` is reaped
+            # before `<pkg>/`, letting the parent collapse in the same
+            # pass.
+            for directory in sorted(
+                directories,
+                key=lambda candidate: len(candidate.parts),
+                reverse=True,
+            ):
+                try:
+                    directory.rmdir()
+                except OSError:  # pragma: no cover — non-empty or transient
+                    pass
 
     def clear_entrypoints(self) -> None:
         """Unlink ``code.py`` / ``main.py`` and confirm they are gone.
