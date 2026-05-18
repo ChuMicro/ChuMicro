@@ -347,3 +347,22 @@ class TestFragmentation:
         client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
+
+    def test_unbounded_empty_continuation_run_closes(self):
+        # A message that never makes byte progress (endless empty
+        # continuation frames) must be closed, not spun on forever.
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        frames = encode_frame(OPCODE_TEXT, b"", fin=False, mask=None)
+        for _ in range(64):
+            frames += encode_frame(OPCODE_CONTINUATION, b"", fin=False, mask=None)
+        socket.feed_inbound(frames)
+        for _ in range(65):
+            client.handle(clock.ticks_ms())
+        assert client.state == WebSocketState.CLOSING
+        client.handle(clock.ticks_ms())
+        parser = FrameParser()
+        parser.feed(socket.read_outbound())
+        code = struct.unpack("!H", parser.payload[:2])[0]
+        assert code == CLOSE_PROTOCOL_ERROR

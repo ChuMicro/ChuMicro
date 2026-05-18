@@ -305,16 +305,54 @@ class TestFunctionHasAssertionEarlyExits:
 
 
 class TestSilentReturnEdgeCases:
-    """The ``if`` body must be exactly one ``return``/``pass`` to fire."""
+    """Widened CHU009: any ``if``-body-final return/pass + bare early exit."""
 
-    def test_multi_statement_if_body_not_flagged(self, tmp_path: Path) -> None:
-        # ``if cond:\n    log(); return`` — body has 2 statements,
-        # so the rule doesn't fire (the test isn't a pure silent skip).
+    def test_multi_statement_if_body_last_return_flagged(self, tmp_path: Path) -> None:
+        # ``if cond:\n    log(); return`` — the guarded branch still
+        # skips ``assert False`` below, so it is a silent skip.
         _stage_test(tmp_path, "foo", "tests", """
             def test_thing() -> None:
                 if True:
                     print("logged")
                     return
                 assert False
+        """)
+        findings = CHU009.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU009"
+
+    def test_bare_early_return_flagged(self, tmp_path: Path) -> None:
+        # An unconditional early return orphans the assertion below it.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                setup()
+                return
+                assert result()
+        """)
+        findings = CHU009.check(tmp_path)
+        assert len(findings) == 1
+        assert findings[0].code == "CHU009"
+
+    def test_return_inside_nested_closure_not_flagged(self, tmp_path: Path) -> None:
+        # A ``return`` inside a factory/callback is that callable's
+        # logic, not the test silently passing.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                calls = []
+                def factory():
+                    if not calls:
+                        calls.append(True)
+                        return object()
+                    raise OSError("down")
+                assert factory() is not None
+        """)
+        assert CHU009.check(tmp_path) == []
+
+    def test_legit_final_return_not_flagged(self, tmp_path: Path) -> None:
+        # A return as the function's last statement is normal Python.
+        _stage_test(tmp_path, "foo", "tests", """
+            def test_thing() -> None:
+                assert compute() == 1
+                return
         """)
         assert CHU009.check(tmp_path) == []

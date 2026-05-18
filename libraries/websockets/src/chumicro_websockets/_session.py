@@ -43,6 +43,15 @@ def _is_eagain(error):
     return getattr(error, "errno", None) in (11, 35)
 
 
+#: A peer can legally fragment a message, including with empty
+#: continuation frames, but an unbounded run of zero-byte fragments
+#: never completes the message and never trips the size cap — a
+#: no-progress liveness stall.  Closing after this many consecutive
+#: empty fragments bounds it without penalising any sender that makes
+#: byte progress.
+_MAX_EMPTY_FRAGMENT_RUN = 64
+
+
 # ---------------------------------------------------------------------------
 # WhenOversized policy (lifted from client.py — used by both halves)
 # ---------------------------------------------------------------------------
@@ -191,6 +200,7 @@ class _BaseSession:
         # — load-bearing when oversize trips at the frame layer (tier 3)
         # since the message buffer never receives those bytes.
         self._inbound_reported_length = 0
+        self._inbound_empty_fragment_run = 0
 
         self._handshake_send_buffer = None
         self._handshake_send_offset = 0
@@ -413,6 +423,17 @@ class _BaseSession:
                 return
             self._inbound_message_opcode = opcode
         self._inbound_reported_length += frame_parser.reported_length
+        if frame_parser.reported_length > 0:
+            self._inbound_empty_fragment_run = 0
+        elif not fin:
+            self._inbound_empty_fragment_run += 1
+            if self._inbound_empty_fragment_run > _MAX_EMPTY_FRAGMENT_RUN:
+                self._send_close(
+                    CLOSE_PROTOCOL_ERROR,
+                    "too many zero-length continuation frames",
+                    now_ms,
+                )
+                return
         if frame_parser.oversized:
             # Tier 3: payload was drained at the frame layer, the empty
             # ``payload`` arg is by design.  Mark the message oversized
@@ -483,6 +504,7 @@ class _BaseSession:
         self._inbound_message_opcode = None
         self._inbound_oversized = False
         self._inbound_reported_length = 0
+        self._inbound_empty_fragment_run = 0
 
     def _handle_close_frame(self, payload: bytes, now_ms: int) -> None:
         """Process inbound CLOSE — record + reciprocate or finalize."""

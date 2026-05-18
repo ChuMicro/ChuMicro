@@ -165,6 +165,15 @@ class TestProtocolErrors:
         with raises(MQTTProtocolError):
             decoder.read_next()
 
+    def test_publish_shorter_than_topic_length_prefix_raises(self) -> None:
+        # PUBLISH (0x30) with a 0-byte body: no room for the 2-byte
+        # topic-length prefix.  Must be a classified protocol error,
+        # not a raw struct/ValueError from the unpack.
+        decoder = PacketDecoder()
+        _feed(decoder, b"\x30\x00")
+        with raises(MQTTProtocolError):
+            decoder.read_next()
+
     def test_oversized_simple_ack_raises(self) -> None:
         """SUBACK with body longer than buffer is a protocol error,
         not an oversize-message event."""

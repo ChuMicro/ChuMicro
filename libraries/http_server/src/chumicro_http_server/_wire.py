@@ -557,6 +557,14 @@ class RequestParser:
 
     def _enter_body_state(self):
         """Headers-complete: figure out body framing + size the body buffer."""
+        if self.headers.get("Transfer-Encoding") is not None:
+            # Chunked request bodies are unsupported; framing one as
+            # zero-length (the no-Content-Length path below) lets a
+            # smuggled body ride into the next request. Reject (400).
+            self._fail(ServerProtocolError(
+                "Transfer-Encoding request bodies are not supported",
+            ))
+            return
         content_length_str = self.headers.get("Content-Length")
         if content_length_str is None:
             # No Content-Length, no chunked — assume zero body.

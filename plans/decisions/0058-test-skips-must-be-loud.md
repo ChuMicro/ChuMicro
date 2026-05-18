@@ -38,7 +38,7 @@ Phases 1–7 of the silent-skip workstream eradicated all four shapes.  This ADR
 
 The rules are enforced as durable lint:
 
-* **CHU009** (in the [`chumicro-checks`](../../workbench/checks/) package) — forbids `if <cond>: return` and `if <cond>: pass` inside any `def test_*` in `libraries/*/{tests,functional_tests}/test_*.py`.  Per-line `# noqa: CHU009` for genuine exceptions.
+* **CHU009** (in the [`chumicro-checks`](../../workbench/checks/) package) — forbids any `return`/`pass` that makes a `def test_*` PASS without asserting, in `libraries/*/{tests,functional_tests}/test_*.py`: a `return`/`pass` as the last statement of any `if` body (the guarded branch skips the assertions below it), and a bare early `return`/`pass` in the test body that orphans the assertions after it.  Returns inside a nested closure (factory, callback) are that callable's logic and are not flagged.  Per-line `# noqa: CHU009` for genuine exceptions.
 * **CHU010** (same module) — forbids test functions with no assertion / raise / skip / fail call.  Per-line `# noqa: CHU010` for genuine exceptions.
 
 ## Rejected

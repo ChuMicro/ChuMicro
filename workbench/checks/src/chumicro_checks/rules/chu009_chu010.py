@@ -6,11 +6,20 @@ Two paired rules, both targeting library-side test files
 detection and AST walking but emit distinct findings under distinct
 codes.
 
-CHU009 — no bare ``return`` / ``pass`` from a test body::
+CHU009 — no ``return`` / ``pass`` that makes a test PASS without
+asserting.  Two shapes are flagged::
 
     def test_thing() -> None:
         if not _PRECONDITION:
-            return            # silent PASS — runner reports as PASS
+            log(...)
+            return            # last stmt of an if body — branch skips
+                              # every assertion below
+        ...
+
+    def test_other() -> None:
+        setup()
+        return                # early bare return — orphans the
+        assert result()       # assertions after it
 
 The test_harness runner reports any test that returns without
 raising as PASS, and pytest does the same.  Use
@@ -126,34 +135,61 @@ def _function_has_assertion(func: ast.FunctionDef) -> bool:
     return False
 
 
+def _source_line(source_lines: list[str], lineno: int) -> str:
+    return source_lines[lineno - 1] if 0 < lineno <= len(source_lines) else ""
+
+
+def _ifs_in_scope(func: ast.FunctionDef):
+    """Yield ``ast.If`` nodes in *func*'s own control flow.
+
+    Descends compound statements (if / for / while / with / try) but
+    stops at nested ``def`` / ``lambda`` / ``class`` — a ``return``
+    inside a closure (a socket factory, a callback) is that callable's
+    logic, not the test silently passing.
+    """
+    stack = list(func.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.Lambda, ast.ClassDef)):
+            continue
+        if isinstance(node, ast.If):
+            yield node
+        for child in ast.iter_child_nodes(node):
+            stack.append(child)
+
+
 def _silent_return_findings(
     func: ast.FunctionDef, filepath: Path, source_lines: list[str]
 ) -> list[Finding]:
+    """Flag any control flow that makes a test PASS without asserting.
+
+    Two shapes, both reported as the test silently passing:
+
+    * ``Return`` / ``Pass`` as the **last** statement of any ``if``
+      body — the guarded branch skips every assertion below it.
+    * a bare ``return`` / ``pass`` that is a direct statement of the
+      test body and not its final statement — an early exit that
+      orphans the assertions after it.
+    """
     findings: list[Finding] = []
-    for node in ast.walk(func):
-        if not isinstance(node, ast.If):
-            continue
-        body = node.body
-        if len(body) != 1:
-            continue
-        first = body[0]
-        if not isinstance(first, ast.Return | ast.Pass):
-            continue
-        if_line = source_lines[node.lineno - 1] if node.lineno <= len(source_lines) else ""
-        body_line = (
-            source_lines[first.lineno - 1] if first.lineno <= len(source_lines) else ""
-        )
-        if line_suppresses(if_line, _CHU009) or line_suppresses(body_line, _CHU009):
-            continue
-        statement_kind = "return" if isinstance(first, ast.Return) else "pass"
+    seen_lines: set[int] = set()
+
+    def _emit(report_line: int, suppress_lines: tuple[str, ...], kind_node) -> None:
+        if report_line in seen_lines:
+            return
+        if any(line_suppresses(text, _CHU009) for text in suppress_lines):
+            return
+        seen_lines.add(report_line)
+        statement_kind = "return" if isinstance(kind_node, ast.Return) else "pass"
         findings.append(
             Finding(
                 path=filepath,
-                line=node.lineno,
+                line=report_line,
                 code=_CHU009,
                 message=(
-                    f"silent ``if <cond>: {statement_kind}`` in test body — "
-                    f"runner reports the test as PASS without exercising the "
+                    f"silent ``{statement_kind}`` in test body — runner "
+                    f"reports the test as PASS without exercising the "
                     f"assertions below.  Use "
                     f"``chumicro_test_harness.skip(reason)`` for a visible "
                     f"skip, or ``raise AssertionError(...)`` if reaching this "
@@ -161,6 +197,29 @@ def _silent_return_findings(
                 ),
             )
         )
+
+    for node in _ifs_in_scope(func):
+        if not node.body:
+            continue
+        last = node.body[-1]
+        if isinstance(last, ast.Return | ast.Pass):
+            _emit(
+                node.lineno,
+                (
+                    _source_line(source_lines, node.lineno),
+                    _source_line(source_lines, last.lineno),
+                ),
+                last,
+            )
+
+    body = func.body
+    for index, stmt in enumerate(body):
+        if index == len(body) - 1:
+            continue
+        if isinstance(stmt, ast.Return | ast.Pass):
+            _emit(stmt.lineno, (_source_line(source_lines, stmt.lineno),), stmt)
+
+    findings.sort(key=lambda finding: finding.line)
     return findings
 
 

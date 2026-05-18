@@ -74,6 +74,14 @@ def test_parse_response_extracts_unix_seconds() -> None:
     assert _parse_response(packet) == target
 
 
+def test_parse_response_handles_post_2036_era_rollover() -> None:
+    """A ~2042 timestamp (NTP era 1, 32-bit field wrapped) decodes correctly."""
+    target = 2_300_000_000  # past the 2036 era-0 rollover
+    # _server_response writes only the low 32 bits, exactly as the wire
+    # does once the era-0 seconds field overflows.
+    assert _parse_response(_server_response(target)) == target
+
+
 def test_parse_response_rejects_short_packet() -> None:
     with raises(NTPError):
         _parse_response(b"\x00" * 16)

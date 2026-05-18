@@ -962,3 +962,31 @@ def test_periodic_zero_raises() -> None:
 
     with raises(ValueError):
         runner.add_periodic(lambda now: None, period_ms=0)
+
+
+def test_tick_is_not_reentrant() -> None:
+    """A handler calling tick() on the same runner raises RuntimeError."""
+    runner = Runner(ticks=FakeTicks())
+
+    def reenter(now_ms: int) -> None:
+        runner.tick()
+
+    runner.add(handler=reenter)
+    with raises(RuntimeError):
+        runner.tick()
+
+
+def test_ticking_flag_resets_after_handler_exception() -> None:
+    """A handler raising must not wedge the runner — the guard clears."""
+    runner = Runner(ticks=FakeTicks())
+
+    def boom(now_ms: int) -> None:
+        raise ValueError("boom")
+
+    runner.add(handler=boom)
+    with raises(ValueError):
+        runner.tick()
+    # If _ticking were left True, this would raise RuntimeError instead
+    # of the handler's ValueError.
+    with raises(ValueError):
+        runner.tick()

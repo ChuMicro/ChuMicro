@@ -92,6 +92,11 @@ def _parse_response(packet: bytes | memoryview) -> int:
         | (packet[42] << 8)
         | packet[43]
     )
+    # NTP era 0 ends 2036-02-07 when the 32-bit field wraps.  A value
+    # below the 1900->1970 offset must be era 1; lift it by 2**32.
+    # Heuristic holds until ~2106, then the hard upper bound.
+    if seconds_1900 < NTP_TO_UNIX:
+        seconds_1900 += 0x100000000
     return seconds_1900 - NTP_TO_UNIX
 
 
