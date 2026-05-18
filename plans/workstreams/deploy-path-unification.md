@@ -93,18 +93,24 @@ risk). Rejected, with reasons: additive-default (causes the
 circup/mip orphan-drift class), per-context exclude sets, open
 user preserve-lists, `settings.toml` preservation.
 
-Phase 0 = write that ADR `proposed`. The audit above confirms the
-invariant holds; do not land it `accepted` until Phase 2 implements
-against it.
+Phase 0 = write that ADR `proposed`. **Done 2026-05-18 —
+[Decision 0077](../decisions/0077-one-device-staging-path.md).** The
+audit above confirms the invariant holds; 0077 stays `proposed` and is
+promoted to `accepted` only when Phase 2 implements against it, at
+which point Decision 0059 §1 gets its in-place partial-supersession
+edit (not before — 0059 is the accurate accepted reality until then).
 
 ## Phases
 
-**Phase 0 — Decide.** Write the invariant ADR (`proposed`). Settle:
-clean-slate default + `--no-wipe`; the closed keep set; `settings.toml`
-never preserved (incl. removing it from `FUNCTIONAL_TEST_EXTRA_EXCLUDES`
-— unify *downward*); example = shim; `install-libraries` retired;
-`libraries/` the one root. ADR-before-code (the discipline lesson from
-0038/0075).
+**Phase 0 — Decide. DONE 2026-05-18 —
+[Decision 0077](../decisions/0077-one-device-staging-path.md)
+(`proposed`).** Settled: clean-slate default + `--no-wipe`; the closed
+keep set; `settings.toml` never preserved (incl. removing it from
+`FUNCTIONAL_TEST_EXTRA_EXCLUDES` — unify *downward*); example = shim;
+`install-libraries` retired; `libraries/` the one root. The 0059 §1
+conflict is named in 0077's Rejected list; its in-place edit is
+deferred to 0077's promotion (ADR-before-code, the discipline lesson
+from 0038/0075).
 
 **Phase 1 — Independent regressions (no design dependency; do first).**
 - ~~`chumicro-workspace preflight` dies `AttributeError: 'Namespace'
@@ -204,10 +210,14 @@ commands) → Phase 4 (root convergence; falls out of 2–3) → Phase 5
 
 ## Status
 
-Opened 2026-05-18. **Phase 0 not started** (ADR to be drafted
-`proposed`; invariant confirmed by the transport audit above). All
-phases pending. No code changed this session — research, decisions,
-and this workstream only. Companion *completed* work this session
+Opened 2026-05-18. **Phase 0 done** —
+[Decision 0077](../decisions/0077-one-device-staging-path.md)
+`proposed` (invariant confirmed by the transport audit above; promotes
+to `accepted` at Phase 2). **Phase 1 done** — preflight `_env`
+regression fixed 2026-05-18; the repl `chumicro_timing` regression
+remains open as a Phase 2 root-cause input. Phases 2–5 pending. The
+structural code change is Phase 2 (still ADR-before-code: 0077 is the
+gate, now written). Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
 template `--device`/ruamel fixes) shipped on `main` of both repos and
 is recorded in `next-up.md` `## Done (recent)`; it is the context
