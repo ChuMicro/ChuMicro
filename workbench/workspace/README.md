@@ -85,13 +85,14 @@ workspace.yml ──────────────────► projects
 | Group | Commands |
 |---|---|
 | **Bootstrap / setup** | `init`, `setup`, `update`, `bootstrap` |
-| **Authoring** | `new <path>` (project), `new --library <name>` (chumicro-style library), `dump-config <project>` |
+| **Authoring** | `new <path>` (project), `new --library <name>` (chumicro-style library) |
+| **Config** | `dump-config <project>`, `config-validate <project>` |
 | **Devices** | `add-device`, `probe`, `discover`, `devices`, `rename --device` |
-| **Deploy / run** | `deploy <project>`, `demo`, `repl [<project>] [--tail SECONDS]`, `projects [--flat]` |
+| **Deploy / run** | `deploy <project>`, `deploy-example`, `demo`, `repl [<project>] [--tail SECONDS]`, `projects [--flat]` |
+| **Libraries** | `library list\|add\|update\|remove\|forget\|switch-channel`, `install-libraries <project>` |
 | **Health** | `status`, `doctor` (also runs as a fast pre-deploy gate; `deploy --skip-health-check` opts out) |
 | **Quality** | `test`, `lint`, `preflight` (chains lint + test; respects `workspace.yml`'s `quality:` block) |
-| **Firmware** | `install-firmware`, `upgrade-firmware` |
-| **Stubs** | `sim`, `env`, `use`, `sync`, `upgrade` (planned / deprecated — print a "not yet" message) |
+| **Firmware** | `install-firmware`, `upgrade-firmware`, `reset-board` |
 
 ### `libs/` vs `libraries/` — when to use each
 

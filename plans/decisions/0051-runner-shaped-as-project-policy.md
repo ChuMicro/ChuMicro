@@ -32,7 +32,12 @@ These rules apply to libraries.  Workbench packages (`workbench/*/`) run on CPyt
 
 ## Rejected
 
-**Async / await as the cross-cutting model.**  CircuitPython's `asyncio` is partial; MicroPython's varies by port; CPython's is full.  A unified async story across the trinity is more friction than the runner contract for the same outcome (cooperative scheduling without blocking the LED).  Decision 0014 rejected this; we re-affirm.
+**Async / await as the cross-cutting model.**  Not a support claim — all three runtimes ship a usable `asyncio` on the boards we target.  The rejection is that an event loop is the wrong *shape* for this class of device, on two grounds:
+
+- **Transparency on a board where serial is your only window.**  The runner contract is a plain `while True:` the developer can read, breakpoint, and single-step; scheduling is explicit in the caller's loop.  An event loop hides where a task yields, turning "why did the LED stutter" into scheduler archaeology with no profiler to fall back on.  This is the framing the README and `chumicro-runner`'s own README already rest on; this ADR aligns with them.
+- **The non-blocking guarantee doesn't survive the asyncio socket layer.**  The whole point is "nothing blocks the main loop."  But MicroPython's asyncio still resolves names through a blocking `getaddrinfo` (documented in its own asyncio reference), so an `await`-ed connect can still stall the loop — the project would have to layer the same non-blocking-DNS / chunked-yield machinery the runner already provides *on top of* asyncio to get the guarantee.  The event loop adds a scheduler whose task ordering is less predictable, for no net gain over the explicit tick.
+
+Decision 0014 rejected this; we re-affirm on shape, not capability.
 
 **`time.sleep()` is allowed if it's "short enough."**  Rejected: every project that allows "short enough" sleeps drifts to seconds eventually.  Hard rule with documented exceptions stays enforceable.
 

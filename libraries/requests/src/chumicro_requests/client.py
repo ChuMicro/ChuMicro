@@ -18,9 +18,12 @@ user pattern::
 
     response = handle.result   # raises on failure
 
-This module ships plain HTTP GET, status line + headers + body
-bytes via ``Content-Length`` or read-until-close.  TLS, POST, JSON,
-redirects, and chunked encoding are future work.
+This module ships GET / POST / PUT / PATCH / DELETE over HTTP and
+HTTPS (an ``https://`` URL selects TLS), JSON request bodies via
+``json=...``, automatic 3xx redirect following (capped, and
+method-preserving where the status requires it), and response
+bodies via ``Content-Length``, ``Transfer-Encoding: chunked``, or
+read-until-close.
 """
 
 import json

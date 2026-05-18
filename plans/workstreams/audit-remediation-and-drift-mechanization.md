@@ -154,7 +154,15 @@ Three findings were structural decisions, not bugs.  All three resolved:
    Host-side — complete fix: gate publish on CI success or move publish
    after `validate-mip`.
 
-## Phase 2 — Confirmed High correctness defects (embedded-aware)
+## Phase 2 — Confirmed High correctness defects (embedded-aware) — DONE 2026-05-18 (`42d5bbd1`)
+
+All six items landed in `42d5bbd1` with tests + lockstep VERSION bumps:
+http_server `Transfer-Encoding` → 400; requests CRLF reject in
+method/path/headers; NTP era-1 lift; ws/mqtt liveness (`MQTTProtocolError`
+on malformed framing, websockets drain rework); runner `_ticking`
+re-entrancy guard; CHU009 widened (Decision 0058 updated in lockstep).
+Verified against current source 2026-05-18.
+
 
 | Item | Complete fix (rejected) | Chosen (cheap) fix | Residual |
 |---|---|---|---|
@@ -171,27 +179,46 @@ makes `recvfrom` address format reliable, skipped where not; low threat
 for a LAN leaf, high cross-runtime cost.  Residual stated; lean on the
 existing plausibility-window sanity check.
 
-## Phase 3 — Docs-vs-code drift cleanup (host/prose — complete fix)
+## Phase 3 — Docs-vs-code drift cleanup (host/prose) — DONE 2026-05-18
 
-- False MP TLS docstring (`sockets/_adapters/mp.py:536`) — rewrite to
-  "client contexts default to VERIFY_REQUIRED; this helper downgrades
-  it."  Code at :542 is already correct.
-- requests `client.py:22` — rewrite the "future work" docstring to the
-  shipped surface (POST/PUT/PATCH/DELETE/JSON/TLS/redirects/chunked).
-- NTP socket-contract docstring (`ntp/core.py:160`) — document
-  `recvfrom_into`, matching the real call at :316; fix the guide's
-  stdlib example.
-- README flagship example crashing on MP (`README.md:129,207,211`;
-  `ntp/docs/guide.md:37`) — expose a runtime-neutral `wifi.radio`
-  accessor on `WifiService`; propagate.  The mqtt guide already shows
-  the correct pattern.
-- workspace phantom/hidden commands (`cli/__init__.py:10-26`,
-  `workspace/README.md:96`) — delete the stub-tier docstring + README
-  "Stubs" row; add the 5 real omitted commands to the table.
-- Re-ground ADR 0051's "asyncio is partial across the trinity" — stale
-  for the project's board tier post CP-asyncio-2025-10; rewrite the
-  "Rejected → async" paragraph onto the transparency/debuggability
-  argument it actually rests on.
+Every item re-verified against current source before editing (one was
+already false — see below).  Docstring-only library edits do not bump
+VERSION (project precedent `239217ed`: VERSION tracks behavior, not doc
+corrections).
+
+- ✅ False MP TLS docstring (`sockets/_adapters/mp.py`) — verified false
+  against pinned MP v1.26.0 `extmod/modtls_mbedtls.c:319-324`
+  (`MBEDTLS_SSL_IS_CLIENT` → `VERIFY_REQUIRED`).  Rewritten: client
+  default is `CERT_REQUIRED`, this helper explicitly downgrades.
+- ✅ requests `client.py` — "future work" docstring rewritten to the
+  shipped surface; all five (GET/POST/PUT/PATCH/DELETE, JSON, TLS via
+  `https://`, capped redirects, chunked response decode) confirmed
+  shipped in `client.py` / `_wire.py`.
+- ✅ NTP socket-contract docstring (`ntp/core.py`) + guide contract
+  table — `recvfrom` → `recvfrom_into`, matching the real call at
+  `core.py:321`.  Guide stdlib example unchanged (CPython socket has
+  `recvfrom_into`).
+- ❌ **README "crashing on MP" — FALSE audit finding.**  `WifiAdapter`
+  base has defined `radio = None` since `ff6f1ec1` (2026-04-28,
+  *predating* the 2026-05-16 audit), so `wifi.adapter.radio` returns
+  `None` on MP and `HttpClient.from_config(radio=None)` is the valid MP
+  path — no AttributeError.  The runtime-neutral accessor the audit
+  asked to create already exists.  No change made; recorded so the
+  finding isn't relitigated.
+- ✅ workspace stub-tier docstring + README — zero `NotImplementedError`
+  stubs remain in `cli/*.py`; docstring rewritten to point at `--help`
+  as source of truth (drift-resistant, no enumerated list to rot).
+  README phantom "Stubs" row (`sim/env/use/sync/upgrade` — all verified
+  unregistered) deleted; the 5 hidden real commands (`config-validate`,
+  `deploy-example`, `install-libraries`, `library`, `reset-board`)
+  added to the table.
+- ✅ ADR 0051 async-rejection paragraph rewritten.  Per user steer: the
+  gripe was never asyncio *support* (the docs never claimed one) — it
+  is shape.  Now rests on (1) transparency, aligned with the existing
+  README / `chumicro-runner` README framing, and (2) a concrete
+  embedded defect — MP asyncio still blocks on `getaddrinfo`, so the
+  non-blocking guarantee doesn't survive its socket layer without the
+  runner machinery anyway.
 
 ## Phase 4 — Mechanize the drift (the load-bearing structural fix)
 
@@ -239,6 +266,14 @@ hardened decoder-only + the load-bearing kvstore/config caller
 follow-through (see Phase 1 item 1 above); preflight green, 4/4 runtime
 matrix not yet bench-run (CPython + MP/CP unix-port green).  Phase 1
 items 2–3 (CI-lint CHU gap, release-not-gated-on-CI) **deferred by the
-user — CI is disabled; revisit when CI is re-enabled.**  Next: Phase 2
-(High correctness; independent items, parallelizable) or Phase 3 (docs
-drift).
+user — CI is disabled; revisit when CI is re-enabled.**  **Phase 2 DONE
+2026-05-17 (`42d5bbd1`)** — all six correctness defects landed (recorded
+late; the ship commit predated this Status update).  **Phase 3 DONE
+2026-05-18** — five real docs-vs-code fixes (sockets TLS docstring,
+requests future-work docstring, NTP recvfrom_into, workspace stub-tier
+docstring + README, ADR 0051 async paragraph); the sixth ("README
+crashes on MP") was re-verified as a **false audit finding** (base-class
+`radio = None` predated the audit) and recorded, not actioned.  Next:
+**Phase 4** — mechanize the drift class as CHU lints (the load-bearing
+phase per Decision 0074); coverage-honesty lint waits on nothing further
+(Phase 0 item 2 resolved).

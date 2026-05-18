@@ -533,8 +533,10 @@ def ssl_context_no_verify():  # pragma: no cover - device only
     context=ssl_context_no_verify())`` shouts what it does.
 
     MP's :class:`ssl.SSLContext` constructed with
-    ``PROTOCOL_TLS_CLIENT`` defaults to ``verify_mode = CERT_NONE`` —
-    we return one explicitly so the call site documents the intent.
+    ``PROTOCOL_TLS_CLIENT`` defaults to ``verify_mode =
+    CERT_REQUIRED`` — this helper explicitly **downgrades** it to
+    ``CERT_NONE`` so the opt-out is visible at the call site rather
+    than silently in effect.
     """
     import ssl  # noqa: PLC0415 — runtime-gated
 
