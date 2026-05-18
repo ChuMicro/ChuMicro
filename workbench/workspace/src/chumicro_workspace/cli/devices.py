@@ -29,8 +29,10 @@ from chumicro_deploy.config.devices_yaml import (
     HardwareOverwriteError,
     add_device,
     dump_devices,
+    find_device,
     list_device_ids,
     load_devices,
+    remove_device,
     rename_device,
     update_device_address,
     update_device_firmware_version,
@@ -434,13 +436,160 @@ def _cmd_rename(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_remove_device(args: argparse.Namespace) -> int:
+    """Delete a device entry from devices.yml.
+
+    Destructive — drops the user-owned metadata (description,
+    deploy_mode, ...) that no probe can regenerate, so it is gated
+    behind ``--yes`` exactly like ``reset-board``.  Any ``defaults:``
+    reference to the id is nulled so the file stays loadable.
+    """
+    workspace = _resolve_workspace(args)
+    if not workspace.devices_yaml.is_file():
+        print(
+            f"remove-device: {workspace.devices_yaml} does not exist yet",
+            file=sys.stderr,
+        )
+        return 1
+    if not args.yes:
+        print(
+            f"remove-device: refusing to delete {args.id!r} without "
+            "--yes.  This drops the entry's user-owned metadata "
+            "(description, deploy_mode, ...) — a probe cannot rebuild it.",
+            file=sys.stderr,
+        )
+        return 2
+    data = load_devices(workspace.devices_yaml)
+    try:
+        remove_device(data, args.id)
+    except DeviceNotFoundError:
+        print(
+            f"remove-device: {args.id!r} not found in devices.yml",
+            file=sys.stderr,
+        )
+        return 1
+    dump_devices(data, workspace.devices_yaml)
+    print(f"remove-device: deleted {args.id}")
+    return 0
+
+
+def _cmd_reset_device(args: argparse.Namespace) -> int:
+    """Rebuild a device entry from a fresh probe (full replace).
+
+    Where ``add-device --force`` *updates* (keeps the user-owned
+    zone), ``reset-device`` *replaces*: it re-probes the connected
+    board and rewrites the entry from silicon, dropping accumulated
+    user-owned drift (description, deploy_mode, serial_baudrate) and
+    re-deriving the hardware-once zone.  The id and any ``defaults:``
+    binding survive (the id is the selector).  Gated behind ``--yes``
+    because the user-owned drop is unrecoverable.  Re-infers the
+    runtime by default — a reset is exactly when firmware may have
+    been reflashed — unless ``--runtime`` pins it.
+    """
+    workspace = _resolve_workspace(args)
+    if not workspace.devices_yaml.is_file():
+        print(
+            f"reset-device: {workspace.devices_yaml} does not exist yet",
+            file=sys.stderr,
+        )
+        return 1
+    data = load_devices(workspace.devices_yaml)
+    existing = find_device(data, args.id)
+    if existing is None:
+        print(
+            f"reset-device: {args.id!r} not found — use `add-device` "
+            "to register a new board.",
+            file=sys.stderr,
+        )
+        return 1
+    if not args.yes:
+        print(
+            f"reset-device: refusing to rebuild {args.id!r} without "
+            "--yes.  This drops the entry's user-owned fields "
+            "(description, deploy_mode, serial_baudrate) and re-probes "
+            "from the connected board.",
+            file=sys.stderr,
+        )
+        return 2
+
+    address = args.address or existing.get("address")
+    if not address:
+        print(
+            f"reset-device: {args.id!r} has no stored address — pass "
+            "--address <port>.",
+            file=sys.stderr,
+        )
+        return 1
+
+    steer = (
+        "reset-device: probe failed — the board must be connected to "
+        "rebuild the entry.  To drop a stale entry without a board use "
+        "`remove-device`; to re-register use `add-device`."
+    )
+    if args.runtime is None:
+        inference = probe_with_runtime_inference(address)
+        if inference.runtime is None or inference.info is None:
+            _emit_probe_failure(
+                "reset-device",
+                address=address,
+                uf2_search_paths=args._env.uf2_search_paths,
+                auto_detect_inference=inference,
+            )
+            print(steer, file=sys.stderr)
+            return 1
+        info = inference.info
+        print(f"reset-device: auto-detected runtime = {inference.runtime}")
+    else:
+        probe_device_obj = Device(transport=args.runtime, address=address)
+        try:
+            info = chumicro_deploy.probe_device(probe_device_obj)
+        except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
+            _emit_probe_failure(
+                "reset-device",
+                address=address,
+                transport=args.runtime,
+                uf2_search_paths=args._env.uf2_search_paths,
+                probe_exception=exception,
+            )
+            print(steer, file=sys.stderr)
+            return 1
+        if info.implementation is None:
+            print(
+                "reset-device: probe did not return an implementation "
+                "marker — cannot rebuild the entry.",
+                file=sys.stderr,
+            )
+            return 1
+
+    remove_device(data, args.id)
+    add_device(
+        data,
+        device_id=args.id,
+        runtime=info.implementation.name,
+        address=address,
+        hardware=_hardware_from_probe_info(info),
+        firmware_version=info.implementation.version or None,
+    )
+    dump_devices(data, workspace.devices_yaml)
+    print(
+        f"reset-device: rebuilt {args.id} "
+        f"({info.implementation.name}) from probe",
+    )
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # Parser wiring
 # ---------------------------------------------------------------------------
 
 
 def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
-    """Register ``add-device`` / ``probe`` / ``discover`` / ``devices`` / ``rename``."""
+    """Register the devices subcommands.
+
+    ``add-device`` / ``probe`` / ``discover`` / ``devices`` /
+    ``remove-device`` / ``reset-device`` (``rename`` is wired
+    separately by :func:`_add_rename_parser`).
+    """
     add_device_parser = subparsers.add_parser(
         "add-device",
         help="Probe a board and register it in devices.yml.",
@@ -526,6 +675,80 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
     )
     _add_workspace_arg(devices_parser)
     devices_parser.set_defaults(func=_cmd_devices)
+
+    remove_device_parser = subparsers.add_parser(
+        "remove-device",
+        help="Delete a device entry from devices.yml.",
+        description=(
+            "Delete one entry by id and null any defaults: reference "
+            "to it so the file stays loadable.  Destructive — drops "
+            "user-owned metadata (description, deploy_mode, ...) that "
+            "no probe can rebuild — so it is gated behind --yes.  No "
+            "board needs to be connected."
+        ),
+    )
+    _add_workspace_arg(remove_device_parser)
+    remove_device_parser.add_argument(
+        "id", help="Device id to delete (must match an entry in devices.yml).",
+    )
+    remove_device_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help=(
+            "Confirm the deletion.  Without this flag the command "
+            "exits 2 without touching the file so a typoed id cannot "
+            "accidentally drop an entry."
+        ),
+    )
+    _add_non_interactive_arg(remove_device_parser)
+    remove_device_parser.set_defaults(func=_cmd_remove_device)
+
+    reset_device_parser = subparsers.add_parser(
+        "reset-device",
+        help="Rebuild a device entry from a fresh probe (full replace).",
+        description=(
+            "Re-probe the connected board and rewrite the entry from "
+            "silicon, keeping the id (and its defaults: binding) but "
+            "dropping accumulated user-owned drift (description, "
+            "deploy_mode, serial_baudrate) and re-deriving the "
+            "hardware-once zone.  The replace counterpart to "
+            "`add-device --force` (which updates in place).  Gated "
+            "behind --yes; the board must be connected (probe failure "
+            "steers to `remove-device` / `add-device`)."
+        ),
+    )
+    _add_workspace_arg(reset_device_parser)
+    reset_device_parser.add_argument(
+        "id", help="Device id to rebuild (must match an entry in devices.yml).",
+    )
+    reset_device_parser.add_argument(
+        "--address",
+        default=None,
+        help=(
+            "Serial port to probe.  Optional: defaults to the entry's "
+            "stored address (pass this when the board moved ports)."
+        ),
+    )
+    reset_device_parser.add_argument(
+        "--runtime",
+        choices=("circuitpython", "micropython"),
+        default=None,
+        help=(
+            "Pin the runtime to probe.  Optional: when omitted the "
+            "runtime is re-inferred by trying both transports — a "
+            "reset is exactly when firmware may have been reflashed."
+        ),
+    )
+    reset_device_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help=(
+            "Confirm the rebuild.  Without this flag the command exits "
+            "2 without touching the file or the board."
+        ),
+    )
+    _add_non_interactive_arg(reset_device_parser)
+    reset_device_parser.set_defaults(func=_cmd_reset_device)
 
 
 def _add_rename_parser(subparsers: argparse._SubParsersAction) -> None:

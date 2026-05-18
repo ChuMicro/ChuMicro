@@ -5857,3 +5857,168 @@ class TestResolveDeployLayoutAsyncRun:
             user_passed_import_graph=False,
         )
         assert layout.boot_shim is True
+
+
+def _seed_with_device(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, description: str | None = None,
+) -> None:
+    """Fresh workspace with one micropython device registered via add-device."""
+    (tmp_path / "workspace.yml").write_text('# machinery only\n')
+    (tmp_path / "secrets.toml").write_text('')
+    import chumicro_deploy
+    monkeypatch.setattr(
+        chumicro_deploy, "probe_device", lambda _device: fake_probe_info(),
+    )
+    argv = [
+        "add-device", "--workspace-dir", str(tmp_path),
+        "--address", "/dev/cu.old", "--runtime", "micropython",
+    ]
+    if description is not None:
+        argv += ["--description", description]
+    argv.append("lolin-s2")
+    assert cli.main(argv) == 0
+
+
+class TestRemoveDevice:
+    def test_deletes_entry_with_yes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        _seed_with_device(tmp_path, monkeypatch)
+        capsys.readouterr()
+        result = cli.main([
+            "remove-device", "--workspace-dir", str(tmp_path), "--yes", "lolin-s2",
+        ])
+        assert result == 0
+        assert "deleted lolin-s2" in capsys.readouterr().out
+        assert "lolin-s2" not in (tmp_path / "devices.yml").read_text()
+
+    def test_refuses_without_yes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        _seed_with_device(tmp_path, monkeypatch)
+        capsys.readouterr()
+        result = cli.main([
+            "remove-device", "--workspace-dir", str(tmp_path), "lolin-s2",
+        ])
+        assert result == 2
+        assert "--yes" in capsys.readouterr().err
+        assert "lolin-s2" in (tmp_path / "devices.yml").read_text()
+
+    def test_missing_id_returns_one(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        _seed_with_device(tmp_path, monkeypatch)
+        result = cli.main([
+            "remove-device", "--workspace-dir", str(tmp_path), "--yes", "ghost",
+        ])
+        assert result == 1
+        assert "not found" in capsys.readouterr().err
+
+    def test_no_devices_file_returns_one(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
+        result = cli.main([
+            "remove-device", "--workspace-dir", str(tmp_path), "--yes", "any",
+        ])
+        assert result == 1
+        assert "does not exist" in capsys.readouterr().err
+
+
+class TestResetDevice:
+    def test_rebuilds_dropping_user_fields_keeps_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        _seed_with_device(tmp_path, monkeypatch, description="Hand-typed note")
+        body_before = (tmp_path / "devices.yml").read_text()
+        assert "Hand-typed note" in body_before
+        capsys.readouterr()
+        result = cli.main([
+            "reset-device", "--workspace-dir", str(tmp_path),
+            "--runtime", "micropython", "--yes", "lolin-s2",
+        ])
+        assert result == 0
+        assert "rebuilt lolin-s2" in capsys.readouterr().out
+        body = (tmp_path / "devices.yml").read_text()
+        assert "lolin-s2" in body
+        assert "Hand-typed note" not in body  # user-owned drift dropped
+        assert "ABCD1234" in body  # hardware re-derived from probe
+        # defaults binding survived the remove+add round (id re-seeds it).
+        assert "micropython: lolin-s2" in body
+
+    def test_refuses_without_yes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        _seed_with_device(tmp_path, monkeypatch, description="keep me")
+        capsys.readouterr()
+        result = cli.main([
+            "reset-device", "--workspace-dir", str(tmp_path),
+            "--runtime", "micropython", "lolin-s2",
+        ])
+        assert result == 2
+        assert "--yes" in capsys.readouterr().err
+        assert "keep me" in (tmp_path / "devices.yml").read_text()
+
+    def test_missing_id_returns_one(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        _seed_with_device(tmp_path, monkeypatch)
+        result = cli.main([
+            "reset-device", "--workspace-dir", str(tmp_path),
+            "--yes", "ghost",
+        ])
+        assert result == 1
+        assert "use `add-device`" in capsys.readouterr().err
+
+    def test_probe_failure_steers_to_remove_device(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        _seed_with_device(tmp_path, monkeypatch)
+        import chumicro_deploy
+
+        def boom(_device: object) -> object:
+            raise RuntimeError("no board")
+
+        monkeypatch.setattr(chumicro_deploy, "probe_device", boom)
+        capsys.readouterr()
+        result = cli.main([
+            "reset-device", "--workspace-dir", str(tmp_path),
+            "--runtime", "micropython", "--yes", "lolin-s2",
+        ])
+        assert result == 1
+        assert "remove-device" in capsys.readouterr().err
+
+    def test_infers_runtime_when_omitted(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        _seed_with_device(tmp_path, monkeypatch)
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw: object) -> object:
+            return onboarding.RuntimeInferenceResult(
+                info=fake_probe_info(runtime="micropython"),
+                runtime="micropython",
+                transport_used="micropython",
+            )
+
+        monkeypatch.setattr(
+            workspace_cli.devices, "probe_with_runtime_inference", fake_inference,
+        )
+        capsys.readouterr()
+        result = cli.main([
+            "reset-device", "--workspace-dir", str(tmp_path),
+            "--yes", "lolin-s2",
+        ])
+        assert result == 0
+        out = capsys.readouterr().out
+        assert "auto-detected runtime = micropython" in out

@@ -44,6 +44,16 @@ This is a thin shim around `chumicro-workspace add-device`.  It probes the conne
 
 Pass `--runtime` if you want to skip the auto-detect probe (faster), or `--description "Desk board"` to add a free-form note.  See `python scripts/run.py add-device --help` for the full flag set.
 
+### Re-probing, replacing, and deleting entries
+
+Three verbs cover an entry's later life — they differ by how much they keep:
+
+- `chumicro-workspace add-device <id> --force` — **update.** Re-probes and refreshes the address + hardware-once fields, but keeps everything you typed (description, deploy_mode). The everyday "this board moved ports / I reflashed it" path.
+- `chumicro-workspace reset-device <id> --yes` — **replace.** Re-probes the connected board and rebuilds the entry from silicon, dropping accumulated hand edits (description, deploy_mode, serial_baudrate) and re-deriving the hardware identity. The id and its `defaults.<runtime>` binding survive. Use it when an entry has drifted and you want it rebuilt from truth. The board must be connected; a probe failure points you back here.
+- `chumicro-workspace remove-device <id> --yes` — **delete.** Drops the entry and nulls any `defaults:` pointer to it so the file stays loadable. No board needed.
+
+`reset-device` and `remove-device` are `--yes`-gated because they discard user-owned metadata a probe cannot regenerate.
+
 ## Tune `devices.yml` if you need to
 
 `add-device` writes a complete, usable entry on every registration — id, runtime, address, probed hardware identity, and (on first registration of each runtime) the matching `defaults.<runtime>` pointer.  The day-to-day flow doesn't require hand-editing.

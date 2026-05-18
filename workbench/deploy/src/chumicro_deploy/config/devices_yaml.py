@@ -464,6 +464,42 @@ def rename_device(
             defaults[default_key] = new_id
 
 
+def remove_device(data: CommentedMap, device_id: str) -> CommentedMap:
+    """Delete a device entry and null any ``defaults:`` ref to it.
+
+    The destructive counterpart to :func:`add_device`.  Drops the
+    matching entry from the ``devices:`` list; every ``defaults.<key>``
+    whose value is *device_id* is set to ``None`` (the canonical
+    "unset" sentinel the template ships) rather than left dangling — a
+    stale default would make :func:`load_devices_yml` raise.  Mirrors
+    :func:`rename_device`'s defaults fix-up, minus a replacement id.
+    Nulling *every* matching default, not just the active runtime's, is
+    deliberate: a board whose firmware was reflashed CP↔MP must not
+    keep a default pointing at the now-wrong runtime.
+
+    Returns the removed entry (a :class:`CommentedMap`) for symmetry
+    with :func:`add_device` and so the ``reset-device`` flow can
+    re-register under the same id.
+
+    Raises:
+        DeviceNotFoundError: No entry with that id.
+    """
+    devices = _devices_list(data)
+    for index, entry in enumerate(devices):
+        if isinstance(entry, Mapping) and entry.get("id") == device_id:
+            removed: CommentedMap = devices.pop(index)
+            break
+    else:
+        raise DeviceNotFoundError(device_id)
+
+    defaults = data.get("defaults")
+    if isinstance(defaults, Mapping):
+        for default_key, default_value in list(defaults.items()):
+            if default_value == device_id:
+                defaults[default_key] = None
+    return removed
+
+
 def set_runtime_default(
     data: CommentedMap,
     runtime: str,

@@ -426,7 +426,7 @@ update_device_address(devices, "back-porch", "/dev/cu.usbmodem1102")
 dump_devices(Path("devices.yml"), devices)
 ```
 
-`update_device_hardware` raises `HardwareOverwriteError` when a hardware-once leaf would change; pass `force=True` to override (the swap-boards case).  `rename_device` also rewrites `defaults.<runtime>` references that point at the old id.
+`update_device_hardware` raises `HardwareOverwriteError` when a hardware-once leaf would change; pass `force=True` to override (the swap-boards case).  `rename_device` also rewrites `defaults.<runtime>` references that point at the old id; `remove_device` deletes an entry and nulls any `defaults.<runtime>` that pointed at it (so the file stays loadable), returning the removed entry for callers that re-register under the same id.
 
 ## Workbench-only
 
