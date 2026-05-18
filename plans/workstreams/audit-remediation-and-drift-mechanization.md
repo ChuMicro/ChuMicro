@@ -238,8 +238,17 @@ the `# noqa: CHU0NN` + one-line-why escape valve.
   findings on current main (validates the Phase 3 README fix was
   complete).  README rule catalog brought current (was stale at
   CHU012; CHU002–005/013/014 added).  `workbench/checks` 0.4.1→0.5.0.
-- ⏳ module-docstring "future work"/capability claims vs shipped
-  symbols (CHU015 — next)
+- ✅ **CHU015** module-docstring "future work" claims vs shipped
+  symbols — DONE 2026-05-18.  Module docstring split into clauses on
+  `.`/`;`/blank; a clause with a not-yet predicate (`future work`,
+  `not yet implemented`, `planned`, `TODO`, `unimplemented`, `is a
+  stub`, `will be added/…`) is matched whole-word against the
+  module's public top-level def/class names + public methods.
+  Clause-scoping is the false-positive guard (`entry point; … is
+  planned` doesn't flag the entry-point symbol).  Catches the
+  `chumicro_requests.client` "TLS/POST/JSON/redirects … future work"
+  class.  0 findings on main (validates the Phase 3 requests fix).
+  `workbench/checks` 0.5.0→0.6.0.
 - ⏳ example-script imports resolve on every declared runtime (CHU016 —
   catches the README MP-crash class)
 - ⏳ coverage-claim honesty (CHU017 — Decision 0074 flags it
