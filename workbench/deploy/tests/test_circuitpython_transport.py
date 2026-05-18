@@ -2143,6 +2143,67 @@ class TestDeployFiles:
         with pytest.raises(CircuitpythonTransportError, match="connect"):
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
 
+    def test_clean_deploy_evicts_settings_toml_keeps_keepset_and_notices(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A clean deploy removes a board settings.toml + keeps the keep set.
+
+        End-to-end check of the unified keep set: ``settings.toml`` is
+        a competing wifi authority and is evicted by ``rsync
+        --delete`` (it is not in ``DEVICE_KEEP_SET``), with a one-time
+        loud notice; ``boot_out.txt`` (planted by the verifiable-drive
+        helper, in the keep set) survives.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "settings.toml").write_text("WIFI_SSID = 'board-owned'\n")
+        content = b"print('clean')\n"
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._stat_response(len(content)),
+            self._boot_output(b"clean"),
+            _RAW_REPL_PROMPT,
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
+        )
+        transport.deploy_files(
+            {"/code.py": content}, "/code.py", clean=True,
+        )
+        out = capsys.readouterr().out
+        assert "WARNING: removing the board's settings.toml" in out
+        assert not (drive / "settings.toml").exists()  # evicted
+        assert (drive / "boot_out.txt").exists()  # keep set survives
+        assert (drive / "code.py").read_bytes() == content
+
+    def test_additive_deploy_does_not_evict_or_notice(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """clean=False (legacy additive) leaves settings.toml + stays quiet."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "settings.toml").write_text("WIFI_SSID = 'board-owned'\n")
+        content = b"print('additive')\n"
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._stat_response(len(content)),
+            self._boot_output(b"additive"),
+            _RAW_REPL_PROMPT,
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra,
+            monkeypatch=monkeypatch,
+        )
+        transport.deploy_files({"/code.py": content}, "/code.py")
+        out = capsys.readouterr().out
+        assert "settings.toml" not in out
+        assert (drive / "settings.toml").exists()  # additive preserves it
+
     def test_stale_pre_reboot_banner_is_discarded(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:

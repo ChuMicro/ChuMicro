@@ -188,9 +188,24 @@ The convergence deltas (the actual Phase 2 work):
    choosing. Behavior-visible change on *every* `chumicro-workspace
    deploy` — the headline risk to flag.
 2. **Converge the keep set to 0077's closed `{boot_out.txt, boot.py,
-   _chu_kv.msgpack}`.** `boot_out.txt`+`boot.py` already excluded
-   (keep). **Add `_chu_kv.msgpack`** — currently *not* preserved (MP
-   non-NVS kvstore data is wiped on a clean deploy: a real gap).
+   _chu_kv.msgpack}`.** **CP DONE 2026-05-18 (Commit 2a),
+   bench-verified Pico W CP.** One `flash_drive.DEVICE_KEEP_SET`
+   constant is now the single source of truth; the CP clean
+   `--exclude` and `FUNCTIONAL_TEST_EXTRA_EXCLUDES` both derive from
+   it (functional unified *downward* — it no longer keeps
+   `settings.toml`). `_chu_kv.msgpack` added (was a real gap — MP
+   non-NVS kvstore data was wiped); `settings.toml` evicted from the
+   CP clean path with a one-time loud `_notice_settings_toml_eviction`
+   (guarded once per transport instance). Bench: a clean
+   `deploy-example` on a board carrying a planted `settings.toml`
+   printed the notice once, removed `settings.toml`, kept
+   `boot_out.txt`, shipped `code.py`. **Deferred to 2b (folds into the
+   default-flip):** the `_list_scope_on_drive` diff-path eviction +
+   the MP keep-set survive-set — under clean-slate-default every
+   deploy goes through the one clean path, so the diff-scope edit and
+   MP `_clean_device_lib` survive-set land there, not as a separate
+   site. `boot_out.txt`+`boot.py` were already kept (now via the
+   constant, not an ad-hoc tuple).
    **Evict `settings.toml`** — 0077's deliberate call (board-resident
    `settings.toml` = competing wifi authority, Decision 0057).
    *Resolved with the user 2026-05-18: evict + a one-time loud warning*
@@ -270,7 +285,13 @@ The convergence deltas (the actual Phase 2 work):
 (`repl <project>` retired → `deploy --tail`); bench-verified Pico W
 CP. **Commit 1b — DONE 2026-05-18:** delta 4 (empty-dir reaping),
 bench-verified Pico W CP. **Commit 1 (the seams) complete.**
-**Commit 2 — next:** deltas
+**Commit 2a — DONE 2026-05-18:** keep-set constant + CP clean-path
+`settings.toml` eviction + one-time notice + `_chu_kv.msgpack` keep,
+bench-verified Pico W CP. **Commit 2b — next:** the default-flip
+(clean-slate default + `--no-wipe`) which also lands the diff-path +
+MP keep-set mechanics and promotes 0077 `proposed`→`accepted` + the
+0059 §1 in-place edit + the AGENTS.md hard rule. **Commit 2c:**
+entrypoint-as-payload (delta 5). Original Commit 2 = deltas
 1+2+5+6 (default-flip, keep-set convergence incl. `settings.toml`
 evict-with-warning + `_chu_kv.msgpack` add + the two-site collapse,
 entrypoint-as-payload, MP mechanics) — the every-deploy-visible policy

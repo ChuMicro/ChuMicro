@@ -332,9 +332,12 @@ class TestRsync:
     def test_additional_excludes_flow_through(self, tmp_path: Path) -> None:
         """``additional_excludes`` are passed through verbatim.
 
-        Functional tests use this to keep the firmware's user-config
-        files (``boot.py``, ``code.py``, ``settings.toml``) safe from
-        ``--delete`` while still cleaning stale test files.
+        Functional tests pass ``FUNCTIONAL_TEST_EXTRA_EXCLUDES`` — the
+        closed keep set (``DEVICE_KEEP_SET``) plus ``code.py`` (the
+        harness entrypoint the test deploy doesn't ship) — so
+        ``--delete`` spares them while cleaning stale test files.
+        ``settings.toml`` is deliberately absent: it is evicted on
+        every path (competing wifi authority).
         """
         source = tmp_path / "source"
         source.mkdir()
@@ -360,10 +363,12 @@ class TestRsync:
         for extra in (
             "--exclude=boot.py",
             "--exclude=boot_out.txt",
+            "--exclude=_chu_kv.msgpack",
             "--exclude=code.py",
-            "--exclude=settings.toml",
         ):
             assert extra in captured[0]
+        # Evicted on every path — never preserved.
+        assert "--exclude=settings.toml" not in captured[0]
 
 
 class TestVerifyRsync:
