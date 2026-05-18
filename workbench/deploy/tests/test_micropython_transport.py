@@ -269,20 +269,24 @@ class TestStage:
             mode="copy",
             runner=runner,
             transport_factory=_factory_for(serial),
+            time=_RecordingTime(),
         )
         transport.stage([source_dir], [], harness_dir)
 
-        # One mpremote subprocess call: the fs cp -r.
-        assert len(runner.calls) == 1
-        command = runner.calls[0][0]
-        assert "fs" in command
-        assert "cp" in command
-        assert "-r" in command
+        # First copy-mode stage: an mkfs wipe (so the board can't inherit
+        # residue from a prior run/session) then the fs cp -r.
+        commands = [call[0] for call in runner.calls]
+        assert any(
+            "exec" in command and "mkfs" in command[-1]
+            for command in commands
+        )
+        fs_cp = commands[-1]
+        assert "fs" in fs_cp and "cp" in fs_cp and "-r" in fs_cp
+        # No rm-script: the wipe replaces incremental cleanup on stage 1.
+        assert not any("os.remove" in command[-1] for command in commands)
 
         # Serial transport stays closed during copy-mode stage.
         assert serial.calls == []
-        # First stage has nothing prior to delete — only the fs cp.
-        assert not any("exec" in call[0] for call in runner.calls)
         # The staged roots are recorded for the next switch to delete.
         assert transport._staged_device_entries == sorted(
             entry.name
@@ -317,6 +321,7 @@ class TestStage:
             mode="copy",
             runner=runner,
             transport_factory=_factory_for(serial),
+            time=_RecordingTime(),
         )
         transport.stage([lib_a], [], harness_dir)
         first_entries = list(transport._staged_device_entries)
@@ -324,22 +329,28 @@ class TestStage:
 
         transport.stage([lib_b], [], harness_dir)
 
-        # Second stage: an mpremote exec rm script naming the first
-        # stage's roots, issued *before* that stage's fs cp.
+        # Second stage: an mpremote exec *rm* script naming the first
+        # stage's roots, issued before that stage's fs cp.  (The first
+        # stage's exec is the mkfs wipe, not a rm — filter on os.remove.)
         commands = [call[0] for call in runner.calls]
-        exec_index = next(
+        rm_index = next(
             index for index, command in enumerate(commands)
-            if "exec" in command
+            if "exec" in command and "os.remove" in command[-1]
         )
         second_fs_cp_index = max(
             index for index, command in enumerate(commands)
             if "cp" in command
         )
-        assert exec_index < second_fs_cp_index
-        rm_script = commands[exec_index][-1]
+        assert rm_index < second_fs_cp_index
+        rm_script = commands[rm_index][-1]
         for name in first_entries:
             assert repr(name) in rm_script
         assert "os.remove" in rm_script and "os.rmdir" in rm_script
+        # Only the first stage wipes; the second uses incremental rm.
+        assert sum(
+            1 for command in commands
+            if "exec" in command and "mkfs" in command[-1]
+        ) == 1
         # New roots recorded; chumicro_a is no longer tracked.
         assert "chumicro_b" in transport._staged_device_entries
         assert "chumicro_a" not in transport._staged_device_entries
@@ -364,11 +375,13 @@ class TestStage:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # First fs cp ok; the rm exec fails; the second fs cp ok.
+        # Stage 1: wipe exec ok, fs cp ok.  Stage 2: rm exec FAILS,
+        # fs cp ok.  The rm failure must not mask the staging result.
         runner = FakeRunner([
-            FakeSubprocessResult(),
-            FakeSubprocessResult(returncode=1, stderr="rm: device busy"),
-            FakeSubprocessResult(),
+            FakeSubprocessResult(),                                    # wipe
+            FakeSubprocessResult(),                                    # cp 1
+            FakeSubprocessResult(returncode=1, stderr="rm: device busy"),  # rm
+            FakeSubprocessResult(),                                    # cp 2
         ])
         serial = FakeSerialTransport(address="/dev/ttyUSB0")
         transport = MicropythonTransport(
@@ -376,6 +389,7 @@ class TestStage:
             mode="copy",
             runner=runner,
             transport_factory=_factory_for(serial),
+            time=_RecordingTime(),
         )
         transport.stage([lib_a], [], harness_dir)
         # No raise despite the rm failure.
@@ -489,6 +503,7 @@ class TestExecute:
         harness_dir.mkdir()
 
         runner = FakeRunner([
+            FakeSubprocessResult(),  # first stage's mkfs wipe
             FakeSubprocessResult(),  # stage's fs cp
         ])
         serial = FakeSerialTransport(
@@ -500,6 +515,7 @@ class TestExecute:
             mode="copy",
             runner=runner,
             transport_factory=_factory_for(serial),
+            time=_RecordingTime(),
         )
         transport.stage([source_dir], [], harness_dir)
         # Serial closed after stage's fs cp.
@@ -1122,11 +1138,14 @@ class TestDeployFiles:
         serial = FakeSerialTransport(address="/dev/ttyUSB0")
         serial.exec_outputs = [(exec_output, b"")]
         runner = runner or FakeRunner()
+        # _RecordingTime so a copy-mode stage()'s first-stage mkfs-wipe
+        # settle is instant rather than a real multi-second sleep.
         transport = MicropythonTransport(
             "/dev/ttyUSB0",
             mode=mode,
             runner=runner,
             transport_factory=_factory_for(serial),
+            time=_RecordingTime(),
         )
         return transport, serial, runner
 
