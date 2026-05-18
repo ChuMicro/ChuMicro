@@ -165,7 +165,6 @@ devices:
         assert device.deploy_mode == "flash"
         # Absent capability ⇒ RAM-capable (back-compatible).
         assert device.supports_ram_mode is True
-        assert device.setup_command is None
         assert device.description == ""
 
 class TestLoadDeviceRegistry:

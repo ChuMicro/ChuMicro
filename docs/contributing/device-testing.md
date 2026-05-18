@@ -96,14 +96,12 @@ devices:
     runtime: circuitpython
     address: /dev/cu.usbmodem101
     description: Desk board running CircuitPython
-    serial_baudrate: 115200
     deploy_mode: ram
 
   - id: office-esp32-mp
     runtime: micropython
     address: /dev/cu.usbserial-0001
     description: Desk board running MicroPython
-    serial_baudrate: 115200
     deploy_mode: flash
 ```
 
@@ -116,10 +114,8 @@ Supported fields today:
 | `address` | yes | Serial port / device address used by the transport |
 | `description` | no | Free-form label for humans |
 | `connection_type` | no | Currently `serial` |
-| `serial_baudrate` | no | Serial baud rate; defaults to `115200` |
 | `deploy_mode` | no | Per-device *preference* override for `ram` or `flash` |
 | `supports_ram_mode` | no | Board *capability* (default `true`). Set `false` only for a board that cannot run RAM mode at all; a requested `ram` deploy then switches to `flash` with a message. Distinct from `deploy_mode`: preference is what you want, capability is what's possible. A board where RAM is merely tight (Pi Pico W's 256 KB) stays `true` — tightness is handled per-library via `requires_flash`, not by disabling the board |
-| `setup_command` | no | Reserved for future per-device setup hooks; currently parsed but not used by the transport layer |
 
 </details>
 

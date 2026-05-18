@@ -5,8 +5,7 @@ zones:
 
 * **user-owned** — workspace-identity stuff the user wrote by hand
   (``id``, ``description``, ``deploy_mode`` preference,
-  ``serial_baudrate``, ``setup_command``).  Never overwritten without
-  ``--force``.
+  ``serial_baudrate``).  Never overwritten without ``--force``.
 * **hardware-once** — written on first probe, then frozen in place
   to avoid clobbering on every routine probe (``hardware.uid``,
   ``hardware.machine``, ``hardware.board_id``,
@@ -69,7 +68,6 @@ USER_OWNED_FIELDS: frozenset[str] = frozenset({
     "description",
     "deploy_mode",
     "serial_baudrate",
-    "setup_command",
 })
 
 #: Fields that are tool-owned and refreshed silently on each probe.

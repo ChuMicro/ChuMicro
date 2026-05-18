@@ -166,7 +166,7 @@ devices:
     address: /dev/x
     description: my board
     connection_type: serial
-    setup_command: null
+    unknown_field: ignored
 """
         yaml_path = _write(tmp_path, content)
         # extra fields are tolerated by Device.from_dict; should not raise.

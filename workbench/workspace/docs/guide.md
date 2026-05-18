@@ -71,7 +71,7 @@ chumicro-workspace discover
 chumicro-workspace add-device back-porch --address /dev/cu.usbmodem1101 --runtime micropython
 
 # `add-device` writes a three-zone entry under devices.yml's `devices:`
-# block: id + description + setup_command (user-owned), address (cached
+# block: id + description (user-owned), address (cached
 # from the probe — silently refreshed later), runtime (user-owned),
 # hardware: { uid, machine, board_id } (hardware-once — re-running
 # add-device with --force prompts before overwriting because the user

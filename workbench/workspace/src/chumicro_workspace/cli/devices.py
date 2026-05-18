@@ -17,6 +17,12 @@ from typing import TYPE_CHECKING
 
 import chumicro_deploy
 from chumicro_deploy import Device
+from chumicro_deploy.config.default import (
+    DeviceConfigError,
+)
+from chumicro_deploy.config.default import (
+    load_devices as load_validated_devices,
+)
 from chumicro_deploy.config.devices_yaml import (
     DeviceAlreadyExistsError,
     DeviceNotFoundError,
@@ -30,7 +36,6 @@ from chumicro_deploy.config.devices_yaml import (
     update_device_firmware_version,
     update_device_hardware,
 )
-from ruamel.yaml import YAML
 from serial.tools import list_ports
 
 from chumicro_workspace.cli._common import (
@@ -105,16 +110,16 @@ def _cmd_devices(args: argparse.Namespace) -> int:
     if not workspace.devices_yaml.is_file():
         print(f"devices: {workspace.devices_yaml} does not exist yet")
         return 0
-    raw = YAML(typ="safe").load(workspace.devices_yaml.read_text()) or {}
-    devices = raw.get("devices", [])
-    if not devices:
+    try:
+        entries = load_validated_devices(workspace.devices_yaml)
+    except DeviceConfigError as exception:
+        print(f"devices: {exception}", file=sys.stderr)
+        return 1
+    if not entries:
         print("devices: no entries")
         return 0
-    for entry in devices:
-        identifier = entry.get("id", "?")
-        runtime = entry.get("runtime", "?")
-        address = entry.get("address", "?")
-        print(f"{identifier}\t{runtime}\t{address}")
+    for entry in entries:
+        print(f"{entry.identifier}\t{entry.runtime}\t{entry.address}")
     return 0
 
 
