@@ -223,7 +223,6 @@ See `plans/workstreams/repl-playground.md` for the larger "side portal" feature 
 **Library shipped 2026-04-25.**  Five slices closed Phase 3a end-to-end: skeleton + `WifiConfig` + state machine + reconnect supervisor + `FakeWifi` (Slice 0); CP `wifi.radio` adapter (Slice 1, Lolin S2 CP + Pi Pico W CP); MP `network.WLAN` adapter on ESP32 with `wlan.config(reconnects=0)` supervisor-off (Slice 2, Lolin S2 MP); MP CYW43 adapter with `wlan.config(pm=0xa11140)` power-save knob (Slice 3, Pi Pico W MP); live-AP acceptance via the gitignored host-driven runner at `.scratch/run_wifi_acceptance.py` (Slice 4, all four boards).  87 host tests at 99 % coverage, full per-substrate functional verification + live-AP connect-drop-reconnect cycle observed on every board.  `_templates/config.toml` shipped per ADR 0036 §5 — first library to ship a workspace-tooling-collectable template.
 
 
-
 Goal: one unified `WifiService` that owns connection and reconnect across CP, MP-ESP32, and MP-Pico-W.  No runtime or firmware-level supervisor competes with the library.
 
 #### Ownership stance
@@ -304,7 +303,6 @@ Docs do not settle these; run on plugged-in boards:
 **Library shipped 2026-04-25.**  Decision 0034 nails down the API + per-backend contracts.  `libraries/kvstore/` ships `KVStore` with mapping-shaped public API + three lifecycle methods (`commit`, `commit_if_changed`, `reload`), four exceptions (`KVStoreError` / `KVStoreFull` / `KVStoreCorrupt` / `KVStoreReadOnly`), four runtime-aware backends (memory, CP NVM with `MAGIC | LEN | CRC32 | MSGPACK` framing, MP NVS single-payload-blob in `chu_kv` namespace, MP LittleFS single `/_chu_kv.msgpack` with tmp+sync+rename atomicity), and `chumicro_kvstore.testing.FakeKVStore` for downstream library tests.  92 host tests at 99 % coverage; 27 functional tests pass on each of the four plugged-in boards (Lolin S2 CP/MP, Pi Pico W CP/MP).
 
 The config-pipeline bullets below remain owned by `chumicro-workspace` (Phase 4a) and don't land a library, so they're tracked here as scope but not as Phase 3b deliverables.
-
 
 
 Decision 0030 splits the old `chumicro-settings` scope into two unrelated concerns: read-only app **config** (shipped with the thing, TOML on host → msgpack on device, transformed at deploy) and mutable **persisted state** (a new, narrower library `chumicro-kvstore`).

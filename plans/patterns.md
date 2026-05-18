@@ -1036,4 +1036,3 @@ When a cross-runtime test file is too large to run on a freshly-reset Pi Pico W 
 - **Slice size is bench-determined per library, not guessed** — the ceiling is library-weight-dependent (requests `_wire` fits 89 tests/file; websockets `_wire` OOMs ~30). Start conservative, ladder down only the slices that OOM. A single test whose *own* allocation exceeds the board (not co-residency) is loud-skipped per the Decision 0072 §3 exception, not split.
 
 Related: Decision 0072, the `chumicro-pytest-device` `--per-file` staging path.
-

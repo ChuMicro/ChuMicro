@@ -1,10 +1,16 @@
-"""Tests for CHU002–CHU005 — newline and whitespace rules."""
+"""Tests for CHU002–CHU005 + CHU018 — newline and whitespace rules."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from chumicro_checks.rules.chu002_chu005 import CHU002, CHU003, CHU004, CHU005
+from chumicro_checks.rules.chu002_chu005 import (
+    CHU002,
+    CHU003,
+    CHU004,
+    CHU005,
+    CHU018,
+)
 
 
 def _stage(repo_root: Path, relative: str, content: str) -> Path:
@@ -16,14 +22,14 @@ def _stage(repo_root: Path, relative: str, content: str) -> Path:
 
 class TestSilentNoOp:
     def test_empty_repo(self, tmp_path: Path) -> None:
-        for rule in (CHU002, CHU003, CHU004, CHU005):
+        for rule in (CHU002, CHU003, CHU004, CHU005, CHU018):
             assert rule.check(tmp_path) == []
 
     def test_files_outside_scope_ignored(self, tmp_path: Path) -> None:
         # libraries/<pkg>/pyproject.toml is OUT of scope — only
         # src/tests/functional_tests/examples are scanned per package.
         _stage(tmp_path, "libraries/foo/pyproject.toml", "# x\n\n")
-        for rule in (CHU002, CHU003, CHU004, CHU005):
+        for rule in (CHU002, CHU003, CHU004, CHU005, CHU018):
             assert rule.check(tmp_path) == []
 
 
@@ -170,6 +176,7 @@ class TestRuleMetadata:
         assert CHU003.code == "CHU003"
         assert CHU004.code == "CHU004"
         assert CHU005.code == "CHU005"
+        assert CHU018.code == "CHU018"
 
     def test_descriptions_distinct(self) -> None:
         descriptions = {
@@ -177,5 +184,48 @@ class TestRuleMetadata:
             CHU003.description,
             CHU004.description,
             CHU005.description,
+            CHU018.description,
         }
-        assert len(descriptions) == 4
+        assert len(descriptions) == 5
+
+
+class TestCHU018:
+    def test_crlf_flagged(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "x = 1\r\ny = 2\r\n")
+        findings = CHU018.check(tmp_path)
+        assert len(findings) == 1
+        assert "CR / CRLF" in findings[0].message
+
+    def test_lone_cr_flagged(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "x = 1\ry = 2\n")
+        findings = CHU018.check(tmp_path)
+        assert len(findings) == 1
+
+    def test_one_finding_per_file_not_per_line(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "a\r\nb\r\nc\r\nd\r\n")
+        assert len(CHU018.check(tmp_path)) == 1
+
+    def test_lf_clean(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "x = 1\ny = 2\n")
+        assert CHU018.check(tmp_path) == []
+
+
+class TestScanScope:
+    """plans/ and docs/ are in scope; gitignored-prone repo root is not."""
+
+    def test_plans_markdown_in_scope(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "plans/next-up.md", "# x\n\n\n\n")
+        assert len(CHU002.check(tmp_path)) == 1
+
+    def test_docs_markdown_in_scope(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "docs/guide.md", "trailing  \nok\n")
+        assert len(CHU004.check(tmp_path)) == 1
+
+    def test_repo_root_loose_file_not_scanned(self, tmp_path: Path) -> None:
+        # Root mixes gitignored user-local files with tracked ones and
+        # the walker reads the filesystem, not git — root stays out of
+        # scope so a per-user devices.yml can't false-positive.
+        _stage(tmp_path, "devices.yml", "bad: 1\n\n\n")
+        _stage(tmp_path, "README.md", "no final newline")
+        for rule in (CHU002, CHU003, CHU004, CHU018):
+            assert rule.check(tmp_path) == []

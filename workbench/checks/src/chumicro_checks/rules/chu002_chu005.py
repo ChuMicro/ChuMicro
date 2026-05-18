@@ -1,10 +1,16 @@
-"""CHU002–CHU005 — newline and whitespace rules.
+"""CHU002–CHU005 + CHU018 — newline and whitespace rules.
 
-Four rules covering the file-shape contract.  Each rule walks the
-same set of text files (any ``.py``, ``.md``, ``.yml``, ``.yaml``,
-``.toml``, ``.txt``, ``.cfg``, ``.ini``, ``.json`` under
-``libraries/``, ``workbench/``, ``support/``, ``scripts/``) and
-emits its specific finding shape.
+The whitespace family (filename keeps the original ``chu002_chu005``
+grouping; CHU018 was added later and shares the same scaffold).  Each
+rule walks the same set of text files (any ``.py``, ``.md``, ``.yml``,
+``.yaml``, ``.toml``, ``.txt``, ``.cfg``, ``.ini``, ``.json`` under
+``libraries/``, ``workbench/``, ``support/``, ``scripts/``,
+``plans/``, ``docs/``) and emits its specific finding shape.
+
+Repo-root loose files are deliberately *not* scanned: the root mixes
+gitignored user-local files (``devices.yml``, ``secrets.toml``) with
+tracked ones, and the walker reads the filesystem, not git — scanning
+root would false-positive on per-user files.
 
 * CHU002 — file does not end with exactly one newline.  Structural;
   no per-line suppression.
@@ -12,6 +18,8 @@ emits its specific finding shape.
   per-line suppression.
 * CHU004 — trailing whitespace on a line.  Suppress with
   ``# noqa: CHU004`` on the line.
+* CHU018 — CR / CRLF line endings; LF only.  Structural; no per-line
+  suppression (a CR is never wanted in this repo's text files).
 * CHU005 — blank line immediately after a block opener (``def``,
   ``class``, ``if``, ``for``, ``while``, ``with``, ``try``, ``else``,
   ``elif``, ``except``, ``finally``).  Python files only.  Suppress
@@ -39,6 +47,7 @@ _CHU002 = "CHU002"
 _CHU003 = "CHU003"
 _CHU004 = "CHU004"
 _CHU005 = "CHU005"
+_CHU018 = "CHU018"
 
 _SCANNED_SUFFIXES: frozenset[str] = frozenset({
     ".py", ".md", ".yml", ".yaml", ".toml",
@@ -57,7 +66,7 @@ _SKIP_DIRS: frozenset[str] = frozenset({
 #: trees, which don't have the per-package ``src/tests/...`` shape
 #: a chumicro library has.
 _SCAN_TOP_LEVELS: tuple[str, ...] = (
-    "scripts",
+    "scripts", "plans", "docs",
     "packages", "projects", "shared", "examples", "tests",
 )
 
@@ -201,6 +210,33 @@ def _check_chu004(filepath: Path, text: str) -> list[Finding]:
     return findings
 
 
+def _check_chu018(filepath: Path, _text: str) -> list[Finding]:
+    """Files must use LF line endings — no CR or CRLF.
+
+    Reads raw bytes: the shared text reader opens in universal-newline
+    mode, which silently translates ``\\r\\n`` to ``\\n`` before any
+    rule sees it — so a CR check has to bypass it.  One finding per
+    file (at the first offending line); a mixed-ending file is one
+    defect, not one per line.
+    """
+    try:
+        data = filepath.read_bytes()
+    except OSError:
+        return []
+    carriage = data.find(b"\r")
+    if carriage == -1:
+        return []
+    line_number = data.count(b"\n", 0, carriage) + 1
+    return [
+        Finding(
+            path=filepath,
+            line=line_number,
+            code=_CHU018,
+            message="CR / CRLF line ending (expected LF)",
+        )
+    ]
+
+
 def _check_chu005(filepath: Path, text: str) -> list[Finding]:
     """No blank line immediately after a Python block opener."""
     if filepath.suffix != ".py":
@@ -252,6 +288,7 @@ _CHECKERS = {
     _CHU003: _check_chu003,
     _CHU004: _check_chu004,
     _CHU005: _check_chu005,
+    _CHU018: _check_chu018,
 }
 
 
@@ -291,4 +328,9 @@ CHU004 = _WhitespaceRule(
 CHU005 = _WhitespaceRule(
     code=_CHU005,
     description="no blank line immediately after a Python block opener",
+)
+
+CHU018 = _WhitespaceRule(
+    code=_CHU018,
+    description="files must use LF line endings (no CR / CRLF)",
 )
