@@ -154,6 +154,13 @@ Three findings were structural decisions, not bugs.  All three resolved:
    Host-side — complete fix: gate publish on CI success or move publish
    after `validate-mip`.
 
+**Items 2–3 re-homed (2026-05-18).**  Both are CI-infrastructure
+defects, not audit-remediation tail, and the CI surface has more wrong
+with it than this audit surfaced.  They are handed off to a future
+dedicated CI workstream rather than carried here — analysis above is
+preserved as the starting brief for that workstream.  This workstream
+no longer tracks them.
+
 ## Phase 2 — Confirmed High correctness defects (embedded-aware) — DONE 2026-05-18 (`42d5bbd1`)
 
 All six items landed in `42d5bbd1` with tests + lockstep VERSION bumps:
@@ -325,7 +332,10 @@ four lints shipped one per commit, CHU014 (command-table parity,
 recurrence, and CHU014's live-repo validation surfaced + fixed a real
 GFM-parsing bug in the bargain.  `workbench/checks` 0.4.1→0.8.0.
 
-**Workstream effectively complete.**  Only Phase 1 items 2–3 (CI-lint
-CHU gap, release-not-gated-on-CI) remain, **deferred by the user until
-CI is re-enabled** — out of scope while CI is disabled.  Phases 0–4 and
-the embedded-cost gate are closed.
+**Workstream COMPLETE 2026-05-18.**  Phases 0–4 and the embedded-cost
+gate are closed.  Phase 1 items 2–3 (CI-lint CHU gap,
+release-not-gated-on-CI) are **re-homed to a future dedicated CI
+workstream** — they are CI-infrastructure defects with more wrong
+around them than this audit surfaced, and can't be validated with CI
+disabled; the analysis in the Phase 1 section is preserved as that
+workstream's starting brief.  Nothing further is tracked here.
