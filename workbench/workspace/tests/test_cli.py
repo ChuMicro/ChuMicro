@@ -5869,3 +5869,49 @@ class TestDeployExampleAdditionalBranches:
         ])
         assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
         assert "RuntimeError: boom" in capsys.readouterr().err
+
+
+class TestResolveDeployLayoutAsyncRun:
+    """`async def run` in app.py is rejected, not silently shimmed.
+
+    The boot shim calls ``run()`` synchronously; an async run would be
+    a coroutine that's never awaited (board boots, does nothing).  The
+    auto-detect must raise an actionable error rather than ship a dead
+    board or imply async is supported.
+    """
+
+    def test_async_run_raises_actionable_layout_error(
+        self, tmp_path: Path,
+    ) -> None:
+        from chumicro_workspace.cli.deploy import (
+            _DeployLayoutError,
+            _resolve_deploy_layout,
+        )
+
+        (tmp_path / "app.py").write_text("async def run():\n    pass\n")
+
+        with pytest.raises(_DeployLayoutError) as excinfo:
+            _resolve_deploy_layout(
+                project_dir=tmp_path,
+                target_entrypoint="code.py",
+                user_passed_boot_shim=False,
+                user_passed_import_graph=False,
+            )
+
+        message = str(excinfo.value)
+        assert "async def run()" in message
+        assert "never awaited" in message
+        assert "chumicro_runner" in message
+
+    def test_sync_run_still_resolves_to_shim(self, tmp_path: Path) -> None:
+        from chumicro_workspace.cli.deploy import _resolve_deploy_layout
+
+        (tmp_path / "app.py").write_text("def run():\n    pass\n")
+
+        layout = _resolve_deploy_layout(
+            project_dir=tmp_path,
+            target_entrypoint="code.py",
+            user_passed_boot_shim=False,
+            user_passed_import_graph=False,
+        )
+        assert layout.boot_shim is True

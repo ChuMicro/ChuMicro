@@ -24,6 +24,7 @@ from chumicro_deploy import (
 from chumicro_deploy.config.default import load_devices_yml
 
 from chumicro_workspace.boot_shim import (
+    project_app_exports_async_run,
     project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
@@ -181,6 +182,26 @@ def _resolve_deploy_layout(
             "board.\n"
             "  Fix: rename main.py → code.py for CircuitPython, or "
             "deploy --runtime micropython.",
+        )
+
+    # app.py defines `async def run` — the boot shim calls run()
+    # synchronously, so an async run evaluates to a coroutine that is
+    # never awaited: the board would boot and do nothing, with no
+    # traceback.  Reject it explicitly rather than ship a dead board,
+    # and steer the user off async entirely — chumicro projects don't
+    # use it anywhere.
+    if project_app_exports_async_run(project_dir):
+        raise _DeployLayoutError(
+            f"project {project_dir.name!r} defines `async def run()` in "
+            "app.py, which chumicro can't run: the boot shim calls "
+            "run() synchronously, so an async run() becomes a coroutine "
+            "that is never awaited — the board boots and does nothing, "
+            "with no error.\n"
+            "  chumicro projects don't use async/await at all.  Make "
+            "run() a plain `def run()` and drive long-running work with "
+            "the tick-based runner pattern: each service exposes "
+            "check(now_ms) / handle(now_ms) and the main loop stays a "
+            "synchronous `while True:` (see chumicro_runner).",
         )
 
     # No runtime-specific entrypoint — try shim mode.
