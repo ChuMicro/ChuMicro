@@ -14,6 +14,7 @@ import pytest
 from chumicro_workspace.boot_shim import (
     SHIM_ENTRYPOINT_SOURCE,
     boot_shim_files,
+    project_app_exports_async_run,
     project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
@@ -34,13 +35,29 @@ class TestProjectAppExportsRun:
         )
         assert project_app_exports_run(tmp_path) is True
 
-    def test_returns_true_when_app_defines_async_run(
-        self, tmp_path: Path,
-    ) -> None:
+    def test_returns_false_when_run_is_async(self, tmp_path: Path) -> None:
+        """An ``async def run`` is not a usable boot-shim entrypoint.
+
+        The shim calls ``run()`` synchronously; an async run would be
+        a coroutine that's never awaited (board boots, does nothing).
+        Detection must not classify it as a runnable sync entrypoint —
+        :func:`project_app_exports_async_run` owns that case so the
+        deploy auto-detect can reject it with an actionable message.
+        """
         (tmp_path / "app.py").write_text(
             "async def run():\n    pass\n",
         )
-        assert project_app_exports_run(tmp_path) is True
+        assert project_app_exports_run(tmp_path) is False
+        assert project_app_exports_async_run(tmp_path) is True
+
+    def test_async_detector_false_for_sync_run(self, tmp_path: Path) -> None:
+        (tmp_path / "app.py").write_text("def run():\n    pass\n")
+        assert project_app_exports_async_run(tmp_path) is False
+
+    def test_async_detector_false_when_app_missing(
+        self, tmp_path: Path,
+    ) -> None:
+        assert project_app_exports_async_run(tmp_path) is False
 
     def test_returns_false_when_app_lacks_run(self, tmp_path: Path) -> None:
         (tmp_path / "app.py").write_text(

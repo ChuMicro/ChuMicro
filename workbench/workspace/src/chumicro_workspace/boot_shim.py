@@ -84,31 +84,56 @@ _DEFAULT_EXCLUDED_DIRS: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 
 
-def project_app_exports_run(project_dir: Path) -> bool:
-    """Return ``True`` when ``project_dir/app.py`` defines a top-level ``run``.
+def _top_level_run_node(project_dir: Path) -> ast.AST | None:
+    """Return the AST node of ``app.py``'s top-level ``run`` def, or ``None``.
 
-    AST-based check — does not import ``app.py``, so a syntax error
-    in the project doesn't crash detection.  Recognizes both
-    ``def run(...)`` and ``async def run(...)``.  Returns ``False``
-    for ``app.py`` missing, syntax errors, or no top-level ``run``.
-
-    Used by :func:`chumicro_workspace.cli._cmd_deploy`'s auto-detect
-    pass: when the project ships ``app.py`` with ``run()`` and no
-    runtime-specific entrypoint (``code.py`` / ``main.py``), boot-
-    shim mode is the right default.
+    AST-based — never imports the project, so a syntax error doesn't
+    crash detection.  ``None`` when ``app.py`` is missing / unreadable
+    / syntax-broken, or has no top-level ``run`` definition.  A ``run``
+    defined inside a class is not top-level and doesn't count.
     """
     app_py = project_dir / "app.py"
     if not app_py.is_file():
-        return False
+        return None
     try:
         tree = ast.parse(app_py.read_text(encoding="utf-8"))
     except (SyntaxError, UnicodeDecodeError):
-        return False
+        return None
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if node.name == "run":
-                return True
-    return False
+                return node
+    return None
+
+
+def project_app_exports_run(project_dir: Path) -> bool:
+    """Return ``True`` when ``app.py`` defines a top-level *synchronous* ``run``.
+
+    Only a plain ``def run(...)`` qualifies.  The synthesized shim
+    calls ``run()`` synchronously (``from app import run; run()``), so
+    an ``async def run`` is *not* a usable boot-shim entrypoint —
+    :func:`project_app_exports_async_run` detects that case and the
+    deploy auto-detect rejects it with an actionable message rather
+    than shipping a board that boots and silently does nothing.
+
+    Used by :func:`chumicro_workspace.cli._cmd_deploy`'s auto-detect
+    pass: when the project ships ``app.py`` with a sync ``run()`` and
+    no runtime-specific entrypoint (``code.py`` / ``main.py``), boot-
+    shim mode is the right default.
+    """
+    return isinstance(_top_level_run_node(project_dir), ast.FunctionDef)
+
+
+def project_app_exports_async_run(project_dir: Path) -> bool:
+    """Return ``True`` when ``app.py``'s top-level ``run`` is ``async def``.
+
+    The boot shim calls ``run()`` synchronously, so an ``async def
+    run`` would evaluate to a coroutine that is created and
+    immediately discarded — the board boots and does nothing, with no
+    traceback.  The deploy auto-detect uses this to surface that as a
+    clear failure instead of letting it through.
+    """
+    return isinstance(_top_level_run_node(project_dir), ast.AsyncFunctionDef)
 
 
 # ---------------------------------------------------------------------------
