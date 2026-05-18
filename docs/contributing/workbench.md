@@ -21,7 +21,7 @@ Workbench packages follow the same per-library conventions as code under `librar
 
 ## Scaffolding
 
-`chumicro-workspace new --workbench <name>` scaffolds a workbench package — same primitive as `new --library` (calls `scaffold_library` with `package_kind="workbench"`), routed to `workbench/<name>/` instead of `libraries/<name>/`.  The mono-repo's `scripts/run.py new-library` shim is library-only today; from inside the mono-repo, invoke `python -m chumicro_workspace new --workbench <name>`.  Track [`plans/next-up.md`](../../plans/next-up.md) for the shim-parity item.
+`python scripts/run.py new-library --workbench <name>` scaffolds a workbench package from inside the mono-repo — same primitive as the library form (calls `scaffold_library` with `package_kind="workbench"`), routed to `workbench/<name>/` instead of `libraries/<name>/`, then editable-installs the package and regenerates IDE configs.  `chumicro-workspace new --workbench <name>` is the equivalent for a workspace project outside the mono-repo.
 
 ## Release lifecycle
 

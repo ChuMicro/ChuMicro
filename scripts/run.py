@@ -474,10 +474,10 @@ def verify_examples(package_dirs: list[Path]) -> int:
     return _verify(package_dirs)
 
 
-def new_library(name: str) -> int:
-    """Scaffold a new device library."""
+def new_library(name: str, *, workbench: bool = False) -> int:
+    """Scaffold a new device library (or host-only workbench tool)."""
     from new_library_scaffold import new_library as _new_library
-    return _new_library(name)
+    return _new_library(name, workbench=workbench)
 
 
 def docs_deploy(channel: str, libraries: list[str] | None = None) -> int:
@@ -3152,6 +3152,12 @@ def _build_parser() -> argparse.ArgumentParser:
     # new-library
     new_library_parser = subparsers.add_parser("new-library", help="scaffold a new library")
     new_library_parser.add_argument("name", help="library name (e.g. gpio)")
+    new_library_parser.add_argument(
+        "--workbench",
+        action="store_true",
+        help="scaffold a host-only workbench tool under workbench/ "
+        "instead of a device library under libraries/",
+    )
 
     return parser
 
@@ -3243,7 +3249,7 @@ def main(argv: list[str]) -> int:
     # --- tasks with specific arguments ---
 
     if args.task == "new-library":
-        return new_library(args.name)
+        return new_library(args.name, workbench=args.workbench)
 
     if args.task == "test-scripts":
         return test_scripts(exit_first=args.exit_first, verbose=args.verbose)

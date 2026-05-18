@@ -201,7 +201,7 @@ The mono-repo itself has workspace shape (`workspace.yml` + `devices.yml` at roo
 | `validate-mip` | Validate `mip install` against a bundle repo or local staging |
 | `check-version` / `check-api` / `check-dep-graph` | Release-gate checks |
 | `add-device` | Register a board (thin shim around `chumicro-workspace add-device`) |
-| `new-library` | Scaffold a new device library + regenerate IDE configs |
+| `new-library` | Scaffold a new device library (`--workbench` for a host-only tool) + regenerate IDE configs |
 | `sync-ide` | Regenerate IDE configs |
 
 `--help` lists every flag. Functional-test flag semantics: [docs/contributing/device-testing.md](docs/contributing/device-testing.md).
@@ -223,7 +223,7 @@ Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/
 | Task | Where |
 |------|-------|
 | New device library | `python scripts/run.py new-library <name>` |
-| New host-only tool | `workbench/<name>/` — hand-scaffold; see [docs/contributing/workbench.md](docs/contributing/workbench.md) |
+| New host-only tool | `python scripts/run.py new-library --workbench <name>`; see [docs/contributing/workbench.md](docs/contributing/workbench.md) |
 | Shared infra (internal) | `support/` |
 | Build / CI tooling | `scripts/` |
 | Design decision | `plans/decisions/NNNN-<slug>.md` (use [`new-decision`](.github/skills/new-decision/SKILL.md) skill) |
