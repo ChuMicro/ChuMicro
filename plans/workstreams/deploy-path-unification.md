@@ -191,20 +191,51 @@ The convergence deltas (the actual Phase 2 work):
    _chu_kv.msgpack}`.** `boot_out.txt`+`boot.py` already excluded
    (keep). **Add `_chu_kv.msgpack`** — currently *not* preserved (MP
    non-NVS kvstore data is wiped on a clean deploy: a real gap).
-   **Evict `settings.toml` from both protection sites** (the
-   clean-exclude tuple *and* `_list_scope_on_drive`'s out-of-scope
-   omission) — 0077's deliberate, contentious call (board-resident
-   `settings.toml` = competing wifi authority, Decision 0057). This
-   *reverses* a deliberate `example-sweep-stability` decision; it is
-   the highest-friction delta and gated on user confirmation before
-   code. `runtime_config.msgpack` is **payload, not keep-set** (re-staged
+   **Evict `settings.toml`** — 0077's deliberate call (board-resident
+   `settings.toml` = competing wifi authority, Decision 0057).
+   *Resolved with the user 2026-05-18: evict + a one-time loud warning*
+   — when a clean deploy finds a pre-existing board `settings.toml`,
+   print a prominent one-time notice naming the file and pointing at
+   host-side `secrets.toml` before removing it (softer migration than a
+   silent wipe; reverses the deliberate `example-sweep-stability`
+   keep).
+   **Why `settings.toml` is protected in *two* places — it is the
+   disease, not two features.** Site A: the clean-exclude tuple on the
+   `clean=True` *wipe-then-restage* path (CP `rsync --exclude`, MP
+   `_clean_device_lib` survive-set). Site B: `_list_scope_on_drive`'s
+   out-of-scope omission on the `deploy_diff` *reconcile* path (a file
+   not "in scope" is never a stale-deletion candidate). Two staging
+   paths (`clean` wipe vs `diff` reconcile) each grew an independent
+   notion of "what survives," encoded differently and free to drift
+   (Site A protects `{settings.toml, boot.py, boot_out.txt}`; Site B's
+   scope is `{code.py, main.py, active.py, runtime_config.msgpack,
+   /lib/**}` so `boot.py`/`boot_out.txt` are protected only by *being
+   unscoped*, for a different reason than Site A's explicit exclude).
+   This is exactly the meta-finding. Phase 2 collapses both into **one
+   keep-set constant** consulted by the one unified path — the
+   convergence *is* the answer to "why two sites." `runtime_config.msgpack`
+   is **payload, not keep-set** (re-staged
    every deploy via `WithRuntimeConfig`; correctly absent from 0077's
    set — noted so a reader doesn't read it as a missing entry).
 3. **Single source-selection owner** (Phase-1 repl root-cause seam).
-   `repl`/example must route through `deploy`'s layout resolution +
-   source, not own a hardcoded `project_boot_source`. This is the
-   load-bearing seam — the regression proved a second source policy is
-   the disease.
+   **DONE 2026-05-18 (Commit 1) — done by *elimination*, the stronger
+   form.** A user question ("why does repl deploy at all?") reframed
+   the fix: rather than make `repl` *share* `deploy`'s source policy
+   (dedupe), `repl <project>`'s deploy path was *retired entirely* and
+   the deploy-then-watch convenience moved onto the one deploy path as
+   `deploy <project> --tail [SECONDS]`. `repl` now owns only
+   interactive / standalone-tail and never stages code. The shared
+   `resolve_project_deploy_source` owner (extracted in
+   `cli/deploy.py`, used by `_cmd_deploy`) is the single source policy;
+   no command owns a second. Bench-verified Pico W CP: `repl
+   hello_world` → clean argparse rejection (was board-dead);
+   `deploy hello_world --tail` → deploys through the one path (ships
+   `chumicro_timing`) + tails, board healthy. Docs (workspace README
+   command table + quickstart + dep notes) updated lockstep; the
+   second deploy orchestration in `_cmd_repl` is deleted, not
+   deduped — the regression class is now structurally impossible.
+   CLI surface change (`repl <project>` retired) is intentional and
+   user-approved.
 4. **Empty-dir reaping** (Phase-1 repl root-cause seam). CP
    `_list_scope_on_drive`+`delete_files` deletes files only, leaving
    `/lib/<pkg>/` husks (stale `import <pkg>` fails mid-package). MP's
@@ -220,6 +251,18 @@ The convergence deltas (the actual Phase 2 work):
    read-before-mkfs/restore or scoped delete (the existing
    `_clean_device_lib` scoped `rm -r :/lib` already is the scoped-delete
    shape — extend its survive-set, don't switch to mkfs).
+
+*Sequencing (user-decided 2026-05-18): seams first, then convergence.*
+**Commit 1a — DONE 2026-05-18:** delta 3 by elimination
+(`repl <project>` retired → `deploy --tail`); bench-verified Pico W
+CP. **Commit 1b — next:** delta 4 (empty-dir reaping), the remaining
+seam. **Commit 2** = deltas
+1+2+5+6 (default-flip, keep-set convergence incl. `settings.toml`
+evict-with-warning + `_chu_kv.msgpack` add + the two-site collapse,
+entrypoint-as-payload, MP mechanics) — the every-deploy-visible policy
+change; promotes 0077 `proposed`→`accepted` and triggers the deferred
+0059 §1 in-place edit. Commit 2 is gated on Commit 1 landed +
+bench-clean.
 
 Constraints Phase 2 must honor (cross-workstream, verified):
 

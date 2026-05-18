@@ -45,7 +45,8 @@ python run.py bootstrap --port /dev/cu.usbmodem1101 --device-id back-porch
 # Then iterate:
 python run.py new my_project                          # scaffold from projects/_template/
 python run.py deploy my_project                       # ship + run on the active device
-python run.py repl my_project --tail 30               # deploy + tail for 30 s
+python run.py deploy my_project --tail 30             # ship + run, then tail for 30 s
+python run.py repl                                    # interactive REPL on the active device
 ```
 
 ### How config flows from your edits to the device
@@ -88,7 +89,7 @@ workspace.yml ──────────────────► projects
 | **Authoring** | `new <path>` (project), `new --library <name>` (chumicro-style library) |
 | **Config** | `dump-config <project>`, `config-validate <project>` |
 | **Devices** | `add-device`, `probe`, `discover`, `devices`, `remove-device`, `reset-device`, `rename --device` |
-| **Deploy / run** | `deploy <project>`, `deploy-example`, `demo`, `repl [<project>] [--tail SECONDS]`, `projects [--flat]` |
+| **Deploy / run** | `deploy <project> [--tail SECONDS]`, `deploy-example`, `demo`, `repl [--tail SECONDS]`, `projects [--flat]` |
 | **Libraries** | `library list\|add\|update\|remove\|forget\|switch-channel`, `install-libraries <project>` |
 | **Health** | `status`, `doctor` (also runs as a fast pre-deploy gate; `deploy --skip-health-check` opts out) |
 | **Quality** | `test`, `lint`, `preflight` (chains lint + test; respects `workspace.yml`'s `quality:` block) |
@@ -124,7 +125,7 @@ When the project ships its own `code.py` / `main.py`, plain mode kicks in and de
 
 ## Where this fits
 
-Depends on [`chumicro-deploy`](../deploy/) (transport) and [`chumicro-repl`](../repl/) (lazily loaded for `repl <project>` and post-deploy `--tail`).  Top-level umbrella CLI — most users reach for `chumicro-workspace`, not the lower-level tools directly.  The on-device side is [`chumicro-config`](../../libraries/config/), which reads the msgpack this package writes.
+Depends on [`chumicro-deploy`](../deploy/) (transport) and [`chumicro-repl`](../repl/) (lazily loaded for `repl` tail/interactive mode and `deploy --tail`).  Top-level umbrella CLI — most users reach for `chumicro-workspace`, not the lower-level tools directly.  The on-device side is [`chumicro-config`](../../libraries/config/), which reads the msgpack this package writes.
 
 ## Public Python API
 
@@ -172,7 +173,7 @@ Plus `chumicro_workspace.workspace.WorkspaceLayout`, `chumicro_workspace.health.
 | Workbench tool | Why you'd use it alongside |
 |---|---|
 | [`chumicro-deploy`](../deploy/) | Lower-level transport + flashing.  Workspace composes on top |
-| [`chumicro-repl`](../repl/) | Interactive + tail-after-deploy serial REPL |
+| [`chumicro-repl`](../repl/) | Interactive + tail serial REPL |
 | [`chumicro-pytest-device`](../pytest-device/) | Run tests on real boards via pytest |
 
 ## Examples
