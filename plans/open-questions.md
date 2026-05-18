@@ -674,3 +674,25 @@ failure (one board un-probable) not aborting the rest, and keeping the
 write atomic across the batch (one `dump_devices`, not N).
 
 Related: Decision 0027.
+
+### `update` is clone-and-clobber, not `git fetch` + merge
+
+**Surfaced 2026-05-18** during the deploy-path-unification research.
+`chumicro-workspace update` re-flows tool-owned files by cloning the
+template upstream into a tmp dir and overwriting — there is no 3-way
+merge, because the workspace's git lineage is severed from the template
+by design (and creation is now clone-only, Decision 0075). A user's
+sanctioned local edit to a tool-owned file is silently clobbered
+rather than surfaced as a conflict.
+
+**Open:** is clone-clobber the right model, or should the template be
+tracked (remote/branch/subtree) so `update` is a scoped `git fetch` +
+merge (real 3-way, version-aware)? Trade-off: clobber is predictable,
+beginner-safe, and *guarantees* critical tool-file fixes propagate
+(the `run.py` bootstrap fix relied on exactly this); merge preserves
+local customization but grafts template history and asks beginners to
+resolve conflicts. Lower priority than deploy-path-unification
+Phases 1–2.
+
+Related: Decision 0075, Decision 0038 §3, workstream
+`deploy-path-unification`.
