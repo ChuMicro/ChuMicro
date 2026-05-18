@@ -13,6 +13,7 @@ from chumicro_deploy.config.devices_yaml import (
     find_device,
     list_device_ids,
     load_devices,
+    remove_device,
     rename_device,
     set_runtime_default,
     update_device_address,
@@ -455,6 +456,70 @@ class TestRenameDevice:
         add_device(data, device_id="beta", runtime="circuitpython", address="/b")
         with pytest.raises(DeviceAlreadyExistsError):
             rename_device(data, "alpha", "beta")
+
+
+# ---------------------------------------------------------------------------
+# remove_device
+# ---------------------------------------------------------------------------
+
+
+class TestRemoveDevice:
+    def test_deletes_entry_and_returns_it(self, tmp_path: Path) -> None:
+        data = load_devices(tmp_path / "x.yml")
+        add_device(data, device_id="alpha", runtime="micropython", address="/a")
+        add_device(data, device_id="beta", runtime="circuitpython", address="/b")
+        removed = remove_device(data, "alpha")
+        assert removed["id"] == "alpha"
+        assert find_device(data, "alpha") is None
+        assert list_device_ids(data) == ["beta"]
+
+    def test_nulls_matching_default_only(self, tmp_path: Path) -> None:
+        data = load_devices(tmp_path / "x.yml")
+        add_device(data, device_id="alpha", runtime="micropython", address="/a")
+        add_device(data, device_id="beta", runtime="circuitpython", address="/b")
+        # defaults: micropython=alpha, circuitpython=beta.
+        remove_device(data, "alpha")
+        assert data["defaults"]["micropython"] is None
+        assert data["defaults"]["circuitpython"] == "beta"
+
+    def test_missing_device_raises(self, tmp_path: Path) -> None:
+        data = load_devices(tmp_path / "x.yml")
+        with pytest.raises(DeviceNotFoundError):
+            remove_device(data, "ghost")
+
+    def test_removing_last_entry_leaves_empty_list(self, tmp_path: Path) -> None:
+        data = load_devices(tmp_path / "x.yml")
+        add_device(data, device_id="solo", runtime="micropython", address="/a")
+        remove_device(data, "solo")
+        assert list_device_ids(data) == []
+
+    def test_round_trip_drops_middle_keeps_comments(
+        self, tmp_path: Path,
+    ) -> None:
+        path = tmp_path / "devices.yml"
+        path.write_text(
+            "# Workspace devices file.\n"
+            "defaults:\n"
+            "  micropython: two\n"
+            "devices:\n"
+            "  - id: one\n"
+            "    runtime: micropython\n"
+            "    address: /a\n"
+            "  - id: two\n"
+            "    runtime: micropython\n"
+            "    address: /b\n"
+            "  - id: three\n"
+            "    runtime: micropython\n"
+            "    address: /c\n"
+        )
+        data = load_devices(path)
+        remove_device(data, "two")
+        dump_devices(data, path)
+        reloaded = load_devices(path)
+        assert list_device_ids(reloaded) == ["one", "three"]
+        # Default referenced the removed id — must be nulled, not dangling.
+        assert reloaded["defaults"]["micropython"] is None
+        assert "# Workspace devices file." in path.read_text()
 
 
 # ---------------------------------------------------------------------------

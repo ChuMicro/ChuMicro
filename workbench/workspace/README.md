@@ -87,7 +87,7 @@ workspace.yml ──────────────────► projects
 | **Bootstrap / setup** | `setup`, `update`, `bootstrap` (workspaces are *created* by cloning the template repo, not a command) |
 | **Authoring** | `new <path>` (project), `new --library <name>` (chumicro-style library) |
 | **Config** | `dump-config <project>`, `config-validate <project>` |
-| **Devices** | `add-device`, `probe`, `discover`, `devices`, `rename --device` |
+| **Devices** | `add-device`, `probe`, `discover`, `devices`, `remove-device`, `reset-device`, `rename --device` |
 | **Deploy / run** | `deploy <project>`, `deploy-example`, `demo`, `repl [<project>] [--tail SECONDS]`, `projects [--flat]` |
 | **Libraries** | `library list\|add\|update\|remove\|forget\|switch-channel`, `install-libraries <project>` |
 | **Health** | `status`, `doctor` (also runs as a fast pre-deploy gate; `deploy --skip-health-check` opts out) |
