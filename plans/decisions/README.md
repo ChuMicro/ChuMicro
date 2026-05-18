@@ -39,6 +39,14 @@ What this means in practice:
 
 The four-status enum exists precisely so editors don't reach for `revised` as a hedge.  An ADR is either in force (`accepted`), replaced (`superseded`), draft (`proposed`), or set aside (`deferred`).  Edits to the body do not change which of those four it is.
 
+## State the principle, not the mechanism
+
+When an ADR encodes a constraint someone asked for, the decision sentence must state the **invariant**, not the implementation that prompted it.  A rule written as a mechanism-exclusion has a hole shaped like every *other* mechanism that violates the same intent — and a later contributor, reading only the written rule, builds straight through it.
+
+The worked cautionary case: the bootstrap constraint was *"no CLI command may materialize a workspace on disk — the user clones the template repo."*  Decision 0038 recorded it as "clone, **not pip-installed scaffolder**" — the mechanism, not the principle — and its §3 explicitly rejected the stricter original ask ("retire `init`/`update`, document only the clone recipe") for convenience.  A clone-based `init` CLI then shipped: it passed the written rule (not pip) and did exactly what the spoken rule forbade (a CLI that creates the workspace).  It was removed weeks later, when intent was finally re-read against the ADR.
+
+Practical guard: find the sentence that states the rule.  If it names a technology or implementation rather than the invariant, restate it as the invariant.  Treat any "**Rejected:** [the stricter thing actually asked for], because [convenience]" bullet as the narrowing happening in real time — that is the line to challenge before the ADR lands.  This drift class is judgement-bound prose; no lint can catch it (see [Decision 0074](0074-drift-mechanization-as-project-policy.md)), so this rule plus ADR review are the only guard.
+
 ## What does NOT belong in a decision record
 
 ADRs capture *decision and reasoning*.  They are not living status dashboards.  When you're tempted to append any of the following to an existing ADR, route the content here instead:
