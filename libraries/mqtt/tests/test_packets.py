@@ -1,5 +1,6 @@
 """Tests for the wire-format primitives."""
 
+from chumicro_mqtt import MQTTProtocolError
 from chumicro_mqtt._wire import (
     decode_varlen,
     encode_string,
@@ -55,6 +56,12 @@ class TestDecodeVarlen:
         decoded, consumed = decode_varlen(memoryview(b"\xff\x7f\x05"), 0)
         assert decoded == 16_383
         assert consumed == 2
+
+    def test_varlen_past_4_bytes_raises_protocol_error(self) -> None:
+        # All 4 bytes set the continuation bit — malformed, not
+        # "incomplete".  Must raise, not return (0, 0) and stall.
+        with raises(MQTTProtocolError):
+            decode_varlen(memoryview(b"\x80\x80\x80\x80"), 0)
 
     def test_returns_zero_zero_when_offset_past_end(self) -> None:
         decoded, consumed = decode_varlen(memoryview(b"\x05"), 1)

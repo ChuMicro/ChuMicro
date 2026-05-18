@@ -121,6 +121,18 @@ class TestRequestParser:
         )
         assert parser.state == RequestParseState.ERROR
 
+    def test_transfer_encoding_rejected(self):
+        # Chunked request bodies are unsupported; framing as zero-length
+        # would let a smuggled body ride into the next request → 400.
+        parser = RequestParser()
+        parser.feed(
+            b"POST / HTTP/1.1\r\n"
+            b"Transfer-Encoding: chunked\r\n\r\n"
+            b"5\r\nhello\r\n0\r\n\r\n",
+        )
+        assert parser.state == RequestParseState.ERROR
+        assert isinstance(parser.error, ServerProtocolError)
+
     def test_oversized_content_length_raises_oversized(self):
         parser = RequestParser(max_body_bytes=10)
         parser.feed(

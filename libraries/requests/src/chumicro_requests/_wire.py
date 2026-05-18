@@ -403,6 +403,12 @@ class CaseInsensitiveDict:
 # ---------------------------------------------------------------------------
 
 
+def _reject_control_chars(label: str, value: str) -> None:
+    """Raise if *value* holds CR, LF, or NUL — HTTP request-splitting guards."""
+    if "\r" in value or "\n" in value or "\x00" in value:
+        raise HttpURLError(f"{label} contains a control character")
+
+
 def encode_request(
     method: str,
     host: str,
@@ -453,8 +459,15 @@ def encode_request(
         for name, value in iterable:
             merged[name] = value
 
+    # CR / LF / NUL in any request-line or header component would let a
+    # caller-controlled value (path, header value) splice extra headers
+    # or a second request onto the wire.  Reject before encoding.
+    _reject_control_chars("method", method)
+    _reject_control_chars("path", path)
     parts = [f"{method} {path} HTTP/1.1\r\n".encode("ascii")]
     for name, value in merged.items():
+        _reject_control_chars("header name", str(name))
+        _reject_control_chars("header value", str(value))
         parts.append(f"{name}: {value}\r\n".encode("ascii"))
     parts.append(CRLF)
     if body is not None:

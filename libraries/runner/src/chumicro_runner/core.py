@@ -94,6 +94,7 @@ class Runner:
     def __init__(self, ticks: object | None = None) -> None:
         self._entries = []
         self._pending = []
+        self._ticking = False
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
 
     def add(self, task: object | None = None,
@@ -191,39 +192,50 @@ class Runner:
         Returns:
             The tick timestamp used this cycle.
         """
-        ticks = self._ticks
-        now_ms = ticks.ticks_ms()
-        ticks_diff = ticks.ticks_diff
-        ticks_add = ticks.ticks_add
-        pending = self._pending
+        # Re-entrancy guard: a handler calling tick() on this runner
+        # would corrupt the shared _pending list mid-iteration. Reject
+        # it rather than queue deferred ops (no per-tick allocation).
+        if self._ticking:
+            raise RuntimeError(
+                "Runner.tick() is not re-entrant; a handler must not call tick()",
+            )
+        self._ticking = True
+        try:
+            ticks = self._ticks
+            now_ms = ticks.ticks_ms()
+            ticks_diff = ticks.ticks_diff
+            ticks_add = ticks.ticks_add
+            pending = self._pending
 
-        for entry in self._entries:
-            # Time gate (period or start delay).
-            if entry.next_due_ms is not None:
-                if ticks_diff(now_ms, entry.next_due_ms) < 0:
-                    continue
-                # Advance: periodic → next period; one-shot → clear.
-                if entry.period_ms is not None:
-                    entry.next_due_ms = ticks_add(now_ms, entry.period_ms)
+            for entry in self._entries:
+                # Time gate (period or start delay).
+                if entry.next_due_ms is not None:
+                    if ticks_diff(now_ms, entry.next_due_ms) < 0:
+                        continue
+                    # Advance: periodic → next period; one-shot → clear.
+                    if entry.period_ms is not None:
+                        entry.next_due_ms = ticks_add(now_ms, entry.period_ms)
+                    else:
+                        entry.next_due_ms = None
+
+                # Check gate.
+                if entry.check_function is not None:
+                    if entry.check_function(now_ms):
+                        pending.append(entry)
                 else:
-                    entry.next_due_ms = None
-
-            # Check gate.
-            if entry.check_function is not None:
-                if entry.check_function(now_ms):
                     pending.append(entry)
-            else:
-                pending.append(entry)
 
-        for entry in pending:
-            entry.handler_function(now_ms)
-            if entry.run_count is not None:
-                entry.run_count -= 1
-                if entry.run_count <= 0:
-                    self._remove(entry)
-        pending.clear()
+            for entry in pending:
+                entry.handler_function(now_ms)
+                if entry.run_count is not None:
+                    entry.run_count -= 1
+                    if entry.run_count <= 0:
+                        self._remove(entry)
+            pending.clear()
 
-        return now_ms
+            return now_ms
+        finally:
+            self._ticking = False
 
     def _initial_next_due_ms(self, start_after_ms: int | None,
                              period_ms: int | None) -> int | None:

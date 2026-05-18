@@ -114,9 +114,11 @@ def encode_varlen(value):
 def decode_varlen(buffer, start_index):
     """Decode an MQTT variable-length integer from *buffer*.
 
-    Returns ``(value, bytes_consumed)``.  Returns ``(0, 0)`` when the
-    buffer doesn't yet contain a complete varlen at *start_index* —
-    the caller should pull more bytes and retry.
+    Returns ``(value, bytes_consumed)``.  Returns ``(0, 0)`` only when
+    the buffer doesn't yet contain a complete varlen at *start_index*
+    (incomplete — pull more bytes and retry).  A varlen still
+    continuing past 4 bytes is malformed, not incomplete, so it raises
+    :class:`MQTTProtocolError` rather than masquerading as "need more".
     """
     value = 0
     shift = 0
@@ -129,7 +131,7 @@ def decode_varlen(buffer, start_index):
         shift += 7
         if (digit & 0x80) == 0:
             return value, consumed + 1
-    return 0, 0
+    raise MQTTProtocolError("varlen exceeds 4 bytes (malformed)")
 
 
 def encode_string(value):
@@ -649,6 +651,11 @@ class PacketDecoder:
         # qos bits are bits 1-2 of the fixed-header byte; retain is bit 0.
         qos = (fixed_byte >> 1) & 0x03
         retain = bool(fixed_byte & 0x01)
+        # A PUBLISH shorter than its 2-byte topic-length prefix is
+        # malformed; without this the struct.unpack below raises a raw
+        # struct/ValueError the caller doesn't classify as protocol.
+        if body_end - body_start < 2:
+            raise MQTTProtocolError("PUBLISH missing 2-byte topic-length prefix")
         # ``struct.unpack`` accepts memoryview directly — no ``bytes()``
         # wrap needed, which would otherwise copy 2 bytes per integer
         # field (4-6 wasted allocs per PUBLISH).

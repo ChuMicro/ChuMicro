@@ -279,6 +279,22 @@ class TestEncodeRequest:
         assert b"Content-Length: 5\r\n" in request_bytes
         assert request_bytes.endswith(b"\r\nhello")
 
+    def test_crlf_in_path_rejected(self):
+        with raises(HttpURLError, match="control character"):
+            encode_request("GET", "h", "/x\r\nX-Evil: 1", headers=None)
+
+    def test_newline_in_method_rejected(self):
+        with raises(HttpURLError, match="control character"):
+            encode_request("GE\nT", "h", "/")
+
+    def test_crlf_in_header_value_rejected(self):
+        with raises(HttpURLError, match="control character"):
+            encode_request("GET", "h", "/", headers={"X-A": "v\r\nX-Evil: 1"})
+
+    def test_nul_in_header_name_rejected(self):
+        with raises(HttpURLError, match="control character"):
+            encode_request("GET", "h", "/", headers={"X-\x00": "v"})
+
 
 # ---------------------------------------------------------------------------
 # Response parser — streaming state machine
