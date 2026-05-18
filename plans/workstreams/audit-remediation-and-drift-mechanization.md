@@ -261,8 +261,22 @@ the `# noqa: CHU0NN` + one-line-why escape valve.
   the established correct pattern passes.  Conservative CP-only / MP-
   only module sets.  0 findings on main (validates the examples are
   correctly guarded).  `workbench/checks` 0.6.0→0.7.0.
-- ⏳ coverage-claim honesty (CHU017 — Decision 0074 flags it
-  judgement-adjacent; reassess tractability at that point)
+- ✅ **CHU017** coverage-claim honesty — DONE 2026-05-18.
+  Tractability was assessed before building (Decision 0074 flagged it
+  judgement-adjacent) and found **tractable, not deferred**: the
+  *prohibited* set is closed (affirmative codebase-extent scope
+  phrases — `shipped code`, `the codebase`, `all code`, `every line`,
+  `fully covered`, …) and the false-positive exemption is mechanical
+  (a sentence carrying a negator or an honest-scope qualifier —
+  `not`, `CPython-reachable`, `post-exclusion`, `device-execution`,
+  `reachable`, `aggregate`, the meta "must carry this scope" framing
+  — is the corrected/meta statement, not drift).  Validated against
+  the live corrected text: the AGENTS.md and ADR-0025 sentences that
+  *state* the honest contract are correctly **not** flagged; a
+  synthetic whole-codebase overclaim **is**.  Scope:
+  `AGENTS.md` + `docs/` + `plans/decisions/` (where the contract and
+  its claims live; the churny next-up/workstreams ledger excluded).
+  0 findings on main.  `workbench/checks` 0.7.0→0.8.0.
 
 ## Explicitly NOT in this workstream
 
@@ -301,7 +315,17 @@ late; the ship commit predated this Status update).  **Phase 3 DONE
 requests future-work docstring, NTP recvfrom_into, workspace stub-tier
 docstring + README, ADR 0051 async paragraph); the sixth ("README
 crashes on MP") was re-verified as a **false audit finding** (base-class
-`radio = None` predated the audit) and recorded, not actioned.  Next:
-**Phase 4** — mechanize the drift class as CHU lints (the load-bearing
-phase per Decision 0074); coverage-honesty lint waits on nothing further
-(Phase 0 item 2 resolved).
+`radio = None` predated the audit) and recorded, not actioned.
+**Phase 4 DONE 2026-05-18** — the load-bearing phase per Decision 0074:
+four lints shipped one per commit, CHU014 (command-table parity,
+`487d2216`) / CHU015 (docstring capability vs shipped symbols,
+`d7c75139`) / CHU016 (example imports per declared runtime, `d5ec8487`)
+/ CHU017 (coverage-claim honesty, this commit).  Each reports 0 on main
+— every defect Phase 3 hand-fixed is now mechanically guarded against
+recurrence, and CHU014's live-repo validation surfaced + fixed a real
+GFM-parsing bug in the bargain.  `workbench/checks` 0.4.1→0.8.0.
+
+**Workstream effectively complete.**  Only Phase 1 items 2–3 (CI-lint
+CHU gap, release-not-gated-on-CI) remain, **deferred by the user until
+CI is re-enabled** — out of scope while CI is disabled.  Phases 0–4 and
+the embedded-cost gate are closed.

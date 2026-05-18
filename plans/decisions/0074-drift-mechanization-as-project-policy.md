@@ -49,17 +49,19 @@ human override for the legitimately-exceptional case.
 
 ## Consequences
 
-- Charters **Phase 4** of the
-  `audit-remediation-and-drift-mechanization` workstream as the first
-  implementation: new `chumicro-checks` rules for
-  doc-command-vs-registered-subcommand parity, module-docstring
-  capability claims vs shipped symbols, example-script imports
-  resolving on every declared runtime, and coverage-claim honesty (the
-  last gated on Decision 0025's corrected "what 94 % covers" contract).
+- Implemented as **Phase 4** of the
+  `audit-remediation-and-drift-mechanization` workstream: four
+  `chumicro-checks` rules now ship — `CHU014`
+  (doc-command-vs-registered-subcommand parity), `CHU015`
+  (module-docstring capability claims vs shipped symbols), `CHU016`
+  (example-script imports resolving on every declared runtime), and
+  `CHU017` (coverage-claim honesty, against Decision 0025's corrected
+  "what 94 % covers" contract).  Each reports zero violations on the
+  current tree — the Phase 3 hand-fixes are now mechanically guarded.
 - The AGENTS.md "docs in lockstep" prose rule remains, but is now a
   *backstop for the un-mechanizable remainder*, not the primary guard
-  for any class a lint can own. As Phase 4 lands checks, the
-  corresponding "rely on diligence" framing is removed from the rule.
+  for any class a lint can own — these four classes are no longer
+  diligence-dependent.
 - A new drifted-and-shipped contract is, by this policy, also a
   Phase-4-class candidate — "fix the doc" is an incomplete remediation
   if the class is lintable and recurs.
