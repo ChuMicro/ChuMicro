@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-04-01`
 Related: Decision 0001 (mono-workspace layout), Decision 0025 (coverage thresholds)
-Supersedes: [Decision 0008](0008-importlib-test-isolation.md)
+Supersedes: [Decision 0008](0008-SUPERSEDED-BY-0009-importlib-test-isolation.md)
 
 ## Context
 

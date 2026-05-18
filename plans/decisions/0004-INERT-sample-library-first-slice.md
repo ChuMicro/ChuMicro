@@ -3,6 +3,7 @@
 Status: `accepted`
 Date: `2026-03-29`
 Related: Decision 0003 (test boundaries), Decision 0007 (cross-platform deps)
+Archived: inert — the first-publishable-library bootstrap choice; the timing seam it picked shipped long ago and every seam it deferred (networking, storage) is built. Historical record only; see [Decision 0076](0076-archive-dead-decisions-in-filename.md).
 
 ## Context
 

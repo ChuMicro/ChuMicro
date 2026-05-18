@@ -46,7 +46,10 @@ grep -l "cross-library\|cross-lib\|shared contract" plans/decisions/
 ls plans/decisions/ | grep -E '^[0-9]' | tail -1
 ```
 
-Take the last number and add 1. Pad to 4 digits.
+Take the last number and add 1. Pad to 4 digits.  Dead-record
+filename markers (Decision 0076) go *after* the `NNNN-` prefix, so
+this recipe stays correct even when superseded / inert ADRs have been
+renamed — the highest number still sorts last.
 
 ### 3. Create the file
 
@@ -105,6 +108,8 @@ If the decision affects rules in `AGENTS.md`, update the relevant section there.
 - **Memory & performance** — new embedded code patterns
 
 If the new decision extends, narrows, or partially supersedes an existing one, **edit the affected paragraphs of the older ADR in place** so a cold reader gets the current rule, and cross-link the new decision inline (e.g. `... — see [Decision NNNN](NNNN-slug.md)`).  Do not add a `> **Note:** See also Decision NNNN ...` blockquote at the head of the older ADR — that pattern is forbidden by the README.  If the change is too large to absorb without distorting the original reasoning, mark the old ADR `superseded` instead and write a fresh one.
+
+When you mark an older ADR `superseded` — or it goes inert (a one-time / bootstrap decision whose every consequence has shipped) — apply the dead-record filename marker from [Decision 0076](../../../plans/decisions/0076-archive-dead-decisions-in-filename.md): rename `NNNN-<slug>.md` to `NNNN-SUPERSEDED-BY-MMMM-<slug>.md` (replaced) or `NNNN-INERT-<slug>.md` (inert, `Status:` stays `accepted` + add an `Archived: inert — <why>` field), then `grep -rn` the old basename and fix the one or two inbound filename links.  Use `git mv` so history follows.  CHU019 fails the build if status, marker, and field disagree.
 
 ### 6. Edit the body in place
 
