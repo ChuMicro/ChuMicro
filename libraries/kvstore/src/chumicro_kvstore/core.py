@@ -154,7 +154,14 @@ class KVStore:
             self._data = {}
             self._last_payload = b""
             return
-        loaded = unpackb(payload)
+        try:
+            loaded = unpackb(payload)
+        except ValueError:
+            # Malformed framing (truncated / over-length / trailing /
+            # too-deep) — unpackb is a trusting decoder and now rejects
+            # these loudly.  Same outcome as a non-dict payload: report
+            # corruption, behave empty, never raise at construction.
+            loaded = None
         if not isinstance(loaded, dict):
             self._data = {}
             self._last_payload = b""
@@ -175,7 +182,10 @@ class KVStore:
             self._last_payload = b""
             self.is_corrupt = False
             return
-        loaded = unpackb(payload)
+        try:
+            loaded = unpackb(payload)
+        except ValueError as error:
+            raise KVStoreCorrupt(f"payload is not valid msgpack: {error}") from error
         if not isinstance(loaded, dict):
             raise KVStoreCorrupt("payload is not a dict")
         self._data = dict(loaded)

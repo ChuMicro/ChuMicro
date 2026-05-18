@@ -12,14 +12,20 @@ def load_runtime_config(path: str | None = None) -> RuntimeConfig:
     """Read + decode the deployed runtime config.
 
     Raises ``OSError`` if the file is missing, :class:`InvalidConfigType`
-    if the payload isn't a dict.  *path* defaults to
-    :data:`DEFAULT_RUNTIME_CONFIG_PATH` at call time (resolved late so
-    tests can monkey-patch the constant).
+    if the payload isn't a dict or is malformed msgpack (e.g. a
+    power-loss-truncated file — ``unpackb`` rejects bad framing).
+    *path* defaults to :data:`DEFAULT_RUNTIME_CONFIG_PATH` at call time
+    (resolved late so tests can monkey-patch the constant).
     """
     if path is None:
         path = DEFAULT_RUNTIME_CONFIG_PATH
     with open(path, "rb") as handle:
-        decoded = unpackb(handle.read())
+        try:
+            decoded = unpackb(handle.read())
+        except ValueError as error:
+            raise InvalidConfigType(
+                f"runtime config is not valid msgpack: {error}"
+            ) from error
     if not isinstance(decoded, dict):
         raise InvalidConfigType(
             f"runtime config must decode to a dict, got {type(decoded).__name__}"

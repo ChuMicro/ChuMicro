@@ -262,6 +262,28 @@ def test_reload_raises_on_non_dict_payload() -> None:
         store.reload()
 
 
+def test_construction_with_truncated_msgpack_resets_silently() -> None:
+    """A power-loss-truncated payload (unpackb raises) is corruption, not a boot crash.
+
+    Guards the ``_load`` contract: construction never raises, even now
+    that ``unpackb`` rejects malformed framing with ``ValueError``.
+    """
+    # bin8 claiming 200 bytes, only 2 supplied — unpackb raises ValueError.
+    store = KVStore(backend=MemoryBackend(initial=b"\xc4\xc8\x01\x02"))
+    assert store.is_corrupt is True
+    assert len(store) == 0
+
+
+def test_reload_raises_on_malformed_msgpack() -> None:
+    """``reload`` surfaces a malformed-framing decode failure as ``KVStoreCorrupt``."""
+    store = KVStore(backend=MemoryBackend())  # start clean
+    store._backend = MemoryBackend(  # noqa: SLF001 - swap to the bad backend
+        initial=b"\xc4\xc8\x01\x02",
+    )
+    with raises(KVStoreCorrupt):
+        store.reload()
+
+
 def test_commit_clears_is_corrupt() -> None:
     """A successful ``commit`` clears the sticky corruption flag."""
     backend = MemoryBackend(initial=b"junk")

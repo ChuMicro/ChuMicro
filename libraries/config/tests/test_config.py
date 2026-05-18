@@ -402,6 +402,19 @@ if _IS_CPYTHON:
         with raises(InvalidConfigType):
             load_runtime_config(path)
 
+    def test_load_runtime_config_truncated_payload_raises_invalid_type(tmp_path) -> None:
+        """A power-loss-truncated file fails as ``InvalidConfigType``, not a raw decode error.
+
+        ``unpackb`` rejects malformed framing with ``ValueError``;
+        ``load_runtime_config`` maps that onto its documented surface so
+        callers (and the boot path) see one corrupt-config exception.
+        """
+        path = str(tmp_path / "truncated.msgpack")
+        with open(path, "wb") as handle:
+            handle.write(b"\xc4\xc8\x01\x02")  # bin8 claims 200 bytes, 2 given
+        with raises(InvalidConfigType):
+            load_runtime_config(path)
+
     def test_load_runtime_config_default_path_used_when_unspecified(
         monkeypatch, tmp_path,
     ) -> None:

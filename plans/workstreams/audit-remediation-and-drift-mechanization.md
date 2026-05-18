@@ -94,7 +94,29 @@ Three findings were structural decisions, not bugs.  All three resolved:
 
 ## Phase 1 — Stop-the-bleeding (Critical / enforcement-not-running)
 
-1. **msgpack decode hardening** (`libraries/msgpack/src/chumicro_msgpack/_pure.py`).
+1. **msgpack decode hardening** (`libraries/msgpack/src/chumicro_msgpack/_pure.py`) — **DONE 2026-05-17**.
+   - Landed: `_bounded_end` length-vs-remaining guard on the 5 silent
+     slice reads (fixstr/str8/str16/bin8/bin16), a one-byte-per-element
+     container-length sanity in `_decode_array`/`_decode_map`, a
+     `depth` int threaded through the recursive core (`_MAX_DEPTH = 32`
+     — chosen low: realistic config/kvstore nests 2–4, and the guard
+     test itself recurses to the bound on a 264 KB board), and a
+     top-level-only trailing-bytes reject in `unpackb`.  `struct`
+     reads left unwrapped — MP/CP `struct.unpack_from` already raises
+     `ValueError("buffer too small")` (verified vs both C sources), so
+     wrapping them would be the rejected over-fix.  11 cross-runtime
+     tests; residual documented in the `unpackb` docstring + guide.
+   - **Load-bearing caller follow-through (same commit):** hardening
+     `unpackb` to *raise* broke two documented contracts that the
+     silent-short-read had masked — `kvstore._load` ("construction
+     never raises") and `config.load_runtime_config` (documented
+     `OSError`/`InvalidConfigType` only).  A truncated persisted file
+     would have become an unhandled `ValueError` boot-crash — the exact
+     failure the embedded-cost gate warns against.  Fix per gate rule
+     2 (route into the existing reject channel, no new machinery):
+     `_load` → `is_corrupt=True`/empty, `reload` → `KVStoreCorrupt`,
+     `load_runtime_config` → `InvalidConfigType`.  4 caller tests.
+     msgpack/kvstore/config VERSIONs bumped lockstep.
    - Threat: realistic risk is **power-loss-truncated persisted flash**
      feeding kvstore/config (`core.py:157,178`, `runtime.py:22`) — a
      network attacker is the rarer case; only CP-NVM has a CRC today.
@@ -206,6 +228,11 @@ Opened 2026-05-16.  **Phase 0 RESOLVED 2026-05-17** — Decision 0073
 (msgpack trusting decoder, per-substrate CRC confirmed), Decisions
 0009 + 0025 corrected in place (coverage honesty) + AGENTS.md, Decision
 0074 (drift-mechanization as policy, charters Phase 4).  Open-questions
-threads deleted.  Phases 1–4 unblocked; no Phase-1 code started.  Next:
-Phase 1 (msgpack decoder hardening — decoder-only per 0073; CI-lint CHU
-gap; release-not-gated-on-CI).
+threads deleted.  **Phase 1 item 1 DONE 2026-05-17** — msgpack decoder
+hardened decoder-only + the load-bearing kvstore/config caller
+follow-through (see Phase 1 item 1 above); preflight green, 4/4 runtime
+matrix not yet bench-run (CPython + MP/CP unix-port green).  Phase 1
+items 2–3 (CI-lint CHU gap, release-not-gated-on-CI) **deferred by the
+user — CI is disabled; revisit when CI is re-enabled.**  Next: Phase 2
+(High correctness; independent items, parallelizable) or Phase 3 (docs
+drift).

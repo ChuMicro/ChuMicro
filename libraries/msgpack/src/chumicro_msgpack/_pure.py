@@ -163,9 +163,41 @@ _OUT_OF_SUBSET = {
     0xdf: ("map32", "maps must be under 65 536 entries"),
 }
 
+# Trusting-decoder bounds.  unpackb is hardened against malformed
+# *framing* — truncation, over-length, trailing bytes, unbounded
+# nesting — but is not a per-type spec validator; a
+# structurally-valid payload of the wrong shape is the caller's
+# contract.  Nesting deeper than _MAX_DEPTH raises rather than
+# exhausting the interpreter C stack on a 256 KB board.  32 is far
+# above any realistic persisted config / kvstore payload (those nest
+# 2–4 deep) yet shallow enough that hitting the bound itself doesn't
+# risk a stack fault on the smallest supported board.  struct-prefixed
+# reads need no check here: MicroPython/CircuitPython struct.unpack_from
+# already raises ValueError("buffer too small") on a short buffer, so
+# only the slice-based str/bin reads (memoryview slicing truncates
+# silently) and the container loops need an explicit length guard.
+_MAX_DEPTH = 32
+_MALFORMED = "malformed msgpack: truncated or over-length framing"
 
-def _decode(data: memoryview, offset: int) -> tuple:
+
+def _bounded_end(data: memoryview, start: int, length: int) -> int:
+    """Return ``start + length``, or raise if it runs past *data*.
+
+    A ``memoryview`` slice silently truncates instead of erroring, so
+    without this an over-length claimed length returns a short result
+    rather than failing — the length-vs-remaining check that keeps the
+    decoder safe against truncated / over-length framing.
+    """
+    end = start + length
+    if end > len(data):
+        raise ValueError(_MALFORMED)
+    return end
+
+
+def _decode(data: memoryview, offset: int, depth: int) -> tuple:
     """Decode one msgpack value from *data* at *offset*; return ``(value, new_offset)``."""
+    if depth > _MAX_DEPTH:
+        raise ValueError("msgpack nesting too deep")
     byte = data[offset]
 
     # positive fixint  (0x00 – 0x7f)
@@ -174,17 +206,17 @@ def _decode(data: memoryview, offset: int) -> tuple:
 
     # fixmap  (0x80 – 0x8f)
     if byte <= 0x8f:
-        return _decode_map(data, offset + 1, byte & 0x0f)
+        return _decode_map(data, offset + 1, byte & 0x0f, depth)
 
     # fixarray  (0x90 – 0x9f)
     if byte <= 0x9f:
-        return _decode_array(data, offset + 1, byte & 0x0f)
+        return _decode_array(data, offset + 1, byte & 0x0f, depth)
 
     # fixstr  (0xa0 – 0xbf)
     if byte <= 0xbf:
         length = byte & 0x1f
         start = offset + 1
-        end = start + length
+        end = _bounded_end(data, start, length)
         return str(data[start:end], "utf-8"), end
 
     # nil
@@ -201,13 +233,15 @@ def _decode(data: memoryview, offset: int) -> tuple:
     if byte == 0xc4:
         length = data[offset + 1]
         start = offset + 2
-        return bytes(data[start:start + length]), start + length
+        end = _bounded_end(data, start, length)
+        return bytes(data[start:end]), end
 
     # bin16
     if byte == 0xc5:
         length = struct.unpack_from(">H", data, offset + 1)[0]
         start = offset + 3
-        return bytes(data[start:start + length]), start + length
+        end = _bounded_end(data, start, length)
+        return bytes(data[start:end]), end
 
     # float32
     if byte == 0xca:
@@ -241,23 +275,25 @@ def _decode(data: memoryview, offset: int) -> tuple:
     if byte == 0xd9:
         length = data[offset + 1]
         start = offset + 2
-        return str(data[start:start + length], "utf-8"), start + length
+        end = _bounded_end(data, start, length)
+        return str(data[start:end], "utf-8"), end
 
     # str16
     if byte == 0xda:
         length = struct.unpack_from(">H", data, offset + 1)[0]
         start = offset + 3
-        return str(data[start:start + length], "utf-8"), start + length
+        end = _bounded_end(data, start, length)
+        return str(data[start:end], "utf-8"), end
 
     # array16
     if byte == 0xdc:
         length = struct.unpack_from(">H", data, offset + 1)[0]
-        return _decode_array(data, offset + 3, length)
+        return _decode_array(data, offset + 3, length, depth)
 
     # map16
     if byte == 0xde:
         length = struct.unpack_from(">H", data, offset + 1)[0]
-        return _decode_map(data, offset + 3, length)
+        return _decode_map(data, offset + 3, length, depth)
 
     # negative fixint  (0xe0 – 0xff)
     if byte >= 0xe0:
@@ -271,21 +307,31 @@ def _decode(data: memoryview, offset: int) -> tuple:
     raise ValueError(f"unsupported msgpack type byte: 0x{byte:02x}")
 
 
-def _decode_array(data: memoryview, offset: int, length: int) -> tuple:
+def _decode_array(data: memoryview, offset: int, length: int, depth: int) -> tuple:
     """Decode *length* array elements starting at *offset*; return ``(list, new_offset)``."""
+    # Every element is at least one byte, so a claimed length past the
+    # remaining buffer is malformed framing — reject before the loop
+    # allocates a giant list from corrupt input.
+    if length > len(data) - offset:
+        raise ValueError(_MALFORMED)
     result = []
     for _ in range(length):
-        value, offset = _decode(data, offset)
+        value, offset = _decode(data, offset, depth + 1)
         result.append(value)
     return result, offset
 
 
-def _decode_map(data: memoryview, offset: int, length: int) -> tuple:
+def _decode_map(data: memoryview, offset: int, length: int, depth: int) -> tuple:
     """Decode *length* map key/value pairs starting at *offset*; return ``(dict, new_offset)``."""
+    # Each pair is at least two bytes; the one-byte-per-entry lower
+    # bound is a safe conservative reject (never false-positives on
+    # valid data) that stops an unbounded loop on corrupt input.
+    if length > len(data) - offset:
+        raise ValueError(_MALFORMED)
     result = {}
     for _ in range(length):
-        key, offset = _decode(data, offset)
-        value, offset = _decode(data, offset)
+        key, offset = _decode(data, offset, depth + 1)
+        value, offset = _decode(data, offset, depth + 1)
         result[key] = value
     return result, offset
 
@@ -316,15 +362,33 @@ def packb(obj: object) -> bytes:
 def unpackb(data: bytes | bytearray | memoryview) -> object:
     """Unpack msgpack *data* to a Python object.
 
+    This is a *trusting* decoder, not a spec validator.  It is safe
+    against malformed framing — truncated, over-length, or
+    trailing-garbage input, and unbounded nesting, all raise
+    ``ValueError`` rather than returning a silently-wrong result — but
+    it does not check that a structurally-valid payload has the type
+    shape the caller expects.  Code persisting corruption- or
+    attacker-reachable bytes (e.g. flash-backed config) still owns
+    type-shape validation of what comes back.
+
     Args:
         data: Msgpack-encoded data.
 
     Returns:
         Deserialized Python object.
+
+    Raises:
+        ValueError: On truncated / over-length framing, nesting beyond
+            the decoder's depth bound, or bytes left over after one
+            complete object.
     """
     if not isinstance(data, memoryview):
         data = memoryview(data)
-    result, _ = _decode(data, 0)
+    result, end = _decode(data, 0, 0)
+    # Trailing bytes are rejected at the top level only — the recursive
+    # core legitimately stops mid-buffer inside a container.
+    if end != len(data):
+        raise ValueError("trailing bytes after msgpack value")
     return result
 
 
