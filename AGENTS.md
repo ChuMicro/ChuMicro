@@ -1,29 +1,34 @@
 # ChuMicro Development Ecosystem
 
 > Operating manual for AI coding agents. Human contributors should use [CONTRIBUTING.md](CONTRIBUTING.md).
+>
+> This file is the directive. The *why* behind each rule — rationale, the
+> incident that forced it, the decision record — lives in
+> [`AGENTS.notes.md`](AGENTS.notes.md). Open it when a rule's reasoning is
+> non-obvious or you're about to argue with one.
 
 ## Session start
 
 Every session, in this order:
 
 1. `git --no-pager log --oneline -20` — see what just shipped.
-2. Read [`plans/next-up.md`](plans/next-up.md) — the agent-managed work queue (`## Now`, `## Next`, `## Done (recent)`).  If the top entry of `## Now` is a session-handoff pointer (matches `**Resume <topic> from session handoff** — see [handoffs/...](...)`) **and** the user signals intent to resume (`/session-resume`, "pick up where we left off", or similar), invoke the [`session-resume`](.github/skills/session-resume/SKILL.md) skill — a queued handoff is not itself a directive to resume.
-3. `ls plans/decisions/` — flat list of every ADR slug; the filename carries the topic, treat it as the index.  Use `head -n 10 plans/decisions/<NNNN-...>.md` for the rough summary when you've narrowed to a candidate; read in full before any structural / pattern / tooling change.  ADRs are co-located with the code they govern.
-4. Check [`plans/open-questions.md`](plans/open-questions.md) for unresolved threads on the area you're touching.
-5. Read the relevant skill at [`.github/skills/<name>/SKILL.md`](.github/skills/) before starting (also reachable at `.claude/skills/` via symlink).
-6. Before writing or modifying implementation code in `libraries/` or `workbench/`, skim [`plans/patterns.md`](plans/patterns.md) for an established shape (recv-buffer reuse, Runner-shaped services, lazy adapter selection, FIFO deque, etc.).
+2. Read [`plans/next-up.md`](plans/next-up.md) — the work queue (`## Now`, `## Next`, `## Done (recent)`). A queued session-handoff pointer in `## Now` is not a resume directive; invoke [`session-resume`](.github/skills/session-resume/SKILL.md) only on an explicit user signal.
+3. `ls plans/decisions/` — the filename slug carries topic *and* lifecycle; treat the listing as the index. A `SUPERSEDED-BY-NNNN` or `INERT` marker means a dead record — skip it on the scan; open it only to trace *why* something changed (`SUPERSEDED-BY-NNNN` names the replacement). For live candidates, `head -n 10` for the gist; full read before any structural / pattern / tooling change. ADRs are co-located with the code they govern.
+4. Check [`plans/open-questions.md`](plans/open-questions.md) for unresolved threads on what you're touching.
+5. Read the relevant [`.github/skills/<name>/SKILL.md`](.github/skills/) before starting (also at `.claude/skills/` via symlink).
+6. Before writing implementation code in `libraries/` or `workbench/`, skim [`plans/patterns.md`](plans/patterns.md) for an established shape.
 
 Commit history is the primary fallback when planning docs are stale. Write commit messages that aid future context recovery.
 
 ## Keeping plans and docs current — load-bearing
 
-**A feature that exists only in code is incomplete.** Docs, ADRs, planning files, scaffold templates, and CI are part of the deliverable, not commentary on it. Every unit of work touches them in lockstep:
+**A feature that exists only in code is incomplete.** Docs, ADRs, planning files, scaffold templates, and CI are part of the deliverable. Every unit of work touches them in lockstep:
 
-- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, the [style guide](docs/contributing/style-guide.md), the [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. Don't limit yourself to a fixed list.  This rule is the backstop for the *un-mechanizable* remainder: per [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md), a drift class that *can* be deterministically linted must be — a drifted-and-shipped lintable contract is a mechanization candidate, not just a doc to fix.
-- **Unit of work landed?** Move the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) to the top of `## Done (recent)` in the *same* edit. Cap is 5 entries — drop the oldest. **Ledger, not synopsis:** each entry is subject + commit hashes + headline result + workstream pointer; aim for under ~500 chars. Skip per-file change descriptions, per-commit decomposition, mid-session reasoning, and dead-end exploration — that detail belongs in the commit message body and the workstream doc, not the index. CHU011 caps each top-level bullet at 5 sub-bullets; bigger items get promoted to [`plans/workstreams/<name>.md`](plans/workstreams/) and surface here as a one-line pointer.
+- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed.
+- **Unit of work landed?** Move the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) to the top of `## Done (recent)` in the *same* edit. `## Done (recent)` is a ledger, not a synopsis — cap 5, drop the oldest. Top-level bullets cap at 5 sub-bullets; bigger items promote to [`plans/workstreams/<name>.md`](plans/workstreams/) and surface here as a one-line pointer.
 - **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands.
-- **Adding or changing an ADR?** Read [`plans/decisions/README.md`](plans/decisions/README.md) **first** — it carries the load-bearing authoring rules (edit the body in place, state the principle not the mechanism, what does *not* belong in an ADR), and they apply to editing an existing decision just as much as to writing a new one. New ADRs additionally route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill. In brief: edit the body in place (rewrite affected paragraphs so a cold reader gets accurate info) — no `Revised:` banners, no `## Update (YYYY-MM-DD)` sections; status enum is `proposed` / `accepted` / `superseded` / `deferred` only.
-- **End of every unit of work** → run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill: preflight green, plans-doc updated, docs in sync, commit + push. Do not yield with uncommitted changes or untested behavior unless the work is explicitly partial — and say so.
+- **Adding or changing an ADR?** Read [`plans/decisions/README.md`](plans/decisions/README.md) **first** — it carries the load-bearing authoring rules and they apply to editing an existing decision as much as to a new one. New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill.
+- **End of every unit of work** → run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill: preflight green, plans-doc updated, docs in sync, commit + push. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial — and say so.
 
 ## Instruction priority
 
@@ -38,107 +43,105 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 ## Non-negotiable rules
 
-Ground rules. Each links to its source of truth where the *why* and edge cases live.
-
-**Suppressions.** Every `CHU0NN` lint has a `# noqa: CHU0NN` escape (`<!-- noqa: CHU0NN -->` in Markdown); `# pragma: no cover` is the coverage equivalent. Use them when the rule legitimately doesn't apply — matching an upstream API, payload-style imports, runtime-only branches, hardware fallbacks. Pair every suppression with a one-line *why* a reviewer can verify.
+Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.md) and the linked decisions.
 
 **Workflow**
 
 - Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop — don't ship onto a broken `main`.
 - While the repo is private, commit directly to `main` — no feature branches, no PRs.
-- Pass the commit message via a single-quoted heredoc (`git commit -m "$(cat <<'EOF' … EOF)"`) so backticks, `$`, parens, and newlines pass through literally.  Read the [`git-commit`](.github/skills/git-commit/SKILL.md) skill before every commit.
+- Pass the commit message via a single-quoted heredoc (`git commit -m "$(cat <<'EOF' … EOF)"`) so backticks, `$`, parens, and newlines pass literally. Read the [`git-commit`](.github/skills/git-commit/SKILL.md) skill before every commit.
 - `.scratch/` is gitignored — temp files, log captures.
 - Pipe large output through `tail` / `head` / `grep`, or redirect to `.scratch/`. Disable pagers (`git --no-pager`, `| cat`).
-- Use file tools for multi-line file content — never heredocs, `echo`, `printf`, or `cat`.
-- No backwards-compatibility burden until 1.0. Nothing has shipped to PyPI yet (every package is `0.x`); edit forward, don't add migration shims, dual-read paths, or compat re-exports. "Public API" today means "us using it" — symbols with zero callers across this repo *and* the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo are dead code, not preserved future surface.
-- Don't hard-code or commit secrets. Wifi passwords, MQTT credentials, API tokens, and the like belong only in the gitignored `secrets.toml` — never in `workspace.yml`, `project_config.toml`, example fixtures, or test data. See [Decision 0057](plans/decisions/0057-two-file-config.md).
+- Use file tools to write or edit files — never heredocs, `echo`, `printf`, or `cat` for file content (the heredoc rule above is commit messages only).
+- No backwards-compatibility burden until 1.0 — edit forward, no migration shims, dual-read paths, or compat re-exports. A symbol with zero callers across this repo *and* the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo is dead code, not future surface.
+- Don't hard-code or commit secrets — Wifi passwords, MQTT credentials, API tokens belong only in the gitignored `secrets.toml`.
+- Every `CHU0NN` lint has a `# noqa: CHU0NN` escape (`<!-- noqa: CHU0NN -->` in Markdown); `# pragma: no cover` is the coverage equivalent. Use only when the rule legitimately doesn't apply, and pair every suppression with a verifiable one-line *why*.
 
 **Testing**
 
-- Use `python scripts/run.py test` for commit-gating runs — per-package subprocess, parallelized, what CI runs. Per-library coverage gating fires **only when `--coverage-threshold N` is passed** (each subprocess gets its own `--cov-fail-under=N`); with no flag (bare `test` / CI `test --all`) coverage is a single post-`combine` repo-wide 85 % aggregate, not per-library — there is no per-library `pyproject.toml` coverage config. Bare `pytest` from the repo root is supported for ad-hoc / IDE Testing-panel runs — root [`pyproject.toml`](pyproject.toml) + [`conftest.py`](conftest.py) handle imports, importlib mode for test-name collisions, and `functional_tests/` deselection — but it does not gate coverage. See [Decision 0009](plans/decisions/0009-per-library-test-runs.md).
-- Maintain coverage gates — every `test` and `preflight` invocation must pass `--coverage-threshold 94`. The `pyproject.toml` baseline is 85 % for human contributors; agent-generated code must use the higher gate per [Decision 0025](plans/decisions/0025-dual-coverage-thresholds.md). 94 % is a **CPython-reachable, post-`# pragma: no cover` figure with no device-execution coverage signal** — not 94 % of shipped code; cite it only with that scope. Use `# pragma: no cover` only where code genuinely cannot be exercised in CPython tests; see also the [coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions) section.
-- Test skips must be loud — bare `if <cond>: return` in a test body is reported as PASS by the runner. Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`. Enforced by `CHU009` + `CHU010` in the [`chumicro-checks`](workbench/checks/) package; see [Decision 0058](plans/decisions/0058-test-skips-must-be-loud.md).
-- Cross-runtime test files must not `import pytest`. A pytest import auto-scopes the file to CPython only — files without pytest imports are expected to run unmodified on MicroPython and CircuitPython unix-ports under `pytest libraries/<name>/tests --target unix-port --runtime <X>` (the `chumicro-pytest-device` plugin's unix-port backend). Use plain `assert` and constructor-injected fakes from each library's `testing.py`. See [Decision 0003](plans/decisions/0003-test-runtime-boundaries.md) + [Decision 0016](plans/decisions/0016-cross-runtime-unit-tests.md).
-- Every cross-runtime test file must run green on a freshly-reset Pi Pico W (264 KB) under **both** CircuitPython and MicroPython — a PSRAM-only pass does not validate the 256 KB HAL these libraries exist for. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting it (source-module-shaped, then mechanically; lossless) until each sub-file fits. No fixed tests-per-file cap — the ceiling is library-weight-dependent and differs CP vs MP, so the target is bench-determined per library. See [Decision 0072](plans/decisions/0072-large-test-modules-on-constrained-boards.md).
-- Tests in any package may depend only on: the package's own `src/` + `testing.py`, Python stdlib, pytest + plugins (including `chumicro-pytest-device`), and `support/test_harness/`. Don't `import chumicro_<other-package>` to construct test inputs, or read from sibling-repo filesystems. When a test needs cross-package or cross-repo data, build a minimal in-repo fixture under `<package>/(functional_)tests/fixtures/`.
+- Use `python scripts/run.py test` for commit-gating runs — per-package subprocess, parallelized, what CI runs. Per-library coverage gating fires **only when `--coverage-threshold N` is passed**. Bare `pytest` from the repo root works for ad-hoc / IDE runs but gates no coverage. See [Decision 0009](plans/decisions/0009-per-library-test-runs.md).
+- Maintain coverage gates — every `test` and `preflight` invocation must pass `--coverage-threshold 94` (a scoped figure; see notes). The `pyproject.toml` baseline is 85 % for humans; agent-generated code uses the higher gate per [Decision 0025](plans/decisions/0025-dual-coverage-thresholds.md). Use `# pragma: no cover` only where code genuinely can't be exercised in CPython.
+- Test skips must be loud — a bare `if <cond>: return` in a test body is reported as PASS. Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`.
+- Cross-runtime test files must not `import pytest` — it auto-scopes the file to CPython only. Use plain `assert` and constructor-injected fakes from each library's `testing.py`.
+- Every cross-runtime test file must run green on a freshly-reset Pi Pico W (264 KB) under **both** CircuitPython and MicroPython. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting it (lossless) until each sub-file fits.
+- Tests in any package may depend only on: the package's own `src/` + `testing.py`, stdlib, pytest + plugins, and `support/test_harness/`. Don't `import chumicro_<other-package>` for inputs or read sibling-repo filesystems — build a minimal in-repo fixture under `<package>/(functional_)tests/fixtures/`.
 
 **Code shape (libraries — runs on a microcontroller)**
 
-- No `async` / `await`, no ISRs — use the tick-based runner pattern from [Decision 0014](plans/decisions/0014-runner-pattern.md). Every device library that owns time or I/O must be runner-shaped per [Decision 0051](plans/decisions/0051-runner-shaped-as-project-policy.md): no `time.sleep(N)` for `N > 0.005`, no `select.poll(timeout > 0)`, no synchronous DNS that doesn't yield.
-- Constructor injection for time, I/O, network deps. Fakes go in the library's `testing.py` submodule. See [Decision 0010](plans/decisions/0010-library-testability.md).
-- Absolute imports only in code that runs on devices — `libraries/*/src/` and `support/test_harness/` must use `from chumicro_foo.bar import baz`. Relative imports break CircuitPython RAM-mode deploys (modules are `exec()`'d without a `__package__`). Workbench / scripts / tests may use either. Enforced by ruff TID252.
-- Use PEP 604 / 585 syntax (`int | None`, `list[int]`). Don't import `typing` and don't write `from __future__ import annotations` in library code — MicroPython has no `__future__` module. CPython-only trees (tests, scripts, workbench) may keep it. See [Decision 0021](plans/decisions/0021-docstring-type-policy.md).
-- Mark runtime-specific files with `__chumicro_runtimes__ = ("circuitpython",)` (or `"micropython"`, `"cpython"`). Read via AST by bundles + every host-side deploy path; wrong-runtime files never land on the device. See [Decision 0037](plans/decisions/0037-runtime-file-marking.md) + [Decision 0044](plans/decisions/0044-deploy-time-runtime-filtering.md). Test-support modules (`testing.py` fakes) instead declare `__chumicro_test_support__ = True` and **no** runtime marker — they run on every runtime but never ship to a product/bundle; the on-device unit sweep is the one path that stages them. See [Decision 0069](plans/decisions/0069-test-support-module-marker.md).
+- No `async` / `await`, no ISRs — use the tick-based runner pattern from [Decision 0014](plans/decisions/0014-runner-pattern.md). Every device library that owns time or I/O must be runner-shaped: no `time.sleep(N)` for `N > 0.005`, no `select.poll(timeout > 0)`, no synchronous DNS that doesn't yield.
+- Constructor injection for time, I/O, network deps. Fakes go in the library's `testing.py` submodule.
+- Absolute imports only in code that runs on devices — `libraries/*/src/` and `support/test_harness/` must use `from chumicro_foo.bar import baz`. Relative imports break CircuitPython RAM-mode deploys. Workbench / scripts / tests may use either. Enforced by ruff TID252.
+- Use PEP 604 / 585 syntax (`int | None`, `list[int]`). Don't import `typing` and don't write `from __future__ import annotations` in library code — MicroPython has no `__future__`. CPython-only trees may keep it.
+- Mark runtime-specific files with `__chumicro_runtimes__ = ("circuitpython",)` (or `"micropython"`, `"cpython"`); wrong-runtime files never land on the device. Test-support modules (`testing.py` fakes) instead declare `__chumicro_test_support__ = True` and **no** runtime marker.
 - Use f-strings. Use `const()`, `memoryview`, pre-allocated buffers in library code only.
-- No `__slots__` in `libraries/*/src/` — MP/CP have no `__slots__` implementation, so the only payoff is CPython-test attribute locking, paid for in flash on every board. No pure-passthrough `@property` either — name the attribute publicly instead, callers write `obj.state` either way. Computed properties (doing actual work) stay legitimate. See [Decision 0065](plans/decisions/0065-device-library-scaffolding-cost.md). Workbench packages (CPython-only) are out of scope.
-- Use descriptive names — no single-letter variables (except `_`); abbreviations to expand into full words: `env` → `environment`, `buf` → `buffer`, `src` → `source`, `cmd` → `command`, `msg` → `message`, `err` → `error`, `ref` → `reference`, `addr` → `address`, `exc` → `exception`, `exec` → `execute`. The `for i in range(10)` exemption is for human contributors — agent-generated code must use descriptive loop targets there too. Enforced by `CHU001`; see [Decision 0022](plans/decisions/0022-naming-conventions.md). Suppress with `# noqa: CHU001` only when matching an upstream API.
+- No `__slots__` in `libraries/*/src/`, and no pure-passthrough `@property` — name the attribute publicly instead. Computed properties (doing actual work) stay legitimate. Workbench packages are out of scope.
+- Use descriptive names — no single-letter variables (except `_`); expand abbreviations to full words (`buffer` not `buf`, `command` not `cmd`, …). The `for i in range(10)` exemption is humans-only. Enforced by `CHU001`; suppress only when matching an upstream API.
 - Minimize dependencies — prefer pure-Python implementations compatible with all three runtimes.
 
 **Code shape (workbench — runs on a laptop)**
 
-- Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`, etc.). Templates / on-device payloads embedded as bytes are fine — that's payload, not import. Enforced by `CHU007` in the [`chumicro-checks`](workbench/checks/) package; see [Decision 0052](plans/decisions/0052-workbench-no-library-imports.md).
-- Workbench tools that touch hardware classify failures. Every host-side tool exposes a closed-set failure-kind enum + classifier + recovery plans in `<package>.recovery`, and CLIs wrap entry points in coaching loops. Generic `raise Exception` in workbench code is a UX defect. See [Decision 0053](plans/decisions/0053-recovery-layer-philosophy.md).
-- Workbench CLIs and `scripts/run.py` tasks callable by both humans and agents support a non-interactive mode: TTY auto-detected via `sys.stdin.isatty()`, override via `--non-interactive`, no prompts and no long-running tails when non-interactive, distinct exit codes for distinct failure modes. Inherently-interactive subcommands (wizards, standalone REPL) document the TTY requirement and exit cleanly without one. See [Decision 0066](plans/decisions/0066-agent-runnable-clis.md).
+- Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`). Embedded payload bytes are fine — that's payload, not import. Enforced by `CHU007`.
+- Workbench tools that touch hardware classify failures. Every host-side tool exposes a closed-set failure-kind enum + classifier + recovery plans in `<package>.recovery`; CLIs wrap entry points in coaching loops. Generic `raise Exception` is a UX defect.
+- Workbench CLIs and `scripts/run.py` tasks callable by humans and agents support a non-interactive mode: TTY auto-detected via `sys.stdin.isatty()`, `--non-interactive` override, no prompts/tails when non-interactive, distinct exit codes per failure mode. Inherently-interactive subcommands document the TTY requirement and exit cleanly without one.
 
 **Code comments**
 
-- Code comments document the *why* of current code, nothing else. No history ("previously this did X"), no dated incidents ("2026-05-09 ESP32-S2 bake"), no removed-code explanations ("we used to also send Ctrl-C, dropped because…"), no workstream pointers ("Step 2 of workbench-deploy-reliability"). That belongs in the commit message, the ADR body, or the workstream file — all of which the next reader can find via `git log` / `plans/`. Applies to docstrings and test-body comments too.
-- Audit-pass commits may add general "what this work is doing" framing comments, but never per-change justification (*"bench-validated -25% allocation"*, *"skips the bytes() copy"*) and never the same comment repeated across many sites. Flash on the supported boards is ~800 KB total; bloaty comment patterns multiplied across libraries fill it fast. Per-change rationale goes in the commit message body. Operational detail lives in `/audit-library` and `/audit-embedded`.
+- Code comments document the *why* of current code, nothing else. No history, no dated incidents, no removed-code explanations, no workstream pointers — that belongs in the commit message, the ADR body, or the workstream file. Applies to docstrings and test-body comments too.
+- Audit-pass commits may add general "what this work is doing" framing, but never per-change justification (*"bench-validated -25% allocation"*) and never the same comment repeated across many sites. Flash is ~800 KB total; bloaty comment patterns multiplied across libraries fill it fast.
 
 **Cross-repo isolation**
 
-- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI, CircuitPython-bundle (`circup`), and MicroPython-bundle (`mip`) consumers without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN` or `ADR NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006` in the [`chumicro-checks`](workbench/checks/) package. Suppress with `# noqa: CHU006` (Markdown: `<!-- noqa: CHU006 -->`) only when the reference is genuinely the only useful pointer.
+- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI / `circup` / `mip` without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN` / `ADR NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006`; suppress only when the reference is genuinely the only useful pointer.
 
 **Plans-doc brevity**
 
-- [`plans/next-up.md`](plans/next-up.md) is the agent-managed work queue and the single source of truth for what's in flight. Each top-level bullet is capped at 5 sub-bullets (CHU011); anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. `## Done (recent)` is capped at 5 entries. Enforced by `CHU011` in the [`chumicro-checks`](workbench/checks/) package. Suppress with `<!-- noqa: CHU011 -->` sparingly.
-- `Phase N` / `Slice N` references in commit subjects and `Done` entries must carry a 3-word topic (`Phase 6 — transport seams`, not bare `Phase 6`). The number alone is opaque six weeks later.
+- [`plans/next-up.md`](plans/next-up.md) is the single source of truth for what's in flight. Top-level bullet capped at 5 sub-bullets; anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. `## Done (recent)` capped at 5 entries. Enforced by `CHU011`.
+- `Phase N` / `Slice N` references in commit subjects and `Done` entries must carry a 3-word topic (`Phase 6 — transport seams`, not bare `Phase 6`).
 
 ## Common pitfalls
 
 - Don't `pip install -e` manually to fix imports — run `python scripts/run.py setup`.
-- If bare `python` errors `command not found`, the agent shell didn't inherit a `python` alias (the Claude desktop app and some remote shells don't; the Claude Code CLI usually does). Run `source .venv/bin/activate` once at the start of the session, or invoke `.venv/bin/python scripts/run.py …` directly. This is a shell-environment detail, not a strict rule — use whichever form works in your shell.
+- If bare `python` errors `command not found`, the agent shell didn't inherit a `python` alias. Run `source .venv/bin/activate` once, or invoke `.venv/bin/python scripts/run.py …` directly.
 - Don't modify unrelated code when fixing a focused bug. Mention pre-existing issues separately.
-- Don't fabricate. Verify claims by reading code, running tests, or checking command output. If you can't verify, say so. Training recall is not verification — for anything time-sensitive, version-specific, or newer than the model cutoff (library APIs, firmware behaviour, tool flags, upstream status), web-search it rather than asserting from memory. Web search is cheap and under-used; reach for it whenever a claim rests on training knowledge.
+- Don't fabricate. Verify by reading code, running tests, or checking command output. Training recall is not verification — for anything time-sensitive, version-specific, or newer than the model cutoff, web-search it rather than asserting from memory.
 - Don't add features, abstractions, or speculative error handling beyond what was asked. If 200 lines could be 50, rewrite.
-- Don't critique an architectural split from docs alone — read the code on both sides; docstrings often encode constraints (e.g. `scripts/prepare_workspace.py` exists separately from `scripts/run.py setup` because the former bootstraps the venv the latter assumes).
-- Verify sub-agent (Explore / audit-* / general-purpose) concrete claims about existing code before relaying — grep or read the referenced files. Reports describe intent, not state.
-- `replace_all` does literal substring substitution — before renaming a short identifier like `_foo`, grep for longer names that contain it (`_apply_foo`); the rename will silently corrupt them.
-- When editing IDE config files (`.iml`, `.idea/`, `pyrightconfig.json`, `.vscode/settings.json` with path content), `cd` to the main checkout first — `sync-ide` from inside `.claude/worktrees/<name>/` writes `$MODULE_DIR$`-relative paths that resolve there but break in main.
-- Don't manipulate CIRCUITPY mount state from the host (`diskutil unmount` / `eject` / `mount`, `rm /Volumes/CIRCUITPY*`). The deploy / transport code owns mount state; manual interference makes recovery harder, not easier. For destructive remediation use `chumicro-workspace reset-board --yes`.
-- Never deploy `code.py` / `main.py` containing `microcontroller.reset()` (CircuitPython) or `machine.reset()` (MicroPython). The runtime re-runs the file on every boot — a reset call there produces an infinite boot loop until safe mode kicks in (which requires physical replug to recover). To trigger a hard reset, send the command via raw REPL exec — one-shot, never persisted. The pattern is in `workbench/deploy/src/chumicro_deploy/circuitpython_transport.py::_reset_into_bootloader`.
-- A `git rm` (or any `git add`) stages immediately and rides into the *next* commit, even a later one you meant to scope narrowly. Before a scoped commit, `git --no-pager diff --cached --stat` and `git restore --staged <unrelated>` anything that isn't part of this unit — or stage with explicit pathspecs and never `git commit` bare with unrelated staged paths. A pre-staged `test_client.py` deletion riding into an unrelated split commit left `main` with a deleted-but-not-replaced suite for one commit (2026-05-17); cost a fixup commit and a broken-main window.
+- Don't critique an architectural split from docs alone — read the code on both sides; docstrings often encode constraints.
+- Verify sub-agent (Explore / audit-* / general-purpose) concrete claims before relaying — grep or read the referenced files. Reports describe intent, not state.
+- `replace_all` is literal substring substitution — before renaming a short identifier like `_foo`, grep for longer names containing it (`_apply_foo`).
+- Editing IDE config files (`.iml`, `.idea/`, `pyrightconfig.json`, `.vscode/settings.json`) — `cd` to the main checkout first; `sync-ide` from a worktree writes paths that break in main.
+- Don't manipulate CIRCUITPY mount state from the host (`diskutil unmount` / `eject` / `mount`, `rm /Volumes/CIRCUITPY*`) — the deploy/transport code owns it. Destructive remediation: `chumicro-workspace reset-board --yes`.
+- Never deploy `code.py` / `main.py` containing `microcontroller.reset()` (CircuitPython) or `machine.reset()` (MicroPython) — the runtime re-runs the file every boot, producing an infinite boot loop. Trigger hard reset via raw REPL exec, one-shot, never persisted. See [`AGENTS.notes.md`](AGENTS.notes.md) for the pattern location.
+- A `git rm` / `git add` stages immediately and rides into the *next* commit, even a later narrowly-scoped one. Before a scoped commit, `git --no-pager diff --cached --stat` and `git restore --staged <unrelated>`, or stage with explicit pathspecs. (This bit `main` once — see notes.)
 
 ## Working style
 
 - **Anchor claims to evidence** — file, symbol, test, or command. No guessing.
 - **Surface tradeoffs early.** Multiple reasonable approaches → name them. Ambiguity affects correctness → ask. Simpler approach would work → say so.
-- **Default to action on reversible local work.** File edits, tests, refactors, plans-doc updates — execute, don't ask. Surface before destructive ops (deletions, force-pushes, breaking API changes), anything visible outside this repo (PRs, public posts), or scope expansion that wasn't asked. Auto mode amplifies *lean toward action* — not *skip the destructive-op check*.
+- **Default to action on reversible local work.** File edits, tests, refactors, plans-doc updates — execute, don't ask. Surface before destructive ops (deletions, force-pushes, breaking API changes), anything visible outside this repo, or unasked scope expansion. Auto mode amplifies *lean toward action* — not *skip the destructive-op check*.
 - **Clean up after yourself.** Make an import / variable / function / test unused → remove it. Affect docs → update them. But don't fix pre-existing issues unless asked.
 - **Re-verify state after recovery actions.** When a fix depends on the user running a recovery action (replug, reset-board, unwedge), re-run the failing detection and the smallest failing test *before* committing. "Done" from the user is the signal to verify, not proof the fix worked.
 - **Quality bar.** Small focused diffs, preflight green, commit messages that name the rule / decision / pattern applied.
 
 ## Writing tone
 
-Cut AI-tic phrases.  The fix is usually structural, not vocabulary — when you write *"the X promise"* or *"the X pattern"*, name X concretely in the same sentence so the reader doesn't have to infer it.
+Cut AI-tic phrases. The fix is usually structural — when you write *"the X promise"* or *"the X pattern"*, name X concretely in the same sentence.
 
 Specific bans:
 
-- **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern.
-- **"the canonical X" generally** → check whether *"the X"* or *"the standard X"* is enough.  Keep `canonical encoding`, `canonical form`, `canonical path` — real technical terms.
-- **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright.  If a thing is comprehensive, list what it covers.
-- **"It is worth noting that" / "It should be noted that" / "Note that"** (as a sentence opener) → just say the thing.
-- **"Let's dive into" / "Let's explore" / "In this section, we will"** → start with the content, not the meta-commentary.
-- **CHU lint codes in prose** (`CHU009`, `CHU010`, etc.) → name the rule's intent (*"silent test skips"*) instead of the code.  Enforced by `CHU006` — exempts `# noqa: CHUNNN` directives.
+- **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern. Keep real technical terms (`canonical encoding`, `canonical form`, `canonical path`).
+- **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright. If a thing is comprehensive, list what it covers.
+- **"It is worth noting that" / "It should be noted that" / "Note that"** (sentence opener) → just say the thing.
+- **"Let's dive into" / "Let's explore" / "In this section, we will"** → start with the content.
+- **CHU lint codes in prose** in publishable trees → name the rule's intent (*"silent test skips"*). Enforced by `CHU006`, which exempts `# noqa: CHUNNN` directives.
 
 ## Project overview
 
 Family of cross-runtime Python libraries for embedded boards.
 
 - **CircuitPython** + **MicroPython** — deployment runtimes (the boards).
-- **CPython** — desktop development, testing, fakes, workbench tooling. Host-test seam, not a deployment target. See [Decision 0049](plans/decisions/0049-three-runtime-trinity.md).
+- **CPython** — desktop development, testing, fakes, workbench tooling. Host-test seam, not a deployment target.
 
-If a third-party library doesn't support CircuitPython or MicroPython, prefer a pure-Python alternative over a runtime-specific dep.
+If a third-party library doesn't support CircuitPython or MicroPython, prefer a pure-Python alternative.
 
 **Minimum board class:** 256 KB MCU RAM, 4 MB flash. Tier detail in [Decision 0015](plans/decisions/0015-board-architecture-support.md).
 
@@ -146,46 +149,45 @@ If a third-party library doesn't support CircuitPython or MicroPython, prefer a 
 
 | Tree | Purpose | Ships to |
 |------|---------|----------|
-| [`libraries/<name>/`](libraries/) | Cross-runtime device libraries | PyPI + CircuitPython bundle (`circup`) + MicroPython bundle (`mip`) |
+| [`libraries/<name>/`](libraries/) | Cross-runtime device libraries | PyPI · `circup` · `mip` |
 | [`workbench/<name>/`](workbench/) | Host-only laptop tools (CPython) | PyPI |
 | [`support/<name>/`](support/) | Internal shared packages | Not published |
 | [`scripts/`](scripts/) | Mono-repo dev tooling | Not published |
 | [`plans/`](plans/) | Decisions, work queue, workstreams | Not published |
 | [`docs/`](docs/) | Contributor + user docs | Published as the docs site |
 
-The installer's destination decides the folder. Workbench-shipped *payload* (template files written onto a device) lives inside the workbench package — it's not an installable. See [Decision 0032](plans/decisions/0032-workbench-host-tools.md).
+The installer's destination decides the folder. Workbench-shipped *payload* (template files written onto a device) lives inside the workbench package — it's not an installable.
 
 ### Libraries
 
-`ls libraries/` is the live inventory; each has a `README.md` and `docs/guide.md`. The set grows — don't depend on a list here. The dependency stack, broadly:
+`ls libraries/` is the live inventory; each has a `README.md` and `docs/guide.md`. The dependency stack, broadly:
 
-- **Primitives** — `timing`, `runner`, `compat`, `logging`, `events`. Owned-by-no-one, depended-on-by-everyone.
-- **Persistence + serialization** — `msgpack`, `config`, `kvstore`. Live on top of the primitives.
+- **Primitives** — `timing`, `runner`, `compat`, `logging`, `events`. Depended-on-by-everyone.
+- **Persistence + serialization** — `msgpack`, `config`, `kvstore`.
 - **Networking transport + protocols** — `wifi` (link), `sockets` (TCP/TLS/UDP), then app protocols: `ntp`, `requests`, `http_server`, `websockets`, `mqtt`.
 
-Per-library deps are declared in each `pyproject.toml`; cross-library policy is [Decision 0042](plans/decisions/0042-library-dependency-policy.md). When a library doesn't already exist for a job, check the latest `plans/decisions/` for a chartered design (`00NN-chumicro-<name>.md`).
+Per-library deps are declared in each `pyproject.toml`. When a library doesn't already exist for a job, check `plans/decisions/` for a chartered design (`00NN-chumicro-<name>.md`).
 
 ### Workbench (host-only)
 
-`ls workbench/` is the live inventory. Currently four packages:
+`ls workbench/` is the live inventory. Currently:
 
 - **`deploy`** — push code, probe identity, flash firmware; failure-classifying recovery layer
 - **`repl`** — serial REPL with traceback highlighting and `tail()` follow-mode
-- **`workspace`** — one-stop project workspace CLI (composes `deploy` + `repl` + config); canonical starter is the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo ([Decision 0038](plans/decisions/0038-workspace-bootstrap-via-clone.md))
+- **`workspace`** — one-stop project workspace CLI (composes `deploy` + `repl` + config); starter is the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo
 - **`pytest-device`** — pytest plugin (auto-registered via `pytest11`) that stages source onto a board and runs tests in the device runtime
+- **`checks`** — the `CHU0NN` lint rules (`chumicro-checks`)
 
 ## Commands
 
-The mono-repo itself has workspace shape (`workspace.yml` + `devices.yml` at root), so the workbench CLIs work directly here too.
-
-`python scripts/run.py setup` does an editable install of every package into `.venv/`. Activate it (`source .venv/bin/activate`) or use `.venv/bin/<cli>` / `.venv/bin/python -m <pkg>` — system `python3` won't find `chumicro_*` packages, and `chumicro-workspace` / `chumicro-deploy` / `chumicro-repl` only end up on PATH from the venv.
+The mono-repo has workspace shape (`workspace.yml` + `devices.yml` at root), so the workbench CLIs work directly here. `python scripts/run.py setup` editable-installs every package into `.venv/`; activate it or use `.venv/bin/<cli>` — system `python3` won't find `chumicro_*`.
 
 ### `python scripts/run.py <cmd>` — CI-mirror runner
 
 | Command | Purpose |
 |---------|---------|
 | `setup` | Install deps + regenerate IDE configs |
-| `preflight` | Full CI mirror (lint + build + docs + unit tests on all runtimes + checks). `--with-functional` adds hardware-gated functional tests; `--with-device-unit` appends the on-device unit sweep |
+| `preflight` | Full CI mirror (lint + build + docs + all-runtime unit tests + checks). `--with-functional` adds hardware-gated tests; `--with-device-unit` appends the on-device sweep |
 | `test` | CPython unit tests (changed packages by default; `--all` for full sweep) |
 | `lint` | Ruff across the workspace |
 | `build` | Build publishable packages |
@@ -194,7 +196,7 @@ The mono-repo itself has workspace shape (`workspace.yml` + `devices.yml` at roo
 | `test-micropython` / `test-circuitpython` | One runtime |
 | `test-functional` | All hardware-gated suites (libraries + workbench) |
 | `test-libraries-functional` / `test-workbench-functional` | Scoped functional runs |
-| `test-unit-on-device` | Cross-runtime *unit* suite on real boards (the on-device sweep): per-library mode resolution, RAM-preferred, mode-grouped; behavioral pass/fail only (no coverage gate). **`--per-file` only acts in flash/copy sessions — it is a no-op in RAM mode.** Light libraries (e.g. `ntp`) resolve to RAM, so `--per-file` does nothing for them; to validate a RAM-resolved library's code on the 264 KB Pico W under CircuitPython, force `--deploy-mode flash` (a CP-RAM inline-bootstrap `MemoryError` there is the resident-ceiling class, not a code defect — confirm via flash mode). A per-library on-silicon failure does not turn `preflight` red, but a Pico W per-file OOM (CP or MP) is a tracked must-fix per [Decision 0072](plans/decisions/0072-large-test-modules-on-constrained-boards.md), not an accepted end-state |
+| `test-unit-on-device` | Cross-runtime *unit* suite on real boards (the on-device sweep): per-library mode resolution, RAM-preferred, behavioral pass/fail only. `--per-file` semantics and the Pico W must-fix rule are in [`AGENTS.notes.md`](AGENTS.notes.md) |
 | `test-scripts` | Scripts infrastructure tests |
 | `prepare-micropython` / `prepare-circuitpython` / `prepare-mpy-cross` | Build / pin runtime sources under `.tools/` (gitignored) |
 | `verify-examples` | Import-check example scripts |
@@ -208,15 +210,15 @@ The mono-repo itself has workspace shape (`workspace.yml` + `devices.yml` at roo
 
 ### Workbench CLIs — directly invocable from the mono-repo
 
-- **`chumicro-workspace`** — top-level dispatcher. Project-workspace lifecycle (`setup`, `update`, `new` — creation is cloning the template repo, not a command), device registry (`add-device`, `probe`, `discover`, `devices`), running things on a board (`deploy`, `repl`, `demo`, `bootstrap`), config (`dump-config`, `config-validate`), firmware (`install-firmware`, `reset-board`, `install-libraries`, `upgrade-firmware`), curated libraries (`library list|add|update|remove|forget|switch-channel` — pull chumicro libs + their deps from PyPI into the workspace's `libraries/`; `remove` keeps a declined audit row, `forget` drops it), health (`status`, `doctor`), and quality gates (`test`, `lint`, `preflight`). Run `chumicro-workspace --help` for the live subcommand list.
-- **`chumicro-deploy`** — lower-level transport: `probe`, `flash`, `deploy`, `resolve-firmware-url`. Prefer `chumicro-workspace` wrappers; reach for this when composing custom flows.
+- **`chumicro-workspace`** — top-level dispatcher: project-workspace lifecycle, device registry, running things on a board, config, firmware, curated libraries, health, and quality gates. Run `chumicro-workspace --help` for the live subcommand list.
+- **`chumicro-deploy`** — lower-level transport: `probe`, `flash`, `deploy`, `resolve-firmware-url`. Prefer the `chumicro-workspace` wrappers; reach for this when composing custom flows.
 - **`chumicro-repl`** — direct REPL without a workspace project.
 
-`<cli> --help` and `<cli> <sub> --help` for full flag lists. Workflow walkthroughs in [docs/contributing/device-testing.md](docs/contributing/device-testing.md) and [docs/contributing/working-with-agents.md](docs/contributing/working-with-agents.md).
+`<cli> --help` and `<cli> <sub> --help` for full flag lists. Walkthroughs in [docs/contributing/device-testing.md](docs/contributing/device-testing.md) and [docs/contributing/working-with-agents.md](docs/contributing/working-with-agents.md).
 
 ## Skills
 
-Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/) (also reachable at `.claude/skills/` via symlink). The session-start reminder lists every available skill with a one-line trigger — read the matching `SKILL.md` body before performing that task. After each unit of work, agents run `task-checkpoint`.
+Procedural knowledge lives in [`.github/skills/<name>/SKILL.md`](.github/skills/) (also at `.claude/skills/` via symlink). The session-start reminder lists every skill with a one-line trigger — read the matching `SKILL.md` body before performing that task. After each unit of work, run `task-checkpoint`.
 
 ## File routing
 
@@ -240,14 +242,15 @@ python scripts/run.py prepare-circuitpython
 
 ## Deeper docs (pointer-only)
 
-For the *what* and *why* behind each rule, the authoritative docs are:
+For the *what* and *why* behind each rule:
 
-- [plans/patterns.md](plans/patterns.md) — agent-targeted implementation cookbooks. The *how* paired with each non-negotiable's *what*: Service pattern, recv-buffer + memoryview, lazy adapter selection, FIFO deque, mpremote internals, IDE Testing-panel show-but-deselect, and more.
-- [docs/contributing/style-guide.md](docs/contributing/style-guide.md) — naming, annotations, imports, layout, doc tone. Linter enforces most of it.
+- [AGENTS.notes.md](AGENTS.notes.md) — rationale + the incident behind each rule, keyed by commit hash.
+- [plans/patterns.md](plans/patterns.md) — implementation cookbooks: Service pattern, recv-buffer + memoryview, lazy adapter selection, FIFO deque, mpremote internals, and more.
+- [docs/contributing/style-guide.md](docs/contributing/style-guide.md) — naming, annotations, imports, layout, doc tone.
 - [docs/contributing/device-testing.md](docs/contributing/device-testing.md) — functional tests, deploy modes, devices.yml.
 - [docs/contributing/releases.md](docs/contributing/releases.md) — VERSION, SemVer, experimental → stable promotion.
 - [docs/contributing/pull-requests.md](docs/contributing/pull-requests.md) — PR conventions.
 
-Tests live under each library's `tests/`; shared fakes in `src/chumicro_<name>/testing.py` (see [Decision 0009](plans/decisions/0009-per-library-test-runs.md), [Decision 0010](plans/decisions/0010-library-testability.md)). On-device tests live under `functional_tests/` and use `support/test_harness/`.
+Tests live under each library's `tests/`; shared fakes in `src/chumicro_<name>/testing.py`. On-device tests live under `functional_tests/` and use `support/test_harness/`.
 
 Each library's `VERSION` file is the source of truth — bump only affected libraries. Development code stays as plain `.py`; `.mpy` compilation happens in the release pipeline.
