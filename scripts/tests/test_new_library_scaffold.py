@@ -85,6 +85,28 @@ class TestScaffoldLibrary:
             tmp_path / "libraries" / "data-store" / "src" / "chumicro_data_store" / "__init__.py"
         ).exists()
 
+    def test_workbench_scaffolds_under_workbench_dir(
+        self, tmp_path: Path, monkeypatch,
+    ):
+        """--workbench scaffolds under workbench/ with the host-tool pyproject.
+
+        Parity with the workspace CLI's ``new --workbench``: same
+        scaffolder, workbench parent + ``package_kind="workbench"``,
+        which yields the CLI-entry-point ``[project.scripts]`` block.
+        """
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
+        (tmp_path / "workbench").mkdir()
+
+        result = _scaffold_library("mytool", workbench=True)
+        assert result == 0
+
+        package_dir = tmp_path / "workbench" / "mytool"
+        assert package_dir.is_dir()
+        assert not (tmp_path / "libraries").exists()
+        pyproject = (package_dir / "pyproject.toml").read_text()
+        assert 'name = "chumicro-mytool"' in pyproject
+        assert "[project.scripts]" in pyproject
+
     def test_test_file_has_tests(self, tmp_path: Path, monkeypatch):
         """Generated test file contains test methods."""
         monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)

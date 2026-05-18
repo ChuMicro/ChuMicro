@@ -312,14 +312,24 @@ class TestMainDispatch:
         assert command_calls == [((resolved_packages,), {})]
 
     def test_new_library_dispatches_name(self, monkeypatch) -> None:
-        """new-library should pass through the requested library name."""
+        """new-library should pass through the name; library kind by default."""
         command_calls, fake_new_library = _make_fake_command(return_value=13)
         monkeypatch.setattr(run, "new_library", fake_new_library)
 
         result = run.main(["run.py", "new-library", "settings"])
 
         assert result == 13
-        assert command_calls == [(("settings",), {})]
+        assert command_calls == [(("settings",), {"workbench": False})]
+
+    def test_new_library_dispatches_workbench_flag(self, monkeypatch) -> None:
+        """--workbench should reach new_library as workbench=True."""
+        command_calls, fake_new_library = _make_fake_command(return_value=0)
+        monkeypatch.setattr(run, "new_library", fake_new_library)
+
+        result = run.main(["run.py", "new-library", "--workbench", "mytool"])
+
+        assert result == 0
+        assert command_calls == [(("mytool",), {"workbench": True})]
 
     def test_test_scripts_dispatches_flags(self, monkeypatch) -> None:
         """test-scripts should pass through CLI flags to the task."""

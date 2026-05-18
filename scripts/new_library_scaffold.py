@@ -24,16 +24,21 @@ from repo_layout import ROOT
 from shared import install_editable
 
 
-def _scaffold_library(name: str) -> int:
-    """Create the directory structure and template files for a new library.
+def _scaffold_library(name: str, *, workbench: bool = False) -> int:
+    """Create the directory structure and template files for a new package.
 
-    Delegates to :func:`chumicro_workspace.scaffold.scaffold_library`
-    with the mono-repo's ``libraries/`` parent.  Returns 0 on
+    Delegates to :func:`chumicro_workspace.scaffold.scaffold_library`.
+    A device library lands under the mono-repo's ``libraries/`` parent;
+    *workbench=True* scaffolds a host-only CPython tool under
+    ``workbench/`` instead (workbench-flavored pyproject + docs, no
+    Runner pattern) — same parent/kind split the workspace CLI's
+    ``new --library`` / ``new --workbench`` uses.  Returns 0 on
     success, 1 when the target already exists.
     """
-    target_dir = ROOT / "libraries"
+    package_kind = "workbench" if workbench else "library"
+    target_dir = ROOT / ("workbench" if workbench else "libraries")
     try:
-        created = scaffold_library(target_dir, name)
+        created = scaffold_library(target_dir, name, package_kind=package_kind)
     except LibraryAlreadyExistsError as exception:
         print(f"Directory already exists: {exception}")
         return 1
@@ -41,13 +46,16 @@ def _scaffold_library(name: str) -> int:
     return 0
 
 
-def new_library(name: str) -> int:
-    """Scaffold a new library under libraries/ and regenerate IDE configs.
+def new_library(name: str, *, workbench: bool = False) -> int:
+    """Scaffold a new package and regenerate IDE configs.
 
     Args:
-        name: Library short name (e.g. ``"gpio"``).
+        name: Package short name (e.g. ``"gpio"``).
+        workbench: Scaffold a host-only workbench tool under
+            ``workbench/`` instead of a device library under
+            ``libraries/``.
     """
-    result = _scaffold_library(name)
+    result = _scaffold_library(name, workbench=workbench)
     if result != 0:
         return result
 

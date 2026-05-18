@@ -55,6 +55,7 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 | Run everything CI will run | `python scripts/run.py preflight` |
 | Lint only | `python scripts/run.py lint` |
 | Scaffold a new library | `python scripts/run.py new-library my-project` |
+| Scaffold a host-only workbench tool | `python scripts/run.py new-library --workbench my-tool` |
 
 ### Testing
 
