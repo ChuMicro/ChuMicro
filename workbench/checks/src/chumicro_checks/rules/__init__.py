@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from chumicro_checks._rule import Rule
 from chumicro_checks.rules.chu001 import CHU001
-from chumicro_checks.rules.chu002_chu005 import CHU002, CHU003, CHU004, CHU005
+from chumicro_checks.rules.chu002_chu005 import (
+    CHU002,
+    CHU003,
+    CHU004,
+    CHU005,
+    CHU018,
+)
 from chumicro_checks.rules.chu006 import CHU006
 from chumicro_checks.rules.chu007 import CHU007
 from chumicro_checks.rules.chu008 import CHU008
@@ -47,4 +53,5 @@ def registered_rules() -> dict[str, Rule]:
         CHU015.code: CHU015,
         CHU016.code: CHU016,
         CHU017.code: CHU017,
+        CHU018.code: CHU018,
     }
