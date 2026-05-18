@@ -322,6 +322,10 @@ class CircuitpythonTransport:
             else circuitpy_drive._circuitpy_volume_candidates
         )
         self._port: SerialPort | None = None
+        #: One-time guard for the board-``settings.toml`` eviction
+        #: notice — emitted at most once per transport instance even
+        #: though a sweep may push many times.
+        self._settings_eviction_notified = False
         self._staged_sources: list[tuple[str, str]] | None = None
         #: Set per :meth:`stage` call.  Only the on-device unit sweep
         #: (``--target device-unit``) passes ``True`` so test-support
@@ -805,6 +809,31 @@ class CircuitpythonTransport:
             f"too short for this board"
         )
 
+    def _notice_settings_toml_eviction(self, drive_path: Path) -> None:
+        """Loudly note, once, that a board ``settings.toml`` is being evicted.
+
+        A clean deploy removes a board-resident ``settings.toml``
+        because it is a competing wifi authority against chumicro's
+        config-driven wifi (``runtime_config.msgpack`` merged from the
+        host ``secrets.toml``).  That eviction is correct but
+        invisible — a user who hand-edited the CircuitPython-native
+        ``settings.toml`` would otherwise lose it with no signal.
+        Emit one prominent notice per transport instance (a sweep
+        re-pushes many times; the user needs to hear this once).
+        """
+        if self._settings_eviction_notified:
+            return
+        if not (drive_path / "settings.toml").is_file():
+            return
+        self._settings_eviction_notified = True
+        print(
+            "WARNING: removing the board's settings.toml — chumicro "
+            "drives wifi from the host-side secrets.toml "
+            "(runtime_config.msgpack), and a board-resident "
+            "settings.toml is a competing authority.  Put credentials "
+            "in the workspace's secrets.toml, not on the board.",
+        )
+
     def _push_staging_to_drive(
         self,
         staging_path: Path,
@@ -878,6 +907,12 @@ class CircuitpythonTransport:
         self._disable_autoreload_before_drive_writes()
         drive_path = self._resolve_circuitpy_drive()
         drive_path = self._verify_drive_for_board(drive_path)
+
+        # A clean push (rsync --delete, keep set = DEVICE_KEEP_SET) is
+        # the single chokepoint that evicts a board settings.toml;
+        # surface it before the bytes move.
+        if rsync_delete:
+            self._notice_settings_toml_eviction(drive_path)
 
         # macOS skip-sentinels go into the staging tree so they ride
         # along in the rsync — not as separate on-drive writes that
@@ -1322,34 +1357,26 @@ class CircuitpythonTransport:
                     staging_destination.write_bytes(files[device_path])
                     if on_file_staged is not None:
                         on_file_staged(device_path)
-                # ``clean=True`` (e.g. ``deploy-example``) tells rsync
-                # to delete drive files not in the staging tree so each
-                # demo lands clean.  Three files are excluded from the
-                # wipe so the next deploy + the device stay healthy:
+                # ``clean=True`` tells rsync to delete drive files not
+                # in the staging tree so the deploy lands clean.  Only
+                # the one closed keep set
+                # (:data:`flash_drive.DEVICE_KEEP_SET`) survives the
+                # wipe — device-generated / -required files
+                # (``boot.py``, ``boot_out.txt``, ``_chu_kv.msgpack``).
+                # A board-resident ``settings.toml`` is deliberately
+                # NOT in that set: it is a competing wifi authority
+                # against chumicro's config-driven wifi, so it is
+                # evicted — with a one-time loud notice (emitted just
+                # above) when one is actually present.
                 #
-                # * ``settings.toml`` — user runtime config.
-                # * ``boot.py`` — user custom boot logic.
-                # * ``boot_out.txt`` — CP writes this only on *hard*
-                #   reboot (deploy soft-reboots via Ctrl-D, which
-                #   doesn't regenerate it).  Wiping it strands the
-                #   drive without identity info until the next power
-                #   cycle, which breaks
-                #   :meth:`_verify_drive_for_board`'s UID match on
-                #   the next deploy — the deploy then "fails open" to
-                #   ``_circuitpy_volume_candidates()[0]`` and can land
-                #   on the wrong board's drive on multi-board hosts.
-                #
-                # ``clean=False`` (the default; the ``chumicro-workspace
-                # deploy`` shape) preserves every drive file outside
-                # the new payload — appropriate when users hand-install
-                # lib/ deps via circup and only the current import
-                # graph rotates per deploy.
+                # ``clean=False`` preserves every drive file outside
+                # the new payload — the legacy additive shape, retained
+                # only until the clean-slate default lands.
                 self._push_staging_to_drive(
                     staging_path,
                     rsync_delete=clean,
                     rsync_additional_excludes=(
-                        ("settings.toml", "boot.py", "boot_out.txt")
-                        if clean else ()
+                        flash_drive.DEVICE_KEEP_SET if clean else ()
                     ),
                     strip_xattrs=True,
                 )

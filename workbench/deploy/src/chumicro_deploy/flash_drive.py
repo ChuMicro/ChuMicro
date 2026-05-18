@@ -9,8 +9,9 @@ Contents:
 - :func:`merge_packages` — copy top-level packages from a ``src/``
   directory into a local staging tree (no device I/O).
 - :func:`rsync` — rsync a staging tree onto the CIRCUITPY USB drive,
-  excluding files that should persist across tests
-  (boot.py, settings.toml, etc.).
+  excluding the closed keep set that must persist across deploys
+  (:data:`DEVICE_KEEP_SET` — ``boot.py``, ``boot_out.txt``,
+  ``_chu_kv.msgpack``; ``settings.toml`` is *not* in it).
 - :func:`strip_extended_attributes` — macOS-only: strip xattrs before
   rsync to prevent ``._`` resource fork files from reaching FAT32.
 - :func:`clean_dot_files` — macOS-only: ``dot_clean`` to merge or
@@ -304,15 +305,19 @@ def rsync(
     differ only on the *delete-semantic* and the *exclude list*:
 
     * **Functional tests** call ``delete=True`` with
-      ``additional_excludes=("boot.py", "boot_out.txt", "code.py",
-      "settings.toml")`` — clean slate between test files, but
-      preserve the user-config files the firmware needs.
-    * **Production deploys** call ``delete=False`` with no extra
-      excludes — preserve user files (``settings.toml``, custom
-      modules in ``/lib/`` not currently in the import graph) and
-      let the deploy's file map drive what gets written.  The
-      ``chumicro-workspace deploy --wipe`` flag covers the
-      destructive case.
+      ``additional_excludes=FUNCTIONAL_TEST_EXTRA_EXCLUDES``
+      (:data:`DEVICE_KEEP_SET` + ``code.py``, the harness entrypoint
+      the test deploy doesn't itself ship) — clean slate between test
+      files, only the closed keep set survives.
+    * **Clean deploys** call ``delete=True`` with
+      ``additional_excludes=DEVICE_KEEP_SET`` — same keep set, the
+      ``code.py`` entrypoint *is* shipped as payload so it isn't
+      excluded.  ``settings.toml`` is in neither set: a board-resident
+      one is a competing wifi authority and is evicted (with a
+      one-time loud notice from the transport).
+    * **Legacy additive deploys** call ``delete=False`` with no extra
+      excludes — stale files persist; retained only until the
+      clean-slate default lands.
 
     The base exclude set (build artifacts + macOS noise / sentinel
     dirs) is shared and unconditional — see :data:`_BASE_RSYNC_EXCLUDES`.
@@ -321,10 +326,10 @@ def rsync(
         source: Source directory whose contents to sync.
         destination: Destination directory.
         delete: When ``True``, pass ``--delete`` so files in
-            destination but not source are removed.  ``False`` is the
-            production-deploy default — stale files persist, which
-            preserves user data (``settings.toml`` etc.) that's not
-            part of the deploy's file map.
+            destination but not source are removed (clean slate;
+            only ``additional_excludes`` survive).  ``False`` is the
+            legacy additive shape — stale files persist — retained
+            only until the clean-slate default lands.
         additional_excludes: Extra basenames to add to ``--exclude``.
             Functional-test callers pass user-config filenames so
             ``--delete`` doesn't wipe them.  Production callers leave
@@ -384,17 +389,41 @@ def rsync(
         ) from rsync_error
 
 
-#: Filenames the functional-test stage path adds to ``--exclude`` so
-#: ``--delete`` doesn't wipe firmware-required user-config files.
-#: Production deploys don't add these — when a deploy's file map
-#: contains ``code.py`` (the entrypoint) we want it written, not
-#: skipped.
-FUNCTIONAL_TEST_EXTRA_EXCLUDES: tuple[str, ...] = (
+#: The one closed keep set: device-generated / device-required files
+#: that survive a clean deploy on *every* path (clean rsync, diff
+#: reconcile, functional-test stage).  This is the single source of
+#: truth — the CP clean ``--exclude``, the functional-test exclude,
+#: and the diff scope all derive from it, so "what survives a deploy"
+#: cannot drift between paths.
+#:
+#: * ``boot_out.txt`` — CP writes it only on a *hard* reboot; a deploy
+#:   soft-reboots, so wiping it strands the drive without identity
+#:   until the next power cycle and breaks the next deploy's UID
+#:   drive-match on multi-board hosts.
+#: * ``boot.py`` — a device necessity; a project that ships its own
+#:   ``boot.py`` overwrites it as payload (payload always wins).
+#: * ``_chu_kv.msgpack`` — the only filesystem-backed kvstore case
+#:   (MP non-NVS boards); CP ``nvm`` / ESP32 ``nvs`` are off-filesystem
+#:   and never at risk.
+#:
+#: ``settings.toml`` is deliberately NOT here: a board-resident one is
+#: a competing wifi authority vs chumicro's config-driven wifi
+#: (``runtime_config.msgpack`` + host ``secrets.toml``), so it is
+#: evicted on every path — with a one-time loud notice when one is
+#: actually present.
+DEVICE_KEEP_SET: tuple[str, ...] = (
     "boot.py",
     "boot_out.txt",
-    "code.py",
-    "settings.toml",
+    "_chu_kv.msgpack",
 )
+
+#: Filenames the functional-test stage path adds to ``--exclude`` so
+#: ``--delete`` doesn't wipe the keep set — plus ``code.py``, the
+#: harness entrypoint the test deploy doesn't itself ship.  Unified
+#: *downward* onto :data:`DEVICE_KEEP_SET` (production used to preserve
+#: less, the test path more; both now derive from the one set so
+#: ``settings.toml`` is evicted by tests too).
+FUNCTIONAL_TEST_EXTRA_EXCLUDES: tuple[str, ...] = (*DEVICE_KEEP_SET, "code.py")
 
 
 def verify_rsync(
