@@ -13,9 +13,11 @@ Content lands here only when:
 ## Guides
 
 - [**macOS CIRCUITPY deploy troubleshooting**](macos-circuitpy.md) — the FSKit / DiskArbitration wedge, stale-mount EACCES after Finder eject, multi-board drive disambiguation, and the Finder-sidebar regression caveat.
+- [**CircuitPython unix-port RingIO build failure**](circuitpython-ringio.md) — why a `VARIANT=standard` build fails (compile vs linker, by CP version), why CP's CI never catches it, and why RingIO is dead code in CircuitPython.
 
 ## Related
 
 - [`docs/contributing/cheat-sheet.md`](../contributing/cheat-sheet.md) — one-line fixes for common lint / test / coverage / device-setup failures.
 - [Device testing guide](../contributing/device-testing.md) — configuring `devices.yml` and running `functional_tests/`.
 - [ADR 0033](../../plans/decisions/0033-macos-circuitpy-deploy-hardening.md) — *why* the deploy tool handles macOS CIRCUITPY the way it does.
+- [ADR 0017](../../plans/decisions/0017-circuitpython-ringio-bug.md) — *why* we build the CP unix port `VARIANT=standard` with the RingIO workaround flag.

@@ -123,3 +123,4 @@ Adapters default to "trust the system's default CA bundle" on CPython / MP-ESP32
 - The pythonProject3 MQTT client's dependency on `adafruit_connection_manager` is replaced at refactor time by `chumicro-sockets`.
 - Documentation: `libraries/sockets/docs/` explains why this library exists (CP/MP/CPython divergence with concrete examples) and how it compares to `adafruit_connection_manager` (CP-only subset) and `umqtt.simple`'s raw-socket pattern (MP-only).
 - No functional-device tests required for the sockets library itself — behavior is covered by the MQTT and requests libraries that consume it, and by host-side `FakeSocket` unit tests on all three runtimes via the existing cross-runtime harness.
+- This charter is TCP/TLS only.  UDP was added to the library after the fact — the `UDPSocket` protocol, `udp_socket()` factory, and `FakeUDPSocket` extension are recorded in [Decision 0043](0043-chumicro-sockets-udp.md), which extends this one rather than replacing it.

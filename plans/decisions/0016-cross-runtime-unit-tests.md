@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-03`
-Related: Decision 0006 (supersedes), Decision 0010 (testability), Decision 0027 (device tests — `chumicro-pytest-device` plugin), Decision 0058 (loud-skip primitive + `__chumicro_runtimes__` / `__chumicro_features__` markers), Decision 0070 (test-lane markers — replaces this decision's `_pytest` filename convention with in-file markers)
+Related: Decision 0049 (three-runtime trinity — the founding principle the middle tier rests on), Decision 0006 (supersedes), Decision 0010 (testability), Decision 0027 (device tests — `chumicro-pytest-device` plugin), Decision 0058 (loud-skip primitive + `__chumicro_runtimes__` / `__chumicro_features__` markers), Decision 0070 (test-lane markers — replaces this decision's `_pytest` filename convention with in-file markers)
 
 ## Context
 
