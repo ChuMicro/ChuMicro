@@ -10,6 +10,7 @@ Each decision file should include:
 - status (`proposed`, `accepted`, `superseded`, or `deferred`)
 - date (the date of the original decision — does not change when the body is edited)
 - related decisions (by number, or "none")
+- `Archived:` — optional; present only on inert records (see "Archiving dead decisions" below)
 - context
 - decision
 - consequences
@@ -38,6 +39,35 @@ What this means in practice:
 - **If the change is large enough that an in-place edit would distort the original reasoning, write a new ADR that supersedes the old one** (set the old one's `Status:` to `superseded`, add `Superseded by: [Decision NNNN](…)`, and let the old body remain frozen as the historical record).  Targeted partial-supersession is also acceptable — Decision 0046 superseding §1+§7 of Decision 0029 is the worked example — but the affected sections of the older ADR still get edited in place to describe the current rule with an inline cross-link.
 
 The four-status enum exists precisely so editors don't reach for `revised` as a hedge.  An ADR is either in force (`accepted`), replaced (`superseded`), draft (`proposed`), or set aside (`deferred`).  Edits to the body do not change which of those four it is.
+
+## Archiving dead decisions
+
+Session start scans this directory by `ls` — the filename *is* the
+index.  A decision that no longer describes current repo state must
+announce that in its filename so the index reader skips it **without
+opening it**.  See [Decision 0076](0076-archive-dead-decisions-in-filename.md)
+for the reasoning and the rejected alternatives (subdir move, status-only,
+a fifth status).
+
+Two dead classes, marker inserted right after the number prefix (the
+`NNNN-` prefix is preserved, so cross-link and next-number recipes are
+unaffected):
+
+- **Replaced** — `Status: superseded`, a `Superseded by:` line, body
+  frozen (the rule above), filename `NNNN-SUPERSEDED-BY-MMMM-<slug>.md`.
+- **Spent / inert** (a one-time or bootstrap decision validly made but
+  no longer load-bearing — no successor ADR) — `Status:` stays
+  `accepted` (archiving is *not* a fifth status), plus an
+  `Archived: inert — <one-line why>` header field and filename
+  `NNNN-INERT-<slug>.md`.
+
+When you supersede an ADR or it goes inert, rename it and fix the
+inbound *filename* links (there are usually one or two; `grep -rn`
+the old basename).  CHU019 enforces that status, marker, and the
+`Archived:` field agree and that number prefixes stay unique — a
+renamed-but-not-restatused record is a lint failure, not something a
+future reader has to catch.  This is the mechanization Decision 0074
+requires for a lintable contract.
 
 ## State the principle, not the mechanism
 

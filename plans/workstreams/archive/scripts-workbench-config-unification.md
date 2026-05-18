@@ -189,7 +189,7 @@ A fresh agent picking up this workstream cold should:
 
 1. Read this file end-to-end.
 2. Read [`plans/now.md`](../now.md) for the current snapshot.
-3. Read [`plans/decisions/0030-config-and-state.md`](../decisions/0030-config-and-state.md), [`plans/decisions/0035-runtime-config-structure.md`](../decisions/0035-runtime-config-structure.md), [`plans/decisions/0036-chumicro-config-library.md`](../decisions/0036-chumicro-config-library.md).
+3. Read [`plans/decisions/0030-config-and-state.md`](../decisions/0030-config-and-state.md), [`plans/decisions/0035-runtime-config-structure.md`](../decisions/0035-SUPERSEDED-BY-0036-runtime-config-structure.md), [`plans/decisions/0036-chumicro-config-library.md`](../decisions/0036-chumicro-config-library.md).
 4. Skim the workspace-template repo's [`workspace.yml`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/blob/main/workspace.yml), [`projects/_template/config.toml`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/blob/main/projects/_template/config.toml), and [`_workspace_template/devices.yml`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/blob/main/_workspace_template/devices.yml) to internalize the target shapes.
 5. Check whether the ADR-cleanup agent's work has landed.  If yes, promote the embedded ADR section above into `plans/decisions/NNNN-config-pipeline-unification.md` (next available number) and update its status to `accepted`.
 6. Pick up the next unstarted phase.  Phases must be done in order — Phase 4 specifically depends on Phase 2's manifests + Phase 3's `workspace.yml` to deliver useful validation messages.
