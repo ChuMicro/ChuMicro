@@ -28,6 +28,10 @@ from chumicro_workspace.cli._common import (
     _add_workspace_arg,
     _resolve_workspace,
 )
+from chumicro_workspace.cli.library_browser import (
+    BrowserModel,
+    run_library_browser,
+)
 from chumicro_workspace.curated_libraries import (
     HEAD,
     VALID_CHANNELS,
@@ -42,6 +46,10 @@ from chumicro_workspace.library import (
     fetch_library,
     read_installed_version,
     remove_library,
+)
+from chumicro_workspace.library_channel import (
+    fetch_text_file,
+    resolve_snapshot,
 )
 
 
@@ -342,6 +350,86 @@ def _cmd_library_switch_channel(args: argparse.Namespace) -> int:
     return 0
 
 
+def _apply_selected(
+    workspace, channel: str, roots: list[str], http_get,
+) -> int:
+    """Fetch each chosen root's closure and record it; the browser's tail.
+
+    Mirrors ``library add`` minus the pin/floating/decline flags — the
+    browser already gave the user library-level selection control, so
+    the closure is pulled wholesale.  A fetch failure persists the
+    libraries recorded so far (caller decides whether to retry) and
+    returns 1.
+    """
+    table = read_curated_libraries(workspace.workspace_yaml)
+    added: list[str] = []
+    for root in roots:
+        try:
+            closure = fetch_closure(
+                root,
+                channel=channel,
+                version=HEAD,
+                workspace_root=workspace.root,
+                http_get=http_get,
+            )
+        except LibraryFetchError as error:
+            write_curated_libraries(workspace.workspace_yaml, table)
+            print(
+                f"library browse: {error} (kind: {error.kind.value})",
+                file=sys.stderr,
+            )
+            return 1
+        for name in closure:
+            version = _recorded_version(
+                workspace.root, name, floating=False, pin=None,
+            )
+            table[name] = CuratedLibrary(name, channel, version)
+            added.append(name)
+    write_curated_libraries(workspace.workspace_yaml, table)
+    print(
+        f"Added {', '.join(sorted(set(added)))} ({channel})."
+        if added else "Nothing selected.",
+    )
+    return 0
+
+
+def _run_browse(args: argparse.Namespace) -> int:  # pragma: no cover
+    """Build the model, run the full-screen browser, apply the result.
+
+    No coverage — the prompt_toolkit shell needs a real terminal (the
+    device-adapter convention); the model and :func:`_apply_selected`
+    are tested directly.
+    """
+    workspace = _resolve_workspace(args)
+    http_get = args._env.http_get
+    model = BrowserModel(
+        channel=args.channel,
+        resolve_snapshot=lambda channel: resolve_snapshot(
+            channel, http_get=http_get,
+        ),
+        fetch_text=lambda channel, tag, path: fetch_text_file(
+            channel, tag, path, http_get=http_get,
+        ),
+    )
+    chosen = run_library_browser(model)
+    if not chosen:
+        print("Nothing added.")
+        return 0
+    return _apply_selected(workspace, model.channel, chosen, http_get)
+
+
+def _cmd_library_browse(args: argparse.Namespace) -> int:
+    """Interactive catalog browser — the TTY twin of ``library add``."""
+    if not sys.stdin.isatty():
+        print(
+            "library browse is interactive and needs a TTY; use "
+            "'library add <name> [--channel ...]' for scripted/agent use.",
+            file=sys.stderr,
+        )
+        return 2
+    return _run_browse(args)
+
+
 def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
     """Register the ``library`` command group."""
     library_parser = subparsers.add_parser(
@@ -358,6 +446,17 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
     _add_workspace_arg(list_parser)
     _add_non_interactive_arg(list_parser)
     list_parser.set_defaults(func=_cmd_library_list)
+
+    browse_parser = verbs.add_parser(
+        "browse",
+        help="Interactive catalog browser (TTY only; scripted? use 'add').",
+    )
+    browse_parser.add_argument(
+        "--channel", choices=VALID_CHANNELS, default="stable",
+        help="Channel to open on (Tab toggles in-app; default: stable).",
+    )
+    _add_workspace_arg(browse_parser)
+    browse_parser.set_defaults(func=_cmd_library_browse)
 
     add_parser = verbs.add_parser(
         "add", help="Fetch a library + its chumicro deps from a snapshot.",

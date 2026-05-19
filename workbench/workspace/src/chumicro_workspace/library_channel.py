@@ -94,6 +94,7 @@ class LibraryCatalogEntry:
     version: str
     description: str
     readme_path: str
+    examples: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -121,9 +122,14 @@ def channel_repo(channel: str) -> str:
         ) from None
 
 
+def raw_file_url(repo: str, reference: str, path: str) -> str:
+    """Raw URL for *path* in *repo* at a git *reference* (tag/branch)."""
+    return f"https://raw.githubusercontent.com/{repo}/{reference}/{path}"
+
+
 def index_url(repo: str, reference: str) -> str:
     """Raw ``index.json`` URL for *repo* at a git *reference* (tag/branch)."""
-    return f"https://raw.githubusercontent.com/{repo}/{reference}/index.json"
+    return raw_file_url(repo, reference, "index.json")
 
 
 def tarball_url(repo: str, tag: str) -> str:
@@ -164,11 +170,16 @@ def _parse_index(channel: str, raw: bytes) -> ChannelSnapshot:
                 f"{channel} index.json entry {name!r} needs a string "
                 "'version'",
             )
+        raw_examples = entry.get("examples", [])
+        examples = tuple(
+            str(item) for item in raw_examples
+        ) if isinstance(raw_examples, list) else ()
         libraries[name] = LibraryCatalogEntry(
             name=name,
             version=entry["version"],
             description=str(entry.get("description", "")),
             readme_path=str(entry.get("readme_path", "README.md")),
+            examples=examples,
         )
     return ChannelSnapshot(channel=channel, tag=tag, libraries=libraries)
 
@@ -272,3 +283,20 @@ def fetch_snapshot_tarball(
     internally-consistent set.
     """
     return http_get(tarball_url(channel_repo(channel), snapshot.tag))
+
+
+def fetch_text_file(
+    channel: str,
+    tag: str,
+    path: str,
+    *,
+    http_get: HttpGet = _real_http_get,
+) -> str:
+    """GET a single UTF-8 text file from *channel* at *tag*.
+
+    Used for browse drill-in (a library's README or one example) —
+    one raw file, no tree clone.  Decodes leniently so a stray byte
+    never aborts the browser.
+    """
+    body = http_get(raw_file_url(channel_repo(channel), tag, path))
+    return body.decode("utf-8", errors="replace")
