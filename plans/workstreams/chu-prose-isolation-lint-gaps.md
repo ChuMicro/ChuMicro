@@ -30,6 +30,59 @@ tradeoffs and route through `new-decision`.
   that a dateless rule can live in CHU012. Tests:
   `workbench/checks/tests/test_chu012.py`.
 
+## Two-engine consolidation (added 2026-05-19)
+
+#1–#4 below, plus the CHU020 closed-AI-tic item (next-up) and the
+open-questions "dedup + date/SHA-token" rules, are not six independent
+lints. They reduce to **two reusable deterministic engines**, plus two
+newly-surfaced problem domains (#5, #6) and one anti-decision. Build
+the engines once and feed them different inputs — that is itself the
+"pattern shared by 3+ consumers → hoist it" shape; the alternative is
+N parallel rule implementations, the cost 0074 exists to bound. None
+of this is AI/ML — it is grep- and hash-class plumbing, deliberately
+dumb (the 0074 thesis: the dumb mechanical rule held in 2c, the
+judgment rule did not).
+
+**Engine A — normalized-block dedup.** Tokenize comment/docstring (or
+ADR-paragraph) blocks → normalize case/whitespace/punctuation → hash
+blocks ≥ ~N tokens → flag a fingerprint recurring ≥3 sites/package or
+≥2 cross-package (≥2 ADR files for the ADR consumer). Min-token floor
++ allowlist (license headers, `# noqa`, pragmas). No semantic
+understanding — pure shape match, which is exactly why it is sound for
+"pasted in 3 places" (the 2c mkfs failure) and useless for "is this
+comment good" (that stays `/audit-comments` judgment).
+  - Consumer 1 — `src/` comments/docstrings: the open-questions
+    "cross-site duplicate block" rule, its highest-value half. Already
+    analysed there; lift, do not re-derive.
+  - Consumer 2 — `plans/decisions/*.md`: the 0038§3↔0075
+    partial-supersession bloat (a corrected principle stated in full
+    in two ADRs) is the same fingerprint-collision shape over ADR
+    bodies. **Proposed, not yet verified** — picker-up must confirm
+    cross-ADR prose dedup has acceptable precision (ADRs share
+    template headings; the floor + allowlist must exclude scaffolding,
+    and the 2026-05-19 de-bloat may already have cleaned every
+    instance, making this a regression guard — still worth it). This
+    is the mechanizable half of #5; the keep/merge/which-home call
+    stays judgment (the networking-charter cluster was correctly *not*
+    merged).
+
+**Engine B — closed-set token/phrase match.** Deterministic
+substring/regex over an *enumerated, closed* list, `# noqa`-escapable,
+with the CHU006 quoted/ban-discussion exemption. This is what CHU006
+already *is*; #2, #3, CHU020, the open-questions date/SHA/Decision-NNNN
+token rule, and #5's ADR-section-marker list are all the same matcher
+with different word lists. Build one closed-set matcher, feed it the
+lists — not one rule per list. The per-list FP tradeoffs and
+allowlists already recorded under #2/#3/CHU020 do not change;
+consolidation is about *one implementation*, not relaxed precision.
+
+Residue that does NOT mechanize (explicit per 0074's own logic, not by
+omission): freeform postmortem narration (#1's "not cleanly lintable"
+half), "narrating change vs explaining current why" (open-questions
+rejects a regex), the keep/merge call on Engine-A hits, and the whole
+core of #6. These stay review-time / `/audit-comments` / `/audit-skill`
+judgment by design.
+
 ## #1 — CHU012 gap: dateless landed-history framing (highest value)
 
 CHU012 already owns this family ("no dated narration or
@@ -220,6 +273,77 @@ not an independent rule — it is a precision/priority gate layered on
 #1's content patterns. Record it inside #1's decision as an optional
 prioritization filter, not as its own rule.
 
+## #5 — ADR-authoring discipline (new 2026-05-19)
+
+Commit-evidence of repeat non-adherence: the 2026-05-19 ADR de-bloat
+(`165c9331`) existed *because* the in-place-edit / one-invariant-one-
+home rules were violated (0038§3↔0075 stated in full twice; 0079
+minted to restate a corrected rule), and `59ee9f36` had to *add*
+"read the decisions README before any ADR work" as a forcing function.
+
+Mechanizable halves:
+- **Banned ADR section markers — Engine B list.** Closed set of
+  history-banner shapes the in-place-edit rule forbids: `## Update (`,
+  `Amended by`, `This was revised`, `## Changelog`, a `SUPERSEDED-BY`
+  marker used *in addition to* (not instead of) an in-place edit.
+  Scope `plans/decisions/*.md`. **Proposed, not yet verified** —
+  picker-up greps `plans/decisions/` first to confirm the set is real
+  and low-FP (the de-bloat may have cleaned every instance → this
+  becomes a regression guard, still worth it).
+- **Superseded-pointer integrity — small structural check.** Every
+  ADR carrying `SUPERSEDED-BY-NNNN` names an existing target; no
+  dangling pointer; no ADR both `accepted` and superseded. Near-zero
+  FP.
+- **Cross-ADR principle duplication — Engine A consumer 2** (above).
+
+Not mechanizable: "genuine reasoning *shift* (new ADR) vs correction
+of *wrong* reasoning (in-place edit)" — the core judgment the README
+and AGENTS.md ADR hard-rules govern. Stays review-time; `new-decision`
+is the process control, not a lint.
+
+Routing: folded into the single decision covering the set — do **not**
+mint a separate ADR for #5, that would itself be the #5 violation.
+
+## #6 — AGENTS.md self-editing meta-rule (new 2026-05-19)
+
+Commit-evidence: a five-commit oscillation — `53313cf6` trim →
+`7f19a109` split-to-`AGENTS.notes.md` → `9f120743` restore + delete
+the notes file → `9158c85b` re-audit → `165c9331` de-bloat. The
+violated rule (argument-stopping *why* stays inline; size is not the
+success metric; no second not-auto-loaded governance file) is now an
+AGENTS.md hard rule but recurrence-untested.
+
+Mechanizable sliver only:
+- **Orphan-governance-file check.** Fail if a governance-doc-shaped
+  file (`AGENTS.notes.md`, `RULES.md`, `*GUIDELINES*.md`) exists and
+  is referenced by AGENTS.md but is *not* auto-loaded via CLAUDE.md's
+  `@`-include chain. The deterministic core of "no second governance
+  file agents never open." File-existence + CLAUDE.md include-graph
+  walk; near-zero FP. **Proposed** — verify the CLAUDE.md `@`-include
+  mechanism is greppable before committing.
+
+Explicit ANTI-decision (record so it is not re-proposed):
+- **Do NOT add an AGENTS.md size/line ceiling lint.** A max-KB or
+  max-line gate mechanically re-incentivizes the exact compression the
+  reversal forbids — a lint that *rewards* the violated behavior and
+  punishes restoring argument-stopping rationale. The one case where
+  mechanization is worse than the prose rule. The most a gate may do
+  is a **non-blocking large-net-deletion review prompt** on AGENTS.md
+  (a speed-bump forcing explicit human sign-off on big cuts), never
+  pass/fail. 0074's "lintable drift must be linted" does not apply:
+  the drift is *removal of load-bearing content*, not lintable without
+  judging whether the content was load-bearing.
+
+Core of #6 (is this *why* argument-stopping; is this cut a
+compression-too-far) is irreducibly review-time. The sliver above is
+the only lint; the rest is the `9f120743` hard-rule + reviewer
+vigilance. A recorded "we will not build X, because" is 0074-
+consistent: 0074 requires *lintable* drift be linted, not that every
+rule be linted.
+
+Routing: same single decision; the anti-decision is part of the
+record.
+
 ## Recommended sequencing
 
 Original recommendation was "#2 now (mechanical), #1 + #3 via
@@ -228,6 +352,18 @@ revises that: **all three route through `new-decision`** (or a single
 decision covering the set, given the open-questions overlap). #2 is
 still first to land — its design space is smallest once the
 `.scratch/` narrowing and the legitimate-data exemptions are decided.
+
+**Revised by the 2026-05-19 two-engine broadening:** one decision now
+covers #1–#6 + both engines + the #6 anti-decision (the open-questions
+overlap already pointed here; #5/#6 reinforce single-decision). Build
+order by risk: **Engine B first** — it already exists as CHU006;
+extending it with lists lands #2 / #3 / CHU020 / the date-SHA-token
+half together at lowest risk, and #1's landed-history regex + #4's
+prefilter ride on the same matcher/AST. **Engine A second** (`src/`
+dedup, then the ADR consumer once its precision is verified). **Small
+structural checks last** (#5 superseded-pointer, #6 orphan-governance).
+Record the #6 anti-decision up front so an AGENTS.md size gate is
+never built while the rest is in flight.
 
 ## Pointers
 
@@ -240,10 +376,23 @@ still first to land — its design space is smallest once the
 - CHU006 self-reference precedents: chu006.py:164-194 (predicate) and
   chu006.py:177-178 (inline `# noqa: CHU006`).
 - User memory `feedback_the_one_x_aitic` (the #3 tic).
+- `.github/skills/audit-comments/SKILL.md` + AGENTS.md → Writing tone
+  "degraded prose is rewritten, not trimmed again" single home (added
+  2026-05-19) — the *judgment* counterpart this lint set's residue
+  routes to; the two were designed as one split (mechanize the lexical
+  half, audit the semantic half).
+- Commit-evidence anchors for #5/#6: `165c9331` (ADR de-bloat),
+  `59ee9f36` (README-read forcing function), the #6 five-commit
+  oscillation (`53313cf6` `7f19a109` `9f120743` `9158c85b` `165c9331`).
 
 ## Status
 
 Opened 2026-05-18, parked. Surfaced from deploy-path-unification
 Commit 2c's comment cleanup (the unmechanized-rule contrast: CHU006
 self-caught its 2c violation; the unlinted gaps reached human review).
-Nothing implemented. Pick up via the routing above.
+**Broadened 2026-05-19** — two-engine consolidation + #5 (ADR-
+authoring) + #6 (AGENTS.md self-editing meta-rule, incl. the no-size-
+gate anti-decision), from the evidence pass that accompanied the
+`/audit-comments` skill + AGENTS.md Writing-tone single-home session.
+Nothing implemented. One `new-decision` covers the set; pick up via
+the routing above.
