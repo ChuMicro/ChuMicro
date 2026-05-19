@@ -2,11 +2,12 @@
 
 A module docstring that calls a capability "future work" / "not yet
 implemented" / "planned" while that capability ships as a public
-symbol in the same module is the exact drift the 2026-05-16 audit
-hand-found in ``chumicro_requests.client`` ("TLS, POST, JSON,
-redirects, and chunked encoding are future work" — while ``post`` /
-``put`` / ``delete`` were all defined).  Prose lockstep didn't catch
-it; this rule does.
+symbol in the same module is the drift class this rule catches.  The
+shape: a docstring says feature X is planned, the module exports a
+function or class implementing X.  Either the docstring is stale or
+the symbol is unintentional public surface — both are leaks of stale
+docs to a PyPI consumer reading the shipped source.  Prose lockstep
+doesn't catch it; this rule does.
 
 Mechanism (deterministic, clause-scoped to keep false positives low):
 

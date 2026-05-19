@@ -90,6 +90,16 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "dated incident — move to commit message or workstream file",
     ),
     (
+        # "the YYYY-MM-DD audit|sweep|incident|pass|investigation"
+        # — verb-less dated-incident shape; the verb-prefixed variants
+        # above don't catch this phrasing.
+        re.compile(
+            r"\bthe \d{4}-\d{2}-\d{2}\s+"
+            r"(?:audit|sweep|incident|pass|investigation|review|finding)\b",
+        ),
+        "dated incident — move to commit message or workstream file",
+    ),
+    (
         re.compile(r"\bin the [a-z]+-[a-z]+(?:\s+[a-z]+){0,2}\s+(?:pass|audit|sweep|bake)\b"),
         "workstream-phase pointer — move to commit message or workstream file",
     ),

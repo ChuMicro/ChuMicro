@@ -6,8 +6,7 @@ can't import on the host).  So an example declaring both
 CircuitPython and MicroPython can ``import board`` (CircuitPython-
 only) at module top level and pass that gate — then crash on
 MicroPython at first boot.  That is the "flagship example crashes on
-the other runtime" class the 2026-05-16 audit raised; this rule
-closes it for example scripts.
+the other runtime" drift class this rule closes for example scripts.
 
 A runtime-exclusive module imported at the **module body level**
 (not nested under a ``sys.implementation`` branch, a ``try``, or a
