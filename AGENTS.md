@@ -2,10 +2,10 @@
 
 > Operating manual for AI coding agents. Human contributors should use [CONTRIBUTING.md](CONTRIBUTING.md).
 >
-> This file is the directive. The *why* behind each rule — rationale, the
-> incident that forced it, the decision record — lives in
-> [`AGENTS.notes.md`](AGENTS.notes.md). Open it when a rule's reasoning is
-> non-obvious or you're about to argue with one.
+> Each rule carries its *why* inline — the incident or constraint that forced
+> it — because a rule you understand is one you won't argue with or route
+> around. The linked ADR holds the full decision and its edge cases; `git
+> log` holds the rest.
 
 ## Session start
 
@@ -24,7 +24,7 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 
 **A feature that exists only in code is incomplete.** Docs, ADRs, planning files, scaffold templates, and CI are part of the deliverable. Every unit of work touches them in lockstep:
 
-- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed.
+- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed — a prose-only contract is exactly the drift class that ships wrong (a 16-agent sweep found a false TLS docstring and 5 phantom CLI commands while mechanized lints held at zero). See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
 - **Unit of work landed?** Move the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) to the top of `## Done (recent)` in the *same* edit. `## Done (recent)` is a ledger, not a synopsis — cap 5, drop the oldest. Top-level bullets cap at 5 sub-bullets; bigger items promote to [`plans/workstreams/<name>.md`](plans/workstreams/) and surface here as a one-line pointer.
 - **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands.
 - **Adding or changing an ADR?** Read [`plans/decisions/README.md`](plans/decisions/README.md) **first** — it carries the load-bearing authoring rules and they apply to editing an existing decision as much as to a new one. New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill.
@@ -43,11 +43,11 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 ## Non-negotiable rules
 
-Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.md) and the linked decisions.
+Ground rules. Each states its *why* inline; the linked ADR carries the depth and edge cases.
 
 **Workflow**
 
-- Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop — don't ship onto a broken `main`.
+- Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop.
 - While the repo is private, commit directly to `main` — no feature branches, no PRs.
 - Pass the commit message via a single-quoted heredoc (`git commit -m "$(cat <<'EOF' … EOF)"`) so backticks, `$`, parens, and newlines pass literally. Read the [`git-commit`](.github/skills/git-commit/SKILL.md) skill before every commit.
 - `.scratch/` is gitignored — temp files, log captures.
@@ -55,15 +55,15 @@ Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.
 - Use file tools to write or edit files — never heredocs, `echo`, `printf`, or `cat` for file content (the heredoc rule above is commit messages only).
 - No backwards-compatibility burden until 1.0 — edit forward, no migration shims, dual-read paths, or compat re-exports. A symbol with zero callers across this repo *and* the [workspace-template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo is dead code, not future surface.
 - Don't hard-code or commit secrets — Wifi passwords, MQTT credentials, API tokens belong only in the gitignored `secrets.toml`.
-- Every `CHU0NN` lint has a `# noqa: CHU0NN` escape (`<!-- noqa: CHU0NN -->` in Markdown); `# pragma: no cover` is the coverage equivalent. Use only when the rule legitimately doesn't apply, and pair every suppression with a verifiable one-line *why*.
+- Every `CHU0NN` lint has a `# noqa: CHU0NN` escape (`<!-- noqa: CHU0NN -->` in Markdown); `# pragma: no cover` is the coverage equivalent. Use only when the rule legitimately doesn't apply — matching an upstream API, payload-style imports, runtime-only branches, hardware fallbacks — and pair every suppression with a one-line *why* a reviewer can verify.
 
 **Testing**
 
 - Use `python scripts/run.py test` for commit-gating runs — per-package subprocess, parallelized, what CI runs. Per-library coverage gating fires **only when `--coverage-threshold N` is passed**. Bare `pytest` from the repo root works for ad-hoc / IDE runs but gates no coverage. See [Decision 0009](plans/decisions/0009-per-library-test-runs.md).
-- Maintain coverage gates — every `test` and `preflight` invocation must pass `--coverage-threshold 94` (a scoped figure; see notes). The `pyproject.toml` baseline is 85 % for humans; agent-generated code uses the higher gate per [Decision 0025](plans/decisions/0025-dual-coverage-thresholds.md). Use `# pragma: no cover` only where code genuinely can't be exercised in CPython.
-- Test skips must be loud — a bare `if <cond>: return` in a test body is reported as PASS. Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`.
+- Maintain coverage gates — every `test` and `preflight` invocation must pass `--coverage-threshold 94`. With no flag, coverage is a single post-`combine` repo-wide 85 % aggregate — there is no per-library `pyproject.toml` coverage config. The 85 % baseline is for human contributors; agent-generated code uses the 94 % gate per [Decision 0025](plans/decisions/0025-dual-coverage-thresholds.md). 94 % is **CPython-reachable, post-`# pragma: no cover`, with no device-execution signal** — not 94 % of shipped code; cite it only with that scope. Use `# pragma: no cover` only where code genuinely can't run in CPython (device adapters blanket-pragma — their imports don't exist there).
+- Test skips must be loud — a bare `if <cond>: return` in a test body is reported as PASS by the runner (this faked 13 green wifi tests on a fresh clone, network never running). Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`. Enforced by `CHU009` + `CHU010`.
 - Cross-runtime test files must not `import pytest` — it auto-scopes the file to CPython only. Use plain `assert` and constructor-injected fakes from each library's `testing.py`.
-- Every cross-runtime test file must run green on a freshly-reset Pi Pico W (264 KB) under **both** CircuitPython and MicroPython. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting it (lossless) until each sub-file fits.
+- Every cross-runtime test file must run green on a freshly-reset Pi Pico W (264 KB) under **both** CircuitPython and MicroPython — a PSRAM-only pass does not validate the 256 KB HAL these libraries exist for. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting it source-module-shaped, then mechanically (lossless), until each sub-file fits. No fixed tests-per-file cap — it's bench-determined per library and differs CP vs MP.
 - Tests in any package may depend only on: the package's own `src/` + `testing.py`, stdlib, pytest + plugins, and `support/test_harness/`. Don't `import chumicro_<other-package>` for inputs or read sibling-repo filesystems — build a minimal in-repo fixture under `<package>/(functional_)tests/fixtures/`.
 
 **Code shape (libraries — runs on a microcontroller)**
@@ -74,8 +74,8 @@ Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.
 - Use PEP 604 / 585 syntax (`int | None`, `list[int]`). Don't import `typing` and don't write `from __future__ import annotations` in library code — MicroPython has no `__future__`. CPython-only trees may keep it.
 - Mark runtime-specific files with `__chumicro_runtimes__ = ("circuitpython",)` (or `"micropython"`, `"cpython"`); wrong-runtime files never land on the device. Test-support modules (`testing.py` fakes) instead declare `__chumicro_test_support__ = True` and **no** runtime marker.
 - Use f-strings. Use `const()`, `memoryview`, pre-allocated buffers in library code only.
-- No `__slots__` in `libraries/*/src/`, and no pure-passthrough `@property` — name the attribute publicly instead. Computed properties (doing actual work) stay legitimate. Workbench packages are out of scope.
-- Use descriptive names — no single-letter variables (except `_`); expand abbreviations to full words (`buffer` not `buf`, `command` not `cmd`, …). The `for i in range(10)` exemption is humans-only. Enforced by `CHU001`; suppress only when matching an upstream API.
+- No `__slots__` in `libraries/*/src/` — MP/CP have no `__slots__` implementation, so the only payoff is CPython-test attribute locking, paid for in flash on every board. No pure-passthrough `@property` either — name the attribute publicly instead. Computed properties (doing actual work) stay legitimate. Workbench packages are out of scope.
+- Use descriptive names — no single-letter variables (except `_`); expand abbreviations to full words: `env`→`environment`, `buf`→`buffer`, `src`→`source`, `cmd`→`command`, `msg`→`message`, `err`→`error`, `ref`→`reference`, `addr`→`address`, `exc`→`exception`, `exec`→`execute`. The `for i in range(10)` exemption is humans-only. Enforced by `CHU001`; suppress only when matching an upstream API.
 - Minimize dependencies — prefer pure-Python implementations compatible with all three runtimes.
 
 **Code shape (workbench — runs on a laptop)**
@@ -83,16 +83,16 @@ Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.
 - Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`). Embedded payload bytes are fine — that's payload, not import. Enforced by `CHU007`.
 - Workbench tools that touch hardware classify failures. Every host-side tool exposes a closed-set failure-kind enum + classifier + recovery plans in `<package>.recovery`; CLIs wrap entry points in coaching loops. Generic `raise Exception` is a UX defect.
 - Workbench CLIs and `scripts/run.py` tasks callable by humans and agents support a non-interactive mode: TTY auto-detected via `sys.stdin.isatty()`, `--non-interactive` override, no prompts/tails when non-interactive, distinct exit codes per failure mode. Inherently-interactive subcommands document the TTY requirement and exit cleanly without one.
-- One device-staging path: code reaches a board only through the deploy stage + diff/`rsync --delete` primitive. Clean-slate is the default (`--no-wipe` opts out to additive, `--wipe` is full erase); a closed keep set `{boot.py, boot_out.txt, _chu_kv.msgpack}` survives, `settings.toml` never does. No command or context grows its own staging path, delete semantics, or keep/exclude policy — per-context variance is only the payload and the post-stage step. [Decision 0077](plans/decisions/0077-one-device-staging-path.md).
+- One device-staging path: code reaches a board only through the deploy stage + diff/`rsync --delete` primitive. Clean-slate is the default (`--no-wipe` opts out to additive, `--wipe` is full erase); a closed keep set `{boot.py, boot_out.txt, _chu_kv.msgpack}` survives, `settings.toml` never does. No command or context grows its own staging path, delete semantics, or keep/exclude policy — per-context variance is only the payload and the post-stage step. Library acquisition is host-local: `install-libraries` fetches into a gitignored workspace-local source tree, never the board; the one deploy then bundles it. [Decision 0077](plans/decisions/0077-one-device-staging-path.md), [Decision 0078](plans/decisions/0078-library-acquisition-is-host-local.md).
 
 **Code comments**
 
-- Code comments document the *why* of current code, nothing else. No history, no dated incidents, no removed-code explanations, no workstream pointers — that belongs in the commit message, the ADR body, or the workstream file. Applies to docstrings and test-body comments too.
-- Audit-pass commits may add general "what this work is doing" framing, but never per-change justification (*"bench-validated -25% allocation"*) and never the same comment repeated across many sites. Flash is ~800 KB total; bloaty comment patterns multiplied across libraries fill it fast.
+- Code comments document the *why* of current code, nothing else. No history (*"previously this did X"*), no dated incidents (*"2026-05-09 ESP32-S2 bake"*), no removed-code explanations (*"we used to also send Ctrl-C, dropped because…"*), no workstream pointers (*"Step 2 of workbench-deploy-reliability"*) — that belongs in the commit message, the ADR body, or the workstream file, all reachable via `git log` / `plans/`. Applies to docstrings and test-body comments too.
+- Audit-pass commits may add general "what this work is doing" framing, but never per-change justification (*"bench-validated -25% allocation"*, *"skips the bytes() copy"*) and never the same comment repeated across many sites. Per-change rationale goes in the commit message body. Flash is ~800 KB total; bloaty comment patterns multiplied across libraries fill it fast.
 
 **Cross-repo isolation**
 
-- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI / `circup` / `mip` without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN` / `ADR NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006`; suppress only when the reference is genuinely the only useful pointer. `.scratch/` is the *agent* scratch convention (see line 53) — publishable code must never read or write it, as a doc/comment pointer *or* a constructed runtime path; a generated artifact uses the gitignored `_generated/` build-artifact convention instead. The `CHU006` `.scratch/` extension is tracked in [`plans/next-up.md`](plans/next-up.md) (routes through `new-decision` per Decision 0074).
+- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI / `circup` / `mip` without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN` / `ADR NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006`; suppress only when the reference is genuinely the only useful pointer. `.scratch/` is the *agent* scratch convention (see line 53) — publishable code must never read or write it, as a doc/comment pointer *or* a constructed runtime path; a generated artifact uses the gitignored `_generated/` build-artifact convention instead (a fetched-dependency tree uses the sibling gitignored `_libraries/` convention — Decision 0078). The `CHU006` `.scratch/` extension is tracked in [`plans/next-up.md`](plans/next-up.md) (routes through `new-decision` per Decision 0074).
 
 **Plans-doc brevity**
 
@@ -110,9 +110,9 @@ Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.
 - Verify sub-agent (Explore / audit-* / general-purpose) concrete claims before relaying — grep or read the referenced files. Reports describe intent, not state.
 - `replace_all` is literal substring substitution — before renaming a short identifier like `_foo`, grep for longer names containing it (`_apply_foo`).
 - Editing IDE config files (`.iml`, `.idea/`, `pyrightconfig.json`, `.vscode/settings.json`) — `cd` to the main checkout first; `sync-ide` from a worktree writes paths that break in main.
-- Don't manipulate CIRCUITPY mount state from the host (`diskutil unmount` / `eject` / `mount`, `rm /Volumes/CIRCUITPY*`) — the deploy/transport code owns it. Destructive remediation: `chumicro-workspace reset-board --yes`.
-- Never deploy `code.py` / `main.py` containing `microcontroller.reset()` (CircuitPython) or `machine.reset()` (MicroPython) — the runtime re-runs the file every boot, producing an infinite boot loop. Trigger hard reset via raw REPL exec, one-shot, never persisted. See [`AGENTS.notes.md`](AGENTS.notes.md) for the pattern location.
-- A `git rm` / `git add` stages immediately and rides into the *next* commit, even a later narrowly-scoped one. Before a scoped commit, `git --no-pager diff --cached --stat` and `git restore --staged <unrelated>`, or stage with explicit pathspecs. (This bit `main` once — see notes.)
+- Don't manipulate CIRCUITPY mount state from the host (`diskutil unmount` / `eject` / `mount`, `rm /Volumes/CIRCUITPY*`) — the deploy/transport code owns mount state, and manual interference defeats its mount probing + EACCES classifier (a macOS FSKit wedge can leave the volume unmountable). Destructive remediation: `chumicro-workspace reset-board --yes`.
+- Never deploy `code.py` / `main.py` containing `microcontroller.reset()` (CircuitPython) or `machine.reset()` (MicroPython) — the runtime re-runs the file every boot, an infinite loop until safe mode (physical replug to recover). Trigger hard reset via raw REPL exec, one-shot, never persisted — the pattern is `workbench/deploy/src/chumicro_deploy/circuitpython_transport.py::_reset_into_bootloader`.
+- A `git rm` / `git add` stages immediately and rides into the *next* commit, even a later narrowly-scoped one. Before a scoped commit, `git --no-pager diff --cached --stat` and `git restore --staged <unrelated>`, or stage with explicit pathspecs. A pre-staged `mqtt/test_client.py` deletion once rode into an unrelated `http_server` split — `main` carried a deleted-but-not-replaced suite for one commit; cost a fixup and a broken-`main` window.
 
 ## Working style
 
@@ -125,13 +125,14 @@ Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.
 
 ## Writing tone
 
-Cut AI-tic phrases. The fix is usually structural — when you write *"the X promise"* or *"the X pattern"*, name X concretely in the same sentence.
+Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. The fix is usually structural, not vocabulary — when you write *"the X promise"* or *"the X pattern"*, name X concretely in the same sentence. When you catch yourself writing one, rewrite the sentence to *demonstrate* the property concretely instead of asserting it abstractly.
 
 Specific bans:
 
-- **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern. Keep real technical terms (`canonical encoding`, `canonical form`, `canonical path`).
+- **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern. Bad: *"Verifies the canonical promise: an LED keeps blinking…"* Good: *"Verifies the LED-blink invariant: an LED keeps blinking…"*
+- **"the canonical X" generally** → check whether *"the X"* or *"the standard X"* is enough. Keep `canonical encoding`, `canonical form`, `canonical path` — real technical terms with no fluff substitute.
 - **"the one/single/sole X that …"** as a definition opener → same tic as "the canonical X"; define the thing plainly (*"`run.py` enforces coverage"*, not *"`run.py` is the single mechanism that enforces coverage"*). Applies to comments and docstrings in `src/`, not just prose docs. Tone guidance, not a lint — legitimate invariant prose (*"the single owner of the staging path"*, Decision 0077's *"exactly one mechanism"*) is correct and stays; this is judgement, not a mechanizable matcher (see the CHU020 entry in [`plans/next-up.md`](plans/next-up.md)).
-- **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright. If a thing is comprehensive, list what it covers.
+- **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright. If a thing is comprehensive, list what it covers; if it's robust, name what it survives.
 - **"It is worth noting that" / "It should be noted that" / "Note that"** (sentence opener) → just say the thing.
 - **"Let's dive into" / "Let's explore" / "In this section, we will"** → start with the content.
 - **CHU lint codes in prose** in publishable trees → name the rule's intent (*"silent test skips"*). Enforced by `CHU006`, which exempts `# noqa: CHUNNN` directives.
@@ -176,7 +177,7 @@ Per-library deps are declared in each `pyproject.toml`. When a library doesn't a
 
 - **`deploy`** — push code, probe identity, flash firmware; failure-classifying recovery layer
 - **`repl`** — serial REPL with traceback highlighting and `tail()` follow-mode
-- **`workspace`** — one-stop project workspace CLI (composes `deploy` + `repl` + config); starter is the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo
+- **`workspace`** — project workspace CLI (composes `deploy` + `repl` + config); starter is the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo
 - **`pytest-device`** — pytest plugin (auto-registered via `pytest11`) that stages source onto a board and runs tests in the device runtime
 - **`checks`** — the `CHU0NN` lint rules (`chumicro-checks`)
 
@@ -198,7 +199,7 @@ The mono-repo has workspace shape (`workspace.yml` + `devices.yml` at root), so 
 | `test-micropython` / `test-circuitpython` | One runtime |
 | `test-functional` | All hardware-gated suites (libraries + workbench) |
 | `test-libraries-functional` / `test-workbench-functional` | Scoped functional runs |
-| `test-unit-on-device` | Cross-runtime *unit* suite on real boards (the on-device sweep): per-library mode resolution, RAM-preferred, behavioral pass/fail only. `--per-file` semantics and the Pico W must-fix rule are in [`AGENTS.notes.md`](AGENTS.notes.md) |
+| `test-unit-on-device` | Cross-runtime *unit* suite on real boards (the on-device sweep): per-library mode resolution, RAM-preferred, behavioral pass/fail only. `--per-file` acts only in flash/copy sessions (no-op in RAM mode); a per-library on-silicon failure doesn't turn `preflight` red, but a Pico W per-file OOM (CP or MP) is a tracked must-fix per [Decision 0072](plans/decisions/0072-large-test-modules-on-constrained-boards.md), not an accepted end-state |
 | `test-scripts` | Scripts infrastructure tests |
 | `prepare-micropython` / `prepare-circuitpython` / `prepare-mpy-cross` | Build / pin runtime sources under `.tools/` (gitignored) |
 | `verify-examples` | Import-check example scripts |
@@ -244,9 +245,8 @@ python scripts/run.py prepare-circuitpython
 
 ## Deeper docs (pointer-only)
 
-For the *what* and *why* behind each rule:
+For deeper implementation detail:
 
-- [AGENTS.notes.md](AGENTS.notes.md) — rationale + the incident behind each rule, keyed by commit hash.
 - [plans/patterns.md](plans/patterns.md) — implementation cookbooks: Service pattern, recv-buffer + memoryview, lazy adapter selection, FIFO deque, mpremote internals, and more.
 - [docs/contributing/style-guide.md](docs/contributing/style-guide.md) — naming, annotations, imports, layout, doc tone.
 - [docs/contributing/device-testing.md](docs/contributing/device-testing.md) — functional tests, deploy modes, devices.yml.
