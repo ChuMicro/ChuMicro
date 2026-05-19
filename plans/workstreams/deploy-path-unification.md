@@ -195,9 +195,8 @@ The convergence deltas (the actual Phase 2 work):
    pre-existing `--wipe` is re-scoped as the *full-erase* escape
    (keep set included) — three coherent levels. The
    `clean_slate`/`clean` kwarg threads protocol → CP/MP transports →
-   `FakeTransport` → both recovery wrappers; MP accepts it but keeps
-   legacy scope (its survive-set is delta 6, the one remaining
-   mechanic). Bench Pi Pico W CP: default `deploy` evicted a planted
+   `FakeTransport` → both recovery wrappers (MP whole-device
+   clean-slate landed in delta 6, below). Bench Pi Pico W CP: default `deploy` evicted a planted
    `settings.toml` + `junk.txt`, kept `boot_out.txt`, ran clean;
    `--no-wipe` preserved both. Decision 0077 promoted
    `proposed`→`accepted`; Decision 0059 §1 + its Rejected bullet
@@ -307,11 +306,17 @@ bench-verified Pico W CP. **Commit 2b — DONE 2026-05-18,
 bench-verified Pico W CP:** clean-slate default-flip + `--no-wipe` +
 `--wipe` re-scope + diff-path eviction notice; 0077
 `proposed`→`accepted`; 0059 §1 edited in place; AGENTS.md
-non-negotiable added. **Remaining: delta 6 — MP keep-set survive-set**
-(MP `_clean_device_lib` only nukes `/lib`; whole-device clean-slate on
-MP needs a root survive-set; MP `list_files_in_scope` accepts
-`clean_slate` but keeps legacy scope today — its own slice, needs an
-MP board). **Commit 2c — next:** entrypoint-as-payload (delta 5). Original Commit 2 = deltas
+non-negotiable added. **Delta 6 — MP keep-set survive-set — DONE
+2026-05-18, bench-verified Pi Pico W MP:** `_clean_device_lib` →
+`_clean_slate_device` (scoped delete of every root entry except the
+keep set, via an mpremote `exec` subprocess — not the persistent
+serial, which would hold the port the following `fs cp` needs; that
+ordering bug was caught + fixed on the bench); MP
+`list_files_in_scope(clean_slate=True)` walks the whole device
+(`_LIST_ALL_SCRIPT`) and host-filters keep set + dotfiles. Bench: a
+clean `deploy-example` on a board full of stale `test_*.py` +
+`settings.toml` + `junk.txt` collapsed to payload + `_chu_kv.msgpack`
+(keep set). **Commit 2c — next:** entrypoint-as-payload (delta 5). Original Commit 2 = deltas
 1+2+5+6 (default-flip, keep-set convergence incl. `settings.toml`
 evict-with-warning + `_chu_kv.msgpack` add + the two-site collapse,
 entrypoint-as-payload, MP mechanics) — the every-deploy-visible policy
@@ -417,8 +422,8 @@ done, all bench-verified Pi Pico W CP:** single source owner
 (repl retired → `deploy --tail`), CP empty-dir reaping, keep-set
 unification + `settings.toml` eviction, clean-slate default-flip
 (`--no-wipe`/`--wipe`) + 0077 promotion + 0059 §1 in-place edit +
-AGENTS.md non-negotiable. **Remaining in Phase 2:** delta 6 (MP
-keep-set survive-set — needs an MP board) and Commit 2c
+AGENTS.md non-negotiable; delta 6 (MP keep-set survive-set,
+bench-verified Pi Pico W MP). **Remaining in Phase 2:** Commit 2c
 (entrypoint-as-payload, delta 5). Phases 3–5 (collapse commands /
 root convergence / CHU mechanization) pending. Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
