@@ -4,7 +4,7 @@
 
 ## Now
 
-_(nothing in flight — see `## Next`)_
+- [ ] **Resume deploy-path unification (Phase 2 Commit 2c) from session handoff** — see [`handoffs/2026-05-18-deploy-path-unification-phase2.md`](handoffs/2026-05-18-deploy-path-unification-phase2.md).
 
 ## Next
 
