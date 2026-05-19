@@ -22,7 +22,7 @@ class DeployError(Exception):
 
 @dataclass(frozen=True)
 class DeployResult:
-    """Outcome of a single ``Deployer.deploy()`` call.
+    """Outcome of a single ``Deployer.deploy_diff()`` call.
 
     Attributes:
         success: ``True`` when the entrypoint executed and the board

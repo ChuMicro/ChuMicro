@@ -119,7 +119,7 @@ def main() -> int:
             print("error: orphan.py made it into the deploy set", file=sys.stderr)
             return 1
 
-        result = Deployer(_device_from_entry(board)).deploy(source)
+        result = Deployer(_device_from_entry(board)).deploy_diff(source)
 
     if result.execute_output:
         print("--- board output ---")

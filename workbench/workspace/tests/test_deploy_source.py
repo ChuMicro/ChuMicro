@@ -432,7 +432,7 @@ class TestDeployerIntegration:
             transport_factory=lambda _device: transport,
         )
 
-        result = Deployer(device).deploy(source)
+        result = Deployer(device).deploy_diff(source)
         assert result.success is True
 
         # The deployer recorded a deploy_files call carrying both

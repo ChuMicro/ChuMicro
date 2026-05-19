@@ -304,7 +304,7 @@ class TestCommandDeploy:
             def __init__(self, device):  # noqa: ANN001
                 captured["device"] = device
 
-            def deploy(self, source, **kwargs):  # noqa: ANN001
+            def deploy_diff(self, source, **kwargs):  # noqa: ANN001
                 captured["source"] = source
                 captured["kwargs"] = kwargs
                 from chumicro_deploy import DeployResult
@@ -333,7 +333,7 @@ class TestCommandDeploy:
             def __init__(self, device):  # noqa: ANN001
                 pass
 
-            def deploy(self, source, **kwargs):  # noqa: ANN001
+            def deploy_diff(self, source, **kwargs):  # noqa: ANN001
                 from chumicro_deploy import DeployResult
                 return DeployResult(success=True, execute_output="y\n")
 
@@ -359,7 +359,7 @@ class TestCommandDeploy:
             def __init__(self, device):  # noqa: ANN001
                 pass
 
-            def deploy(self, source, **kwargs):  # noqa: ANN001
+            def deploy_diff(self, source, **kwargs):  # noqa: ANN001
                 from chumicro_deploy import DeployResult
                 return DeployResult(
                     success=False,
@@ -400,7 +400,7 @@ class TestCommandDeploy:
             def __init__(self, device):  # noqa: ANN001
                 pass
 
-            def deploy(self, source, **kwargs):  # noqa: ANN001
+            def deploy_diff(self, source, **kwargs):  # noqa: ANN001
                 raise CircuitpythonTransportError("Failed to open serial port")
 
         monkeypatch.setattr("chumicro_deploy.deployer.Deployer", FakeDeployer)
@@ -435,7 +435,7 @@ class TestCommandDeploy:
             def __init__(self, device):  # noqa: ANN001
                 pass
 
-            def deploy(self, source, **kwargs):  # noqa: ANN001
+            def deploy_diff(self, source, **kwargs):  # noqa: ANN001
                 from chumicro_deploy import DeployResult
                 return DeployResult(success=True, execute_output="")
 
@@ -444,7 +444,7 @@ class TestCommandDeploy:
                 captured["wrapped"] = True
                 captured["inner"] = inner
 
-            def deploy(self, source, **kwargs):  # noqa: ANN001
+            def deploy_diff(self, source, **kwargs):  # noqa: ANN001
                 from chumicro_deploy import DeployResult
                 return DeployResult(success=True, execute_output="")
 
@@ -489,7 +489,7 @@ class TestCommandDeployRuntimeFiltering:
             def __init__(self, device):  # noqa: ANN001
                 captured["device"] = device
 
-            def deploy(self, source, **_kwargs):  # noqa: ANN001
+            def deploy_diff(self, source, **_kwargs):  # noqa: ANN001
                 captured["files"] = source.files()
                 return DeployResult(success=True, execute_output="")
 

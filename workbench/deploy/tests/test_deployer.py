@@ -31,7 +31,7 @@ class TestDeployerBasic:
     def test_deploy_returns_success_on_clean_run(self):
         deployer, fake = _make_deployer_with_fake(execute_output="hello\n")
         source = FileMapSource({"/code.py": "print('hello')"}, entrypoint="/code.py")
-        result = deployer.deploy(source)
+        result = deployer.deploy_diff(source)
         assert isinstance(result, DeployResult)
         assert result.success is True
         assert result.execute_output == "hello\n"
@@ -46,7 +46,7 @@ class TestDeployerBasic:
         )
         deployer, _ = _make_deployer_with_fake(execute_output=traceback_output)
         source = FileMapSource({"/code.py": "1/0"}, entrypoint="/code.py")
-        result = deployer.deploy(source)
+        result = deployer.deploy_diff(source)
         assert result.success is False
         assert result.traceback is not None
         assert "ZeroDivisionError" in result.traceback
@@ -54,9 +54,11 @@ class TestDeployerBasic:
     def test_deploy_lifecycle_calls(self):
         deployer, fake = _make_deployer_with_fake()
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
-        deployer.deploy(source)
+        deployer.deploy_diff(source)
         method_order = [call[0] for call in fake.calls]
-        assert method_order == ["connect", "deploy_files", "disconnect"]
+        assert method_order == [
+            "connect", "list_files_in_scope", "deploy_files", "disconnect",
+        ]
 
     def test_disconnect_called_even_on_transport_error(self):
         class BoomTransport(FakeTransport):
@@ -73,7 +75,7 @@ class TestDeployerBasic:
         ))
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
         with pytest.raises(RuntimeError, match="kaboom"):
-            deployer.deploy(source)
+            deployer.deploy_diff(source)
         assert ("disconnect", ()) in fake.calls
 
     def test_deploy_passes_files_and_entrypoint_to_transport(self):
@@ -82,7 +84,7 @@ class TestDeployerBasic:
             {"/code.py": "pass", "/lib/helper.py": "X = 1"},
             entrypoint="/code.py",
         )
-        deployer.deploy(source)
+        deployer.deploy_diff(source)
         deploy_call = [call for call in fake.calls if call[0] == "deploy_files"][0]
         files_arg, entrypoint_arg, _follow = deploy_call[1]
         assert entrypoint_arg == "/code.py"
@@ -93,18 +95,24 @@ class TestDeployerBasic:
         assert isinstance(deployer.device, Device)
 
     def test_clean_kwarg_propagates_to_transport(self):
-        """``Deployer.deploy(clean=True)`` reaches the transport so
-        ``deploy-example``'s ``--no-clean`` opt-out lines up with the
-        rsync ``--delete`` flag in the CP flash path.  Default is
-        ``False`` to preserve the user-data-survives shape that
-        ``chumicro-workspace deploy`` relies on.
+        """``deploy_diff`` is clean-slate by default; ``clean=False``
+        is the additive ``--no-wipe`` opt-out.  The flag drives the
+        in-scope listing: clean-slate lists the whole device minus the
+        closed keep set so stale board files reconcile away; additive
+        lists only the legacy deploy scope and leaves the rest.
         """
         deployer, fake = _make_deployer_with_fake()
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
-        deployer.deploy(source)
-        assert fake.last_clean is False
-        deployer.deploy(source, clean=True)
-        assert fake.last_clean is True
+        deployer.deploy_diff(source)
+        scope_calls = [
+            call for call in fake.calls if call[0] == "list_files_in_scope"
+        ]
+        assert scope_calls[-1][1] == (True,)
+        deployer.deploy_diff(source, clean=False)
+        scope_calls = [
+            call for call in fake.calls if call[0] == "list_files_in_scope"
+        ]
+        assert scope_calls[-1][1] == (False,)
 
 
 class TestDeployerCallbacks:
@@ -115,10 +123,13 @@ class TestDeployerCallbacks:
         def record(fraction: float, message: str) -> None:
             progress_events.append((fraction, message))
 
-        deployer.deploy(source, on_progress=record)
+        deployer.deploy_diff(source, on_progress=record)
         fractions = [event[0] for event in progress_events]
         messages = [event[1] for event in progress_events]
-        assert fractions == [0.0, 0.1, 0.2, 0.9, 1.0]
+        # deploy_diff's pre-stage hook owns the 0.1 "listing in-scope"
+        # / 0.3 "staging" milestones (0.2 "cleaning stale" only fires
+        # when there is a stale set; the fake device starts empty).
+        assert fractions == [0.0, 0.1, 0.3, 0.9, 1.0]
         assert "connecting" in messages[0]
         assert "done" in messages[-1]
 
@@ -129,7 +140,7 @@ class TestDeployerCallbacks:
             entrypoint="/code.py",
         )
         staged: list[str] = []
-        deployer.deploy(source, on_file_staged=staged.append)
+        deployer.deploy_diff(source, on_file_staged=staged.append)
         # FakeTransport emits sorted, so we should see both in order.
         assert staged == ["/code.py", "/lib/helper.py"]
 
@@ -137,14 +148,14 @@ class TestDeployerCallbacks:
         deployer, _ = _make_deployer_with_fake(execute_output="alpha\nbeta\ngamma\n")
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
         lines: list[str] = []
-        deployer.deploy(source, on_execute_line=lines.append)
+        deployer.deploy_diff(source, on_execute_line=lines.append)
         assert lines == ["alpha", "beta", "gamma"]
 
     def test_callbacks_default_to_none_without_error(self):
         deployer, _ = _make_deployer_with_fake(execute_output="hi\n")
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
         # No callbacks — should run without raising.
-        result = deployer.deploy(source)
+        result = deployer.deploy_diff(source)
         assert result.success is True
 
 
@@ -167,7 +178,7 @@ class TestWindowsGuard:
 
 
 class TestFlashModeRsyncGuard:
-    """Deployer.deploy() pre-checks rsync for CP flash deploys."""
+    """Deployer.deploy_diff() pre-checks rsync for CP flash deploys."""
 
     def test_flash_mode_circuitpython_raises_when_rsync_missing(
         self, monkeypatch: pytest.MonkeyPatch,
@@ -186,7 +197,7 @@ class TestFlashModeRsyncGuard:
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
 
         with pytest.raises(RsyncMissingError):
-            deployer.deploy(source)
+            deployer.deploy_diff(source)
         # Transport must not have been opened — no connect/disconnect dance
         # before the rsync gate fires.
         assert fake.calls == []
@@ -207,7 +218,7 @@ class TestFlashModeRsyncGuard:
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
 
         # Must complete normally — RAM mode never touches rsync.
-        result = deployer.deploy(source)
+        result = deployer.deploy_diff(source)
         assert result.success is True
 
     def test_micropython_flash_skips_rsync_check(
@@ -226,7 +237,7 @@ class TestFlashModeRsyncGuard:
         source = FileMapSource({"/main.py": "pass"}, entrypoint="/main.py")
 
         # mpremote handles flash on MP — no rsync needed, no gate.
-        result = deployer.deploy(source)
+        result = deployer.deploy_diff(source)
         assert result.success is True
 
 
@@ -265,7 +276,7 @@ class TestDeployerFollowKwargRouting:
         deployer, fake = self._make_deployer(
             monkeypatch, runtime="micropython", deploy_mode="flash",
         )
-        deployer.deploy(FileMapSource({"/main.py": "pass"}, entrypoint="/main.py"))
+        deployer.deploy_diff(FileMapSource({"/main.py": "pass"}, entrypoint="/main.py"))
         deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
         _files, _entrypoint, follow = deploy_call[1]
         assert follow == "soft_reboot"
@@ -276,7 +287,7 @@ class TestDeployerFollowKwargRouting:
         deployer, fake = self._make_deployer(
             monkeypatch, runtime="micropython", deploy_mode="flash",
         )
-        deployer.deploy(FileMapSource({"/code.py": "pass"}, entrypoint="/code.py"))
+        deployer.deploy_diff(FileMapSource({"/code.py": "pass"}, entrypoint="/code.py"))
         deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
         _files, _entrypoint, follow = deploy_call[1]
         assert follow == "exec"
@@ -287,7 +298,7 @@ class TestDeployerFollowKwargRouting:
         deployer, fake = self._make_deployer(
             monkeypatch, runtime="micropython", deploy_mode="ram",
         )
-        deployer.deploy(FileMapSource({"/main.py": "pass"}, entrypoint="/main.py"))
+        deployer.deploy_diff(FileMapSource({"/main.py": "pass"}, entrypoint="/main.py"))
         deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
         _files, _entrypoint, follow = deploy_call[1]
         assert follow == "exec"
@@ -305,7 +316,7 @@ class TestDeployerFollowKwargRouting:
         deployer, fake = self._make_deployer(
             monkeypatch, runtime="circuitpython", deploy_mode="ram",
         )
-        deployer.deploy(FileMapSource({"/code.py": "pass"}, entrypoint="/code.py"))
+        deployer.deploy_diff(FileMapSource({"/code.py": "pass"}, entrypoint="/code.py"))
         deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
         # FakeTransport's default ``follow="exec"`` is recorded — i.e.
         # the kwarg was not passed by the Deployer.  The discriminator
@@ -383,7 +394,7 @@ class TestPreflightAutoSwitch:
         deployer = Deployer(ram_device)
 
         messages: list[str] = []
-        result = deployer.deploy(
+        result = deployer.deploy_diff(
             source,
             on_preflight_message=messages.append,
         )
@@ -417,7 +428,7 @@ class TestPreflightAutoSwitch:
         )
         deployer = Deployer(device)
         messages: list[str] = []
-        result = deployer.deploy(source, on_preflight_message=messages.append)
+        result = deployer.deploy_diff(source, on_preflight_message=messages.append)
 
         assert result.success is True
         assert messages == []  # silent when nothing to switch
@@ -448,7 +459,7 @@ class TestPreflightAutoSwitch:
         deployer = Deployer(device)
         messages: list[str] = []
         # Force RAM mode despite the flagged library — caller's choice.
-        result = deployer.deploy(
+        result = deployer.deploy_diff(
             source,
             force_deploy_mode="ram",
             on_preflight_message=messages.append,
@@ -479,7 +490,7 @@ class TestPreflightAutoSwitch:
             transport_factory=lambda _device: fake,
         )
         deployer = Deployer(device)
-        deployer.deploy(source)
+        deployer.deploy_diff(source)
 
         captured = capsys.readouterr()
         assert "switching to flash mode" in captured.err
@@ -510,7 +521,7 @@ class TestPreflightDataFileAutoSwitch:
             entrypoint="/code.py",
         )
         messages: list[str] = []
-        result = deployer.deploy(source, on_preflight_message=messages.append)
+        result = deployer.deploy_diff(source, on_preflight_message=messages.append)
 
         assert result.success is True
         assert len(messages) == 1
@@ -524,7 +535,7 @@ class TestPreflightDataFileAutoSwitch:
             entrypoint="/code.py",
         )
         messages: list[str] = []
-        result = deployer.deploy(source, on_preflight_message=messages.append)
+        result = deployer.deploy_diff(source, on_preflight_message=messages.append)
 
         assert result.success is True
         assert messages == []  # no false positive on an all-.py set
@@ -539,7 +550,7 @@ class TestPreflightDataFileAutoSwitch:
             entrypoint="/code.py",
         )
         messages: list[str] = []
-        result = deployer.deploy(
+        result = deployer.deploy_diff(
             source,
             force_deploy_mode="ram",
             on_preflight_message=messages.append,
@@ -554,7 +565,7 @@ class TestPreflightDataFileAutoSwitch:
             {"/code.py": "pass", "/assets/bundle.der": b"\x30"},
             entrypoint="/code.py",
         )
-        deployer.deploy(source)
+        deployer.deploy_diff(source)
 
         captured = capsys.readouterr()
         assert "switching to flash mode" in captured.err
@@ -576,7 +587,7 @@ class TestTracebackExtraction:
         )
         deployer, _ = _make_deployer_with_fake(execute_output=output)
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
-        result = deployer.deploy(source)
+        result = deployer.deploy_diff(source)
         assert result.traceback is not None
         assert "KeyError: second" in result.traceback
         assert "ValueError: first" not in result.traceback

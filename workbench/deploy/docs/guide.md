@@ -2,7 +2,7 @@
 
 `chumicro-deploy` writes Python code onto CircuitPython and MicroPython boards from your laptop, then helps you recover when something goes wrong.
 
-This guide walks `Device`, `Deployer.deploy()`, file sources, probing, firmware URL resolution, end-to-end firmware flashing with `flash_firmware`, and the `InteractiveDeployer` recovery wrapper that classifies transport failures and coaches you through retry loops for unplug / ejected-drive / REPL-stuck failures.
+This guide walks `Device`, `Deployer.deploy_diff()`, file sources, probing, firmware URL resolution, end-to-end firmware flashing with `flash_firmware`, and the `InteractiveDeployer` recovery wrapper that classifies transport failures and coaches you through retry loops for unplug / ejected-drive / REPL-stuck failures.
 
 ## Install
 
@@ -109,7 +109,7 @@ Validation runs in `__post_init__`:
 | MicroPython | mpremote `mount` — stages host dir, mounts at `/remote` on device, runs from the mount | mpremote `copy` — copies to device flash, then execs |
 | CircuitPython | inline raw-REPL exec — every `.py` in *files* is injected into `sys.modules` via the class-as-module pattern, then the entrypoint runs as `__main__` | write to CIRCUITPY drive, soft-reboot, capture output |
 
-`Deployer.deploy()` supports both modes on both runtimes. CP RAM mode does not require a mounted CIRCUITPY drive — it deploys purely over the serial raw REPL, which makes it the fastest option for a dev loop where the board is reachable over USB but you do not want to wait for the flash round-trip. The tradeoff is that RAM mode cannot ship non-`.py` assets (TOML config, JSON data, images) because it has no device filesystem to write to — use flash mode if the payload needs those.
+`Deployer.deploy_diff()` supports both modes on both runtimes. CP RAM mode does not require a mounted CIRCUITPY drive — it deploys purely over the serial raw REPL, which makes it the fastest option for a dev loop where the board is reachable over USB but you do not want to wait for the flash round-trip. The tradeoff is that RAM mode cannot ship non-`.py` assets (TOML config, JSON data, images) because it has no device filesystem to write to — use flash mode if the payload needs those.
 
 ## Pick a `FileSource`
 
@@ -170,7 +170,7 @@ Dynamic imports (`importlib.import_module`, `__import__`) are invisible to AST w
 
 Any object satisfying the `FileSource` protocol works. `isinstance(your_source, FileSource)` returns `True` as long as `.files()` and `.entrypoint()` are defined — it's a `@runtime_checkable` Protocol, no inheritance required.
 
-## Deploy — `Deployer.deploy()`
+## Deploy — `Deployer.deploy_diff()`
 
 ```python
 from chumicro_deploy import Deployer
@@ -183,13 +183,17 @@ def on_progress(fraction: float, message: str) -> None:
 def on_file_staged(device_path: str) -> None:
     print(f"  staged {device_path}")
 
+def on_file_deleted(device_path: str) -> None:
+    print(f"  removed stale {device_path}")
+
 def on_execute_line(line: str) -> None:
     print(f"  > {line}")
 
-result = deployer.deploy(
+result = deployer.deploy_diff(
     source,
     on_progress=on_progress,
     on_file_staged=on_file_staged,
+    on_file_deleted=on_file_deleted,
     on_execute_line=on_execute_line,
 )
 
@@ -200,7 +204,9 @@ else:
     print(f"deploy failed — traceback:\n{result.traceback}")
 ```
 
-The lifecycle is always `create_transport() -> connect() -> transport.deploy_files() -> disconnect()`. The transport is released even when `deploy_files()` raises.
+`deploy_diff()` is the one stage primitive: it lists the on-device files in scope, deletes the stale set (anything not in the new payload), then stages and runs the entrypoint. It is **clean-slate by default** (`clean=True`) — the board is reconciled to exactly the payload plus the closed device keep set (`boot.py`, `boot_out.txt`, `_chu_kv.msgpack`); a board-resident `settings.toml` is evicted. Pass `clean=False` for the additive opt-out (reconcile only the entrypoint/state files + `/lib`, leave other board files), or `wipe=True` for a full filesystem erase (keep set included) before staging.
+
+The lifecycle is `create_transport() -> connect() -> list_files_in_scope() -> delete_files(stale) -> transport.deploy_files() -> disconnect()` (a RAM-mode deploy lists nothing and collapses to a plain stage; a `wipe=True` deploy replaces the list/delete step with `wipe_filesystem()`). The transport is released even when `deploy_files()` raises.
 
 `DeployResult`:
 
@@ -209,35 +215,34 @@ The lifecycle is always `create_transport() -> connect() -> transport.deploy_fil
 - `execute_output: str` — combined stdout captured from the board.
 - `traceback: str | None` — the last traceback block extracted from `execute_output`, or `None`.
 
-Callbacks are all optional. `on_progress` emits coarse milestones (0.0 connecting, 0.1 collecting, 0.2 staging, 0.9 executing, 1.0 done). `on_file_staged` and `on_execute_line` are forwarded to the transport; the real transports emit them after the fact rather than live-streaming.
+Callbacks are all optional. `on_progress` emits coarse milestones (0.0 connecting, 0.1 listing in-scope, 0.2 cleaning stale — only when there is a stale set, 0.3 staging, 0.9 executing, 1.0 done). `on_file_staged`, `on_file_deleted`, and `on_execute_line` are forwarded to the transport / diff step; the real transports emit them after the fact rather than live-streaming.
 
 ## Recover from deploy failures — `InteractiveDeployer`
 
-`Deployer.deploy()` raises transport errors directly — it's the deterministic programmatic surface that automation pipelines depend on.  For interactive use, `InteractiveDeployer` wraps a `Deployer` with classification, retry-loop, and user-facing coaching on failure.  The `chumicro-deploy deploy` CLI does this wrapping for you by default; pass `--non-interactive` to opt out.  `chumicro-workspace deploy` / `repl <thing>` / `demo` do the same.  When you call `Deployer.deploy()` from your own Python code you opt in by constructing the wrapper explicitly:
+`Deployer.deploy_diff()` raises transport errors directly — it's the deterministic programmatic surface that automation pipelines depend on.  For interactive use, `InteractiveDeployer` wraps a `Deployer` with classification, retry-loop, and user-facing coaching on failure.  The `chumicro-deploy deploy` CLI does this wrapping for you by default; pass `--non-interactive` to opt out.  `chumicro-workspace deploy` / `deploy-example` / `demo` do the same.  When you call `Deployer.deploy_diff()` from your own Python code you opt in by constructing the wrapper explicitly:
 
 ```python
 from chumicro_deploy import Deployer, InteractiveDeployer
 
 interactive = InteractiveDeployer(
     Deployer(device),
-    max_attempts=3,         # retry ceiling per deploy() call
+    max_attempts=3,         # retry ceiling per deploy_diff() call
 )
 
-result = interactive.deploy(source)
+result = interactive.deploy_diff(source)
 
-# .deploy_diff() mirrors Deployer.deploy_diff() through the same
-# classify/coach/retry loop — workspace's diff-deploy path uses it.
+# clean=False is the additive opt-out; wipe=True is a full erase.
 result = interactive.deploy_diff(source, wipe=True)
 ```
 
-When the underlying `Deployer.deploy()` raises a `CircuitpythonTransportError` or `MicropythonTransportError`, the interactive deployer:
+When the underlying `Deployer.deploy_diff()` raises a `CircuitpythonTransportError` or `MicropythonTransportError`, the interactive deployer:
 
 1. Classifies the error into a `DeployFailureKind` — one of `PORT_UNAVAILABLE`, `RAW_REPL_UNRESPONSIVE`, `CIRCUITPY_DRIVE_MISSING`, `MACOS_FSKIT_WEDGED`, `FLASH_COPY_FAILED`, `BOOTSTRAP_EXEC_FAILED`, `INSUFFICIENT_MEMORY`, `TRACEBACK_RETURNED`, `CONFIGURATION_ERROR`, or `UNKNOWN`.
 2. Prints a headline, the underlying error, and the canned `RecoveryPlan` for that kind (the physical actions that typically fix it — close the app holding the port, tap RESET, replug USB, switch to flash mode, etc.).
 3. Prompts the user to fix the condition and press Enter to retry, up to `max_attempts` times.  Typing `q` / `quit` / `abort` / `exit` at the prompt stops retrying and re-raises the last error.
 4. For non-retryable kinds (`INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, `TRACEBACK_RETURNED`) it prints the coaching once and returns / re-raises without prompting — a source-level bug can't be fixed by replugging, and a too-small board can't grow more RAM by retrying.
 
-When `Deployer.deploy()` returns a `DeployResult` with `success=False` and a `traceback`, `InteractiveDeployer` prints the traceback and a source-fix recovery plan, then returns the unchanged result.
+When `Deployer.deploy_diff()` returns a `DeployResult` with `success=False` and a `traceback`, `InteractiveDeployer` prints the traceback and a source-fix recovery plan, then returns the unchanged result.
 
 ### Plug in your own prompt and output
 
@@ -269,7 +274,7 @@ interactive = InteractiveDeployer(
 from chumicro_deploy import DeployFailureKind, classify_deploy_failure
 
 try:
-    Deployer(device).deploy(source)
+    Deployer(device).deploy_diff(source)
 except Exception as error:
     kind = classify_deploy_failure(error)
     if kind is DeployFailureKind.PORT_UNAVAILABLE:
@@ -375,13 +380,13 @@ flash_firmware(
 
 ## Tail the board with chumicro-repl
 
-`Deployer.deploy()` returns once the entrypoint executes; if the entrypoint then enters a long-running loop (a heartbeat, a sensor publisher, a server) the deploy is "done" but the interesting output is just starting.  [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) is the sister workbench tool for this — it streams the friendly REPL with traceback highlighting and exposes a `tail()` follow-mode that fails fast on a crash:
+`Deployer.deploy_diff()` returns once the entrypoint executes; if the entrypoint then enters a long-running loop (a heartbeat, a sensor publisher, a server) the deploy is "done" but the interesting output is just starting.  [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) is the sister workbench tool for this — it streams the friendly REPL with traceback highlighting and exposes a `tail()` follow-mode that fails fast on a crash:
 
 ```python
 from chumicro_deploy import Deployer
 from chumicro_repl import tail, ExitCode
 
-result = Deployer(device).deploy(source)
+result = Deployer(device).deploy_diff(source)
 if not result.success:
     raise SystemExit(f"deploy failed:\n{result.traceback}")
 

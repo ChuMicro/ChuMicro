@@ -86,7 +86,7 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     )
     result = _make_deploy_runner(
         device, non_interactive=args.non_interactive,
-    ).deploy(source)
+    ).deploy_diff(source)
     if result.execute_output:
         print(result.execute_output, end="")
     if not result.success:

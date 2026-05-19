@@ -81,7 +81,7 @@ def test_micropython_single_project_boot_runs_app(
     source = project_boot_source(
         project_dir, workspace=workspace, entrypoint_filename="main.py",
     )
-    result = Deployer(device).deploy(source)
+    result = Deployer(device).deploy_diff(source)
     assert result.success, f"deploy failed: {result.traceback}"
     assert "MARKER-SOLO-MP" in result.execute_output
 
@@ -97,6 +97,6 @@ def test_circuitpython_single_project_boot_runs_app(
     source = project_boot_source(
         project_dir, workspace=workspace, entrypoint_filename="code.py",
     )
-    result = Deployer(device).deploy(source)
+    result = Deployer(device).deploy_diff(source)
     assert result.success, f"deploy failed: {result.traceback}"
     assert "MARKER-SOLO-CP" in result.execute_output

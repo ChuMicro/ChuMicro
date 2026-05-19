@@ -163,7 +163,7 @@ def _blink_identify(context: BoardContext) -> None:
     entrypoint = _entrypoint_for(context.runtime)
     source = FileMapSource({entrypoint: script}, entrypoint=entrypoint)
     try:
-        Deployer(device).deploy(source)
+        Deployer(device).deploy_diff(source)
     except (CircuitpythonTransportError, MicropythonTransportError) as error:
         _print_note(f"LED blink skipped ({error}).")
 
@@ -248,7 +248,7 @@ def scenario_happy_path_ram(context: BoardContext) -> bool:
         _print_warn(
             "No usable deploy device — CircuitPython boards need a "
             "mounted CIRCUITPY drive on the host for flash-mode "
-            "Deployer.deploy.  Mount the board's USB drive and retry."
+            "Deployer.deploy_diff.  Mount the board's USB drive and retry."
         )
         return False
     interactive = InteractiveDeployer(
@@ -260,7 +260,7 @@ def scenario_happy_path_ram(context: BoardContext) -> bool:
         {entrypoint: "print('chu-demo-ok')\n"}, entrypoint=entrypoint,
     )
     try:
-        result = interactive.deploy(source)
+        result = interactive.deploy_diff(source)
     except (CircuitpythonTransportError, MicropythonTransportError) as error:
         _print_warn(f"Baseline deploy failed: {error}")
         return False
@@ -320,7 +320,7 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
     #   coaching block, and re-raises.  Either outcome is "correct"
     #   hand-holding for the user.
     try:
-        result = interactive.deploy(source)
+        result = interactive.deploy_diff(source)
     except (CircuitpythonTransportError, MicropythonTransportError) as error:
         kind = classify_deploy_failure(error)
         if kind is not DeployFailureKind.TRACEBACK_RETURNED:
@@ -398,7 +398,7 @@ def scenario_port_unavailable(context: BoardContext) -> bool:
         entrypoint=entrypoint,
     )
     try:
-        result = interactive.deploy(source)
+        result = interactive.deploy_diff(source)
     except (CircuitpythonTransportError, MicropythonTransportError) as error:
         kind = classify_deploy_failure(error)
         _print_warn(
@@ -475,7 +475,7 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
         entrypoint="/code.py",
     )
     try:
-        result = interactive.deploy(source)
+        result = interactive.deploy_diff(source)
     except CircuitpythonTransportError as error:
         _print_warn(
             f"Could not recover after retries.  Underlying: {error}"
@@ -595,7 +595,7 @@ def scenario_flash_copy_failed(context: BoardContext) -> bool:
         max_attempts=1,
     )
     try:
-        result = interactive.deploy(source)
+        result = interactive.deploy_diff(source)
     except CircuitpythonTransportError as error:
         kind = classify_deploy_failure(error)
         if kind is not DeployFailureKind.FLASH_COPY_FAILED:

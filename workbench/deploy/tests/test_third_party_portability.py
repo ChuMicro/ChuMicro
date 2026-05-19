@@ -82,7 +82,7 @@ class TestThirdPartyPortability:
         deployer = Deployer(device)
         source = CustomLayoutFileSource(_TEMPLATE_ROOT)
 
-        result = deployer.deploy(source)
+        result = deployer.deploy_diff(source)
         assert isinstance(result, DeployResult)
         assert result.success is True
         assert result.execute_output == "hello, third-party\n"
