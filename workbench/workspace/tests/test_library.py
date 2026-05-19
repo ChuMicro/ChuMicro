@@ -1,231 +1,223 @@
-"""Tests for chumicro_workspace.library — the PyPI fetch backend."""
+"""Tests for chumicro_workspace.library — the snapshot fetch backend.
+
+No sockets: an injected ``http_get`` serves an ``index.json`` and a
+snapshot tarball built in memory.
+"""
 
 from __future__ import annotations
 
 import io
-import subprocess
+import json
 import tarfile
 from pathlib import Path
 
 import pytest
 from chumicro_workspace.library import (
-    HEAD,
     LibraryFetchError,
     LibraryFetchFailureKind,
-    channel_distribution,
-    classify_pip_failure,
+    fetch_closure,
     fetch_library,
+    read_installed_version,
+    remove_library,
 )
+from chumicro_workspace.library_channel import index_url, tarball_url
 
-_TREES = ("src", "tests", "examples", "docs")
-_FILES = ("pyproject.toml", "VERSION", "README.md")
+_REPO = "ChuMicro/ChuMicro-Libraries"
 
 
-def _build_sdist(
-    path: Path,
-    base: str,
+def _pyproject(deps: tuple[str, ...]) -> bytes:
+    body = "[project]\nname = 'x'\ndependencies = [{}]\n".format(
+        ", ".join(repr(dep) for dep in deps),
+    )
+    return body.encode()
+
+
+def _snapshot(
+    tag: str,
+    libraries: dict[str, dict],
     *,
-    trees: tuple[str, ...] = _TREES,
-    files: tuple[str, ...] = _FILES,
-    extra_root: bool = False,
-    traversal_member: bool = False,
-) -> None:
-    """Write a minimal sdist .tar.gz to *path* with root dir *base*/."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(path, "w:gz") as archive:
+    drop_tree: str | None = None,
+) -> bytes:
+    """Build a GitHub-shaped tarball of full curated library trees.
+
+    *libraries* maps short name -> {"version": str, "deps": tuple}.
+    *drop_tree* omits one REQUIRED tree from every library (to
+    exercise the malformed-content guard).
+    """
+    wrapper = f"ChuMicro-Libraries-{tag}"
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
         def add(name: str, body: bytes = b"x") -> None:
             info = tarfile.TarInfo(name)
             info.size = len(body)
             archive.addfile(info, io.BytesIO(body))
 
-        for tree in trees:
-            add(f"{base}/{tree}/placeholder")
-        for filename in files:
-            add(f"{base}/{filename}")
-        if extra_root:
-            add("second_root/placeholder")
-        if traversal_member:
-            add("../escape.py")
-
-
-class _SdistRunner:
-    """Fake subprocess.run that drops a sdist into pip's ``-d`` dir.
-
-    Mirrors ``pip download -d <dir>`` for the happy path; configurable
-    to skip the drop (wheel-only repo) or fail with canned stderr.
-    """
-
-    def __init__(
-        self,
-        *,
-        base: str = "chumicro_mqtt-0.11.4",
-        returncode: int = 0,
-        stderr: str = "",
-        drop_sdist: bool = True,
-        **build_kwargs,
-    ) -> None:
-        self.base = base
-        self.returncode = returncode
-        self.stderr = stderr
-        self.drop_sdist = drop_sdist
-        self.build_kwargs = build_kwargs
-        self.calls: list[list[str]] = []
-
-    def __call__(self, args, **kwargs):
-        self.calls.append(list(args))
-        if self.returncode == 0 and self.drop_sdist:
-            dest = Path(args[args.index("-d") + 1])
-            _build_sdist(
-                dest / f"{self.base}.tar.gz", self.base, **self.build_kwargs,
+        index = {"tag": tag, "libraries": {}}
+        for short, spec in libraries.items():
+            index["libraries"][f"chumicro_{short}"] = {
+                "version": spec["version"],
+            }
+            for tree in ("src", "tests", "examples", "docs"):
+                if tree == drop_tree:
+                    continue
+                add(f"{wrapper}/{short}/{tree}/placeholder")
+            add(
+                f"{wrapper}/{short}/src/chumicro_{short}/__init__.py",
             )
-        return subprocess.CompletedProcess(
-            args, self.returncode, "", self.stderr,
-        )
+            add(
+                f"{wrapper}/{short}/pyproject.toml",
+                _pyproject(spec.get("deps", ())),
+            )
+            add(f"{wrapper}/{short}/VERSION", spec["version"].encode())
+            add(f"{wrapper}/{short}/README.md")
+        add(f"{wrapper}/index.json", json.dumps(index).encode())
+    return buffer.getvalue()
 
 
-class TestChannelDistribution:
-    def test_stable(self):
-        assert channel_distribution("chumicro_mqtt", "stable") == "chumicro-mqtt"
+def _channel(tag: str, libraries: dict[str, dict]):
+    """An ``http_get`` serving the index + tarball for one snapshot."""
+    tarball = _snapshot(tag, libraries)
+    index = json.dumps({
+        "tag": tag,
+        "libraries": {
+            f"chumicro_{short}": {"version": spec["version"]}
+            for short, spec in libraries.items()
+        },
+    }).encode()
+    served = {
+        index_url(_REPO, "main"): index,
+        index_url(_REPO, tag): index,
+        tarball_url(_REPO, tag): tarball,
+    }
+    calls: list[str] = []
 
-    def test_experimental(self):
-        assert (
-            channel_distribution("chumicro_mqtt", "experimental")
-            == "chumicro-mqtt-experimental"
-        )
+    def http_get(url: str) -> bytes:
+        calls.append(url)
+        try:
+            return served[url]
+        except KeyError:
+            raise LibraryFetchError(
+                LibraryFetchFailureKind.PACKAGE_NOT_FOUND, f"404 {url}",
+            ) from None
 
-    def test_unknown_channel_raises(self):
-        with pytest.raises(LibraryFetchError) as caught:
-            channel_distribution("chumicro_mqtt", "nightly")
-        assert caught.value.kind is LibraryFetchFailureKind.UNKNOWN
-
-
-class TestClassifyPipFailure:
-    def test_package_not_found(self):
-        stderr = "ERROR: Could not find a version that satisfies the requirement"
-        assert (
-            classify_pip_failure(stderr)
-            is LibraryFetchFailureKind.PACKAGE_NOT_FOUND
-        )
-
-    def test_network(self):
-        stderr = "Temporary failure in name resolution"
-        assert classify_pip_failure(stderr) is LibraryFetchFailureKind.NETWORK
-
-    def test_unknown(self):
-        assert (
-            classify_pip_failure("something unexpected")
-            is LibraryFetchFailureKind.UNKNOWN
-        )
+    http_get.calls = calls  # type: ignore[attr-defined]
+    return http_get
 
 
 class TestFetchLibrary:
-    def test_happy_path_lands_curated_content(self, tmp_path: Path):
-        runner = _SdistRunner()
+    def test_lands_curated_tree(self, tmp_path: Path):
+        http_get = _channel("20260519", {"mqtt": {"version": "1.2.0"}})
         destination = fetch_library(
             "chumicro_mqtt",
             workspace_root=tmp_path,
-            subprocess_runner=runner,
+            http_get=http_get,
         )
         assert destination == tmp_path / "libraries" / "chumicro_mqtt"
-        for tree in _TREES:
-            assert (destination / tree).is_dir()
-        for filename in _FILES:
-            assert (destination / filename).is_file()
+        assert (destination / "src" / "chumicro_mqtt" / "__init__.py").is_file()
+        assert (destination / "pyproject.toml").is_file()
+        assert read_installed_version(tmp_path, "chumicro_mqtt") == "1.2.0"
 
-    def test_head_is_unpinned_spec(self, tmp_path: Path):
-        runner = _SdistRunner()
+    def test_pinned_tag_resolves_that_snapshot(self, tmp_path: Path):
+        http_get = _channel("20260101", {"mqtt": {"version": "0.9.0"}})
         fetch_library(
             "chumicro_mqtt",
-            version=HEAD,
+            version="20260101",
             workspace_root=tmp_path,
-            subprocess_runner=runner,
+            http_get=http_get,
         )
-        assert "chumicro-mqtt" in runner.calls[0]
-        assert not any("==" in arg for arg in runner.calls[0])
+        assert read_installed_version(tmp_path, "chumicro_mqtt") == "0.9.0"
 
-    def test_pinned_version_in_spec(self, tmp_path: Path):
-        runner = _SdistRunner(base="chumicro_mqtt-0.11.4")
+    def test_refetch_backs_up_edited_tree(self, tmp_path: Path):
+        http_get = _channel("20260519", {"mqtt": {"version": "1.2.0"}})
         fetch_library(
-            "chumicro_mqtt",
-            version="0.11.4",
-            workspace_root=tmp_path,
-            subprocess_runner=runner,
+            "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get,
         )
-        assert "chumicro-mqtt==0.11.4" in runner.calls[0]
+        edited = (
+            tmp_path / "libraries" / "chumicro_mqtt" / "src"
+            / "chumicro_mqtt" / "__init__.py"
+        )
+        edited.write_text("# my local change\n", encoding="utf-8")
 
-    def test_experimental_channel_spec(self, tmp_path: Path):
-        runner = _SdistRunner(base="chumicro_mqtt_experimental-0.11.4")
         fetch_library(
-            "chumicro_mqtt",
-            channel="experimental",
-            workspace_root=tmp_path,
-            subprocess_runner=runner,
+            "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get,
         )
-        assert "chumicro-mqtt-experimental" in runner.calls[0]
 
-    def test_pip_failure_is_classified(self, tmp_path: Path):
-        runner = _SdistRunner(
-            returncode=1,
-            stderr="ERROR: Could not find a version that satisfies",
+        backups = list(
+            (tmp_path / "_library-backups" / "chumicro_mqtt").iterdir(),
         )
+        assert len(backups) == 1
+        assert backups[0].name.startswith("1.2.0-")
+        preserved = (
+            backups[0] / "src" / "chumicro_mqtt" / "__init__.py"
+        ).read_text(encoding="utf-8")
+        assert preserved == "# my local change\n"
+        # Fresh copy replaced the working tree.
+        assert "my local change" not in edited.read_text(encoding="utf-8")
+
+    def test_malformed_tree_is_classified(self, tmp_path: Path):
+        tarball = _snapshot(
+            "t", {"mqtt": {"version": "1.0.0"}}, drop_tree="tests",
+        )
+        served = {
+            index_url(_REPO, "main"): json.dumps(
+                {"tag": "t", "libraries": {"chumicro_mqtt": {"version": "1"}}},
+            ).encode(),
+            tarball_url(_REPO, "t"): tarball,
+        }
         with pytest.raises(LibraryFetchError) as caught:
             fetch_library(
-                "chumicro_nope",
+                "chumicro_mqtt",
                 workspace_root=tmp_path,
-                subprocess_runner=runner,
+                http_get=lambda url: served[url],
+            )
+        assert caught.value.kind is LibraryFetchFailureKind.MALFORMED_PACKAGE
+
+    def test_unknown_library_propagates(self, tmp_path: Path):
+        http_get = _channel("t", {"timing": {"version": "1.0.0"}})
+        with pytest.raises(LibraryFetchError) as caught:
+            fetch_library(
+                "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get,
             )
         assert caught.value.kind is LibraryFetchFailureKind.PACKAGE_NOT_FOUND
 
-    def test_no_sdist_downloaded(self, tmp_path: Path):
-        runner = _SdistRunner(drop_sdist=False)
-        with pytest.raises(LibraryFetchError) as caught:
-            fetch_library(
-                "chumicro_mqtt",
-                workspace_root=tmp_path,
-                subprocess_runner=runner,
-            )
-        assert caught.value.kind is LibraryFetchFailureKind.NO_SDIST
 
-    def test_malformed_sdist_missing_tree(self, tmp_path: Path):
-        runner = _SdistRunner(trees=("src", "tests", "examples"))  # no docs/
-        with pytest.raises(LibraryFetchError) as caught:
-            fetch_library(
-                "chumicro_mqtt",
-                workspace_root=tmp_path,
-                subprocess_runner=runner,
-            )
-        assert caught.value.kind is LibraryFetchFailureKind.MALFORMED_PACKAGE
-        assert "docs" in str(caught.value)
-
-    def test_traversal_member_rejected(self, tmp_path: Path):
-        runner = _SdistRunner(traversal_member=True)
-        with pytest.raises(LibraryFetchError) as caught:
-            fetch_library(
-                "chumicro_mqtt",
-                workspace_root=tmp_path,
-                subprocess_runner=runner,
-            )
-        assert caught.value.kind is LibraryFetchFailureKind.BAD_ARCHIVE
-
-    def test_extra_top_level_dir_rejected(self, tmp_path: Path):
-        runner = _SdistRunner(extra_root=True)
-        with pytest.raises(LibraryFetchError) as caught:
-            fetch_library(
-                "chumicro_mqtt",
-                workspace_root=tmp_path,
-                subprocess_runner=runner,
-            )
-        assert caught.value.kind is LibraryFetchFailureKind.MALFORMED_PACKAGE
-
-    def test_replaces_existing_curated_copy(self, tmp_path: Path):
-        stale = tmp_path / "libraries" / "chumicro_mqtt"
-        stale.mkdir(parents=True)
-        (stale / "stale_marker.py").write_text("old\n")
-        runner = _SdistRunner()
-        destination = fetch_library(
-            "chumicro_mqtt",
-            workspace_root=tmp_path,
-            subprocess_runner=runner,
+class TestFetchClosure:
+    def test_single_snapshot_one_tarball_get(self, tmp_path: Path):
+        http_get = _channel("20260519", {
+            "mqtt": {"version": "1.2.0", "deps": ("chumicro-timing",)},
+            "timing": {"version": "0.5.0"},
+        })
+        closure = fetch_closure(
+            "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get,
         )
-        assert not (destination / "stale_marker.py").exists()
-        assert (destination / "src").is_dir()
+        assert closure == ["chumicro_mqtt", "chumicro_timing"]
+        assert read_installed_version(tmp_path, "chumicro_timing") == "0.5.0"
+        # One snapshot: exactly one tarball download for the whole set.
+        tar_gets = [
+            url for url in http_get.calls
+            if url == tarball_url(_REPO, "20260519")
+        ]
+        assert len(tar_gets) == 1
+
+    def test_cycle_safe(self, tmp_path: Path):
+        http_get = _channel("t", {
+            "a": {"version": "1", "deps": ("chumicro-b",)},
+            "b": {"version": "1", "deps": ("chumicro-a",)},
+        })
+        closure = fetch_closure(
+            "chumicro_a", workspace_root=tmp_path, http_get=http_get,
+        )
+        assert sorted(closure) == ["chumicro_a", "chumicro_b"]
+
+
+class TestHousekeeping:
+    def test_read_installed_version_absent(self, tmp_path: Path):
+        assert read_installed_version(tmp_path, "chumicro_mqtt") is None
+
+    def test_remove_library(self, tmp_path: Path):
+        http_get = _channel("t", {"mqtt": {"version": "1.0.0"}})
+        fetch_library(
+            "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get,
+        )
+        assert remove_library(tmp_path, "chumicro_mqtt") is True
+        assert remove_library(tmp_path, "chumicro_mqtt") is False

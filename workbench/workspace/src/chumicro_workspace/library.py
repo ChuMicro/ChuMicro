@@ -1,53 +1,55 @@
-"""PyPI fetch backend for curated workspace libraries.
+"""Snapshot-channel fetch backend for curated workspace libraries.
 
-Pull a chumicro library's sdist from PyPI into the user's workspace
-``libraries/<package>/`` so the deploy walker treats it like a local
-library — same import-graph rules, same opt-out mechanism, same
-FAT-safe deploy path.  This module owns only the fetch primitive; the
+Pull a chumicro library — and the chumicro libraries it declares —
+out of a published snapshot channel into the user's workspace
+``libraries/<name>/`` so the deploy walker treats it like any local
+library.  A channel snapshot is an internally-consistent set every
+library was built together in (library ``pyproject.toml``s carry no
+version constraints, so the correct dependency set is definitionally
+the one in the same snapshot); a closure is therefore resolved from a
+single snapshot, fetched as one tarball.
+
+The acquired tree is the user's source to read, run, and edit.  A
+re-fetch never silently clobbers it: the current tree is moved aside
+to ``_library-backups/<name>/<old-version>-<timestamp>/`` before the
+new one is written, so a user who adapted the library can lift their
+changes back.
+
+This module owns the placement primitive; the
 ``chumicro-workspace library`` CLI surface and its coaching loop are
-built on top of it separately.
-
-Channel -> PyPI distribution (mirrors the experimental rename the
-release pipeline already performs):
-
-    stable        chumicro-<lib>
-    experimental  chumicro-<lib>-experimental
-
-The ``version: HEAD`` sentinel means "track the channel's latest" — it
-maps to an unpinned ``pip download`` because PyPI has no "HEAD"
-version, and the release pipeline publishes every VERSION-bumped main
-merge to the experimental package, so the channel's latest already is
-main's latest.
-
-Failures are classified into a closed set so a caller can coach the
-user instead of dumping a pip traceback.  The per-kind user-facing
-recovery prose + retry loop live with the CLI; this module's contract
-is the typed :class:`LibraryFetchError` carrying a
-:class:`LibraryFetchFailureKind`.
+built on top.  Failures are classified into a closed set
+(:class:`LibraryFetchFailureKind`) so the CLI coaches instead of
+dumping a traceback; the transport itself lives in
+:mod:`chumicro_workspace.library_channel`.
 """
 
 from __future__ import annotations
 
 import shutil
-import subprocess
-import sys
-import tarfile
 import tempfile
+import time
 from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
 
-from chumicro_workspace.dep_resolver import chumicro_dependencies
+from chumicro_workspace.dep_resolver import (
+    chumicro_dependencies,
+    transitive_closure,
+)
 
-#: Trees the curated copy must carry.  ``src/`` is what the deploy
-#: walker needs; ``tests/``/``examples/``/``docs/`` make the curated
-#: library self-contained (the sdist now ships them for this reason).
+#: Trees a curated copy carries — ``src/`` is what the deploy walker
+#: needs; ``tests/``/``examples/``/``docs/`` make it self-contained so
+#: a user can run and adapt the library without leaving the workspace.
 REQUIRED_TREES = ("src", "tests", "examples", "docs")
 
 #: Top-level files copied alongside the trees.
 COPIED_FILES = ("pyproject.toml", "VERSION", "README.md")
 
-#: Sentinel recorded in ``workspace.yml`` for ``--floating`` entries.
+#: Workspace-relative dir holding pre-upgrade backups of edited trees.
+LIBRARY_BACKUPS_DIRNAME = "_library-backups"
+
+#: Sentinel recorded in ``workspace.yml`` for ``--floating`` entries —
+#: "track the channel's latest snapshot" rather than a pinned tag.
 HEAD = "HEAD"
 
 
@@ -56,9 +58,9 @@ class LibraryFetchFailureKind(Enum):
 
     NETWORK = "network"
     PACKAGE_NOT_FOUND = "package-not-found"
-    NO_SDIST = "no-sdist"
     BAD_ARCHIVE = "bad-archive"
     MALFORMED_PACKAGE = "malformed-package"
+    INDEX_MALFORMED = "index-malformed"
     UNKNOWN = "unknown"
 
 
@@ -70,157 +72,12 @@ class LibraryFetchError(RuntimeError):
         self.kind = kind
 
 
-def channel_distribution(package: str, channel: str) -> str:
-    """Map an import name + channel to its PyPI distribution name.
-
-    ``("chumicro_mqtt", "stable")`` -> ``"chumicro-mqtt"``;
-    ``("chumicro_mqtt", "experimental")`` -> ``"chumicro-mqtt-experimental"``.
-    """
-    base = package.replace("_", "-")
-    if channel == "stable":
-        return base
-    if channel == "experimental":
-        return f"{base}-experimental"
-    raise LibraryFetchError(
-        LibraryFetchFailureKind.UNKNOWN,
-        f"unknown channel {channel!r} (expected 'stable' or 'experimental')",
-    )
-
-
-def classify_pip_failure(stderr: str) -> LibraryFetchFailureKind:
-    """Map ``pip download`` stderr to a failure kind.
-
-    Pattern-matches on the substrings pip emits; falls open to
-    :attr:`LibraryFetchFailureKind.UNKNOWN`.
-    """
-    lowered = stderr.lower()
-    if "could not find a version" in lowered or "no matching distribution" in lowered:
-        return LibraryFetchFailureKind.PACKAGE_NOT_FOUND
-    network_markers = (
-        "temporary failure in name resolution",
-        "failed to establish a new connection",
-        "connection refused",
-        "network is unreachable",
-        "timed out",
-        "retries exceeded",
-    )
-    if any(marker in lowered for marker in network_markers):
-        return LibraryFetchFailureKind.NETWORK
-    return LibraryFetchFailureKind.UNKNOWN
-
-
-def _safe_extract(sdist: Path, into: Path) -> Path:
-    """Extract *sdist* under *into*; return the unpacked root directory.
-
-    Rejects members with absolute paths or ``..`` traversal before
-    extracting — ``tarfile``'s ``data`` filter would do this, but it
-    only exists on Python 3.12+ and this package supports 3.11.
-    """
-    try:
-        with tarfile.open(sdist, "r:gz") as archive:
-            members = archive.getmembers()
-            for member in members:
-                target = (into / member.name).resolve()
-                if not str(target).startswith(str(into.resolve())):
-                    raise LibraryFetchError(
-                        LibraryFetchFailureKind.BAD_ARCHIVE,
-                        f"sdist member escapes extraction dir: {member.name!r}",
-                    )
-            archive.extractall(into)  # noqa: S202 — members validated above
-    except tarfile.TarError as error:
-        raise LibraryFetchError(
-            LibraryFetchFailureKind.BAD_ARCHIVE,
-            f"could not unpack sdist {sdist.name}: {error}",
-        ) from error
-
-    roots = [child for child in into.iterdir() if child.is_dir()]
-    if len(roots) != 1:
-        raise LibraryFetchError(
-            LibraryFetchFailureKind.MALFORMED_PACKAGE,
-            f"expected one top-level dir in {sdist.name}, found {len(roots)}",
-        )
-    return roots[0]
-
-
-def fetch_library(
-    package: str,
-    *,
-    channel: str = "stable",
-    version: str = HEAD,
-    workspace_root: Path,
-    subprocess_runner=subprocess.run,
-) -> Path:
-    """Fetch *package* from PyPI into ``workspace_root/libraries/<package>/``.
-
-    Runs ``pip download --no-deps --no-binary :all:`` so the sdist
-    (not a wheel) lands, unpacks it, and copies ``src/`` + ``tests/`` +
-    ``examples/`` + ``docs/`` + the top-level metadata files into the
-    workspace.  An existing curated copy is replaced.
-
-    *version* may be a PyPI-resolvable string or the :data:`HEAD`
-    sentinel (unpinned — the channel's latest).  *subprocess_runner*
-    is injected so tests can fake the pip call.
-
-    Returns the destination directory.  Raises
-    :class:`LibraryFetchError` with a classified kind on any failure.
-    """
-    distribution = channel_distribution(package, channel)
-    spec = distribution if version == HEAD else f"{distribution}=={version}"
-
-    with tempfile.TemporaryDirectory(prefix="chumicro-library-") as staging:
-        staging_dir = Path(staging)
-        command = [
-            sys.executable, "-m", "pip", "download",
-            "--no-deps", "--no-binary", ":all:",
-            spec, "-d", str(staging_dir),
-        ]
-        completed = subprocess_runner(  # noqa: S603 — args fully controlled
-            command, capture_output=True, text=True, check=False,
-        )
-        if completed.returncode != 0:
-            stderr = completed.stderr or ""
-            raise LibraryFetchError(
-                classify_pip_failure(stderr),
-                f"pip download failed for {spec!r}:\n{stderr.strip()}",
-            )
-
-        tarballs = sorted(staging_dir.glob("*.tar.gz"))
-        if not tarballs:
-            raise LibraryFetchError(
-                LibraryFetchFailureKind.NO_SDIST,
-                f"no sdist (.tar.gz) downloaded for {spec!r} — "
-                "is the published distribution wheel-only?",
-            )
-
-        unpacked_root = _safe_extract(tarballs[0], staging_dir / "unpacked")
-        _validate_curated_content(unpacked_root, spec)
-
-        destination = workspace_root / "libraries" / package
-        _replace_tree(unpacked_root, destination)
-        return destination
-
-
-def _validate_curated_content(root: Path, spec: str) -> None:
-    """Confirm an unpacked sdist carries everything a curated copy needs."""
-    missing = [tree for tree in REQUIRED_TREES if not (root / tree).is_dir()]
-    missing += [name for name in COPIED_FILES if not (root / name).is_file()]
-    if missing:
-        raise LibraryFetchError(
-            LibraryFetchFailureKind.MALFORMED_PACKAGE,
-            f"sdist for {spec!r} is missing {', '.join(sorted(missing))} — "
-            "it predates the curated-content sdist change",
-        )
-
-
-def _replace_tree(source_root: Path, destination: Path) -> None:
-    """Copy curated content from *source_root* into a fresh *destination*."""
-    if destination.exists():
-        shutil.rmtree(destination)
-    destination.mkdir(parents=True)
-    for tree in REQUIRED_TREES:
-        shutil.copytree(source_root / tree, destination / tree)
-    for name in COPIED_FILES:
-        shutil.copy2(source_root / name, destination / name)
+def read_installed_version(workspace_root: Path, package: str) -> str | None:
+    """Return the VERSION of a curated library on disk, or None if absent."""
+    version_file = workspace_root / "libraries" / package / "VERSION"
+    if not version_file.is_file():
+        return None
+    return version_file.read_text(encoding="utf-8").strip() or None
 
 
 def remove_library(workspace_root: Path, package: str) -> bool:
@@ -232,12 +89,116 @@ def remove_library(workspace_root: Path, package: str) -> bool:
     return True
 
 
-def read_installed_version(workspace_root: Path, package: str) -> str | None:
-    """Return the VERSION of a curated library on disk, or None if absent."""
-    version_file = workspace_root / "libraries" / package / "VERSION"
-    if not version_file.is_file():
+def _validate_curated_content(root: Path, package: str) -> None:
+    """Confirm an extracted library tree carries everything needed."""
+    missing = [tree for tree in REQUIRED_TREES if not (root / tree).is_dir()]
+    missing += [name for name in COPIED_FILES if not (root / name).is_file()]
+    if missing:
+        raise LibraryFetchError(
+            LibraryFetchFailureKind.MALFORMED_PACKAGE,
+            f"snapshot tree for {package!r} is missing "
+            f"{', '.join(sorted(missing))}",
+        )
+
+
+def _backup_existing(destination: Path, workspace_root: Path) -> Path | None:
+    """Move an existing curated tree aside before it is replaced.
+
+    Returns the backup directory, or ``None`` if there was nothing to
+    back up.  The backup is keyed by the version that was on disk so a
+    user can tell which edits came from where; an untracked dir, never
+    committed (workspace ``.gitignore`` covers it).
+    """
+    if not destination.exists():
         return None
-    return version_file.read_text(encoding="utf-8").strip() or None
+    old_version = read_installed_version(
+        workspace_root, destination.name,
+    ) or "unknown"
+    backup_dir = (
+        workspace_root
+        / LIBRARY_BACKUPS_DIRNAME
+        / destination.name
+        / f"{old_version}-{int(time.time())}"
+    )
+    backup_dir.parent.mkdir(parents=True, exist_ok=True)
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
+    shutil.move(str(destination), str(backup_dir))
+    return backup_dir
+
+
+def _place_library(
+    source_root: Path, package: str, workspace_root: Path,
+) -> Path:
+    """Install an extracted tree, preserving any edited copy first.
+
+    Validates the tree, backs up an existing curated copy
+    (edit-preserving — never an implicit clobber), then copies the
+    curated subset into ``libraries/<package>/``.  Returns the
+    destination.
+    """
+    _validate_curated_content(source_root, package)
+    destination = workspace_root / "libraries" / package
+    _backup_existing(destination, workspace_root)
+    destination.mkdir(parents=True)
+    for tree in REQUIRED_TREES:
+        shutil.copytree(source_root / tree, destination / tree)
+    for name in COPIED_FILES:
+        shutil.copy2(source_root / name, destination / name)
+    return destination
+
+
+def _snapshot_and_tarball(channel: str, version: str, http_get):
+    """Resolve the channel snapshot and fetch its tarball once.
+
+    *version* is the :data:`HEAD` sentinel (latest snapshot) or a
+    pinned snapshot tag.
+    """
+    # Imported here so the transport stays a leaf the test fixtures
+    # can swap without importing this module's placement logic.
+    from chumicro_workspace.library_channel import (
+        fetch_snapshot_tarball,
+        resolve_snapshot,
+    )
+
+    snapshot = resolve_snapshot(
+        channel,
+        tag=None if version == HEAD else version,
+        http_get=http_get,
+    )
+    return snapshot, fetch_snapshot_tarball(
+        channel, snapshot, http_get=http_get,
+    )
+
+
+def _real_http_get(url: str) -> bytes:
+    """Default transport — deferred so importing this module is cheap."""
+    from chumicro_workspace.library_channel import _real_http_get as backend
+
+    return backend(url)
+
+
+def fetch_library(
+    package: str,
+    *,
+    channel: str = "stable",
+    version: str = HEAD,
+    workspace_root: Path,
+    http_get: Callable[[str], bytes] = _real_http_get,
+) -> Path:
+    """Fetch one *package* from a channel snapshot into the workspace.
+
+    *version* is :data:`HEAD` (the channel's latest snapshot) or a
+    pinned snapshot tag.  An existing curated copy is backed up, not
+    clobbered.  Returns the destination directory; raises
+    :class:`LibraryFetchError` with a classified kind on any failure.
+    """
+    snapshot, tarball = _snapshot_and_tarball(channel, version, http_get)
+    from chumicro_workspace.library_channel import extract_library
+
+    with tempfile.TemporaryDirectory(prefix="chumicro-library-") as staging:
+        root = extract_library(tarball, package, Path(staging))
+        return _place_library(root, package, workspace_root)
 
 
 def fetch_closure(
@@ -246,41 +207,34 @@ def fetch_closure(
     channel: str = "stable",
     version: str = HEAD,
     workspace_root: Path,
-    subprocess_runner: Callable[..., subprocess.CompletedProcess] = (
-        subprocess.run
-    ),
+    http_get: Callable[[str], bytes] = _real_http_get,
 ) -> list[str]:
     """Fetch *root* and every chumicro library it transitively needs.
 
-    Breadth-first from *root*: fetch a library, read its
-    ``[project].dependencies`` for chumicro entries, enqueue the
-    unseen ones.  *root* is fetched at the requested *version*; each
-    transitive dependency tracks its channel's latest (an unpinned
-    fetch) — channel does not leak, version pins are per-library.
-
-    Returns the closure as import names in BFS order (root first).
-    Cycle-safe.  Raises :class:`LibraryFetchError` from the first
-    fetch that fails (the partially-fetched libraries stay on disk;
-    the caller decides whether to roll back).
+    The whole closure comes from one snapshot — one ``index.json``
+    GET, one tarball GET — because a snapshot is the
+    internally-consistent set every library was built together in
+    (library pyprojects carry no version constraints, so the right
+    dependency set is whatever shipped in the same snapshot).
+    Breadth-first from *root* over each placed library's ``chumicro-``
+    deps,
+    via the shared :func:`~chumicro_workspace.dep_resolver.
+    transitive_closure`.  Returns the closure as import names in BFS
+    order (root first); cycle-safe.  Raises :class:`LibraryFetchError`
+    from the first member that fails to extract (already-placed
+    members stay on disk; the caller decides whether to roll back).
     """
-    seen: set[str] = set()
-    ordered: list[str] = []
-    queue: list[str] = [root]
-    while queue:
-        name = queue.pop(0)
-        if name in seen:
-            continue
-        seen.add(name)
-        ordered.append(name)
-        fetch_library(
-            name,
-            channel=channel,
-            version=version if name == root else HEAD,
-            workspace_root=workspace_root,
-            subprocess_runner=subprocess_runner,
+    snapshot, tarball = _snapshot_and_tarball(channel, version, http_get)
+    from chumicro_workspace.library_channel import extract_library
+
+    def deps_of(name: str) -> list[str]:
+        with tempfile.TemporaryDirectory(
+            prefix="chumicro-library-",
+        ) as staging:
+            extracted = extract_library(tarball, name, Path(staging))
+            _place_library(extracted, name, workspace_root)
+        return chumicro_dependencies(
+            workspace_root / "libraries" / name / "pyproject.toml",
         )
-        pyproject = workspace_root / "libraries" / name / "pyproject.toml"
-        for dependency in chumicro_dependencies(pyproject):
-            if dependency not in seen:
-                queue.append(dependency)
-    return ordered
+
+    return transitive_closure([root], deps_of)
