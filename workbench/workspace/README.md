@@ -90,7 +90,7 @@ workspace.yml ──────────────────► projects
 | **Config** | `dump-config <project>`, `config-validate <project>` |
 | **Devices** | `add-device`, `probe`, `discover`, `devices`, `remove-device`, `reset-device`, `rename --device` |
 | **Deploy / run** | `deploy <project> [--tail SECONDS]`, `deploy-example`, `demo`, `repl [--tail SECONDS]`, `projects [--flat]` |
-| **Libraries** | `library list\|add\|update\|remove\|forget\|switch-channel`, `install-libraries <project>` |
+| **Libraries** | `library list\|add\|update\|remove\|forget\|switch-channel` |
 | **Health** | `status`, `doctor` (also runs as a fast pre-deploy gate; `deploy --skip-health-check` opts out) |
 | **Quality** | `test`, `lint`, `preflight` (chains lint + test; respects `workspace.yml`'s `quality:` block) |
 | **Firmware** | `install-firmware`, `upgrade-firmware`, `reset-board` |

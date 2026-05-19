@@ -460,28 +460,46 @@ distinct exit codes, recovery coaching, the `--tail`/`--no-tail`/
 pyproject; `FileSource` `@runtime_checkable`, all inner sources
 duck-type it honestly).
 
-*Collapse B — retire `install-libraries`' board-push.* **[Decision
+*Collapse B — library acquisition.* **[Decision
 0078](../decisions/0078-library-acquisition-is-host-local.md)
-`accepted` 2026-05-18.** `install-libraries` keeps its command surface
-+ host-side primitives (AST walk, name map, channel select); only the
-subprocess board-push (the out-of-band `/lib` writer, meta-finding
-bullet 3) is deleted. It now fetches each `chumicro_<name>` into a
-gitignored workspace-local `<workspace>/_libraries/<name>/src/` tree
-(pip `--target` primary; `mip`/`circup` `--target` as
-download-to-local fallback, never a device/CIRCUITPY mount) and
-registers it in the same managed `library_sources:` block dev mode
-uses — regular mode becomes dev mode pointed at a fetched local tree;
-the one import-graph `deploy` then bundles it. Transitive deps land
-locally per Decision 0042; the AST walker stays the only
-what-actually-ships filter. Workspace-template `.gitignore` +
-regular-mode README (gap #4b) update to the fetch-then-deploy recipe.
+`accepted`.** The 3d shape (`install-libraries` AST-discovers imports,
+pip/mip `--target`-fetches each into a gitignored
+`<workspace>/_libraries/<name>/src/` blob, registers a parallel
+regular-mode `library_sources:` block) was wrong from the get-go: a
+second acquisition subsystem beside the curated `library` path, a
+flattened site-packages blob mislabeled as one library's `src/`, and
+AST-discovery that finds nothing on a fresh project (you cannot import
+what isn't acquired). 0078 was rewritten in place (a
+wrong-from-the-start correction, not a superseding ADR — the
+AGENTS.md ADR rule). Corrected design: declarative
+`chumicro-workspace library add` pulls a library's full editable tree
+plus its `pyproject` closure from a published snapshot channel
+(`ChuMicro/ChuMicro-Libraries[-Experimental]`, circup/mip-shaped tags,
+single-snapshot internally-consistent closure) into **committed
+`libraries/<name>/`**, edit-preserving (`_library-backups/<name>/`
+before any replace), one engine behind a prompt_toolkit browser and a
+scriptable non-interactive `library add`. Landed: `library_channel.py`
+(snapshot resolve + one-tarball/extract-subtree, 100 % cov) +
+`library.py` rewired off pip-sdist onto it with single-snapshot
+closure (converged onto `dep_resolver.transitive_closure`) +
+edit-preserving placement; `CliEnv.http_get` seam; the entire
+`install-libraries`/`_libraries`/pip-mip subsystem
+(`install_libraries.py`, `cli/install_libraries.py`, its tests,
+parser wiring) deleted; `.gitignore` `_libraries/`→`_library-backups/`.
+Remaining: the prompt_toolkit browser front-end (engine + scriptable
+`add` done); the promote-pipeline full-tree channel + catalog index
+(Phase, CI-gated). Per-library version pinning is gated on a
+`pyproject` version-constraint decision — generalized into
+`open-questions.md`. Workspace-template `.gitignore` +
+regular-mode README are cross-repo, separate, user-gated.
 
-**Phase 4 — Root convergence.** `libraries/` is the single importable
-root (pip-curated chumicro libs already land there per
-`cli/library.py`). Decide `packages/` fate (collapse entirely vs keep
-only for its gitignore-by-default behavior) and `shared/` fate. Fix
-the `packages/README.md`-vs-`cli/library.py` contradiction as a
-consequence, not a standalone patch.
+**Phase 4 — Root convergence.** Largely subsumed by the corrected
+Collapse B: the rewired `library` path is the single acquisition
+mechanism and `libraries/` the single committed importable root, so
+the parallel-root problem is gone. Residual, standalone: decide
+`packages/` fate (collapse vs keep for its gitignore-by-default
+behavior) and `shared/` fate, and fix the
+`packages/README.md`-vs-`cli/library.py` contradiction.
 
 **Phase 5 — Mechanize (Decision 0074).** A `chumicro-checks` rule that
 fails if a new device-staging path appears outside the one pipeline,
@@ -566,10 +584,14 @@ drop retained (3b), `Deployer.deploy()` + wrapper `.deploy()` deleted
 4 example scripts + deploy guide rewritten (3c) — one stage primitive,
 zero CLI bypass; Collapse B —
 **[Decision 0078](../decisions/0078-library-acquisition-is-host-local.md)
-`accepted`** (`install-libraries` board-push retired → host-local
-`_libraries/` fetch via pip/mip `--target` + managed `library_sources:`
-registration; the one deploy bundles it; `.gitignore` updated) (3d).
-Phases 4–5 (root convergence / CHU mechanization) pending. Companion *completed* work this session
+`accepted`** (3d's `_libraries/` pip/mip-`--target` fetch was
+wrong-from-the-start; 0078 rewritten in place → declarative
+`library add` pulls full editable trees + closure from a published
+snapshot channel into committed `libraries/`, edit-preserving; engine
+rewired (`library_channel.py` + `library.py`), `install-libraries`
+subsystem deleted; browser front-end + promote-pipeline channel
+remain). Phase 4 root-convergence largely subsumed; Phase 5 CHU
+mechanization pending. Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
 template `--device`/ruamel fixes) shipped on `main` of both repos and
 is recorded in `next-up.md` `## Done (recent)`; it is the context
