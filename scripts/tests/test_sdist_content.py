@@ -20,7 +20,7 @@ name = "chumicro-{dist}"
 test = ["pytest"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]
+only-include = ["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]
 """
 
 _PYPROJECT_NO_TEST_EXTRA = """\
@@ -28,7 +28,7 @@ _PYPROJECT_NO_TEST_EXTRA = """\
 name = "chumicro-{dist}"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]
+only-include = ["src/", "VERSION", "README.md", "tests/", "examples/", "docs/"]
 """
 
 
