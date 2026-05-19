@@ -344,6 +344,72 @@ rule be linted.
 Routing: same single decision; the anti-decision is part of the
 record.
 
+## #7 — forward-reference `the` tic (new 2026-05-19)
+
+Surfaced by two `/audit-comments` pilots on `workbench/deploy` (the
+first pilot's whole-package pass + the submodule (a) pass on
+transports/probe/device).  Sibling of #3's definition tic: same
+Engine B (closed-set match), different modifier list, different
+position constraint, different FP profile.
+
+**The pattern.**  `the (next|first|only|new|sole) <generic-noun>` in
+docstring-initial or comment-initial position with no prior referent in
+the surrounding scope.  Pretends definite reference without an anchor;
+should be `a/an` (category), `any` (universal), or no article.
+Examples lifted from the actual rewrites the pilots produced (each one
+caught by the reviewer, not by the auditor's first draft):
+
+- *"the next port grab"* (settle comment — no defined next port grab)
+- *"the new payload"* (clean=True/False comment)
+- *"the next `stage()` call"* (soft_reset paragraph)
+- *"the first file change"* (autoreload docstring — hypothetical first one)
+- *"the next host `write()`"* (autoreload docstring)
+- *"the only option"* (DiskArbitrationAgent bullet)
+
+Each fails the per-noun forward-reference test (AGENTS.md → Writing
+tone, judgment guidance for the general case): *is there a unique
+singular instance of X already established in scope?*  For these, no.
+For the legitimate keeps (*"the open raw-REPL session"* after
+`_enter_raw_repl` ran; *"the runtime"* / *"the freshly-formatted
+volume"* inside `wipe_filesystem`'s method body), yes — surrounding
+context establishes the referent.
+
+**Lintable subset — closed modifier × closed noun + position constraint.**
+
+- **Modifiers:** `next|first|only|new|sole` (small, stable).
+- **Nouns:** `call|write|file|file change|iteration|port|port grab|command|
+  session|payload|deploy|request|line|step|stage|message|byte|chunk|
+  response|option|instance` — pilot-derived *starter* list.  **Extend
+  as more pilots surface concrete failures; do not pre-guess.**  The
+  pilots ARE the calibration set.
+- **Position:** sentence-initial inside a docstring or `#` comment.
+  Mid-sentence occurrences (*"…and the next call sees X"*) carry too
+  high an FP rate (idioms like *"the first time"*, *"the only LED"*)
+  and stay with audit-pass judgment.
+
+**FP allowlist via `# noqa: CHU0NN — <why>`** (per AGENTS.md noqa
+rule):
+
+- *"the next test"* inside a test docstring describing a sequence.
+- *"the only LED"* / *"the only board"* / *"the only port"* when the
+  noun is uniquely identified by surrounding state.
+- *"the first call"* in a state machine describing a specific
+  first-transition.
+
+Each escape carries the one-line *why* AGENTS.md requires.
+
+Routing: folded into the single `new-decision` covering the set —
+recorded as a peer closed-set list to #3 (`the (one|single|sole) X`
+definition tic).  Both feed Engine B with different modifier+noun
+lists and different position constraints; do NOT pre-merge into one
+mega-pattern — the two FP profiles diverge enough that calibration
+stays per-list.
+
+Not mechanizable: the per-noun semantic test (*"does the surrounding
+context establish a referent for X?"*) for the general case.  Stays
+with `/audit-comments` + AGENTS.md Writing tone, the sibling of the
+change-narration sniffer `open-questions.md` rejected.
+
 ## Recommended sequencing
 
 Original recommendation was "#2 now (mechanical), #1 + #3 via
@@ -354,7 +420,7 @@ still first to land — its design space is smallest once the
 `.scratch/` narrowing and the legitimate-data exemptions are decided.
 
 **Revised by the 2026-05-19 two-engine broadening:** one decision now
-covers #1–#6 + both engines + the #6 anti-decision (the open-questions
+covers #1–#7 + both engines + the #6 anti-decision (the open-questions
 overlap already pointed here; #5/#6 reinforce single-decision). Build
 order by risk: **Engine B first** — it already exists as CHU006;
 extending it with lists lands #2 / #3 / CHU020 / the date-SHA-token
@@ -362,8 +428,10 @@ half together at lowest risk, and #1's landed-history regex + #4's
 prefilter ride on the same matcher/AST. **Engine A second** (`src/`
 dedup, then the ADR consumer once its precision is verified). **Small
 structural checks last** (#5 superseded-pointer, #6 orphan-governance).
-Record the #6 anti-decision up front so an AGENTS.md size gate is
-never built while the rest is in flight.
+**#7 follows #3** once that calibrates — same engine, peer closed-set;
+do not pre-merge the two `the`-shape lists since their FP profiles
+diverge.  Record the #6 anti-decision up front so an AGENTS.md size
+gate is never built while the rest is in flight.
 
 ## Pointers
 
@@ -392,7 +460,9 @@ Commit 2c's comment cleanup (the unmechanized-rule contrast: CHU006
 self-caught its 2c violation; the unlinted gaps reached human review).
 **Broadened 2026-05-19** — two-engine consolidation + #5 (ADR-
 authoring) + #6 (AGENTS.md self-editing meta-rule, incl. the no-size-
-gate anti-decision), from the evidence pass that accompanied the
+gate anti-decision) + #7 (forward-reference `the` tic, sibling
+closed-set to #3, calibrated from two `/audit-comments` pilots on
+`workbench/deploy`), from the evidence pass that accompanied the
 `/audit-comments` skill + AGENTS.md Writing-tone single-home session.
 Nothing implemented. One `new-decision` covers the set; pick up via
 the routing above.
