@@ -9,8 +9,10 @@ from pathlib import Path
 
 import pytest
 from chumicro_workspace import cli
+from chumicro_workspace.cli.library import _apply_selected
 from chumicro_workspace.curated_libraries import read_curated_libraries
 from chumicro_workspace.testing import seed_workspace
+from chumicro_workspace.workspace import WorkspaceLayout
 
 # Dep graph the fake channel serves: import-name -> chumicro dist deps.
 _GRAPH = {
@@ -427,3 +429,52 @@ class TestUpdate:
         out = capsys.readouterr().out
         assert "pinned to 0.3.1" in out
         assert "chumicro_sockets" in out
+
+
+class TestBrowse:
+    def test_non_tty_refuses_with_usage_exit(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        seed_workspace(tmp_path)
+        # pytest's stdin is not a TTY — the inherently-interactive
+        # contract: exit 2, point at the scriptable verb, no prompt.
+        code = _run(
+            ["library", "browse", "--workspace-dir", str(tmp_path)],
+            _Channel(),
+        )
+        assert code == 2
+        stderr = capsys.readouterr().err
+        assert "needs a TTY" in stderr
+        assert "library add" in stderr
+
+    def test_apply_selected_fetches_closure_and_records(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        seed_workspace(tmp_path)
+        workspace = WorkspaceLayout.from_dir(tmp_path)
+        channel = _Channel(version="2.1.0")
+
+        code = _apply_selected(
+            workspace, "stable", ["chumicro_mqtt"], channel.http_get,
+        )
+        assert code == 0
+        table = read_curated_libraries(workspace.workspace_yaml)
+        # mqtt + its closure (sockets, timing) all recorded + on disk.
+        assert {"chumicro_mqtt", "chumicro_sockets", "chumicro_timing"} <= set(
+            table,
+        )
+        assert (tmp_path / "libraries" / "chumicro_mqtt" / "src").is_dir()
+        assert table["chumicro_mqtt"].version == "2.1.0"
+        assert "Added" in capsys.readouterr().out
+
+    def test_apply_selected_fetch_error_returns_one(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        seed_workspace(tmp_path)
+        workspace = WorkspaceLayout.from_dir(tmp_path)
+
+        code = _apply_selected(
+            workspace, "stable", ["chumicro_nope"], _Channel().http_get,
+        )
+        assert code == 1
+        assert "library browse:" in capsys.readouterr().err
