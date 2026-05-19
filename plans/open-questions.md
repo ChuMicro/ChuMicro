@@ -602,37 +602,6 @@ the original analysis.)
 Related: Decision 0071, Decision 0068, Decision 0027 (the persistent
 raw-REPL harness execution model), Decision 0028.
 
-### MP copy-mode sweep: device left dirty by a prior aborted run isn't self-healed on the first stage
-
-**Surfaced 2026-05-16** while fixing the MP copy-mode cascade
-(Decision 0071, the additive-`fs cp` ENOSPC defect).  The fix tracks
-the previously-staged top-level tree per transport instance and
-deletes it before each `fs cp`.  `_staged_device_entries` starts
-**empty**, so the *first* `stage()` of a sweep does not clean
-whatever a prior aborted run left on the device — only the
-plugin's `clear_entrypoints()` (code.py/main.py only) runs at
-session start.
-
-Low probability now: ENOSPC cascades are fixed, so a completed
-sweep ends with only the last library's ~330 KB tree on an ~848 KB
-LittleFS, and a clean device is the normal precondition.  But a run
-aborted mid-sweep by a *real* test failure (recover() fires, run
-stops) leaves N libraries' trees; the next run's first stage won't
-clear them, and across repeated aborted runs accumulation could
-recur.
-
-Options when/if it bites: (a) on the first copy-mode `stage()`
-(`_staged_device_entries` empty), wipe all `chumicro_*` + `test_*.py`
-at device root before `fs cp` — the sweep owns root, user files
-(`boot.py`) preserved by name pattern; (b) reuse
-`wipe_filesystem()` (LittleFS mkfs) as a session-start hook in the
-plugin's `is_filesystem_mode` first-library branch.  Not blocking —
-record-and-defer until an aborted-run accumulation is actually
-observed (adding it speculatively risks new bugs for no observed
-failure, same reasoning as the per-file-reset thread above).
-
-Related: Decision 0071, Decision 0068, Decision 0028.
-
 ### Re-run the live-PyPI `library add` smoke test once CI/publishing is back on
 
 `workspace-library-curation` Phases 1 + 2 are complete and validated,

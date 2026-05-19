@@ -301,20 +301,22 @@ def rsync(
     test stage path (:meth:`CircuitpythonTransport.stage`) use.  Both
     callers want the same FAT-write reliability (``--checksum`` to
     verify content because FAT32 timestamps are unreliable,
-    ``--inplace`` to avoid temp-file rename races on FAT32) — they
-    differ only on the *delete-semantic* and the *exclude list*:
+    ``--inplace`` to avoid temp-file rename races on FAT32) and now
+    issue an *identical* rsync invocation. The per-context
+    ``code.py`` carve-out is gone — one device-staging path, with
+    per-context variance only in the payload and the post-stage step:
 
-    * **Functional tests** call ``delete=True`` with
-      ``additional_excludes=FUNCTIONAL_TEST_EXTRA_EXCLUDES``
-      (:data:`DEVICE_KEEP_SET` + ``code.py``, the harness entrypoint
-      the test deploy doesn't itself ship) — clean slate between test
-      files, only the closed keep set survives.
-    * **Clean deploys** call ``delete=True`` with
-      ``additional_excludes=DEVICE_KEEP_SET`` — same keep set, the
-      ``code.py`` entrypoint *is* shipped as payload so it isn't
-      excluded.  ``settings.toml`` is in neither set: a board-resident
-      one is a competing wifi authority and is evicted (with a
-      one-time loud notice from the transport).
+    * **Clean deploys and functional tests** both call ``delete=True``
+      with ``additional_excludes=DEVICE_KEEP_SET`` — clean slate, only
+      the closed keep set survives.  Production ships ``code.py`` as
+      payload (the boot shim); the functional-test stage ships no
+      entrypoint (its harness runs over the live raw REPL, not by
+      booting ``code.py``), so a stale board ``code.py`` is reconciled
+      away by ``--delete`` rather than preserved.  Per-context variance
+      is now only the staged payload and the post-stage step, never
+      the exclude list.  ``settings.toml`` is not in the keep set: a
+      board-resident one is a competing wifi authority and is evicted
+      (with a one-time loud notice from the transport).
     * **Legacy additive deploys** call ``delete=False`` with no extra
       excludes — stale files persist; retained only until the
       clean-slate default lands.
@@ -331,8 +333,9 @@ def rsync(
             legacy additive shape — stale files persist — retained
             only until the clean-slate default lands.
         additional_excludes: Extra basenames to add to ``--exclude``.
-            Functional-test callers pass user-config filenames so
-            ``--delete`` doesn't wipe them.  Production callers leave
+            Clean callers (production *and* functional-test) pass
+            :data:`DEVICE_KEEP_SET` so ``--delete`` doesn't wipe the
+            device-required keep set.  Legacy additive callers leave
             empty.
         timeout: Override the auto-computed timeout (seconds).  Default
             ``None`` lets :func:`compute_rsync_timeout_seconds` pick
@@ -391,10 +394,11 @@ def rsync(
 
 #: Device-generated / device-required files that survive a clean
 #: deploy on every path — clean rsync, diff reconcile, functional-test
-#: stage.  The CP clean ``--exclude``, the functional-test exclude,
-#: and the diff scope all derive from this tuple rather than each
-#: hard-coding their own list, so "what survives a deploy" cannot
-#: drift between paths.
+#: stage.  The CP clean ``--exclude`` and the diff scope both derive
+#: from this one tuple rather than each hard-coding their own list, so
+#: "what survives a deploy" cannot drift between paths.  There is no
+#: per-context exclude: the functional-test stage uses this same set,
+#: never a wider one.
 #:
 #: * ``boot_out.txt`` — CP writes it only on a *hard* reboot; a deploy
 #:   soft-reboots, so wiping it strands the drive without identity
@@ -416,14 +420,6 @@ DEVICE_KEEP_SET: tuple[str, ...] = (
     "boot_out.txt",
     "_chu_kv.msgpack",
 )
-
-#: Filenames the functional-test stage path adds to ``--exclude`` so
-#: ``--delete`` doesn't wipe the keep set — plus ``code.py``, the
-#: harness entrypoint the test deploy doesn't itself ship.  Unified
-#: *downward* onto :data:`DEVICE_KEEP_SET` (production used to preserve
-#: less, the test path more; both now derive from the one set so
-#: ``settings.toml`` is evicted by tests too).
-FUNCTIONAL_TEST_EXTRA_EXCLUDES: tuple[str, ...] = (*DEVICE_KEEP_SET, "code.py")
 
 
 def verify_rsync(
