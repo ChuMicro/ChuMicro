@@ -8,7 +8,7 @@ Combines:
   layers are gitignored and share the section-namespaced shape.
 * **Deploy integration** — :class:`~chumicro_workspace.deploy_source.WithRuntimeConfig`
   + the ``project_*_source`` helpers compose with ``chumicro-deploy``'s
-  ``FileSource``\\ s so a single ``Deployer.deploy(...)`` call ships
+  ``FileSource``\\ s so a single ``Deployer.deploy_diff(...)`` call ships
   app code + the merged config + (optional) boot shim in one shot.
 * **``devices.yml`` round-trip** — three-zone writer (USER_OWNED /
   HARDWARE_ONCE / PROBED_ALWAYS), owned by ``chumicro-deploy``.

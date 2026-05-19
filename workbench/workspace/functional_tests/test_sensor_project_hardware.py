@@ -193,7 +193,7 @@ def test_sensor_project_kvstore_persists_across_deploys_on_micropython(
     first = deployer.deploy_diff(source, wipe=True)
     _assert_fixture_completed(first.execute_output)
 
-    second = deployer.deploy(source)
+    second = deployer.deploy_diff(source)
     _assert_fixture_completed(second.execute_output)
 
     first_count = int(re.search(r"fixture: boot #(\d+)", first.execute_output).group(1))

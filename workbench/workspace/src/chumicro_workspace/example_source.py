@@ -8,7 +8,7 @@ merged ``runtime_config.msgpack`` baked from ``secrets.toml`` plus
 an optional per-example ``examples/config.toml``.
 
 This module owns the shape of that source.  The CLI just asks for
-one and hands it to ``Deployer.deploy()`` like any other
+one and hands it to ``Deployer.deploy_diff()`` like any other
 ``FileSource``.
 
 The shape composes existing pieces:
@@ -110,7 +110,7 @@ def example_source(
     Reads ``libraries/<lib>/examples/<example_name>.py``, walks its
     Python imports against ``<root>/src`` for every entry in
     *library_roots*, and wraps the result with
-    :class:`WithRuntimeConfig` so a single ``Deployer.deploy(source)``
+    :class:`WithRuntimeConfig` so a single ``Deployer.deploy_diff(source)``
     call ships the example as ``/code.py`` (CP) or ``/main.py`` (MP)
     plus every reachable ``chumicro_*`` module under ``/lib/`` plus
     the merged ``/runtime_config.msgpack``.
@@ -172,7 +172,7 @@ def example_source(
 
     Returns:
         A ``WithRuntimeConfig`` wrapping an ``ImportGraphSource`` —
-        ready to hand to ``Deployer.deploy(source)``.
+        ready to hand to ``Deployer.deploy_diff(source)``.
     """
     from chumicro_deploy import ImportGraphSource  # noqa: PLC0415
 

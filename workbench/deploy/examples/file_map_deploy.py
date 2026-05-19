@@ -86,7 +86,7 @@ def main() -> int:
     print(f"deploying {len(_PAYLOAD)} files to {board.address}")
 
     source = FileMapSource(_PAYLOAD, entrypoint=_ENTRYPOINT)
-    result = Deployer(_device_from_entry(board)).deploy(source)
+    result = Deployer(_device_from_entry(board)).deploy_diff(source)
 
     if result.execute_output:
         print("--- board output ---")

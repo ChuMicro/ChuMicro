@@ -15,7 +15,7 @@ Two scenarios:
 The tests skip cleanly when ``devices.yml`` has no matching entry.
 
 What's deliberately *not* here: a "deploy a heartbeat, tail it,
-assert the marker appears" test.  ``Deployer.deploy()`` waits for
+assert the marker appears" test.  ``Deployer.deploy_diff()`` waits for
 the entrypoint to finish before returning, so by the time
 ``tail()`` opens the port the script is done — there is no
 deterministic on-device source of in-window output that doesn't

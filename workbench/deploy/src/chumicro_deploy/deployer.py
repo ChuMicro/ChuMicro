@@ -101,7 +101,7 @@ class Deployer:
 
     Args:
         device: Target board configuration.  :attr:`Device.create_transport`
-            is called once per :meth:`deploy` invocation.
+            is called once per :meth:`deploy_diff` invocation.
     """
 
     def __init__(self, device: Device) -> None:
@@ -252,76 +252,6 @@ class Deployer:
             traceback=traceback_text,
         )
 
-    def deploy(
-        self,
-        source: FileSource,
-        *,
-        force_deploy_mode: str | None = None,
-        on_progress: Callable[[float, str], None] | None = None,
-        on_file_staged: Callable[[str], None] | None = None,
-        on_execute_line: Callable[[str], None] | None = None,
-        on_preflight_message: Callable[[str], None] | None = None,
-        tail_seconds: float | None = None,
-        clean: bool = False,
-    ) -> DeployResult:
-        """Deploy *source* to the configured device and run its entrypoint.
-
-        Flow: ``create_transport`` -> ``connect`` -> ``deploy_files``
-        -> ``disconnect``.  The transport-level ``deploy_files`` is
-        responsible for the actual file-write and execute dance; this
-        method layers progress callbacks and result packaging on top.
-
-        Args:
-            source: Any object satisfying
-                :class:`~chumicro_deploy.sources.FileSource` —
-                ``files()`` returns path -> bytes, ``entrypoint()``
-                returns the boot file's on-device path.
-            force_deploy_mode: Override the pre-flight requires_flash
-                policy.  ``None`` (default) runs the pre-flight check
-                that auto-promotes RAM → flash when a flagged library
-                is in the graph; pass ``"ram"`` to keep RAM mode even
-                when a library is flagged, or ``"flash"`` to force
-                flash regardless.
-            on_progress: Optional callback ``(fraction, message)``
-                invoked at coarse milestones: 0.0 "connecting", 0.1
-                "collecting files", 0.2 "staging", 0.9 "executing",
-                1.0 "done".  Fractions are nominal — ``deploy_files``
-                does not report incremental progress.
-            on_file_staged: Forwarded to
-                :meth:`TransportProtocol.deploy_files`.
-            on_execute_line: Forwarded to
-                :meth:`TransportProtocol.deploy_files`.
-            on_preflight_message: Optional callback for the
-                "switching to flash mode" message the requires_flash
-                pre-flight emits.  Defaults to ``sys.stderr``.
-            tail_seconds: CP-only override for how long the transport
-                captures serial output after the entrypoint's
-                soft-reboot.  ``None`` keeps the transport's built-in
-                default; ignored on MP transports.
-            clean: Forwarded to :meth:`TransportProtocol.deploy_files`.
-                In CP flash mode triggers ``rsync --delete`` (with
-                ``settings.toml`` / ``boot.py`` / ``boot_out.txt``
-                preserved); in MP copy mode triggers a
-                ``mpremote fs rm -r :/lib`` before the new push.
-                No-op for RAM / mount modes.
-
-        Returns:
-            :class:`DeployResult` with ``success``, ``staged_files``,
-            ``execute_output``, and ``traceback`` populated.  ``success``
-            is ``True`` when the output contains no detectable traceback.
-        """
-        return self._run_deploy(
-            source,
-            force_deploy_mode=force_deploy_mode,
-            on_progress=on_progress,
-            on_file_staged=on_file_staged,
-            on_execute_line=on_execute_line,
-            on_preflight_message=on_preflight_message,
-            tail_seconds=tail_seconds,
-            pre_stage_hook=None,
-            transport_kwargs={"clean": clean},
-        )
-
     def deploy_diff(
         self,
         source: FileSource,
@@ -378,7 +308,10 @@ class Deployer:
                 RAM-mode transports treat the wipe as a no-op so
                 callers don't need to gate on mode.
             force_deploy_mode: Override the pre-flight requires_flash
-                policy.  Same semantics as :meth:`deploy`'s argument.
+                policy.  ``None`` (default) runs the pre-flight check
+                that auto-promotes RAM → flash when a flagged library
+                is in the graph; ``"ram"`` keeps RAM mode even when a
+                library is flagged; ``"flash"`` forces flash.
             on_progress: Optional ``(fraction, message)`` callback.
                 Stages: ``connecting``, ``listing in-scope`` /
                 ``wiping``, ``cleaning stale``, ``staging``,
@@ -388,13 +321,17 @@ class Deployer:
                 stale on-device path before deletion.  Lets the CLI
                 surface "removed: /lib/old.py" lines for transparency.
             on_execute_line: Forwarded to ``deploy_files``.
-            on_preflight_message: Forwarded to the same pre-flight
-                message sink as :meth:`deploy`.  Defaults to stderr.
-            tail_seconds: CP-only soft-reboot capture-window override.
-                Same semantics as :meth:`deploy`'s argument.
+            on_preflight_message: Optional callback for the
+                "switching to flash mode" message the requires_flash
+                pre-flight emits.  Defaults to ``sys.stderr``.
+            tail_seconds: CP-only override for how long the transport
+                captures serial output after the entrypoint's
+                soft-reboot.  ``None`` keeps the transport's built-in
+                default; ignored on MP transports.
 
         Returns:
-            :class:`DeployResult` populated as in :meth:`deploy`.  The
+            :class:`DeployResult` with ``success``, ``staged_files``,
+            ``execute_output``, and ``traceback`` populated.  The
             ``staged_files`` field carries the new payload's keys
             (the deletion list is observable via *on_file_deleted*
             during the call but not retained on the result).

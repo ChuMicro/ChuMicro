@@ -204,7 +204,7 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
         baudrate=circuitpython_flash_device.serial_baudrate,
         deploy_mode="flash",
     )
-    plant_result = Deployer(plant_device).deploy(
+    plant_result = Deployer(plant_device).deploy_diff(
         FileMapSource(
             {
                 "/code.py": b"# wipe-test plant: code.py is a no-op so the\n"

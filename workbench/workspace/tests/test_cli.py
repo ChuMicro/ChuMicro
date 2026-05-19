@@ -1412,12 +1412,10 @@ class TestDeployFailureHints:
 class TestDeployDiffCleanup:
     """`python run.py deploy <project>` runs a scoped diff-deploy by default.
 
-    Pre-Phase-7-follow-on, the CLI used `Deployer.deploy()` which
-    leaves stale on-device files alone.  After the multi-project-
-    staging-replacement work the CLI routes through
-    `Deployer.deploy_diff()` — stale `/lib/*` from a previous
-    deploy gets cleaned + a "removed stale" line surfaces in the
-    CLI output for transparency.
+    The CLI routes through `Deployer.deploy_diff()` — the one stage
+    primitive — so stale `/lib/*` from a previous deploy gets cleaned
+    and a "removed stale" line surfaces in the CLI output for
+    transparency.
     """
 
     def test_stale_files_are_deleted_and_logged(

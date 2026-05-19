@@ -48,7 +48,7 @@ source = FileMapSource(
     entrypoint="/main.py",
 )
 
-result = Deployer(device).deploy(source)
+result = Deployer(device).deploy_diff(source)
 print(result.execute_output)  # → "hello from micropython"
 ```
 

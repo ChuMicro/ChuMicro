@@ -423,18 +423,6 @@ class _FakeDeployer:
         self._outcomes = list(outcomes)
         self.calls = 0
 
-    def deploy(
-        self,
-        source,
-        *,
-        on_progress: Callable[[float, str], None] | None = None,
-        on_file_staged: Callable[[str], None] | None = None,
-        on_execute_line: Callable[[str], None] | None = None,
-        tail_seconds: float | None = None,
-        clean: bool = False,
-    ) -> DeployResult:
-        return self._consume()
-
     def deploy_diff(
         self,
         source,
@@ -504,7 +492,7 @@ def test_interactive_deployer_returns_result_when_deploy_succeeds() -> None:
         output=sink,
     )
 
-    result = interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+    result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert result is ok
     assert fake.calls == 1
@@ -531,7 +519,7 @@ def test_retries_on_port_unavailable_then_succeeds() -> None:
         output=sink,
     )
 
-    result = interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+    result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert result is ok
     assert fake.calls == 2
@@ -565,7 +553,7 @@ def test_retries_up_to_max_attempts_then_reraises() -> None:
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert fake.calls == 3
     # Two prompts: after attempts 1 and 2.  No prompt after the
@@ -591,7 +579,7 @@ def test_non_retryable_failure_raises_without_prompting() -> None:
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert fake.calls == 1
     assert prompt.prompts == []
@@ -618,7 +606,7 @@ def test_user_quit_stops_retries() -> None:
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert fake.calls == 1
     assert len(prompt.prompts) == 1
@@ -646,7 +634,7 @@ def test_quit_aliases(quit_response: str) -> None:
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert fake.calls == 1
 
@@ -666,7 +654,7 @@ def test_traceback_returns_result_but_prints_coaching() -> None:
         output=sink,
     )
 
-    result = interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+    result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     # Source-level bug — InteractiveDeployer still returns the
     # result (no retry) but prints the traceback-coaching block.
@@ -697,7 +685,7 @@ def test_mpremote_transport_error_is_handled() -> None:
         output=sink,
     )
 
-    result = interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+    result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert result is ok
     assert fake.calls == 2
@@ -717,7 +705,7 @@ def test_forwards_callbacks_to_deployer() -> None:
     class _SpyDeployer:
         calls = 0
 
-        def deploy(self, source, **kwargs):  # type: ignore[no-untyped-def]
+        def deploy_diff(self, source, **kwargs):  # type: ignore[no-untyped-def]
             type(self).calls += 1
             received.update(kwargs)
             return DeployResult(success=True)
@@ -740,7 +728,7 @@ def test_forwards_callbacks_to_deployer() -> None:
     def _line(_text: str) -> None:
         pass
 
-    interactive.deploy(
+    interactive.deploy_diff(
         _DUMMY_SOURCE,  # type: ignore[arg-type]
         on_progress=_progress,
         on_file_staged=_staged,
@@ -891,7 +879,7 @@ def test_stale_mount_eaccess_message_promotes_to_fskit_wedged() -> None:
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     joined = "\n".join(lines)
     assert "macos_fskit_wedged" in joined
@@ -920,7 +908,7 @@ def test_drive_missing_is_promoted_to_fskit_wedged_when_detector_trips() -> None
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     joined = "\n".join(lines)
     assert "macos_fskit_wedged" in joined
@@ -962,7 +950,7 @@ def test_wipe_filesystem_remount_timeout_promotes_to_fskit_wedged() -> None:
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     joined = "\n".join(lines)
     assert "macos_fskit_wedged" in joined
@@ -986,7 +974,7 @@ def test_drive_missing_stays_generic_when_detector_says_healthy() -> None:
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     joined = "\n".join(lines)
     assert "circuitpy_drive_missing" in joined
@@ -1021,7 +1009,7 @@ def test_detector_not_called_for_unrelated_failure_kinds() -> None:
     )
 
     with pytest.raises(CircuitpythonTransportError):
-        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert detector_calls == 0
 
@@ -1380,7 +1368,7 @@ class TestReportFailureWithPortHolders:
             output=sink,
         )
         with pytest.raises(MicropythonTransportError):
-            interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+            interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
         # The PID + command must appear so the user can kill it.
@@ -1425,7 +1413,7 @@ class TestReportFailureWithPortHolders:
             output=sink,
         )
         with pytest.raises(MicropythonTransportError):
-            interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+            interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
         # PID still surfaces so the user knows what's there.
@@ -1462,7 +1450,7 @@ class TestReportFailureWithPortHolders:
             output=sink,
         )
         with pytest.raises(MicropythonTransportError):
-            interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+            interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
         # No diagnosis section; canonical recovery hints still present.
@@ -1497,7 +1485,7 @@ class TestReportFailureWithPortHolders:
             output=sink,
         )
         with pytest.raises(MicropythonTransportError):
-            interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+            interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
         # No diagnosis section emitted; canonical hints still present.
@@ -1531,7 +1519,7 @@ class TestNonInteractiveDeployer:
             output=sink,
         )
 
-        result = runner.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        result = runner.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         assert result is ok
         assert fake.calls == 1
@@ -1557,7 +1545,7 @@ class TestNonInteractiveDeployer:
         )
 
         with pytest.raises(MicropythonTransportError):
-            runner.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+            runner.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         # Underlying deployer was called exactly once — no retry.
         assert fake.calls == 1
@@ -1648,7 +1636,7 @@ class TestNonInteractiveDeployer:
             output=sink,
         )
         with pytest.raises(MicropythonTransportError):
-            runner.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+            runner.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
         assert "4242" in joined
@@ -1673,7 +1661,7 @@ class TestNonInteractiveDeployer:
             output=sink,
         )
 
-        result = runner.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        result = runner.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         assert result is bad
         joined = "\n".join(lines)

@@ -537,28 +537,6 @@ class NonInteractiveDeployer(_RecoveringDeployer):
             promotion semantics.
     """
 
-    def deploy(
-        self,
-        source: FileSource,
-        *,
-        on_progress: Callable[[float, str], None] | None = None,
-        on_file_staged: Callable[[str], None] | None = None,
-        on_execute_line: Callable[[str], None] | None = None,
-        tail_seconds: float | None = None,
-        clean: bool = False,
-    ) -> DeployResult:
-        """Deploy *source*; classify + report + re-raise on failure."""
-        return self._run(
-            lambda: self._deployer.deploy(
-                source,
-                on_progress=on_progress,
-                on_file_staged=on_file_staged,
-                on_execute_line=on_execute_line,
-                tail_seconds=tail_seconds,
-                clean=clean,
-            ),
-        )
-
     def deploy_diff(
         self,
         source: FileSource,
@@ -661,33 +639,6 @@ class InteractiveDeployer(_RecoveringDeployer):
         self._max_attempts = max_attempts
         self._prompt = prompt
 
-    def deploy(
-        self,
-        source: FileSource,
-        *,
-        on_progress: Callable[[float, str], None] | None = None,
-        on_file_staged: Callable[[str], None] | None = None,
-        on_execute_line: Callable[[str], None] | None = None,
-        tail_seconds: float | None = None,
-        clean: bool = False,
-    ) -> DeployResult:
-        """Deploy *source*, prompting the user to recover on failure.
-
-        Signature matches :meth:`Deployer.deploy` exactly — all
-        callback parameters are forwarded.  The only new behavior
-        is the retry loop + user prompts on classified failures.
-        """
-        return self._retry_loop(
-            lambda: self._deployer.deploy(
-                source,
-                on_progress=on_progress,
-                on_file_staged=on_file_staged,
-                on_execute_line=on_execute_line,
-                tail_seconds=tail_seconds,
-                clean=clean,
-            ),
-        )
-
     def deploy_diff(
         self,
         source: FileSource,
@@ -705,7 +656,9 @@ class InteractiveDeployer(_RecoveringDeployer):
         Signature matches :meth:`Deployer.deploy_diff` exactly — all
         callback parameters and the ``wipe`` flag are forwarded.  The
         only new behavior is the retry loop + user prompts on
-        classified failures, identical in shape to :meth:`deploy`.
+        classified failures (the
+        :class:`NonInteractiveDeployer` reports once and re-raises
+        instead of prompting).
         """
         return self._retry_loop(
             lambda: self._deployer.deploy_diff(

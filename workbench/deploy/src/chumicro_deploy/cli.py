@@ -261,11 +261,17 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         if args.non_interactive
         else InteractiveDeployer(deployer)
     )
-    result = runner.deploy(
+    deleted: list[str] = []
+    result = runner.deploy_diff(
         source,
+        clean=args.clean,
+        wipe=args.wipe,
         on_progress=_stderr_progress,
+        on_file_deleted=deleted.append,
         tail_seconds=args.tail_seconds,
     )
+    for stale_path in deleted:
+        print(f"removed stale {stale_path}", file=sys.stderr)
     if result.execute_output:
         print(result.execute_output, end="")
     if not result.success:
@@ -411,6 +417,31 @@ def build_parser() -> argparse.ArgumentParser:
         "--resource-prefix",
         default="/",
         help="On-device prefix for non-entrypoint files (default /).",
+    )
+    deploy_parser.add_argument(
+        "--no-wipe",
+        dest="clean",
+        action="store_false",
+        default=True,
+        help=(
+            "Legacy additive deploy: reconcile only the entrypoint / "
+            "state files + /lib, leaving every other board file in "
+            "place.  The default is clean-slate — the deploy removes "
+            "anything that isn't the new payload or a device-required "
+            "keep-set file (boot.py, boot_out.txt, _chu_kv.msgpack); a "
+            "board-resident settings.toml is evicted.  Use --no-wipe "
+            "only when you deliberately hand-manage board files."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--wipe",
+        action="store_true",
+        help=(
+            "Erase the *entire* device filesystem before deploying — "
+            "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
+            "included.  Stricter than the clean-slate default; for "
+            "corruption recovery.  No-op in RAM mode."
+        ),
     )
     deploy_parser.add_argument(
         "--target-runtime",
