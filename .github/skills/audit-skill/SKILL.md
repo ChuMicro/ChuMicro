@@ -128,6 +128,8 @@ The end-of-work bookend (`task-checkpoint`) and the commit step (`git-commit`) a
 
 Run the **AI-tic grep from [`audit-docs` dim 2](../audit-docs/SKILL.md#2-vocabulary--grammar-tics)** — that regex is the source of truth.  Treat hits the same way `audit-docs` does (drop / replace / case-by-case).  Same rules apply to skill bodies as to user-facing docs.
 
+**Degraded passages get rewritten, not re-trimmed.**  SKILL.md bodies rot exactly the way code comments and READMEs do — these skills are long and have been trimmed pass after pass, each removing a word, none asking *what should this say?*  An `ai-tic` or `shape` finding whose passage has rotted that far (illegible, says nothing, would lose nothing it doesn't already lack if deleted) is not fixed by removing another word.  Discard it and rewrite from a fresh read of *what this skill does and when it fires* — the cold-loader / cold-triggering-agent test (Audit philosophy).  Tag it `rewrite` and show the proposed replacement text inline; MEDIUM by default, since the rebuilt prose is a judgment call.  This is the AGENTS.md → Writing tone single rule applied to SKILL.md bodies (`/audit-comments` and `/audit-docs` make the same move for their scopes) — re-trimming the wreckage manufactures the residue the rule exists to stop.
+
 Skill-specific anti-patterns on top of the standard list:
 
 * **Anti-self-assertions** — *"I have read all the rules"*, *"always follow these guidelines"*, *"I will not skip steps"* in the body.  Known Cline-community failure mode: the assertion reads as completed work and the agent skips the actual rule.  Flag every occurrence.
@@ -210,6 +212,8 @@ HIGH-CONFIDENCE (safe to fix):
 
 MEDIUM-CONFIDENCE (sign-off needed):
 
+  rewrite      §<section>  — <passage rotted by prior trim passes;
+                              proposed replacement text shown inline>
   drift        §<section>  — <restated rule diverged from AGENTS.md / ADR>
   composability §<section> — <duplicates task-checkpoint / git-commit>
   justify      L<n>  — <rule absolute, no why or pointer>
@@ -272,6 +276,7 @@ LOW-CONFIDENCE (questions for the user):
 * `drift` — restated rule diverged from source of truth (dim 6)
 * `composability` — sibling-skill duplication or missing deferral (dim 7)
 * `ai-tic` — vocabulary / phrasing (dim 8, lifted from `audit-docs`)
+* `rewrite` — passage degraded by prior subtractive passes; discard and rebuild from a fresh read of what the skill does (dim 8 / AGENTS.md → Writing tone). Replacement shown inline; MEDIUM by default — rebuilt prose is a judgment call.
 * `overlap` — cross-skill trigger / directive overlap (dim 9)
 * `redundant` — line-overlap merge candidate (dim 9)
 * `conflict` — cross-skill directive contradiction (dim 9)

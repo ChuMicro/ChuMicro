@@ -85,8 +85,11 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 **Code comments**
 
-- Code comments document the *why* of current code, nothing else. No history (*"previously this did X"*), no dated incidents (*"2026-05-09 ESP32-S2 bake"*), no removed-code explanations (*"we used to also send Ctrl-C, dropped because…"*), no workstream pointers (*"Step 2 of workbench-deploy-reliability"*) — that belongs in the commit message, the ADR body, or the workstream file, all reachable via `git log` / `plans/`. Applies to docstrings and test-body comments too.
+- A code comment first states, in plain words, **what the thing does or returns**, written so a reader who has *not* read the code is oriented — then the non-obvious *why*. "Document the why" is not enough alone: *"the one true path for getting this string from this area"* breaks none of the prohibitions below and still says nothing; *"Returns the product ID string."* is the fix. Full shape and the trim-vs-rewrite call: the [`audit-comments`](.github/skills/audit-comments/SKILL.md) skill.
+- Two comment failures agents commit while writing, not just in audits: a confined helper's comment must not name its callers — it has no business knowing them; state the contract, not *"called from the deploy CLI"*. And a comment must not point outside this code's world: no *"mirrors the reference impl"*, no upstream-repo / sibling-project names — the reader here cannot act on them (for shipped trees `CHU006` also mechanizes the mono-repo subset).
+- Beyond the what+why shape, the comment documents the *why of current code*, nothing else. No history (*"previously this did X"*), no dated incidents (*"2026-05-09 ESP32-S2 bake"*), no removed-code explanations (*"we used to also send Ctrl-C, dropped because…"*), no workstream pointers (*"Step 2 of workbench-deploy-reliability"*) — that belongs in the commit message, the ADR body, or the workstream file, all reachable via `git log` / `plans/`. Applies to docstrings and test-body comments too.
 - Audit-pass commits may add general "what this work is doing" framing, but never per-change justification (*"bench-validated -25% allocation"*, *"skips the bytes() copy"*) and never the same comment repeated across many sites. Per-change rationale goes in the commit message body. Flash is ~800 KB total; bloaty comment patterns multiplied across libraries fill it fast.
+- A comment so degraded that trimming it again only makes it less legible gets *rewritten from a fresh read of the code*, not subtracted further — repeated trim-only audit passes are how comments rot to illegibility. That rewrite work routes through the [`audit-comments`](.github/skills/audit-comments/SKILL.md) skill (the judgment counterpart to the mechanized comment-lint subset; `/audit-library`'s comment checks detect and trim only).
 
 **Cross-repo isolation**
 
@@ -124,6 +127,8 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 ## Writing tone
 
 Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. The fix is usually structural, not vocabulary — when you write *"the X promise"* or *"the X pattern"*, name X concretely in the same sentence. When you catch yourself writing one, rewrite the sentence to *demonstrate* the property concretely instead of asserting it abstractly.
+
+**Degraded prose is rewritten, not trimmed again — the single rule, all prose.** A passage rotted by repeated subtractive edits (each pass removed a word, none asked *what should this say?*) is not fixed by removing another word — that only makes it shorter and no clearer. Discard it and rewrite from a fresh read of what the thing is and why it exists. This is the *why* of the entire comment/doc-audit family: code comments → [`audit-comments`](.github/skills/audit-comments/SKILL.md), user-facing markdown → [`audit-docs`](.github/skills/audit-docs/SKILL.md), SKILL.md bodies → [`audit-skill`](.github/skills/audit-skill/SKILL.md), ADR bodies → in-place edit per [`plans/decisions/README.md`](plans/decisions/README.md). Those skills carry the scope-specific application; this is the rule they apply.
 
 Specific bans:
 

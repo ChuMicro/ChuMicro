@@ -23,6 +23,8 @@ Three readers land on the same paragraph and want different things.  The skill's
 * **Advanced reader** — already knows the field.  Bails when the doc reads like a tutorial for content they've seen 50 times.  *"First, install Python…"* burns them.
 * **Beginner reader** — earlier on the curve than the cold reader.  Bails when the doc assumes context they don't have, names tools they haven't seen, or skips the *"why would I want this?"*.
 
+**Degraded passages get rewritten, not re-trimmed.**  The dimensions below are operationally subtractive (drop a tic word, cut a history note, shrink a ratio).  Run subtractively enough times on the same paragraph and each pass removes a word while none asks *what should this say?* — the result is a README sentence as illegible as the worst code comment.  When a passage has rotted that far, discard it and rewrite from a fresh read of what the thing actually is and why a reader would want it (the cold-reader test).  Trimming the wreckage again only makes it shorter and no clearer.  This is the prescriptive counterpart to *"don't golf"* (What NOT to do): that rule stops over-cutting a *good* passage; this one says what to do with an already-degraded one.
+
 Most doc problems fall into:
 
 * **Jargon leak** — internal vocabulary used before defining
@@ -212,6 +214,8 @@ Code examples should actually run.
 
 Trailing `# comment` annotations should narrate behavior, not label operations — and they should pull their weight, since example blocks ship as flash bytes when copy-pasted.
 
+Scope note: this dimension covers comments *in markdown example blocks*.  Comments and docstrings in `src/` (the actual library / workbench code) are `/audit-comments`'s target — route those there, don't fix them from a docs pass.
+
 * **Labels** — *"# start a request"* — flag.
 * **Narration** — *"# every 30 s, queue a fetch for example.com"* — keep.
 * **Runtime / runner relationship narration** — for runner-shaped code, the comment should name the runner's call relationship: *"# Runner calls this every 30 s — if no fetch is in flight, queue a new one"*, *"# Runner asks this every tick — True once the response is ready"*.
@@ -290,6 +294,8 @@ HIGH-CONFIDENCE (safe to fix):
 
 MEDIUM-CONFIDENCE (sign-off needed):
 
+  rewrite      §<section> — <passage rotted by prior trim passes;
+                             proposed replacement text shown inline>
   structure    §<section> — <restructure proposal + rationale>
   claim        L<n> — <claim to verify or soften>
   trivia       §<section> — <explanation/content ratio off>
@@ -342,6 +348,7 @@ Tag taxonomy:
 * `comment` — inline-comment label vs narration (dim 8).
 * `history` — historical rationale that should be in `git log` (dim 9).
 * `trivia` — explanation-to-content ratio off (dim 10).
+* `rewrite` — passage degraded by prior subtractive passes; discard and rebuild from a fresh read (Audit philosophy). Replacement text shown inline; MEDIUM by default — the rebuilt prose is a judgment call needing sign-off.
 
 ## Surface questions instead of guessing
 
@@ -366,6 +373,7 @@ When the same patterns recur across audits, **ask** rather than acting:
 **Content don'ts** (what not to write into the punch-list):
 
 * **Don't golf for word count.**  Sometimes longer prose is clearer.  User framing: *"you don't have to be so compact, these one-liners don't say much."*  Add words when they help comprehension.
+* **Don't re-trim a degraded passage — rewrite it.**  If a paragraph is already rotted from prior subtractive passes (illegible, says nothing, survived three audits a word lighter each time), removing another word is the wrong fix.  Discard it and rewrite from a fresh read of what the thing is (see Audit philosophy → "Degraded passages get rewritten").  A `rewrite` finding shows the proposed replacement text inline, same as `/audit-comments`.
 * **Don't strip every "the".**  *"the LED"*, *"the loop"*, *"the request"* are specific singular nouns — dropping the article reads wrong.  Only flag the genuinely-redundant ones.
 * **Don't restructure based on taste alone.**  The three-reader walk gives an objective lens.  *"I'd write it differently"* is not a reason to move things.
 
