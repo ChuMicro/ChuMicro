@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chumicro_checks.rules.chu002_chu005 import (
+from chumicro_checks.rules.chu002_005_018 import (
     CHU002,
     CHU003,
     CHU004,

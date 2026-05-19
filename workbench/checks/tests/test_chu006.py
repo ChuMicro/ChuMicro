@@ -137,6 +137,50 @@ class TestChuCodeInProse:
         assert CHU006.check(tmp_path) == []
 
 
+class TestGovernanceFilePattern:
+    def test_agents_md_ref_flagged(self, tmp_path: Path) -> None:
+        body = "# see " + "AGENTS.md" + " for the rule\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("governance file" in finding.message for finding in findings)
+
+    def test_contributing_md_ref_flagged(self, tmp_path: Path) -> None:
+        body = "# see " + "CONTRIBUTING.md" + " for setup\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("governance file" in finding.message for finding in findings)
+
+    def test_agents_notes_md_ref_flagged(self, tmp_path: Path) -> None:
+        # The second-governance-file shape — even if no current file
+        # exists, a publishable-tree pointer to it is a leak.
+        body = "# see " + "AGENTS.notes.md" + "\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any("governance file" in finding.message for finding in findings)
+
+    def test_checks_package_exempt(self, tmp_path: Path) -> None:
+        # The chu008 / chu017 rules legitimately enumerate AGENTS.md
+        # as data — the existing chumicro_checks exemption covers them.
+        body = "# rule scans " + "AGENTS.md" + "\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "workbench", "checks", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert all("governance file" not in finding.message for finding in findings)
+
+
+class TestScratchPathPattern:
+    def test_scratch_path_flagged(self, tmp_path: Path) -> None:
+        body = "# see " + ".scratch/run_perf.py" + " for bench\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
+        findings = CHU006.check(tmp_path)
+        assert any(".scratch/" in finding.message for finding in findings)
+
+    def test_scratch_in_markdown_flagged(self, tmp_path: Path) -> None:
+        body = "Run `" + ".scratch/perf.py" + "` for fragmentation testing.\n"  # noqa: CHU006  fixture: rule-pattern data
+        _stage_publishable(tmp_path, "libraries", "wifi", "README.md", body)
+        findings = CHU006.check(tmp_path)
+        assert any(".scratch/" in finding.message for finding in findings)
+
+
 class TestSuppression:
     def test_noqa_chu006_suppresses(self, tmp_path: Path) -> None:
         _stage_publishable(

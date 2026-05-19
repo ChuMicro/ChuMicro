@@ -11,8 +11,8 @@ class TestClassify:
         "path",
         [
             "run.py",
-            "AGENTS.md",
-            "CONTRIBUTING.md",
+            "AGENTS.md",  # noqa: CHU006  template-payload filename data
+            "CONTRIBUTING.md",  # noqa: CHU006  template-payload filename data
             "pyproject.toml",
             "projects/_template/config.toml",
             "projects/_template/app.py",

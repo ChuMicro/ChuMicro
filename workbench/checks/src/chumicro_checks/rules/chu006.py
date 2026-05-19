@@ -192,6 +192,19 @@ _PATTERNS: tuple[LeakPattern, ...] = (
         "already exempt",
         _outside_chumicro_checks,
     ),
+    (
+        re.compile(r"\b(?:AGENTS(?:\.notes)?|CONTRIBUTING)\.md\b"),  # noqa: CHU006  rule-pattern data: the regex flags this exact literal
+        "AGENTS.md / CONTRIBUTING.md ref — mono-repo / template "
+        "governance file, meaningless to a PyPI consumer reading the "
+        "shipped source",
+        _outside_chumicro_checks,
+    ),
+    (
+        re.compile(r"\.scratch/"),  # noqa: CHU006  rule-pattern data: the regex flags this exact literal
+        ".scratch/ path — agent-scratch convention, not on consumer "
+        "machines; publishable code writes build artifacts to _generated/",
+        _outside_chumicro_checks,
+    ),
 )
 
 _SCANNED_SUFFIXES: tuple[str, ...] = (
