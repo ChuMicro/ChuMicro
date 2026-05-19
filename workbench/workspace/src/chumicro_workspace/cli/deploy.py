@@ -42,6 +42,7 @@ from chumicro_workspace.cli._common import (
 )
 from chumicro_workspace.deploy_source import project_directory_source
 from chumicro_workspace.deploy_targets import read_deploy_targets
+from chumicro_workspace.example_source import example_source
 from chumicro_workspace.health import HealthLevel, collect_health_findings
 from chumicro_workspace.import_graph import project_import_graph_source
 from chumicro_workspace.workspace import (
@@ -97,6 +98,32 @@ class _ResolvedLayout:
 
     boot_shim: bool
     import_graph: bool
+
+
+@dataclass(frozen=True)
+class ExampleSpec:
+    """A library example resolved as a deploy payload.
+
+    An example is a project through the one staging pipeline: this
+    is the example-specific *payload* fork (the legitimate
+    per-context variance) handed to the single source owner
+    :func:`resolve_project_deploy_source`; the stage / delete / keep
+    policy is shared, never forked per command.
+
+    Attributes:
+        library_root: ``libraries/<lib>/`` — the library that owns
+            the example.
+        example_name: Example filename stem (no trailing ``.py``).
+        libraries_root: ``libraries/`` — enumerated for the sibling
+            ``src/`` search paths + manifest validation roots.
+        extra_modules: Dotted module names to force-include past the
+            AST walker (dynamic-import cases).
+    """
+
+    library_root: Path
+    example_name: str
+    libraries_root: Path
+    extra_modules: list[str] | None = None
 
 
 class _DeployLayoutError(Exception):
@@ -229,33 +256,61 @@ def _resolve_deploy_layout(
 
 def resolve_project_deploy_source(
     *,
-    project_dir: Path,
     workspace: WorkspaceLayout,
     device: Device,
+    project_dir: Path | None = None,
+    example: ExampleSpec | None = None,
     user_boot_shim: bool = False,
     user_import_graph: bool = False,
     user_entrypoint: str | None = None,
     target_runtime: str | None = None,
 ) -> tuple[str, object]:
-    """Resolve ``(layout_label, FileSource)`` for a project deploy.
+    """Resolve ``(layout_label, FileSource)`` for a deploy.
 
-    The single owner of project → on-device-source policy: one
-    mechanism, one source policy.  Every command that puts a
-    *project* on a board routes through this so the project stages
-    identically regardless of which command invoked it.
-    ``deploy`` passes its ``--boot-shim`` / ``--import-graph`` /
-    ``--entrypoint`` / ``--target-runtime`` flags through; ``repl``
-    (and any other front-end) passes nothing and gets the same
-    auto-detected layout ``deploy`` would.
+    The single owner of *what FileSource ships to this board*: one
+    mechanism, one source policy, for both a project and a library
+    example.  Every command that puts code on a board routes through
+    this so the payload stages identically regardless of which
+    command invoked it.  ``deploy`` passes a *project_dir* + its
+    ``--boot-shim`` / ``--import-graph`` / ``--entrypoint`` /
+    ``--target-runtime`` flags; ``deploy-example`` passes an
+    *example* spec and nothing else.  An example is a project through
+    this one pipeline: its only fork is the inner payload source,
+    never the stage / delete / keep policy.
+
+    Exactly one of *project_dir* / *example* must be given.
 
     Raises:
+        ValueError: Neither or both of *project_dir* / *example*.
         _DeployLayoutError: project shape doesn't match the target
             runtime's entrypoint convention.  Callers surface the
             instance's str as the user-facing message — a malformed
             project is refused identically on every path, never
             silently shipped as a library-less boot deploy.
+        FileNotFoundError, ValueError: forwarded from
+            :func:`example_source` for a malformed example (callers
+            classify these as a precheck failure).
     """
+    if (project_dir is None) == (example is None):
+        raise ValueError(
+            "resolve_project_deploy_source needs exactly one of "
+            "project_dir / example",
+        )
     target = target_runtime or str(device.transport)
+    if example is not None:
+        library_roots = sorted(
+            path
+            for path in example.libraries_root.iterdir()
+            if path.is_dir()
+        )
+        return "example", example_source(
+            example.library_root,
+            example.example_name,
+            library_roots=library_roots,
+            runtime=target,
+            secrets_toml=workspace.secrets_toml,
+            extra_modules=example.extra_modules,
+        )
     layout_choice = _resolve_deploy_layout(
         project_dir=project_dir,
         target_entrypoint=device.effective_entrypoint,

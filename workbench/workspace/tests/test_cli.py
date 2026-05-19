@@ -5858,10 +5858,10 @@ class TestDeployExampleAdditionalBranches:
         root = _seed_workspace_with_cp_device(tmp_path)
         _seed_example_library(root, "timing")
 
-        # Replace _make_deploy_runner so .deploy() raises a classifiable
-        # NO_PYTHON_RUNTIME error.
+        # Replace _make_deploy_runner so deploy_diff() raises a
+        # classifiable NO_PYTHON_RUNTIME error.
         class _NoPythonDeployer:
-            def deploy(self, _source: object, **_kwargs: object) -> None:
+            def deploy_diff(self, _source: object, **_kwargs: object) -> None:
                 raise CircuitpythonTransportError(
                     "no python runtime detected on /dev/cu.fake",
                 )
@@ -5891,7 +5891,7 @@ class TestDeployExampleAdditionalBranches:
         _seed_example_library(root, "timing")
 
         class _PortBusyDeployer:
-            def deploy(self, _source: object, **_kwargs: object) -> None:
+            def deploy_diff(self, _source: object, **_kwargs: object) -> None:
                 raise CircuitpythonTransportError(
                     "Failed to open serial port: Resource busy",
                 )
@@ -5978,6 +5978,43 @@ class TestResolveDeployLayoutAsyncRun:
             user_passed_import_graph=False,
         )
         assert layout.boot_shim is True
+
+
+class TestResolveProjectDeploySourceGuard:
+    """``resolve_project_deploy_source`` owns project *and* example.
+
+    Exactly one of ``project_dir`` / ``example`` must be given — the
+    single source owner refuses an ambiguous or empty request rather
+    than silently picking a path.
+    """
+
+    def test_neither_project_nor_example_raises(self) -> None:
+        from chumicro_workspace.cli.deploy import (
+            resolve_project_deploy_source,
+        )
+
+        with pytest.raises(ValueError, match="exactly one"):
+            resolve_project_deploy_source(
+                workspace=object(), device=object(),
+            )
+
+    def test_both_project_and_example_raises(self, tmp_path: Path) -> None:
+        from chumicro_workspace.cli.deploy import (
+            ExampleSpec,
+            resolve_project_deploy_source,
+        )
+
+        with pytest.raises(ValueError, match="exactly one"):
+            resolve_project_deploy_source(
+                workspace=object(),
+                device=object(),
+                project_dir=tmp_path,
+                example=ExampleSpec(
+                    library_root=tmp_path / "timing",
+                    example_name="circuitpython_blink",
+                    libraries_root=tmp_path,
+                ),
+            )
 
 
 def _seed_with_device(
