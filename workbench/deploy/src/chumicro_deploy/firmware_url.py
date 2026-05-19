@@ -36,9 +36,7 @@ from xml.etree import ElementTree
 
 #: S3 bucket where Adafruit publishes CircuitPython firmware.  The
 #: front-end CDN at ``downloads.circuitpython.org`` strips query
-#: parameters, so we hit the bucket directly for listing.  Stable
-#: since the bucket was created; mirrored across the Adafruit
-#: tooling ecosystem.
+#: parameters, so we hit the bucket directly for listing.
 CIRCUITPYTHON_S3_BUCKET_URL = "https://adafruit-circuit-python.s3.amazonaws.com/"
 
 #: Adafruit's CDN download URL — used for the actual firmware

@@ -126,9 +126,6 @@ class FakeTime:
       scenarios where production does not sleep but the test needs to
       simulate elapsed time (e.g., timeout expiry).
 
-    This mirrors the semantics of Kotlin's ``TestCoroutineScheduler``:
-    time only moves when the test (or a sleep call) says it does.
-
     Example::
 
         fake = FakeTime()

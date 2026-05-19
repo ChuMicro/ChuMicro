@@ -515,7 +515,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
     On :class:`CircuitpythonTransportError` or
     :class:`MicropythonTransportError`: classifies the failure,
     prints the coached recovery output (headline + F6 lsof
-    diagnosis when applicable + canonical fix steps), and re-raises.
+    diagnosis when applicable + fix steps), and re-raises.
     No retry loop, no user prompt — designed for callers that
     have nowhere to read stdin from (CI runners, log-driven
     automation, ``--non-interactive`` CLI flag).

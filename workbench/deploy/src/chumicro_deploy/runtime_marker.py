@@ -168,9 +168,9 @@ def file_targets_runtime(
     """Return ``True`` when *python_file* should ship to *target_runtime*.
 
     ``target_runtime=None`` is the unfiltered case — every file matches.
-    This is the legacy default for deploy paths that want the prior
-    "ship everything" behavior; PyPI sdist / wheel building doesn't
-    pass through this function.
+    Used by deploy paths that ship every file regardless of marker.
+    PyPI sdist / wheel building uses its own filter and doesn't pass
+    through this function.
 
     A string target (``"circuitpython"`` / ``"micropython"`` /
     ``"cpython"``) means "this single concrete runtime" — a marked file

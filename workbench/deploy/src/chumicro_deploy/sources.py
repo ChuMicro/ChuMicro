@@ -116,8 +116,7 @@ class DirectorySource:
             / ``"cpython"``), ``.py`` files carrying a
             ``__chumicro_runtimes__`` marker are skipped if the marker
             doesn't include *target_runtime*.  ``None`` (the default)
-            ships every file, matching the prior unfiltered behavior.
-            Non-``.py`` files are unaffected.
+            ships every file.  Non-``.py`` files are unaffected.
 
     Raises:
         NotADirectoryError: If *root* does not exist or is not a
@@ -244,13 +243,11 @@ class ImportGraphSource:
             / ``"cpython"``), modules carrying a ``__chumicro_runtimes__``
             marker for a different runtime are dropped, and their
             imports are not walked further.  ``None`` (the default)
-            ships every
-            reachable module, matching the prior unfiltered behavior;
-            this is the right setting when the runtime selector
-            reaches both adapters at import time and you want the
-            unmatched one available so the selector can fail loudly
-            on misclassification.  The entrypoint itself is never
-            filtered.
+            ships every reachable module — the right setting when the
+            runtime selector reaches both adapters at import time and
+            you want the unmatched one available so the selector can
+            fail loudly on misclassification.  The entrypoint itself
+            is never filtered.
 
     If *entrypoint* declares a module-level
     ``__chumicro_skip_factories__`` constant, named chumicro factory
