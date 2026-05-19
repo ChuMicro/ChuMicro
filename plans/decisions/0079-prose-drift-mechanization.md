@@ -1,0 +1,70 @@
+# Decision 0079: Mechanize prose drift through closed-set and dedup engines
+
+Status: `accepted`
+Date: `2026-05-19`
+Related: [Decision 0074](0074-drift-mechanization-as-project-policy.md) (lintable drift must be mechanized), [Decision 0060](0060-chu-rules-home.md) (`chumicro-checks` package home), [`plans/workstreams/chu-prose-isolation-lint-gaps.md`](../workstreams/chu-prose-isolation-lint-gaps.md).
+
+## Context
+
+Deploy-path-unification Commit 2c surfaced seven prose-drift classes that pass a green lint today: dateless landed-history framing, mono-repo pointers (`AGENTS.md`, `.scratch/`), a definition AI-tic (`the (one|single|sole) X`), a forward-reference AI-tic (`the (next|first|only|new|sole) X`), banned ADR-authoring section markers, dangling `Superseded by:` pointers, and orphan governance-doc files. Each escaped preflight and reached human review.
+
+Decision 0074 binds the response: a contract whose violation is detectable by a deterministic check does not get to rely on "an agent will keep the prose in lockstep." The workstream's analysis reduces the seven classes plus the `plans/open-questions.md` "comments document current-code why" entry and the existing `CHU020` next-up entry to **two reusable engines** plus three single-purpose structural checks — building each as its own rule duplicates the infrastructure 0060 already provides.
+
+## Decision
+
+### Principle
+
+**Closed-set lexical and small structural prose-drift classes get a deterministic CHU lint, each behind a `# noqa: CHU0NN — <why>` escape. Open-set semantic classes stay with `/audit-comments`, `/audit-skill`, ADR review, and the AGENTS.md "Writing tone" prose rule.** The split is the same one 0074 already drew for code shape, extended to prose. "Is this comment narrating a change vs explaining current code?" is semantic and stays unmechanized; "does this comment contain a date, a commit SHA, a `Decision NNNN` token, a fingerprint-matching duplicate of another block, or one of N enumerated banned phrases?" is lexical and is mechanized.
+
+### Two engines, fed different inputs
+
+**Engine B — closed-set token/phrase matcher.** The existing `LeakRule` shape in `workbench/checks/src/chumicro_checks/rules/_leak_rule.py` already is this engine: a tuple of `(re.Pattern, message, scope_predicate)`, `# noqa`-escapable, with per-rule scope predicates for legitimate-data exemptions. Extending it requires feeding new word lists, not new infrastructure. Per-rule consumers:
+
+- **CHU006 extension** — add `AGENTS.md` / `CONTRIBUTING.md` and `.scratch/` patterns to the existing publishable-tree leak set. `61f31c26` removed the only known legitimate `.scratch/` use in `chumicro_workspace` src; the remaining tool-owned filename-data references in `workbench/workspace/src/chumicro_workspace/template_zones.py` carry `# noqa: CHU006 — tool-owned template filename data` per the existing project escape convention.
+- **CHU012 extension** — add the dateless landed-history shape (`\blanded\b` / `\bdeferred until\b` framing) to the existing CHU012 pattern tuple. The freeform postmortem half ("sweep-wide cascade", "no margin", "we've observed") is open-set semantic and stays unmechanized.
+- **CHU020** — closed AI-tic phrase set (`comprehensive`, `robust`, `seamlessly`, `cutting-edge`, `best-in-class`, `It is worth noting that`, `Let's dive into`, …) per the existing next-up entry. Quoted/ban-discussion text exempt via the same mechanism CHU006 uses.
+- **CHU021** — `the (one|single|sole) <noun>` definition AI-tic. Per-noun closed set, FP allowlist via `# noqa: CHU021 — <why>`. Legitimate invariant prose (`the single owner of the staging path`, `the single source of truth` as established term) lands on the allowlist or carries a `# noqa`.
+- **CHU022** — `the (next|first|only|new|sole) <noun>` forward-reference tic, sentence-initial inside docstring or `#` comment only. Mid-sentence occurrences carry too high an FP rate (idioms: `the first time`, `the only LED`) and stay with audit-pass judgement. Peer to CHU021; **never pre-merged into one rule** — modifier sets, position constraints, and FP profiles diverge enough that calibration must stay per-list.
+- **CHU023** — date (`\d{4}-\d{2}-\d{2}`), 7-40-hex commit-SHA, and `Decision/ADR NNNN` tokens in code comments and docstrings across all trees (extends the open-questions date/SHA-token half beyond CHU006's publishable-only scope; CHU006 keeps its `Decision NNNN` coverage of publishable trees).
+- **CHU024** — banned ADR-authoring section markers in `plans/decisions/*.md`: `## Update (`, `Amended by`, `This was revised`, `## Changelog`, a `SUPERSEDED-BY` filename marker used *in addition to* the original body (per the README's in-place-edit rule). Engine B is exactly the right shape for an enumerated banner list.
+
+**Engine A — normalized-block dedup.** New file walker (no precedent in `chumicro-checks` today): tokenize comment/docstring/ADR-paragraph blocks, normalize whitespace + case + punctuation, hash blocks ≥ a min-token floor, flag fingerprints recurring ≥3 sites in a package or ≥2 cross-package. Allowlist: license headers, `# noqa`, `# type: ignore`, `pragma: no cover`. Each block escape-able by `# noqa: CHU0NN — <why>` on the line carrying the first token.
+
+- **CHU027** — cross-site duplicate comment+docstring blocks in `src/`. The 2c `mkfs/keep-set` narrative pasted across three files is the worked failure this catches.
+- **CHU028** — cross-ADR principle duplication in `plans/decisions/`. The 0038§3 ↔ 0075 partial-supersession bloat (a corrected principle stated in full in two ADRs) was this class's worked case, manually collapsed in commit `165c9331`; CHU028 is the regression guard. **Deferred until CHU027's precision is validated on real corpus** — ADRs share template headings and the cross-ADR precision risk is real; the per-block floor + allowlist must exclude scaffolding before this lands.
+
+### Three small structural checks (single-purpose, not engines)
+
+- **CHU025** — `Superseded by:` pointer integrity in `plans/decisions/`. Every `Superseded by:` field names an existing target ADR; no ADR is both `accepted` and `superseded`; no `SUPERSEDED-BY-MMMM-` filename marker dangles.
+- **CHU026** — orphan governance-doc file. Every governance-doc-shaped file (`AGENTS.notes.md`, `RULES.md`, `*GUIDELINES*.md`) referenced from `AGENTS.md` must also be reachable from `CLAUDE.md`'s `@`-include chain (today: the single line `@AGENTS.md`; the walker traverses transitively). Mechanizes the "no second not-auto-loaded governance file" half of the AGENTS.md self-editing meta-rule.
+
+### Build order
+
+By risk, lowest first:
+
+1. **Engine B extensions and standalone codes.** CHU006 + CHU012 augments first (smallest pattern delta, exercises the existing rule on existing scope). Then CHU020 (the next-up entry already names it, ready to land), CHU021 → CHU022 (peer codes — CHU021 calibrates the per-noun closed set and FP allowlist before CHU022 lands), CHU023, CHU024.
+2. **Single-purpose structural checks.** CHU025, CHU026 — each ~50-100 LOC, no shared infrastructure.
+3. **Engine A.** CHU027 first; bench-calibrate the min-token floor and allowlist on the real `src/` corpus, then land CHU028 against `plans/decisions/`.
+
+## Anti-decision (recorded so it is not re-proposed)
+
+**No AGENTS.md size, line-count, or token-budget ceiling lint.** A pass/fail size gate mechanically rewards the compression behavior the AGENTS.md "argument-stopping rationale stays inline" rule forbids — a lint that *punishes* the restoration of load-bearing why-clauses and *rewards* their removal. Commit-evidence: the five-commit oscillation `53313cf6` → `7f19a109` → `9f120743` → `9158c85b` → `165c9331` was driven by repeated unnoticed compression of load-bearing rationale; a size gate would have actively assisted it. The most a tool may do on AGENTS.md is a non-blocking large-net-deletion review prompt forcing explicit sign-off on big cuts, never pass/fail. 0074's "lintable drift must be linted" is not violated: removal-of-load-bearing-content is not deterministically separable from legitimate compression without judging *whether the content was load-bearing*.
+
+## Rejected
+
+- **One mega-pattern merging CHU021 (definition `the X` tic) and CHU022 (forward-reference `the X` tic).** They share the article `the` and look superficially identical, but the modifier sets (`one|single|sole` vs `next|first|only|new|sole`), position constraints (anywhere vs sentence-initial), and FP profiles (legitimate invariant prose vs idioms like `the first time`) diverge. One pattern → one calibration → one over- or under-fires. Keep them peer closed-sets.
+- **Comment-to-code volume ratio** (the workstream's #4 first framing). Inverts — it fires hardest on a 3-line hardware-quirk workaround legitimately carrying 15 lines of *why*, which is exactly the dense-comment shape AGENTS.md endorses. The conjunctive structural predicate (`volume ≥3× ∧ no Args/Returns ∧ not Protocol/property/abstract`) cannot be the defect signal either — verified: `_disable_autoreload_before_drive_writes` in `circuitpython_transport.py` matches all three conjuncts and is canonically correct dense-why. Its salvageable role is as an optional precision/priority gate on CHU012's content patterns, not a standalone rule.
+- **Generic blocklist for change-narrating phrases** (`previously`, `no longer`, `was removed`, `replaces the old`, `that is intended`). `plans/open-questions.md` rejected this: those phrases recur in legitimate present-tense *why* (`this list is no longer mutated after init`). Precision would be low, suppression-fatigue high, semantic-vs-lexical line crossed. Stays with reviewer.
+- **A standalone ADR for ADR-authoring discipline.** Restating in a fresh ADR the rules already stated in `plans/decisions/README.md` is itself the duplication CHU028 catches. The lintable half lands as CHU024 + CHU025 from inside this ADR; the judgement half (genuine reasoning shift vs in-place correction of wrong reasoning) stays in the README — one invariant, one home.
+- **AGENTS.md size/line ceiling lint** (per the anti-decision section above — recorded as rejection so future agents do not re-propose it).
+- **Folding CHU021 and CHU022 into CHU020's general AI-tic set.** CHU020's next-up entry explicitly carves out `the (one|single|sole) X` because the modifier-only matcher false-positives on legitimate invariant prose. CHU021 + CHU022 add the closed-noun half that makes the matcher sound; conflating them with CHU020 would re-introduce the same FP problem.
+
+## Consequences
+
+- **`chumicro-checks` gains nine rule codes** — CHU020 through CHU028. CHU020-024 reuse the existing `LeakRule` machinery with new pattern/scope tuples (small additions, ~20-60 LOC per code). CHU025-026 are single-purpose walkers (~50-100 LOC each). CHU027 introduces the normalized-block dedup engine (a new file walker comparable in size to today's `LeakRule`); CHU028 is the second consumer of that engine. CHU006 and CHU012's pattern tuples gain new entries per the Engine B section.
+- **`plans/open-questions.md` "Mechanize the comments document current-code why" entry resolves** — CHU023 mechanizes its date/SHA-token half, CHU027 mechanizes its cross-site-dedup half, the freeform-prose-sniffer half stays rejected. Delete the entry when this ADR lands.
+- **`plans/next-up.md` CHU020 entry resolves** — folded into this ADR. Delete the standalone entry; CHU020 lands as the first standalone Engine B consumer per the build order.
+- **The workstream `chu-prose-isolation-lint-gaps` transitions from "parked, analysis only" to "design decided, implementation tracked here."** The workstream file stays as the deeper analysis reference; `plans/next-up.md` shrinks to a one-line pointer at this ADR plus the workstream for detail.
+- **AGENTS.md "Code comments" and "Writing tone" non-negotiables stay** — the lints are the primary guard for the lintable half, the prose rules backstop the un-mechanizable remainder (per 0074). Each new CHU code's AGENTS.md cross-reference lands with its implementation commit, not pre-emptively, following the 0060 precedent.
+- **A new drifted-and-shipped prose contract is, by 0074 + this ADR, an Engine B or Engine A candidate** — "fix the prose" remains an incomplete remediation if the class is lintable and recurs.
+- **No device-flash cost.** `chumicro-checks` is CPython-only per Decision 0032; all nine new rules run host-side in `python -m chumicro_checks` and CI. Host-side cost is incremental — Engine B reuses the existing walker, Engine A adds one new walker comparable to today's per-rule cost.

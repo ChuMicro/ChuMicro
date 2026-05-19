@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-17`
-Related: [Decision 0058](0058-test-skips-must-be-loud.md), [Decision 0025](0025-dual-coverage-thresholds.md), the `chumicro-checks` CHU-rule family in `workbench/checks/`.
+Related: [Decision 0058](0058-test-skips-must-be-loud.md), [Decision 0025](0025-dual-coverage-thresholds.md), [Decision 0079](0079-prose-drift-mechanization.md) (prose-drift consumer of this policy), the `chumicro-checks` CHU-rule family in `workbench/checks/`.
 
 ## Context
 
