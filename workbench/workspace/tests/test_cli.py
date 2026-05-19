@@ -5092,43 +5092,32 @@ class TestConfigValidate:
 class TestInstallLibrariesCommand:
     """End-to-end tests for ``install-libraries`` via the CLI dispatcher.
 
-    Monkey-patches ``subprocess.run`` to capture the commands the CLI
-    would have invoked without actually shelling out to circup /
-    mpremote (which require network + a real board respectively).
+    Acquisition is host-local: the command fetches into
+    ``<workspace>/_libraries/<name>/src/`` and registers
+    ``library_sources:`` — it never contacts a device.  A
+    :class:`FakeSubprocessRunner` captures the fetch commands without
+    actually shelling out to pip / mpremote.
     """
 
     def _seed_workspace_and_project(
-        self, tmp_path: Path, *, runtime: str = "micropython",
+        self, tmp_path: Path,
         app_source: str = "import chumicro_wifi\nimport chumicro_mqtt\n",
     ) -> Path:
-        """Stage a workspace + project and return the workspace root.
-
-        Tests pair this with a freshly-constructed
-        :class:`FakeSubprocessRunner` passed to ``cli.main`` via
-        ``env=cli.CliEnv(subprocess_runner=...)``.
-        """
+        """Stage a workspace + project and return the workspace root."""
         (tmp_path / "workspace.yml").write_text('# machinery only\n')
         (tmp_path / "secrets.toml").write_text('')
-        (tmp_path / "devices.yml").write_text(
-            "defaults:\n"
-            f"  {runtime}: target-board\n"
-            "devices:\n"
-            "  - id: target-board\n"
-            f"    runtime: {runtime}\n"
-            "    address: /dev/cu.fake\n",
-        )
         project_dir = tmp_path / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
         (project_dir / "app.py").write_text(app_source)
         return tmp_path
 
-    def test_micropython_runs_one_mip_install_per_chumicro_import(
+    def test_pip_backend_fetches_each_import_into_local_cache(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = self._seed_workspace_and_project(tmp_path, runtime="micropython")
+        root = self._seed_workspace_and_project(tmp_path)
         runner = FakeSubprocessRunner()
 
         exit_code = cli.main(
@@ -5136,44 +5125,63 @@ class TestInstallLibrariesCommand:
             env=cli.CliEnv(subprocess_runner=runner),
         )
         assert exit_code == 0
-        # Two chumicro imports → two mip install commands.
+        # One pip --target fetch per chumicro import, host-local only.
         assert len(runner.calls) == 2
         for call in runner.calls:
             command = call.args
-            assert command[0] == "mpremote"
-            assert "mip" in command and "install" in command
-            assert "/dev/cu.fake" in command
-            assert "github:ChuMicro/ChuMicro-Bundle/" in command[-1]
-        # Sorted: chumicro_mqtt < chumicro_wifi alphabetically.
-        assert "chumicro_mqtt" in runner.calls[0].args[-1]
-        assert "chumicro_wifi" in runner.calls[1].args[-1]
+            assert command[:4] == [sys.executable, "-m", "pip", "install"]
+            assert "--target" in command
+            assert str(root / "_libraries") in " ".join(command)
+            assert "circup" not in command
+            assert all("/dev/" not in part for part in command)
+        # Sorted: chumicro_mqtt < chumicro_wifi.
+        def _target(args: list[str]) -> str:
+            return args[args.index("--target") + 1]
+        assert _target(runner.calls[0].args).endswith("mqtt/src")
+        assert _target(runner.calls[1].args).endswith("wifi/src")
         out = capsys.readouterr().out
-        assert "chumicro-mqtt" in out
-        assert "chumicro-wifi" in out
-        assert "installed 2 libraries" in out
+        assert "acquired 2 libraries" in out
+        assert "next: chumicro-workspace deploy back-porch" in out
 
-    def test_circuitpython_runs_one_circup_invocation(
+    def test_library_sources_block_is_registered(
         self,
         tmp_path: Path,
     ) -> None:
-        root = self._seed_workspace_and_project(tmp_path, runtime="circuitpython")
+        root = self._seed_workspace_and_project(tmp_path)
+
+        cli.main(
+            ["install-libraries", "--workspace-dir", str(root), "back-porch"],
+            env=cli.CliEnv(subprocess_runner=FakeSubprocessRunner()),
+        )
+        workspace_yaml = (root / "workspace.yml").read_text()
+        assert "library_sources:" in workspace_yaml
+        assert "chumicro_wifi: _libraries/wifi/src" in workspace_yaml
+        assert "chumicro_mqtt: _libraries/mqtt/src" in workspace_yaml
+        assert "install-libraries" in workspace_yaml  # provenance marker
+
+    def test_mip_backend_fetches_locally_never_a_board(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        root = self._seed_workspace_and_project(tmp_path)
         runner = FakeSubprocessRunner()
 
-        exit_code = cli.main(
-            ["install-libraries", "--workspace-dir", str(root), "back-porch"],
+        cli.main(
+            [
+                "install-libraries", "--workspace-dir", str(root),
+                "--backend", "mip", "back-porch",
+            ],
             env=cli.CliEnv(subprocess_runner=runner),
         )
-        assert exit_code == 0
-        # circup takes a list — one invocation total.
-        assert len(runner.calls) == 1
-        command = runner.calls[0].args
-        assert command[0] == "circup"
-        assert "install" in command
-        # Both packages on the same circup install line.
-        assert "chumicro-mqtt" in command
-        assert "chumicro-wifi" in command
+        assert len(runner.calls) == 2
+        for call in runner.calls:
+            command = call.args
+            assert command[:4] == ["mpremote", "mip", "install", "--target"]
+            assert "connect" not in command
+            assert all("/dev/" not in part for part in command)
+            assert "github:ChuMicro/ChuMicro-Bundle/" in command[-1]
 
-    def test_dry_run_prints_commands_without_executing(
+    def test_dry_run_prints_without_executing_or_registering(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
@@ -5189,13 +5197,14 @@ class TestInstallLibrariesCommand:
             env=cli.CliEnv(subprocess_runner=runner),
         )
         assert exit_code == 0
-        assert runner.calls == []  # subprocess.run NOT called under --dry-run
+        assert runner.calls == []
         out = capsys.readouterr().out
         assert "--dry-run" in out
-        assert "mpremote" in out  # commands still printed
-        assert "github:ChuMicro/ChuMicro-Bundle/" in out
+        assert "pip" in out  # commands still printed
+        # library_sources NOT written under --dry-run.
+        assert "library_sources:" not in (root / "workspace.yml").read_text()
 
-    def test_experimental_swaps_bundle_repo_on_micropython(
+    def test_experimental_swaps_bundle_repo_with_mip_backend(
         self,
         tmp_path: Path,
     ) -> None:
@@ -5205,32 +5214,13 @@ class TestInstallLibrariesCommand:
         cli.main(
             [
                 "install-libraries", "--workspace-dir", str(root),
-                "--experimental", "back-porch",
+                "--backend", "mip", "--experimental", "back-porch",
             ],
             env=cli.CliEnv(subprocess_runner=runner),
         )
         for call in runner.calls:
             assert "ChuMicro-Bundle-Experimental" in call.args[-1]
             assert "ChuMicro-Bundle/" not in call.args[-1]
-
-    def test_drive_path_forwarded_to_circup(
-        self,
-        tmp_path: Path,
-    ) -> None:
-        root = self._seed_workspace_and_project(tmp_path, runtime="circuitpython")
-        runner = FakeSubprocessRunner()
-
-        cli.main(
-            [
-                "install-libraries", "--workspace-dir", str(root),
-                "--drive-path", "/Volumes/CIRCUITPY", "back-porch",
-            ],
-            env=cli.CliEnv(subprocess_runner=runner),
-        )
-        assert runner.calls[0].args == [
-            "circup", "--path", "/Volumes/CIRCUITPY",
-            "install", "chumicro-mqtt", "chumicro-wifi",
-        ]
 
     def test_no_chumicro_imports_returns_zero_without_subprocess(
         self,
@@ -5263,7 +5253,7 @@ class TestInstallLibrariesCommand:
             env=cli.CliEnv(subprocess_runner=runner),
         )
         assert exit_code == 42
-        assert "command failed" in capsys.readouterr().err
+        assert "fetch of" in capsys.readouterr().err
 
 
 class TestResetBoard:

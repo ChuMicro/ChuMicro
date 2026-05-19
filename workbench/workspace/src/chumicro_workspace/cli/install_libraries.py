@@ -1,4 +1,12 @@
-"""``install-libraries`` subcommand — circup (CP) / mip (MP) bundle install."""
+"""``install-libraries`` subcommand — host-local library acquisition.
+
+Fetches the chumicro libraries the project imports into the
+gitignored ``<workspace>/_libraries/<name>/src/`` cache and registers
+them in ``workspace.yml``'s managed ``library_sources:`` block.  The
+one deploy then bundles them onto the board — nothing here touches a
+device.  Regular-mode counterpart to dev-mode's sibling-checkout
+``library_sources:`` auto-sync.
+"""
 
 from __future__ import annotations
 
@@ -6,50 +14,38 @@ import argparse
 import sys
 
 from chumicro_workspace.cli._common import (
-    _add_device_selector,
     _add_workspace_arg,
-    _resolve_device,
     _resolve_project_name,
     _resolve_workspace,
 )
 from chumicro_workspace.install_libraries import (
-    EXPERIMENTAL_BUNDLE_REPO,
-    STABLE_BUNDLE_REPO,
-    build_circup_command,
-    build_mip_commands,
+    LIBRARIES_CACHE_DIRNAME,
+    LIBRARY_SOURCES_MARKER,
+    build_mip_fetch_command,
+    build_pip_fetch_command,
     discover_chumicro_imports,
     import_name_to_package,
+    local_src_dir,
 )
+from chumicro_workspace.managed_block import sync_managed_block
 
 
 def _cmd_install_libraries(args: argparse.Namespace) -> int:
-    """Install chumicro libraries onto a device via circup (CP) / mip (MP).
+    """Acquire the project's chumicro libraries into the host-local cache.
 
-    Regular-mode counterpart to dev-mode's ``library_sources:`` auto-sync
-    (gap #4 of the workspace-template dev-and-regular-mode-gaps audit).
-    AST-walks the project's source tree to discover every
-    ``chumicro_<name>`` top-level import, then shells out to the right
-    runtime tool to fetch + install those packages from the published
-    bundle:
+    AST-walks PROJECT for ``chumicro_<name>`` imports, fetches each
+    into ``<workspace>/_libraries/<name>/src/`` (``pip install
+    --target`` by default; ``--backend mip`` for the
+    ``mpremote mip install --target`` download-to-local fallback),
+    then registers every fetched tree in ``workspace.yml``'s managed
+    ``library_sources:`` block.  No device is contacted — the next
+    ``chumicro-workspace deploy`` bundles the libraries onto the board
+    through the one staging path.
 
-    * **CircuitPython** — one ``circup install <pkg-list>`` invocation
-      against the bundle the user has already registered (pre-flight
-      check warns if no chumicro bundle is in circup's bundle list).
-      The CIRCUITPY drive is auto-detected; pass ``--drive-path`` to
-      pin a specific mount when multiple boards share a host.
-    * **MicroPython** — one ``mpremote connect <addr> mip install
-      github:ChuMicro/<bundle>/<package>`` per chumicro library
-      (mip doesn't take a list).
-
-    ``--experimental`` swaps the bundle URL to
-    ``ChuMicro-Bundle-Experimental`` (mip), or surfaces a hint for
-    the equivalent ``circup bundle-add`` command (circup needs the
-    bundle pre-registered).
-
-    ``--dry-run`` prints the commands that would run but does not
-    execute them — useful for "what would this do on my air-gapped
-    rig?" inspection or for paste-into-elsewhere when host doesn't
-    have circup / mpremote installed.
+    ``--experimental`` swaps the mip bundle repo to
+    ``ChuMicro-Bundle-Experimental`` (no effect on the pip backend).
+    ``--dry-run`` prints the fetch commands without executing them and
+    skips the ``library_sources:`` write.
     """
     workspace = _resolve_workspace(args)
     project_name = _resolve_project_name(workspace, args.project)
@@ -64,86 +60,98 @@ def _cmd_install_libraries(args: argparse.Namespace) -> int:
     imports = discover_chumicro_imports(project_dir)
     if not imports:
         print(
-            f"install-libraries: no chumicro imports found in {project_name} — "
-            "nothing to install.",
+            f"install-libraries: no chumicro imports found in "
+            f"{project_name} — nothing to acquire.",
         )
         return 0
-    packages = sorted(import_name_to_package(name) for name in imports)
+    import_names = sorted(imports)
     print(
         f"install-libraries: {project_name} imports "
-        f"{len(packages)} chumicro libraries:",
+        f"{len(import_names)} chumicro libraries:",
     )
-    for package in packages:
-        print(f"  {package}")
+    for import_name in import_names:
+        print(f"  {import_name}")
 
-    device = _resolve_device(workspace, args)
-    bundle_repo = (
-        EXPERIMENTAL_BUNDLE_REPO if args.experimental else STABLE_BUNDLE_REPO
-    )
-    transport = str(device.transport)
-
-    if transport == "circuitpython":
-        command = build_circup_command(packages, drive_path=args.drive_path)
-        commands_to_run: list[list[str]] = [command]
-        if args.experimental:
-            print(
-                "install-libraries: --experimental + CP — make sure you've run "
-                f"`circup bundle-add ChuMicro/{EXPERIMENTAL_BUNDLE_REPO}` "
-                "first; circup pulls from registered bundles only.",
+    registered: dict[str, str] = {}
+    for import_name in import_names:
+        target_dir = local_src_dir(workspace.root, import_name)
+        if args.backend == "mip":
+            command = build_mip_fetch_command(
+                import_name,
+                target_dir,
+                bundle_repo=(
+                    "ChuMicro-Bundle-Experimental"
+                    if args.experimental
+                    else "ChuMicro-Bundle"
+                ),
             )
-    elif transport == "micropython":
-        commands_to_run = build_mip_commands(
-            packages, bundle_repo=bundle_repo, address=device.address,
-        )
-    else:
-        print(
-            f"install-libraries: unsupported transport {transport!r} "
-            f"on device {device.address}.",
-            file=sys.stderr,
-        )
-        return 2
-
-    print(
-        f"install-libraries: target {transport}@{device.address} "
-        f"({bundle_repo})",
-    )
-    for command in commands_to_run:
+        else:
+            command = build_pip_fetch_command(
+                import_name_to_package(import_name), target_dir,
+            )
         print(f"  $ {' '.join(command)}")
         if args.dry_run:
             continue
+        target_dir.mkdir(parents=True, exist_ok=True)
         completed = args._env.subprocess_runner(command, check=False)  # noqa: S603 — args fully controlled
         if completed.returncode != 0:
             print(
-                f"install-libraries: command failed (exit {completed.returncode}); "
-                "fix the underlying tool error and re-run install-libraries.",
+                f"install-libraries: fetch of {import_name} failed "
+                f"(exit {completed.returncode}); fix the underlying "
+                "tool error and re-run install-libraries.",
                 file=sys.stderr,
             )
             return completed.returncode
+        registered[import_name] = (
+            f"{LIBRARIES_CACHE_DIRNAME}/"
+            f"{import_name.removeprefix('chumicro_')}/src"
+        )
+
     if args.dry_run:
-        print("install-libraries: --dry-run — no commands executed.")
-    else:
-        print(f"install-libraries: installed {len(packages)} libraries.")
+        print(
+            "install-libraries: --dry-run — no fetch ran, "
+            "library_sources unchanged.",
+        )
+        return 0
+
+    child_lines = [
+        f"  {name}: {registered[name]}" for name in sorted(registered)
+    ]
+    sync_managed_block(
+        workspace.workspace_yaml,
+        "library_sources",
+        LIBRARY_SOURCES_MARKER,
+        child_lines,
+    )
+    print(
+        f"install-libraries: acquired {len(registered)} libraries into "
+        f"{LIBRARIES_CACHE_DIRNAME}/ and registered library_sources.\n"
+        f"  next: chumicro-workspace deploy {project_name}",
+    )
     return 0
 
 
 def _add_install_libraries_parser(subparsers: argparse._SubParsersAction) -> None:
-    """``install-libraries`` — circup (CP) / mip (MP) bundle install per project."""
+    """``install-libraries`` — host-local library acquisition per project."""
     install_libraries_parser = subparsers.add_parser(
         "install-libraries",
         help=(
-            "Install chumicro libraries the project imports onto the "
-            "device via circup (CP) / mip (MP)."
+            "Fetch the chumicro libraries the project imports into the "
+            "host-local cache and register library_sources."
         ),
         description=(
-            "AST-walks PROJECT for chumicro_<name> imports and shells "
-            "out to circup (CP) or mpremote-mip (MP) per device's "
-            "runtime.  Regular-mode counterpart to dev-mode's "
-            "library_sources auto-sync.  Use --dry-run to preview the "
-            "exact commands without executing them."
+            "AST-walks PROJECT for chumicro_<name> imports, fetches "
+            "each into <workspace>/_libraries/<name>/src/ (pip "
+            "--target by default; --backend mip for the mip "
+            "download-to-local fallback), and registers them in "
+            "workspace.yml's managed library_sources block.  No device "
+            "is contacted — run `chumicro-workspace deploy` afterwards "
+            "to bundle them onto the board.  Regular-mode counterpart "
+            "to dev-mode's sibling-checkout library_sources sync.  Use "
+            "--dry-run to preview the fetch commands."
         ),
     )
     _add_workspace_arg(install_libraries_parser)
-    _add_device_selector(install_libraries_parser)
     install_libraries_parser.add_argument(
         "project",
         help=(
@@ -152,29 +160,32 @@ def _add_install_libraries_parser(subparsers: argparse._SubParsersAction) -> Non
         ),
     )
     install_libraries_parser.add_argument(
-        "--experimental",
-        action="store_true",
+        "--backend",
+        choices=("pip", "mip"),
+        default="pip",
         help=(
-            "Install from ChuMicro-Bundle-Experimental instead of "
-            "ChuMicro-Bundle (stable, default)."
+            "Acquisition backend.  pip (default) runs `pip install "
+            "--target`; mip runs `mpremote mip install --target` "
+            "against the bundle repo for packages not on PyPI.  Both "
+            "write the host-local cache only — never a board."
         ),
     )
     install_libraries_parser.add_argument(
-        "--drive-path",
-        default=None,
+        "--experimental",
+        action="store_true",
         help=(
-            "CP only — explicit CIRCUITPY mount.  Pass when multiple "
-            "CIRCUITPY drives are mounted so circup knows which one "
-            "to install onto.  Ignored on MP."
+            "mip backend only: fetch from ChuMicro-Bundle-Experimental "
+            "instead of ChuMicro-Bundle (stable, default).  No effect "
+            "with the pip backend."
         ),
     )
     install_libraries_parser.add_argument(
         "--dry-run",
         action="store_true",
         help=(
-            "Print the commands that would run without executing them. "
-            "Useful for air-gapped hosts or when reviewing what gets "
-            "fetched before committing to the install."
+            "Print the fetch commands without executing them and "
+            "without touching library_sources.  Useful for air-gapped "
+            "hosts or reviewing what gets fetched."
         ),
     )
     install_libraries_parser.set_defaults(func=_cmd_install_libraries)

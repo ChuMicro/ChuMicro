@@ -371,11 +371,12 @@ Constraints Phase 2 must honor (cross-workstream, verified):
   change touches. Independent defect (the repl↔walker link was
   falsified on-device); cross-reference, do not absorb or block on it.
 
-**Phase 3 — Collapse the commands. DESIGN SETTLED 2026-05-18
-(ADR-before-code; user-decided all forks). Implementation pending —
-the next unit of work.** Two collapses, both in this Phase (user:
-"Both A and B"). Mechanism lives here; the ADRs state only the
-invariant (README "what does NOT belong in a decision record").
+**Phase 3 — Collapse the commands. COMPLETE 2026-05-19**
+(design settled 2026-05-18 ADR-before-code, all forks user-decided;
+shipped over Commits 3a–3d, CP/MP unit-tested, functional bench
+pending). Two collapses, both in this Phase (user: "Both A and B").
+Mechanism lives here; the ADRs state only the invariant (README
+"what does NOT belong in a decision record").
 
 *Collapse A — `deploy-example` → thin front-end (the 0077-load-bearing,
 self-contained part; implements accepted 0077 + 0059 §1, no new ADR).*
@@ -554,16 +555,21 @@ deleted (CP functional = the byte-identical clean rsync; stale board
 `code.py` now reconciled away), post-stage fork named (`PostStageStep`),
 MP functional first-stage `mkfs`→`_clean_slate_device`, 0077
 entrypoint clause corrected + 0077↔0071 reconciled.
-**Phase 2 complete. Phase 3 design settled 2026-05-18** (ADR-before-code;
-all forks user-decided): Collapse A — `deploy-example` → `ExampleSpec`
-branch on `resolve_project_deploy_source` + `deploy_diff`, `Deployer.deploy()`
-deleted (demo + low-level `chumicro-deploy` CLI fold onto `deploy_diff`),
-`wrap_with_runtime_config` tail-dedup, interactive REPL drop retained;
-Collapse B — **[Decision 0078](../decisions/0078-library-acquisition-is-host-local.md)
+**Phase 2 complete. Phase 3 complete 2026-05-19** (design settled
+2026-05-18 ADR-before-code, all forks user-decided; shipped over
+Commits 3a–3d, CP/MP unit-tested + preflight-green, functional bench
+the one open hardware step): Collapse A — `wrap_with_runtime_config`
+tail-dedup (3a), `deploy-example` → `ExampleSpec` branch on
+`resolve_project_deploy_source` + `deploy_diff` with interactive REPL
+drop retained (3b), `Deployer.deploy()` + wrapper `.deploy()` deleted
+/ demo + low-level `chumicro-deploy` CLI folded onto `deploy_diff` /
+4 example scripts + deploy guide rewritten (3c) — one stage primitive,
+zero CLI bypass; Collapse B —
+**[Decision 0078](../decisions/0078-library-acquisition-is-host-local.md)
 `accepted`** (`install-libraries` board-push retired → host-local
-`_libraries/` fetch + the one deploy bundles it). Phase 3
-*implementation* pending — the next unit of work. Phases 4–5 (root
-convergence / CHU mechanization) pending. Companion *completed* work this session
+`_libraries/` fetch via pip/mip `--target` + managed `library_sources:`
+registration; the one deploy bundles it; `.gitignore` updated) (3d).
+Phases 4–5 (root convergence / CHU mechanization) pending. Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
 template `--device`/ruamel fixes) shipped on `main` of both repos and
 is recorded in `next-up.md` `## Done (recent)`; it is the context

@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from chumicro_workspace.install_libraries import (
     DEFAULT_GITHUB_ORG,
     EXPERIMENTAL_BUNDLE_REPO,
+    LIBRARIES_CACHE_DIRNAME,
     STABLE_BUNDLE_REPO,
-    build_circup_command,
-    build_mip_commands,
+    build_mip_fetch_command,
+    build_pip_fetch_command,
     discover_chumicro_imports,
     import_name_to_package,
+    local_src_dir,
 )
 
 # ---------------------------------------------------------------------------
@@ -109,84 +112,86 @@ class TestImportNameToPackage:
 
 
 # ---------------------------------------------------------------------------
-# build_circup_command
+# local_src_dir
 # ---------------------------------------------------------------------------
 
 
-class TestBuildCircupCommand:
-    def test_default_no_drive_path(self) -> None:
-        command = build_circup_command(["chumicro-wifi", "chumicro-mqtt"])
-        # Sorted, deterministic.
-        assert command == ["circup", "install", "chumicro-mqtt", "chumicro-wifi"]
-
-    def test_with_drive_path(self) -> None:
-        command = build_circup_command(
-            ["chumicro-wifi"], drive_path="/Volumes/CIRCUITPY",
+class TestLocalSrcDir:
+    def test_maps_import_name_to_cache_src_dir(self, tmp_path: Path) -> None:
+        assert local_src_dir(tmp_path, "chumicro_kvstore") == (
+            tmp_path / LIBRARIES_CACHE_DIRNAME / "kvstore" / "src"
         )
+
+    def test_strips_only_the_chumicro_prefix(self, tmp_path: Path) -> None:
+        """``chumicro_http_server`` → ``_libraries/http_server/src``."""
+        assert local_src_dir(tmp_path, "chumicro_http_server") == (
+            tmp_path / LIBRARIES_CACHE_DIRNAME / "http_server" / "src"
+        )
+
+    def test_src_child_is_the_importable_package(self, tmp_path: Path) -> None:
+        """The dir maps 1:1 to a ``library_sources:`` value — its child
+        is ``chumicro_<name>/``, so the path is what the import-graph
+        walker roots on.
+        """
+        src_dir = local_src_dir(tmp_path, "chumicro_wifi")
+        assert src_dir.name == "src"
+        assert src_dir.parent.name == "wifi"
+
+
+# ---------------------------------------------------------------------------
+# build_pip_fetch_command (primary backend)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPipFetchCommand:
+    def test_targets_dir_under_active_interpreter(self, tmp_path: Path) -> None:
+        target = tmp_path / "_libraries" / "wifi" / "src"
+        command = build_pip_fetch_command("chumicro-wifi", target)
         assert command == [
-            "circup", "--path", "/Volumes/CIRCUITPY", "install", "chumicro-wifi",
+            sys.executable, "-m", "pip", "install",
+            "--target", str(target), "--upgrade", "chumicro-wifi",
         ]
 
-    def test_empty_list_still_returns_install(self) -> None:
-        """Empty list — circup install with no args.  Caller decides whether to skip."""
-        command = build_circup_command([])
-        assert command == ["circup", "install"]
+    def test_no_board_or_circup_token(self, tmp_path: Path) -> None:
+        """Host-local only — never circup / a drive / a serial port."""
+        command = build_pip_fetch_command("chumicro-mqtt", tmp_path)
+        assert "circup" not in command
+        assert "--path" not in command
+        assert all("/dev/" not in part for part in command)
 
 
 # ---------------------------------------------------------------------------
-# build_mip_commands
+# build_mip_fetch_command (download-to-local fallback)
 # ---------------------------------------------------------------------------
 
 
-class TestBuildMipCommands:
-    def test_one_command_per_package(self) -> None:
-        commands = build_mip_commands(["chumicro-wifi", "chumicro-mqtt"])
-        assert len(commands) == 2
-
-    def test_default_targets_stable_bundle(self) -> None:
-        commands = build_mip_commands(["chumicro-wifi"])
+class TestBuildMipFetchCommand:
+    def test_default_targets_stable_bundle_locally(self, tmp_path: Path) -> None:
+        command = build_mip_fetch_command("chumicro_wifi", tmp_path)
+        assert command[:4] == ["mpremote", "mip", "install", "--target"]
+        assert str(tmp_path) in command
         assert (
             f"github:{DEFAULT_GITHUB_ORG}/{STABLE_BUNDLE_REPO}/chumicro_wifi"
-            in commands[0]
+            == command[-1]
         )
 
-    def test_experimental_bundle_target(self) -> None:
-        commands = build_mip_commands(
-            ["chumicro-wifi"], bundle_repo=EXPERIMENTAL_BUNDLE_REPO,
+    def test_experimental_bundle_target(self, tmp_path: Path) -> None:
+        command = build_mip_fetch_command(
+            "chumicro_wifi", tmp_path, bundle_repo=EXPERIMENTAL_BUNDLE_REPO,
         )
         assert (
             f"github:{DEFAULT_GITHUB_ORG}/{EXPERIMENTAL_BUNDLE_REPO}/chumicro_wifi"
-            in commands[0]
+            == command[-1]
         )
 
-    def test_address_emits_connect(self) -> None:
-        commands = build_mip_commands(
-            ["chumicro-wifi"], address="/dev/cu.usbmodem1",
+    def test_never_connects_to_a_board(self, tmp_path: Path) -> None:
+        """``--target`` writes the host; mip must not ``connect`` a port."""
+        command = build_mip_fetch_command("chumicro_wifi", tmp_path)
+        assert "connect" not in command
+        assert all("/dev/" not in part for part in command)
+
+    def test_custom_org(self, tmp_path: Path) -> None:
+        command = build_mip_fetch_command(
+            "chumicro_wifi", tmp_path, org="MyFork",
         )
-        assert "connect" in commands[0]
-        assert "/dev/cu.usbmodem1" in commands[0]
-
-    def test_no_address_omits_connect(self) -> None:
-        commands = build_mip_commands(["chumicro-wifi"])
-        assert "connect" not in commands[0]
-
-    def test_underscored_package_name_in_url(self) -> None:
-        """``chumicro-http-server`` → URL uses ``chumicro_http_server``."""
-        commands = build_mip_commands(["chumicro-http-server"])
-        assert "chumicro_http_server" in commands[0][-1]
-        assert "chumicro-http-server" not in commands[0][-1]
-
-    def test_packages_sorted_for_deterministic_order(self) -> None:
-        """Same input set in any iter-order produces the same command list."""
-        first = build_mip_commands(["chumicro-zeta", "chumicro-alpha"])
-        second = build_mip_commands(["chumicro-alpha", "chumicro-zeta"])
-        assert first == second
-        # And alphabetical.
-        assert "chumicro_alpha" in first[0][-1]
-        assert "chumicro_zeta" in first[1][-1]
-
-    def test_custom_org(self) -> None:
-        commands = build_mip_commands(
-            ["chumicro-wifi"], org="MyFork",
-        )
-        assert "github:MyFork/" in commands[0][-1]
+        assert command[-1].startswith("github:MyFork/")
