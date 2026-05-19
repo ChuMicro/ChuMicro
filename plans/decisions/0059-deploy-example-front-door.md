@@ -16,7 +16,7 @@ Phase 3 of `library-config-aware-refactor` proposed `python scripts/run.py deplo
 
 A new subcommand `chumicro-workspace deploy-example <lib> <name>` lives in [workbench/workspace/src/chumicro_workspace/cli.py](../../workbench/workspace/src/chumicro_workspace/cli.py) and uses a new `chumicro_workspace.example_source(library_name, example_name, *, runtime, secrets_toml, project_config=None, library_roots=...)` `FileSource`.  `python scripts/run.py deploy-example` is a thin mono-repo shim that calls into it with `library_roots=<repo>/libraries/`.  Mirrors how `python scripts/run.py add-device` shims `chumicro-workspace add-device` today.
 
-The new `FileSource` composes existing pieces — `ImportGraphSource` for the import-graph walk, `WithRuntimeConfig` for config merge + manifest validation, `__chumicro_runtimes__` filtering for runtime safety — and adds two things: example-path resolution under `libraries/<lib>/examples/<name>.py` and entrypoint renaming (the example file becomes `code.py` on CircuitPython, `main.py` on MicroPython).
+The example is staged through the *one* device-staging path, not a parallel `example_source` implementation: an example is a project through the unified pipeline (a thin shim), per [Decision 0077](0077-one-device-staging-path.md). Example-path resolution (`libraries/<lib>/examples/<name>.py`) and entrypoint renaming (the example file becomes `code.py` on CircuitPython / `main.py` on MicroPython) are the example-specific resolution in front of that shared source + clean-slate + keep-set primitive — they do not fork the stage/delete/keep policy. The rest of this ADR (the precheck stack, the four first-touch board states, exit codes, recovery coaching, `--list`) is unaffected and stands.
 
 ### 2. Fast precheck stack — always run, never gated
 
@@ -84,7 +84,7 @@ This generalizes the AGENTS.md "Executing actions with care" rule for the `deplo
 
 **Wrap each library's example as a project under `projects/_template/` shape.**  Rejected: forces a project directory per example, breaks `examples/<name>.py` discoverability, and conflates "example for a library" with "user's own project."  The example is the example file; ship that, don't repackage it.
 
-**Keep `chumicro-workspace deploy` as the only deploy command.**  Rejected: `deploy` assumes a workspace-shaped project directory.  An example is a single file with an inferred import graph, not a project.  Different file source, different precheck story, different first-touch UX.
+**A separate file-source / stage-delete-keep policy for examples.**  Rejected ([Decision 0077](0077-one-device-staging-path.md)): the original framing here ("an example is a single file, not a project; different file source") justified a parallel `example_source` staging path, and that per-context divergence was the disease 0077 exists to stop.  `deploy-example` keeps its *own surface* — the distinct precheck story and first-touch UX above are real and stand — but it stages through the same source + clean-slate + keep-set primitive every deploy uses; an example is a project through that pipeline.  What's rejected is a second *staging policy*, not the `deploy-example` command.
 
 **Auto-flash firmware on detected `NO_PYTHON_RUNTIME` even in non-interactive mode.**  Rejected: destructive without consent.  Agents and CI runners can issue `install-firmware` themselves with full visibility; surprising them with a flash is exactly the failure mode the destructive-action rule prevents.
 

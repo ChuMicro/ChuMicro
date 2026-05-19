@@ -326,6 +326,7 @@ class Deployer:
         self,
         source: FileSource,
         *,
+        clean: bool = True,
         wipe: bool = False,
         force_deploy_mode: str | None = None,
         on_progress: Callable[[float, str], None] | None = None,
@@ -358,12 +359,24 @@ class Deployer:
 
         Args:
             source: :class:`FileSource` to deploy.
+            clean: Clean-slate reconcile (the default).  The diff
+                scope is the whole device minus the closed keep set
+                (:data:`flash_drive.DEVICE_KEEP_SET`) + device-managed
+                noise, so a stale board ``settings.toml`` / leftover
+                user file is removed and only payload + keep set
+                remain.  ``False`` is the legacy additive scope (the
+                ``--no-wipe`` opt-out): only the entrypoint/state
+                files + ``/lib`` are reconciled, other root files
+                preserved.  Distinct from *wipe*: clean-slate keeps
+                the keep set; *wipe* erases the whole filesystem
+                including it.
             wipe: When ``True``, call ``transport.wipe_filesystem()``
-                before staging — destructive clean-slate path used by
-                ``chumicro-workspace deploy --wipe``.  Skips the diff
-                cleanup entirely (nothing left to diff against after a
-                wipe).  RAM-mode transports treat the wipe as a no-op
-                so callers don't need to gate on mode.
+                before staging — full destructive erase (keep set
+                included) used by ``chumicro-workspace deploy --wipe``
+                for corruption recovery.  Skips the diff cleanup
+                entirely (nothing left to diff against after a wipe).
+                RAM-mode transports treat the wipe as a no-op so
+                callers don't need to gate on mode.
             force_deploy_mode: Override the pre-flight requires_flash
                 policy.  Same semantics as :meth:`deploy`'s argument.
             on_progress: Optional ``(fraction, message)`` callback.
@@ -397,7 +410,9 @@ class Deployer:
                 transport.wipe_filesystem()
             else:
                 report(0.1, "listing in-scope")
-                on_device = set(transport.list_files_in_scope())
+                on_device = set(
+                    transport.list_files_in_scope(clean_slate=clean),
+                )
                 stale = sorted(on_device - set(files))
                 if stale:
                     report(0.2, f"cleaning stale ({len(stale)})")

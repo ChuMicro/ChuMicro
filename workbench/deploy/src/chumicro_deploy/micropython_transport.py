@@ -929,13 +929,19 @@ class MicropythonTransport:
                 on_execute_line(output_line)
         return output
 
-    def list_files_in_scope(self) -> list[str]:
+    def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
         """List on-device files within the deploy's managed scope.
 
         Walks ``/lib/`` recursively + checks the four canonical
         scope files (``/code.py``, ``/main.py``, ``/active.py``,
         ``/runtime_config.msgpack``).  Returns paths in
         leading-slash form.
+
+        ``clean_slate`` is accepted for protocol parity with the CP
+        transport but not yet honored here — MP whole-device
+        clean-slate (the root survive-set in ``_clean_device_lib``)
+        is a separate follow; today MP keeps the legacy scope on both
+        values.  CP is unaffected.
 
         Mount-mode (RAM) deploys return an empty list — mount mode
         doesn't write to flash, so there's nothing persistent to

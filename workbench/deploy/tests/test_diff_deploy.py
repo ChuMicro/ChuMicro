@@ -64,7 +64,11 @@ class TestFakeTransportPrimitives:
         })
         listed = sorted(transport.list_files_in_scope())
         assert listed == ["/code.py", "/lib/foo.py"]
-        assert ("list_files_in_scope", ()) in transport.calls
+        assert ("list_files_in_scope", (False,)) in transport.calls
+        # clean-slate widens scope to everything but the keep set.
+        clean = sorted(transport.list_files_in_scope(clean_slate=True))
+        assert clean == ["/code.py", "/lib/foo.py", "/photo.jpg", "/settings.toml"]
+        assert ("list_files_in_scope", (True,)) in transport.calls
 
     def test_delete_drops_paths_from_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
         transport = FakeTransport(device_files={
@@ -136,8 +140,42 @@ class TestDeployerDeployDiff:
         assert transport.device_files["/lib/new_project.py"] == b"new code"
         assert "/lib/old_project.py" not in transport.device_files
 
-    def test_out_of_scope_files_survive(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """User-managed files (settings.toml, photos, etc.) never get deleted."""
+    def test_clean_slate_default_removes_non_keepset_files(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The default clean-slate diff removes everything but payload + keep set.
+
+        A board ``settings.toml`` (competing wifi authority), stray
+        photos, and old logs are reconciled away; only the new payload
+        and the closed keep set (``boot_out.txt``) remain.
+        """
+        transport = FakeTransport(
+            mode="copy",
+            device_files={
+                "/code.py": b"# previous",
+                "/settings.toml": b"WIFI_SSID = 'home'",
+                "/photo.jpg": b"<jpeg>",
+                "/data/log.txt": b"old log",
+                "/lib/foo.py": b"old foo",
+                "/boot_out.txt": b"identity",  # keep set — must survive
+            },
+        )
+        deployer = Deployer(_build_device(transport))
+        deployer.deploy_diff(
+            FileMapSource({"/code.py": b"# new"}, entrypoint="/code.py"),
+        )
+        assert "/settings.toml" not in transport.device_files
+        assert "/photo.jpg" not in transport.device_files
+        assert "/data/log.txt" not in transport.device_files
+        assert "/lib/foo.py" not in transport.device_files
+        # Keep-set file preserved; payload written.
+        assert transport.device_files["/boot_out.txt"] == b"identity"
+        assert transport.device_files["/code.py"] == b"# new"
+
+    def test_no_wipe_opt_out_preserves_out_of_scope_files(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """clean=False (the --no-wipe opt-out) keeps user-managed files."""
         transport = FakeTransport(
             mode="copy",
             device_files={
@@ -150,16 +188,14 @@ class TestDeployerDeployDiff:
         )
         deployer = Deployer(_build_device(transport))
         deployer.deploy_diff(
-            FileMapSource(
-                {"/code.py": b"# new"},
-                entrypoint="/code.py",
-            ),
+            FileMapSource({"/code.py": b"# new"}, entrypoint="/code.py"),
+            clean=False,
         )
-        # Out-of-scope files preserved in the simulated state.
+        # Legacy additive scope: out-of-scope files preserved.
         assert transport.device_files["/settings.toml"] == b"WIFI_SSID = 'home'"
         assert transport.device_files["/photo.jpg"] == b"<jpeg>"
         assert transport.device_files["/data/log.txt"] == b"old log"
-        # In-scope file dropped because not in new payload.
+        # In-scope file still dropped because not in new payload.
         assert "/lib/foo.py" not in transport.device_files
 
     def test_no_stale_files_skips_delete_call(self, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -418,13 +418,22 @@ class TransportProtocol(Protocol):
         """
         ...
 
-    def list_files_in_scope(self) -> list[str]:
+    def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
         """Enumerate device files within the deploy's managed scope.
 
         Used by :meth:`Deployer.deploy_diff` to compute "what's on the
         device today that the next deploy would replace" — the
         difference becomes the *stale* set the diff routine deletes
         before writing the new payload.
+
+        ``clean_slate=True`` (the deploy default) widens the scope to
+        the whole device minus the closed keep set
+        (:data:`flash_drive.DEVICE_KEEP_SET`) and device-managed noise,
+        so a stale board ``settings.toml`` or leftover user file is
+        reconciled away.  ``clean_slate=False`` is the legacy additive
+        scope (the ``--no-wipe`` opt-out): only the entrypoint /
+        state files and the library tree, leaving other root files in
+        place.
 
         Returns paths in the same leading-slash form
         :meth:`deploy_files` accepts (``"/lib/foo.py"``,

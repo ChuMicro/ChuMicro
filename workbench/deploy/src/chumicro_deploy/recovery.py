@@ -563,6 +563,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
         self,
         source: FileSource,
         *,
+        clean: bool = True,
         wipe: bool = False,
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
@@ -574,6 +575,7 @@ class NonInteractiveDeployer(_RecoveringDeployer):
         return self._run(
             lambda: self._deployer.deploy_diff(
                 source,
+                clean=clean,
                 wipe=wipe,
                 on_progress=on_progress,
                 on_file_staged=on_file_staged,
@@ -690,6 +692,7 @@ class InteractiveDeployer(_RecoveringDeployer):
         self,
         source: FileSource,
         *,
+        clean: bool = True,
         wipe: bool = False,
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
@@ -707,6 +710,7 @@ class InteractiveDeployer(_RecoveringDeployer):
         return self._retry_loop(
             lambda: self._deployer.deploy_diff(
                 source,
+                clean=clean,
                 wipe=wipe,
                 on_progress=on_progress,
                 on_file_staged=on_file_staged,

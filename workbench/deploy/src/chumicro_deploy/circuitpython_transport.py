@@ -1418,8 +1418,13 @@ class CircuitpythonTransport:
                 on_execute_line(output_line)
         return output
 
-    def list_files_in_scope(self) -> list[str]:
+    def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
         """List on-device files within the deploy's managed scope.
+
+        ``clean_slate`` (the deploy default ``True``, forwarded by
+        :meth:`Deployer.deploy_diff`) widens the scope to the whole
+        drive minus :data:`flash_drive.DEVICE_KEEP_SET` + macOS noise;
+        ``False`` is the legacy additive scope.
 
         Flash mode walks the CIRCUITPY USB drive directly via stdlib
         ``pathlib`` — faster + simpler than a raw-REPL round-trip,
@@ -1442,7 +1447,9 @@ class CircuitpythonTransport:
             drive = self._verify_drive_for_board(drive)
         except CircuitpythonTransportError:
             return []
-        return circuitpy_drive._list_scope_on_drive(drive)
+        return circuitpy_drive._list_scope_on_drive(
+            drive, clean_slate=clean_slate,
+        )
 
     def delete_files(self, paths: list[str]) -> None:
         """Delete *paths* from the CIRCUITPY drive.
@@ -1476,6 +1483,12 @@ class CircuitpythonTransport:
             drive = self._verify_drive_for_board(drive)
         except CircuitpythonTransportError:
             return
+        # The clean-slate diff path removes a stale board settings.toml
+        # here (vs the clean-rsync path, which removes it via
+        # --delete); the notice is guarded once-per-instance so it
+        # fires exactly once regardless of which path does the removal.
+        if any(path.lstrip("/") == "settings.toml" for path in paths):
+            self._notice_settings_toml_eviction(drive)
         for device_path in paths:
             relative = device_path.lstrip("/")
             target = drive / relative
