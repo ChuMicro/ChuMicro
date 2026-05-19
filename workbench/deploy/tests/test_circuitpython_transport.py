@@ -19,6 +19,7 @@ from chumicro_deploy.circuitpython_transport import (
     _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS,
     CircuitpythonTransport,
     CircuitpythonTransportError,
+    PostStageStep,
 )
 from chumicro_deploy.testing import (
     FakeSerialPort,
@@ -1106,6 +1107,76 @@ class TestFlashMode:
 
         transport.disconnect()
 
+    def test_functional_stage_is_unified_clean_slate_with_named_fork(
+        self, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Functional stage() = the same clean-slate path, fork only named.
+
+        Single-staging-path rule: the functional-test stage issues the
+        *identical* rsync invocation as a production clean deploy
+        (``--delete`` + ``DEVICE_KEEP_SET``, no per-context ``code.py``
+        carve-out), so a stale board ``code.py`` / ``settings.toml`` is
+        reconciled away while the keep set survives.  The only
+        sanctioned divergence is the recorded :class:`PostStageStep`.
+        """
+        drive_path = tmp_path / "CIRCUITPY"
+        drive_path.mkdir()
+        # Board carries leftovers from a prior project deploy.
+        (drive_path / "code.py").write_text("# stale project entrypoint")
+        (drive_path / "settings.toml").write_text("WIFI_SSID = 'board'\n")
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        import subprocess as _subprocess
+        original_run = _subprocess.run
+        rsync_argv: list[list[str]] = []
+
+        def recording_run(command, **kwargs):
+            if command and str(command[0]) == "rsync":
+                rsync_argv.append([str(part) for part in command])
+            return original_run(command, **kwargs)
+
+        monkeypatch.setattr(_subprocess, "run", recording_run)
+
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
+            ],
+        )
+        transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
+        transport.connect()
+        transport.stage([source_dir], [test_file], harness_dir)
+
+        # Bytes-on-device path: stale entrypoint + competing wifi
+        # authority reconciled away; keep set survives; payload landed.
+        assert not (drive_path / "code.py").exists()
+        assert not (drive_path / "settings.toml").exists()
+        assert (drive_path / "boot_out.txt").exists()  # DEVICE_KEEP_SET
+        assert (drive_path / "test_example.py").exists()
+
+        # The rsync invocation is the clean one, with NO code.py
+        # carve-out (the per-context divergence that was removed).
+        assert rsync_argv, "rsync was not invoked"
+        argv = rsync_argv[0]
+        assert "--delete" in argv
+        for keep in ("boot.py", "boot_out.txt", "_chu_kv.msgpack"):
+            assert f"--exclude={keep}" in argv
+        assert "--exclude=code.py" not in argv
+        assert "--exclude=settings.toml" not in argv
+
+        # The one sanctioned per-context divergence, named.
+        assert transport._post_stage_step is PostStageStep.HARNESS_EXEC_OVER_REPL
+
+        transport.disconnect()
+
     def test_flash_stage_sends_autoreload_disable(
         self, tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -2178,6 +2249,9 @@ class TestDeployFiles:
         assert not (drive / "settings.toml").exists()  # evicted
         assert (drive / "boot_out.txt").exists()  # keep set survives
         assert (drive / "code.py").read_bytes() == content
+        # Same clean-slate bytes path as the functional stage; the only
+        # sanctioned divergence is this named post-stage fork.
+        assert transport._post_stage_step is PostStageStep.SOFT_REBOOT_AND_TAIL
 
     def test_additive_deploy_does_not_evict_or_notice(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

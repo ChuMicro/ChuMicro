@@ -284,11 +284,32 @@ The convergence deltas (the actual Phase 2 work):
    every deploy regardless; making the sweep unconditional belongs in
    Commit 2's one-clean-primitive restructure, not bolted onto
    `delete_files`. MP's wholesale `rm -r :/lib` already avoids husks.
-5. **Entrypoint always payload + post-stage fork.** Project `app.py`→
-   shim, example file→shim, test file→shim, so `code.py` leaves the
-   exclude set and the rsync is byte-identical across contexts. The
-   irreducible post-stage step (soft-reboot+tail vs harness-exec+
-   collect) is an explicit strategy, not a hidden coupling.
+5. **Entrypoint leaves the exclude set + post-stage fork named.**
+   **DONE 2026-05-18 (Commit 2c), CP unit-tested; functional bench
+   pending.** The original framing ("test file→shim") was wrong and
+   is corrected here: a functional test ships *no* entrypoint at all —
+   its harness runs over the live raw REPL, not by booting one
+   (Decision 0027). What delta 5 actually does: delete
+   `FUNCTIONAL_TEST_EXTRA_EXCLUDES` (0077's named-rejected per-context
+   exclude) so the CP functional stage issues the byte-identical clean
+   rsync a production deploy does (`--delete` + `DEVICE_KEEP_SET`); a
+   stale board `code.py`/`settings.toml` is now reconciled away rather
+   than preserved (a real, user-approved behavior change — running the
+   functional suite wipes a deployed project, keep set surviving). The
+   post-stage fork is named explicitly as `PostStageStep`
+   (`SOFT_REBOOT_AND_TAIL` vs `HARNESS_EXEC_OVER_REPL`), recorded on
+   the transport so the "identical bytes path, named fork" invariant
+   is unit-assertable and Phase 5's lint has a symbol to anchor on.
+   **Scope expansion (user-decided 2026-05-18):** delta 5 also
+   converged the MP functional path — its first copy-mode stage
+   blind-`lfs mkfs`'d the whole filesystem (destroying
+   `_chu_kv.msgpack`/`boot_out.txt`, a deeper 0077 keep-set violation
+   than the CP carve-out). It now calls the same `_clean_slate_device`
+   as `deploy_files(clean=True)`. Decision 0071's per-library
+   tracked-delete on subsequent MP stages is the orthogonal mode-axis
+   mechanism and is unchanged (keep-set-safe by construction). This
+   resolved the `open-questions.md` "MP copy-mode sweep dirty board"
+   entry (deleted) and added a 0077↔0071 cross-link both ways.
 6. **MP keep-set mechanics.** `lfs mkfs` has no `--exclude`; the
    `{boot_out.txt, boot.py, _chu_kv.msgpack}` set survives via
    read-before-mkfs/restore or scoped delete (the existing
@@ -316,7 +337,13 @@ ordering bug was caught + fixed on the bench); MP
 (`_LIST_ALL_SCRIPT`) and host-filters keep set + dotfiles. Bench: a
 clean `deploy-example` on a board full of stale `test_*.py` +
 `settings.toml` + `junk.txt` collapsed to payload + `_chu_kv.msgpack`
-(keep set). **Commit 2c — next:** entrypoint-as-payload (delta 5). Original Commit 2 = deltas
+(keep set). **Commit 2c — DONE 2026-05-18, CP unit-tested + MP functional
+converged; functional bench pending:** delta 5 — `FUNCTIONAL_TEST_EXTRA_EXCLUDES`
+deleted (CP functional now the byte-identical clean rsync), post-stage
+fork named (`PostStageStep`), MP functional first-stage `mkfs`→
+`_clean_slate_device` (keep-set-preserving), 0077 entrypoint clause
+corrected in place + 0077↔0071 reconciled, `open-questions.md`
+MP-dirty-board entry resolved. Original Commit 2 = deltas
 1+2+5+6 (default-flip, keep-set convergence incl. `settings.toml`
 evict-with-warning + `_chu_kv.msgpack` add + the two-site collapse,
 entrypoint-as-payload, MP mechanics) — the every-deploy-visible policy
@@ -423,8 +450,14 @@ done, all bench-verified Pi Pico W CP:** single source owner
 unification + `settings.toml` eviction, clean-slate default-flip
 (`--no-wipe`/`--wipe`) + 0077 promotion + 0059 §1 in-place edit +
 AGENTS.md non-negotiable; delta 6 (MP keep-set survive-set,
-bench-verified Pi Pico W MP). **Remaining in Phase 2:** Commit 2c
-(entrypoint-as-payload, delta 5). Phases 3–5 (collapse commands /
+bench-verified Pi Pico W MP). **Commit 2c done 2026-05-18 (delta 5),
+CP unit-tested + MP functional converged — functional-suite bench
+the one remaining hardware step:** `FUNCTIONAL_TEST_EXTRA_EXCLUDES`
+deleted (CP functional = the byte-identical clean rsync; stale board
+`code.py` now reconciled away), post-stage fork named (`PostStageStep`),
+MP functional first-stage `mkfs`→`_clean_slate_device`, 0077
+entrypoint clause corrected + 0077↔0071 reconciled.
+**Phase 2 complete.** Phases 3–5 (collapse commands /
 root convergence / CHU mechanization) pending. Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
 template `--device`/ruamel fixes) shipped on `main` of both repos and

@@ -22,6 +22,7 @@ import shutil
 import tempfile
 import time as _time_module
 from collections.abc import Callable
+from enum import Enum
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -42,6 +43,35 @@ _CTRL_C = b"\x03"
 _CTRL_D = b"\x04"
 _RAW_REPL_PROMPT = b"raw REPL; CTRL-B to exit\r\n>"
 _SOFT_REBOOT_MARKER = b"soft reboot"
+
+
+class PostStageStep(Enum):
+    """What a context does after the rsync — the only step that varies.
+
+    The device-staging path is single: every context stages through
+    the same clean-slate rsync + :data:`flash_drive.DEVICE_KEEP_SET`,
+    so the bytes reach the board identically for a project, an
+    example, and a functional test. Only the step taken once the bytes
+    have landed differs, and only two values exist. Naming them here
+    keeps the divergence explicit and gives the planned drift lint a
+    symbol to anchor on instead of two unrelated methods that happen
+    to differ.
+
+    - :attr:`SOFT_REBOOT_AND_TAIL` — project / example deploy
+      (:meth:`deploy_files`): Ctrl-D soft-reboot so the board runs the
+      freshly-staged ``code.py``, then capture its serial output.
+    - :attr:`HARNESS_EXEC_OVER_REPL` — functional-test stage
+      (:meth:`_stage_to_flash`): keep the live raw-REPL session alive
+      (a soft-reboot would tear down state the harness drives over
+      that session), refresh the FAT cache with a cheap directory
+      walk, and let the caller exec the harness and collect asserts.
+
+    The chosen value never changes how the bytes got there: everything
+    up to and including the rsync is identical by construction.
+    """
+
+    SOFT_REBOOT_AND_TAIL = "soft-reboot then capture code.py output"
+    HARNESS_EXEC_OVER_REPL = "keep raw-REPL session, exec harness, collect"
 
 #: Default timeout in seconds for serial reads.
 DEFAULT_TIMEOUT = 10.0
@@ -343,6 +373,12 @@ class CircuitpythonTransport:
         #: ``__chumicro_runtimes__`` are filtered out of every staging
         #: path (RAM mode + flash mode).
         self._target_runtime: str = "circuitpython"
+        #: The :class:`PostStageStep` the last :meth:`_push_staging_to_drive`
+        #: ran under.  Recorded so the single-staging-path invariant —
+        #: both contexts issue the *identical* rsync and differ only in
+        #: the named post-stage fork — is assertable in tests rather
+        #: than implied.
+        self._post_stage_step: PostStageStep | None = None
 
     @staticmethod
     def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
@@ -839,6 +875,7 @@ class CircuitpythonTransport:
         staging_path: Path,
         *,
         rsync_delete: bool,
+        post_stage: PostStageStep,
         rsync_additional_excludes: tuple[str, ...] = (),
         strip_xattrs: bool = False,
     ) -> Path:
@@ -859,25 +896,41 @@ class CircuitpythonTransport:
           :meth:`_build_local_staging_tree`; ``deploy_files`` walks the
           flat file dict.  This split is the legitimate difference
           between the two call paths.
-        * **What happens after the rsync.**  ``_stage_to_flash`` does a
-          cheap directory-walk FAT-cache refresh (the harness expects
-          the raw-REPL session to stay alive); ``deploy_files`` does a
-          full soft-reboot via Ctrl-D (it's about to run code.py
-          anyway).  Both invalidate CP's in-RAM FAT cache so the
-          freshly-rsynced files are visible to the importer; the
-          choice of mechanism is caller-driven.
+        * **What happens after the rsync.**  This is the one
+          sanctioned per-context fork, named by the
+          *post_stage* argument — a :class:`PostStageStep`, not a
+          hidden coupling.  :attr:`~PostStageStep.HARNESS_EXEC_OVER_REPL`
+          (``_stage_to_flash``) does a cheap directory-walk FAT-cache
+          refresh and leaves the raw-REPL session alive for the harness;
+          :attr:`~PostStageStep.SOFT_REBOOT_AND_TAIL` (``deploy_files``)
+          does a full Ctrl-D soft-reboot to run the freshly-staged
+          ``code.py``.  Both invalidate CP's in-RAM FAT cache so the
+          rsynced files are visible; the helper records the chosen step
+          on ``self._post_stage_step`` so the "identical bytes path,
+          named fork" invariant is assertable, and the caller performs
+          the step itself after this helper returns.
 
         Args:
             staging_path: Local staging directory whose contents are
                 rsynced onto the drive.
-            rsync_delete: ``--delete`` flag.  Functional tests pass
-                ``True`` (clean slate between test files); production
-                deploys pass ``False`` (preserve user data not in the
-                file map).
+            rsync_delete: ``--delete`` flag.  Clean callers — production
+                deploy *and* functional-test stage — pass ``True``
+                (clean slate, only ``rsync_additional_excludes``
+                survives); legacy additive deploys pass ``False``
+                (preserve drive files not in the staging tree).
+            post_stage: Which :class:`PostStageStep` the caller will
+                run once this helper returns.  Recorded on
+                ``self._post_stage_step``; the post-stage action itself
+                stays caller-side (it needs caller session state).  The
+                bytes-on-device path above it is identical regardless
+                of this value — that is the single-staging-path
+                invariant.
             rsync_additional_excludes: Extra basenames to exclude.
-                Functional tests pass ``FUNCTIONAL_TEST_EXTRA_EXCLUDES``
-                (boot.py, code.py, settings.toml — preserved across
-                runs); production deploys leave empty.
+                Clean callers — production deploy *and* functional-test
+                stage — both pass :data:`flash_drive.DEVICE_KEEP_SET`
+                (the identical invocation; the per-context ``code.py``
+                carve-out was removed).  Legacy additive deploys leave
+                empty.
             strip_xattrs: When ``True``, strip macOS extended
                 attributes from the staging tree before rsync.
                 Production deploys want this so AppleDouble ``._foo``
@@ -895,6 +948,11 @@ class CircuitpythonTransport:
             CircuitpythonTransportError: Drive can't be resolved /
                 verified, or the rsync subprocess fails / times out.
         """
+        # Record the named post-stage fork: everything
+        # below is identical across contexts; only what the caller does
+        # after this returns diverges, and only into these two values.
+        self._post_stage_step = post_stage
+
         # Order is load-bearing.  Enter raw REPL FIRST + disable
         # autoreload BEFORE any host-side drive write — otherwise
         # rsync to CIRCUITPY can hang in uninterruptible kernel I/O.
@@ -994,9 +1052,21 @@ class CircuitpythonTransport:
         - ``--delete``: remove stale files that no longer belong on
           the device.
 
-        Device config files (``boot.py``, ``boot_out.txt``,
-        ``settings.toml``) are excluded from deletion so they
-        survive the sync.
+        The rsync *command line* is identical to the production clean
+        deploy — ``--delete`` plus ``additional_excludes=DEVICE_KEEP_SET``.
+        What differs is only the *staging tree* fed to it — the
+        single-staging-path rule permits per-context payload, not a
+        per-context exclude: the functional tree is libs + harness +
+        ``test_*.py`` and ships no entrypoint, because the harness runs
+        over the live raw REPL, not by booting ``code.py``.
+
+        Net on-device effect: the board is reconciled down to that
+        payload plus :data:`flash_drive.DEVICE_KEEP_SET`.  A project
+        ``code.py`` (or board ``settings.toml``) left from a prior
+        deploy is **deleted** — there is no longer a per-context
+        ``code.py`` carve-out preserving it.  That is intended:
+        clean-slate isolation for the test run, and no stale
+        entrypoint that could autorun if the board resets mid-session.
 
         Disables autoreload before copying to prevent restarts during
         the file transfer.  Requires rsync on the host.
@@ -1020,7 +1090,8 @@ class CircuitpythonTransport:
             drive_path = self._push_staging_to_drive(
                 staging_path,
                 rsync_delete=True,
-                rsync_additional_excludes=flash_drive.FUNCTIONAL_TEST_EXTRA_EXCLUDES,
+                post_stage=PostStageStep.HARNESS_EXEC_OVER_REPL,
+                rsync_additional_excludes=flash_drive.DEVICE_KEEP_SET,
             )
 
         self._warn_if_flush_produced_empty_file(drive_path, test_files)
@@ -1374,6 +1445,7 @@ class CircuitpythonTransport:
                 self._push_staging_to_drive(
                     staging_path,
                     rsync_delete=clean,
+                    post_stage=PostStageStep.SOFT_REBOOT_AND_TAIL,
                     rsync_additional_excludes=(
                         flash_drive.DEVICE_KEEP_SET if clean else ()
                     ),

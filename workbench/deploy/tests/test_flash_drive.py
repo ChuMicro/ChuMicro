@@ -332,12 +332,13 @@ class TestRsync:
     def test_additional_excludes_flow_through(self, tmp_path: Path) -> None:
         """``additional_excludes`` are passed through verbatim.
 
-        Functional tests pass ``FUNCTIONAL_TEST_EXTRA_EXCLUDES`` — the
-        closed keep set (``DEVICE_KEEP_SET``) plus ``code.py`` (the
-        harness entrypoint the test deploy doesn't ship) — so
-        ``--delete`` spares them while cleaning stale test files.
-        ``settings.toml`` is deliberately absent: it is evicted on
-        every path (competing wifi authority).
+        Clean callers — production deploy *and* functional-test stage —
+        both pass the same closed ``DEVICE_KEEP_SET``; ``--delete``
+        spares exactly that set.  ``code.py`` is **not** excluded:
+        the per-context carve-out was removed, so a stale board
+        ``code.py`` is reconciled away on the functional path too.
+        ``settings.toml`` is likewise absent — evicted on every path
+        (competing wifi authority).
         """
         source = tmp_path / "source"
         source.mkdir()
@@ -357,16 +358,18 @@ class TestRsync:
             flash_drive.rsync(
                 source,
                 destination,
-                additional_excludes=flash_drive.FUNCTIONAL_TEST_EXTRA_EXCLUDES,
+                additional_excludes=flash_drive.DEVICE_KEEP_SET,
             )
 
         for extra in (
             "--exclude=boot.py",
             "--exclude=boot_out.txt",
             "--exclude=_chu_kv.msgpack",
-            "--exclude=code.py",
         ):
             assert extra in captured[0]
+        # The per-context carve-out is gone: a stale board code.py is
+        # reconciled away, not preserved.
+        assert "--exclude=code.py" not in captured[0]
         # Evicted on every path — never preserved.
         assert "--exclude=settings.toml" not in captured[0]
 

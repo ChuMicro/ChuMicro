@@ -517,17 +517,24 @@ class MicropythonTransport:
         if self.mode == "copy":
             # Subprocess `fs cp -r` — release the serial port if held.
             self._close_serial()
-            # `mpremote fs cp` only adds/overwrites — it has no
-            # `--delete` analog like the CircuitPython flash rsync, so
-            # stale trees must be cleared or LittleFS fills and `fs cp`
-            # hits ENOSPC (wedging USB-CDC and cascading the sweep).
-            # First copy-mode stage: the board may carry residue from a
-            # prior run/session/killed deploy that no in-process tracking
-            # knows about — mkfs once (authoritative; recovers the full
-            # block budget) so a clean run is actually clean.  Every
-            # later stage clears exactly what the previous one wrote.
+            # `mpremote fs cp` only adds/overwrites — no `--delete`
+            # analog — so a stale tree must be cleared or LittleFS
+            # fills and `fs cp` hits ENOSPC (wedging USB-CDC, cascading
+            # the sweep).  The first stage may meet residue from a
+            # prior killed run that no in-process tracking saw, so it
+            # must clean whatever is actually on the device, not just
+            # tracked roots.  `_clean_slate_device` (the same primitive
+            # `deploy_files(clean=True)` calls) scoped-deletes the
+            # whole device while preserving `DEVICE_KEEP_SET`; the
+            # `lfs mkfs` it replaced destroyed `_chu_kv.msgpack` /
+            # `boot_out.txt`, breaking the keep-set guarantee every
+            # staging path must honor.  Later stages keep the
+            # per-library tracked-delete (the copy-mode `--delete`
+            # analog): those roots are library/test trees, never
+            # keep-set names, so that path is already keep-set-safe
+            # and is unchanged.
             if not self._did_initial_wipe:
-                self.wipe_filesystem()
+                self._clean_slate_device()
                 self._did_initial_wipe = True
             elif self._staged_device_entries:
                 self._remove_device_entries(self._staged_device_entries)
@@ -1270,10 +1277,16 @@ class MicropythonTransport:
     def _clean_slate_device(self) -> None:
         """Clean-slate the device root, preserving only the keep set.
 
-        Called from :meth:`deploy_files` when ``clean=True`` in copy
-        mode — the MP analog of the CP ``rsync --delete`` +
-        :data:`flash_drive.DEVICE_KEEP_SET` clean push.  ``mpremote fs
-        cp`` never deletes, so without this each deploy stacks onto
+        The MP analog of the CP ``rsync --delete`` +
+        :data:`flash_drive.DEVICE_KEEP_SET` clean push.  Called from
+        :meth:`deploy_files` when ``clean=True`` in copy mode, and from
+        :meth:`stage`'s first copy-mode stage (the functional-test
+        path) so a board left dirty by a prior run is reconciled
+        without destroying the keep set.  That functional first-stage
+        role previously used ``lfs mkfs``, which wiped
+        ``_chu_kv.msgpack`` and ``boot_out.txt`` too — breaking the
+        keep-set guarantee every staging path must honor.  ``mpremote
+        fs cp`` never deletes, so without this each deploy stacks onto
         the previous tree and a Pi Pico W MP fills its ~860 KB flash.
         Every root entry except the keep set (``boot.py`` /
         ``boot_out.txt`` / ``_chu_kv.msgpack``) is removed

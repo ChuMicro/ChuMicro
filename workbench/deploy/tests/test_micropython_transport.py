@@ -273,17 +273,26 @@ class TestStage:
         )
         transport.stage([source_dir], [], harness_dir)
 
-        # First copy-mode stage: an mkfs wipe (so the board can't inherit
-        # residue from a prior run/session) then the fs cp -r.
+        # First copy-mode stage: a keep-set-preserving whole-device
+        # clean-slate (replaces the old `lfs mkfs`, which destroyed
+        # `_chu_kv.msgpack` / `boot_out.txt`) then the fs cp -r.  The
+        # clean-slate script walks `os.listdir('/')` against the keep
+        # set; it is NOT mkfs.
         commands = [call[0] for call in runner.calls]
-        assert any(
-            "exec" in command and "mkfs" in command[-1]
-            for command in commands
-        )
+        clean_slate = [
+            command for command in commands
+            if "exec" in command
+            and "os.listdir('/')" in command[-1]
+            and "_keep" in command[-1]
+        ]
+        assert len(clean_slate) == 1
+        assert "boot_out.txt" in clean_slate[0][-1]  # keep set preserved
+        assert not any("mkfs" in command[-1] for command in commands)
         fs_cp = commands[-1]
         assert "fs" in fs_cp and "cp" in fs_cp and "-r" in fs_cp
-        # No rm-script: the wipe replaces incremental cleanup on stage 1.
-        assert not any("os.remove" in command[-1] for command in commands)
+        # No tracked-tuple rm on stage 1: the whole-device clean-slate
+        # is the cleanup (the prior-roots tuple delete is stage 2+).
+        assert not any("for _n in (" in command[-1] for command in commands)
 
         # Serial transport stays closed during copy-mode stage.
         assert serial.calls == []
@@ -329,13 +338,16 @@ class TestStage:
 
         transport.stage([lib_b], [], harness_dir)
 
-        # Second stage: an mpremote exec *rm* script naming the first
-        # stage's roots, issued before that stage's fs cp.  (The first
-        # stage's exec is the mkfs wipe, not a rm — filter on os.remove.)
+        # Second stage: a tracked-tuple rm script naming the first
+        # stage's roots, issued before that stage's fs cp.  The first
+        # stage's exec is the whole-device clean-slate (walks
+        # `os.listdir('/')` against `_keep`); the second-stage cleanup
+        # is the explicit prior-roots tuple (`for _n in (...)`) — filter
+        # on that so the clean-slate isn't mistaken for it.
         commands = [call[0] for call in runner.calls]
         rm_index = next(
             index for index, command in enumerate(commands)
-            if "exec" in command and "os.remove" in command[-1]
+            if "exec" in command and "for _n in (" in command[-1]
         )
         second_fs_cp_index = max(
             index for index, command in enumerate(commands)
@@ -346,11 +358,14 @@ class TestStage:
         for name in first_entries:
             assert repr(name) in rm_script
         assert "os.remove" in rm_script and "os.rmdir" in rm_script
-        # Only the first stage wipes; the second uses incremental rm.
+        # Exactly one whole-device clean-slate (stage 1, keep-set
+        # preserving); stage 2 uses the incremental tracked-tuple rm.
         assert sum(
             1 for command in commands
-            if "exec" in command and "mkfs" in command[-1]
+            if "exec" in command
+            and "os.listdir('/')" in command[-1] and "_keep" in command[-1]
         ) == 1
+        assert not any("mkfs" in command[-1] for command in commands)
         # New roots recorded; chumicro_a is no longer tracked.
         assert "chumicro_b" in transport._staged_device_entries
         assert "chumicro_a" not in transport._staged_device_entries
@@ -503,7 +518,7 @@ class TestExecute:
         harness_dir.mkdir()
 
         runner = FakeRunner([
-            FakeSubprocessResult(),  # first stage's mkfs wipe
+            FakeSubprocessResult(),  # first stage's clean-slate
             FakeSubprocessResult(),  # stage's fs cp
         ])
         serial = FakeSerialTransport(
@@ -1138,8 +1153,9 @@ class TestDeployFiles:
         serial = FakeSerialTransport(address="/dev/ttyUSB0")
         serial.exec_outputs = [(exec_output, b"")]
         runner = runner or FakeRunner()
-        # _RecordingTime so a copy-mode stage()'s first-stage mkfs-wipe
-        # settle is instant rather than a real multi-second sleep.
+        # _RecordingTime so a copy-mode stage()'s first-stage
+        # clean-slate settle is instant rather than a real
+        # multi-second sleep.
         transport = MicropythonTransport(
             "/dev/ttyUSB0",
             mode=mode,
