@@ -29,15 +29,46 @@ commit. Same session, same change, same agent — the linted rule held,
 the unlinted one didn't. Decision 0074 states a deterministically-
 lintable drift class must be linted, not just doc-fixed.
 
-**Open:** is this class lintable cleanly enough to be a CHU rule
-(sibling to CHU006), and at what scope? Two detectable sub-patterns:
-(a) cross-site near-duplicate comment/docstring blocks within a
-package; (b) removed-code/history-narrative markers in comments
-("replaces the old", "previously used", "no longer", "was removed",
-"that is intended"). Risk: (b) false-positives on legitimate why that
-references prior state for a real reason; would need a `# noqa`
-escape and careful phrase scoping, exactly as CHU006 does. (a) is the
-higher-signal, lower-false-positive half and may be worth doing alone.
+**Proposed scope — two narrow high-precision rules, not one prose
+sniffer.** The non-negotiable bundles two prohibitions with very
+different lint tractability; mechanize only the lexically-clean half.
+
+1. **Cross-site duplicate comment/docstring blocks** (the high-value
+   rule). Tokenize comments + extract docstrings, normalize
+   (whitespace/punctuation/case), hash blocks ≥ ~8 tokens, flag when
+   the same normalized block recurs in ≥3 sites within a package (or
+   ≥2 across packages). This is the failure that reached review in 2c
+   (one mkfs/keep-set narrative in three places) and the one the
+   AGENTS.md rationale names ("repeated across many sites… fills flash
+   fast"). High precision via a min-length floor + an allowlist
+   (license headers, `# noqa`, `# type: ignore`, `pragma: no cover`).
+   It mechanizes the real discipline: explain once in a canonical
+   home, point from the rest. Caveat: intentionally-parallel sibling
+   docstrings trip it — a real signal (extract a shared docstring)
+   but sometimes a justified accept, so it needs a `# noqa` escape
+   (expected usage low, unlike the rejected sniffer below).
+2. **Unambiguous history tokens in comments/docstrings**: an ISO date
+   (`\d{4}-\d{2}-\d{2}`), a commit-SHA-shaped 7–40-hex token, or
+   `Decision/ADR NNNN`. Near-zero false-positive — a date or SHA in a
+   comment is an incident log that belongs in git/the ADR. (CHU006
+   already covers `Decision NNNN` for *shipped* trees; this extends
+   the date/SHA part to all trees and all comment contexts.)
+
+**Explicitly rejected — do not re-explore.** A phrase/regex matcher
+for removed-code-narrative markers ("replaces the old", "previously
+used", "no longer", "was removed", "that is intended"). Those phrases
+occur constantly in legitimate present-tense *why* ("this list is no
+longer mutated after init"). Precision would be low, it would need a
+`# noqa` escape, and a noqa-heavy rule trains reflexive suppression
+that hollows it out. "Is this comment narrating a change vs.
+explaining current code?" is *semantic*, not lexical — the same
+judgment-bound class Decision 0074 and the AI-tic prohibition already
+assign to ADR review, not lint. A regex here would give false
+confidence and pass the real cases through (exactly how the
+unmechanized rule failed in 2c).
+
+Net: the dedup rule + the date/SHA token rule are the lintable
+contract; the change-narration call stays with the human reviewer.
 Routes through `new-decision` if it lands (a 0074 consequence).
 
 Related: Decision 0074, CHU006, workstream `deploy-path-unification`.
