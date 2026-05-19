@@ -389,12 +389,12 @@ def rsync(
         ) from rsync_error
 
 
-#: The one closed keep set: device-generated / device-required files
-#: that survive a clean deploy on *every* path (clean rsync, diff
-#: reconcile, functional-test stage).  This is the single source of
-#: truth — the CP clean ``--exclude``, the functional-test exclude,
-#: and the diff scope all derive from it, so "what survives a deploy"
-#: cannot drift between paths.
+#: Device-generated / device-required files that survive a clean
+#: deploy on every path — clean rsync, diff reconcile, functional-test
+#: stage.  The CP clean ``--exclude``, the functional-test exclude,
+#: and the diff scope all derive from this tuple rather than each
+#: hard-coding their own list, so "what survives a deploy" cannot
+#: drift between paths.
 #:
 #: * ``boot_out.txt`` — CP writes it only on a *hard* reboot; a deploy
 #:   soft-reboots, so wiping it strands the drive without identity

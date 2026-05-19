@@ -1359,10 +1359,9 @@ class CircuitpythonTransport:
                         on_file_staged(device_path)
                 # ``clean=True`` tells rsync to delete drive files not
                 # in the staging tree so the deploy lands clean.  Only
-                # the one closed keep set
-                # (:data:`flash_drive.DEVICE_KEEP_SET`) survives the
-                # wipe — device-generated / -required files
-                # (``boot.py``, ``boot_out.txt``, ``_chu_kv.msgpack``).
+                # :data:`flash_drive.DEVICE_KEEP_SET` survives —
+                # device-generated / -required files (``boot.py``,
+                # ``boot_out.txt``, ``_chu_kv.msgpack``).
                 # A board-resident ``settings.toml`` is deliberately
                 # NOT in that set: it is a competing wifi authority
                 # against chumicro's config-driven wifi, so it is
