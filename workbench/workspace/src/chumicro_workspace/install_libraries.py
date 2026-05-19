@@ -1,41 +1,44 @@
-"""Install chumicro libraries onto a device via ``circup`` (CP) or ``mip`` (MP).
+"""Acquire chumicro libraries the project imports into a host-local tree.
 
 The regular-mode mirror of dev-mode's ``library_sources:`` auto-sync
 (:mod:`chumicro_workspace.chumicro_dev`).  In regular mode the user
-hasn't pulled a sibling chumicro checkout — the project's
-``import chumicro_<name>`` statements need their referents on the
-board's flash, fetched from the published bundle.
+hasn't pulled a sibling chumicro checkout, so the project's
+``import chumicro_<name>`` statements have no host-side referent for
+the deploy-time import-graph walker to bundle.
+
+Acquisition is **host-local**: nothing here writes a device.  A
+library reaches a board only by being made resolvable to host source
+the import-graph walker can see, after which the one deploy stages it
+like any other payload (the single device-staging path).  Regular
+mode becomes dev mode pointed at a fetched local tree instead of a
+sibling checkout.
 
 The user-visible flow:
 
 1. AST-walks every ``.py`` under the project directory and collects
    every ``chumicro_<name>`` top-level module imported.
-2. Maps each to its bundle package name (``chumicro_kvstore`` →
+2. Maps each to its distribution name (``chumicro_kvstore`` →
    ``chumicro-kvstore``).
-3. Builds the right shell command per target runtime:
+3. Fetches each into ``<workspace>/_libraries/<name>/src/`` — the
+   gitignored, tool-managed cache (``pip install --target`` is the
+   primary backend; ``mpremote mip install --target`` the
+   download-to-local fallback for mip-only packages).  Never a board
+   or CIRCUITPY mount.
+4. Registers each fetched tree in ``workspace.yml``'s managed
+   ``library_sources:`` block so the deploy-time walker resolves it —
+   the same mechanism dev mode uses.
 
-   * **CircuitPython** — one ``circup install <pkg-list>`` invocation,
-     optionally pinned to a specific CIRCUITPY drive via ``--path``.
-     Assumes the user has already run ``circup bundle-add
-     ChuMicro/ChuMicro-Bundle`` once for stable, or
-     ``ChuMicro/ChuMicro-Bundle-Experimental`` for experimental.
-   * **MicroPython** — one ``mpremote ... mip install
-     github:ChuMicro/<bundle_repo>/<import_name>`` per package
-     (``mip.install`` doesn't take a list).  No prior registration
-     step — the bundle repo URL is in each invocation.
-
-This module owns the host-side primitives (AST walk + command
-builders).  Subprocess execution lives in the CLI command
+This module owns the host-side primitives (AST walk + name map +
+fetch-command builders + cache-path resolution).  Subprocess
+execution lives in the CLI command
 (:func:`chumicro_workspace.cli._cmd_install_libraries`) so the
 primitives stay pure-functional and trivially testable.
-
-Gap #4 of the workspace-template dev-and-regular-mode-gaps audit.
 """
 
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+import sys
 from pathlib import Path
 
 #: Canonical bundle repository for stable chumicro releases.  Mirrors
@@ -112,65 +115,83 @@ def import_name_to_package(import_name: str) -> str:
     return import_name.replace("_", "-")
 
 
-def build_circup_command(
-    packages: Iterable[str],
-    *,
-    drive_path: str | None = None,
-) -> list[str]:
-    """Build a ``circup install`` command for *packages*.
+#: Gitignored, tool-managed cache dir under the workspace root.  Each
+#: fetched library lands at ``<workspace>/_libraries/<name>/src/`` —
+#: the same ``libraries/<name>/src/`` shape dev mode resolves against,
+#: so the deploy-time import-graph walker treats fetched and
+#: sibling-checkout libraries identically.  Joins ``_generated/`` as a
+#: never-committed workspace artifact dir; reproducible from the
+#: project's imports + the distribution.
+LIBRARIES_CACHE_DIRNAME = "_libraries"
 
-    Returns one command — circup accepts a package list inline.
-    Caller is responsible for ensuring the chumicro bundle is
-    registered first (one-time ``circup bundle-add
-    ChuMicro/ChuMicro-Bundle``).
+#: Marker comment written above the managed ``library_sources:`` block
+#: when ``install-libraries`` owns it (regular mode).  Distinct from
+#: dev mode's marker so a human opening ``workspace.yml`` sees which
+#: tool wrote the block; the sync is the same raw-text primitive.
+LIBRARY_SOURCES_MARKER = (
+    "managed by chumicro-workspace install-libraries — host-local fetch"
+)
+
+
+def local_src_dir(workspace_root: Path, import_name: str) -> Path:
+    """Host-local src dir a fetched *import_name* is acquired into.
+
+    ``chumicro_kvstore`` → ``<workspace_root>/_libraries/kvstore/src``.
+    The directory's child is the importable package
+    (``chumicro_kvstore/``), so the path is exactly what
+    ``library_sources:`` maps the import name to.
+    """
+    short_name = import_name.removeprefix("chumicro_")
+    return (
+        workspace_root / LIBRARIES_CACHE_DIRNAME / short_name / "src"
+    )
+
+
+def build_pip_fetch_command(package: str, target_dir: Path) -> list[str]:
+    """``pip install --target`` *package* into *target_dir* (the primary backend).
+
+    ``--target`` writes the package tree (and its dependency closure)
+    straight into *target_dir* on the host — no virtualenv mutation,
+    no board contact.  ``--upgrade`` keeps a re-run idempotent against
+    a newer release.  Runs under the active interpreter so it uses the
+    workspace's own pip.
 
     Args:
-        packages: bundle package names — e.g. ``"chumicro-kvstore"``.
-        drive_path: optional explicit CIRCUITPY mount.  Pass when
-            there are multiple CIRCUITPY drives so circup knows which
-            one to install onto; omit to let circup auto-detect.
+        package: distribution name — e.g. ``"chumicro-kvstore"``.
+        target_dir: ``<workspace>/_libraries/<name>/src`` (created by
+            pip if absent).
     """
-    command = ["circup"]
-    if drive_path is not None:
-        command.extend(["--path", drive_path])
-    command.append("install")
-    command.extend(sorted(packages))
-    return command
+    return [
+        sys.executable, "-m", "pip", "install",
+        "--target", str(target_dir), "--upgrade", package,
+    ]
 
 
-def build_mip_commands(
-    packages: Iterable[str],
+def build_mip_fetch_command(
+    import_name: str,
+    target_dir: Path,
     *,
     bundle_repo: str = STABLE_BUNDLE_REPO,
     org: str = DEFAULT_GITHUB_ORG,
-    address: str | None = None,
-) -> list[list[str]]:
-    """Build one ``mpremote ... mip install`` command per chumicro package.
+) -> list[str]:
+    """``mpremote mip install --target`` *import_name* into *target_dir*.
 
-    ``mip.install`` doesn't accept a list — one invocation per
-    package.  Each command pulls
-    ``github:<org>/<bundle_repo>/<import_name>``; the import-name
-    form (underscored) is what the bundle's ``package.json`` files
-    are keyed by.
+    The download-to-local fallback for packages served only from the
+    bundle repo (not PyPI).  ``--target`` makes ``mip`` write to a
+    host directory instead of a connected board — no device, no
+    CIRCUITPY mount.  Pulls ``github:<org>/<bundle_repo>/<import_name>``
+    (the underscored import name is what the bundle's ``package.json``
+    files are keyed by).
 
     Args:
-        packages: bundle package names — e.g. ``"chumicro-kvstore"``.
+        import_name: importable module name — e.g. ``"chumicro_kvstore"``.
+        target_dir: ``<workspace>/_libraries/<name>/src``.
         bundle_repo: ``ChuMicro-Bundle`` (stable, default) or
             ``ChuMicro-Bundle-Experimental``.
         org: GitHub organization owning the bundle repo.
-        address: optional serial address for ``mpremote connect``.
-            Pass when multiple boards are connected so mpremote
-            knows which one to install onto.
     """
-    commands: list[list[str]] = []
-    for package_name in sorted(packages):
-        import_name = package_name.replace("-", "_")
-        command = ["mpremote"]
-        if address is not None:
-            command.extend(["connect", address])
-        command.extend([
-            "mip", "install",
-            f"github:{org}/{bundle_repo}/{import_name}",
-        ])
-        commands.append(command)
-    return commands
+    return [
+        "mpremote", "mip", "install",
+        "--target", str(target_dir),
+        f"github:{org}/{bundle_repo}/{import_name}",
+    ]
