@@ -1,10 +1,11 @@
 """CHU014 — workspace CLI command-table parity.
 
 The ``chumicro-workspace`` README documents every subcommand in a
-``| Group | Commands |`` table.  That table drifted twice in the
-2026-05-16 audit: five commands were documented that no subparser
-registered (phantom), and five registered commands were absent from
-the table (hidden).  Prose lockstep didn't catch it; this rule does.
+``| Group | Commands |`` table.  That table drifts every time a
+subparser is added or removed without the README catching up: phantom
+commands (documented but not registered) and hidden commands
+(registered but not documented).  Prose lockstep doesn't catch it;
+this rule does.
 
 Two surfaces, compared by top-level command name:
 

@@ -58,6 +58,7 @@ Each rule walks the paths it targets and silently no-ops in repos where those pa
 | `CHU017` | Coverage % must not be cited as a whole-codebase guarantee |
 | `CHU018` | Files must use LF line endings — no CR / CRLF |
 | `CHU019` | Dead ADRs must carry a filename lifecycle marker matching status / `Archived:` |
+| `CHU020` | Closed AI-tic phrase set — drop unfounded adjectives + sentence-opener filler in user-facing prose |
 | `CHU024` | No history banners on accepted ADRs — edit the body in place |
 | `CHU025` | `Superseded by:` pointers and filename markers must name an existing ADR |
 | `CHU026` | Governance docs referenced from AGENTS.md must be auto-loaded via CLAUDE.md's `@`-include chain |

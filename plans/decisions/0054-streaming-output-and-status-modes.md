@@ -112,7 +112,7 @@ CLI flags `--phase-workers` and `--package-workers` continue to override.
 
 ## Alternatives considered
 
-- **Multi-line ANSI status block (gradle-style spinner with `\r` redraws).**  Deferred — single-line "phase event" output is robust in any terminal (no cursor escapes), works in tmux / screen / VS Code's integrated terminal, and gives the user enough information.  If a future ADR adds a multi-line block, the dispatcher abstraction supports it as a new implementation.
+- **Multi-line ANSI status block (gradle-style spinner with `\r` redraws).**  Deferred — single-line "phase event" output uses no cursor escapes, so it works in tmux / screen / VS Code's integrated terminal, and gives the user enough information.  If a future ADR adds a multi-line block, the dispatcher abstraction supports it as a new implementation.
 - **Periodic "still running" heartbeat lines.**  Considered for status mode (`  ⏳ test (python 3.13) [running 30s]` every 10s), deferred as YAGNI.  The phase_started / phase_done deltas already tell users something is alive.
 - **`--stream` flag forcing interleave mode regardless of TTY.**  Considered, deferred.  The TTY-vs-not selection covers the natural cases; if someone wants prefixed lines in a TTY, redirecting stdout to a pipe achieves it.
 - **Dropping subprocess re-invocation entirely** (calling Python-level phase functions in threads).  Considered, rejected.  Per-phase process isolation has independent value (OOM containment, import-time crash isolation) that this ADR preserves.  `test_all_runtimes` is the one carve-out where in-process + sink threading was simpler than the subprocess path.

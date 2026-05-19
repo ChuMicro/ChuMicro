@@ -69,4 +69,4 @@ them. Nothing was published, so no compatibility surface is owed.
   `init` are left intact as historical record.
 - The separately-tracked `run.py` bootstrap hardening (idempotent
   self-repair + verify, ported from `scripts/prepare_workspace.py`)
-  makes the clone-only path robust enough to be the only path.
+  lets the clone-only path stand as the only path without a fallback.
