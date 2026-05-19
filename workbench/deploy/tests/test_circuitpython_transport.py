@@ -44,8 +44,7 @@ def _isolate(monkeypatch: pytest.MonkeyPatch) -> None:
     tests that don't explicitly pass ``drive_path`` + ``monkeypatch``
     will (a) probe-write+unlink files onto the real device's filesystem
     and (b) block on real macOS ``sync`` / ``xattr`` / ``dot_clean``
-    subprocess calls.  Together these tests accumulated ~80s of preflight
-    time before the fixture landed.  See
+    subprocess calls.  See
     :func:`chumicro_deploy.testing.isolate_from_host_filesystem`.
 
     Tests that need ``_circuitpy_volume_candidates`` to return a specific

@@ -8,7 +8,7 @@ Related: Decision 0007 (cross-platform deps — §3 prefigures this)
 
 ChuMicro libraries import modules that only exist on CircuitPython or MicroPython (e.g., `micropython.const`, `supervisor.ticks_ms`, `machine.Pin`).  The code uses `try/except ImportError` guards so it runs correctly on CPython, but IDEs flag the imports as unresolved.
 
-An earlier draft hand-wrote minimal `.pyi` stubs in a `typings/` directory.  This was revised: well-maintained upstream stub packages exist for both runtimes.
+Hand-written `.pyi` stubs in a `typings/` directory were considered and rejected — well-maintained upstream stub packages exist for both runtimes.
 
 ## Decision
 
@@ -63,4 +63,3 @@ Both packages are installed by `python scripts/run.py setup` alongside other dev
 - Stubs stay in sync with pinned runtime versions automatically via `target-runtimes.toml`.
 - Two additional PyPI dependencies in the dev environment.
 - The `micropython` module conflict is documented and has a clear mitigation path.
-- Replaces an earlier hand-written `typings/` directory; that directory has been removed.

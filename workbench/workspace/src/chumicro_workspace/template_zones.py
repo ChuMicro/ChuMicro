@@ -4,7 +4,7 @@ Workspaces are created by cloning the template repo directly (there
 is no scaffolding CLI command); these zones govern only what
 `update` re-syncs into an existing workspace:
 
-* **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
+* **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,  <!-- noqa: CHU006 -->
   `pyproject.toml`, `projects/_template/`, `examples/`
   (reading-material demos shipped from the canonical template), and
   the agent-skill documents under `.github/skills/`.  `update`
@@ -39,8 +39,8 @@ class Zone(Enum):
 #: Files / paths that are tool-owned.  ``update`` rewrites them.
 TOOL_OWNED_PATHS: frozenset[str] = frozenset({
     "run.py",
-    "AGENTS.md",
-    "CONTRIBUTING.md",
+    "AGENTS.md",  # noqa: CHU006  tool-owned template filename data
+    "CONTRIBUTING.md",  # noqa: CHU006  tool-owned template filename data
     "pyproject.toml",
 })
 

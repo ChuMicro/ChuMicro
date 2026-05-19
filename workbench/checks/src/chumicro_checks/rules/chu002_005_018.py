@@ -1,8 +1,7 @@
 """CHU002–CHU005 + CHU018 — newline and whitespace rules.
 
-The whitespace family (filename keeps the original ``chu002_chu005``
-grouping; CHU018 was added later and shares the same scaffold).  Each
-rule walks the same set of text files (any ``.py``, ``.md``, ``.yml``,
+The whitespace family.  Each rule walks the same set of text files
+(any ``.py``, ``.md``, ``.yml``,
 ``.yaml``, ``.toml``, ``.txt``, ``.cfg``, ``.ini``, ``.json`` under
 ``libraries/``, ``workbench/``, ``support/``, ``scripts/``,
 ``plans/``, ``docs/``) and emits its specific finding shape.

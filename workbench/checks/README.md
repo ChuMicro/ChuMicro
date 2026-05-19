@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **The workspace lint rules ruff can't express — for ChuMicro mono-repos and downstream workspaces.**
 
-A small CLI + rule set (`CHU001`–`CHU019`) covering descriptive names, mono-repo-vs-published-tree isolation, workbench-doesn't-import-libraries, silent test skips, plans-doc brevity, command-table parity, docstring-capability honesty, cross-runtime example imports, coverage-claim honesty, whitespace / line-ending hygiene in doc + plan trees ruff never sees, archived-decision marker consistency, and other policies that ruff doesn't have a check for.  Drop it on any CPython 3.11+ workspace; rules silently no-op in repos where their target paths don't exist, so it's safe in the mono-repo, the workspace-template, or a downstream user workspace alike.
+A small CLI + rule set (`CHU001`–`CHU026`) covering descriptive names, mono-repo-vs-published-tree isolation, workbench-doesn't-import-libraries, silent test skips, plans-doc brevity, command-table parity, docstring-capability honesty, cross-runtime example imports, coverage-claim honesty, whitespace / line-ending hygiene in doc + plan trees ruff never sees, archived-decision marker consistency, ADR-authoring discipline, governance-doc orphan detection, and other policies that ruff doesn't have a check for.  Drop it on any CPython 3.11+ workspace; rules silently no-op in repos where their target paths don't exist, so it's safe in the mono-repo, the workspace-template, or a downstream user workspace alike.
 
 <br clear="left">
 
@@ -58,6 +58,9 @@ Each rule walks the paths it targets and silently no-ops in repos where those pa
 | `CHU017` | Coverage % must not be cited as a whole-codebase guarantee |
 | `CHU018` | Files must use LF line endings — no CR / CRLF |
 | `CHU019` | Dead ADRs must carry a filename lifecycle marker matching status / `Archived:` |
+| `CHU024` | No history banners on accepted ADRs — edit the body in place |
+| `CHU025` | `Superseded by:` pointers and filename markers must name an existing ADR |
+| `CHU026` | Governance docs referenced from AGENTS.md must be auto-loaded via CLAUDE.md's `@`-include chain |
 
 ### Configuration
 

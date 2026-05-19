@@ -97,6 +97,27 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         re.compile(r"\b(?:Earlier versions|Previously,?\s+th(?:is|e)|We used to|Used to be)\b"),
         "removed-code framing — move to commit message or workstream file",
     ),
+    (
+        # "X retained only until Y lands|landed" — roadmap framing
+        # for a thing kept around pending future work.
+        re.compile(r"\bretained (?:only )?until\b[^\n]{0,80}\b(?:lands?|landed)\b"),
+        "dateless landed-history framing — move to commit message or workstream file",
+    ),
+    (
+        # "before X landed" — past-tense framing of a prior incident.
+        re.compile(r"\bbefore [^\n]{1,80}\blanded\b"),
+        "dateless landed-history framing — move to commit message or workstream file",
+    ),
+    (
+        # "deferred until ..." — future-work / roadmap framing.
+        re.compile(r"\bdeferred until\b"),
+        "deferred-work framing — move to commit message or workstream file",
+    ),
+    (
+        # "until we have a|an X" — roadmap framing for a future capability.
+        re.compile(r"\buntil we have (?:a|an)\b"),
+        "deferred-work framing — move to commit message or workstream file",
+    ),
 )
 
 _SCANNED_SUFFIXES = (".py", ".md")

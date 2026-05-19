@@ -102,8 +102,6 @@ The hardware-prefixed examples + real-network suites in `functional_tests/test_r
 
 The host-side suite under `tests/test_memory_pressure_pytest.py` uses `tracemalloc` to verify the client doesn't leak across hot paths (QoS 0 / QoS 1 publish, inbound recv, subscribe/unsubscribe cycles).
 
-For real-board fragmentation testing, `.scratch/run_mqtt_perf.py` deploys a long-running publish/subscribe loop that samples `gc.mem_free()` periodically.  Verified live: 5-minute soak on Pi Pico W MP at 1 Hz publish, 299 publishes + 299 received, **0 bytes net heap drift**.  All four supported boards (Lolin S2 CP/MP, Pi Pico W CP/MP) pass the 30 s drift check.
-
 ## Contributing
 
 Working on `chumicro-mqtt` itself?  Clone the [mono-repo](https://github.com/ChuMicro/ChuMicro) if you haven't already — the rest of the workflow assumes you're inside that workspace.

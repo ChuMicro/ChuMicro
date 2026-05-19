@@ -41,7 +41,7 @@ def fake_template_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "fake-template"
     repo.mkdir()
     (repo / "run.py").write_text("# tool-owned shim\n")
-    (repo / "AGENTS.md").write_text("# tool-owned agents doc\n")
+    (repo / "AGENTS.md").write_text("# tool-owned agents doc\n")  # noqa: CHU006  template-payload filename data
     (repo / "pyproject.toml").write_text(
         '[project]\nname = "my-workspace"\n',
     )
@@ -146,7 +146,7 @@ class TestUpdate:
         # Every tool-owned file should report UNCHANGED post-clone since
         # the clone seeded them straight from the same source.
         assert actions["run.py"] == ApplyAction.UNCHANGED
-        assert actions["AGENTS.md"] == ApplyAction.UNCHANGED
+        assert actions["AGENTS.md"] == ApplyAction.UNCHANGED  # noqa: CHU006  template-payload filename data
         assert actions["pyproject.toml"] == ApplyAction.UNCHANGED
 
     def test_skips_user_edited_readme(

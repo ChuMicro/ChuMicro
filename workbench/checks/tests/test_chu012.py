@@ -75,6 +75,52 @@ class TestPatternHits:
         findings = CHU012.check(tmp_path)
         assert len(findings) == 1
 
+    def test_retained_until_lands(self, tmp_path: Path) -> None:
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "# retained only until the clean-slate default lands\n",
+        )
+        findings = CHU012.check(tmp_path)
+        assert len(findings) == 1
+        assert "landed-history" in findings[0].message
+
+    def test_before_landed(self, tmp_path: Path) -> None:
+        _stage(tmp_path, "scripts/foo.py", "# before the sentinel landed\n")
+        findings = CHU012.check(tmp_path)
+        assert len(findings) == 1
+        assert "landed-history" in findings[0].message
+
+    def test_deferred_until(self, tmp_path: Path) -> None:
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "# deferred until a hardware-cheap probe is ready\n",
+        )
+        findings = CHU012.check(tmp_path)
+        assert len(findings) == 1
+        assert "deferred-work" in findings[0].message
+
+    def test_until_we_have_a(self, tmp_path: Path) -> None:
+        _stage(
+            tmp_path,
+            "scripts/foo.py",
+            "# until we have a hardware-cheap probe primitive\n",
+        )
+        findings = CHU012.check(tmp_path)
+        assert len(findings) == 1
+        assert "deferred-work" in findings[0].message
+
+    def test_lands_in_docstring_caught(self, tmp_path: Path) -> None:
+        # The line-by-line scan covers docstrings too, no AST needed.
+        _stage(
+            tmp_path,
+            "support/notes.py",
+            '"""\nThis helper is retained only until the new path lands.\n"""\n',
+        )
+        findings = CHU012.check(tmp_path)
+        assert len(findings) == 1
+
 
 class TestSuppression:
     """``# noqa: CHU012`` mutes the rule on that line."""

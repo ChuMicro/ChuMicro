@@ -10,10 +10,6 @@ These don't replicate device-level fragmentation (CP / MP allocators
 are different), but they prove the pure-Python data structures the
 client maintains converge: any growing list / dict / accumulating
 closure surfaces here as monotonically rising allocation counts.
-
-Pair with the on-board long-run perf runner at
-``.scratch/run_mqtt_perf.py`` for end-to-end heap-fragmentation
-measurement against real hardware.
 """
 
 #: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
