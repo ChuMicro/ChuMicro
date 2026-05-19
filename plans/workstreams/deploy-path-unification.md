@@ -371,12 +371,109 @@ Constraints Phase 2 must honor (cross-workstream, verified):
   change touches. Independent defect (the repl↔walker link was
   falsified on-device); cross-reference, do not absorb or block on it.
 
-**Phase 3 — Collapse the commands.** `deploy-example` → thin front-end
-over `deploy` (resolve example → ephemeral project → same `deploy` →
-optional tail); its only unique surface is `--list` + the tail
-convenience. Retire `install-libraries`' board-push: library
-acquisition (pip; circup/mip only as a *download-to-local* backend)
-lands files in `libraries/`, then the one `deploy` bundles them.
+**Phase 3 — Collapse the commands. DESIGN SETTLED 2026-05-18
+(ADR-before-code; user-decided all forks). Implementation pending —
+the next unit of work.** Two collapses, both in this Phase (user:
+"Both A and B"). Mechanism lives here; the ADRs state only the
+invariant (README "what does NOT belong in a decision record").
+
+*Collapse A — `deploy-example` → thin front-end (the 0077-load-bearing,
+self-contained part; implements accepted 0077 + 0059 §1, no new ADR).*
+Verified in code, `deploy-example` diverges from `deploy` on **two**
+axes, not one:
+
+- *Source builder* — `deploy` routes through
+  `cli/deploy.py:resolve_project_deploy_source` (single source owner,
+  four `WithRuntimeConfig` front-ends, Phase 2 Commit 1).
+  `deploy-example` routes via its own
+  `cli/examples.py:_build_deploy_example_source` → `example_source()`
+  — the parallel staging source 0077 names in its Rejected list.
+- *Stage primitive (the load-bearing one)* — `deploy` calls
+  `runner.deploy_diff(source, clean=True, wipe=, on_file_deleted=)`:
+  the 0077-conformant clean-slate path Phase 2 built (`deployer.py`).
+  `deploy-example` calls `runner.deploy(source, clean=, tail_seconds=)`
+  — `Deployer.deploy()`, the *additive, no-reconcile, no-keep-set-scope*
+  primitive. Even `clean=True` there is just the legacy CP
+  exclude-tuple rsync. **`deploy-example` is the last CLI command
+  bypassing the unified stage primitive** — the parallel
+  `example_source` builder is secondary; `deploy()` vs `deploy_diff()`
+  is the real 0077 violation.
+
+The audit's "one parameterized builder + thin front-ends" was the
+*wrong* cut and 0077 says why: per-context variance is legitimate in
+the *payload* (which inner `FileSource`) and forbidden in
+stage/delete/keep/transport. The five inner-source constructors
+(directory walk, AST import-graph walk, synthesized shim, shim+graph
+merge, example-path resolver) are the legitimate payload fork, not
+duplication; don't merge the front-ends. The settled mechanism:
+
+1. **Source: `ExampleSpec` branch on `resolve_project_deploy_source`**
+   (user-chosen over a sibling resolver — one function owns project +
+   example source policy, literally "route `example_source` through
+   the dispatcher"). New `example: ExampleSpec | None` param; the
+   example branch bypasses `_resolve_deploy_layout` (no on-disk
+   project shape) and returns `("example", wrapped)`. Not a `mode=`
+   string with inner-source conditionals — that is 0077's forbidden
+   re-coupling. `example_source`'s `ImportGraphSource` construction
+   stays intact as the 5th inner constructor.
+2. **Stage: `_cmd_deploy_example` calls `runner.deploy_diff(...)`**
+   byte-identical to `_cmd_deploy`. Consequently `Deployer.deploy()`
+   + the `Interactive/NonInteractiveDeployer.deploy()` wrapper
+   methods are **deleted** (user: nothing published, sole consumer is
+   us → dead code per the no-backwards-compat rule, not a public-API
+   ADR). `_cmd_demo` and the low-level `chumicro-deploy deploy` CLI
+   (`workbench/deploy/src/chumicro_deploy/cli.py:264`) fold onto
+   `deploy_diff` (add `--no-wipe`/`--wipe` parity to the low-level
+   CLI); the 4 `workbench/deploy/examples/*.py` programmatic scripts +
+   the `result.py` docstring are rewritten to the `deploy_diff` API
+   (`verify-examples` must stay green). Exactly one stage primitive
+   remains — Phase 5's lint then has zero sanctioned bypass.
+3. **Tail: keep the interactive REPL drop** (user-chosen). 0077
+   explicitly leaves the post-stage step a legitimate per-context
+   fork (`PostStageStep`); a first-touch front door wants to
+   *interact*, not a bounded capture. `deploy-example` keeps dropping
+   into `chumicro_repl` (route through the entrypoint cleanly);
+   `deploy --tail` keeps its bounded `tail()`.
+4. **Tail-dedup helper (audit bullet 2, fold into the same commit):**
+   one `wrap_with_runtime_config(inner, *, project_dir,
+   search_paths=None, workspace=None, secrets_toml=None,
+   output_path=None)` in `deploy_source.py` (the module owning
+   `WithRuntimeConfig`) absorbing the 3–4× duplicated default
+   resolutions — `find_library_roots(search_paths)` + its repeated
+   4-line comment (`example_source.py:223`, `import_graph.py:287`,
+   `boot_shim.py:502`), `secrets_toml = workspace.secrets_toml` 3×
+   (`boot_shim.py:293,452`; `import_graph.py:249`),
+   `project_dir / GENERATED_DIRNAME / "runtime_config.msgpack"` 3×,
+   `find_project_config(project_dir)` 4×. Each front-end keeps its own
+   inner-source construction and ends with one call — collapses the
+   dup *without* merging front-ends. Normalize `boot_shim.py:35`'s
+   `chumicro_deploy.runtime_marker` import to the package root (audit
+   bullet 3) since the file is touched.
+
+What stays unique to `deploy-example` and is untouched (0059,
+0077-sanctioned): `--list`, the precheck stack, the four first-touch
+board states + bootstrap wizard, runtime-marker disambiguation,
+distinct exit codes, recovery coaching, the `--tail`/`--no-tail`/
+`--non-interactive` UX. Boundary contract is otherwise clean
+(`chumicro_workspace` → `chumicro_deploy` only, no cycle, declared in
+pyproject; `FileSource` `@runtime_checkable`, all inner sources
+duck-type it honestly).
+
+*Collapse B — retire `install-libraries`' board-push.* **[Decision
+0078](../decisions/0078-library-acquisition-is-host-local.md)
+`accepted` 2026-05-18.** `install-libraries` keeps its command surface
++ host-side primitives (AST walk, name map, channel select); only the
+subprocess board-push (the out-of-band `/lib` writer, meta-finding
+bullet 3) is deleted. It now fetches each `chumicro_<name>` into a
+gitignored workspace-local `<workspace>/_libraries/<name>/src/` tree
+(pip `--target` primary; `mip`/`circup` `--target` as
+download-to-local fallback, never a device/CIRCUITPY mount) and
+registers it in the same managed `library_sources:` block dev mode
+uses — regular mode becomes dev mode pointed at a fetched local tree;
+the one import-graph `deploy` then bundles it. Transitive deps land
+locally per Decision 0042; the AST walker stays the only
+what-actually-ships filter. Workspace-template `.gitignore` +
+regular-mode README (gap #4b) update to the fetch-then-deploy recipe.
 
 **Phase 4 — Root convergence.** `libraries/` is the single importable
 root (pip-curated chumicro libs already land there per
@@ -457,8 +554,16 @@ deleted (CP functional = the byte-identical clean rsync; stale board
 `code.py` now reconciled away), post-stage fork named (`PostStageStep`),
 MP functional first-stage `mkfs`→`_clean_slate_device`, 0077
 entrypoint clause corrected + 0077↔0071 reconciled.
-**Phase 2 complete.** Phases 3–5 (collapse commands /
-root convergence / CHU mechanization) pending. Companion *completed* work this session
+**Phase 2 complete. Phase 3 design settled 2026-05-18** (ADR-before-code;
+all forks user-decided): Collapse A — `deploy-example` → `ExampleSpec`
+branch on `resolve_project_deploy_source` + `deploy_diff`, `Deployer.deploy()`
+deleted (demo + low-level `chumicro-deploy` CLI fold onto `deploy_diff`),
+`wrap_with_runtime_config` tail-dedup, interactive REPL drop retained;
+Collapse B — **[Decision 0078](../decisions/0078-library-acquisition-is-host-local.md)
+`accepted`** (`install-libraries` board-push retired → host-local
+`_libraries/` fetch + the one deploy bundles it). Phase 3
+*implementation* pending — the next unit of work. Phases 4–5 (root
+convergence / CHU mechanization) pending. Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
 template `--device`/ruamel fixes) shipped on `main` of both repos and
 is recorded in `next-up.md` `## Done (recent)`; it is the context
