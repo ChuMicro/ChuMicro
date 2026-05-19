@@ -12,6 +12,36 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ---
 
+### Mechanize the "comments document current-code why, not history" non-negotiable
+
+**Surfaced 2026-05-18** during deploy-path-unification Commit 2c. The
+AGENTS.md "Code comments" non-negotiable (comments state the *why of
+current code* — no history, no removed-code explanation, no same
+comment repeated across sites) is prose-only, unenforced. In 2c an
+agent violated it across ~8 sites (change-rationale narrated into
+comments: "replaces the old lfs mkfs, which destroyed …"); preflight
+passed and it reached the human reviewer uncaught.
+
+The contrast is the argument: the sibling cross-repo-isolation rule
+"no `Decision NNNN` in shipped trees" *is* mechanized (CHU006) and
+caught its own 2c violation automatically, forcing the fix before
+commit. Same session, same change, same agent — the linted rule held,
+the unlinted one didn't. Decision 0074 states a deterministically-
+lintable drift class must be linted, not just doc-fixed.
+
+**Open:** is this class lintable cleanly enough to be a CHU rule
+(sibling to CHU006), and at what scope? Two detectable sub-patterns:
+(a) cross-site near-duplicate comment/docstring blocks within a
+package; (b) removed-code/history-narrative markers in comments
+("replaces the old", "previously used", "no longer", "was removed",
+"that is intended"). Risk: (b) false-positives on legitimate why that
+references prior state for a real reason; would need a `# noqa`
+escape and careful phrase scoping, exactly as CHU006 does. (a) is the
+higher-signal, lower-false-positive half and may be worth doing alone.
+Routes through `new-decision` if it lands (a 0074 consequence).
+
+Related: Decision 0074, CHU006, workstream `deploy-path-unification`.
+
 ### `chumicro-presence` design from Decision 0042 §167-168 — re-audit before anything rides on its shape
 
 **Surfaced 2026-05-12** during the `/audit-integration` pass on `chumicro-events ↔ wifi + mqtt`.  Decision 0042 names a future `chumicro-presence` library as the centralized binder for wifi/mqtt state into the events bus: *"`chumicro-presence` ships a one-line `presence.bind(wifi=..., mqtt=...)` that does the callback wiring centrally"* (§167-168).  Library doesn't exist yet (`ls libraries/` confirms — no presence directory).  The `presence.bind(wifi=..., mqtt=...)` shape was sketched long ago — the user flagged it as possibly stale or wrong, and the binding method it promises should be considered suspect until re-audited.
