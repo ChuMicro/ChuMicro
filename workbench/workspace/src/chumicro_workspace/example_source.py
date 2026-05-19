@@ -45,8 +45,11 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from chumicro_workspace.config_manifest import find_library_roots
-from chumicro_workspace.deploy_source import GENERATED_DIRNAME, WithRuntimeConfig
+from chumicro_workspace.deploy_source import (
+    GENERATED_DIRNAME,
+    WithRuntimeConfig,
+    wrap_with_runtime_config,
+)
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     pass
@@ -220,12 +223,15 @@ def example_source(
     if output_path is None:
         output_path = _default_output_path(library_root, example_name)
 
-    library_roots_for_validation = find_library_roots(search_paths)
-
-    return WithRuntimeConfig(
+    # An example's per-example config + msgpack path are
+    # example-specific (resolved just above), so they are passed
+    # explicitly; only the import-graph library-root derivation is
+    # the shared convention the helper owns.
+    return wrap_with_runtime_config(
         inner,
+        project_dir=library_root,
+        search_paths=search_paths,
         secrets_toml=secrets_toml,
         project_config=project_config,
         output_path=output_path,
-        library_roots=library_roots_for_validation,
     )

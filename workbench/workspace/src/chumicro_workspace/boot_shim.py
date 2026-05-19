@@ -32,12 +32,12 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from chumicro_deploy.runtime_marker import file_targets_runtime
+from chumicro_deploy import file_targets_runtime
 
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
     WithRuntimeConfig,
-    find_project_config,
+    wrap_with_runtime_config,
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
@@ -290,20 +290,17 @@ def project_boot_source(
         FileNotFoundError: When *project_dir* contains no
             recognized config file.
     """
-    if secrets_toml is None:
-        secrets_toml = workspace.secrets_toml
-
     inner = _BootShimSource(
         project_dir=project_dir,
         entrypoint_filename=entrypoint_filename,
         extra_excluded=extra_excluded,
         target_runtime=target_runtime,
     )
-    return WithRuntimeConfig(
+    return wrap_with_runtime_config(
         inner,
+        project_dir=project_dir,
+        workspace=workspace,
         secrets_toml=secrets_toml,
-        project_config=find_project_config(project_dir),
-        output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
     )
 
 
@@ -449,8 +446,6 @@ def project_boot_with_import_graph_source(
 
     if workspace_yaml is None:
         workspace_yaml = workspace.workspace_yaml
-    if secrets_toml is None:
-        secrets_toml = workspace.secrets_toml
 
     boot_inner = _BootShimSource(
         project_dir=project_dir,
@@ -493,18 +488,10 @@ def project_boot_with_import_graph_source(
         project_dir=project_dir,
     )
 
-    # Library roots derived from the import-graph search paths so
-    # ``WithRuntimeConfig`` validates the merged config against
-    # each library's manifest before writing the msgpack.
-    from chumicro_workspace.config_manifest import (  # noqa: PLC0415
-        find_library_roots,
-    )
-    library_roots = find_library_roots(search_paths)
-
-    return WithRuntimeConfig(
+    return wrap_with_runtime_config(
         combined,
+        project_dir=project_dir,
+        search_paths=search_paths,
+        workspace=workspace,
         secrets_toml=secrets_toml,
-        project_config=find_project_config(project_dir),
-        output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
-        library_roots=library_roots,
     )

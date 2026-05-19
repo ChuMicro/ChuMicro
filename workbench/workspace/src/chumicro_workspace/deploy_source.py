@@ -36,6 +36,8 @@ from chumicro_workspace.pipeline import build_runtime_config
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from chumicro_deploy import FileSource
 
+    from chumicro_workspace.workspace import WorkspaceLayout
+
 #: Canonical on-device path for the merged runtime-config msgpack.
 #: Every consumer library + the workspace template assumes this
 #: exact location; changing it is an ABI break.
@@ -190,6 +192,92 @@ class WithRuntimeConfig:
         return self._inner.entrypoint()
 
 
+def wrap_with_runtime_config(
+    inner: FileSource,
+    *,
+    project_dir: Path,
+    search_paths: Iterable[Path] | None = None,
+    workspace: WorkspaceLayout | None = None,
+    secrets_toml: Path | None = None,
+    project_config: Path | None = None,
+    output_path: Path | None = None,
+) -> WithRuntimeConfig:
+    """Wrap *inner* in :class:`WithRuntimeConfig`, resolving conventions.
+
+    Every ``FileSource`` front-end ends the same way: build an inner
+    source, then wrap it so the merged ``runtime_config.msgpack`` rides
+    the deploy.  The wrapping needed the same four conventional-default
+    resolutions open-coded in each builder.  This collapses them into
+    one call; each front-end keeps its own inner-source construction
+    and ends with ``return wrap_with_runtime_config(inner, ...)``.
+
+    Conventions resolved when the corresponding argument is ``None``:
+
+    * *secrets_toml* → ``workspace.secrets_toml`` (requires *workspace*).
+    * *project_config* → :func:`find_project_config` under
+      *project_dir* (the per-project ``project_config.toml`` /
+      legacy ``config.*``).
+    * *output_path* → ``project_dir / _generated /
+      runtime_config.msgpack`` (the gitignored build-artifact dir).
+    * *library_roots* (for manifest validation) → derived from
+      *search_paths* when given (an import-graph front-end), else
+      left empty (a directory / boot-shim front-end with no walked
+      libraries — validation off, as before).
+
+    Args:
+        inner: The base ``FileSource`` to wrap.
+        project_dir: The project (or, for an example, the owning
+            library) directory — only consulted for the
+            *project_config* / *output_path* defaults.
+        search_paths: Import-graph search paths.  When given, each
+            ``libraries/<name>/`` root among them is read for its
+            ``[tool.chumicro.config]`` manifest and the merged config
+            is validated before the msgpack is written.
+        workspace: Resolved :class:`WorkspaceLayout` — the
+            *secrets_toml* fallback source.
+        secrets_toml: Explicit ``secrets.toml`` path; overrides the
+            *workspace* fallback.
+        project_config: Explicit per-project config path; overrides
+            the *project_dir* lookup (an example passes its own
+            ``examples/config.toml``).
+        output_path: Explicit host path for the generated msgpack;
+            overrides the ``_generated/`` default.
+
+    Raises:
+        ValueError: Neither *secrets_toml* nor *workspace* given —
+            there is no ``secrets.toml`` to resolve.
+        FileNotFoundError: *project_config* defaulted and no
+            recognized config file exists under *project_dir*.
+    """
+    if secrets_toml is None:
+        if workspace is None:
+            raise ValueError(
+                "wrap_with_runtime_config needs secrets_toml or workspace",
+            )
+        secrets_toml = workspace.secrets_toml
+    if project_config is None:
+        project_config = find_project_config(project_dir)
+    if output_path is None:
+        output_path = project_dir / GENERATED_DIRNAME / "runtime_config.msgpack"
+    library_roots: tuple[Path, ...] | None = None
+    if search_paths is not None:
+        # Local import: ``config_manifest`` pulls in ``tomllib`` + the
+        # dataclass machinery; keep this module's import cost flat for
+        # the no-validation (directory / boot-shim) front-ends.
+        from chumicro_workspace.config_manifest import (  # noqa: PLC0415
+            find_library_roots,
+        )
+
+        library_roots = find_library_roots(search_paths)
+    return WithRuntimeConfig(
+        inner,
+        secrets_toml=secrets_toml,
+        project_config=project_config,
+        output_path=output_path,
+        library_roots=library_roots,
+    )
+
+
 def project_directory_source(
     project_dir: Path,
     *,
@@ -247,8 +335,8 @@ def project_directory_source(
         excluded_names=excluded,
         target_runtime=target_runtime,
     )
-    return WithRuntimeConfig(
+    return wrap_with_runtime_config(
         inner,
+        project_dir=project_dir,
         secrets_toml=secrets_toml,
-        project_config=find_project_config(project_dir),
     )
