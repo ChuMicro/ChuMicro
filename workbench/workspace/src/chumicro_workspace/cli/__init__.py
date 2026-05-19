@@ -98,6 +98,7 @@ from chumicro_workspace.cli.repl import (
     _resolve_repl_mode as _resolve_repl_mode,
 )
 from chumicro_workspace.cli.setup import _add_setup_parsers
+from chumicro_workspace.library import _real_http_get as _default_http_get
 
 # ---------------------------------------------------------------------------
 # Implemented commands
@@ -182,6 +183,11 @@ class CliEnv:
     subprocess_runner: Callable[..., subprocess.CompletedProcess] = (
         subprocess.run
     )
+    #: HTTP GET used by the curated-library snapshot backend
+    #: (``library add`` / ``update`` / ``switch-channel``).  Returns
+    #: the response body bytes.  Tests pass a fixture that serves
+    #: in-memory snapshot tarballs / ``index.json`` so no sockets open.
+    http_get: Callable[[str], bytes] = _default_http_get
     #: Override the firmware-flash callable.  ``None`` means use
     #: :func:`chumicro_deploy.flash_firmware`.  Tests pass a recording
     #: stub to assert on the URL / device / kwargs the CLI forwards.

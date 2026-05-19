@@ -1,12 +1,12 @@
 """``chumicro-workspace library`` subcommands — curated library host.
 
 ``list`` / ``add`` / ``update`` / ``remove`` / ``forget`` /
-``switch-channel`` pull chumicro libraries from PyPI into the
-workspace's ``libraries/`` folder and maintain the ``libraries:``
-table in ``workspace.yml``.  ``remove`` uninstalls but keeps the row
-as ``declined: true`` (so ``update`` skips it and the decision is
-auditable); ``forget`` drops the row entirely.  The heavy
-lifting (fetch, sdist unpack, dep walk) lives in
+``switch-channel`` pull chumicro libraries from a published snapshot
+channel into the workspace's ``libraries/`` folder and maintain the
+``libraries:`` table in ``workspace.yml``.  ``remove`` uninstalls but
+keeps the row as ``declined: true`` (so ``update`` skips it and the
+decision is auditable); ``forget`` drops the row entirely.  The heavy
+lifting (snapshot resolve, extract, dep walk) lives in
 :mod:`chumicro_workspace.library`; this module is the parser + the
 prompt/IO surface.
 
@@ -125,7 +125,7 @@ def _cmd_library_add(args: argparse.Namespace) -> int:
             channel=args.channel,
             version=root_version,
             workspace_root=workspace.root,
-            subprocess_runner=args._env.subprocess_runner,
+            http_get=args._env.http_get,
         )
     except LibraryFetchError as error:
         print(
@@ -186,7 +186,7 @@ def _cmd_library_update(args: argparse.Namespace) -> int:
                 channel=entry.channel,
                 version=HEAD,
                 workspace_root=workspace.root,
-                subprocess_runner=args._env.subprocess_runner,
+                http_get=args._env.http_get,
             )
         except LibraryFetchError as error:
             print(
@@ -318,7 +318,7 @@ def _cmd_library_switch_channel(args: argparse.Namespace) -> int:
             channel=args.channel,
             version=HEAD,
             workspace_root=workspace.root,
-            subprocess_runner=args._env.subprocess_runner,
+            http_get=args._env.http_get,
         )
     except LibraryFetchError as error:
         print(
@@ -346,7 +346,7 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
     """Register the ``library`` command group."""
     library_parser = subparsers.add_parser(
         "library",
-        help="Curate chumicro libraries into the workspace from PyPI.",
+        help="Curate chumicro libraries into the workspace from a channel.",
     )
     verbs = library_parser.add_subparsers(
         dest="library_command", required=True,
@@ -360,16 +360,16 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
     list_parser.set_defaults(func=_cmd_library_list)
 
     add_parser = verbs.add_parser(
-        "add", help="Fetch a library + its chumicro deps from PyPI.",
+        "add", help="Fetch a library + its chumicro deps from a snapshot.",
     )
     add_parser.add_argument("name", help="Import name, e.g. chumicro_mqtt.")
     add_parser.add_argument(
         "--channel", choices=VALID_CHANNELS, default="stable",
-        help="PyPI channel (default: stable).",
+        help="Release channel (default: stable).",
     )
     add_parser.add_argument(
         "--version", default=None,
-        help="Pin the root library to this version (default: latest).",
+        help="Pin to this channel snapshot tag (default: latest snapshot).",
     )
     add_parser.add_argument(
         "--floating", action="store_true",

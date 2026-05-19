@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-import subprocess
+import json
 import tarfile
 from pathlib import Path
 
@@ -12,7 +12,7 @@ from chumicro_workspace import cli
 from chumicro_workspace.curated_libraries import read_curated_libraries
 from chumicro_workspace.testing import seed_workspace
 
-# Dep graph the fake registry serves: import-name -> chumicro deps.
+# Dep graph the fake channel serves: import-name -> chumicro dist deps.
 _GRAPH = {
     "chumicro_mqtt": ["chumicro-sockets", "chumicro-timing"],
     "chumicro_sockets": ["chumicro-timing"],
@@ -20,67 +20,73 @@ _GRAPH = {
 }
 
 
-def _spec_to_import_name(spec: str) -> tuple[str, str | None]:
-    """('chumicro-mqtt-experimental==0.2' ) -> ('chumicro_mqtt', '0.2')."""
-    name, _, version = spec.partition("==")
-    name = name.removesuffix("-experimental")
-    return name.replace("-", "_"), (version or None)
+class _Channel:
+    """Fake snapshot channel: serves index.json + a source tarball.
 
-
-class _RegistryRunner:
-    """Fake pip that serves sdists from :data:`_GRAPH`.
-
-    Unknown packages return a pip "no matching distribution" failure.
+    A snapshot is built lazily per requested tag (``"latest"`` for an
+    unpinned/main resolve, the pin string itself for ``--version T``)
+    so every library lands at version *version*.  Both the stable and
+    experimental repos are served, so ``switch-channel`` works.
+    Unknown libraries simply aren't in the tarball — the extract step
+    raises ``PACKAGE_NOT_FOUND``, the real not-found path.
     """
 
     def __init__(self, *, version: str = "1.0.0") -> None:
         self.version = version
-        self.fetched: list[str] = []
+        self.calls: list[str] = []
 
-    def __call__(self, args, **kwargs):
-        spec = args[args.index("-d") - 1]
-        dest = Path(args[args.index("-d") + 1])
-        import_name, pinned = _spec_to_import_name(spec)
-        if import_name not in _GRAPH:
-            return subprocess.CompletedProcess(
-                args, 1, "",
-                "ERROR: Could not find a version that satisfies the "
-                f"requirement {spec}",
+    def _tarball(self, repo_stem: str, tag: str) -> bytes:
+        wrapper = f"{repo_stem}-{tag}"
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+            def add(name: str, body: bytes = b"") -> None:
+                info = tarfile.TarInfo(name)
+                info.size = len(body)
+                archive.addfile(info, io.BytesIO(body))
+
+            for import_name, deps in _GRAPH.items():
+                short = import_name.removeprefix("chumicro_")
+                rendered = ", ".join(f'"{dep}"' for dep in deps)
+                add(
+                    f"{wrapper}/{short}/pyproject.toml",
+                    f'[project]\nname = "{short}"\n'
+                    f"dependencies = [{rendered}]\n".encode(),
+                )
+                add(f"{wrapper}/{short}/VERSION", f"{self.version}\n".encode())
+                add(f"{wrapper}/{short}/README.md", b"# x\n")
+                add(f"{wrapper}/{short}/src/chumicro_{short}/__init__.py")
+                for tree in ("src", "tests", "examples", "docs"):
+                    add(f"{wrapper}/{short}/{tree}/placeholder")
+            add(f"{wrapper}/index.json", self._index(tag))
+        return buffer.getvalue()
+
+    def _index(self, tag: str) -> bytes:
+        return json.dumps({
+            "tag": tag,
+            "libraries": {
+                name: {"version": self.version} for name in _GRAPH
+            },
+        }).encode()
+
+    def http_get(self, url: str) -> bytes:
+        self.calls.append(url)
+        raw = "https://raw.githubusercontent.com/"
+        codeload = "https://codeload.github.com/"
+        if url.startswith(raw):
+            # <owner>/<repo>/<ref>/index.json
+            _, _, reference, _ = url[len(raw):].split("/", 3)
+            return self._index(
+                "latest" if reference == "main" else reference,
             )
-        self.fetched.append(import_name)
-        version = pinned or self.version
-        self._build(dest, import_name, version, _GRAPH[import_name])
-        return subprocess.CompletedProcess(args, 0, "", "")
-
-    @staticmethod
-    def _build(
-        dest: Path, import_name: str, version: str, deps: list[str],
-    ) -> None:
-        dest.mkdir(parents=True, exist_ok=True)
-        base = f"{import_name}-{version}"
-        rendered = ", ".join(f'"{dep}"' for dep in deps)
-        files = {
-            "pyproject.toml": (
-                f'[project]\nname = "{import_name.replace("_", "-")}"\n'
-                f"dependencies = [{rendered}]\n"
-            ),
-            "VERSION": f"{version}\n",
-            "README.md": "# x\n",
-            "src/placeholder": "",
-            "tests/placeholder": "",
-            "examples/placeholder": "",
-            "docs/placeholder": "",
-        }
-        with tarfile.open(dest / f"{base}.tar.gz", "w:gz") as archive:
-            for name, body in files.items():
-                payload = body.encode()
-                info = tarfile.TarInfo(f"{base}/{name}")
-                info.size = len(payload)
-                archive.addfile(info, io.BytesIO(payload))
+        if url.startswith(codeload):
+            # <owner>/<repo>/tar.gz/refs/tags/<tag>
+            _, repo, _, _, _, tag = url[len(codeload):].split("/", 5)
+            return self._tarball(repo, tag)
+        raise AssertionError(f"unexpected URL {url}")
 
 
-def _run(args: list[str], runner: _RegistryRunner) -> int:
-    return cli.main(args, env=cli.CliEnv(subprocess_runner=runner))
+def _run(args: list[str], runner: _Channel) -> int:
+    return cli.main(args, env=cli.CliEnv(http_get=runner.http_get))
 
 
 class TestList:
@@ -88,7 +94,7 @@ class TestList:
         seed_workspace(tmp_path)
         assert _run(
             ["library", "list", "--workspace-dir", str(tmp_path)],
-            _RegistryRunner(),
+            _Channel(),
         ) == 0
         assert "No curated libraries" in capsys.readouterr().out
 
@@ -98,7 +104,7 @@ class TestAdd:
         self, tmp_path: Path,
     ):
         seed_workspace(tmp_path)
-        runner = _RegistryRunner(version="0.9.0")
+        runner = _Channel(version="0.9.0")
         code = _run(
             [
                 "library", "add", "chumicro_mqtt",
@@ -124,7 +130,7 @@ class TestAdd:
                 "--version", "0.3.1",
                 "--workspace-dir", str(tmp_path), "--non-interactive",
             ],
-            _RegistryRunner(),
+            _Channel(),
         )
         table = read_curated_libraries(tmp_path / "workspace.yml")
         assert table["chumicro_timing"].version == "0.3.1"
@@ -136,7 +142,7 @@ class TestAdd:
                 "library", "add", "chumicro_timing", "--floating",
                 "--workspace-dir", str(tmp_path), "--non-interactive",
             ],
-            _RegistryRunner(),
+            _Channel(),
         )
         table = read_curated_libraries(tmp_path / "workspace.yml")
         assert table["chumicro_timing"].version == "HEAD"
@@ -149,7 +155,7 @@ class TestAdd:
                 "--version", "1", "--floating",
                 "--workspace-dir", str(tmp_path), "--non-interactive",
             ],
-            _RegistryRunner(),
+            _Channel(),
         ) == 2
 
     def test_unknown_package_fails(self, tmp_path: Path):
@@ -159,7 +165,7 @@ class TestAdd:
                 "library", "add", "chumicro_nope",
                 "--workspace-dir", str(tmp_path), "--non-interactive",
             ],
-            _RegistryRunner(),
+            _Channel(),
         ) == 1
 
     def test_per_dep_deselect_declines_only_chosen(
@@ -177,7 +183,7 @@ class TestAdd:
         code = cli.main(
             ["library", "add", "chumicro_mqtt",
              "--workspace-dir", str(tmp_path)],
-            env=cli.CliEnv(subprocess_runner=_RegistryRunner()),
+            env=cli.CliEnv(http_get=_Channel().http_get),
         )
         assert code == 0
         table = read_curated_libraries(tmp_path / "workspace.yml")
@@ -196,14 +202,14 @@ class TestRemove:
                 "library", "remove", "chumicro_mqtt",
                 "--workspace-dir", str(tmp_path), "--non-interactive",
             ],
-            _RegistryRunner(),
+            _Channel(),
         ) == 2
 
     def test_remove_uninstalls_but_keeps_declined_row(
         self, tmp_path: Path, capsys: pytest.CaptureFixture,
     ):
         seed_workspace(tmp_path)
-        runner = _RegistryRunner()
+        runner = _Channel()
         _run(
             [
                 "library", "add", "chumicro_mqtt",
@@ -230,7 +236,7 @@ class TestRemove:
 
     def test_update_skips_declined_then_add_flips_back(self, tmp_path: Path):
         seed_workspace(tmp_path)
-        runner = _RegistryRunner(version="0.3.1")
+        runner = _Channel(version="0.3.1")
         _run(
             [
                 "library", "add", "chumicro_timing",
@@ -275,12 +281,12 @@ class TestForget:
                 "library", "forget", "chumicro_mqtt",
                 "--workspace-dir", str(tmp_path), "--non-interactive",
             ],
-            _RegistryRunner(),
+            _Channel(),
         ) == 2
 
     def test_forget_drops_row_and_uninstalls(self, tmp_path: Path):
         seed_workspace(tmp_path)
-        runner = _RegistryRunner()
+        runner = _Channel()
         _run(
             [
                 "library", "add", "chumicro_timing",
@@ -303,7 +309,7 @@ class TestForget:
     def test_forget_a_declined_entry(self, tmp_path: Path):
         """The documented path: remove -> declined, then forget."""
         seed_workspace(tmp_path)
-        runner = _RegistryRunner()
+        runner = _Channel()
         for verb in ("add", "remove"):
             _run(
                 [
@@ -328,7 +334,7 @@ class TestForget:
 
 
 class TestSwitchChannel:
-    def _seed_one(self, tmp_path: Path, runner: _RegistryRunner) -> None:
+    def _seed_one(self, tmp_path: Path, runner: _Channel) -> None:
         seed_workspace(tmp_path)
         _run(
             [
@@ -346,11 +352,11 @@ class TestSwitchChannel:
                 "experimental",
                 "--workspace-dir", str(tmp_path), "--non-interactive",
             ],
-            _RegistryRunner(),
+            _Channel(),
         ) == 2
 
     def test_switch_re_resolves_and_records(self, tmp_path: Path):
-        runner = _RegistryRunner(version="0.3.1")
+        runner = _Channel(version="0.3.1")
         self._seed_one(tmp_path, runner)
         code = _run(
             [
@@ -368,7 +374,7 @@ class TestSwitchChannel:
         assert entry.version == "0.3.1"
 
     def test_already_on_channel_noop(self, tmp_path: Path):
-        runner = _RegistryRunner()
+        runner = _Channel()
         self._seed_one(tmp_path, runner)
         assert _run(
             [
@@ -387,14 +393,14 @@ class TestUpdate:
                 "library", "update", "chumicro_mqtt",
                 "--workspace-dir", str(tmp_path), "--non-interactive",
             ],
-            _RegistryRunner(),
+            _Channel(),
         ) == 2
 
     def test_pinned_skipped_floating_refetched(
         self, tmp_path: Path, capsys: pytest.CaptureFixture,
     ):
         seed_workspace(tmp_path)
-        runner = _RegistryRunner()
+        runner = _Channel()
         _run(
             [
                 "library", "add", "chumicro_sockets", "--floating",

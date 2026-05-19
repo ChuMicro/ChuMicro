@@ -442,12 +442,29 @@ similar config driving the version list.
 
 See Decision 0024 (naming conventions section) for the folder scheme.
 
-### Should the bundle repo carry per-library version tags for mip pinning?
+### Should distribution channels carry per-library version pinning?
+
+Spans both the device-bundle channel (mip/circup) and the
+`ChuMicro-Libraries` workspace-acquisition channel (Decision 0078) —
+same root cause, so tracked once here.
+
+**The root cause (identified in Decision 0078):** library
+`pyproject.toml`s declare bare dep names with **no version constraints**
+(`"chumicro-timing"`, not `>=1.2`). Snapshot-tagged channels are sound
+precisely because a snapshot is an internally-consistent tested-together
+set; assembling a mixed-version closure (hold `timing` old while `mqtt`
+advances) has no constraint metadata to make it sound. Sound per-library
+pinning is therefore first a *pyproject-versioning-metadata* decision
+(do chumicro libraries declare version constraints, and who maintains
+them?), and only then a channel/tag-layout question. That metadata
+decision is the gate; it would route through `new-decision`.
 
 mip supports version pinning via `version="branch-or-tag"`, but the bundle
 repo's release tags are date-based bundle snapshots (e.g. `20260410`), not
 per-library versions.  A user who wants "timing v0.1.25" cannot map that to
-a bundle tag without reading release notes.
+a bundle tag without reading release notes.  The `ChuMicro-Libraries`
+channel has the identical snapshot-tag shape by design (Decision 0078) —
+`library add --pin` pins to a snapshot, not a per-library version.
 
 circup has no version-pinning capability at all — it always pulls the latest
 bundle release.  That's an upstream limitation we can't fix.
@@ -464,12 +481,15 @@ Options considered:
 3. **Per-library branches** (e.g. `chumicro-timing/latest`) — more complex,
    unclear benefit over tags.
 
-Not blocking any current work.  Worth revisiting if users request pinning or
+Not blocking any current work — the snapshot model is sound and shipping
+on both channels.  Worth revisiting if users request pinning or
 if the library count grows enough that bundle-level snapshots cause unwanted
-upgrades of unrelated libraries.
+upgrades of unrelated libraries; the pyproject-version-constraint decision
+is the prerequisite either way.
 
 Related: Decision 0018 (bundle architecture), Decision 0024 (mpy folder
-serving).
+serving), Decision 0078 (workspace acquisition / `ChuMicro-Libraries`
+channel, where the no-version-constraint root cause is stated).
 
 ### What does "contributor-ready" look like beyond docs?
 
