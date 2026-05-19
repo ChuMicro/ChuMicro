@@ -9,7 +9,7 @@ Pairs with [`session-resume`](../session-resume/SKILL.md) — write/read symmetr
 
 Used when you're about to `/clear`, switch to a fresh session, or otherwise leave conversation state behind, and the session produced context that would not survive `git log` + `plans/next-up.md` alone.
 
-A handoff is a **faithful, complete state-transfer document** — as long as the session warrants. Not a tight summary. The next session should be able to pick up nearly fully informed by reading the handoff plus the warm-up ritual (`git --no-pager log --oneline -20` + `plans/next-up.md`).
+A handoff is a **faithful, complete state-transfer document** — as long as the session warrants. Not a tight summary. The next session resumes via [`/session-resume`](../session-resume/SKILL.md), which runs the warm-up ritual (`git --no-pager log --oneline -20` + `plans/next-up.md`), follows the `## Now` pointer to this file, and tries to falsify what you wrote. Write so that reader is nearly fully informed from the handoff plus that warm-up.
 
 **Claim discipline (load-bearing).** A handoff is written by the most context-degraded agent in the cycle — near a context limit, after a long session, where recall and momentum have already produced errors. The resumer *will and should* try to falsify what you wrote. So tag every non-trivial claim inline so it can be:
 
@@ -137,4 +137,4 @@ Keep it to one line (CHU011 caps each top-level bullet at 5 bullet points — le
 
 Show the user the diff (handoff file + next-up.md edit). Once approved, follow the [`git-commit`](../git-commit/SKILL.md) skill. Commit message names the handoff topic and links any related workstream or ADR.
 
-After commit, the handoff is durable — the user can `/clear` knowing the next session's warm-up will surface it via `next-up.md ## Now`.
+After commit, the handoff is durable — the user can `/clear` knowing the next session's `/session-resume` will surface it via the `next-up.md ## Now` pointer. Tell them exactly that: resume with **`/session-resume`** (optionally `/session-resume <slug>`). Do **not** instruct them to hand-walk `git log` + `next-up.md` + open the handoff — that redundantly narrates what `/session-resume` already does.
