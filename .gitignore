@@ -35,10 +35,10 @@ workbench/*/docs/assets/
 # the tracked example source.
 libraries/*/examples/_generated/
 
-# Host-local library cache from `chumicro-workspace install-libraries`
-# — fetched chumicro_<name> trees the deploy bundles; tool-managed,
-# reproducible from the project's imports, never committed.
-_libraries/
+# Pre-upgrade backups of edited curated library trees, written by
+# `chumicro-workspace library update` before it replaces a tree —
+# tool-managed, never committed; recover local edits from here.
+_library-backups/
 
 # Agent-tooling scratch dir (worktrees, per-user settings).  Track only:
 # * the `skills` symlink so Claude Code auto-discovers the canonical skills
