@@ -464,5 +464,13 @@ gate anti-decision) + #7 (forward-reference `the` tic, sibling
 closed-set to #3, calibrated from two `/audit-comments` pilots on
 `workbench/deploy`), from the evidence pass that accompanied the
 `/audit-comments` skill + AGENTS.md Writing-tone single-home session.
-Nothing implemented. One `new-decision` covers the set; pick up via
-the routing above.
+
+**Design decided 2026-05-19 — [Decision 0079](../decisions/0079-prose-drift-mechanization.md)
+is now the durable design record.** This file stays as the deeper
+analysis reference (per-rule FP profiles, source anchors, the
+verified-then-stale-by-`61f31c26` `.scratch/` narrowing story, the
+structural-conjunct prefilter analysis for #4, the rejected ratio
+framing, the open-questions / CHU020 fold-in reasoning). Implementation
+tracked in [`plans/next-up.md`](../next-up.md) under
+"CHU prose/isolation lint mechanization — implement Decision 0079."
+Nothing implemented yet; build order in the ADR.
