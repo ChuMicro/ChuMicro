@@ -10,7 +10,7 @@ and actually run the shipped tests.
 
 Shipping the directories and declaring the extra are two independent
 contracts a future edit could silently break (drop a line from
-``[tool.hatch.build.targets.sdist].include``, delete the
+``[tool.hatch.build.targets.sdist].only-include``, delete the
 ``[project.optional-dependencies]`` block).  This guard runs after
 ``scripts/run.py build`` and fails the build if either regresses, so the
 break is caught before it reaches PyPI.
@@ -95,7 +95,7 @@ def check_library_sdist(library_dir: Path) -> list[str]:
         if required not in present_top:
             problems.append(
                 f"{name}: sdist {sdist_path.name} is missing '{required}/' "
-                "— extend [tool.hatch.build.targets.sdist].include"
+                "— extend [tool.hatch.build.targets.sdist].only-include"
             )
 
     return problems
