@@ -19,6 +19,15 @@ from __future__ import annotations
 STABLE_BUNDLE_REPO = "ChuMicro-Bundle"
 EXPERIMENTAL_BUNDLE_REPO = "ChuMicro-Bundle-Experimental"
 
+#: Full-source-tree channel repos for host-side workspace acquisition
+#: (``chumicro-workspace library add/browse``).  Distinct from the
+#: device bundles above: those are deploy-flattened ``.py``+``.mpy``
+#: for circup/mip; these carry each library's whole tree
+#: (src/tests/examples/docs/pyproject/VERSION/README) plus a root
+#: ``index.json`` catalog, tag-versioned with the same snapshot model.
+STABLE_LIBRARIES_REPO = "ChuMicro-Libraries"
+EXPERIMENTAL_LIBRARIES_REPO = "ChuMicro-Libraries-Experimental"
+
 #: MicroPython mpy bytecode format version folder name.  mpy v6 is used
 #: by MicroPython 1.24+.  Contains .mpy files compiled with MicroPython's
 #: mpy-cross (magic byte 'M') and ``package.json`` manifests for mip.
