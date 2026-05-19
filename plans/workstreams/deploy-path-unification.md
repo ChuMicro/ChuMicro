@@ -182,11 +182,27 @@ the exclude tuple).
 
 The convergence deltas (the actual Phase 2 work):
 
-1. **Flip the default.** `clean=False` → clean-slate default;
-   `--no-clean` becomes the single `--no-wipe` opt-out (0077). Every
-   context (project/example/test) inherits it; per-context callers stop
-   choosing. Behavior-visible change on *every* `chumicro-workspace
-   deploy` — the headline risk to flag.
+1. **Flip the default.** **DONE 2026-05-18 (Commit 2b), CP
+   bench-verified Pi Pico W.** `deploy_diff(clean: bool = True)` is
+   now clean-slate by default: the diff scope is the whole drive
+   minus `DEVICE_KEEP_SET` + macOS noise (`_list_scope_on_drive(*,
+   clean_slate=)` — all noise is dot-prefixed, so "no path part
+   starts with a dot" excludes the class without enumerating it), so
+   a stale board `settings.toml` / leftover user file is reconciled
+   away with the one-time eviction notice (now also fired from the
+   diff-path `delete_files`, guarded once-per-instance). `--no-wipe`
+   (`dest=clean`, `store_false`) is the additive opt-out; the
+   pre-existing `--wipe` is re-scoped as the *full-erase* escape
+   (keep set included) — three coherent levels. The
+   `clean_slate`/`clean` kwarg threads protocol → CP/MP transports →
+   `FakeTransport` → both recovery wrappers; MP accepts it but keeps
+   legacy scope (its survive-set is delta 6, the one remaining
+   mechanic). Bench Pi Pico W CP: default `deploy` evicted a planted
+   `settings.toml` + `junk.txt`, kept `boot_out.txt`, ran clean;
+   `--no-wipe` preserved both. Decision 0077 promoted
+   `proposed`→`accepted`; Decision 0059 §1 + its Rejected bullet
+   edited in place to cross-link 0077; AGENTS.md gained the
+   one-staging-path non-negotiable.
 2. **Converge the keep set to 0077's closed `{boot_out.txt, boot.py,
    _chu_kv.msgpack}`.** **CP DONE 2026-05-18 (Commit 2a),
    bench-verified Pico W CP.** One `flash_drive.DEVICE_KEEP_SET`
@@ -287,11 +303,15 @@ CP. **Commit 1b — DONE 2026-05-18:** delta 4 (empty-dir reaping),
 bench-verified Pico W CP. **Commit 1 (the seams) complete.**
 **Commit 2a — DONE 2026-05-18:** keep-set constant + CP clean-path
 `settings.toml` eviction + one-time notice + `_chu_kv.msgpack` keep,
-bench-verified Pico W CP. **Commit 2b — next:** the default-flip
-(clean-slate default + `--no-wipe`) which also lands the diff-path +
-MP keep-set mechanics and promotes 0077 `proposed`→`accepted` + the
-0059 §1 in-place edit + the AGENTS.md hard rule. **Commit 2c:**
-entrypoint-as-payload (delta 5). Original Commit 2 = deltas
+bench-verified Pico W CP. **Commit 2b — DONE 2026-05-18,
+bench-verified Pico W CP:** clean-slate default-flip + `--no-wipe` +
+`--wipe` re-scope + diff-path eviction notice; 0077
+`proposed`→`accepted`; 0059 §1 edited in place; AGENTS.md
+non-negotiable added. **Remaining: delta 6 — MP keep-set survive-set**
+(MP `_clean_device_lib` only nukes `/lib`; whole-device clean-slate on
+MP needs a root survive-set; MP `list_files_in_scope` accepts
+`clean_slate` but keeps legacy scope today — its own slice, needs an
+MP board). **Commit 2c — next:** entrypoint-as-payload (delta 5). Original Commit 2 = deltas
 1+2+5+6 (default-flip, keep-set convergence incl. `settings.toml`
 evict-with-warning + `_chu_kv.msgpack` add + the two-site collapse,
 entrypoint-as-payload, MP mechanics) — the every-deploy-visible policy
@@ -390,14 +410,17 @@ commands) → Phase 4 (root convergence; falls out of 2–3) → Phase 5
 
 Opened 2026-05-18. **Phase 0 done** —
 [Decision 0077](../decisions/0077-one-device-staging-path.md)
-`proposed` (invariant confirmed by the transport audit above; promotes
-to `accepted` at Phase 2). **Phase 1 done** — preflight `_env`
-regression fixed 2026-05-18; the repl `chumicro_timing` regression
-root-caused 2026-05-18 (static + bench, Pico W CP) and written up as a
-Phase 2 input (no isolated patch — the fix is the unified source path).
-Phases 2–5 pending. The structural code change is Phase 2 (still
-ADR-before-code: 0077 is the gate, now written; Phase 1 fully closed —
-both regressions resolved/root-caused, Phase 2 has its concrete seam). Companion *completed* work this session
+**`accepted` 2026-05-18** (CP path implemented + bench-verified).
+**Phase 1 done** — preflight `_env` fixed; repl `chumicro_timing`
+root-caused + structurally fixed. **Phase 2 — Commits 1a/1b/2a/2b
+done, all bench-verified Pi Pico W CP:** single source owner
+(repl retired → `deploy --tail`), CP empty-dir reaping, keep-set
+unification + `settings.toml` eviction, clean-slate default-flip
+(`--no-wipe`/`--wipe`) + 0077 promotion + 0059 §1 in-place edit +
+AGENTS.md non-negotiable. **Remaining in Phase 2:** delta 6 (MP
+keep-set survive-set — needs an MP board) and Commit 2c
+(entrypoint-as-payload, delta 5). Phases 3–5 (collapse commands /
+root convergence / CHU mechanization) pending. Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
 template `--device`/ruamel fixes) shipped on `main` of both repos and
 is recorded in `next-up.md` `## Done (recent)`; it is the context

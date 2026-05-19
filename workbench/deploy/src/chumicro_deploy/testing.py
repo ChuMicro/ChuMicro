@@ -509,17 +509,25 @@ class FakeTransport:
                 on_execute_line(output_line)
         return self.execute_output
 
-    def list_files_in_scope(self) -> list[str]:
+    def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
         """Return on-device paths in scope (mirrors `device_files`).
 
-        Filters :attr:`device_files` to those paths that
-        :func:`is_in_deploy_scope` accepts so a test can pre-populate
-        a mix of in-scope and out-of-scope files and verify the
-        diff-routine ignores the latter.
+        ``clean_slate=True`` mirrors the real clean-slate scope: every
+        device file except the closed keep set
+        (:data:`flash_drive.DEVICE_KEEP_SET`).  ``False`` keeps the
+        legacy :func:`is_in_deploy_scope` filter so a test can verify
+        the additive path leaves out-of-scope files alone.
         """
+        from .flash_drive import DEVICE_KEEP_SET  # noqa: PLC0415 — avoid cycle
         from .protocol import is_in_deploy_scope  # noqa: PLC0415 — avoid cycle
 
-        self.calls.append(("list_files_in_scope", ()))
+        self.calls.append(("list_files_in_scope", (clean_slate,)))
+        if clean_slate:
+            keep = set(DEVICE_KEEP_SET)
+            return [
+                path for path in self.device_files
+                if path.lstrip("/").split("/")[-1] not in keep
+            ]
         return [path for path in self.device_files if is_in_deploy_scope(path)]
 
     def delete_files(self, paths: list[str]) -> None:

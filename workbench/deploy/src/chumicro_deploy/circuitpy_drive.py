@@ -33,6 +33,8 @@ import getpass
 import os
 from pathlib import Path
 
+from . import flash_drive
+
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
@@ -228,18 +230,38 @@ def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
     return None
 
 
-def _list_scope_on_drive(drive: Path) -> list[str]:
-    """Walk a CIRCUITPY drive and return the deploy's in-scope paths.
+def _list_scope_on_drive(drive: Path, *, clean_slate: bool = False) -> list[str]:
+    """Walk a CIRCUITPY drive and return the diff's in-scope paths.
 
     Flash-mode helper for the transport's ``list_files_in_scope``.
-    Returns the four canonical state files (``/code.py``,
-    ``/main.py``, ``/active.py``, ``/runtime_config.msgpack``) when
-    they exist, plus every file under ``/lib/`` recursively.
-    Out-of-scope files (user-uploaded images, hand-edited
-    ``settings.toml``, the dotfile sentinels CIRCUITPY drops itself)
-    are omitted so the diff routine never deletes them.
+
+    ``clean_slate=True`` (the deploy default) puts *every* drive file
+    in scope except the closed keep set
+    (:data:`flash_drive.DEVICE_KEEP_SET`) and macOS-managed noise — so
+    the diff reconciles the whole drive and a stale board
+    ``settings.toml`` / leftover user file is removed.  All macOS
+    noise (``.Spotlight-V100``, ``.fseventsd``, ``._`` AppleDouble,
+    ``.metadata_never_index``, …) is dot-prefixed and the chumicro
+    payload never is, so "no path part starts with a dot" excludes
+    the whole noise class without enumerating it.
+
+    ``clean_slate=False`` is the legacy additive scope (the
+    ``--no-wipe`` opt-out): only the four canonical state files plus
+    ``/lib/**``, so a board ``settings.toml`` and other root files
+    are preserved.
     """
-    found: list[str] = []
+    if clean_slate:
+        keep = set(flash_drive.DEVICE_KEEP_SET)
+        found: list[str] = []
+        for path in sorted(drive.rglob("*")):
+            relative = path.relative_to(drive)
+            if any(part.startswith(".") for part in relative.parts):
+                continue  # macOS noise / sentinels are all dot-prefixed
+            if path.is_file() and path.name not in keep:
+                found.append(f"/{relative.as_posix()}")
+        return found
+
+    found = []
     for filename in ("code.py", "main.py", "active.py", "runtime_config.msgpack"):
         if (drive / filename).is_file():
             found.append(f"/{filename}")
@@ -247,6 +269,6 @@ def _list_scope_on_drive(drive: Path) -> list[str]:
     if lib_root.is_dir():
         for path in sorted(lib_root.rglob("*")):
             if path.is_file():
-                relative = path.relative_to(drive).as_posix()
-                found.append(f"/{relative}")
+                relative_path = path.relative_to(drive).as_posix()
+                found.append(f"/{relative_path}")
     return found

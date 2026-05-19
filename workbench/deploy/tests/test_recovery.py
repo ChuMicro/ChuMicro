@@ -439,6 +439,7 @@ class _FakeDeployer:
         self,
         source,
         *,
+        clean: bool = True,
         wipe: bool = False,
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
@@ -446,6 +447,7 @@ class _FakeDeployer:
         on_execute_line: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
     ) -> DeployResult:
+        self.last_clean = clean
         self.last_wipe = wipe
         return self._consume()
 
@@ -1582,8 +1584,8 @@ class TestNonInteractiveDeployer:
             )
 
     def test_diff_signature_mirrors_deployer(self) -> None:
-        """``deploy_diff`` accepts wipe + on_file_deleted just like the
-        underlying :class:`Deployer`.
+        """``deploy_diff`` accepts clean + wipe + on_file_deleted just
+        like the underlying :class:`Deployer`, and forwards them.
         """
         from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
 
@@ -1596,11 +1598,23 @@ class TestNonInteractiveDeployer:
         )
         result = runner.deploy_diff(
             _DUMMY_SOURCE,  # type: ignore[arg-type]
+            clean=False,
             wipe=True,
             on_file_deleted=lambda _path: None,
         )
         assert result is ok
         assert fake.last_wipe is True
+        assert fake.last_clean is False  # forwarded through the wrapper
+
+    def test_diff_clean_defaults_true(self) -> None:
+        """clean-slate is the default — the wrapper forwards clean=True."""
+        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+
+        fake = _FakeDeployer([DeployResult(success=True)])
+        sink, _lines = _capturing_output()
+        runner = NonInteractiveDeployer(fake, output=sink)  # type: ignore[arg-type]
+        runner.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
+        assert fake.last_clean is True
 
     def test_includes_port_holder_diagnosis(
         self, monkeypatch: pytest.MonkeyPatch,

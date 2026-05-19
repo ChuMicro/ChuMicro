@@ -549,6 +549,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 device, non_interactive=args.non_interactive,
             ).deploy_diff(
                 source,
+                clean=args.clean,
                 wipe=args.wipe,
                 on_file_deleted=deleted.append,
             )
@@ -760,16 +761,32 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     deploy_parser.add_argument(
+        "--no-wipe",
+        dest="clean",
+        action="store_false",
+        default=True,
+        help=(
+            "Legacy additive deploy: reconcile only the entrypoint / "
+            "state files + /lib, leaving every other board file "
+            "(settings.toml, uploaded assets, hand-installed circup "
+            "libs) in place.  The default is clean-slate — the deploy "
+            "removes anything that isn't the new payload or a "
+            "device-required keep-set file (boot.py, boot_out.txt, "
+            "_chu_kv.msgpack); a board-resident settings.toml is "
+            "evicted (it competes with config-driven wifi).  Use "
+            "--no-wipe only when you deliberately hand-manage board "
+            "files."
+        ),
+    )
+    deploy_parser.add_argument(
         "--wipe",
         action="store_true",
         help=(
-            "Erase the entire device filesystem before deploying.  "
-            "Destructive — wipes user-managed files (settings.toml, "
-            "uploaded assets, hand-edited boot.py) along with managed "
-            "deploy scope.  Use for clean-slate / corruption-recovery "
-            "flows; an ordinary deploy already cleans stale /lib/* "
-            "files via the diff-deploy primitive.  No-op in RAM mode "
-            "(nothing in flash to wipe)."
+            "Erase the *entire* device filesystem before deploying — "
+            "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
+            "included.  Stricter than the clean-slate default (which "
+            "preserves the keep set); for corruption recovery.  No-op "
+            "in RAM mode (nothing in flash to wipe)."
         ),
     )
     _add_non_interactive_arg(deploy_parser)

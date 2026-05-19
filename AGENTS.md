@@ -83,6 +83,7 @@ Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.
 - Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`). Embedded payload bytes are fine — that's payload, not import. Enforced by `CHU007`.
 - Workbench tools that touch hardware classify failures. Every host-side tool exposes a closed-set failure-kind enum + classifier + recovery plans in `<package>.recovery`; CLIs wrap entry points in coaching loops. Generic `raise Exception` is a UX defect.
 - Workbench CLIs and `scripts/run.py` tasks callable by humans and agents support a non-interactive mode: TTY auto-detected via `sys.stdin.isatty()`, `--non-interactive` override, no prompts/tails when non-interactive, distinct exit codes per failure mode. Inherently-interactive subcommands document the TTY requirement and exit cleanly without one.
+- One device-staging path: code reaches a board only through the deploy stage + diff/`rsync --delete` primitive. Clean-slate is the default (`--no-wipe` opts out to additive, `--wipe` is full erase); a closed keep set `{boot.py, boot_out.txt, _chu_kv.msgpack}` survives, `settings.toml` never does. No command or context grows its own staging path, delete semantics, or keep/exclude policy — per-context variance is only the payload and the post-stage step. [Decision 0077](plans/decisions/0077-one-device-staging-path.md).
 
 **Code comments**
 
