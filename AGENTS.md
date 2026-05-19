@@ -1,11 +1,6 @@
 # ChuMicro Development Ecosystem
 
 > Operating manual for AI coding agents. Human contributors should use [CONTRIBUTING.md](CONTRIBUTING.md).
->
-> Each rule carries its *why* inline — the incident or constraint that forced
-> it — because a rule you understand is one you won't argue with or route
-> around. The linked ADR holds the full decision and its edge cases; `git
-> log` holds the rest.
 
 ## Session start
 
@@ -24,7 +19,7 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 
 **A feature that exists only in code is incomplete.** Docs, ADRs, planning files, scaffold templates, and CI are part of the deliverable. Every unit of work touches them in lockstep:
 
-- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed — a prose-only contract is exactly the drift class that ships wrong (a 16-agent sweep found a false TLS docstring and 5 phantom CLI commands while mechanized lints held at zero). See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
+- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed — a prose-only contract is exactly the drift class that ships wrong. See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
 - **Unit of work landed?** Move the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) to the top of `## Done (recent)` in the *same* edit. `## Done (recent)` is a ledger, not a synopsis — cap 5, drop the oldest. Top-level bullets cap at 5 sub-bullets; bigger items promote to [`plans/workstreams/<name>.md`](plans/workstreams/) and surface here as a one-line pointer.
 - **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands.
 - **Adding or changing an ADR?** Read [`plans/decisions/README.md`](plans/decisions/README.md) **first** — it carries the load-bearing authoring rules and they apply to editing an existing decision as much as to a new one. New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill.
@@ -43,8 +38,6 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 ## Non-negotiable rules
 
-Ground rules. Each states its *why* inline; the linked ADR carries the depth and edge cases.
-
 **Workflow**
 
 - Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop.
@@ -61,7 +54,7 @@ Ground rules. Each states its *why* inline; the linked ADR carries the depth and
 
 - Use `python scripts/run.py test` for commit-gating runs — per-package subprocess, parallelized, what CI runs. Per-library coverage gating fires **only when `--coverage-threshold N` is passed**. Bare `pytest` from the repo root works for ad-hoc / IDE runs but gates no coverage. See [Decision 0009](plans/decisions/0009-per-library-test-runs.md).
 - Maintain coverage gates — every `test` and `preflight` invocation must pass `--coverage-threshold 94`. With no flag, coverage is a single post-`combine` repo-wide 85 % aggregate — there is no per-library `pyproject.toml` coverage config. The 85 % baseline is for human contributors; agent-generated code uses the 94 % gate per [Decision 0025](plans/decisions/0025-dual-coverage-thresholds.md). 94 % is **CPython-reachable, post-`# pragma: no cover`, with no device-execution signal** — not 94 % of shipped code; cite it only with that scope. Use `# pragma: no cover` only where code genuinely can't run in CPython (device adapters blanket-pragma — their imports don't exist there).
-- Test skips must be loud — a bare `if <cond>: return` in a test body is reported as PASS by the runner (this faked 13 green wifi tests on a fresh clone, network never running). Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`. Enforced by `CHU009` + `CHU010`.
+- Test skips must be loud — a bare `if <cond>: return` in a test body is reported as PASS by the runner. Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`. Enforced by `CHU009` + `CHU010`.
 - Cross-runtime test files must not `import pytest` — it auto-scopes the file to CPython only. Use plain `assert` and constructor-injected fakes from each library's `testing.py`.
 - Every cross-runtime test file must run green on a freshly-reset Pi Pico W (264 KB) under **both** CircuitPython and MicroPython — a PSRAM-only pass does not validate the 256 KB HAL these libraries exist for. A file that OOMs there even with `--per-file` is a tracked defect, fixed by splitting it source-module-shaped, then mechanically (lossless), until each sub-file fits. No fixed tests-per-file cap — it's bench-determined per library and differs CP vs MP.
 - Tests in any package may depend only on: the package's own `src/` + `testing.py`, stdlib, pytest + plugins, and `support/test_harness/`. Don't `import chumicro_<other-package>` for inputs or read sibling-repo filesystems — build a minimal in-repo fixture under `<package>/(functional_)tests/fixtures/`.
@@ -77,6 +70,7 @@ Ground rules. Each states its *why* inline; the linked ADR carries the depth and
 - No `__slots__` in `libraries/*/src/` — MP/CP have no `__slots__` implementation, so the only payoff is CPython-test attribute locking, paid for in flash on every board. No pure-passthrough `@property` either — name the attribute publicly instead. Computed properties (doing actual work) stay legitimate. Workbench packages are out of scope.
 - Use descriptive names — no single-letter variables (except `_`); expand abbreviations to full words: `env`→`environment`, `buf`→`buffer`, `src`→`source`, `cmd`→`command`, `msg`→`message`, `err`→`error`, `ref`→`reference`, `addr`→`address`, `exc`→`exception`, `exec`→`execute`. The `for i in range(10)` exemption is humans-only. Enforced by `CHU001`; suppress only when matching an upstream API.
 - Minimize dependencies — prefer pure-Python implementations compatible with all three runtimes.
+- These code-shape rules (`const()` / `memoryview` / pre-alloc, no `typing` / `__future__` / `__slots__`, absolute imports) exist *because* the code runs on MicroPython / CircuitPython, and they stop at that boundary: `scripts/` and `support/` (except `support/test_harness/`) are CPython-only — use the full stdlib and standard modern Python there. Applying the embedded patterns to infra code is cost with no payoff.
 
 **Code shape (workbench — runs on a laptop)**
 
