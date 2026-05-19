@@ -41,34 +41,15 @@ if TYPE_CHECKING:  # pragma: no cover - type-only
     from .circuitpython_transport import TimeSource
 
 
-#: Idle timeout (seconds) for ``exec_raw`` on the test-bootstrap path —
-#: ``execute()`` and ``deploy_files()``.  Mirrors
-#: :data:`chumicro_deploy.circuitpython_transport._EXECUTE_IDLE_TIMEOUT`
-#: but bigger because MicroPython boards we test on have larger heaps
-#: than the CP boards (e.g. Lolin S2 MP exposes the full 2 MB SPIRAM,
-#: vs ~150 KB on CP boards), and the on-device fragmentation tests'
-#: histogram bisection scales its silent allocation loop to whatever
-#: heap is available.
-#:
-#: mpremote's ``SerialTransport.exec_raw(command, timeout=N)`` passes
-#: ``N`` straight through to ``follow()`` → ``read_until(timeout=N)``,
-#: where ``timeout`` is documented as "between characters" — i.e. an
-#: idle-between-bytes timeout, **not** wall-clock.  Bytes received by
-#: the host reset the clock; only ``N`` seconds of *consecutive
-#: silence* end the wait.  See ``transport_serial.read_until`` in the
-#: vendored mpremote source for the implementation.
-#:
-#: Failure mode this avoids: the on-device fragmentation tests'
-#: ``_count_blocks_of_size`` runs ``while True: holders.append(
-#: bytearray(size))`` in a tight Python loop until ``MemoryError``,
-#: with no intermediate output.  On a 2 MB heap at the 256-byte tier
-#: that's ~7,500 silent allocations; the surrounding ``gc.collect()``
-#: calls on a fragmented heap can each take seconds on Xtensa-class
-#: MCUs.  The previous ``timeout=120`` was hit mid-bisection on Lolin
-#: S2 MP, surfacing as ``TransportError: timeout waiting for first
-#: EOF reception`` from mpremote's ``follow()``.  Other exec paths
-#: (probe, scope listing, delete, wipe, bootloader) are short
-#: interactive ops and keep their original short timeouts.
+#: Idle timeout (seconds) for ``exec_raw`` on the bootstrap path
+#: (``execute()`` / ``deploy_files()``).  This is mpremote's inter-byte
+#: ``read_until`` timeout, **not** a wall-clock budget: every received
+#: byte resets the clock, so it bounds only a run of *consecutive
+#: silence*.  Sized large because on-device tests can run long
+#: allocation loops that emit no output for minutes (the fragmentation
+#: suite allocates until ``MemoryError``, with ``gc.collect()`` pauses
+#: between).  Short interactive ops (probe, scope listing, delete,
+#: wipe, bootloader) keep their own short timeouts.
 _EXECUTE_IDLE_TIMEOUT: float = 300.0
 
 
@@ -196,11 +177,10 @@ _LIST_ALL_SCRIPT: str = (
 #:
 #: Substrate-dispatched: each MicroPython port exposes its flash /
 #: data partition through a different module.  The dispatch covers
-#: the two substrates chumicro supports today (rp2, esp32); other
-#: ports raise ``RuntimeError`` so the failure has a name instead
-#: of surfacing as "mkfs got no block device."  Firmware lives on a
-#: separate partition (``factory`` on esp32, the bootloader region
-#: on rp2), untouched by the LFS-only reformat.
+#: rp2 and esp32; other ports raise ``RuntimeError`` so the failure
+#: has a name instead of surfacing as "mkfs got no block device."
+#: Firmware lives on a separate partition (``factory`` on esp32, the
+#: bootloader region on rp2), untouched by the LFS-only reformat.
 _WIPE_FILESYSTEM_SCRIPT: str = (
     "import os, sys, machine\n"
     "if sys.platform == 'rp2':\n"
@@ -225,12 +205,11 @@ _WIPE_FILESYSTEM_SCRIPT: str = (
 
 #: Wall-clock pause between issuing ``machine.soft_reset()`` (inside
 #: :data:`_WIPE_FILESYSTEM_SCRIPT`) and re-opening the persistent
-#: serial transport.  rp2 and esp32 both keep their host-side USB-CDC
-#: alive across a soft reset, so this is just settle time for the
-#: runtime to remount ``/`` on the freshly-formatted volume — not a
-#: full USB-CDC re-enumeration like CircuitPython's
-#: ``storage.erase_filesystem`` triggers.  Two seconds is comfortable
-#: on hardware in practice (1 s also worked but had no margin).
+#: serial transport.  rp2 and esp32 keep their host-side USB-CDC alive
+#: across a soft reset, so this is settle time for the runtime to
+#: remount ``/`` on the freshly-formatted volume — not a full USB-CDC
+#: re-enumeration like CircuitPython's ``storage.erase_filesystem``
+#: triggers.
 _WIPE_REBOOT_SETTLE_SECONDS: float = 2.0
 
 
@@ -238,10 +217,9 @@ _WIPE_REBOOT_SETTLE_SECONDS: float = 2.0
 #: (e.g. one that hit ``ENOSPC`` mid-stage) has dropped and is
 #: re-enumerating its USB-CDC.  ``mpremote connect <port> reset`` then
 #: fails ``it may be in use by another program`` / ``device not
-#: configured`` for the re-enumeration window; without a settle that
-#: first transient failed the per-library reset and cascaded across
-#: the whole sweep.  The settle reuses the wipe-reboot value (2 s is
-#: comfortable on rp2 / esp32 in practice).
+#: configured`` for the re-enumeration window; the settle rides that
+#: window out before returning so the next per-library reset doesn't
+#: race it.  Reuses the wipe-reboot settle value.
 _RESET_RETRY_ATTEMPTS: int = 4
 _RESET_RETRY_SETTLE_SECONDS: float = _WIPE_REBOOT_SETTLE_SECONDS
 
@@ -385,8 +363,8 @@ class MicropythonTransport:
         self._serial: Any = None
         self._mounted: bool = False
         #: Top-level device-root names written by the last copy-mode
-        #: :meth:`stage`.  ``mpremote fs cp`` is additive (no ``--delete``
-        #: analog, unlike the CircuitPython flash rsync), so a
+        #: :meth:`stage`.  ``mpremote fs cp`` is additive — it has no
+        #: ``--delete`` analog (the CircuitPython flash rsync does), so a
         #: multi-library sweep must delete the prior library's tree
         #: before the next ``fs cp`` or the device LittleFS fills and
         #: staging hits ``ENOSPC``.  Persists for the transport's life
@@ -399,14 +377,14 @@ class MicropythonTransport:
         #: ``micropython_rp2``) fold into ``"micropython"``.
         self._target_runtime: str = "micropython"
         #: Set per :meth:`stage` call.  Only the on-device unit sweep
-        #: passes ``True`` so test-support fakes reach the board
-        #: product/app/functional deploys leave it ``False``.
+        #: passes ``True``, so test-support fakes reach the board;
+        #: product / app / functional deploys leave it ``False``.
         self._include_test_support: bool = False
         #: The first copy-mode :meth:`stage` mkfs-wipes the board so the
-        #: sweep never inherits residue from a prior run/session/killed
-        #: deploy (``fs cp`` is additive — that residue would accumulate
-        #: to ``ENOSPC``).  In-process incremental cleanup handles every
-        #: stage after this one.
+        #: sweep never inherits residue from a prior killed run (the
+        #: additive-``fs cp`` accumulation described on
+        #: :attr:`_staged_device_entries`).  In-process incremental
+        #: cleanup handles every stage after this one.
         self._did_initial_wipe: bool = False
 
     def connect(self) -> None:
@@ -660,9 +638,7 @@ class MicropythonTransport:
         # again — mpremote handles the whole open/reset/close cycle.
         # The retry+settle rides out a USB-CDC re-enumeration on a
         # wedged board and settles before returning, so the next
-        # per-library stage()/soft_reset() doesn't race the reboot —
-        # the window that turned one library's hard failure into a
-        # sweep-wide cascade.
+        # per-library stage()/soft_reset() doesn't race the reboot.
         try:
             self._subprocess_reset_with_retry()
         except MicropythonTransportError:  # pragma: no cover - hardware-only
@@ -678,8 +654,8 @@ class MicropythonTransport:
         retry across that window, and settle once more after the reset
         reboots the board so the *next* port grab (the following
         per-library ``stage()`` / ``soft_reset()``) doesn't land
-        mid-re-enumeration.  Raises only if every attempt fails — a
-        loud error beats the silent sweep-wide cascade.
+        mid-re-enumeration.  Raises only if every attempt fails —
+        failing loud beats silently wedging the rest of the sweep.
         """
         last_error: Exception | None = None
         for _attempt in range(_RESET_RETRY_ATTEMPTS):
@@ -1178,12 +1154,11 @@ class MicropythonTransport:
         """
         assert self._serial is not None
         port = self._serial.serial
-        # Two-stage transition.  Sending Ctrl-B + Ctrl-D back-to-back
-        # was bench-tested as racing on Pi Pico W MP — the firmware
-        # didn't always see Ctrl-D as "soft-reboot from friendly REPL"
-        # because it was still finishing the raw-REPL exit.  Wait for
-        # the friendly-REPL prompt before issuing Ctrl-D so the
-        # transition is observable.
+        # Two-stage transition.  Ctrl-B + Ctrl-D back-to-back races the
+        # firmware: it can still be finishing the raw-REPL exit and miss
+        # Ctrl-D as "soft-reboot from friendly REPL".  Wait for the
+        # friendly-REPL prompt before issuing Ctrl-D so the transition
+        # is observable.
         port.write(b"\r\x02")  # Ctrl-B: exit raw REPL into friendly REPL.
         self._serial.read_until(
             1, b">>> ", timeout=2.0, timeout_overall=2.0,
