@@ -56,10 +56,15 @@ clause is optional.
   argument-stopping?" is not deterministically detectable — it sits with
   the "state the principle, not the mechanism" class of
   review-only rules.
-- On acceptance, cross-link this decision from the `AGENTS.md` header
-  (the principle is currently embodied there in prose without a pointer).
-  Held at `proposed` pending confirmation that the inline-why budget is
-  the right long-term shape rather than a reaction to one bad trim.
+- `AGENTS.md` states this principle nowhere — not in the header, not as
+  a section preamble. Both were tried and cut: announcing "each rule
+  carries its why inline" is itself the doc-about-doc meta-tic this repo
+  removes. The rules demonstrate the principle by carrying their *why*;
+  this ADR is the only place it is stated. A future contributor who
+  wants to argue the inline-why budget is told so by `git log` and this
+  record, not by a preamble.
+- Held at `proposed` pending confirmation that the inline-why budget is
+  the right long-term shape, not a reaction to one bad trim.
 - Size is not the success metric. The reversal landed at 27.6 KB, larger
   than the 24 KB over-trim and smaller than the 33 KB accretion;
   "direction present" is the bar, not a byte target.
