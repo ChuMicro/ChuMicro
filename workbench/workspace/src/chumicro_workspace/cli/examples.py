@@ -14,7 +14,6 @@ import argparse
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from chumicro_deploy import Device, FileMapSource
 from chumicro_deploy.recovery import DeployFailureKind, classify_deploy_failure
@@ -29,8 +28,11 @@ from chumicro_workspace.cli._common import (
     _resolve_workspace,
 )
 from chumicro_workspace.cli.bootstrap import _cmd_bootstrap
-from chumicro_workspace.cli.deploy import _make_deploy_runner
-from chumicro_workspace.example_source import example_source
+from chumicro_workspace.cli.deploy import (
+    ExampleSpec,
+    _make_deploy_runner,
+    resolve_project_deploy_source,
+)
 from chumicro_workspace.workspace import WorkspaceLayout
 
 # ---------------------------------------------------------------------------
@@ -364,32 +366,6 @@ def _validate_example_runtime_matches_device(
         )
 
 
-def _build_deploy_example_source(
-    paths: _DeployExamplePaths,
-    *,
-    libraries_root: Path,
-    target_runtime: str,
-    secrets_toml: Path,
-) -> Any:
-    """Build the example FileSource with every sibling library on the search path."""
-    library_roots = sorted(
-        path for path in libraries_root.iterdir() if path.is_dir()
-    )
-    try:
-        return example_source(
-            paths.library_root,
-            paths.stem,
-            library_roots=library_roots,
-            runtime=target_runtime,
-            secrets_toml=secrets_toml,
-        )
-    except (FileNotFoundError, ValueError) as build_error:
-        raise _DeployExampleError(
-            DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
-            f"precheck failed: {build_error}",
-        ) from build_error
-
-
 def _cmd_deploy_example(args: argparse.Namespace) -> int:
     """Deploy a library example to a registered device.
 
@@ -438,12 +414,25 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
             marker=marker,
         )
         target_runtime = runtime_required or device_runtime
-        source = _build_deploy_example_source(
-            paths,
-            libraries_root=libraries_root,
-            target_runtime=target_runtime,
-            secrets_toml=workspace.secrets_toml,
-        )
+        # The example stages through the one source owner +
+        # clean-slate primitive every project deploy uses (Decision
+        # 0077); only the inner payload is example-specific.
+        try:
+            _layout, source = resolve_project_deploy_source(
+                workspace=workspace,
+                device=device,
+                example=ExampleSpec(
+                    library_root=paths.library_root,
+                    example_name=paths.stem,
+                    libraries_root=libraries_root,
+                ),
+                target_runtime=target_runtime,
+            )
+        except (FileNotFoundError, ValueError) as build_error:
+            raise _DeployExampleError(
+                DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
+                f"precheck failed: {build_error}",
+            ) from build_error
     except _DeployExampleError as error:
         if str(error):
             print(f"deploy-example: {error}", file=sys.stderr)
@@ -457,15 +446,22 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
     # Wrap in the recovery-coaching deployer.  NonInteractiveDeployer
     # re-raises after printing; InteractiveDeployer prompts to retry.
     runner = _make_deploy_runner(device, non_interactive=non_interactive)
+    deleted: list[str] = []
     try:
-        result = runner.deploy(
-            source, clean=args.clean, tail_seconds=args.tail_seconds,
+        result = runner.deploy_diff(
+            source,
+            clean=args.clean,
+            wipe=args.wipe,
+            on_file_deleted=deleted.append,
+            tail_seconds=args.tail_seconds,
         )
     except Exception as deploy_error:  # noqa: BLE001 — classify + route
         kind = classify_deploy_failure(deploy_error)
         if kind is DeployFailureKind.NO_PYTHON_RUNTIME:
             return DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME
         return DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
+    for stale_path in deleted:
+        print(f"deploy-example: removed stale {stale_path}")
 
     if result.execute_output:
         print(result.execute_output, end="")
@@ -582,16 +578,30 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Exit cleanly after deploy instead of tailing the REPL.",
     )
     deploy_example_parser.add_argument(
-        "--no-clean",
+        "--no-wipe",
         dest="clean",
         action="store_false",
         default=True,
         help=(
-            "Preserve files already on the device that aren't part of "
-            "this example's payload.  Default is to wipe stale `lib/` "
-            "packages and other deploy-managed files so each example "
-            "lands fresh; pass --no-clean if you've hand-installed "
-            "extra modules on the board you want to keep."
+            "Legacy additive deploy: leave board files that aren't "
+            "this example's payload in place.  The default is "
+            "clean-slate — the deploy removes anything that isn't the "
+            "new payload or a device-required keep-set file (boot.py, "
+            "boot_out.txt, _chu_kv.msgpack); a board-resident "
+            "settings.toml is evicted (it competes with config-driven "
+            "wifi).  Use --no-wipe only when you deliberately "
+            "hand-manage board files.  Same semantics as "
+            "`chumicro-workspace deploy --no-wipe`."
+        ),
+    )
+    deploy_example_parser.add_argument(
+        "--wipe",
+        action="store_true",
+        help=(
+            "Erase the *entire* device filesystem before deploying — "
+            "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
+            "included.  Stricter than the clean-slate default; for "
+            "corruption recovery.  No-op in RAM mode."
         ),
     )
     deploy_example_parser.add_argument(
