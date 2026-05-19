@@ -42,6 +42,21 @@ CURATED_TREES = ("src", "tests", "examples", "docs")
 #: Top-level files copied alongside the trees.
 CURATED_FILES = ("pyproject.toml", "VERSION", "README.md")
 
+#: Local build/test cruft a contributor's working tree accumulates —
+#: ``shutil.copytree`` would otherwise haul it into the published
+#: channel.  CI runs on a fresh checkout where most of these are
+#: absent; the filter exists for hand-invoked runs and for the
+#: ``.DS_Store``-style entries that survive any checkout.
+_COPY_IGNORE = shutil.ignore_patterns(
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "*.egg-info",
+    ".DS_Store",
+)
+
 
 def channel_repo(*, experimental: bool) -> str:
     """Channel repo name for the requested release line."""
@@ -92,13 +107,25 @@ def stage_libraries_channel(
 ) -> dict:
     """Stage every library tree + the catalog into *staging_dir*.
 
-    *staging_dir* is wiped and rebuilt so a stale library never rides
-    a release.  Returns the written ``index.json`` document (also a
-    convenient summary for the caller to log).
+    Top-level entries in *staging_dir* are wiped (except ``.git/``, so
+    a pre-cloned channel checkout passes straight through to the
+    ``bundle_push`` step) and rebuilt so a stale library never rides
+    a release.  If ``LICENSE`` is present at *root_dir*, it's copied
+    in alongside the library trees — mirrors ``release.yml``'s
+    explicit LICENSE copy onto the bundle repo.  Returns the written
+    ``index.json`` document (also a convenient summary for the caller
+    to log).
     """
     if staging_dir.exists():
-        shutil.rmtree(staging_dir)
-    staging_dir.mkdir(parents=True)
+        for entry in staging_dir.iterdir():
+            if entry.name == ".git":
+                continue
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink()
+    else:
+        staging_dir.mkdir(parents=True)
 
     libraries: dict[str, dict] = {}
     for name, library_dir in _iter_libraries(root_dir):
@@ -107,7 +134,9 @@ def stage_libraries_channel(
         for tree in CURATED_TREES:
             source = library_dir / tree
             if source.is_dir():
-                shutil.copytree(source, destination / tree)
+                shutil.copytree(
+                    source, destination / tree, ignore=_COPY_IGNORE,
+                )
         for filename in CURATED_FILES:
             source = library_dir / filename
             if source.is_file():
@@ -120,6 +149,10 @@ def stage_libraries_channel(
             "readme_path": f"{name}/README.md",
             "examples": _example_paths(library_dir, name),
         }
+
+    license_source = root_dir / "LICENSE"
+    if license_source.is_file():
+        shutil.copy2(license_source, staging_dir / "LICENSE")
 
     document = {"tag": tag, "libraries": libraries}
     (staging_dir / "index.json").write_text(

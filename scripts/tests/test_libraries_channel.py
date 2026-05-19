@@ -116,6 +116,73 @@ class TestStage:
         assert (staging / "timing").is_dir()
         assert set(document["libraries"]) == {"chumicro_timing"}
 
+    def test_preserves_git_dir_when_present(self, tmp_path: Path):
+        # CI clones the channel repo into the staging dir; the stale-
+        # entry wipe must skip .git/ so push_bundle has a checkout to
+        # commit into.
+        root = tmp_path / "repo"
+        libraries_dir = root / "libraries"
+        libraries_dir.mkdir(parents=True)
+        _make_library(
+            libraries_dir, "mqtt", version="1.0.0", description="d",
+        )
+        staging = tmp_path / "checkout"
+        staging.mkdir()
+        git_dir = staging / ".git"
+        git_dir.mkdir()
+        (git_dir / "config").write_text("[core]\n")
+        (staging / "stale-file.txt").write_text("old\n")
+        (staging / "stale-tree").mkdir()
+        (staging / "stale-tree" / "x").write_text("y\n")
+
+        stage_libraries_channel(root, staging, tag="t")
+
+        assert (git_dir / "config").read_text() == "[core]\n"
+        assert not (staging / "stale-file.txt").exists()
+        assert not (staging / "stale-tree").exists()
+        assert (staging / "mqtt").is_dir()
+        assert (staging / "index.json").is_file()
+
+    def test_skips_build_cruft(self, tmp_path: Path):
+        # A contributor's working tree carries __pycache__ + .pyc from
+        # local pytest runs; the producer must not haul them into the
+        # published channel.
+        root = tmp_path / "repo"
+        libraries_dir = root / "libraries"
+        libraries_dir.mkdir(parents=True)
+        _make_library(
+            libraries_dir, "mqtt", version="1.0.0", description="d",
+        )
+        package_dir = libraries_dir / "mqtt" / "src" / "chumicro_mqtt"
+        cache_dir = package_dir / "__pycache__"
+        cache_dir.mkdir()
+        (cache_dir / "__init__.cpython-314.pyc").write_bytes(b"\x00")
+        (package_dir / "stray.pyc").write_bytes(b"\x00")
+        (libraries_dir / "mqtt" / ".DS_Store").write_bytes(b"\x00")
+
+        staging = tmp_path / "staged"
+        stage_libraries_channel(root, staging, tag="t")
+
+        staged_pkg = staging / "mqtt" / "src" / "chumicro_mqtt"
+        assert not (staged_pkg / "__pycache__").exists()
+        assert not (staged_pkg / "stray.pyc").exists()
+        assert not (staging / "mqtt" / ".DS_Store").exists()
+        # Sanity: the real source file did get through.
+        assert (staged_pkg / "__init__.py").is_file()
+
+    def test_copies_license_when_present(self, tmp_path: Path):
+        root = tmp_path / "repo"
+        (root / "libraries").mkdir(parents=True)
+        _make_library(
+            root / "libraries", "mqtt", version="1.0.0", description="d",
+        )
+        (root / "LICENSE").write_text("BSD 3-Clause\n")
+        staging = tmp_path / "staged"
+
+        stage_libraries_channel(root, staging, tag="t")
+
+        assert (staging / "LICENSE").read_text() == "BSD 3-Clause\n"
+
     def test_no_libraries_dir_is_empty(self, tmp_path: Path):
         document = stage_libraries_channel(
             tmp_path, tmp_path / "staged", tag="t",
