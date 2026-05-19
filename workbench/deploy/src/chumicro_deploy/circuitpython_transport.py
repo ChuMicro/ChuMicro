@@ -1404,13 +1404,8 @@ class CircuitpythonTransport:
                     staging_destination.write_bytes(files[device_path])
                     if on_file_staged is not None:
                         on_file_staged(device_path)
-                # ``clean=True`` tells rsync to delete drive files not
-                # in the staging tree so the deploy lands clean; only
-                # :data:`flash_drive.DEVICE_KEEP_SET` survives (see that
-                # constant for what is kept and why ``settings.toml`` is
-                # evicted, with the one-time notice emitted just above).
-                # ``clean=False`` preserves every drive file outside the
-                # new payload — additive mode.
+                # clean=True: rsync --delete, only DEVICE_KEEP_SET survives.
+                # clean=False: additive — drive files outside this payload persist.
                 self._push_staging_to_drive(
                     staging_path,
                     rsync_delete=clean,
@@ -1964,7 +1959,7 @@ class CircuitpythonTransport:
         ``supervisor.runtime.autoreload = True`` — flipping autoreload
         back on outside an active raw-REPL session can layer an
         autoreload-driven soft-reboot on top of one already in flight,
-        which has historically wedged the ESP32-S2 USB-CDC firmware.
+        which can wedge ESP32-S2 USB-CDC firmware.
 
         When :meth:`reset_into_bootloader` has already been called, it
         closes the port itself and nulls :attr:`_port` — this method
@@ -2073,7 +2068,6 @@ class CircuitpythonTransport:
             CircuitpythonTransportError: If the response is malformed
                 or stderr contains error output.
         """
-        # The response should start with "OK".
         response_text = raw_response.decode("utf-8", errors="replace")
 
         if not response_text.startswith("OK"):
@@ -2081,10 +2075,8 @@ class CircuitpythonTransport:
                 f"Raw REPL did not acknowledge code.  Response: {response_text!r}"
             )
 
-        # Strip the leading "OK".
         after_ok = response_text[2:]
 
-        # Split on \x04 to separate stdout and stderr.
         parts = after_ok.split("\x04")
         if len(parts) < 2:
             raise CircuitpythonTransportError(

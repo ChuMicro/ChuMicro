@@ -331,8 +331,7 @@ def rsync(
         additional_excludes: Extra basenames to add to ``--exclude``.
             Clean callers (production *and* functional-test) pass
             :data:`DEVICE_KEEP_SET` so ``--delete`` doesn't wipe the
-            device-required keep set.  Legacy additive callers leave
-            empty.
+            device-required keep set.  Additive callers leave empty.
         timeout: Override the auto-computed timeout (seconds).  Default
             ``None`` lets :func:`compute_rsync_timeout_seconds` pick
             a value scaled to the staging-tree size — the right

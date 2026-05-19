@@ -1102,10 +1102,8 @@ class MicropythonTransport:
             raise MicropythonTransportError(
                 f"wipe_filesystem failed: {error}",
             ) from error
-        # Let the runtime finish booting on the freshly-formatted volume
-        # before any follow-up call grabs the port.  rp2 and esp32 keep
-        # their host-side USB-CDC alive across machine.soft_reset(), so
-        # this is settle time for the runtime — not USB-CDC re-enumeration.
+        # Settle the runtime on the freshly-formatted volume before any
+        # follow-up port grab; see _WIPE_REBOOT_SETTLE_SECONDS for why.
         self._time.sleep(_WIPE_REBOOT_SETTLE_SECONDS)
 
     # ------------------------------------------------------------------
