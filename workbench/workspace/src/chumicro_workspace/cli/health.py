@@ -91,29 +91,13 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
 
 def _cmd_doctor(args: argparse.Namespace) -> int:
-    """Strict sibling of ``status`` — adds AST + Python-version checks.
+    """Strict sibling of ``status``: also checks the host Python
+    version and AST-walks each project's ``app.py`` for a top-level
+    ``run()``.  Same renderer and exit codes as ``status`` (errors
+    → 1, warnings → 0).
 
-    With ``--fix-fskit-wedge`` dispatches to the macOS FSKit recovery
-    wrapper instead of the static checks.  That path has no workspace
-    dependency — wedge detection + the killall recovery don't touch
-    workspace state.
-
-    On top of ``status``'s four checks, ``doctor`` runs:
-
-    * ``check_python_version`` — is the host Python on a supported
-      version (3.11+).
-    * ``check_project_run_functions`` — AST-walks each project's
-      ``app.py`` and verifies a top-level ``run()`` definition
-      exists (the workspace_runtime boot contract).
-
-    Same renderer + exit-code rules as ``status``: errors flip exit
-    to 1, warnings stay at 0.  Per-project failures list the failing
-    project names in the hint so the user can navigate straight to
-    the broken file.
-
-    Per-device reachability probes (``check the board responds on
-    its address``) are deferred until we have a hardware-cheap probe
-    primitive that can run without blocking the static checks.
+    ``--fix-fskit-wedge`` short-circuits to the macOS FSKit recovery
+    wrapper before any workspace is resolved.
     """
     if getattr(args, "fix_fskit_wedge", False):
         return _fix_fskit_wedge(args._env.subprocess_runner)

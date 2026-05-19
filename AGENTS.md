@@ -92,7 +92,7 @@ Ground rules. The *why* and edge cases live in [`AGENTS.notes.md`](AGENTS.notes.
 
 **Cross-repo isolation**
 
-- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI / `circup` / `mip` without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN` / `ADR NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006`; suppress only when the reference is genuinely the only useful pointer.
+- No mono-repo references in publishable trees. `libraries/*/`, `workbench/*/`, and `support/test_harness/` ship to PyPI / `circup` / `mip` without the mono-repo. These trees must not name `plans/...md` paths, `Decision NNNN` / `ADR NNNN`, `scripts/run.py`, bare `run.py` (only `chumicro_workspace` legitimately knows about it), or "chumicro mono-repo" framing. Inline a one-line summary instead. Enforced by `CHU006`; suppress only when the reference is genuinely the only useful pointer. `.scratch/` is the *agent* scratch convention (see line 53) — publishable code must never read or write it, as a doc/comment pointer *or* a constructed runtime path; a generated artifact uses the gitignored `_generated/` build-artifact convention instead. The `CHU006` `.scratch/` extension is tracked in [`plans/next-up.md`](plans/next-up.md) (routes through `new-decision` per Decision 0074).
 
 **Plans-doc brevity**
 
@@ -130,6 +130,7 @@ Cut AI-tic phrases. The fix is usually structural — when you write *"the X pro
 Specific bans:
 
 - **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern. Keep real technical terms (`canonical encoding`, `canonical form`, `canonical path`).
+- **"the one/single/sole X that …"** as a definition opener → same tic as "the canonical X"; define the thing plainly (*"`run.py` enforces coverage"*, not *"`run.py` is the single mechanism that enforces coverage"*). Applies to comments and docstrings in `src/`, not just prose docs. Tone guidance, not a lint — legitimate invariant prose (*"the single owner of the staging path"*, Decision 0077's *"exactly one mechanism"*) is correct and stays; this is judgement, not a mechanizable matcher (see the CHU020 entry in [`plans/next-up.md`](plans/next-up.md)).
 - **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright. If a thing is comprehensive, list what it covers.
 - **"It is worth noting that" / "It should be noted that" / "Note that"** (sentence opener) → just say the thing.
 - **"Let's dive into" / "Let's explore" / "In this section, we will"** → start with the content.

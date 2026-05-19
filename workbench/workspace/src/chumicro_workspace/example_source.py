@@ -28,9 +28,9 @@ What this module adds:
 * Picks the on-device entrypoint name from the *runtime* arg
   (``code.py`` for CircuitPython, ``main.py`` for MicroPython).
 * Sensible default ``output_path`` for the generated msgpack —
-  ``<secrets_toml>.parent/.scratch/example_runtime_config_<lib>_<name>.msgpack``
-  so the artifact lands in the gitignored ``.scratch/`` tree, never
-  inside the tracked ``libraries/<lib>/examples/`` folder.
+  ``libraries/<lib>/examples/_generated/example_runtime_config_<lib>_<name>.msgpack``
+  using the same gitignored ``_generated/`` build-artifact convention
+  as project deploys, so it isn't committed beside the example source.
 
 Scoped to working trees that own a ``libraries/<lib>/`` directory
 layout (the upstream chumicro source tree).  Workspace template
@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from chumicro_workspace.config_manifest import find_library_roots
-from chumicro_workspace.deploy_source import WithRuntimeConfig
+from chumicro_workspace.deploy_source import GENERATED_DIRNAME, WithRuntimeConfig
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     pass
@@ -74,19 +74,19 @@ def _resolve_example_path(library_root: Path, example_name: str) -> Path:
     return library_root / "examples" / f"{stem}.py"
 
 
-def _default_output_path(
-    secrets_toml: Path, library_root: Path, example_name: str,
-) -> Path:
-    """Default scratch path for the generated msgpack.
+def _default_output_path(library_root: Path, example_name: str) -> Path:
+    """Default output path for the generated msgpack.
 
-    Lives under ``<secrets_toml>.parent/.scratch/`` so the artifact
-    lands in the gitignored scratch tree, never inside the tracked
-    ``libraries/<lib>/examples/`` folder.
+    Lives under ``libraries/<lib>/examples/_generated/`` — the same
+    ``_generated/`` build-artifact convention :class:`WithRuntimeConfig`
+    uses for project deploys, gitignored so it isn't committed beside
+    the tracked example source.
     """
     stem = example_name[:-3] if example_name.endswith(".py") else example_name
     return (
-        secrets_toml.parent
-        / ".scratch"
+        library_root
+        / "examples"
+        / GENERATED_DIRNAME
         / f"example_runtime_config_{library_root.name}_{stem}.msgpack"
     )
 
@@ -155,8 +155,8 @@ def example_source(
             ``<library_root>/examples/config.toml`` automatically.
         output_path: Where to write the generated
             ``runtime_config.msgpack`` on the host.  Defaults to
-            ``<secrets_toml>.parent/.scratch/example_runtime_config_<lib>_<name>.msgpack``
-            so the artifact lands in the gitignored scratch tree.
+            ``libraries/<lib>/examples/_generated/example_runtime_config_<lib>_<name>.msgpack``
+            (the gitignored ``_generated/`` build-artifact convention).
         extra_modules: Force-included dotted module names — passed
             through to ``ImportGraphSource`` for dynamic-import
             cases the AST walker can't see.
@@ -218,9 +218,7 @@ def example_source(
     if project_config is None:
         project_config = library_root / "examples" / "config.toml"
     if output_path is None:
-        output_path = _default_output_path(
-            secrets_toml, library_root, example_name,
-        )
+        output_path = _default_output_path(library_root, example_name)
 
     library_roots_for_validation = find_library_roots(search_paths)
 

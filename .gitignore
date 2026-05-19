@@ -30,6 +30,11 @@ workbench/*/docs/assets/
 .mypy_cache/
 .scratch/
 
+# Generated runtime-config msgpack from `chumicro-workspace deploy-example`
+# — the `_generated/` build-artifact convention, never committed beside
+# the tracked example source.
+libraries/*/examples/_generated/
+
 # Agent-tooling scratch dir (worktrees, per-user settings).  Track only:
 # * the `skills` symlink so Claude Code auto-discovers the canonical skills
 #   tree at `.github/skills/` from the location it expects (`.claude/skills/`).

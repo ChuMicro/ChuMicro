@@ -42,7 +42,7 @@ from pathlib import Path
 #: Directories under :mod:`chumicro_workspace`'s package tree where
 #: scaffolding templates live.  Resolved at import time so filesystem
 #: reads stay simple — the wheel ships both paths.  The workbench
-#: tree only carries the four ``docs/`` templates today (workbench
+#: tree carries only the four ``docs/`` templates (workbench
 #: packages need a different doc shape: no Runner pattern, no Memory
 #: notes, no Bundle footer links).  Every other scaffolded file is
 #: shared, so it lives under :data:`_LIBRARY_TEMPLATE_DIR` and
@@ -228,10 +228,9 @@ def scaffold_library(
         _load_template("helpers.py.template"),
     )
 
-    # src/<package>/__init__.py — absolute imports per
-    # AGENTS.md non-negotiables (CircuitPython RAM-mode `exec()`s
-    # library modules without a `__package__` so leading-dot
-    # relatives break at deploy).  Eager imports are correct for
+    # src/<package>/__init__.py — absolute imports only: CircuitPython
+    # RAM-mode `exec()`s library modules without a `__package__`, so
+    # leading-dot relatives break at deploy.  Eager imports are correct for
     # small-surface libraries; if the library grows per-runtime
     # adapters, push the lazy selection into a `_select_<project>`
     # function rather than a module-level PEP 562 `__getattr__`

@@ -382,9 +382,9 @@ def recovery_plan_for(kind: DeployFailureKind) -> RecoveryPlan:
 
 
 #: Default number of deploy attempts before :class:`InteractiveDeployer`
-#: gives up and re-raises.  Three matches the typical "user had
-#: another program open, closes it, retries once, maybe needs a RESET"
-#: pattern observed across CP + MP boards.
+#: gives up and re-raises.  Three matches the common recovery
+#: pattern: user had another program open, closes it, retries once,
+#: maybe needs a RESET.
 _DEFAULT_MAX_ATTEMPTS = 3
 
 

@@ -65,8 +65,8 @@ _VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
 #: Derived from the zone-classified spec
 #: (:data:`chumicro_deploy.config.devices_yaml.ALL_TOP_LEVEL_ENTRY_FIELDS`)
 #: plus the small set of deploy-only fields the writer doesn't need
-#: to manage zone-wise (``connection_type`` is always ``"serial"``
-#: today; carried for forward-compatibility with future transports).
+#: to manage zone-wise (``connection_type`` is always ``"serial"``;
+#: carried for forward-compatibility with future transports).
 #: Anything outside this set falls into :attr:`DeviceEntry.extra`.
 _DEPLOY_ONLY_FIELDS: frozenset[str] = frozenset(
     {"connection_type", "supports_ram_mode"},
@@ -103,7 +103,7 @@ class DeviceEntry:
     deploy_mode: str = DEFAULT_DEPLOY_MODE
     #: Board *capability*, orthogonal to the ``deploy_mode``
     #: *preference*: ``False`` only for a board that cannot run RAM
-    #: mode at all (none known today — the field exists so the schema
+    #: mode at all (none known — the field exists so the schema
     #: is stable when one appears).  RAM being merely *tight* (e.g. Pi
     #: Pico W's 256 KB) is a per-library concern, not this.  Absent in
     #: ``devices.yml`` ⇒ ``True`` (back-compatible).
@@ -504,10 +504,8 @@ def load_devices_yml(
 
     1. *device_id* — wins outright.
     2. *runtime* — picks ``defaults.<runtime>`` when *device_id* is
-       ``None``.  Lets a caller that owns one runtime (e.g.
-       ``chumicro-repl`` opening one session) disambiguate a
-       ``defaults:`` block that has both runtimes set without
-       requiring the user to memorize the device id.
+       ``None``, so a single-runtime caller disambiguates a
+       two-runtime ``defaults:`` block without naming the device id.
     3. Single-default fallback — when both *device_id* and *runtime*
        are ``None``, exactly one runtime default in the file picks
        itself; otherwise raises.

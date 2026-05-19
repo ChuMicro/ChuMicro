@@ -98,16 +98,6 @@ def parse_version_tuple(version: str) -> tuple[int, ...] | None:
     any other parse failure — callers treat ``None`` as
     :attr:`FirmwareSupportStatus.UNPARSEABLE`.
 
-    Defensive against the empirically-observed shapes of
-    ``sys.implementation.version`` across runtimes and builds:
-    CircuitPython RC builds ship ``(10, 2, 0, '')`` (4-tuple with
-    empty string), MicroPython ships ``(1, 28, 0)`` (3-tuple),
-    CPython ships ``(3, 12, 0, 'final', 0)`` (5-tuple).  The probe
-    in :data:`chumicro_deploy.protocol.PROBE_IMPLEMENTATION_SCRIPT`
-    now stops at the first non-int element when stringifying, but
-    cached entries in older ``devices.yml`` files may carry the
-    legacy trailing-dot form.
-
     Args:
         version: Dotted version string from
             ``DeviceImplementation.version``.
