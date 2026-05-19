@@ -88,6 +88,7 @@ Per-word handling:
 * **"X is the one that Y"** — usually wordy.  *"`run.py` is the one that enforces coverage"* → *"`run.py` enforces coverage"*.
 * **Stacked definite articles** — *"the X of the Y of the Z"* often has one too many.
 * **"The same X"** at sentence-start — sometimes *"Same X"* reads cleaner; sometimes not.  Judgment call.
+* **Abstract opener, em-dash, concrete restatement** — a sentence names a category or abstraction, em-dashes, then says the same thing concretely.  The clause after the em-dash is the real content; the opener adds nothing (and often mislabels — an artifact called a "rule", a file called a "policy").  Delete the opener; lead with the concrete.  Before: *"The config is declarative — you list your devices in a YAML file."*  After: *"List your devices in `devices.yml`."*  Hard-to-spot because each half reads fine alone; catch it by asking whether the pre-em-dash clause survives deletion (it usually should).
 
 Keep *"the"* for genuinely-specific singular nouns: *"the LED"*, *"the loop"*, *"the request"* — these refer to a specific instance in the example and dropping the article reads wrong.
 
