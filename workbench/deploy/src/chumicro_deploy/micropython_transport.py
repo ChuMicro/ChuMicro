@@ -26,6 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from .flash_drive import DEVICE_KEEP_SET
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
@@ -153,6 +154,31 @@ _LIST_SCOPE_SCRIPT: str = (
     "        continue\n"
     "    print('__CHU_F:' + path)\n"
     "_walk('/lib')\n"
+)
+
+#: Clean-slate scope: every file on the device.  The host filters out
+#: :data:`flash_drive.DEVICE_KEEP_SET` (and any dot-prefixed path, for
+#: parity with the CP drive walk), so the diff reconciles the whole
+#: device down to payload + keep set — a stale board ``settings.toml``
+#: / leftover file is removed, not just stale ``/lib`` packages.
+_LIST_ALL_SCRIPT: str = (
+    "import os\n"
+    "def _walk(p):\n"
+    "    try:\n"
+    "        names = os.listdir(p)\n"
+    "    except OSError:\n"
+    "        return\n"
+    "    for name in names:\n"
+    "        full = p + '/' + name if p != '/' else '/' + name\n"
+    "        try:\n"
+    "            stat = os.stat(full)\n"
+    "        except OSError:\n"
+    "            continue\n"
+    "        if stat[0] & 0x4000:\n"
+    "            _walk(full)\n"
+    "        else:\n"
+    "            print('__CHU_F:' + full)\n"
+    "_walk('/')\n"
 )
 
 
@@ -861,17 +887,13 @@ class MicropythonTransport:
             # boilerplate.
             self._close_serial()
             if clean:
-                # Mirror CP's ``rsync --delete`` clean-deploy semantics
-                # for the actual accumulation site: chumicro_* and
-                # other library packages under ``/lib``.  Without this,
-                # each deploy stacks new packages onto the previous
-                # deploy's tree and a Pi Pico W MP fills its 860 KB
-                # flash after enough rotation between examples.
-                # ``boot.py`` / ``main.py`` / ``settings.toml`` /
-                # ``runtime_config.msgpack`` and other top-level
-                # user-managed files live outside ``/lib`` and survive
-                # unchanged.
-                self._clean_device_lib()
+                # MP analog of CP's ``rsync --delete`` +
+                # DEVICE_KEEP_SET clean push: clear the whole device
+                # root (only the keep set survives), then the
+                # ``fs cp -r`` below repopulates the payload.  A board
+                # ``settings.toml`` is evicted like everything outside
+                # the keep set — same one-staging-path rule as CP.
+                self._clean_slate_device()
             self._run_mpremote([
                 "fs", "cp", "-r",
                 str(staging_path) + "/.",
@@ -932,16 +954,16 @@ class MicropythonTransport:
     def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
         """List on-device files within the deploy's managed scope.
 
-        Walks ``/lib/`` recursively + checks the four canonical
-        scope files (``/code.py``, ``/main.py``, ``/active.py``,
-        ``/runtime_config.msgpack``).  Returns paths in
-        leading-slash form.
-
-        ``clean_slate`` is accepted for protocol parity with the CP
-        transport but not yet honored here — MP whole-device
-        clean-slate (the root survive-set in ``_clean_device_lib``)
-        is a separate follow; today MP keeps the legacy scope on both
-        values.  CP is unaffected.
+        ``clean_slate=True`` (the deploy default) walks the *whole*
+        device and the host drops :data:`flash_drive.DEVICE_KEEP_SET`
+        + any dot-prefixed path (parity with the CP drive walk), so
+        the diff reconciles a stale board ``settings.toml`` /
+        leftover file away — not just stale ``/lib`` packages.
+        ``clean_slate=False`` (the ``--no-wipe`` opt-out) keeps the
+        legacy scope: ``/lib/`` recursively + the four canonical
+        files (``/code.py``, ``/main.py``, ``/active.py``,
+        ``/runtime_config.msgpack``).  Returns paths in leading-slash
+        form.
 
         Mount-mode (RAM) deploys return an empty list — mount mode
         doesn't write to flash, so there's nothing persistent to
@@ -961,14 +983,23 @@ class MicropythonTransport:
                 pass
             self._mounted = False
         self._ensure_serial()
+        script = _LIST_ALL_SCRIPT if clean_slate else _LIST_SCOPE_SCRIPT
         try:
-            result = self._serial.exec_raw(_LIST_SCOPE_SCRIPT, timeout=30)
+            result = self._serial.exec_raw(script, timeout=30)
         except Exception as error:
             raise MicropythonTransportError(
                 f"list_files_in_scope failed: {error}",
             ) from error
         output = _decode_exec_result(result)
-        return _parse_scope_listing(output)
+        listed = _parse_scope_listing(output)
+        if not clean_slate:
+            return listed
+        keep = set(DEVICE_KEEP_SET)
+        return [
+            path for path in listed
+            if not any(part.startswith(".") for part in path.split("/") if part)
+            and path.rsplit("/", 1)[-1] not in keep
+        ]
 
     def delete_files(self, paths: list[str]) -> None:
         """Delete *paths* from the device's filesystem.
@@ -1236,27 +1267,54 @@ class MicropythonTransport:
         finally:
             self._serial = None
 
-    def _clean_device_lib(self) -> None:
-        """Remove ``:/lib`` from the device, tolerating a missing tree.
+    def _clean_slate_device(self) -> None:
+        """Clean-slate the device root, preserving only the keep set.
 
         Called from :meth:`deploy_files` when ``clean=True`` in copy
-        mode.  The CP transport runs ``rsync --delete`` with
-        ``settings.toml`` / ``boot.py`` / ``boot_out.txt`` excluded;
-        on MP the analog is "wipe the most common accumulation site
-        and let the rsync-equivalent ``mpremote fs cp -r`` repopulate
-        it."  Top-level user-managed files (``boot.py``, ``main.py``,
-        ``settings.toml``, ``runtime_config.msgpack``) live outside
-        ``/lib`` and are untouched.
+        mode — the MP analog of the CP ``rsync --delete`` +
+        :data:`flash_drive.DEVICE_KEEP_SET` clean push.  ``mpremote fs
+        cp`` never deletes, so without this each deploy stacks onto
+        the previous tree and a Pi Pico W MP fills its ~860 KB flash.
+        Every root entry except the keep set (``boot.py`` /
+        ``boot_out.txt`` / ``_chu_kv.msgpack``) is removed
+        recursively; the subsequent ``fs cp -r`` repopulates the
+        payload.  A board ``settings.toml`` is *not* in the keep set
+        and is evicted (competing wifi authority), matching CP.
 
-        Tolerates a missing ``/lib`` — first deploy on a clean device,
-        or repeat deploys after a previous wipe.  mpremote exits
-        non-zero in that case; we swallow it because "the dir we
-        wanted gone is gone" is the desired post-condition either way.
+        One device-side script (one round trip, authoritative),
+        best-effort per entry — a stray leftover is cleaned next
+        deploy and the post-``fs cp`` free space is the real guard; a
+        hard failure here would mask the staging it precedes.
         """
+        keep = sorted(DEVICE_KEEP_SET)
+        script = (
+            "import os\n"
+            "def _rm(p):\n"
+            "    try:\n"
+            "        for e in os.listdir(p):\n"
+            "            _rm(p + '/' + e)\n"
+            "        os.rmdir(p)\n"
+            "    except OSError:\n"
+            "        try:\n"
+            "            os.remove(p)\n"
+            "        except OSError:\n"
+            "            pass\n"
+            f"_keep = {keep!r}\n"
+            "for _e in os.listdir('/'):\n"
+            "    if _e not in _keep:\n"
+            "        _rm('/' + _e)\n"
+        )
         try:
-            self._run_mpremote(["fs", "rm", "-r", ":/lib"])
-        except MicropythonTransportError:
-            # /lib doesn't exist on the device — nothing to clean.
+            # mpremote subprocess (not the persistent serial): the
+            # caller `_close_serial()`d before this and the `fs cp`
+            # that follows is also a subprocess — opening the serial
+            # here would hold the port and fail that push.  Mirrors
+            # `_remove_device_entries`.
+            self._run_mpremote(["exec", script])
+        except MicropythonTransportError:  # pragma: no cover — best-effort
+            # A clean device (nothing to remove) or a transient
+            # hiccup: the post-`fs cp` free-space check is the real
+            # guard, so don't let this mask the staging it precedes.
             pass
 
     def _remove_device_entries(self, entries: list[str]) -> None:

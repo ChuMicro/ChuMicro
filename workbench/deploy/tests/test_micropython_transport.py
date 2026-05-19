@@ -1218,13 +1218,13 @@ class TestDeployFiles:
         finally:
             transport.disconnect()
 
-    def test_copy_mode_clean_true_wipes_lib_before_push(self) -> None:
-        """``clean=True`` issues ``mpremote fs rm -r :/lib`` before the push.
+    def test_copy_mode_clean_true_clean_slates_root_before_push(self) -> None:
+        """``clean=True`` clean-slates the device root before the push.
 
-        Mirrors the CP transport's ``rsync --delete`` semantics for
-        the most common accumulation site (chumicro_* and other
-        library packages under ``/lib``).  The ordering matters —
-        wiping AFTER the push would clobber the just-deployed payload.
+        MP analog of CP's ``rsync --delete`` + ``DEVICE_KEEP_SET``: a
+        device-side script removes every root entry except the keep
+        set, then ``fs cp -r`` repopulates the payload.  Ordering
+        matters — clearing AFTER the push would clobber it.
         """
         transport, _, runner = self._prepare_transport(mode="copy")
         try:
@@ -1233,10 +1233,15 @@ class TestDeployFiles:
                 "/code.py",
                 clean=True,
             )
-            rm_index = next(
+            # Clean-slate runs as an mpremote `exec` subprocess (not
+            # the persistent serial — that would hold the port the
+            # following `fs cp` subprocess needs).
+            clean_index = next(
                 (
                     index for index, call in enumerate(runner.calls)
-                    if "rm" in call[0] and ":/lib" in call[0]
+                    if "exec" in call[0]
+                    and "os.listdir('/')" in " ".join(call[0])
+                    and "_keep" in " ".join(call[0])
                 ),
                 None,
             )
@@ -1247,39 +1252,31 @@ class TestDeployFiles:
                 ),
                 None,
             )
-            assert rm_index is not None, (
-                f"expected fs rm -r :/lib call; got {runner.calls!r}"
+            assert clean_index is not None, (
+                f"expected a keep-set clean-slate exec; got {runner.calls!r}"
             )
             assert cp_index is not None, (
-                f"expected fs cp -r call; got {runner.calls!r}"
+                f"expected fs cp -r push; got {runner.calls!r}"
             )
-            assert rm_index < cp_index, (
-                "lib wipe must precede the staging push so the push "
-                "isn't clobbered"
+            assert clean_index < cp_index, (
+                "clean-slate must precede the push so it isn't clobbered"
             )
+            script = " ".join(runner.calls[clean_index][0])
+            assert "boot_out.txt" in script and "_chu_kv.msgpack" in script
+            assert "settings.toml" not in script
         finally:
             transport.disconnect()
 
-    def test_copy_mode_clean_true_tolerates_missing_lib_dir(self) -> None:
-        """First-deploy case: ``:/lib`` doesn't exist yet — rm fails;
-        deploy still proceeds and pushes the staging tree.
+    def test_copy_mode_clean_true_first_deploy_proceeds(self) -> None:
+        """First-deploy case: a fresh device has nothing to clear.
 
-        mpremote exits non-zero on ``rm -r`` against a missing path.
-        Without the swallow, every first-clean-deploy on a freshly
-        formatted board would raise ``MicropythonTransportError``
-        before any payload reached flash.
+        The clean-slate device script is best-effort per entry, so an
+        empty / freshly-formatted root is a no-op and the deploy still
+        pushes the staging tree — no error before payload reaches
+        flash.
         """
-        rm_failure = FakeSubprocessResult(
-            returncode=1, stderr="rm: cannot stat ':/lib': No such file",
-        )
-        success = FakeSubprocessResult()
-        # ``deploy_files`` copy-mode mpremote sequence: fs rm -r :/lib
-        # (failure) → fs cp -r staging :/. (success).  No other
-        # mpremote calls fire on this path.
-        runner = FakeRunner(results=[rm_failure, success])
-        transport, _, _ = self._prepare_transport(mode="copy", runner=runner)
+        transport, _, runner = self._prepare_transport(mode="copy")
         try:
-            # Should NOT raise even though rm failed.
             transport.deploy_files(
                 {"/code.py": b"print('hi')"},
                 "/code.py",
@@ -1290,7 +1287,7 @@ class TestDeployFiles:
                 if "cp" in call[0] and "-r" in call[0]
             ]
             assert cp_calls, (
-                "fs cp -r push must still fire when fs rm fails — "
+                "fs cp -r push must still fire on a first clean deploy — "
                 f"got {runner.calls!r}"
             )
         finally:
@@ -1721,6 +1718,41 @@ class TestListFilesInScope:
         exec_calls = [call for call in serial.calls if call[0] == "exec_raw"]
         assert len(exec_calls) == 1
         assert "__CHU_F:" in exec_calls[0][1][0]
+
+    def test_clean_slate_scope_drops_keepset_and_dotfiles(self) -> None:
+        """clean_slate=True walks the whole device, host-filters keep set.
+
+        The keep set (``boot_out.txt``, ``_chu_kv.msgpack``) and any
+        dot-prefixed path are dropped so the diff reconciles
+        everything else — incl. a stale board ``settings.toml`` — not
+        just ``/lib``.
+        """
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0",
+            exec_outputs=[
+                b"__CHU_F:/main.py\n"
+                b"__CHU_F:/lib/foo.py\n"
+                b"__CHU_F:/settings.toml\n"
+                b"__CHU_F:/boot_out.txt\n"
+                b"__CHU_F:/_chu_kv.msgpack\n"
+                b"__CHU_F:/.fseventsd/x\n",
+            ],
+        )
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=FakeRunner(),
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        result = sorted(transport.list_files_in_scope(clean_slate=True))
+        # settings.toml + libs + entrypoint stay (reconciled away if
+        # not in the new payload); keep set + dotfiles dropped.
+        assert result == ["/lib/foo.py", "/main.py", "/settings.toml"]
+        script = next(
+            call[1][0] for call in serial.calls if call[0] == "exec_raw"
+        )
+        assert "_walk('/')" in script  # whole-device walk
+        assert "/lib" not in script  # not the legacy scoped walk
 
     def test_copy_mode_unmounts_before_listing(self) -> None:
         """If a mount is live (left over from a prior mode-mix), drop it first.
