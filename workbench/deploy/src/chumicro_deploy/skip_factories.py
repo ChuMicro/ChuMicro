@@ -37,9 +37,9 @@ def read_skip_factories_marker(entrypoint_path: Path) -> tuple[str, ...] | None:
     """Return entries from ``__chumicro_skip_factories__`` on *entrypoint_path*.
 
     The marker is a top-level tuple/list assignment of string literals.
-    Returns ``None`` when no marker is declared (legacy default — no
-    skipping).  Returns an empty tuple only if the marker is explicitly
-    empty (legal but useless; the walker treats it as no-op).
+    Returns ``None`` when no marker is declared (no skipping).  Returns
+    an empty tuple only if the marker is explicitly empty (legal but
+    useless; the walker treats it as no-op).
 
     Read via :func:`ast.parse` — never executes the file, matching the
     :func:`~chumicro_deploy.runtime_marker.read_runtime_marker` precedent.

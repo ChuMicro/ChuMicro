@@ -7,7 +7,7 @@ failures and looks them up).  Keeping the types in a leaf module
 breaks the otherwise-cyclic graph cleanly.
 
 Both names are re-exported from :mod:`chumicro_deploy.recovery` for
-external consumers; this module is the canonical definition site.
+external consumers; this module is where they're defined.
 """
 
 from __future__ import annotations

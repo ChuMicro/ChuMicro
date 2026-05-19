@@ -7,10 +7,11 @@ baudrate, CIRCUITPY drive path), and the deploy-mode preference.
 :class:`~chumicro_deploy.protocol.TransportProtocol` instance, so
 callers don't have to branch on runtime themselves.
 
-The deploy-time fields (``entrypoint_name``, ``resource_prefix``) are
-reserved for the upcoming :class:`~chumicro_deploy.deployer.Deployer`
-facade and are exposed on the device now so downstream code can pass a
-single ``Device`` instance through the deploy pipeline.
+Two fields — ``entrypoint_name`` and ``resource_prefix`` — aren't
+read by :meth:`create_transport`; :class:`~chumicro_deploy.deployer.Deployer`
+reads them off the Device when running a deploy.  Carrying them on
+Device means a deploy takes one configured object, not Device plus
+a separate deploy-config struct.
 """
 
 from __future__ import annotations

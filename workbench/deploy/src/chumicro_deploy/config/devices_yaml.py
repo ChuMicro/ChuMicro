@@ -22,7 +22,7 @@ and sorts keys alphabetically by default — so the runtime cost of
 the extra dep buys the no-clobber-of-user-edits property the
 workspace template depends on.
 
-The canonical empty-registry text for a fresh workspace ships in
+The empty-registry text for a fresh workspace ships in
 ``_payloads/devices.yml.template`` next to this module; consumers
 materialize it via :func:`read_devices_yml_template`.  Schema and
 default content live together so changes stay co-located.
@@ -39,9 +39,9 @@ from typing import Any
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-#: Path to the canonical ``devices.yml`` template inside the
-#: ``chumicro_deploy`` package.  Resolved at import time so reads stay
-#: simple — the wheel ships the same path.
+#: Path to the ``devices.yml`` template inside the ``chumicro_deploy``
+#: package.  Resolved at import time so reads stay simple — the wheel
+#: ships the same path.
 _DEVICES_YML_TEMPLATE_PATH = (
     Path(__file__).resolve().parent.parent
     / "_payloads"
@@ -50,7 +50,7 @@ _DEVICES_YML_TEMPLATE_PATH = (
 
 
 def read_devices_yml_template() -> str:
-    """Return the canonical empty-registry ``devices.yml`` text.
+    """Return the empty-registry ``devices.yml`` text.
 
     Three-zone-headed shape with ``defaults.{micropython,
     circuitpython}: null`` (filled by ``add-device``), ``deploy_mode:

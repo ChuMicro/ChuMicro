@@ -194,7 +194,8 @@ def merge_packages(
         target_runtime: When set, ``.py`` files carrying a
             ``__chumicro_runtimes__`` marker for a different runtime
             are skipped (in addition to ``__pycache__`` / ``*.pyc``).
-            ``None`` matches the prior unfiltered behavior.
+            ``None`` (the default) keeps every ``.py`` file regardless
+            of its marker.
     """
     if not source_directory.is_dir():
         return
@@ -312,9 +313,9 @@ def rsync(
       away by ``--delete``.  ``settings.toml`` is not in the keep set: a
       board-resident one is a competing wifi authority and is evicted
       (with a one-time loud notice from the transport).
-    * **Legacy additive deploys** call ``delete=False`` with no extra
-      excludes — stale files persist; retained only until the
-      clean-slate default lands.
+    * **Additive deploys** (the ``--no-wipe`` opt-out) call
+      ``delete=False`` with no extra excludes — stale files persist.
+      Used when the caller hand-manages other board files.
 
     The base exclude set (build artifacts + macOS noise / sentinel
     dirs) is shared and unconditional — see :data:`_BASE_RSYNC_EXCLUDES`.
@@ -325,8 +326,8 @@ def rsync(
         delete: When ``True``, pass ``--delete`` so files in
             destination but not source are removed (clean slate;
             only ``additional_excludes`` survive).  ``False`` is the
-            legacy additive shape — stale files persist — retained
-            only until the clean-slate default lands.
+            additive shape — stale files persist — used by the
+            ``--no-wipe`` opt-out.
         additional_excludes: Extra basenames to add to ``--exclude``.
             Clean callers (production *and* functional-test) pass
             :data:`DEVICE_KEEP_SET` so ``--delete`` doesn't wipe the
