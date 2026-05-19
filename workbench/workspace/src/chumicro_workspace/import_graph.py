@@ -33,9 +33,8 @@ from typing import TYPE_CHECKING
 from ruamel.yaml import YAML
 
 from chumicro_workspace.deploy_source import (
-    GENERATED_DIRNAME,
     WithRuntimeConfig,
-    find_project_config,
+    wrap_with_runtime_config,
 )
 from chumicro_workspace.loaders import WorkspaceConfigError
 
@@ -246,8 +245,6 @@ def project_import_graph_source(
 
     if workspace_yaml is None:
         workspace_yaml = workspace.workspace_yaml
-    if secrets_toml is None:
-        secrets_toml = workspace.secrets_toml
 
     entrypoint_path = project_dir / entrypoint_filename
     if not entrypoint_path.is_file():
@@ -275,21 +272,10 @@ def project_import_graph_source(
         target_runtime=target_runtime,
     )
 
-    # Library roots extracted from the search paths so
-    # ``WithRuntimeConfig`` can read each library's
-    # ``[tool.chumicro.config]`` block and validate the merged + flat
-    # config dict against the union manifest before writing the
-    # msgpack.  Local import keeps the import-graph module's import
-    # cost flat for callers who don't deploy.
-    from chumicro_workspace.config_manifest import (  # noqa: PLC0415
-        find_library_roots,
-    )
-    library_roots = find_library_roots(search_paths)
-
-    return WithRuntimeConfig(
+    return wrap_with_runtime_config(
         inner,
+        project_dir=project_dir,
+        search_paths=search_paths,
+        workspace=workspace,
         secrets_toml=secrets_toml,
-        project_config=find_project_config(project_dir),
-        output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
-        library_roots=library_roots,
     )
