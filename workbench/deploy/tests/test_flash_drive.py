@@ -334,11 +334,10 @@ class TestRsync:
 
         Clean callers — production deploy *and* functional-test stage —
         both pass the same closed ``DEVICE_KEEP_SET``; ``--delete``
-        spares exactly that set.  ``code.py`` is **not** excluded:
-        the per-context carve-out was removed, so a stale board
-        ``code.py`` is reconciled away on the functional path too.
-        ``settings.toml`` is likewise absent — evicted on every path
-        (competing wifi authority).
+        spares exactly that set.  ``code.py`` is **not** excluded, so
+        a stale board ``code.py`` is reconciled away on the functional
+        path too.  ``settings.toml`` is likewise absent — evicted on
+        every path (competing wifi authority).
         """
         source = tmp_path / "source"
         source.mkdir()
@@ -367,7 +366,7 @@ class TestRsync:
             "--exclude=_chu_kv.msgpack",
         ):
             assert extra in captured[0]
-        # The per-context carve-out is gone: a stale board code.py is
+        # No per-context code.py exclude: a stale board code.py is
         # reconciled away, not preserved.
         assert "--exclude=code.py" not in captured[0]
         # Evicted on every path — never preserved.

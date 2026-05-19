@@ -274,10 +274,8 @@ class TestStage:
         transport.stage([source_dir], [], harness_dir)
 
         # First copy-mode stage: a keep-set-preserving whole-device
-        # clean-slate (replaces the old `lfs mkfs`, which destroyed
-        # `_chu_kv.msgpack` / `boot_out.txt`) then the fs cp -r.  The
-        # clean-slate script walks `os.listdir('/')` against the keep
-        # set; it is NOT mkfs.
+        # clean-slate then fs cp -r.  The clean-slate script walks
+        # `os.listdir('/')` against the keep set; it is not mkfs.
         commands = [call[0] for call in runner.calls]
         clean_slate = [
             command for command in commands

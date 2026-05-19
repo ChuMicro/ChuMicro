@@ -927,10 +927,9 @@ class CircuitpythonTransport:
                 invariant.
             rsync_additional_excludes: Extra basenames to exclude.
                 Clean callers — production deploy *and* functional-test
-                stage — both pass :data:`flash_drive.DEVICE_KEEP_SET`
-                (the identical invocation; the per-context ``code.py``
-                carve-out was removed).  Legacy additive deploys leave
-                empty.
+                stage — both pass :data:`flash_drive.DEVICE_KEEP_SET`,
+                the identical invocation with no per-context exclude.
+                Legacy additive deploys leave empty.
             strip_xattrs: When ``True``, strip macOS extended
                 attributes from the staging tree before rsync.
                 Production deploys want this so AppleDouble ``._foo``
@@ -1052,21 +1051,16 @@ class CircuitpythonTransport:
         - ``--delete``: remove stale files that no longer belong on
           the device.
 
-        The rsync *command line* is identical to the production clean
+        The rsync command line is identical to a production clean
         deploy — ``--delete`` plus ``additional_excludes=DEVICE_KEEP_SET``.
-        What differs is only the *staging tree* fed to it — the
-        single-staging-path rule permits per-context payload, not a
-        per-context exclude: the functional tree is libs + harness +
-        ``test_*.py`` and ships no entrypoint, because the harness runs
-        over the live raw REPL, not by booting ``code.py``.
-
-        Net on-device effect: the board is reconciled down to that
-        payload plus :data:`flash_drive.DEVICE_KEEP_SET`.  A project
-        ``code.py`` (or board ``settings.toml``) left from a prior
-        deploy is **deleted** — there is no longer a per-context
-        ``code.py`` carve-out preserving it.  That is intended:
-        clean-slate isolation for the test run, and no stale
-        entrypoint that could autorun if the board resets mid-session.
+        Only the staging tree differs: libs + harness + ``test_*.py``,
+        no entrypoint, because the harness runs over the live raw REPL
+        rather than by booting ``code.py``.  The board is therefore
+        reconciled down to that payload plus
+        :data:`flash_drive.DEVICE_KEEP_SET`; a project ``code.py`` /
+        board ``settings.toml`` is deleted like any other non-keep-set
+        file, which is what a test run wants — no stale entrypoint that
+        could autorun if the board resets mid-session.
 
         Disables autoreload before copying to prevent restarts during
         the file transfer.  Requires rsync on the host.
