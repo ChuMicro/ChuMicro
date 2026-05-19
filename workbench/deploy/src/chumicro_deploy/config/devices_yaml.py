@@ -85,7 +85,7 @@ HARDWARE_ONCE_FIELDS: frozenset[str] = frozenset({
 
 #: Per-leaf zone classification for the nested ``hardware:`` block.
 #: Every key here is hardware-once; no probed-always or user-owned
-#: keys live under ``hardware:`` today.
+#: keys live under ``hardware:``.
 HARDWARE_BLOCK_ZONES: dict[str, str] = {
     "uid": "hardware-once",
     "machine": "hardware-once",

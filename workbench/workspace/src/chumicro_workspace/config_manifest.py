@@ -181,18 +181,11 @@ def find_library_roots(
 ) -> tuple[Path, ...]:
     """Return the directories under *search_paths* that own a ``pyproject.toml``.
 
-    The import graph's search paths are typically directories like
-    ``libraries/<name>/src/`` (the importable module layout) — the
-    pyproject sits one level up at ``libraries/<name>/pyproject.toml``.
-    Other search-path entries (``shared/``, ``packages/``,
-    ``library_sources:`` overrides pointing at arbitrary directories)
-    may or may not have a pyproject; this helper silently filters
-    them out, returning only paths where one exists.
-
-    Returned in the same order as the input.  Duplicates removed
-    (when two search-path entries resolve to the same library root,
-    e.g. an override and the default scan both finding
-    ``libraries/wifi/``).
+    Search paths are usually ``libraries/<name>/src/``, with the
+    pyproject one level up at ``libraries/<name>/pyproject.toml``.
+    Entries without a pyproject are silently filtered out.  Input
+    order is preserved; entries resolving to the same root are
+    deduplicated.
 
     Args:
         search_paths: Directories the import graph searches when

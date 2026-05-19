@@ -63,23 +63,16 @@ _DEFAULT_TAIL_SECONDS = 30.0
 def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
     """Construct the deploy runner for a CLI command.
 
-    Returns one of two :class:`chumicro_deploy._RecoveringDeployer`
-    subclasses depending on whether the CLI has stdin to prompt
-    against.  Both surface the same coached recovery output (failure
-    classification, F6 lsof diagnosis when applicable, canonical
-    fix steps) — they differ only in whether they retry on
-    retryable failures:
+    Both subclasses surface the same coached recovery output and
+    differ only in retry behavior:
 
-    * ``non_interactive=True`` → :class:`NonInteractiveDeployer`.
-      Prints the report once and re-raises.  CI / scripted flows
-      where the retry prompt has nowhere to go.
-    * ``non_interactive=False`` → :class:`InteractiveDeployer`.
-      Prompts the user to fix the condition and press Enter to
-      retry (default ``max_attempts=3``).
+    * ``non_interactive=True`` → :class:`NonInteractiveDeployer`:
+      prints the report once and re-raises (CI / scripted flows).
+    * ``non_interactive=False`` → :class:`InteractiveDeployer`:
+      prompts to fix the condition and press Enter to retry
+      (default ``max_attempts=3``).
 
-    Returns the runner; caller invokes ``.deploy()`` or
-    ``.deploy_diff()`` as needed (both signatures match
-    :class:`Deployer`'s exactly).
+    Caller invokes ``.deploy()`` / ``.deploy_diff()`` on the result.
     """
     deployer = Deployer(device)
     if non_interactive:
@@ -510,8 +503,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                     f"deploy: --- {device.transport}@{device.address} ---",
                 )
             # Source policy (layout resolution + the four source
-            # factories) lives in one owner, the single mechanism that
-            # places a project on a board — no command owns a second.
+            # factories) lives in one owner; no command places a
+            # project on a board by another route.
             # `--target-runtime` overrides the device's runtime;
             # `_resolve_deploy_layout` raises on a project/runtime
             # entrypoint mismatch before any bytes leave the host.

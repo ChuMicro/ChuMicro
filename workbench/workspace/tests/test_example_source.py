@@ -449,33 +449,29 @@ class TestNamingAndValidation:
 
 
 class TestDefaultOutputPath:
-    def test_default_output_path_lands_under_scratch(self, tmp_path: Path) -> None:
-        """Default output path is ``<secrets>.parent/.scratch/`` so the
-        artifact lands in the gitignored scratch tree, never inside
-        the tracked libraries/<lib>/examples/ folder."""
+    def test_default_output_path_lands_under_generated(
+        self, tmp_path: Path,
+    ) -> None:
+        """Default output path is ``libraries/<lib>/examples/_generated/``
+        — the gitignored ``_generated/`` build-artifact convention, so
+        the msgpack isn't committed beside the tracked example source."""
         libs = tmp_path / "libraries"
         timing = _seed_library(libs, "timing")
-        path = _default_output_path(
-            tmp_path / "secrets.toml", timing, "circuitpython_blink",
-        )
+        path = _default_output_path(timing, "circuitpython_blink")
         assert path == (
-            tmp_path / ".scratch"
+            timing / "examples" / "_generated"
             / "example_runtime_config_timing_circuitpython_blink.msgpack"
         )
 
     def test_default_output_path_strips_py_suffix(self, tmp_path: Path) -> None:
         libs = tmp_path / "libraries"
         timing = _seed_library(libs, "timing")
-        with_suffix = _default_output_path(
-            tmp_path / "secrets.toml", timing, "blink.py",
-        )
-        without_suffix = _default_output_path(
-            tmp_path / "secrets.toml", timing, "blink",
-        )
+        with_suffix = _default_output_path(timing, "blink.py")
+        without_suffix = _default_output_path(timing, "blink")
         assert with_suffix == without_suffix
 
     def test_omitted_output_path_uses_default(self, tmp_path: Path) -> None:
-        """Caller doesn't pass output_path → defaults to .scratch/."""
+        """Caller omits output_path → defaults under examples/_generated/."""
         libs = tmp_path / "libraries"
         timing = _seed_library(libs, "timing")
         _seed_example(timing, "blink.py", "pass\n")
@@ -488,10 +484,10 @@ class TestDefaultOutputPath:
             secrets_toml=secrets,
         )
         # files() materializes the msgpack — by the time it returns,
-        # the default scratch artifact must exist on disk.
+        # the default _generated artifact must exist on disk.
         source.files()
         expected = (
-            tmp_path / ".scratch"
+            timing / "examples" / "_generated"
             / "example_runtime_config_timing_blink.msgpack"
         )
         assert expected.is_file()

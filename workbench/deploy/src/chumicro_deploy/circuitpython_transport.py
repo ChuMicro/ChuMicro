@@ -76,13 +76,13 @@ class PostStageStep(Enum):
 #: Default timeout in seconds for serial reads.
 DEFAULT_TIMEOUT = 10.0
 
-#: Idle timeout for ``execute()`` — the test-bootstrap execution path.
+#: Idle timeout for ``execute()`` — the bootstrap execution path.
 #: Longer than ``DEFAULT_TIMEOUT`` because test bootstraps can include
-#: silent CPU-bound work (the fragmentation-test histogram bisection
-#: does ~7,500 ``bytearray`` allocs at the 256-byte tier on a Lolin S2's
-#: 2 MB heap) that can outlast the interactive-op default.  Short-running
-#: interactive ops (probe, autoreload, ``gc.collect`` between chunks)
-#: still use ``DEFAULT_TIMEOUT`` via :meth:`_send_repl_command`.
+#: silent CPU-bound work (the fragmentation suite allocates until
+#: ``MemoryError``) that outlasts the interactive-op default.
+#: Short-running interactive ops (probe, autoreload, ``gc.collect``
+#: between chunks) still use ``DEFAULT_TIMEOUT`` via
+#: :meth:`_send_repl_command`.
 _EXECUTE_IDLE_TIMEOUT = 60.0
 
 #: Delay between Ctrl-C interrupts in seconds.
@@ -93,8 +93,8 @@ _ENTER_DELAY = 0.1
 
 #: How many times to poll the board's view of a just-written entrypoint
 #: before giving up.  USB MSC writes can trail the host-side ``sync`` +
-#: settle delay on slower controllers (observed on Pi Pico W), and
-#: soft-rebooting before CP sees the new blocks produces a one-cycle-
+#: settle delay on slower controllers, and soft-rebooting before CP
+#: sees the new blocks produces a one-cycle-
 #: delayed capture (the previous ``code.py`` runs again against the
 #: cached FAT view).  Polling ``os.stat`` via raw REPL gives us a
 #: deterministic sync point.
@@ -113,19 +113,18 @@ _BOARD_FILE_VISIBLE_POLL_INTERVAL = 0.25
 #: against by remounting the volume read-only.
 _BOARD_FILE_VISIBLE_POST_SETTLE = 2.0
 
-#: Seconds to wait after ``storage.erase_filesystem()`` before
 #: Initial settle delay before the first reconnect attempt after
 #: ``storage.erase_filesystem()`` reboots the board.  CDC takes a
 #: beat to come back; this is the minimum we wait before even
 #: starting to poll for the port.
 _WIPE_REBOOT_SETTLE_SECONDS = 2.0
-#: Total wall-clock budget for the post-wipe reconnect.  CP boards
-#: with a populated FAT volume occasionally take 6-10 seconds to
-#: re-enumerate after ``storage.erase_filesystem()`` reformats the
-#: volume — a stricter budget surfaces as a bare ``could not open
-#: port`` error during a deploy that the user reasonably expects
-#: to recover transparently.  Empirically determined against the
-#: four-board canonical matrix (`.scratch/wipe_soak.py`).
+#: Total wall-clock budget for the post-wipe reconnect.  A CP board
+#: with a populated FAT volume can take 6-10 seconds to re-enumerate
+#: after ``storage.erase_filesystem()`` reformats the volume — a
+#: stricter budget surfaces as a bare ``could not open port`` error
+#: during a deploy the user reasonably expects to recover
+#: transparently.  Sized above observed re-enumeration latency on
+#: real boards.
 _WIPE_RECONNECT_TIMEOUT_SECONDS = 30.0
 #: Poll interval between reconnect attempts inside
 #: ``_WIPE_RECONNECT_TIMEOUT_SECONDS``.  Short enough to keep a
@@ -140,10 +139,9 @@ _WIPE_RECONNECT_POLL_SECONDS = 0.5
 #: seconds later.  Without this wait, a ``deploy_files`` call
 #: immediately after ``wipe_filesystem`` returns races the volume
 #: mount and dies with "CIRCUITPY drive not found".  10 s is well
-#: above empirical FAT-remount latency on the four-board canonical
-#: matrix while staying short enough that a genuinely unmounted
-#: drive (board ejected from Finder, USB cable popped) surfaces
-#: quickly.
+#: above observed FAT-remount latency on real boards while staying
+#: short enough that a genuinely unmounted drive (board ejected from
+#: Finder, USB cable popped) surfaces quickly.
 _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS = 10.0
 
 
@@ -435,29 +433,16 @@ class CircuitpythonTransport:
     def _disable_autoreload_before_drive_writes(self) -> None:
         """Send the autoreload-off REPL command — order-load-bearing.
 
-        Every flash-mode entry point (``_stage_to_flash``,
-        ``deploy_files``) calls this **immediately** after
-        :meth:`_enter_raw_repl` and **before** any host-side drive
-        operation — ``.chu-probe``, ``neuter_macos_metadata`` sentinels,
-        the rsync itself.  Otherwise the board's autoreload watcher
-        sees the first file change, schedules a soft-reboot, the
-        USB-CDC link re-enumerates, and the next host-side ``write()``
-        may land in uninterruptible kernel I/O wait — the "wedged
-        rsync" failure mode (rsync to CIRCUITPY can hang in
-        uninterruptible kernel I/O).
+        Every flash-mode path calls this immediately after
+        :meth:`_enter_raw_repl` and before any host-side drive write.
+        Otherwise the board's autoreload watcher sees the first file
+        change, soft-reboots, the USB-CDC link re-enumerates, and the
+        next host ``write()`` can hang in uninterruptible kernel I/O —
+        the "wedged rsync".
 
-        ``supervisor.runtime.autoreload`` is process-lifetime state on
-        the CP VM, so any soft-reboot resets it back to default-on —
-        no explicit restore is needed on either flash-mode path:
-
-        * ``deploy_files`` issues an explicit Ctrl-D between rsync and
-          ``code.py`` capture; that reboot restores the default.
-        * ``_stage_to_flash`` runs harness code via the live raw REPL
-          session and does not reboot inside the session.  The board
-          is left with autoreload off until the next reset / power
-          cycle, which is fine because functional-test sessions don't
-          need ``code.py``-style reload-on-edit behavior, and the
-          next flash-mode entry point will re-disable anyway.
+        ``supervisor.runtime.autoreload`` is process-lifetime state, so
+        a soft-reboot resets it to default-on; no explicit restore is
+        needed.
         """
         self._send_repl_command(
             "import supervisor; supervisor.runtime.autoreload = False",
@@ -965,9 +950,9 @@ class CircuitpythonTransport:
         drive_path = self._resolve_circuitpy_drive()
         drive_path = self._verify_drive_for_board(drive_path)
 
-        # A clean push (rsync --delete, keep set = DEVICE_KEEP_SET) is
-        # the single chokepoint that evicts a board settings.toml;
-        # surface it before the bytes move.
+        # A clean push (rsync --delete, keep set = DEVICE_KEEP_SET)
+        # evicts a board settings.toml; surface it before the bytes
+        # move.
         if rsync_delete:
             self._notice_settings_toml_eviction(drive_path)
 
@@ -1051,16 +1036,13 @@ class CircuitpythonTransport:
         - ``--delete``: remove stale files that no longer belong on
           the device.
 
-        The rsync command line is identical to a production clean
-        deploy — ``--delete`` plus ``additional_excludes=DEVICE_KEEP_SET``.
-        Only the staging tree differs: libs + harness + ``test_*.py``,
-        no entrypoint, because the harness runs over the live raw REPL
-        rather than by booting ``code.py``.  The board is therefore
-        reconciled down to that payload plus
-        :data:`flash_drive.DEVICE_KEEP_SET`; a project ``code.py`` /
-        board ``settings.toml`` is deleted like any other non-keep-set
-        file, which is what a test run wants — no stale entrypoint that
-        could autorun if the board resets mid-session.
+        Same rsync command line as a production clean deploy
+        (``--delete`` + ``additional_excludes=DEVICE_KEEP_SET``); only
+        the staging tree differs — libs + harness + ``test_*.py``, no
+        entrypoint, since the harness runs over the live raw REPL
+        instead of booting ``code.py``.  A stale ``code.py`` is thus
+        reconciled away like any non-keep-set file, which is what a
+        test run wants.
 
         Disables autoreload before copying to prevent restarts during
         the file transfer.  Requires rsync on the host.
@@ -1423,19 +1405,12 @@ class CircuitpythonTransport:
                     if on_file_staged is not None:
                         on_file_staged(device_path)
                 # ``clean=True`` tells rsync to delete drive files not
-                # in the staging tree so the deploy lands clean.  Only
-                # :data:`flash_drive.DEVICE_KEEP_SET` survives —
-                # device-generated / -required files (``boot.py``,
-                # ``boot_out.txt``, ``_chu_kv.msgpack``).
-                # A board-resident ``settings.toml`` is deliberately
-                # NOT in that set: it is a competing wifi authority
-                # against chumicro's config-driven wifi, so it is
-                # evicted — with a one-time loud notice (emitted just
-                # above) when one is actually present.
-                #
-                # ``clean=False`` preserves every drive file outside
-                # the new payload — the legacy additive shape, retained
-                # only until the clean-slate default lands.
+                # in the staging tree so the deploy lands clean; only
+                # :data:`flash_drive.DEVICE_KEEP_SET` survives (see that
+                # constant for what is kept and why ``settings.toml`` is
+                # evicted, with the one-time notice emitted just above).
+                # ``clean=False`` preserves every drive file outside the
+                # new payload — additive mode.
                 self._push_staging_to_drive(
                     staging_path,
                     rsync_delete=clean,
@@ -1567,12 +1542,11 @@ class CircuitpythonTransport:
         # empty `/lib/<pkg>/` husk — worse than nothing: a stale
         # `import <pkg>` then fails *mid-package* (dir present, __init__
         # gone) instead of cleanly.  rsync --delete prunes empty dirs;
-        # the diff path must match that.  Sweep the whole scope, not
-        # just this run's deletions, so pre-existing husks (e.g. from a
-        # deploy before this reaping landed) also get cleaned — exactly
-        # what a real --delete pass would do.  Bottom-up so nested
-        # husks collapse; rmdir only removes an *empty* dir, so a live
-        # package is never touched; lib root itself is left in place.
+        # the diff path matches that by sweeping the whole scope (not
+        # just this run's deletions) so pre-existing husks clear too.
+        # Bottom-up so nested husks collapse; rmdir only removes an
+        # *empty* dir, so a live package is never touched; lib root
+        # itself is left in place.
         lib_root = drive / "lib"
         if lib_root.is_dir():
             directories = [

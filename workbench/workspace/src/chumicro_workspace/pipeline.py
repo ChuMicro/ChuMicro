@@ -35,40 +35,25 @@ def compose_runtime_config(
     secrets_toml: Path,
     project_config: Path | None,
 ) -> dict:
-    """Read sources, deep-merge, flatten, return the flat dict.  No msgpack write.
+    """Read sources, deep-merge, flatten to dotted keys, return the dict.
 
-    The host-side composition step.  Same flow ``build_runtime_config``
-    runs minus the final ``write_runtime_config`` call.  Useful when
-    a caller needs the resolved flat dict for in-memory consumption
-    (e.g. networking-library functional-test conftests handing the
-    merged dict to ``chumicro_pytest_device.runtime_config.set_runtime_config``)
-    without leaving an unused msgpack file on disk.
-
-    Merge precedence (lowest → highest):
-
-    1. ``secrets.toml`` (workspace-wide credentials + device defaults)
-    2. ``projects/<name>/project_config.toml`` (per-project)
-
-    The deep-merged nested dict is then flattened to dotted keys
-    (``{"wifi": {"ssid": "x"}}`` → ``{"wifi.ssid": "x"}``) so the
-    on-device reader sees the format it consumes natively.
+    Same flow as ``build_runtime_config`` minus the
+    ``write_runtime_config`` call — for callers that need the resolved
+    dict in memory rather than an on-disk msgpack.  Merge precedence:
+    ``secrets.toml`` defaults, overridden by the per-project config.
 
     Args:
         secrets_toml: Path to ``secrets.toml`` (workspace-wide
             credentials + device defaults).
-        project_config: Path to a per-project / per-library config
-            file (``project_config.toml`` / ``config.toml`` /
-            ``.yml`` / ``.yaml``).  May be ``None`` (or point at a
-            missing file) — both treated as "no project-level
-            overrides", merge yields the secrets-toml defaults
-            verbatim.
+        project_config: Per-project / per-library config file.
+            ``None`` or a missing path means no overrides — the
+            secrets-toml defaults pass through verbatim.
 
     Returns:
-        The fully-merged + flattened dict with dotted keys.
+        The merged, flattened dict with dotted keys.
 
     Raises:
-        WorkspaceConfigError: One of the YAML/TOML files has a
-            malformed top level.
+        WorkspaceConfigError: A YAML/TOML file has a malformed top level.
     """
     secrets = read_secrets_toml(secrets_toml)
     project_data: dict = {}

@@ -286,7 +286,7 @@ class Deployer:
                 invoked at coarse milestones: 0.0 "connecting", 0.1
                 "collecting files", 0.2 "staging", 0.9 "executing",
                 1.0 "done".  Fractions are nominal — ``deploy_files``
-                does not report incremental progress today.
+                does not report incremental progress.
             on_file_staged: Forwarded to
                 :meth:`TransportProtocol.deploy_files`.
             on_execute_line: Forwarded to
@@ -364,7 +364,7 @@ class Deployer:
                 (:data:`flash_drive.DEVICE_KEEP_SET`) + device-managed
                 noise, so a stale board ``settings.toml`` / leftover
                 user file is removed and only payload + keep set
-                remain.  ``False`` is the legacy additive scope (the
+                remain.  ``False`` is the additive scope (the
                 ``--no-wipe`` opt-out): only the entrypoint/state
                 files + ``/lib`` are reconciled, other root files
                 preserved.  Distinct from *wipe*: clean-slate keeps

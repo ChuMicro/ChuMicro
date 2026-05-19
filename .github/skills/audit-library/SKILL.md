@@ -89,7 +89,9 @@ The user's framing: "following the file should allow me to understand the logic 
 * **Convention per file.**  Either public-functions-first or helpers-first; pick one and stick to it within the file.
 * **Adjacent related concepts.**  Helper functions for the same feature should sit together, not be scattered.
 * **Early-exit guards first.**  `if not condition: raise / return` should land at the top of the function, not be buried.
-* **Docstrings explain *why*, not just *what*.**  The signature already says what.  The body already says how.  The docstring should say why this exists or what subtle invariant it maintains.  Drop docstrings that only re-state the signature in prose.
+* **Docstrings and comments explain *why*, not just *what*.**  The signature says what; the body says how; the prose should say why this exists or what subtle invariant it holds.  Inline comments must *narrate* (`# every 30 s, queue a fetch`), not *label* (`# start a request`).  Drop prose that only re-states the signature.
+* **Essay-bloat: prose that dwarfs the code it wraps.**  Compute a per-function `(docstring+comment) / code` line ratio across `src/` and read the outliers top-down — greps cannot see bloat or incoherence; ratio + read can.  Cut narration that restates the code, justifies the diff, or duplicates a constant's own docstring.  Apply the **cold-maintainer test**: every sentence must be comprehensible to a maintainer who didn't write it — cut the ones that aren't, don't paraphrase them.  **Calibrate before cutting:** `typing.Protocol` method bodies (the docstring *is* the contract), `@property` / `@abstractmethod` stubs, and destructive- or many-parameter public-API `Args:` blocks legitimately run long — the ratio is a *trigger*, not a target.  See [field-reality → essay-bloat and the cold-maintainer test](field-reality.md#essay-bloat-and-the-cold-maintainer-test).
+* **AI-tic, grammar-tic, and dateless-history sweep in comments.**  Run the `/audit-docs` standing regex (`canonical|idempotent|comprehensive|robust|seamless|leverage|harness|under the hood|by construction|…`) plus the `the (one|single|sole) <noun> (that|which|is)` definition-tic and `the` before brand names over `src/` comments and docstrings, not just markdown.  Both are *triage sweeps, not verdicts*: legitimate invariant prose (*"the single owner of the staging path"*, *"exactly one mechanism"*) is a keep, not a tic — judge each hit.  Flag the dateless history `CHU012` can't anchor on: *"previously this…"*, *"X now that / before / until Y landed"*, removed-code explanations, bench-observation logs (*"empirically the slowest we've observed"*), and **any `.scratch/` reference in publishable `src/`** — `.scratch/` is the agent scratch convention; shipped code must never name it as a pointer *or* build it as a runtime path (a generated artifact uses the gitignored `_generated/` convention instead).  Both shapes are defects.  The lint catches the dated / verb-anchored subset; this sweep catches the judgment cases.  See [field-reality → AI-tic and dateless-history in code comments](field-reality.md#ai-tic-and-dateless-history-in-code-comments).
 
 ### 7. chumicro project-policy compliance
 
@@ -175,6 +177,8 @@ When a finding ends in "extract these helpers to a sibling module," the *how* ma
 
 * **Don't add per-change justification comments to library source during audit passes.**  Inline notes like `# bench-validated -25% allocation` or `# skips the bytes() copy` belong in the commit message body, not in `src/`.  Per-change comments document *why the diff exists* (audit reasoning) — they rot fast (today's bench number isn't necessarily true three audits later), they multiply across sites, and they ship as flash bytes on every supported board.  A general work-being-done comment at a strategy's home (one place, naming the buffer-reuse pattern at the parser's top) is OK sparingly; per-change notes are not.  Pre-existing per-change comments from earlier audits are legacy — don't proliferate, trim when convenient.  AGENTS.md → Code comments is the broader rule.
 
+* **Don't gut a long docstring just because the ratio flagged it.**  Protocol contracts, a destructive-API `Args:` block (e.g. the flash-offset warning that stops a caller bricking a board), and clean multi-parameter public-API docs earn their length.  Cutting them is essay-bloat inverted — the "don't golf" rule applies to prose too.  Trim narration and incoherence; keep the load-bearing contract.
+
 * **Don't dismiss inline comments that justify a non-obvious structure without verifying the claim.**  A comment like *"defined here rather than imported from X because <reason>"* is direct evidence that someone considered the cleaner alternative and rejected it.  Before "fixing" the structure, validate the comment's claim against the actual constraint it names — and run the test sweep that the constraint relates to, not just CPython unit tests.  If the file is imported by cross-runtime tests (any test file not marked `__chumicro_runtimes__ = ("cpython",)` or `__chumicro_host_only__ = True`), run `python scripts/run.py preflight` rather than `pytest libraries/<name>/tests/` before committing — the latter won't surface MicroPython / CircuitPython parse-time or import-time failures.  See [field-reality → don't dismiss inline comments](field-reality.md#dont-dismiss-inline-comments-without-verifying-the-claim).
 
 ## After the audit
@@ -213,6 +217,7 @@ HIGH-CONFIDENCE (safe to fix):
   duplicate  src/<name>/<file>.py:NN — <one-line description>
   dead-code  src/<name>/<file>.py:NN — <one-line description>
   lean       src/<name>/<file>.py:NN — <cargo-cult method / spec-trivia export>
+  prose      src/<name>/<file>.py:NN — <essay-bloat / incoherent / AI-tic / dateless history>
   policy     src/<name>/<file>.py:NN — <Decision NNNN violation>
   ...
 
@@ -245,6 +250,7 @@ Tag taxonomy:
 * `wiring` — over-wiring or speculative public API.
 * `perf` — hot-path allocations, redundant I/O.
 * `flow` — top-to-bottom readability.
+* `prose` — docstring / comment essay-bloat, incoherence, AI-tic, dateless history (§6).
 * `lean` — peer-LOC outlier, cargo-cult class methods, spec-trivia in `__all__`, sibling-file structural duplication (§8).
 * `policy` — chumicro project-policy compliance (Decisions [0010](../../../plans/decisions/0010-library-testability.md), [0014](../../../plans/decisions/0014-runner-pattern.md), [0021](../../../plans/decisions/0021-docstring-type-policy.md), [0022](../../../plans/decisions/0022-naming-conventions.md), [0025](../../../plans/decisions/0025-dual-coverage-thresholds.md), [0037](../../../plans/decisions/0037-runtime-file-marking.md), [0044](../../../plans/decisions/0044-deploy-time-runtime-filtering.md), [0051](../../../plans/decisions/0051-runner-shaped-as-project-policy.md), [0065](../../../plans/decisions/0065-device-library-scaffolding-cost.md)).
 * `cross-lib` — finding spans this library + at least one other; escalate to `/audit-integration`.

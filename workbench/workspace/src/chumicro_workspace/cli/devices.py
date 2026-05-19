@@ -165,27 +165,18 @@ def _suggest_add_device_id(
 ) -> str:
     """Default ``add-device`` id when the user omits the positional.
 
-    Composes :func:`_suggest_device_id` (the machine-string slug used
-    by the bootstrap wizard) with a runtime suffix and collision
-    resolution against the workspace's existing ``devices.yml``:
+    :func:`_suggest_device_id`'s machine-string slug plus a runtime
+    suffix (``-cp`` / ``-mp``):
 
     * ``"Raspberry Pi Pico W with rp2040"`` + circuitpython
       → ``"raspberry-pi-pico-w-cp"``
-    * ``"S2Mini with ESP32S2-S2FN4R2"`` + circuitpython
-      → ``"s2mini-cp"``
     * ``"LOLIN_S2_MINI with ESP32-S2FN4R2"`` + micropython
       → ``"lolin-s2-mini-mp"``
-    * Empty machine string + circuitpython → ``"circuitpython-cp"``
-      (fallback shape from the underlying slug helper; rare —
-      indicates a probe that returned no machine identifier).
+    * Empty machine string → ``"circuitpython-cp"`` (slug-helper
+      fallback; rare — probe returned no machine identifier).
 
-    When the resulting id collides with *existing_ids*, append a
-    numeric suffix: ``"-2"``, ``"-3"``, etc.  The user can rename the
-    entry afterwards with ``rename --device <old> <new>``.
-
-    Probe-suggested ids spare a beginner running ``add-device``
-    without a positional id from inventing one cold when the probe
-    already knows what board this is.
+    On collision with *existing_ids*, append ``"-2"``, ``"-3"``, …;
+    the user can ``rename --device <old> <new>`` afterwards.
 
     Args:
         implementation: Probe's :class:`DeviceImplementation` (carries

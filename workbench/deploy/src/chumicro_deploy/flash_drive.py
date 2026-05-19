@@ -66,19 +66,16 @@ RSYNC_TIMEOUT_MIN_SECONDS = 240.0
 
 #: Base seconds added to every rsync timeout regardless of size.
 #: Covers handshake / enumeration / checksum-sweep jitter that
-#: doesn't scale with payload size — Lolin S2 in particular needs
-#: 60-90s of cold-start latency before rsync's first write.
+#: doesn't scale with payload size — slow boards need 60-90s of
+#: cold-start latency before rsync's first write.
 RSYNC_TIMEOUT_BASE_SECONDS = 120.0
 
-#: Per-MB allowance for rsync.  600 s/MB ≈ 1.7 KB/s — empirically
-#: the slowest sustained USB-MSC FAT12 write rate we've observed
-#: (Lolin S2 / ESP32-S2 CP can drop into this range under
-#: macOS-cache-pressure or after several back-to-back deploys; Pi
-#: Pico W is closer to 100 KB/s so the budget is far above what
-#: most boards need).  Generous on purpose — false-positive
-#: timeouts that surface as "wedge!" recovery are operational
-#: noise, while a real wedge is a clear failure regardless of how
-#: long we waited.
+#: Per-MB allowance for rsync.  600 s/MB ≈ 1.7 KB/s, sized for the
+#: slowest sustained USB-MSC FAT12 write rate seen on real boards
+#: (under macOS cache pressure or several back-to-back deploys).
+#: Generous on purpose: a false-positive timeout surfaces as "wedge!"
+#: recovery noise, while a real wedge is a clear failure regardless
+#: of how long we waited.
 #:
 #: To override per-call (e.g. an integration test on a known-fast
 #: rig), pass ``timeout=`` explicitly to :func:`rsync`.
@@ -577,8 +574,8 @@ def clean_dot_files(drive_path: Path) -> None:
 #: ``.Trashes`` is the load-bearing one: macOS preemptively creates
 #: ``.Trashes/<UID>/`` on every FAT mount, then sets the inner UID dir
 #: read-only at the kernel level so even the mounting user can't
-#: ``unlinkat`` it (verified live: ``rsync --delete`` aborts with
-#: ``Operation not permitted``).  Planting ``.Trashes`` as a *file*
+#: ``unlinkat`` it (``rsync --delete`` aborts with ``Operation not
+#: permitted``).  Planting ``.Trashes`` as a *file*
 #: blocks macOS from creating the directory in the first place — the
 #: kernel can't ``mkdir`` over an existing non-directory entry.
 #: Already-contaminated drives keep their protected dir; the rsync
@@ -593,11 +590,10 @@ _MACOS_SKIP_SENTINELS = (
 #: at deploy time — they re-appear if macOS still wants them, but the sentinel
 #: files above usually persuade it not to.
 #:
-#: ``.Trashes`` is intentionally absent from this list now that the
-#: sentinel above blocks it from being created.  If a drive was
-#: already contaminated before the sentinel landed, the rsync
-#: ``--exclude=.Trashes`` line in :func:`rsync` lets the deploy
-#: proceed without trying to delete the protected directory.
+#: ``.Trashes`` is deliberately absent here: the sentinel above
+#: blocks its creation, and on a drive already carrying the protected
+#: directory the ``--exclude=.Trashes`` line in :func:`rsync` lets
+#: the deploy proceed without trying to delete it.
 _MACOS_NOISE_DIRS = (
     ".Spotlight-V100",
     ".TemporaryItems",
@@ -608,30 +604,13 @@ _MACOS_NOISE_DIRS = (
 def plant_macos_sentinels_in_staging(staging_path: Path) -> None:
     """Plant macOS skip-sentinels into a local staging directory.
 
-    The three sentinels live at the staging-tree root so rsync ships
-    them onto the CIRCUITPY drive in the same pass as the actual
-    payload — no host-side write to the live drive before rsync starts
-    (every such write is a wedge-risk vector — rsync to CIRCUITPY
-    can hang in uninterruptible kernel I/O).
+    The sentinels (see :data:`_MACOS_SKIP_SENTINELS` for what each
+    suppresses) go at the staging-tree root so rsync ships them onto
+    CIRCUITPY in the same pass as the payload — no host-side write to
+    the live drive before rsync starts, since every such write can
+    wedge rsync in uninterruptible kernel I/O.
 
-    The sentinels:
-
-    * ``.metadata_never_index`` — Spotlight skips this volume.  This
-      replaces the old ``mdutil -i off`` invocation; the file form
-      survives remount whereas the mdutil state does not.
-    * ``.fseventsd/no_log`` — FSEvents daemon skips logging.
-    * ``.Trashes`` planted as a *file* — kernel cannot ``mkdir`` over
-      a non-directory entry, so macOS can't create the
-      ``.Trashes/<UID>/`` it would otherwise lock read-only at the
-      kernel level (the EPERM-on-``unlinkat`` that breaks
-      ``rsync --delete``).
-
-    Cluster cost on FAT12 (Pi Pico W: ~870 KB / 4 KB clusters): three
-    clusters total, dwarfed by the noise dirs they suppress (often
-    hundreds of KB).
-
-    No-op on non-macOS platforms — the sentinels target macOS-specific
-    daemons that Linux + Windows hosts don't run.
+    No-op on non-macOS platforms.
 
     Args:
         staging_path: Local staging-tree root.  rsync will copy
@@ -648,20 +627,13 @@ def plant_macos_sentinels_in_staging(staging_path: Path) -> None:
 def cleanup_macos_noise_dirs_post_rsync(drive_path: Path) -> None:
     """Remove already-accumulated macOS noise directories from the drive.
 
-    Called *after* rsync (not before) so all the wedge-risky on-drive
-    writes happen inside the single rsync pass.  Idempotent: when the
-    sentinels from :func:`plant_macos_sentinels_in_staging` are in
-    place, macOS doesn't recreate these dirs, so subsequent runs hit
-    the missing-path branch and exit cleanly.
-
-    Targets the legacy-drive case: a CIRCUITPY drive that was used
-    on macOS before the sentinels landed will have ``.Spotlight-V100``,
-    ``.TemporaryItems``, ``.DocumentRevisions-V100`` directories
-    accumulated from previous mounts.  ``rsync --delete`` can't be
-    used because they're listed in ``_BASE_RSYNC_EXCLUDES`` (some of
-    their contents are macOS-locked on FAT volumes — the
-    EPERM-on-``unlinkat`` failure mode).  ``shutil.rmtree`` with
-    ``ignore_errors=True`` walks them best-effort.
+    Called *after* rsync so the wedge-risky on-drive writes stay
+    inside the single rsync pass.  Clears the noise dirs a drive
+    picked up from earlier macOS mounts (:data:`_MACOS_NOISE_DIRS`);
+    ``rsync --delete`` can't, since they're excluded and partly
+    kernel-locked on FAT.  ``shutil.rmtree(ignore_errors=True)`` walks
+    them best-effort, so a drive the sentinels already keep clean is a
+    no-op.
 
     No-op on non-macOS platforms.
 
