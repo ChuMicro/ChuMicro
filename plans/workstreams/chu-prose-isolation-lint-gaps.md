@@ -190,6 +190,36 @@ distribution before fixing N" step recorded as part of the decision.
 Pairs naturally with the cross-site dedup rule (the other half of the
 real 2c defect was *duplication*, not just per-body volume).
 
+**Best-built variant — a conjunctive structural predicate — and why
+it is a #1 prefilter, not a standalone rule.** Proposed shape: flag a
+function when `docstring+comments ≥ 3× code` AND no `Args:`/`Returns:`
+block AND not a Protocol / `@property` / `@abstractmethod` body. The
+`Args:`/`Returns:`/protocol carve-outs are real precision — they
+exempt the *structured-contract* legitimate class by construction.
+But "exempts the legitimate long docs by construction" is disproved
+by the *parameterless-mechanism-why* class, verified:
+`circuitpython_transport.py:_disable_autoreload_before_drive_writes`
+— 3-line body, ~13-line docstring (≈4.3×), only `self`, `-> None`,
+not protocol/property/abstract → **all three conjuncts fire**, yet
+the docstring is the canonically correct load-bearing ordering/wedge
+"why" AGENTS.md endorses, with zero history/roadmap content. It is
+**structurally identical** to `_cmd_doctor`-before (thin body, long
+prose docstring, no Args/Returns, not protocol/property/abstract);
+the only difference is *content* (callee-restatement + deferred-work
+vs current-mechanism-why), which the structural conjuncts cannot see.
+This shape is common across the quirk-dense transport layer — the
+code that most legitimately needs it.
+
+Conclusion: the structural predicate cannot be the defect signal
+(structure does not discriminate bloat from correct dense-why). Its
+correct role is a **high-precision prefilter that raises #1's
+confidence and priority**: `volume ≥3× AND no Args/Returns AND not
+protocol/property/abstract AND contains a #1 history/roadmap marker`.
+Drop the last conjunct and it flags `_disable_autoreload`. So #4 is
+not an independent rule — it is a precision/priority gate layered on
+#1's content patterns. Record it inside #1's decision as an optional
+prioritization filter, not as its own rule.
+
 ## Recommended sequencing
 
 Original recommendation was "#2 now (mechanical), #1 + #3 via
