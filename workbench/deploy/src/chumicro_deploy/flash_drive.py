@@ -301,10 +301,10 @@ def rsync(
     test stage path (:meth:`CircuitpythonTransport.stage`) use.  Both
     callers want the same FAT-write reliability (``--checksum`` to
     verify content because FAT32 timestamps are unreliable,
-    ``--inplace`` to avoid temp-file rename races on FAT32) and now
-    issue an *identical* rsync invocation. The per-context
-    ``code.py`` carve-out is gone — one device-staging path, with
-    per-context variance only in the payload and the post-stage step:
+    ``--inplace`` to avoid temp-file rename races on FAT32) and issue
+    an *identical* rsync invocation — one device-staging path, no
+    per-context exclude, per-context variance only in the payload and
+    the post-stage step:
 
     * **Clean deploys and functional tests** both call ``delete=True``
       with ``additional_excludes=DEVICE_KEEP_SET`` — clean slate, only
@@ -312,9 +312,7 @@ def rsync(
       payload (the boot shim); the functional-test stage ships no
       entrypoint (its harness runs over the live raw REPL, not by
       booting ``code.py``), so a stale board ``code.py`` is reconciled
-      away by ``--delete`` rather than preserved.  Per-context variance
-      is now only the staged payload and the post-stage step, never
-      the exclude list.  ``settings.toml`` is not in the keep set: a
+      away by ``--delete``.  ``settings.toml`` is not in the keep set: a
       board-resident one is a competing wifi authority and is evicted
       (with a one-time loud notice from the transport).
     * **Legacy additive deploys** call ``delete=False`` with no extra

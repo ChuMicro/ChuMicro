@@ -1162,8 +1162,8 @@ class TestFlashMode:
         assert (drive_path / "boot_out.txt").exists()  # DEVICE_KEEP_SET
         assert (drive_path / "test_example.py").exists()
 
-        # The rsync invocation is the clean one, with NO code.py
-        # carve-out (the per-context divergence that was removed).
+        # The rsync invocation is the clean one, with no per-context
+        # code.py exclude.
         assert rsync_argv, "rsync was not invoked"
         argv = rsync_argv[0]
         assert "--delete" in argv
