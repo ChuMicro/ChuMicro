@@ -43,7 +43,7 @@ TOPIC = "demo/telemetry"
 
 The constants act as the fallback when no `runtime_config.msgpack` is present on the device, so the same example file works in both modes.
 
-## What the library actually reads
+## What the library reads
 
 None of the network-shaped libraries reads either `workspace.yml`, `secrets.toml`, or `runtime_config.msgpack` directly.  They all take a typed config object (`WifiConfig`, `HttpClient`, `MQTTClient(...)`) and a transport handle, and go.  The config wiring is application-layer — `chumicro-config` is what reads the msgpack, and your example or app code is what wires the typed config into the library.
 

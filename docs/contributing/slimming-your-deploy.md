@@ -108,4 +108,4 @@ if factory_kwarg is None:
         ) from exception
 ```
 
-That's the contract every `from_config` in mqtt / requests / websockets / ntp / http_server already implements; mirror it for new libraries.  The `new-library` scaffolder generates the factory file at the canonical path — if you scaffolded via `python scripts/run.py new-library`, the placement is already right.
+That's the contract every `from_config` in mqtt / requests / websockets / ntp / http_server already implements; mirror it for new libraries.  The `new-library` scaffolder puts the factory file at the package root for you — if you scaffolded via `python scripts/run.py new-library`, the placement is already right.
