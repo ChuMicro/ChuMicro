@@ -78,11 +78,10 @@ _KNOWN_KEYS: frozenset[str] = ALL_TOP_LEVEL_ENTRY_FIELDS | _DEPLOY_ONLY_FIELDS
 # Validated registry shape
 #
 # Sits one level above :class:`Device`: a registry record with
-# description and arbitrary extra metadata that
-# orchestration layers (IDE-test orchestrators, project-workspace
-# template loaders) carry alongside the deploy-relevant fields.
-# :class:`Device` is the transport-construction primitive.
-# :class:`DeviceEntry` is the devices.yml record.
+# description and arbitrary extra metadata alongside the
+# deploy-relevant fields.  :class:`Device` is the transport-
+# construction primitive.  :class:`DeviceEntry` is the devices.yml
+# record.
 # ---------------------------------------------------------------------------
 
 
@@ -218,10 +217,8 @@ def load_device_registry(
 ) -> tuple[list[DeviceEntry], DeviceDefaults]:
     """Load and validate ``devices.yml`` into ``(entries, defaults)``.
 
-    The full validated registry.  Useful for orchestration layers
-    that need the rich :class:`DeviceEntry` shape with descriptions
-    and extra metadata, not just one :class:`Device` for a single
-    transport.
+    The full validated registry, exposed as the rich
+    :class:`DeviceEntry` shape with descriptions and extra metadata.
 
     Args:
         path: Explicit path to ``devices.yml``.  When ``None``,
@@ -315,10 +312,8 @@ def load_raw_entries(
     The schema-shape primitive that ``chumicro-deploy`` owns: read
     the YAML, return the ``devices:`` list and the ``defaults:``
     mapping verbatim — no field validation, no Device construction,
-    no normalization.  Consumers with richer schemas (IDE-test
-    orchestrators, future project-workspace template loaders) call
-    this and layer their own validation on top, so the YAML shape
-    lives in one place.
+    no normalization.  Richer schemas layer their own validation on
+    top, so the YAML shape lives in one place.
 
     Args:
         path: Filesystem path to the YAML file.
@@ -414,10 +409,7 @@ def _resolve_raw_entry(
 ) -> tuple[dict[str, Any], str | None]:
     """Resolve one raw ``devices.yml`` entry by the precedence rules.
 
-    Owns the selection logic so both :func:`load_devices_yml` (returns
-    a :class:`Device`) and :func:`load_devices_yml_raw` (returns the
-    entry dict) share one resolution order: ``device_id → defaults.<runtime>
-    → single-default``.
+    Resolution order: ``device_id → defaults.<runtime> → single-default``.
 
     Returns ``(chosen_entry, default_deploy_mode)``.  Raises as
     documented on :func:`load_devices_yml`.
@@ -545,11 +537,9 @@ def load_devices_yml_raw(
 
     Identical resolution to :func:`load_devices_yml` (same precedence,
     same errors) but returns the unmapped entry dict — including
-    ``hardware`` and other keys the :class:`Device` dataclass drops —
-    for consumers that need fields off the schema, not the transport
+    ``hardware`` and other keys the :class:`Device` dataclass drops.
+    Use when fields off the schema are needed alongside the transport
     facade (firmware-URL derivation reads ``hardware.firmware_source``).
-    Keeps selection logic owned here instead of reimplemented by the
-    caller.
     """
     chosen, _ = _resolve_raw_entry(
         Path(path), device_id=device_id, runtime=runtime,

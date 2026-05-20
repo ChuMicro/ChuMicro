@@ -57,13 +57,12 @@ class PostStageStep(Enum):
     symbol to anchor on instead of two unrelated methods that happen
     to differ.
 
-    - :attr:`SOFT_REBOOT_AND_TAIL` — project / example deploy
-      (:meth:`deploy_files`): Ctrl-D soft-reboot so the board runs the
-      freshly-staged ``code.py``, then capture its serial output.
-    - :attr:`HARNESS_EXEC_OVER_REPL` — functional-test stage
-      (:meth:`_stage_to_flash`): keep the live raw-REPL session alive
-      (a soft-reboot would tear down state the harness drives over
-      that session), refresh the FAT cache with a cheap directory
+    - :attr:`SOFT_REBOOT_AND_TAIL`: Ctrl-D soft-reboot so the board
+      runs the freshly-staged ``code.py``, then capture its serial
+      output.
+    - :attr:`HARNESS_EXEC_OVER_REPL`: keep the live raw-REPL session
+      alive (a soft-reboot would tear down state the harness drives
+      over that session), refresh the FAT cache with a cheap directory
       walk, and let the caller exec the harness and collect asserts.
 
     The chosen value never changes how the bytes got there: everything
@@ -218,9 +217,8 @@ def _walk_package_files(
             ):
                 continue
             if is_test_support_module(child) and not include_test_support:
-                # Test-support fakes never ship to a product/app/
-                # functional deploy.  Only the on-device unit sweep
-                # passes include_test_support=True.
+                # Test-support fakes are excluded unless the caller
+                # explicitly opts in.
                 continue
             source_text = child.read_text(encoding="utf-8")
             if child.name == "__init__.py":
@@ -239,7 +237,7 @@ class SerialPort(Protocol):
     """Structural interface for a serial port.
 
     Matches the subset of ``serial.Serial`` used by the transport.
-    Fakes in tests satisfy this protocol without importing pyserial.
+    Implementations can satisfy this protocol without importing pyserial.
     """
 
     @property
@@ -254,8 +252,8 @@ class TimeSource(Protocol):
     """Structural interface for an injectable time source.
 
     Matches the subset of Python's ``time`` module used by the transport.
-    ``FakeTime`` from :mod:`chumicro_deploy.testing` satisfies this
-    protocol so tests can eliminate wall-clock waits.
+    ``FakeTime`` from :mod:`chumicro_deploy.testing` is one conforming
+    implementation that eliminates wall-clock waits.
     """
 
     def monotonic(self) -> float: ...
@@ -339,10 +337,8 @@ class CircuitpythonTransport:
         self._time: TimeSource = time or cast(TimeSource, _time_module)
         #: Callable returning candidate CIRCUITPY mount paths.  Defaults
         #: to :func:`circuitpy_drive._circuitpy_volume_candidates`.
-        #: Tests inject a fake scanner to avoid touching real OS mount
-        #: tables.  Tests that don't construct their own transport fall
-        #: back to the module-level patch installed by
-        #: :func:`chumicro_deploy.testing.isolate_from_host_filesystem`.
+        #: Injectable so callers can substitute a scanner that does not
+        #: touch real OS mount tables.
         self._drive_scanner: Callable[[], list[Path]] = (
             drive_scanner
             if drive_scanner is not None
@@ -354,27 +350,22 @@ class CircuitpythonTransport:
         #: though a sweep may push many times.
         self._settings_eviction_notified = False
         self._staged_sources: list[tuple[str, str]] | None = None
-        #: Set per :meth:`stage` call.  Only the on-device unit sweep
-        #: (``--target device-unit``) passes ``True`` so test-support
-        #: fakes reach the board; every product/app/functional deploy
-        #: leaves it ``False``.
+        #: Set per :meth:`stage` call.  When ``True``, test-support
+        #: fakes reach the board; default ``False`` excludes them.
         self._include_test_support: bool = False
         #: True once ``stage()`` or the RAM-mode ``deploy_files`` path
         #: has prepared the transport for ``execute()`` calls.  Kept
         #: separate from ``_staged_sources`` so the deploy path does
         #: not have to pretend it staged modules it did not collect.
         self._staged: bool = False
-        #: The transport's identity *is* its target runtime.  Selecting
-        #: :class:`CircuitpythonTransport` means the deployment target
-        #: is CircuitPython, so files marked for another runtime via
-        #: ``__chumicro_runtimes__`` are filtered out of every staging
-        #: path (RAM mode + flash mode).
+        #: The deployment target is CircuitPython, so files marked for
+        #: another runtime via ``__chumicro_runtimes__`` are filtered out
+        #: of every staging path (RAM mode + flash mode).
         self._target_runtime: str = "circuitpython"
         #: The :class:`PostStageStep` the last :meth:`_push_staging_to_drive`
         #: ran under.  Recorded so the single-staging-path invariant —
         #: both contexts issue the *identical* rsync and differ only in
-        #: the named post-stage fork — is assertable in tests rather
-        #: than implied.
+        #: the named post-stage fork — is assertable.
         self._post_stage_step: PostStageStep | None = None
 
     @staticmethod
@@ -459,11 +450,9 @@ class CircuitpythonTransport:
     ) -> None:
         """Read source files into memory for inline execution.
 
-        **Test-harness API.**  Sister of :meth:`deploy_files` for the
-        functional-test orchestrator (`source_dirs` + `test_files` +
-        `harness_source` are test-runner concepts).  Production
-        deploys use :meth:`deploy_files` with a flat
-        ``files: dict[device_path, bytes]`` instead.
+        Sister of :meth:`deploy_files` that takes library/test/harness
+        directories (``source_dirs`` + ``test_files`` + ``harness_source``)
+        instead of a flat ``files: dict[device_path, bytes]``.
 
         In RAM mode, source code is read and stored for embedding into
         the bootstrap code block sent via raw REPL.
@@ -654,11 +643,10 @@ class CircuitpythonTransport:
     ) -> Path:
         """Compare drive ↔ board identity, then auto-correct or raise.
 
-        Used by both the UID and machine-string branches of drive
-        verification.  ``identity_label`` is only used for the
-        user-facing error message when no sibling mount matches.
-        Auto-correction on success is silent.  The corrected path is
-        returned and the caller proceeds without host-side noise.
+        ``identity_label`` is only used for the user-facing error
+        message when no sibling mount matches.  Auto-correction on
+        success is silent.  The corrected path is returned without
+        host-side noise.
         """
         if drive_identity == probe_identity:
             return drive_path
@@ -689,19 +677,16 @@ class CircuitpythonTransport:
 
         *probe_writable* (default ``False``) — when ``True``, additionally
         write+unlink a ``.chu-probe`` marker to confirm the mount is
-        actually writable.  Only the wipe-and-wait path
-        (:meth:`_wait_for_writable_drive_after_wipe`) uses this, and it
-        polls until ``storage.erase_filesystem()`` finishes and the
-        FAT remounts cleanly, which requires actually testing
-        writability.
+        actually writable.  Required for polling a remount after
+        ``storage.erase_filesystem()`` finishes, which needs an actual
+        writability test.
 
-        Normal staging / deploy paths leave it ``False``: the rsync
-        that follows is itself a write probe, and skipping the
-        ``.chu-probe`` removes one host-side drive write before rsync
-        starts (each write before rsync is a wedge-risk vector, since
-        rsync to CIRCUITPY can hang in uninterruptible kernel I/O on
-        macOS when the drive is wedged).  When
-        the drive is genuinely unwritable, the rsync subprocess
+        When left ``False``, the next rsync acts as its own write
+        probe, and skipping the ``.chu-probe`` removes one host-side
+        drive write before rsync starts (each write before rsync is a
+        wedge-risk vector, since rsync to CIRCUITPY can hang in
+        uninterruptible kernel I/O on macOS when the drive is wedged).
+        When the drive is genuinely unwritable, the rsync subprocess
         surfaces the OS error in its stderr and ``flash_drive.rsync``
         wraps it as :class:`FlashDriveError`.
         """
@@ -713,12 +698,11 @@ class CircuitpythonTransport:
             )
         drive_path = candidates[0]
         # Belt-and-braces re-check.  ``_circuitpy_volume_candidates``
-        # already filters by ``is_dir`` at scan time, but the wipe-and-
-        # wait path re-resolves while the FAT volume is mid-remount,
-        # so the cached candidates list can name a path that's
-        # temporarily ``is_dir() == False`` between the scan and the
-        # next probe iteration.  Re-checking here turns that into a
-        # clear "not mounted" error the wait loop can recognize.
+        # already filters by ``is_dir`` at scan time, but during a
+        # FAT volume mid-remount the cached candidates list can name
+        # a path that's temporarily ``is_dir() == False`` between the
+        # scan and the next probe iteration.  Re-checking here turns
+        # that into a clear "not mounted" error.
         if not drive_path.is_dir():
             raise CircuitpythonTransportError(
                 f"CIRCUITPY drive not mounted: {drive_path}"
@@ -861,71 +845,47 @@ class CircuitpythonTransport:
         rsync_additional_excludes: tuple[str, ...] = (),
         strip_xattrs: bool = False,
     ) -> Path:
-        """Common drive-write phase shared by ``_stage_to_flash`` (functional
-        tests) and ``deploy_files`` (production deploy).
+        """Common drive-write phase.
 
-        Both callers build their staging tree differently.  Functional
-        tests assemble it from package source directories + harness +
-        test files, while production deploys take a flat
-        ``{path: bytes}`` dict.  Once the local tree is built, the
-        host-side work is identical: enter raw REPL, disable
-        autoreload, resolve and verify the drive, plant macOS
-        skip-sentinels into the staging tree, optionally strip xattrs,
-        rsync, post-cleanup, flush.
+        Once the local staging tree is built, the host-side work is
+        identical regardless of how the tree was assembled: enter raw
+        REPL, disable autoreload, resolve and verify the drive, plant
+        macOS skip-sentinels into the staging tree, optionally strip
+        xattrs, rsync, post-cleanup, flush.
 
-        Caller-specific concerns kept out of this helper:
-
-        * **Building the staging tree.**  Functional tests use
-          :meth:`_build_local_staging_tree`, and ``deploy_files`` walks
-          the flat file dict.  This split is the legitimate difference
-          between the two call paths.
-        * **What happens after the rsync.**  This is the one
-          sanctioned per-context fork, named by the
-          *post_stage* argument — a :class:`PostStageStep`, not a
-          hidden coupling.  :attr:`~PostStageStep.HARNESS_EXEC_OVER_REPL`
-          (``_stage_to_flash``) does a cheap directory-walk FAT-cache
-          refresh and leaves the raw-REPL session alive for the
-          harness.  :attr:`~PostStageStep.SOFT_REBOOT_AND_TAIL`
-          (``deploy_files``) does a full Ctrl-D soft-reboot to run the
-          freshly-staged ``code.py``.  Both invalidate CP's in-RAM FAT
-          cache so the rsynced files are visible.  The helper records
-          the chosen step on ``self._post_stage_step`` so the
-          "identical bytes path, named fork" invariant is assertable,
-          and the caller performs the step itself after this helper
-          returns.
+        What happens after the rsync is named by the *post_stage*
+        argument — a :class:`PostStageStep`, not a hidden coupling.
+        Both values invalidate CP's in-RAM FAT cache so the rsynced
+        files are visible.  The helper records the chosen step on
+        ``self._post_stage_step`` so the "identical bytes path, named
+        fork" invariant is assertable, and the post-stage action
+        itself runs once this helper returns.
 
         Args:
             staging_path: Local staging directory whose contents are
                 rsynced onto the drive.
-            rsync_delete: ``--delete`` flag.  Clean callers — production
-                deploy *and* functional-test stage — pass ``True``
-                (clean slate, only ``rsync_additional_excludes``
-                survives).  Additive deploys pass ``False`` (preserve
-                drive files not in the staging tree).
-            post_stage: Which :class:`PostStageStep` the caller will
-                run once this helper returns.  Recorded on
+            rsync_delete: ``--delete`` flag.  ``True`` means clean
+                slate, only ``rsync_additional_excludes`` survives;
+                ``False`` preserves drive files not in the staging tree.
+            post_stage: Which :class:`PostStageStep` will run once this
+                helper returns.  Recorded on
                 ``self._post_stage_step``.  The post-stage action
-                itself stays caller-side (it needs caller session
+                itself runs outside this helper (it needs session
                 state).  The bytes-on-device path above it is
                 identical regardless of this value.  That is the
                 single-staging-path invariant.
             rsync_additional_excludes: Extra basenames to exclude.
-                Clean callers — production deploy *and* functional-test
-                stage — both pass :data:`flash_drive.DEVICE_KEEP_SET`,
-                the identical invocation with no per-context exclude.
-                Additive deploys leave empty.
+                A clean push passes :data:`flash_drive.DEVICE_KEEP_SET`;
+                additive deploys leave it empty.
             strip_xattrs: When ``True``, strip macOS extended
-                attributes from the staging tree before rsync.
-                Production deploys want this so AppleDouble ``._foo``
-                companions don't materialize on the FAT volume.  The
-                functional-test path skips it because the staging
-                tree is built from source files that already passed
-                through ``shutil.copytree`` (no xattrs survive).
+                attributes from the staging tree before rsync so
+                AppleDouble ``._foo`` companions don't materialize on
+                the FAT volume.
 
         Returns:
-            The resolved drive path, for callers that need it for
-            their post-deploy work (e.g. polling for entrypoint
-            visibility, warning if a flush left an empty marker).
+            The resolved drive path, for post-deploy work (e.g.
+            polling for entrypoint visibility, warning if a flush left
+            an empty marker).
 
         Raises:
             CircuitpythonTransportError: Drive can't be resolved /
@@ -940,10 +900,8 @@ class CircuitpythonTransport:
         # autoreload BEFORE any host-side drive write, because
         # otherwise rsync to CIRCUITPY can hang in uninterruptible
         # kernel I/O.  ``_enter_raw_repl`` is idempotent (resends
-        # Ctrl-C / Ctrl-A) so the second call from ``deploy_files``
-        # after ``connect()`` is safe, and ``_stage_to_flash`` benefits
-        # because its caller (the pytest-device session cache) may have
-        # soft-rebooted the board between batches.
+        # Ctrl-C / Ctrl-A) so repeated calls after ``connect()`` or
+        # after an intervening soft-reboot are safe.
         self._enter_raw_repl()
         self._disable_autoreload_before_drive_writes()
         drive_path = self._resolve_circuitpy_drive()
@@ -1035,13 +993,13 @@ class CircuitpythonTransport:
         - ``--delete``: remove stale files that no longer belong on
           the device.
 
-        Same rsync command line as a production clean deploy
-        (``--delete`` + ``additional_excludes=DEVICE_KEEP_SET``).  Only
-        the staging tree differs — libs + harness + ``test_*.py``, no
-        entrypoint, since the harness runs over the live raw REPL
-        instead of booting ``code.py``.  A stale ``code.py`` is thus
-        reconciled away like any non-keep-set file, which is what a
-        test run wants.
+        Rsync command line is a clean push (``--delete`` +
+        ``additional_excludes=DEVICE_KEEP_SET``).  The staging tree
+        carries libs + harness + ``test_*.py`` and no entrypoint,
+        since the harness runs over the live raw REPL instead of
+        booting ``code.py``.  A stale ``code.py`` is thus reconciled
+        away like any non-keep-set file, which is what a test run
+        wants.
 
         Disables autoreload before copying to prevent restarts during
         the file transfer.  Requires rsync on the host.
@@ -1070,12 +1028,9 @@ class CircuitpythonTransport:
             )
 
         self._warn_if_flush_produced_empty_file(drive_path, test_files)
-        # Stage path: refresh CP's FAT cache via a directory walk
-        # (cheap, preserves raw REPL session state).  ``deploy_files``
-        # uses a soft-reboot for the same purpose because it has to
-        # boot into code.py anyway; here the harness drives test
-        # execution via the live raw REPL session, so a soft-reboot
-        # would tear down state the harness expects.
+        # Refresh CP's FAT cache via a directory walk (cheap, and
+        # preserves raw REPL session state — a soft-reboot would tear
+        # down the live session the harness drives test execution on).
         self._refresh_board_fat_cache_after_rsync()
 
     def _collect_package_sources(self, source_directory: Path) -> None:
@@ -1170,11 +1125,10 @@ class CircuitpythonTransport:
         ESP32-S2/S3/C6/P4 + RP2040/RP2350 + most SAMD/nRF52 ports,
         but whether the call actually puts a *particular* board in
         bootloader mode depends on that board's HAL build.  Treat
-        success as observable, not declared: the raw-REPL link
-        drops as the chip resets (expected), and a new bootloader
-        port / UF2 drive shows up for the caller's drive-poll to
-        spot.  Don't add board-specific branching here.  If the
-        poll comes up empty, the manual-entry fallback handles it.
+        success as observable, not declared: the raw-REPL link drops
+        as the chip resets (expected), and a new bootloader port /
+        UF2 drive becomes visible to whatever polls for one.  Don't
+        add board-specific branching here.
 
         Closes the serial port directly so a subsequent
         :meth:`disconnect` becomes a no-op.  The USB link is gone on
@@ -1248,11 +1202,9 @@ class CircuitpythonTransport:
     def run_script(self, script: str, *, timeout: float = 10.0) -> str:
         """Run *script* via the persistent raw REPL with no staging.
 
-        Mirrors :meth:`probe_implementation`'s use of
-        :meth:`_send_repl_command` and bypasses the
-        ``stage()``-first precondition that :meth:`execute` enforces.
-        *script* must be self-contained (no imports of staged
-        modules).
+        Bypasses the ``stage()``-first precondition that
+        :meth:`execute` enforces.  *script* must be self-contained
+        (no imports of staged modules).
 
         Args:
             script: Self-contained Python source to run.
@@ -1272,8 +1224,8 @@ class CircuitpythonTransport:
         (which clears ``sys.modules`` and all interpreter state), waits
         for the reboot to complete, then re-enters raw REPL.
 
-        Use between test groups to ensure each group starts with a
-        clean interpreter, since previous modules are evicted from RAM.
+        Leaves the interpreter clean — previous modules are evicted
+        from RAM.
 
         Raises:
             CircuitpythonTransportError: If raw REPL cannot be
@@ -1323,14 +1275,12 @@ class CircuitpythonTransport:
     ) -> str:
         """Deploy *files* and execute *entrypoint* in the configured mode.
 
-        **Production deploy API.**  Sister of :meth:`stage` (test-
-        harness use only).  Takes a flat ``files: dict[device_path,
-        bytes]`` rather than `source_dirs` + `test_files` so it
-        composes cleanly with arbitrary :class:`FileSource`
-        implementations (`DirectorySource`, `FileMapSource`,
-        `ImportGraphSource`, workspace-shaped sources).  The CLI's
-        ``chumicro-deploy deploy`` and `Deployer.deploy` /
-        `deploy_diff` both route here.
+        Sister of :meth:`stage`.  Takes a flat
+        ``files: dict[device_path, bytes]`` rather than ``source_dirs``
+        + ``test_files`` so it composes cleanly with arbitrary
+        :class:`FileSource` implementations (:class:`DirectorySource`,
+        :class:`FileMapSource`, :class:`ImportGraphSource`,
+        workspace-shaped sources).
 
         Flash mode writes every entry of *files* to the CIRCUITPY USB
         drive (auto-detecting the mount path when not configured),
@@ -1355,8 +1305,8 @@ class CircuitpythonTransport:
             entrypoint: On-device path (must be a key of *files*).
             on_file_staged: Per-file callback invoked after each file
                 is written to the drive (flash mode) or before the
-                inline scripts run (RAM mode, in sorted-key order so
-                tests get a deterministic sequence).
+                inline scripts run (RAM mode, in sorted-key order for
+                a deterministic sequence).
             on_execute_line: Callback invoked once per line of captured
                 output (in order) after the entrypoint returns.
             tail_seconds: Override for how long flash mode captures
@@ -1455,10 +1405,9 @@ class CircuitpythonTransport:
     def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
         """List on-device files within the deploy's managed scope.
 
-        ``clean_slate`` (the deploy default ``True``, forwarded by
-        :meth:`Deployer.deploy_diff`) widens the scope to the whole
-        drive minus :data:`flash_drive.DEVICE_KEEP_SET` + macOS noise.
-        ``False`` is the additive scope.
+        ``clean_slate=True`` widens the scope to the whole drive minus
+        :data:`flash_drive.DEVICE_KEEP_SET` + macOS noise.  ``False``
+        is the additive scope.
 
         Flash mode walks the CIRCUITPY USB drive directly via stdlib
         ``pathlib``, which is faster and simpler than a raw-REPL
@@ -1467,9 +1416,7 @@ class CircuitpythonTransport:
 
         Pairs ``_resolve_circuitpy_drive`` with ``_verify_drive_for_board``
         so the macOS multi-board mount-order swap is silently corrected
-        to the connected board's actual mount before the walk.  Without
-        verify, the diff layer reads the *other* board's files and
-        reports zero stale entries when there's a real diff to apply.
+        to the connected board's actual mount before the walk.
 
         RAM mode returns an empty list, because RAM-mode deploys never
         touch flash, so there's nothing persistent to diff between
@@ -1497,19 +1444,16 @@ class CircuitpythonTransport:
         the deploy that follows.
 
         Pairs ``_resolve_circuitpy_drive`` with ``_verify_drive_for_board``
-        for the same reason ``list_files_in_scope`` does.  Without
-        verify, the macOS first-mount-wins behavior could unlink the
-        *other* board's files (this is the destructive sister of the
-        list-the-wrong-drive bug).
+        so the macOS first-mount-wins behavior cannot unlink the
+        *other* board's files on multi-board hosts.
 
         Uses :meth:`pathlib.Path.unlink` rather than rsync ``--delete``
         on purpose: rsync's delete semantics are "remove anything in
         DEST not in SRC", which is the wrong shape for "delete these
-        specific files."  Unlink also dodges FAT32's data-write reliability
-        concerns by only touching directory entries, no payload
-        bytes.  The diff layer recomputes the stale set
-        on every deploy, so a swallowed error here just retries
-        next time.
+        specific files."  Unlink also dodges FAT32's data-write
+        reliability concerns by only touching directory entries, no
+        payload bytes.  The stale set is recomputed on every deploy,
+        so a swallowed error here just retries next time.
         """
         if not paths or self.mode != "flash":
             return
@@ -1518,10 +1462,9 @@ class CircuitpythonTransport:
             drive = self._verify_drive_for_board(drive)
         except CircuitpythonTransportError:
             return
-        # The clean-slate diff path removes a stale board settings.toml
-        # here (vs the clean-rsync path, which removes it via
-        # --delete).  The notice is guarded once-per-instance so it
-        # fires exactly once regardless of which path does the removal.
+        # If the delete set targets a stale board settings.toml, emit
+        # the once-per-instance eviction notice here.  The guard fires
+        # exactly once regardless of which removal path runs.
         if any(path.lstrip("/") == "settings.toml" for path in paths):
             self._notice_settings_toml_eviction(drive)
         for device_path in paths:
@@ -1572,13 +1515,12 @@ class CircuitpythonTransport:
         Flash mode only.  RAM mode never writes a persistent
         entrypoint, so there is nothing to clear.  Host-side
         ``pathlib.unlink`` (a directory-entry-only op — no FAT data
-        write, the same FAT-safe shape :meth:`delete_files` relies on),
-        then ``flush_volume`` so the deletion is on the physical medium
-        before the caller's soft-reboot re-reads FAT, then a bounded
-        poll that the drive no longer shows them.  Raises if an
-        entrypoint is still present after the flush + poll budget.  A
-        loud failure is correct here: the caller is about to reboot and
-        a surviving ``code.py`` is exactly the race this removes.
+        write), then ``flush_volume`` so the deletion is on the
+        physical medium before a soft-reboot re-reads FAT, then a
+        bounded poll that the drive no longer shows them.  Raises if
+        an entrypoint is still present after the flush + poll budget,
+        because a surviving ``code.py`` is exactly the soft-reboot race
+        this removes.
         """
         if self.mode != "flash":
             return
@@ -1674,11 +1616,9 @@ class CircuitpythonTransport:
 
         ``storage.erase_filesystem()`` reboots the board, and USB-CDC
         and the FAT volume mount on independent macOS timelines —
-        CDC first, FAT typically a few seconds later.  The serial
-        reconnect inside :meth:`wipe_filesystem` only waits for
-        CDC, so a follow-up :meth:`deploy_files` immediately after
-        wipe returns can race two distinct settle phases on the
-        host side:
+        CDC first, FAT typically a few seconds later.  Waiting for
+        CDC alone leaves two distinct host-side settle phases racing
+        a follow-up deploy:
 
         1. Mount-not-yet-present — the configured drive path
            doesn't exist yet (FAT volume hasn't remounted at all).
@@ -1686,14 +1626,12 @@ class CircuitpythonTransport:
            but probe writes hit ``EACCES`` (macOS hasn't finished
            setting up access for the user).
 
-        Both surface as deploy failures.  Reuses
-        :meth:`_resolve_circuitpy_drive` in a retry loop because it
-        already exercises both checks (``is_dir`` + tiny probe
-        write/unlink), and polling it covers either phase without
-        duplicating the probe logic.  The poll waits for *any*
-        CIRCUITPY mount to come back, and
-        :meth:`_verify_drive_for_board` on subsequent operations swaps
-        to the connected board's mount on multi-board hosts.
+        Both surface as deploy failures.  Polls
+        :meth:`_resolve_circuitpy_drive` with ``probe_writable=True``
+        so each iteration exercises both checks (``is_dir`` + tiny
+        probe write/unlink) without duplicating the probe logic.  The
+        poll waits for *any* CIRCUITPY mount to come back; the
+        connected-board mount is selected on subsequent operations.
         """
         deadline = (
             self._time.monotonic() + _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS
@@ -1710,14 +1648,11 @@ class CircuitpythonTransport:
             except CircuitpythonTransportError as resolve_error:
                 last_error = resolve_error
                 self._time.sleep(_WIPE_RECONNECT_POLL_SECONDS)
-        # Phrasing matches `_CIRCUITPY_DRIVE_PATTERNS["circuitpy
-        # drive not mounted"]` in recovery.py so the recovery
-        # classifier routes this to CIRCUITPY_DRIVE_MISSING, which
-        # `_RecoveringDeployer._resolve_kind` then promotes to
-        # MACOS_FSKIT_WEDGED when `detect_fskit_wedge()` reports True.
-        # That promotion is the only host-visible signal that a
-        # FAT-remount stall is the macOS FSKit wedge rather than a
-        # generic timeout.
+        # Phrasing matches a recovery-classifier pattern so this
+        # surfaces as CIRCUITPY_DRIVE_MISSING (which the classifier
+        # promotes to MACOS_FSKIT_WEDGED when the wedge probe fires).
+        # Don't reword without updating the matching pattern in
+        # recovery.py.
         raise CircuitpythonTransportError(
             f"CIRCUITPY drive not mounted within "
             f"{_WIPE_FAT_REMOUNT_TIMEOUT_SECONDS:.0f}s of "
@@ -1741,14 +1676,12 @@ class CircuitpythonTransport:
         reuses the persistent raw-REPL session.  No CIRCUITPY drive
         or soft-reboot is involved.
 
-        ``execute_scripts`` delegates to :meth:`execute`, whose
-        guard covers a test-harness invariant ("``stage()`` must be
-        called before ``execute()``").  The RAM-mode deploy path
-        flips :attr:`_staged` itself so the guard passes without
-        mutating :attr:`_staged_sources`.  Deploy doesn't collect
-        modules the same way ``stage()`` does, and pretending
-        otherwise would leak the test path's shape into the deploy
-        API surface.
+        ``execute_scripts`` delegates to :meth:`execute`, whose guard
+        ("``stage()`` must be called before ``execute()``") covers a
+        different invariant.  Flips :attr:`_staged` directly so the
+        guard passes without mutating :attr:`_staged_sources`, since
+        the modules a deploy ships are not the same set
+        :meth:`stage` collects.
         """
         if on_file_staged is not None:
             for device_path in sorted(files):
@@ -1773,10 +1706,10 @@ class CircuitpythonTransport:
         / removes / replaces files on the USB-MSC side updates the
         FAT on the device's flash, but the in-RAM cache may not pick
         up the new entries until something forces a directory read.
-        Without this refresh, back-to-back ``_stage_to_flash`` calls
-        on the same board can hit ``ImportError: no module named X.Y``
-        because the freshly-rsynced module is on disk but invisible
-        to CP's importer.
+        Without this refresh, back-to-back rsyncs on the same board
+        can hit ``ImportError: no module named X.Y`` because the
+        freshly-rsynced module is on disk but invisible to CP's
+        importer.
 
         Implementation: a recursive ``os.listdir`` walk from the FS
         root.  Listing a directory forces CP to re-read its FAT
@@ -1784,14 +1717,10 @@ class CircuitpythonTransport:
         ``/lib/<package>/<submodule>.py`` shape that the importer
         will hit next).
 
-        Called from :meth:`_stage_to_flash` after the host-side
-        ``flush_volume`` settle delay.  ``deploy_files`` (production
-        path) handles the equivalent invalidation differently.  It
-        does an explicit soft-reboot via Ctrl-D after the rsync, which
-        tears down + rebuilds the entire CP runtime including its
-        FAT cache.  ``_stage_to_flash`` cannot soft-reboot because
-        the harness expects the raw-REPL session to stay alive across
-        the call.
+        Use this when the raw-REPL session must stay alive across the
+        cache invalidation.  A Ctrl-D soft-reboot is the heavier
+        alternative that tears down + rebuilds the entire CP runtime
+        including its FAT cache.
         """
         # The walk script is small enough to inline.  ``S_IFDIR =
         # 0o40000 = 16384`` is stable across CP/MP and the stat[0]
@@ -1897,8 +1826,8 @@ class CircuitpythonTransport:
             ``code.py output:`` header and the ``Code done running.``
             marker (if present), or everything after ``soft reboot``
             otherwise.  When ``soft reboot`` is never observed the
-            raw accumulated bytes are returned so callers / tests
-            can still diagnose the failure.
+            raw accumulated bytes are returned so callers can still
+            diagnose the failure.
         """
         assert self._port is not None
         window = self.timeout if tail_seconds is None else tail_seconds
@@ -1961,15 +1890,15 @@ class CircuitpythonTransport:
         raw REPL, a no-op control byte otherwise) so the next serial
         consumer never finds the board parked in raw REPL, then
         closes the port.  No Ctrl-C, because that would interrupt any
-        ``code.py`` left running by ``deploy_files``.  No
+        ``code.py`` left running on the board.  No
         ``supervisor.runtime.autoreload = True``, because flipping
         autoreload back on outside an active raw-REPL session can layer
         an autoreload-driven soft-reboot on top of one already in
         flight, which can wedge ESP32-S2 USB-CDC firmware.
 
-        When :meth:`reset_into_bootloader` has already been called, it
-        closes the port itself and nulls :attr:`_port`.  This method
-        then finds nothing to close and only clears
+        Tolerates an already-closed port (e.g. after
+        :meth:`reset_into_bootloader` nulled :attr:`_port`): the
+        method finds nothing to close and only clears
         :attr:`_staged_sources`.
         """
         if self._port is not None:
@@ -2001,12 +1930,12 @@ class CircuitpythonTransport:
 
         Per-call override exists because two workload classes share this
         primitive: short interactive ops (autoreload toggle,
-        ``gc.mem_free`` probe) finish in <1 s, while test bootstraps can
-        include silent CPU loops longer than that (the Lolin S2
+        ``gc.mem_free`` probe) finish in <1 s, while bootstrap scripts
+        can include silent CPU loops longer than that (the Lolin S2
         fragmentation-test bisection runs ~7,500 silent ``bytearray()``
-        allocs at the 256-byte tier).  The bootstrap path passes a
-        longer ``idle_timeout`` so the parser doesn't fire mid-script
-        and raise "Malformed raw REPL response".
+        allocs at the 256-byte tier).  A longer ``idle_timeout`` keeps
+        the parser from firing mid-script and raising "Malformed raw
+        REPL response".
 
         Args:
             marker: Byte sequence to look for.
@@ -2036,7 +1965,6 @@ class CircuitpythonTransport:
     def _send_repl_command(self, command: str) -> str:
         """Send a command through raw REPL and return stdout.
 
-        Used internally for control commands (autoreload, supervisor).
         The port must already be connected and in raw REPL mode.
 
         Args:

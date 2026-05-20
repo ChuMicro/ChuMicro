@@ -19,11 +19,10 @@ field is set short-circuits the lookup, and the value is returned
 verbatim.  Vendor builds, locally-compiled firmware, mirrored
 URLs all pass through.
 
-Network access is via an injectable ``url_opener`` callable so tests
-exercise the parsing + version-picking logic without hitting the
-real bucket / download page.  Production code calls
-:func:`derive_firmware_url` without injection; the default opener
-is :func:`urllib.request.urlopen`.
+Network access is via an injectable ``url_opener`` callable so the
+parsing + version-picking logic can run without hitting the real
+bucket / download page.  When left unset, the default opener is
+:func:`urllib.request.urlopen`.
 """
 
 from __future__ import annotations
@@ -80,10 +79,9 @@ _CIRCUITPYTHON_FILENAME_VERSION = re.compile(
 _STABLE_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
 #: Hand-curated subset of the MicroPython ``machine`` → BOARD map.
-#: Extends as new boards land.  The project-workspace template will
-#: ship periodic refreshes pulled from ``micropython.org/download/``.
-#: Boards not in this table fall through to the prompt-and-cache
-#: path.
+#: Extends as new boards land, refreshed periodically against
+#: ``micropython.org/download/``.  Boards not in this table return
+#: ``None`` from :func:`micropython_board_for_machine`.
 #:
 #: Vendor-published Adafruit boards (Feather ESP32-S2 / S3 etc.)
 #: deliberately *aren't* in the map: Adafruit ships their own
@@ -102,8 +100,8 @@ MICROPYTHON_BOARD_BY_MACHINE: dict[str, str] = {
 }
 
 #: Concrete callable shape the network layer expects.  Same as
-#: :func:`urllib.request.urlopen`'s sync signature.  Tests inject a
-#: fake that returns a context manager wrapping in-memory bytes.
+#: :func:`urllib.request.urlopen`'s sync signature.  A conforming
+#: fake returns a context manager wrapping in-memory bytes.
 UrlOpener = Callable[[str], Any]
 
 
@@ -167,8 +165,8 @@ def list_circuitpython_versions(
         board_id: Adafruit board identifier (e.g.
             ``"raspberry_pi_pico_w"``).
         language: Adafruit language code; default ``"en_US"``.
-        url_opener: Inject a fake for tests.  Production callers
-            leave it ``None`` and use :func:`urllib.request.urlopen`.
+        url_opener: Injectable network opener.  When ``None``, uses
+            :func:`urllib.request.urlopen`.
 
     Raises:
         UnresolvedFirmwareError: The S3 prefix lookup returned no
@@ -351,8 +349,8 @@ def list_micropython_builds(
     A build is "stable" iff both markers are empty.
 
     Order follows the order anchors appear in the page (newest
-    first, by convention), and :func:`latest_micropython_url` does
-    its own sort so callers don't have to trust the listing.
+    first, by convention).  Sort downstream when ordering matters,
+    since the listing's order is not guaranteed.
 
     Args:
         board: Upper-snake-case BOARD name (``"RPI_PICO_W"``).
@@ -362,8 +360,8 @@ def list_micropython_builds(
             extension.  Defaults to ``"uf2"``; pass ``"bin"`` for
             ESP32 / ESP32-Sx, ``"hex"`` for older MicroPython
             ports, etc.  Strip the leading dot.
-        url_opener: Inject a fake for tests.  Production callers
-            leave it ``None``.
+        url_opener: Injectable network opener.  When ``None``, uses
+            :func:`urllib.request.urlopen`.
 
     Raises:
         UnresolvedFirmwareError: ``board`` is empty, or the page
@@ -459,16 +457,16 @@ def derive_firmware_url(
        ``hardware.board_id`` against the S3 bucket and return the
        latest CDN URL.
     3. When the runtime is ``micropython``, look up ``hardware.machine``
-       against the curated map.  No MP URL is constructed; the
-       caller (CLI) prompts for one and stores it via
-       ``hardware.firmware_source`` for next time.
+       against the curated map.  When the lookup fails, raises so the
+       caller can prompt for an explicit ``hardware.firmware_source``.
 
     Args:
         device_entry: A devices.yml device dict (typical fields:
             ``id``, ``runtime``, ``address``, ``hardware``).
         language: CP-only Adafruit language code.
         allow_prerelease: Include CP pre-release versions.
-        url_opener: Inject for tests.
+        url_opener: Injectable network opener.  When ``None``, uses
+            :func:`urllib.request.urlopen`.
 
     Raises:
         UnresolvedFirmwareError: When no path through the

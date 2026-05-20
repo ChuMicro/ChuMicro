@@ -19,13 +19,12 @@ zones:
 The writer preserves user comments and field ordering on round-trip
 via :mod:`ruamel.yaml`.  PyYAML can't do this, because it discards
 comments and sorts keys alphabetically by default, so the runtime
-cost of the extra dep buys the no-clobber-of-user-edits property the
-workspace template depends on.
+cost of the extra dep buys a no-clobber-of-user-edits property.
 
 The empty-registry text for a fresh workspace ships in
-``_payloads/devices.yml.template`` next to this module, and consumers
-materialize it via :func:`read_devices_yml_template`.  Schema and
-default content live together so changes stay co-located.
+``_payloads/devices.yml.template`` next to this module, available via
+:func:`read_devices_yml_template`.  Schema and default content live
+together so changes stay co-located.
 """
 
 from __future__ import annotations
@@ -53,10 +52,10 @@ def read_devices_yml_template() -> str:
     """Return the empty-registry ``devices.yml`` text.
 
     Three-zone-headed shape with ``defaults.{micropython,
-    circuitpython}: null`` (filled by ``add-device``), ``deploy_mode:
-    flash``, ``ide_runtime: micropython``, and ``devices: []``.  Single
-    source of truth for every consumer that needs to materialize the
-    file on first setup.
+    circuitpython}: null`` (filled when devices are registered),
+    ``deploy_mode: flash``, ``ide_runtime: micropython``, and
+    ``devices: []``.  Single source of truth for the file's empty
+    shape.
     """
     return _DEVICES_YML_TEMPLATE_PATH.read_text(encoding="utf-8")
 
@@ -95,9 +94,8 @@ HARDWARE_BLOCK_ZONES: dict[str, str] = {
 
 #: Every top-level entry key the writer knows about.  The single
 #: source of truth for "is this a recognized devices.yml field?".
-#: Deploy's reader (``_validate_device``) derives its
-#: ``known_keys`` from this so adding a field in one place keeps the
-#: reader in sync automatically.  ``"hardware"`` is the nested
+#: Reader and writer share this set so adding a field in one place
+#: keeps both in sync automatically.  ``"hardware"`` is the nested
 #: block, and its leaves are classified by :data:`HARDWARE_BLOCK_ZONES`.
 ALL_TOP_LEVEL_ENTRY_FIELDS: frozenset[str] = (
     USER_OWNED_FIELDS
@@ -282,8 +280,7 @@ def add_device(
     Args:
         data: The full ``devices.yml`` document (from :func:`load_devices`).
         device_id: User-friendly id (e.g. ``"back-porch"``).
-        runtime: ``"circuitpython"`` or ``"micropython"``.  Drives
-            :func:`load_devices_yml`'s ``transport`` mapping.
+        runtime: ``"circuitpython"`` or ``"micropython"``.
         address: Serial port path.  Treated as probed-always — gets
             silently refreshed by :func:`update_device_address`.
         hardware: Probed hardware info.  Each leaf is in the
@@ -302,8 +299,7 @@ def add_device(
             implicit default.
 
     Returns:
-        The newly-created entry (a :class:`CommentedMap`).  Useful
-        for tests that want to assert further on the structure.
+        The newly-created entry (a :class:`CommentedMap`).
 
     Raises:
         DeviceAlreadyExistsError: An entry with that id already exists.
@@ -336,10 +332,10 @@ def add_device(
     if set_default:
         defaults = _defaults_block(data)
         # Treat both "absent key" and "key present with null value" as
-        # "no default set yet".  The materialized devices.yml.template
-        # ships with ``micropython:`` and ``circuitpython:`` (null
-        # values, keys present), so ``runtime in defaults`` would be
-        # True before any add-device ran.  ``defaults.get(runtime)
+        # "no default set yet".  The shipped template materializes
+        # ``micropython:`` and ``circuitpython:`` as null values
+        # (keys present), so ``runtime in defaults`` would be True
+        # even before any default is set.  ``defaults.get(runtime)
         # is None`` covers both shapes.
         if defaults.get(runtime) is None:
             defaults[runtime] = device_id
@@ -379,8 +375,7 @@ def update_device_firmware_version(
     Mirrors :func:`update_device_address`.  The firmware on a board
     can be upgraded out of band (the user runs `install-firmware`,
     or flashes via a vendor tool), so a fresh probe just overwrites
-    the cached value with no prompt.  Used by the ``add-device
-    --force`` re-probe path.
+    the cached value with no prompt.
 
     Raises:
         DeviceNotFoundError: No entry with that id.
@@ -471,15 +466,13 @@ def remove_device(data: CommentedMap, device_id: str) -> CommentedMap:
     matching entry from the ``devices:`` list.  Every ``defaults.<key>``
     whose value is *device_id* is set to ``None`` (the canonical
     "unset" sentinel the template ships) rather than left dangling,
-    since a stale default would make :func:`load_devices_yml` raise.  Mirrors
-    :func:`rename_device`'s defaults fix-up, minus a replacement id.
-    Nulling *every* matching default, not just the active runtime's, is
-    deliberate: a board whose firmware was reflashed CP↔MP must not
-    keep a default pointing at the now-wrong runtime.
+    since a stale default would surface as a hard error on next load.
+    Nulling *every* matching default, not just the active runtime's,
+    is deliberate: a board whose firmware was reflashed CP↔MP must
+    not keep a default pointing at the now-wrong runtime.
 
     Returns the removed entry (a :class:`CommentedMap`) for symmetry
-    with :func:`add_device` and so the ``reset-device`` flow can
-    re-register under the same id.
+    with :func:`add_device` so the same id can be re-registered.
 
     Raises:
         DeviceNotFoundError: No entry with that id.

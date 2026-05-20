@@ -21,8 +21,8 @@ and reports the wedge.
 
 Recovery requires ``sudo`` (killing system daemons), so this module
 does not auto-run it.  It just surfaces the exact command in
-:data:`MACOS_FSKIT_RECOVERY_COMMAND` for :mod:`recovery` to paste
-into the user-facing coaching output.
+:data:`MACOS_FSKIT_RECOVERY_COMMAND` for the user-facing coaching
+output to paste verbatim.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ from collections.abc import Callable
 #:
 #: This string is the single source of truth for the recovery
 #: command.  The prose copy in ``docs/troubleshooting/macos-circuitpy.md``
-#: pulls from it.  A test pins the two together so they cannot drift.
+#: pulls from it.
 MACOS_FSKIT_RECOVERY_COMMAND = (
     "sudo killall -9 com.apple.fskit.msdos fskit_helper "
     "fskitd fskit_agent diskarbitrationd DiskArbitrationAgent"
@@ -87,18 +87,17 @@ def detect_fskit_wedge(
     detection itself to hang.
 
     Args:
-        runner: Subprocess runner (injected for tests).  Must match
-            the ``subprocess.run`` signature closely enough for
+        runner: Injectable subprocess runner.  Must match the
+            ``subprocess.run`` signature closely enough for
             ``capture_output=True, text=True, check=False, timeout=…``
             to work.
-        platform: ``sys.platform`` value (injected for tests).
+        platform: Injectable ``sys.platform`` value.
 
     Returns:
         ``True`` if the daemon is in uninterruptible wait, else
         ``False``.  Any subprocess failure — missing ``pgrep``/``ps``,
         timeout, non-zero exit — is treated as "not wedged" so a
-        false positive can never block a legitimate
-        CIRCUITPY_DRIVE_MISSING retry.
+        false positive can never block a legitimate retry.
     """
     if platform != "darwin":
         return False

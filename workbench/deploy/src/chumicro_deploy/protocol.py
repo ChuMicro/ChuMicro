@@ -78,10 +78,9 @@ class DeviceImplementation:
 
     Populated by ``probe_implementation`` on transports that support
     it.  Identifies the runtime + board behind a connected device, and
-    pins a UID that disambiguates two boards of the same model.  Used
-    downstream to match a mounted CIRCUITPY drive to its connected
-    board, so ``devices.yml`` doesn't have to encode a
-    mount-order-dependent path.
+    pins a UID that disambiguates two boards of the same model, so a
+    mounted CIRCUITPY drive can be matched to its connected board
+    without a mount-order-dependent path.
 
     Attributes:
         name: ``sys.implementation.name`` — ``"circuitpython"`` or
@@ -204,9 +203,8 @@ def validate_entrypoint_in_files(
     The exact message text (``"entrypoint <name> missing from
     files ..."``) is pattern-matched by
     :func:`~chumicro_deploy.recovery.classify_deploy_failure` to route
-    to :attr:`DeployFailureKind.CONFIGURATION_ERROR`, so every deploy
-    layer routes through this helper to keep the classifier contract
-    in one place.
+    to :attr:`DeployFailureKind.CONFIGURATION_ERROR`, so the message
+    shape is part of the helper's contract.
     """
     if entrypoint not in files:
         raise error_cls(
@@ -223,10 +221,8 @@ def parse_probe_output(output: str) -> DeviceImplementation | None:
     output.  When an accompanying ``__CHU_UID__:`` line is present,
     its hex payload is attached to :attr:`DeviceImplementation.uid`;
     output without that line parses cleanly with ``uid=""``.
-    Returns ``None`` when the ``__CHU_IMPL__:`` marker
-    is missing or its payload is malformed, and callers treat that as
-    "probe unavailable" and fall back to per-device metadata from
-    ``devices.yml``.
+    Returns ``None`` when the ``__CHU_IMPL__:`` marker is missing or
+    its payload is malformed (the "probe unavailable" signal).
 
     Args:
         output: Combined stdout (and stderr if merged) from the probe
@@ -260,10 +256,9 @@ class UnsupportedExtraFilesError(NotImplementedError):
     writable device-side filesystem to land bytes on (RAM mode runs
     inline-execed source via raw REPL; CIRCUITPY is host-write but
     a host write while the device is running can trigger a soft reset
-    that wipes the in-memory test state).  Tests that need an
-    on-device file artifact — typically ``runtime_config.msgpack``
-    so test code can call ``chumicro_config.load_runtime_config()``
-    — must run on flash mode.
+    that wipes the in-memory state).  Staging an on-device file
+    artifact (typically ``runtime_config.msgpack`` for
+    ``chumicro_config.load_runtime_config()``) requires flash mode.
     """
 
 
@@ -272,9 +267,9 @@ class TransportProtocol(Protocol):
     """Minimum transport contract every device transport must satisfy."""
 
     #: User-facing deploy mode label.  ``"ram"`` / ``"flash"`` for
-    #: CircuitPython, ``"mount"`` / ``"copy"`` for MicroPython.  The
-    #: orchestration layer branches on this to decide per-library vs.
-    #: bulk staging, soft-reset cadence, and inline vs. import bootstraps.
+    #: CircuitPython, ``"mount"`` / ``"copy"`` for MicroPython.
+    #: Drives per-library vs. bulk staging, soft-reset cadence, and
+    #: inline vs. import bootstraps.
     mode: str
 
     def connect(self) -> None:
@@ -294,17 +289,16 @@ class TransportProtocol(Protocol):
         """Prepare the host-side staging area and (mode-dependent) push to device.
 
         *extra_modules* are additional Python files that the test files
-        import as top-level modules — host-fixture-materialized siblings
-        a conftest writes alongside its test files.  Each is registered
-        as importable on the device alongside library sources: in RAM
-        mode they join ``staged_sources`` so the inline bootstrap
-        registers them; in flash / copy / mount modes they land at the
-        device root next to the test files.
+        import as top-level modules.  Each is registered as importable
+        on the device alongside library sources: in RAM mode they join
+        ``staged_sources`` so the inline bootstrap registers them; in
+        flash / copy / mount modes they land at the device root next
+        to the test files.
 
         *extra_files* are non-Python files to land at named device paths.
         Keys are absolute device paths (``"/runtime_config.msgpack"``);
-        values are the bytes to write.  The canonical use case is staging
-        a ``runtime_config.msgpack`` alongside test files so on-device
+        values are the bytes to write.  Typical use is staging a
+        ``runtime_config.msgpack`` alongside test files so on-device
         code can call :func:`chumicro_config.load_runtime_config`.
         Per-mode semantics: flash and copy modes write
         each file to the device's filesystem alongside library + test
@@ -373,8 +367,6 @@ class TransportProtocol(Protocol):
             ``False`` when the runtime does not expose a
             bootloader-entry API, the transport could not be opened,
             or the command failed before reaching the board.
-            Callers fall back to an interactive prompt in the
-            ``False`` case.
         """
         ...
 
@@ -390,10 +382,8 @@ class TransportProtocol(Protocol):
         """Write files onto the device and execute the entrypoint.
 
         Distinct from :meth:`stage` + :meth:`execute`.  The former pair
-        is test-harness-shaped (dirs + test files + harness source),
-        while this method takes a generic path-to-bytes map and a
-        single entrypoint path.  Used by :class:`Deployer` and by any
-        third party shipping an app rather than running tests.
+        takes dirs + test files + harness source; this method takes a
+        generic path-to-bytes map and a single entrypoint path.
 
         Args:
             files: On-device-path -> file-bytes mapping.  Paths may
@@ -415,10 +405,9 @@ class TransportProtocol(Protocol):
     def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
         """Enumerate device files within the deploy's managed scope.
 
-        Returns the file set the diff routine reads as "what's on the
-        device today that the next deploy would replace".  The
-        difference becomes the *stale* set the diff routine deletes
-        before writing the new payload.
+        Returns the file set on the device today that the next deploy
+        would replace.  Files in this set that aren't in the next
+        deploy's payload are the *stale* set to delete before writing.
 
         ``clean_slate=True`` (the deploy default) widens the scope to
         the whole device minus the closed keep set
@@ -444,10 +433,9 @@ class TransportProtocol(Protocol):
 
         No-op when *paths* is empty.  Each path must be in the same
         leading-slash form :meth:`deploy_files` accepts; transports
-        normalize internally.  Missing paths are tolerated silently
-        (the diff-routine call site is `delete what isn't in the new
-        payload`, and a previous deploy may have already removed
-        something, so re-deleting shouldn't error).
+        normalize internally.  Missing paths are tolerated silently —
+        a previous deploy may have already removed something, so
+        re-deleting shouldn't error.
 
         Best-effort: a single delete failure logs a warning but does
         not abort the batch.  The deploy that follows still writes
@@ -477,11 +465,9 @@ class TransportProtocol(Protocol):
         Destructive — wipes *every* file the runtime can see, both
         in-scope (``/lib/*``, ``/code.py`` / ``/main.py`` / etc.) and
         out-of-scope (``/settings.toml``, hand-edited ``boot.py``,
-        user-uploaded assets).  Used by ``chumicro-workspace deploy
-        --wipe`` and ``chumicro-workspace reset-board`` for
-        clean-slate / corruption-recovery flows where an ordinary
-        diff-deploy isn't enough, and by functional-test runs that
-        filled the board's flash with stage residue and now hit
+        user-uploaded assets).  Use for clean-slate / corruption-
+        recovery flows where an ordinary diff-deploy isn't enough,
+        and to reclaim flash filled with stage residue that has hit
         ``ENOSPC`` mid-deploy.
 
         Per-runtime recipe matrix:
@@ -507,9 +493,8 @@ class TransportProtocol(Protocol):
         partitions are untouched on every runtime.
 
         RAM-mode / mount-mode deploys (CP RAM, MP mount) are no-ops,
-        since neither writes to flash, so there's nothing persistent to
-        wipe.  Callers don't need to gate on mode; the transport
-        does the right thing.
+        since neither writes to flash, so there's nothing persistent
+        to wipe.  No need to gate on mode at the call site.
         """
         ...
 
@@ -518,9 +503,8 @@ class TransportProtocol(Protocol):
 class ExtendedTransportProtocol(TransportProtocol, Protocol):
     """Transport contract plus the CircuitPython RAM-mode chunking helpers.
 
-    Implemented by :class:`CircuitpythonTransport`; orchestrators (and
-    test fakes that exercise the chunked path) check for this protocol
-    before calling the chunked-execute helpers.
+    Implemented by :class:`CircuitpythonTransport`.  Runtime-check
+    against this protocol before calling the chunked-execute helpers.
     """
 
     #: Module sources captured by ``stage()`` for RAM-mode inline

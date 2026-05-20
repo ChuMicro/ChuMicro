@@ -41,8 +41,9 @@ def read_skip_factories_marker(entrypoint_path: Path) -> tuple[str, ...] | None:
     an empty tuple only if the marker is explicitly empty (legal but
     useless; the walker treats it as no-op).
 
-    Read via :func:`ast.parse` — never executes the file, matching the
-    :func:`~chumicro_deploy.runtime_marker.read_runtime_marker` precedent.
+    Read via :func:`ast.parse` — never executes the file, so device-
+    only imports at the top of *entrypoint_path* don't trip the
+    reader.
     """
     try:
         tree = ast.parse(entrypoint_path.read_text(), filename=str(entrypoint_path))
@@ -80,8 +81,7 @@ def discover_factory_modules(search_paths: list[Path]) -> dict[str, str]:
     (``sockets_factory``) used for family-form matching.
 
     First-search-path-wins: if two search paths both contain
-    ``chumicro_mqtt/sockets_factory.py`` (unusual), the first wins —
-    matching :meth:`ImportGraphSource._resolve_module`'s convention.
+    ``chumicro_mqtt/sockets_factory.py`` (unusual), the first wins.
     """
     discovered: dict[str, str] = {}
     for search_path in search_paths:
@@ -109,14 +109,14 @@ def resolve_skip_targets(
 
     * ``per_entry`` — mapping of each user-written entry to the set of
       fully-qualified factory module names it matched.  Order of the
-      keys preserves the order the user wrote them.  Used both for
-      queue filtering (the union of all values is the skip set) and
-      for dead-skip diagnostics (an entry is dead when none of its
-      matched modules' parent libraries are imported).
+      keys preserves the order the user wrote them.  The union of all
+      values is the skip set; the per-entry mapping enables dead-skip
+      diagnostics (an entry is dead when none of its matched modules'
+      parent libraries are imported).
     * ``unmatched`` — user entries that matched zero discovered modules,
-      preserved in the order the user wrote them.  Callers raise on a
-      non-empty ``unmatched`` (typo guard: a silent skip that ships the
-      unwanted library is a worse outcome than refusing to deploy).
+      preserved in the order the user wrote them.  Treat a non-empty
+      ``unmatched`` as a typo guard and raise: silently shipping the
+      unwanted library is worse than refusing to deploy.
 
     Two match shapes:
 

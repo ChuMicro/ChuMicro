@@ -161,8 +161,8 @@ class FakeSerialPort:
     Each entry in ``read_responses`` is either ``bytes`` (returned
     verbatim on the matching ``read()`` call) or an instance of
     ``BaseException`` (raised on that call).  The exception form
-    lets tests script "first read returns bytes, second read drops
-    the cable" scenarios without subclassing the fake.
+    scripts "first read returns bytes, second read drops the cable"
+    scenarios without subclassing the fake.
 
     Instances are callable and return themselves, so a
     ``FakeSerialPort`` instance can be passed directly as a transport's
@@ -193,8 +193,7 @@ class FakeSerialPort:
         Lets the instance double as a ``serial_port_factory`` callable.
         Accepts both positional and keyword args (different transports
         call factories with different signatures); all are ignored.
-        Tests that need to assert on factory args write an explicit
-        closure instead.
+        Use an explicit closure when factory-arg assertions are needed.
         """
         if self._open_error is not None:
             raise self._open_error
@@ -247,9 +246,9 @@ class FakeTransport:
 
     Implements both :class:`TransportProtocol` and the
     :class:`ExtendedTransportProtocol` (CircuitPython chunked-execution
-    helpers) so tests for either path can use a single fake.  The
-    chunked methods default to delegating to ``execute`` so callers
-    that don't care about the chunked behavior get sensible defaults.
+    helpers) so a single fake covers either path.  The chunked
+    methods default to delegating to ``execute`` so the chunked
+    behavior is not required up front.
 
     Attributes:
         execute_output: The string returned by ``execute()``.
@@ -265,8 +264,8 @@ class FakeTransport:
     execute_output: str = ""
     #: Per-call output queue.  ``execute()`` and ``execute_scripts()``
     #: pop the head and return it; an empty list falls back to
-    #: :attr:`execute_output`.  Lets a test script "first invocation
-    #: returns X, second returns Y" without subclassing the fake.
+    #: :attr:`execute_output`.  Scripts "first invocation returns X,
+    #: second returns Y" without subclassing the fake.
     outputs: list[str] = field(default_factory=list)
     mode: str = "ram"
     #: Default ~64 KB matches the real CP transport's lower bound.
@@ -278,12 +277,11 @@ class FakeTransport:
     #: ``ExtendedTransportProtocol`` shape used by the RAM-mode path.
     #: Defaults to an empty list (non-``None``) so the CP RAM
     #: bootstrap path's "stage() must be called first" assertion
-    #: passes for fake-backed plugin / bootstrap tests that don't
-    #: bother to inject sources.
+    #: passes when sources are not injected explicitly.
     staged_sources: list[tuple[str, str]] = field(default_factory=list)
     #: Canned return value for :meth:`reset_into_bootloader`.  ``True``
-    #: simulates a successful dispatch; ``False`` exercises the
-    #: flasher's interactive-manual-entry fallback path.
+    #: simulates a successful dispatch; ``False`` simulates the
+    #: dispatch failing.
     bootloader_reset_result: bool = True
     #: When set, ``connect()`` records the call then raises this
     #: exception.  Failure-injection hook for the connect path.
@@ -292,22 +290,19 @@ class FakeTransport:
     #: call then raise this exception.
     execute_raises: BaseException | None = None
     #: When set, ``recover()`` records the call then raises this
-    #: exception, exercising the cache's "recovery failed → evict
-    #: transport" path.
+    #: exception.  Failure-injection hook for the recover path.
     recover_raises: BaseException | None = None
     #: Simulated on-device file state for the diff-deploy primitives
-    #: (`list_files_in_scope` / `delete_files`).  Tests pre-populate this
-    #: to assert what the deploy routine considers "stale" + verify
-    #: deletion.  Mirrors the leading-slash device-path form
-    #: :meth:`deploy_files` accepts.
+    #: (`list_files_in_scope` / `delete_files`).  Pre-populate to
+    #: control what the deploy routine considers "stale".  Mirrors
+    #: the leading-slash device-path form :meth:`deploy_files` accepts.
     device_files: dict[str, bytes] = field(default_factory=dict)
     #: Files staged via the ``extra_files`` keyword on :meth:`stage`.
     #: Keys are the device paths (``"/runtime_config.msgpack"``);
     #: values are the bytes the caller asked to land at that path.
-    #: Tests assert on this dict to verify pytest-device's binary
-    #: staging hook.  In RAM mode (``mode == "ram"``) a non-empty
-    #: ``extra_files`` argument raises
-    #: :class:`UnsupportedExtraFilesError` and this dict stays empty.
+    #: In RAM mode (``mode == "ram"``) a non-empty ``extra_files``
+    #: argument raises :class:`UnsupportedExtraFilesError` and this
+    #: dict stays empty.
     staged_extra_files: dict[str, bytes] = field(default_factory=dict)
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False
@@ -338,9 +333,7 @@ class FakeTransport:
             extra_modules: Sibling Python files to register as
                 importable on the device.
             extra_files: Non-Python files to land at named device paths
-                (typically ``{"/runtime_config.msgpack": <bytes>}`` so
-                test code can call ``chumicro_config.load_runtime_config()``
-                without committing a credentials shim).
+                (typically ``{"/runtime_config.msgpack": <bytes>}``).
                 A non-empty dict in RAM mode raises
                 :class:`UnsupportedExtraFilesError`.
 
@@ -348,8 +341,8 @@ class FakeTransport:
             UnsupportedExtraFilesError: ``mode == "ram"`` and
                 *extra_files* is non-empty.  RAM mode bypasses the
                 device filesystem entirely — there's nowhere to land
-                bytes.  Caller should switch the device's
-                ``deploy_mode`` to ``"flash"`` before calling.
+                bytes.  Switch the device's ``deploy_mode`` to
+                ``"flash"`` before calling.
         """
         from .protocol import UnsupportedExtraFilesError  # noqa: PLC0415
 
@@ -413,9 +406,8 @@ class FakeTransport:
         When :attr:`outputs` is non-empty, pops a single head value and
         returns it, treating the whole chunked execute as one batched
         operation, with no synthetic per-script ``execute`` entries.
-        Otherwise records synthetic per-script ``execute`` entries so
-        tests that count ``execute`` invocations still see one per
-        chunk, and returns :attr:`execute_output`.
+        Otherwise records synthetic per-script ``execute`` entries (one
+        per chunk) and returns :attr:`execute_output`.
         """
         self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
         if self.execute_raises is not None:
@@ -460,10 +452,9 @@ class FakeTransport:
     def reset_into_bootloader(self) -> bool:
         """Record the call and return the configured result.
 
-        Defaults to ``True`` (pretending the dispatch succeeded) so
-        tests that don't care about the branch get sensible
-        behavior; override via :attr:`bootloader_reset_result` when
-        exercising the "runtime doesn't support bootloader entry"
+        Defaults to ``True`` (pretending the dispatch succeeded) for
+        the common branch; override via :attr:`bootloader_reset_result`
+        to simulate the "runtime doesn't support bootloader entry"
         fallback.
         """
         self.calls.append(("reset_into_bootloader", ()))
@@ -482,29 +473,24 @@ class FakeTransport:
     ) -> str:
         """Record a deploy_files call and return the configured output.
 
-        Emits ``on_file_staged`` per file (sorted to keep tests
-        deterministic) and ``on_execute_line`` per line of
-        ``execute_output`` before returning.  The ``calls`` entry uses
-        a dict-of-bytes + entrypoint + follow tuple so tests can
-        assert on the payload, callback ordering, and the follow mode
-        the Deployer chose for this run.
+        Emits ``on_file_staged`` per file (sorted for deterministic
+        order) and ``on_execute_line`` per line of ``execute_output``
+        before returning.  The ``calls`` entry uses a dict-of-bytes +
+        entrypoint + follow tuple so the payload, callback ordering,
+        and follow mode are all observable.
 
         The ``follow`` kwarg accepts the same values as
         :class:`MicropythonTransport.deploy_files` (``"exec"`` or
-        ``"soft_reboot"``) so the Deployer can pass-through without
-        switching transports; the fake records it but doesn't
+        ``"soft_reboot"``).  The fake records it but doesn't
         otherwise change behavior.
 
         ``tail_seconds`` mirrors the CP transport's post-soft-reboot
-        capture-window override.  The fake records it on
-        :attr:`last_tail_seconds` so callers can assert the Deployer
-        forwarded the value (``None`` when the caller didn't pass it
-        through, or when the device is MP and the kwarg was filtered
-        out by ``_deploy_files_kwargs``).
+        capture-window override.  Recorded on
+        :attr:`last_tail_seconds`.
         """
         self.calls.append(("deploy_files", (dict(files), entrypoint, follow)))
-        # `clean` rides on the kwarg surface; tests asserting on it
-        # check the rsync call directly or stub the transport.
+        # `clean` rides on the kwarg surface and is recorded for
+        # later inspection.
         self.last_clean = clean  # type: ignore[attr-defined]
         self.last_tail_seconds = tail_seconds  # type: ignore[attr-defined]
         # Update simulated on-device state so a subsequent
@@ -525,8 +511,8 @@ class FakeTransport:
         ``clean_slate=True`` mirrors the real clean-slate scope: every
         device file except the closed keep set
         (:data:`flash_drive.DEVICE_KEEP_SET`).  ``False`` keeps the
-        :func:`is_in_deploy_scope` filter so a test can verify the
-        additive path leaves out-of-scope files alone.
+        :func:`is_in_deploy_scope` filter so the additive path leaves
+        out-of-scope files alone.
         """
         from .flash_drive import DEVICE_KEEP_SET  # noqa: PLC0415 — avoid cycle
         from .protocol import is_in_deploy_scope  # noqa: PLC0415 — avoid cycle
@@ -557,9 +543,8 @@ class FakeTransport:
 
         Mirrors the real-transport contract: in flash/copy mode the
         whole user filesystem (in-scope + out-of-scope alike) is gone
-        after this returns.  In RAM/mount mode the call is a no-op so
-        tests for the ``deploy --wipe`` plumbing exercise both
-        branches against the same fake.
+        after this returns.  In RAM/mount mode the call is a no-op,
+        so both branches exercise against the same fake.
         """
         self.calls.append(("wipe_filesystem", ()))
         if self.mode in ("flash", "copy"):

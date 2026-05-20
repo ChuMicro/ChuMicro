@@ -1,13 +1,12 @@
 """Shared types for the deploy-recovery layer.
 
 :class:`DeployFailureKind` and :class:`RecoveryPlan` live here, not
-in :mod:`recovery`, because they're imported by both consumers
-(``recovery_plans`` populates the plans dict, ``recovery`` classifies
-failures and looks them up).  Keeping the types in a leaf module
-breaks the otherwise-cyclic graph cleanly.
+in :mod:`recovery`, because both the plans registry and the
+classifier import them; keeping them in a leaf module breaks the
+otherwise-cyclic graph cleanly.
 
-Both names are re-exported from :mod:`chumicro_deploy.recovery` for
-external consumers; this module is where they're defined.
+Both names are re-exported from :mod:`chumicro_deploy.recovery`;
+this module is where they're defined.
 """
 
 from __future__ import annotations
@@ -19,12 +18,11 @@ from enum import Enum
 class DeployFailureKind(Enum):
     """Broad categories of deploy failures, keyed to recovery guidance.
 
-    The classifier in :mod:`chumicro_deploy.recovery` collapses the
-    ~20 distinct ``CircuitpythonTransportError`` sites and MP
-    transport errors into these buckets.  Each bucket has a canned
-    :class:`RecoveryPlan` in :mod:`chumicro_deploy.recovery_plans`;
-    ``RecoveringDeployer`` consults the plan's ``retryable`` flag to
-    decide whether to loop or bail.
+    The ~20 distinct ``CircuitpythonTransportError`` sites and MP
+    transport errors all collapse into these buckets.  Each bucket
+    has a canned :class:`RecoveryPlan` in
+    :mod:`chumicro_deploy.recovery_plans` whose ``retryable`` flag
+    drives whether the recovery loop continues or bails.
     """
 
     PORT_UNAVAILABLE = "port_unavailable"
@@ -47,8 +45,8 @@ class RecoveryPlan:
     Attributes:
         headline: One-line summary the user reads first.
         fix_steps: Ordered physical actions the user can take.  Each
-            step is a short imperative sentence; the interactive
-            deployer renders them as a bulleted list.
+            step is a short imperative sentence, rendered as a
+            bulleted list.
         retryable: ``True`` when retrying after the user takes the
             fix steps is worth attempting.  ``False`` for hard
             failures (wrong flags, runtime tracebacks, too-small

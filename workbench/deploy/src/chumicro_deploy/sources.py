@@ -162,7 +162,7 @@ class DirectorySource:
                 or is_test_support_module(file_path)
             ):
                 # Wrong-runtime, or a test-support module (testing.py
-                # fakes) that must never reach a product/app deploy.
+                # fakes), which must not ship.
                 continue
             relative_path = file_path.relative_to(self._root).as_posix()
             device_path = self._join_prefix(self._resource_prefix, relative_path)
@@ -260,8 +260,7 @@ class ImportGraphSource:
     survive with a warning surfaced through
     :attr:`skip_factories_warnings`; skip targets whose parent library
     is never imported at all emit a dead-skip notice through the same
-    property.  :class:`DirectorySource` has no concept of an import
-    graph and is not affected.
+    property.
 
     Raises:
         FileNotFoundError: If *entrypoint* does not exist.
@@ -339,10 +338,9 @@ class ImportGraphSource:
     def skip_factories_warnings(self) -> tuple[str, ...]:
         """Return diagnostic messages emitted by the skip mechanism.
 
-        Direct-import overrides and dead-skip notices land here.  CLI
-        wrappers surface this to the user after construction.  Empty
-        tuple when the deploy used no skip mechanism or nothing was
-        worth saying.
+        Direct-import overrides and dead-skip notices land here.
+        Empty tuple when the deploy used no skip mechanism or nothing
+        was worth saying.
         """
         return tuple(self._skip_warnings)
 
@@ -373,8 +371,7 @@ class ImportGraphSource:
                 resolved_path, target_runtime=self._target_runtime,
             ) or is_test_support_module(resolved_path):
                 # Wrong-runtime module, or a test-support module
-                # (testing.py fakes) that must never reach a
-                # product/app deploy: drop it and don't walk its
+                # (testing.py fakes): drop it and don't walk its
                 # imports, which are likely runtime-specific too.
                 continue
             device_path = self._device_path_for(module_name, resolved_path)

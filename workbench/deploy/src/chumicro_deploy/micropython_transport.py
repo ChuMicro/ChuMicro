@@ -295,8 +295,8 @@ def _decode_exec_result(result: Any) -> str:
 def _default_transport_factory(address: str, baudrate: int) -> SerialTransport:
     """Default :class:`SerialTransport` factory.
 
-    Importing inside the call so test environments that monkey-patch
-    the factory don't need ``mpremote`` installed.
+    Importing inside the call so a monkey-patched factory does not
+    require ``mpremote`` to be installed.
 
     Args:
         address: Serial port path (e.g. ``/dev/cu.usbmodem1234``).
@@ -319,16 +319,14 @@ class MicropythonTransport:
         mode: ``"mount"`` (default) or ``"copy"``.
         runner: Callable that executes subprocess commands.  Accepts
             the same signature as ``subprocess.run``.  Defaults to
-            ``subprocess.run``.  Inject a fake for testing.
+            ``subprocess.run``.
         transport_factory: Callable that builds a :class:`SerialTransport`
             given ``(address, baudrate)``.  Defaults to
-            :func:`_default_transport_factory`.  Inject a fake to avoid
-            opening real serial ports in tests.
+            :func:`_default_transport_factory`.  Inject a fake to
+            avoid opening a real serial port.
         time: Object providing ``monotonic()`` and ``sleep()``.  Defaults
             to Python's ``time`` module.  Inject :class:`FakeTime` (from
-            :mod:`chumicro_deploy.testing`) to eliminate wall-clock waits
-            in tests that exercise :meth:`wipe_filesystem`'s post-reset
-            settle.
+            :mod:`chumicro_deploy.testing`) to eliminate wall-clock waits.
     """
 
     def __init__(
@@ -368,15 +366,15 @@ class MicropythonTransport:
         #: staging hits ``ENOSPC``.  Persists for the transport's life
         #: (one transport per device across the whole sweep).
         self._staged_device_entries: list[str] = []
-        #: Selecting :class:`MicropythonTransport` means the deployment
-        #: target is MicroPython, so files marked for another runtime
-        #: via ``__chumicro_runtimes__`` are filtered out of the staging
-        #: tree.  Sub-runtime markers (``micropython_esp32`` /
-        #: ``micropython_rp2``) fold into ``"micropython"``.
+        #: The deployment target is MicroPython, so files marked for
+        #: another runtime via ``__chumicro_runtimes__`` are filtered out
+        #: of the staging tree.  Sub-runtime markers
+        #: (``micropython_esp32`` / ``micropython_rp2``) fold into
+        #: ``"micropython"``.
         self._target_runtime: str = "micropython"
-        #: Set per :meth:`stage` call.  Only the on-device unit sweep
-        #: passes ``True``, so test-support fakes reach the board;
-        #: product / app / functional deploys leave it ``False``.
+        #: Set per :meth:`stage` call.  When ``True``, test-support
+        #: fakes reach the board; product / app / functional deploys
+        #: leave it ``False``.
         self._include_test_support: bool = False
         #: The first copy-mode :meth:`stage` mkfs-wipes the board so the
         #: sweep never inherits residue from a prior killed run (the
@@ -587,10 +585,9 @@ class MicropythonTransport:
         ``SerialIntercept`` (``mount_local`` unconditionally wraps
         ``self.serial``) and garble subsequent I/O.
 
-        Used between test groups so each group starts with a clean
-        interpreter and an un-wrapped serial.  If no persistent
-        transport is open, falls back to a subprocess ``mpremote
-        reset`` with a bounded settle-and-retry: a prior hard failure
+        Leaves the interpreter clean and the serial un-wrapped.  If no
+        persistent transport is open, falls back to a subprocess
+        ``mpremote reset`` with a bounded settle-and-retry: a prior hard failure
         (e.g. a stage ``ENOSPC``) can wedge the board so its USB-CDC
         re-enumerates, and the first ``mpremote connect ... reset``
         then fails ``it may be in use by another program``.  Retrying
@@ -676,10 +673,9 @@ class MicropythonTransport:
         the function at all, or may implement it as a plain reset
         that boots straight back into the app.  We try blindly
         rather than maintain a board / firmware-version table: a
-        successful entry shows up as a new ROM-bootloader serial
-        port for the caller's drive-poll to spot, and an
-        unsuccessful entry surfaces as no-new-port, falling back to
-        the manual-entry prompt.  Don't add board-specific
+        successful entry surfaces as a new ROM-bootloader serial
+        port visible to whatever polls for one, and an unsuccessful
+        entry surfaces as no-new-port.  Don't add board-specific
         branching here.  The try-and-poll architecture is the right
         abstraction.
         """
@@ -791,9 +787,7 @@ class MicropythonTransport:
                 survive unchanged.  No-op for ``mode="mount"`` (mount
                 mode is transient by design — nothing on the device's
                 flash to clean).  Default ``False`` preserves the
-                additive-by-default contract that ``chumicro-workspace
-                deploy`` relies on; ``chumicro-workspace deploy-example``
-                passes ``True`` so each demo lands fresh.
+                additive-by-default contract.
 
         Returns:
             Combined stdout captured from the entrypoint execution.
@@ -1147,14 +1141,14 @@ class MicropythonTransport:
     def _trigger_soft_reboot_and_read(self) -> str:
         """Exit raw REPL, soft-reboot, read main.py output, return user text.
 
-        Used for app-code deploys whose entrypoint may be a
-        ``while True`` body that never returns.  The raw-REPL
-        ``exec_raw`` path (``follow="exec"``) works for return-bounded
-        scripts because raw REPL emits the EOF (``\\x04``) marker when
-        the script returns; for an infinite-loop body the EOF never
-        fires and the deploy hangs.  Soft-reboot bypasses raw REPL
-        and reads serial directly with a wall-clock timeout, returning
-        whatever accumulated.
+        Survives entrypoints that may be a ``while True`` body that
+        never returns.  The raw-REPL ``exec_raw`` path
+        (``follow="exec"``) works for return-bounded scripts because
+        raw REPL emits the EOF (``\\x04``) marker when the script
+        returns; for an infinite-loop body the EOF never fires and the
+        deploy hangs.  Soft-reboot bypasses raw REPL and reads serial
+        directly with a wall-clock timeout, returning whatever
+        accumulated.
 
         Sequence:
 
@@ -1268,11 +1262,11 @@ class MicropythonTransport:
         """Clean-slate the device root, preserving only the keep set.
 
         The MP analog of the CP ``rsync --delete`` +
-        :data:`flash_drive.DEVICE_KEEP_SET` clean push.  Used by the
-        copy-mode staging path so a board left dirty by a prior run
-        is reconciled without destroying the keep set.  ``mpremote fs cp``
-        never deletes, so without this each deploy stacks onto the
-        previous tree and a Pi Pico W MP fills its ~860 KB flash.
+        :data:`flash_drive.DEVICE_KEEP_SET` clean push.  Reconciles a
+        board left dirty by a prior run without destroying the keep
+        set.  ``mpremote fs cp`` never deletes, so without this each
+        deploy stacks onto the previous tree and a Pi Pico W MP fills
+        its ~860 KB flash.
         Every root entry except the keep set (``boot.py`` /
         ``boot_out.txt`` / ``_chu_kv.msgpack``) is removed
         recursively; the subsequent ``fs cp -r`` repopulates the
@@ -1304,10 +1298,9 @@ class MicropythonTransport:
         )
         try:
             # mpremote subprocess (not the persistent serial): the
-            # caller `_close_serial()`d before this and the `fs cp`
-            # that follows is also a subprocess.  Opening the serial
-            # here would hold the port and fail that push.  Mirrors
-            # `_remove_device_entries`.
+            # serial is closed at entry and the `fs cp` that follows is
+            # also a subprocess.  Opening the serial here would hold the
+            # port and fail that push.
             self._run_mpremote(["exec", script])
         except MicropythonTransportError:  # pragma: no cover — best-effort
             # A clean device (nothing to remove) or a transient
@@ -1426,7 +1419,6 @@ class MicropythonTransport:
             and is_test_support_module(path)
             and not self._include_test_support
         ):
-            # Test-support fakes never reach a product/app/functional
-            # deploy.  Only the on-device unit sweep opts in.
+            # Test-support fakes are excluded unless explicitly opted in.
             return True
         return False

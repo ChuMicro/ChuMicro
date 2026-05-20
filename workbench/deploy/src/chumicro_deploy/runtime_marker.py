@@ -4,30 +4,26 @@ A module-level marker declares which runtimes a file is meant for::
 
     __chumicro_runtimes__ = ("circuitpython",)
 
-The bundle pipeline uses this marker to filter per-runtime ``.mpy``
-bundles.  The same filter applies on deploy paths
-(``DirectorySource`` / ``ImportGraphSource`` / the per-runtime
-transports), so wrong-runtime files never land on a board.
+Bundle filtering and per-runtime deploy filtering both consume this
+marker so wrong-runtime files never land on a board.
 
 :func:`file_targets_runtime` accepts a single runtime name (concrete
-target) or a frozenset of runtimes (set-of-acceptable-targets — used by
-the source bundle to drop CPython-only files while keeping everything
-device-bound).
+target) or a frozenset of runtimes (set-of-acceptable-targets, e.g.
+"every device-bound runtime").
 
 A separate, runtime-independent marker — ``__chumicro_test_support__
-= True`` — flags a library's ``testing.py`` fakes as test-support:
-filtered out of bundles and product / app / functional deploys, but
-staged by the on-device unit sweep.  :func:`is_test_support_module`
-reads it.
+= True`` — flags a library's ``testing.py`` fakes as test-support
+and gates whether they reach a device deploy.
+:func:`is_test_support_module` reads it.
 
 A third marker — ``__chumicro_host_only__ = True`` — flags a
-``tests/test_*.py`` file as host-lane only: it runs on CPython and the
-MicroPython / CircuitPython unix-ports but never on real silicon (it
-drives runtime-specific source through host fakes and asserts
-off-target behaviour).  Orthogonal to runtime ABI: these files run on
-every host interpreter, so ``__chumicro_runtimes__`` cannot express
-them.  :func:`is_host_only_test` reads it; the on-device unit sweep
-excludes host-only files while the unix-port lane keeps them.
+``tests/test_*.py`` file as host-lane only: it runs on CPython and
+the MicroPython / CircuitPython unix-ports but never on real
+silicon, because it exercises a runtime-specific source module
+through host fakes and asserts off-target behaviour.  Orthogonal to
+runtime ABI: these files run on every host interpreter, so
+``__chumicro_runtimes__`` cannot express them.
+:func:`is_host_only_test` reads it.
 
 The readers use :func:`ast.parse` (no execution), because
 runtime-specific files commonly import device-only modules at top
@@ -49,10 +45,10 @@ KNOWN_RUNTIMES: frozenset[str] = frozenset({
     "cpython",
 })
 
-#: Runtimes that land on a microcontroller.  The source bundle passes
-#: this set as *target_runtime* so files marked exclusively for
-#: ``cpython`` drop out.  They only belong in the PyPI sdist / wheel,
-#: which doesn't go through the bundle pipeline.
+#: Runtimes that land on a microcontroller.  Passing this set as
+#: *target_runtime* drops files marked exclusively for ``cpython``;
+#: those only belong in the PyPI sdist / wheel, which doesn't go
+#: through the bundle pipeline.
 DEVICE_RUNTIMES: frozenset[str] = frozenset({"circuitpython", "micropython"})
 
 
@@ -101,14 +97,9 @@ def is_test_support_module(python_file: Path) -> bool:
     """Return ``True`` when *python_file* declares ``__chumicro_test_support__``.
 
     A test-support module (a library's ``testing.py`` fakes) exists
-    only to support tests and must never reach a shipped product.  It
-    is filtered out of every bundle and every product / app /
-    functional device deploy, independent of runtime, because the
-    fakes run on every runtime (the cross-runtime unit suite executes
-    them on MicroPython and CircuitPython).  The on-device unit sweep
-    (``--target device-unit``) is the one path that stages them,
-    because the cross-runtime unit tests legitimately import the
-    fakes.
+    only to support tests and must never reach a shipped product.
+    The marker is runtime-independent because the fakes run on every
+    runtime.
 
     The marker is a top-level ``__chumicro_test_support__ = True``
     assignment.
@@ -121,20 +112,18 @@ def is_host_only_test(python_file: Path) -> bool:
     """Return ``True`` when *python_file* declares ``__chumicro_host_only__``.
 
     A host-only test file runs on CPython and the MicroPython /
-    CircuitPython unix-ports but never on real silicon: it exercises a
-    runtime-specific source module through host fakes and asserts
+    CircuitPython unix-ports but never on real silicon: it exercises
+    a runtime-specific source module through host fakes and asserts
     off-target behaviour (e.g. ``RuntimeError`` because the device
-    module is absent on the host).  The deploy filter would correctly
-    strip the imported runtime module on a non-matching board, and a
-    *matching* board would fail the off-target assertion, so these
-    files are not on-device-sweep-eligible by construction.
+    module is absent on the host).  On real silicon both branches
+    fail — the wrong-runtime device-side filter strips the imported
+    module, and a matching board fails the off-target assertion.
 
-    This is orthogonal to ``__chumicro_runtimes__`` (the files run on
-    every host interpreter, so no runtime subset describes them) and to
-    ``__chumicro_test_support__`` (that gates *shipping* of ``testing.py``
-    fakes; this gates *collection* of test files for the on-device
-    sweep).  The on-device unit sweep excludes host-only files; the
-    unix-port lane and plain CPython keep them.
+    Orthogonal to ``__chumicro_runtimes__`` (the files run on every
+    host interpreter, so no runtime subset describes them) and to
+    ``__chumicro_test_support__`` (that gates *shipping* of
+    ``testing.py`` fakes; this gates *collection* of test files for
+    the on-device sweep).
 
     The marker is a top-level ``__chumicro_host_only__ = True``
     assignment.
@@ -150,20 +139,17 @@ def file_targets_runtime(
 ) -> bool:
     """Return ``True`` when *python_file* should ship to *target_runtime*.
 
-    ``target_runtime=None`` is the unfiltered case, and every file matches.
-    Used by deploy paths that ship every file regardless of marker.
-    PyPI sdist / wheel building uses its own filter and doesn't pass
-    through this function.
+    ``target_runtime=None`` is the unfiltered case, and every file
+    matches.
 
     A string target (``"circuitpython"`` / ``"micropython"`` /
     ``"cpython"``) means "this single concrete runtime", so a marked
-    file matches only when its marker contains the target.  Used by
-    per-runtime mpy bundles and by transports that know their target.
+    file matches only when its marker contains the target.
 
-    A frozenset target means "any of these runtimes", so a marked file
-    matches when its marker overlaps the set.  Used by the source
-    bundle (:data:`DEVICE_RUNTIMES`) to drop ``("cpython",)``-only
-    files while keeping every CP- and MP-bound file.
+    A frozenset target means "any of these runtimes", so a marked
+    file matches when its marker overlaps the set, e.g. dropping
+    ``("cpython",)``-only files while keeping every CP- and MP-bound
+    file.
 
     Files without a marker match every target (default-safe).
     Sub-runtime markers (``micropython_esp32`` etc.) fold into

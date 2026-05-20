@@ -159,8 +159,8 @@ def _infer_reflash_method(url: str) -> str:
     name release files with the bootloader-shape extension built
     in: ``.uf2`` for boards that talk to a UF2 mass-storage
     bootloader, ``.bin`` for ESP32-family boards that take esptool
-    over USB-CDC.  Callers who pass the URL we just resolved
-    shouldn't have to repeat the choice as a separate flag.
+    over USB-CDC.  Lets a resolved URL drive method selection
+    without a separate flag.
 
     Raises:
         ValueError: URL extension isn't ``.uf2`` or ``.bin`` — the
@@ -192,7 +192,7 @@ def _download_firmware(
     destination: Path,
     *,
     on_progress: Callable[[float, str], None] | None = None,
-    urlopen: Callable[..., object] = urllib.request.urlopen,  # injectable for tests
+    urlopen: Callable[..., object] = urllib.request.urlopen,  # injectable
 ) -> None:
     """Stream *url* to *destination* with coarse progress reporting.
 
@@ -205,7 +205,7 @@ def _download_firmware(
             when the stream is fully consumed — per-chunk updates
             when ``Content-Length`` is known, coarse start/stop
             otherwise.
-        urlopen: Injectable override, used by tests.
+        urlopen: Injectable override for the HTTP open call.
 
     Raises:
         FlashFirmwareError: If the URL is unreachable or the
@@ -265,9 +265,8 @@ def _poll_until_deadline(
 
     Returns the first non-``None`` value *probe* yields, or ``None`` if
     *timeout* seconds elapse first.  *interval* and *timeout* are
-    taken from the caller (every wait-for helper here carries its
-    own hardware-tuned budget) so nothing about the cadence changes
-    when helpers switch to this shared skeleton.
+    passed in so each wait-for use carries its own hardware-tuned
+    budget.
     """
     deadline = monotonic() + timeout
     while monotonic() < deadline:
@@ -283,10 +282,10 @@ def _uf2_mount_candidates(
 ) -> list[Path]:
     """Return directories where UF2 drives may mount on this platform.
 
-    Defaults are derived from ``sys.platform``, and tests inject
-    *search_paths* directly.  An empty list means no candidates, and
-    callers treat that as "platform unsupported, prompt user to
-    pass ``bootloader_drive_path``".
+    Defaults are derived from ``sys.platform``; pass *search_paths*
+    explicitly to override.  An empty list means no candidates ("the
+    platform is unsupported, fall through to an explicit
+    ``bootloader_drive_path``").
     """
     if search_paths is not None:
         return list(search_paths)
@@ -362,14 +361,13 @@ def _wait_for_drive_gone(
 def _dispatch_bootloader_reset(device: Device) -> bool:
     """Open *device*'s transport and dispatch its ``reset_into_bootloader``.
 
-    Delegates to :meth:`TransportProtocol.reset_into_bootloader`, which
-    knows the right runtime-specific script to send
-    (``machine.bootloader()`` on MP, the ``microcontroller`` API on
-    CP).  Returns ``True`` when the command was dispatched; the
-    caller's drive-poll / serial-port-snapshot is the authoritative
-    success signal because the board's serial link drops as it
-    resets.  Returns ``False`` when connect() failed, the runtime
-    does not expose a bootloader API, or the dispatch raised.
+    Delegates to :meth:`TransportProtocol.reset_into_bootloader`,
+    which knows the right runtime-specific reset script.  Returns
+    ``True`` when the command was dispatched; observing actual
+    bootloader entry requires a follow-up drive-poll or serial-port-
+    snapshot because the board's serial link drops as it resets.
+    Returns ``False`` when connect() failed, the runtime does not
+    expose a bootloader API, or the dispatch raised.
     """
     try:
         transport = device.create_transport()
@@ -395,11 +393,9 @@ def _prompt_manual_bootloader_entry(
 ) -> None:
     """Ask the user to manually put the board in bootloader mode.
 
-    Used when :func:`_dispatch_bootloader_reset` returns ``False``
-    or when UF2 drive detection fails.  The prompt text
-    is general because the correct physical action depends on the
-    board: hold BOOTSEL on a Pi Pico, hold GPIO0 on a bare ESP32,
-    double-tap RESET on some Adafruit boards.
+    The prompt text is general because the correct physical action
+    depends on the board: hold BOOTSEL on a Pi Pico, hold GPIO0 on
+    a bare ESP32, double-tap RESET on some Adafruit boards.
 
     Args:
         device: Target device (used for messaging).
@@ -524,9 +520,8 @@ def _flash_firmware_uf2(
 
 
 #: Glob pattern for macOS / Linux serial ports that typically host
-#: an ESP32 ROM bootloader.  Used by
-#: :func:`_list_candidate_serial_ports` to snapshot "before" and
-#: "after" states when detecting a bootloader-mode re-enumeration.
+#: an ESP32 ROM bootloader.  Diffing snapshots of this set detects a
+#: bootloader-mode re-enumeration.
 _SERIAL_PORT_GLOBS: tuple[str, ...] = (
     "/dev/cu.usbmodem*",
     "/dev/ttyACM*",
@@ -544,11 +539,10 @@ def _list_candidate_serial_ports(
     return ports
 
 
-#: Interval between :func:`_wait_for_new_serial_port` probes.  Half a
-#: second balances responsiveness against the ~1s typical bootloader
-#: re-enumeration window on macOS.  The faster we poll, the earlier
-#: we'd catch a bounce, but the more churn we generate while a board
-#: is mid-reset.
+#: Interval between serial-port presence probes.  Half a second
+#: balances responsiveness against the ~1s typical bootloader
+#: re-enumeration window on macOS.  Faster polling catches a bounce
+#: earlier, but generates more churn while a board is mid-reset.
 _SERIAL_PORT_POLL_INTERVAL = 0.5
 
 
@@ -581,11 +575,11 @@ def _prompt_manual_esp32_bootloader(
 ) -> None:
     """Ask the user to manually put an ESP32 board in ROM bootloader.
 
-    Used by the esptool path when programmatic bootloader entry
-    either isn't supported by the runtime (MicroPython on ESP32
-    boards without a working ``machine.bootloader()``) or doesn't
-    produce a bootloader port (Lolin S2 Mini where
-    ``machine.bootloader()`` leaves the chip half-running).
+    For boards where programmatic bootloader entry either isn't
+    supported by the runtime (MicroPython on ESP32 boards without a
+    working ``machine.bootloader()``) or doesn't produce a bootloader
+    port (Lolin S2 Mini where ``machine.bootloader()`` leaves the
+    chip half-running).
     """
     message = (
         f"\n[chumicro-deploy] Could not put {device.address!r} into "
@@ -614,8 +608,8 @@ def _enter_esp32_rom_bootloader(
 
     1. If *device.address* itself already looks like a bootloader
        port (exists and esptool can reach it later), return it
-       unchanged, since the caller may already have opened bootloader
-       manually and passed that address.
+       unchanged, since that address may already point at a manually-
+       entered bootloader.
     2. Otherwise snapshot the current serial ports, dispatch a
        runtime-specific ``reset_into_bootloader`` via the
        transport, and poll for a new port (typically
@@ -636,7 +630,7 @@ def _enter_esp32_rom_bootloader(
         interactive: When ``True``, fall back to a human prompt
             after the programmatic path fails.  When ``False``,
             raise :class:`FlashFirmwareError` instead.
-        prompt: Injectable prompt callable — tests override.
+        prompt: Injectable prompt callable.
         sleep: Injectable sleep for port polling.
         monotonic: Injectable clock for timeouts.
         globs: Serial-port path glob patterns (macOS + Linux
@@ -644,7 +638,7 @@ def _enter_esp32_rom_bootloader(
 
     Returns:
         Absolute path to the serial port now hosting the ROM
-        bootloader.  Callers address esptool at this path.
+        bootloader.
 
     Raises:
         FlashFirmwareError: If no bootloader port appeared after
@@ -715,9 +709,8 @@ def _flash_firmware_esptool(
 
     esptool manages its own bootloader entry via the USB-CDC RTS/DTR
     dance on boards wired for it (Lolin S2 / Feather S3 / most
-    dev kits).  Boards without that wiring need the user to hold
-    GPIO0 manually before the command runs; the caller is
-    responsible for prompting in that case.
+    dev kits).  Boards without that wiring require the user to hold
+    GPIO0 manually before the command runs.
 
     Defaults to erasing flash before write-flash, because leftover
     partitions, user data, or half-written sectors from a failed
@@ -742,7 +735,7 @@ def _flash_firmware_esptool(
             (CIRCUITPY drive, NVS, stored wifi credentials) —
             irreversible.  Use for recovery / first install, skip
             for ordinary upgrades.
-        runner: Injectable subprocess runner for tests.
+        runner: Injectable subprocess runner.
 
     Raises:
         FlashFirmwareError: If esptool is not installed, either
@@ -945,10 +938,10 @@ def flash_firmware(
                 device, interactive=interactive,
             )
             # Address esptool at the bootloader port rather than the
-            # (now-gone) runtime serial port.  The flash completes with
-            # a default hard_reset so the board comes back on its usual
-            # runtime address, so callers' subsequent probe_device /
-            # Deployer calls keep working against the original Device.
+            # (now-gone) runtime serial port.  The flash completes
+            # with a default hard_reset so the board comes back on
+            # its usual runtime address, so subsequent operations
+            # against the original Device keep working.
             bootloader_device = dataclasses.replace(
                 device, address=bootloader_port,
             )

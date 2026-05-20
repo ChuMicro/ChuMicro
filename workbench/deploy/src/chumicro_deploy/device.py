@@ -8,9 +8,8 @@ baudrate, CIRCUITPY drive path), and the deploy-mode preference.
 callers don't have to branch on runtime themselves.
 
 Two fields, ``entrypoint_name`` and ``resource_prefix``, aren't
-read by :meth:`create_transport`.  :class:`~chumicro_deploy.deployer.Deployer`
-reads them off the Device when running a deploy.  Carrying them on
-Device means a deploy takes one configured object, not Device plus
+read by :meth:`create_transport`.  They are deploy-config carried
+on Device so a deploy takes one configured object, not Device plus
 a separate deploy-config struct.
 """
 
@@ -68,13 +67,8 @@ class Device:
         transport_factory: Override hook for :meth:`create_transport`.
             When set, :meth:`create_transport` returns
             ``transport_factory(self)`` instead of building the
-            runtime-specific transport.  Production constructs Device
-            without this kwarg; tests pass a factory that returns a
-            :class:`~chumicro_deploy.testing.FakeTransport` (or another
-            implementation of :class:`TransportProtocol`) so the deploy
-            flow runs against an in-memory recorder.  Per-instance, so
-            multiple Devices in one test can carry different
-            transports.
+            runtime-specific transport.  Per-instance, so multiple
+            Devices can carry different transport implementations.
 
     The CIRCUITPY drive (CP flash-mode deploys) is auto-resolved at
     deploy time by scanning the host's mount points and matching the
@@ -163,8 +157,7 @@ class Device:
         (``ram``/``flash`` to the transport's native label) happens here.
 
         When :attr:`transport_factory` is set, returns its result
-        instead — the test-injection seam that lets host-side tests
-        run the deploy flow without real hardware.
+        instead.
         """
         if self.transport_factory is not None:
             return self.transport_factory(self)

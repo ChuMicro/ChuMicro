@@ -118,24 +118,20 @@ def build_circuitpython_deploy_scripts(
     ``/lib/foo/bar.py`` as ``foo.bar``.  Files at the device root
     (``/foo.py``) register as top-level ``foo``.  Non-``.py`` files
     are silently skipped.  RAM-mode deploy has no device filesystem
-    to write them to.  Callers that need to ship assets must use
-    flash mode.
+    to write them to, so shipping non-Python assets requires flash
+    mode.
 
     Args:
-        files: On-device-path -> bytes mapping (the same shape
-            :meth:`CircuitpythonTransport.deploy_files` receives).
+        files: On-device-path -> bytes mapping.
         entrypoint: On-device path exec'd as ``__main__``.  Must be
             a key of *files*.
         max_chunk_size_bytes: Maximum encoded size for any single
             submitted raw REPL script.  Defaults to
-            :data:`DEFAULT_INLINE_SCRIPT_BUDGET_BYTES`; callers that
-            have polled ``gc.mem_free()`` should pass a tighter
-            budget derived from it.
+            :data:`DEFAULT_INLINE_SCRIPT_BUDGET_BYTES`; pass a tighter
+            budget derived from ``gc.mem_free()`` when known.
 
     Returns:
-        Ordered list of Python source strings to execute
-        sequentially via
-        :meth:`CircuitpythonTransport.execute_scripts`.
+        Ordered list of Python source strings to execute sequentially.
 
     Raises:
         ValueError: *entrypoint* is missing from *files* or
@@ -232,14 +228,13 @@ def _build_shared_prelude(
     staged_sources: list[tuple[str, str]],
     max_chunk_size_bytes: int,
 ) -> list[str]:
-    """Return the helper + stub + population scripts both CircuitPython
-    RAM-mode bootstrap builders share.
+    """Return the helper + stub + population scripts shared by every
+    CircuitPython RAM-mode bootstrap builder.
 
-    The test-harness and deploy builders emit the same prelude — the
-    class-as-module helper definitions, the stub-registration pass,
-    and the population pass — and diverge only on the final exec
-    script, so extracting the prelude here means a touch to the
-    class-as-module machinery updates one builder instead of two.
+    The prelude (class-as-module helper definitions, stub-registration
+    pass, population pass) is identical regardless of which final
+    exec script ships on top of it, so the class-as-module machinery
+    has one definition site.
     """
     helper_script = _build_helper_script()
     _validate_script_size(
