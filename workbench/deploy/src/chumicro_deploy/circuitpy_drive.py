@@ -29,7 +29,6 @@ from pathlib import Path
 
 from . import flash_drive
 
-#: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
 
@@ -237,7 +236,7 @@ def _list_scope_on_drive(drive: Path, *, clean_slate: bool = False) -> list[str]
         for path in sorted(drive.rglob("*")):
             relative = path.relative_to(drive)
             if any(part.startswith(".") for part in relative.parts):
-                continue  # macOS noise / sentinels are all dot-prefixed
+                continue
             if path.is_file() and path.name not in keep:
                 found.append(f"/{relative.as_posix()}")
         return found

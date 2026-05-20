@@ -395,20 +395,16 @@ class CircuitpythonTransport:
     def _enter_raw_repl(self) -> None:
         """Interrupt running code and switch to raw REPL mode."""
         assert self._port is not None
-        # Ctrl-C × 2 to interrupt any running program.
         self._port.write(_CTRL_C)
         self._time.sleep(_INTERRUPT_DELAY)
         self._port.write(_CTRL_C)
         self._time.sleep(_INTERRUPT_DELAY)
 
-        # Drain any pending output before entering raw REPL.
         self._port.reset_input_buffer()
 
-        # Ctrl-A to enter raw REPL.
         self._port.write(_CTRL_A)
         self._time.sleep(_ENTER_DELAY)
 
-        # Read until we see the raw REPL prompt.
         response = self._read_until(_RAW_REPL_PROMPT)
         if _RAW_REPL_PROMPT not in response:
             raise CircuitpythonTransportError(
@@ -488,10 +484,8 @@ class CircuitpythonTransport:
 
         self._include_test_support = include_test_support
         self._staged_sources = []
-        # Collect library package sources (needed for both modes).
         for source_directory in source_dirs:
             self._collect_package_sources(source_directory)
-        # Collect harness sources.
         self._collect_package_sources(harness_source)
 
         # Register sibling modules so the test source's top-level
@@ -902,15 +896,9 @@ class CircuitpythonTransport:
         drive_path = self._resolve_circuitpy_drive()
         drive_path = self._verify_drive_for_board(drive_path)
 
-        # A clean push (rsync --delete, keep set = DEVICE_KEEP_SET)
-        # evicts a board settings.toml.  Surface it before the bytes
-        # move.
         if rsync_delete:
             self._notice_settings_toml_eviction(drive_path)
 
-        # macOS skip-sentinels go into the staging tree so they ride
-        # along in the rsync — not as separate on-drive writes that
-        # would compound the wedge risk.
         flash_drive.plant_macos_sentinels_in_staging(staging_path)
         if strip_xattrs:
             flash_drive.strip_extended_attributes(staging_path)
@@ -931,9 +919,7 @@ class CircuitpythonTransport:
         # already-contaminated drives, and idempotent once the
         # sentinels have prevented re-creation.
         flash_drive.cleanup_macos_noise_dirs_post_rsync(drive_path)
-        # Strip macOS AppleDouble (._foo) companions before flushing.
         flash_drive.clean_dot_files(drive_path)
-        # Flush the volume so the device reads current content.
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 
         # Re-read every file via rsync --checksum --dry-run.  Any path
@@ -1066,9 +1052,7 @@ class CircuitpythonTransport:
                 "connect() must be called before execute()"
             )
 
-        # Send the code.
         self._port.write(bootstrap_script.encode("utf-8"))
-        # Ctrl-D to execute.
         self._port.write(_CTRL_D)
 
         # Read the response.  Raw REPL format:
@@ -1230,15 +1214,11 @@ class CircuitpythonTransport:
             raise CircuitpythonTransportError(
                 "Cannot soft_reset — port is not open"
             )
-        # Exit raw REPL into the normal REPL.
         self._port.write(_CTRL_B)
         self._time.sleep(_ENTER_DELAY)
-        # Ctrl-D in normal REPL triggers soft reboot.
         self._port.write(_CTRL_D)
         self._time.sleep(0.5)
-        # Drain the soft-reboot banner.
         self._port.reset_input_buffer()
-        # Re-enter raw REPL for the next test group.
         self._enter_raw_repl()
 
     def recover(self) -> None:
@@ -1383,9 +1363,9 @@ class CircuitpythonTransport:
         # disabled, exec(open()) would read stale content.  Soft-reboot
         # from normal REPL so the board re-reads its filesystem and
         # runs the new code.py fresh.
-        self._port.write(_CTRL_B)  # exit raw REPL
+        self._port.write(_CTRL_B)
         self._time.sleep(_ENTER_DELAY)
-        self._port.write(_CTRL_D)  # trigger soft-reboot
+        self._port.write(_CTRL_D)
         output = self._read_code_py_output(tail_seconds=tail_seconds)
 
         # Do NOT re-enter raw REPL here.  That sends Ctrl-C and would
@@ -1865,7 +1845,6 @@ class CircuitpythonTransport:
         header_marker = "code.py output:"
         header_index = text.find(header_marker)
         if header_index != -1:
-            # Skip past the header + its trailing newline.
             trailing_newline = text.find("\n", header_index)
             if trailing_newline != -1:
                 text = text[trailing_newline + 1:]
