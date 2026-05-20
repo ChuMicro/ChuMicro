@@ -8,8 +8,8 @@ returns a :class:`~chumicro_deploy.result.DeployResult`.
 
 The transport-level primitive this builds on is
 :meth:`~chumicro_deploy.protocol.TransportProtocol.deploy_files`.
-Test orchestrators that need per-file iteration and per-group resets
-stick with the richer ``stage()`` / ``execute()`` flow.
+Per-file iteration and per-group resets are exposed through the
+richer ``stage()`` / ``execute()`` flow instead.
 
 :meth:`Deployer.deploy_diff` runs a pre-flight pass before transport
 setup: when the device's ``deploy_mode == "ram"`` and the source
@@ -74,15 +74,14 @@ def _deploy_files_kwargs(
     soft-reboot follow mode so ``while True`` app code captures partial
     output instead of timing out waiting for the raw-REPL EOF marker
     that an infinite loop never emits.  Other paths (CP, MP RAM, MP
-    flash with non-``/main.py`` entrypoints) keep transport defaults.
-    CP doesn't accept ``follow``, and MP RAM / test-harness deploys
-    want ``follow="exec"`` because their entrypoints return cleanly
-    and the EOF marker fires.
+    flash with non-``/main.py`` entrypoints) keep transport defaults:
+    CP doesn't accept ``follow``, and the other MP shapes want
+    ``follow="exec"`` because their entrypoints return cleanly and
+    the EOF marker fires.
 
-    *tail_seconds* is CP-only, and it tunes how long
-    :meth:`CircuitpythonTransport._read_code_py_output` waits for
-    boot-time prints before exiting.  MP transports ignore it
-    (mpremote follow mode owns its own timing).
+    *tail_seconds* is CP-only, and it tunes how long the boot-time
+    capture window stays open.  MP transports ignore it (mpremote
+    follow mode owns its own timing).
     """
     kwargs: dict[str, object] = {}
     if (
@@ -128,12 +127,10 @@ class Deployer:
         policy inputs (the staged file set, and the ``requires_flash``
         closure when *source* exposes ``host_paths()``) and delegates
         the decision to :func:`chumicro_deploy.resolve_deploy_mode`,
-        the one shared deploy-mode policy.  An app deploy has no single
-        owning library, so it passes ``resolution_unit=None`` (no
+        the shared deploy-mode policy.  An app deploy has no single
+        owning library, so passes ``resolution_unit=None`` (no
         "declare requires_flash" recommendation) and the default
-        :class:`DeviceCaps` (every board this path targets can RAM, and
-        the per-device capability is a registry concern the test path
-        threads in).
+        :class:`DeviceCaps`.
 
         Returns a :class:`Device` whose ``deploy_mode`` is the
         resolved mode.  ``self._device`` is never mutated, and when the
@@ -186,19 +183,17 @@ class Deployer:
     ) -> DeployResult:
         """Run the shared connect, then (pre-stage), then deploy_files, then disconnect flow.
 
-        :meth:`deploy` and :meth:`deploy_diff` share every step except
-        the pre-stage phase: a plain deploy has no extra work
-        (``pre_stage_hook=None``, and _run_deploy emits the 0.1 /
-        0.2 milestones inline), while deploy_diff lists in-scope files
-        and deletes the stale set (or wipes the filesystem outright)
-        via its hook.  When supplied, *pre_stage_hook* receives the
-        live transport plus the new payload's file map and the same
-        progress reporter the outer flow uses, and it owns its own milestones.
+        The pre-stage phase is the only branchable step: when
+        *pre_stage_hook* is ``None`` the helper emits the 0.1 / 0.2
+        milestones inline; otherwise the hook receives the live
+        transport plus the new payload's file map and the same
+        progress reporter the outer flow uses, and owns its own
+        milestones.
 
         *transport_kwargs* are passed straight through to
         ``transport.deploy_files`` after merging with the runtime-
         appropriate ``_deploy_files_kwargs`` (follow / tail_seconds).
-        Callers that don't pass them get the transport defaults.
+        Empty falls back to transport defaults.
         """
 
         def _report(fraction: float, message: str) -> None:
@@ -302,11 +297,11 @@ class Deployer:
                 including it.
             wipe: When ``True``, call ``transport.wipe_filesystem()``
                 before staging — full destructive erase (keep set
-                included) used by ``chumicro-workspace deploy --wipe``
-                for corruption recovery.  Skips the diff cleanup
-                entirely (nothing left to diff against after a wipe).
-                RAM-mode transports treat the wipe as a no-op so
-                callers don't need to gate on mode.
+                included) for corruption-recovery flows.  Skips the
+                diff cleanup entirely (nothing left to diff against
+                after a wipe).  RAM-mode transports treat the wipe
+                as a no-op, so no need to gate on mode at the call
+                site.
             force_deploy_mode: Override the pre-flight requires_flash
                 policy.  ``None`` (default) runs the pre-flight check
                 that auto-promotes RAM → flash when a flagged library
@@ -318,8 +313,7 @@ class Deployer:
                 ``executing``, ``done``.
             on_file_staged: Forwarded to ``deploy_files``.
             on_file_deleted: Per-file callback invoked with each
-                stale on-device path before deletion.  Lets the CLI
-                surface "removed: /lib/old.py" lines for transparency.
+                stale on-device path before deletion.
             on_execute_line: Forwarded to ``deploy_files``.
             on_preflight_message: Optional callback for the
                 "switching to flash mode" message the requires_flash

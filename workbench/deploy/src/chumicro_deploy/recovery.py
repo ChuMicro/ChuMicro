@@ -15,15 +15,13 @@ This module provides:
   headline + ordered fix-steps per kind.
 - :class:`RecoveringDeployer` — sibling of :class:`Deployer` that
   catches transport failures, surfaces the plan, and either reports
-  + re-raises (``prompt=None``, CI / scripted flows) or prompts the
-  user to retry after fixing the condition and loops up to
-  *max_attempts* (interactive flows).
+  + re-raises (when ``prompt=None``) or prompts the user to retry
+  after fixing the condition and loops up to *max_attempts*.
 
-Keeping this as a sibling instead of baking it into
-:class:`Deployer` preserves the deterministic programmatic API
-that programmatic callers depend on.  Interactive use (the
-``chumicro-deploy`` CLI, direct human invocation) opts in by
-instantiating :class:`RecoveringDeployer` with a prompt callable.
+Keeping recovery as a sibling instead of baking it into
+:class:`Deployer` preserves a deterministic programmatic API.
+Interactive recovery is opt-in via :class:`RecoveringDeployer` with
+a prompt callable.
 """
 
 from __future__ import annotations
@@ -217,14 +215,11 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     ``CircuitpythonTransportError`` often wraps a ``SerialException``
     or ``OSError`` whose text is the real signal.
 
-    Returns :attr:`DeployFailureKind.UNKNOWN` when no row matches, and
-    :class:`RecoveringDeployer` treats that as retryable so the
-    user isn't locked out of an unclassified hiccup.
+    Returns :attr:`DeployFailureKind.UNKNOWN` when no row matches.
     """
     # Typed disconnect subclasses skip the string-pattern dance.
     # They were raised because the device dropped, period.  Routes
-    # to PORT_UNAVAILABLE because the user-facing fix is the same
-    # ("plug it back in").
+    # to PORT_UNAVAILABLE — the recovery is "plug it back in".
     if isinstance(
         error,
         (CircuitpythonMidDeployDisconnected, MicropythonMidDeployDisconnected),
@@ -242,16 +237,16 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
 class PortHolder:
     """A process currently holding a serial port open.
 
-    Returned by :func:`diagnose_port_holders` so the recovery
-    printer can show the user which process is blocking the deploy
-    instead of the generic "close the app holding the port" hint.
+    Returned by :func:`diagnose_port_holders` so output to the user
+    can name the process blocking the deploy instead of the generic
+    "close the app holding the port" hint.
 
     Attributes:
         pid: Process id reported by ``lsof``.
         command: Full command line via ``ps -o command=``.  More
             informative than ``lsof``'s short ``c`` field for
             distinguishing stale chumicro processes from an external
-            app the user explicitly opened.
+            app explicitly opened by the user.
     """
 
     pid: int
@@ -260,17 +255,16 @@ class PortHolder:
 
 #: Recognize ``/dev/cu.X`` (macOS) and ``/dev/ttyACM0`` /
 #: ``/dev/ttyUSB0`` (Linux) paths embedded in transport-error text.
-#: Used by :func:`_extract_port_path_from_error` to drive the
-#: post-failure ``lsof`` lookup.  The character class is restricted
-#: to alphanumerics + ``.`` / ``_`` / ``-`` so trailing ``:`` (from
-#: ``"/dev/ttyACM0: Resource busy"``) and ``'`` / ``"`` (from
-#: quoted error strings) don't get pulled into the captured path.
+#: The character class is restricted to alphanumerics + ``.`` / ``_``
+#: / ``-`` so trailing ``:`` (from ``"/dev/ttyACM0: Resource busy"``)
+#: and ``'`` / ``"`` (from quoted error strings) don't get pulled
+#: into the captured path.
 _PORT_PATH_RE = re.compile(r"/dev/(?:cu|tty)[A-Za-z0-9._-]+")
 
 #: Substrings that flag a port-holding process as "probably ours" —
 #: a stale chumicro-deploy or mpremote subprocess from a previous
 #: run, vs. an external app the user explicitly opened (Mu, Thonny,
-#: VS Code's serial console).  Used to tailor the recovery message.
+#: VS Code's serial console).
 _LIKELY_CHUMICRO_KEYWORDS = (
     "chumicro-deploy",
     "chumicro_workspace",
@@ -283,9 +277,8 @@ def _extract_port_path_from_error(error: BaseException) -> str | None:
     """Find the first ``/dev/(cu|tty)*`` path in an error's text.
 
     Transport errors embed the port path in their message
-    (mpremote's stderr, pyserial's ``SerialException``).  Pulling
-    it back out lets the recovery printer probe ``lsof`` against
-    that exact port.  Returns ``None`` when no path is found.
+    (mpremote's stderr, pyserial's ``SerialException``).  Returns
+    ``None`` when no path is found.
     """
     match = _PORT_PATH_RE.search(str(error))
     return match.group(0) if match else None
@@ -393,9 +386,9 @@ class RecoveringDeployer:
 
     Two modes selected by the *prompt* argument:
 
-    - **Non-interactive** (``prompt=None``, the default — CI /
-      scripted flows): runs once, prints the classified failure +
-      ordered fix steps on a transport error, then re-raises.
+    - **Non-interactive** (``prompt=None``, the default): runs once,
+      prints the classified failure + ordered fix steps on a
+      transport error, then re-raises.
     - **Interactive** (``prompt=input`` or any callable taking the
       prompt text and returning the user's reply): runs up to
       *max_attempts* times, asks between attempts.  An empty / pure-

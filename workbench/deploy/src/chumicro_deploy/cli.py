@@ -485,21 +485,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 @dataclass(frozen=True)
 class CliEnv:
-    """Test-injectable seams for :func:`main`.
+    """Injectable seams for :func:`main`.
 
-    Production callers don't need to construct this.  :func:`main`
-    defaults to a no-override :class:`CliEnv` that uses production
-    behavior everywhere.  Tests pass a custom env to swap one seam
-    for the duration of the call without monkeypatching module
-    internals.  Production code reads the values off ``args._env``
-    inside CLI sub-commands.
+    :func:`main` defaults to a no-override :class:`CliEnv` that uses
+    the module-level implementations everywhere.  Pass a custom env
+    to swap one seam for the duration of the call without
+    monkeypatching module internals.  Sub-commands read the values
+    off ``args._env``.
 
     Attributes:
         flash_firmware_fn: Override the firmware-flash callable.
             ``None`` means use the module-level
-            :func:`chumicro_deploy.firmware.flash_firmware`.  Tests
-            pass a recording stub to assert on the URL / device /
-            kwargs the CLI forwards.
+            :func:`chumicro_deploy.firmware.flash_firmware`.
         probe_device_fn: Override the probe callable.  ``None`` means
             use :func:`chumicro_deploy.probe.probe_device`.
     """
@@ -527,9 +524,10 @@ def main(
 
     Args:
         argv: Command-line arguments (``None`` reads from ``sys.argv``).
-        env: Test-injectable seams.  Defaults to a no-override
-            :class:`CliEnv` that uses production behavior everywhere.
-            Stashed on ``args._env`` so sub-commands can read it.
+        env: Injectable seams.  Defaults to a no-override
+            :class:`CliEnv` that uses the module-level implementations
+            everywhere.  Stashed on ``args._env`` so sub-commands can
+            read it.
     """
     parser = build_parser()
     args = parser.parse_args(argv)

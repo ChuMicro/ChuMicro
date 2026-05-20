@@ -3,10 +3,9 @@
 :func:`resolve_deploy_mode` is pure policy.  Given the configured
 mode and the resolution unit's inputs, it returns the effective mode
 plus an optional human-readable message when a requested RAM mode
-was overridden to flash.  One rule, byte-identical for every caller:
-the unit/functional distinction is expressed by how each caller
-scopes ``staged_files`` and ``resolution_unit``, never by a branch
-in the policy.
+was overridden to flash.  One rule across every shape: the
+unit/functional distinction is expressed by how ``staged_files`` and
+``resolution_unit`` are scoped, never by a branch in the policy.
 
 Public API:
 
@@ -63,9 +62,8 @@ def resolve_deploy_mode(
     Pure policy — no I/O, no emission.  The caller computes the inputs
     (the dependency-closure walk for *requires_flash_libs*, the staged
     file set for *staged_files*), surfaces the returned message, and
-    applies the mode.  A *resolution unit* is one deploy for the
-    :class:`~chumicro_deploy.Deployer` or one library's test suite for
-    the on-device sweep.
+    applies the mode.  A *resolution unit* is one deploy or one
+    library's test suite.
 
     Two inputs have opposite scoping rules, and that — not a branch —
     is the whole subtlety:
@@ -74,12 +72,11 @@ def resolve_deploy_mode(
       closure**.  ``requires_flash`` means "OOMs on import in RAM on a
       small board"; the import happens regardless of test shape, so it
       cannot be scoped down.
-    * *staged_files* is **caller-scoped**: the full closure for
-      functional / app-deploy callers (a functional test genuinely
-      uses a dependency's data file), the library-under-test's own
-      ``src`` only for the unit sweep (a pure unit test cannot reach a
-      dependency's data-file code path, so a dropped dependency asset
-      is harmless and must not poison every dependent suite).
+    * *staged_files* is **caller-scoped**: pass the full closure when
+      a dependency's data file is genuinely used, pass only the
+      library-under-test's own ``src`` for a pure unit pass (a
+      dropped dependency asset is harmless when no code path reaches
+      it).
 
     *resolution_unit* is the library a "you should declare
     ``requires_flash``" recommendation would name, or ``None`` for an
@@ -163,7 +160,7 @@ def find_libraries_requiring_flash(host_paths: list[Path]) -> list[str]:
 
     Args:
         host_paths: Filesystem paths the deploy graph drew files
-            from (typically :meth:`ImportGraphSource.host_paths`).
+            from.
 
     Returns:
         Sorted list of unique pip-name-shaped library names

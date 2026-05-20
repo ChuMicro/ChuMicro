@@ -95,7 +95,8 @@ def _directory_size_bytes(path: Path) -> int:
 
     Symlinks count once for their target size; broken symlinks and
     files that race-deleted between iteration and stat are ignored
-    (the rsync that follows will surface any real I/O error).
+    (a real I/O error surfaces downstream when content is actually
+    accessed).
     """
     total = 0
     if not path.is_dir():
@@ -216,8 +217,8 @@ def merge_packages(
             if is_test_support_module(
                 Path(directory) / name,
             ) and not include_test_support:
-                # Test-support fakes never reach a product/app deploy;
-                # only the on-device unit sweep opts in.
+                # Test-support fakes are excluded unless explicitly
+                # opted in via include_test_support.
                 ignored.add(name)
         return ignored
 
@@ -236,11 +237,10 @@ def merge_packages(
         )
 
 
-#: Excludes every CP rsync uses regardless of caller — build artifacts,
-#: macOS file-level detritus, and the macOS volume-level noise dirs +
-#: skip-sentinels :func:`plant_macos_sentinels_in_staging` ships in
-#: source.  See the docstring on each block in :func:`rsync` for the
-#: rationale.
+#: Excludes every CP rsync uses — build artifacts, macOS file-level
+#: detritus, and the macOS volume-level noise dirs + skip-sentinels
+#: planted in the staging tree.  See the docstring on each block in
+#: :func:`rsync` for the rationale.
 _BASE_RSYNC_EXCLUDES: tuple[str, ...] = (
     "__pycache__",
     "*.pyc",
@@ -290,28 +290,18 @@ def rsync(
 ) -> None:
     """Rsync a source directory's contents to a destination.
 
-    Single primitive both the production deploy path
-    (:meth:`CircuitpythonTransport.deploy_files`) and the functional-
-    test stage path (:meth:`CircuitpythonTransport.stage`) use.  Both
-    callers want the same FAT-write reliability (``--checksum`` to
-    verify content because FAT32 timestamps are unreliable,
-    ``--inplace`` to avoid temp-file rename races on FAT32) and issue
-    an *identical* rsync invocation — one device-staging path, no
-    per-context exclude, per-context variance only in the payload and
-    the post-stage step:
+    Single FAT-write primitive: ``--checksum`` verifies content
+    (FAT32 timestamps are unreliable) and ``--inplace`` avoids
+    temp-file rename races on FAT32.  Two parameter shapes:
 
-    * **Clean deploys and functional tests** both call ``delete=True``
-      with ``additional_excludes=DEVICE_KEEP_SET`` — clean slate, only
-      the closed keep set survives.  Production ships ``code.py`` as
-      payload (the boot shim).  The functional-test stage ships no
-      entrypoint (its harness runs over the live raw REPL, not by
-      booting ``code.py``), so a stale board ``code.py`` is reconciled
-      away by ``--delete``.  ``settings.toml`` is not in the keep set: a
-      board-resident one is a competing wifi authority and is evicted
-      (with a one-time loud notice from the transport).
-    * **Additive deploys** (the ``--no-wipe`` opt-out) call
-      ``delete=False`` with no extra excludes — stale files persist.
-      Used when the caller hand-manages other board files.
+    * **Clean push** — ``delete=True`` with
+      ``additional_excludes=DEVICE_KEEP_SET``.  Clean slate, only the
+      closed keep set survives.  ``settings.toml`` is not in the keep
+      set: a board-resident one is a competing wifi authority and is
+      evicted.
+    * **Additive push** — ``delete=False`` with no extra excludes.
+      Stale files persist.  Used when other board files are
+      hand-managed.
 
     The base exclude set (build artifacts + macOS noise / sentinel
     dirs) is shared and unconditional — see :data:`_BASE_RSYNC_EXCLUDES`.
@@ -322,17 +312,15 @@ def rsync(
         delete: When ``True``, pass ``--delete`` so files in
             destination but not source are removed (clean slate;
             only ``additional_excludes`` survive).  ``False`` is the
-            additive shape — stale files persist — used by the
-            ``--no-wipe`` opt-out.
+            additive shape — stale files persist.
         additional_excludes: Extra basenames to add to ``--exclude``.
-            Clean callers (production *and* functional-test) pass
-            :data:`DEVICE_KEEP_SET` so ``--delete`` doesn't wipe the
-            device-required keep set.  Additive callers leave empty.
+            Pass :data:`DEVICE_KEEP_SET` on clean pushes so
+            ``--delete`` doesn't wipe the device-required keep set;
+            leave empty for additive pushes.
         timeout: Override the auto-computed timeout (seconds).  Default
             ``None`` lets :func:`compute_rsync_timeout_seconds` pick
-            a value scaled to the staging-tree size — the right
-            choice for production callers.  Tests pass an explicit
-            value to make the assertion deterministic.
+            a value scaled to the staging-tree size.  Pass an explicit
+            value when a deterministic deadline is needed.
 
     Raises:
         FlashDriveError: If rsync is not installed or the sync fails.
@@ -384,12 +372,10 @@ def rsync(
 
 
 #: Device-generated / device-required files that survive a clean
-#: deploy on every path — clean rsync, diff reconcile, functional-test
-#: stage.  The CP clean ``--exclude`` and the diff scope both derive
-#: from this one tuple rather than each hard-coding their own list, so
-#: "what survives a deploy" cannot drift between paths.  There is no
-#: per-context exclude: the functional-test stage uses this same set,
-#: never a wider one.
+#: deploy on every path.  The CP clean ``--exclude`` and the diff
+#: scope both derive from this one tuple rather than hard-coding
+#: their own list, so "what survives a deploy" cannot drift between
+#: paths.
 #:
 #: * ``boot_out.txt`` — CP writes it only on a *hard* reboot, and a
 #:   deploy soft-reboots, so wiping it strands the drive without
@@ -661,7 +647,6 @@ def flush_volume(
     Args:
         drive_path: Path on the volume to flush.
         sleep: Callable that sleeps for the given number of seconds.
-            Typically ``transport._time.sleep`` from a CircuitpythonTransport.
         settle_delay: Seconds to wait after the sync.
     """
     if _sys_module.platform == "darwin":

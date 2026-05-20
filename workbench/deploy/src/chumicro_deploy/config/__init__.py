@@ -17,8 +17,7 @@ Where ``my_pkg.loader.load(path, *, device_id=None)`` returns a
 
 :func:`discover_config_loaders` collects the built-in ``default``
 loader plus every registered third-party loader into a single
-``{name: callable}`` mapping that the CLI and any
-orchestration-layer code can dispatch from.
+``{name: callable}`` mapping that downstream code can dispatch from.
 """
 
 from __future__ import annotations
@@ -53,10 +52,7 @@ def _default_loader(
     """Adapter wrapping the built-in ``devices.yml`` loader.
 
     Forwards both ``device_id`` and ``runtime`` to
-    :func:`chumicro_deploy.config.default.load_devices_yml`.  Third-
-    party loaders that don't accept ``runtime`` will continue to work
-    because callers gate the ``runtime`` kwarg on the registered
-    loader name (see ``chumicro_repl.cli._device_from_args``).
+    :func:`chumicro_deploy.config.default.load_devices_yml`.
     """
     # Late import so importing :mod:`chumicro_deploy.config` alone
     # does not pull in PyYAML.

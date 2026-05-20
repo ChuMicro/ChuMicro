@@ -52,10 +52,9 @@ class DeviceInfo:
 def probe_device(device: Device) -> DeviceInfo:
     """Connect, probe, disconnect — return what the board reports.
 
-    Exceptions during the probe propagate; callers that want soft
-    failure (onboarding flows where a hardware probe is best-effort)
-    wrap the call themselves.  The transport is always disconnected,
-    even on error.
+    Exceptions during the probe propagate.  Wrap the call when a
+    soft-failure shape is needed.  The transport is always
+    disconnected, even on error.
 
     Args:
         device: Target :class:`Device`.

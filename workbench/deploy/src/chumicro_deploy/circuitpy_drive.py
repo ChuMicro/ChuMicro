@@ -36,13 +36,11 @@ _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 def _format_probe_error(drive_path: Path | str, error: OSError) -> str:
     """Translate a probe-write OSError into a recovery-friendly message.
 
-    The transport's ``.chu-probe`` write distinguishes three classes of
-    failure on the drive:
+    Distinguishes three classes of failure on the drive:
 
     - ``ENOSPC`` — drive is full.  Includes the exact errno phrasing
-      (``No space left on device``) so the recovery classifier's
-      :data:`~chumicro_deploy.recovery._FLASH_DRIVE_STATE_PATTERNS`
-      check picks it up.
+      (``No space left on device``) so the recovery classifier picks
+      it up.
     - ``EROFS`` — drive remounted read-only (rare on CIRCUITPY but
       possible after a USB hiccup or a board that booted into
       protected mode).
@@ -178,10 +176,8 @@ def find_circuitpy_drive_for_uid(target_uid: str) -> str | None:
     Scans every mounted ``CIRCUITPY*`` volume, reads the ``UID:...``
     line from ``boot_out.txt``, and returns the first path whose UID
     equals *target_uid* (case-insensitive).  Returns ``None`` when no
-    mount matches.  This is the preferred discovery path.
-    Transport-side identity verification only falls back to
-    :func:`find_circuitpy_drive_for_machine` when the UID probe is
-    unavailable on either side of the comparison.
+    mount matches.  Preferred over machine-string matching since UID
+    disambiguates two boards of the same model.
     """
     if not target_uid:
         return None
@@ -217,7 +213,7 @@ def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
 def _list_scope_on_drive(drive: Path, *, clean_slate: bool = False) -> list[str]:
     """Walk a CIRCUITPY drive and return the diff's in-scope paths.
 
-    Flash-mode helper for the transport's ``list_files_in_scope``.
+    Flash-mode scope walker.
 
     ``clean_slate=True`` (the deploy default) puts *every* drive file
     in scope except the closed keep set
