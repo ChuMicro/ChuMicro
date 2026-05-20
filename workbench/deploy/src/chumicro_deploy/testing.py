@@ -268,16 +268,15 @@ class FakeTransport:
     #: second returns Y" without subclassing the fake.
     outputs: list[str] = field(default_factory=list)
     mode: str = "ram"
-    #: Default ~64 KB matches the real CP transport's lower bound.
+    #: Default ~64 KB — a realistic floor for the boards this fake stands in for.
     free_memory_bytes: int = 64 * 1024
     #: Canned return value for ``probe_implementation``.  ``None``
     #: simulates a probe that couldn't complete.
     probe_result: DeviceImplementation | None = None
-    #: Module sources returned by ``staged_sources``; matches the
-    #: ``ExtendedTransportProtocol`` shape used by the RAM-mode path.
-    #: Defaults to an empty list (non-``None``) so the CP RAM
-    #: bootstrap path's "stage() must be called first" assertion
-    #: passes when sources are not injected explicitly.
+    #: Module sources returned by ``staged_sources``.  Defaults to an
+    #: empty list (non-``None``) so the CP RAM bootstrap path's
+    #: "stage() must be called first" assertion passes when sources
+    #: are not injected explicitly.
     staged_sources: list[tuple[str, str]] = field(default_factory=list)
     #: Canned return value for :meth:`reset_into_bootloader`.  ``True``
     #: simulates a successful dispatch; ``False`` simulates the
@@ -294,7 +293,7 @@ class FakeTransport:
     recover_raises: BaseException | None = None
     #: Simulated on-device file state for the diff-deploy primitives
     #: (`list_files_in_scope` / `delete_files`).  Pre-populate to
-    #: control what the deploy routine considers "stale".  Mirrors
+    #: control what the deploy routine considers "stale".  Keys use
     #: the leading-slash device-path form :meth:`deploy_files` accepts.
     device_files: dict[str, bytes] = field(default_factory=dict)
     #: Files staged via the ``extra_files`` keyword on :meth:`stage`.
@@ -400,8 +399,7 @@ class FakeTransport:
     def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
         """Record a chunked-execute call and return the configured output.
 
-        Mirrors :meth:`CircuitpythonTransport.execute_scripts`.  Raises
-        :attr:`execute_raises` after recording when set.
+        Raises :attr:`execute_raises` after recording when set.
 
         When :attr:`outputs` is non-empty, pops a single head value and
         returns it, treating the whole chunked execute as one batched
@@ -425,7 +423,7 @@ class FakeTransport:
         return self.free_memory_bytes
 
     def inline_script_budget_bytes(self) -> int:
-        """Return half the configured free-memory budget (matches CP heuristic)."""
+        """Return half the configured free-memory budget."""
         self.calls.append(("inline_script_budget_bytes", ()))
         return max(8 * 1024, self.free_memory_bytes // 2)
 
@@ -484,9 +482,8 @@ class FakeTransport:
         ``"soft_reboot"``).  The fake records it but doesn't
         otherwise change behavior.
 
-        ``tail_seconds`` mirrors the CP transport's post-soft-reboot
-        capture-window override.  Recorded on
-        :attr:`last_tail_seconds`.
+        ``tail_seconds`` is recorded on :attr:`last_tail_seconds` so
+        tests can assert the capture-window override.
         """
         self.calls.append(("deploy_files", (dict(files), entrypoint, follow)))
         # `clean` rides on the kwarg surface and is recorded for
@@ -506,13 +503,12 @@ class FakeTransport:
         return self.execute_output
 
     def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
-        """Return on-device paths in scope (mirrors `device_files`).
+        """Return on-device paths in scope, drawn from :attr:`device_files`.
 
-        ``clean_slate=True`` mirrors the real clean-slate scope: every
-        device file except the closed keep set
-        (:data:`flash_drive.DEVICE_KEEP_SET`).  ``False`` keeps the
-        :func:`is_in_deploy_scope` filter so the additive path leaves
-        out-of-scope files alone.
+        ``clean_slate=True`` widens to every device file except the
+        closed keep set (:data:`flash_drive.DEVICE_KEEP_SET`).
+        ``False`` keeps the :func:`is_in_deploy_scope` filter so the
+        additive path leaves out-of-scope files alone.
         """
         from .flash_drive import DEVICE_KEEP_SET  # noqa: PLC0415 — avoid cycle
         from .protocol import is_in_deploy_scope  # noqa: PLC0415 — avoid cycle
@@ -541,10 +537,10 @@ class FakeTransport:
     def wipe_filesystem(self) -> None:
         """Erase every simulated on-device file.
 
-        Mirrors the real-transport contract: in flash/copy mode the
-        whole user filesystem (in-scope + out-of-scope alike) is gone
-        after this returns.  In RAM/mount mode the call is a no-op,
-        so both branches exercise against the same fake.
+        In flash/copy mode the whole user filesystem (in-scope + out-
+        of-scope alike) is gone after this returns.  In RAM/mount mode
+        the call is a no-op, so both branches exercise against the
+        same fake.
         """
         self.calls.append(("wipe_filesystem", ()))
         if self.mode in ("flash", "copy"):

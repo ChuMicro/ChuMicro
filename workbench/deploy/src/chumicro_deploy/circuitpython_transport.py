@@ -236,7 +236,6 @@ def _walk_package_files(
 class SerialPort(Protocol):
     """Structural interface for a serial port.
 
-    Matches the subset of ``serial.Serial`` used by the transport.
     Implementations can satisfy this protocol without importing pyserial.
     """
 
@@ -251,7 +250,6 @@ class SerialPort(Protocol):
 class TimeSource(Protocol):
     """Structural interface for an injectable time source.
 
-    Matches the subset of Python's ``time`` module used by the transport.
     ``FakeTime`` from :mod:`chumicro_deploy.testing` is one conforming
     implementation that eliminates wall-clock waits.
     """
@@ -1481,16 +1479,14 @@ class CircuitpythonTransport:
         # package* (dir present, __init__ gone) instead of cleanly;
         # (b) an empty `/<pkg>/` at the drive root resolves
         # `import <pkg>` to a PEP 420 namespace package and shadows
-        # the populated `/lib/<pkg>/` deeper in `sys.path`.  rsync
-        # --delete prunes empty dirs, and the diff path matches that
-        # by sweeping the whole scope (not just
-        # this run's deletions) so pre-existing husks clear too.
+        # the populated `/lib/<pkg>/` deeper in `sys.path`.  The reap
+        # sweeps the whole scope (not just this run's deletions) so
+        # pre-existing husks clear too.
         # Bottom-up so nested husks collapse, and rmdir only removes
         # an *empty* dir, so a live package is never touched.
         # Dot-prefixed entries (macOS noise: ``.Spotlight-V100`` …) are
-        # skipped for parity with ``_list_scope_on_drive``.  They're not
-        # ours to reap.  The drive root itself is excluded by the
-        # ``rglob("*")`` starting point.
+        # skipped — they're not ours to reap.  The drive root itself is
+        # excluded by the ``rglob("*")`` starting point.
         directories = sorted(
             (
                 entry for entry in drive.rglob("*")
