@@ -191,7 +191,9 @@ python scripts/run.py prepare-circuitpython
 For deeper implementation detail:
 
 - [plans/patterns.md](plans/patterns.md): implementation cookbooks. Service pattern, recv-buffer + memoryview, lazy adapter selection, FIFO deque, mpremote internals, and more.
+- [docs/contributing/agent-style-guide.md](docs/contributing/agent-style-guide.md): full phrase bans, the `the X` forward-reference test, the rewrite-not-trim discipline.
 - [docs/contributing/style-guide.md](docs/contributing/style-guide.md): naming, annotations, imports, layout, doc tone.
 - [docs/contributing/device-testing.md](docs/contributing/device-testing.md): functional tests, deploy modes, devices.yml.
 - [docs/contributing/releases.md](docs/contributing/releases.md) covers VERSION, SemVer, and experimental-to-stable promotion.
 - [docs/contributing/pull-requests.md](docs/contributing/pull-requests.md): PR conventions.
+- [docs/troubleshooting/](docs/troubleshooting/): hardware-issue recovery (FSKit wedge, read-only FAT, RingIO quirks).
