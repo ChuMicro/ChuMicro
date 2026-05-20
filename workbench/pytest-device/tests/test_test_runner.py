@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 from chumicro_deploy import DeviceEntry
-from chumicro_pytest_device import _test_runner as device_testing
+from chumicro_pytest_device import test_runner as device_testing
 
 
 def _make_synthetic_library(

@@ -61,7 +61,7 @@ from chumicro_deploy import (
 from chumicro_deploy.runtime_marker import is_host_only_test, read_runtime_marker
 from msgpack import packb
 
-from ._test_runner import (
+from .test_runner import (
     build_device_bootstrap,
     build_transport_for_entry,
     execute_device_bootstrap,
