@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from chumicro_workspace.cli._common import (
@@ -53,6 +54,7 @@ from chumicro_workspace.library_channel import (
     fetch_text_file,
     resolve_snapshot,
 )
+from chumicro_workspace.workspace import WorkspaceLayout
 
 
 def _interactive(args: argparse.Namespace) -> bool:
@@ -117,10 +119,14 @@ def _declined_transitive(
 
 
 def _recorded_version(
-    workspace_root, package: str, *, floating: bool, pin: str | None,
+    workspace_root: Path, package: str, *, floating: bool, pin: str | None,
 ) -> str:
-    """The version string to store: explicit pin, HEAD if floating, else
-    the concrete version that landed on disk."""
+    """Return the version string to record in ``workspace.yml``.
+
+    Explicit *pin* wins; ``--floating`` records :data:`HEAD`; otherwise
+    the concrete version that landed on disk (or ``HEAD`` when the
+    library has no ``VERSION`` file yet).
+    """
     if pin is not None:
         return pin
     if floating:
@@ -245,7 +251,11 @@ def _cmd_library_update(args: argparse.Namespace) -> int:
     return 0
 
 
-def _dependents_of(workspace, table, name: str) -> list[str]:
+def _dependents_of(
+    workspace: WorkspaceLayout,
+    table: dict[str, CuratedLibrary],
+    name: str,
+) -> list[str]:
     """Curated, non-declined libraries whose pyproject still needs *name*."""
     return sorted(
         other
@@ -255,6 +265,35 @@ def _dependents_of(workspace, table, name: str) -> list[str]:
             workspace.root / "libraries" / other / "pyproject.toml",
         )
     )
+
+
+def _confirm_dependents_block(
+    workspace: WorkspaceLayout,
+    table: dict[str, CuratedLibrary],
+    name: str,
+    args: argparse.Namespace,
+    *,
+    action_label: str,
+) -> bool:
+    """Warn when *name* still has dependents; return whether to proceed.
+
+    *action_label* fills the verb in the confirm prompt ("Remove anyway?"
+    / "Forget anyway?").  No dependents → True; non-interactive →
+    warning printed but True; interactive abort → False.
+    """
+    dependents = _dependents_of(workspace, table, name)
+    if not dependents:
+        return True
+    verb = "depends" if len(dependents) == 1 else "depend"
+    pronoun = "its" if len(dependents) == 1 else "their"
+    print(
+        f"warning: {', '.join(dependents)} still {verb} on "
+        f"{name}; {pronoun} deploy will fail without it.",
+    )
+    if _interactive(args) and not _confirm(f"{action_label} anyway?"):
+        print("Aborted.")
+        return False
+    return True
 
 
 def _cmd_library_remove(args: argparse.Namespace) -> int:
@@ -269,17 +308,10 @@ def _cmd_library_remove(args: argparse.Namespace) -> int:
         print(f"library remove: not curated: {args.name}", file=sys.stderr)
         return 2
 
-    dependents = _dependents_of(workspace, table, args.name)
-    if dependents:
-        verb = "depends" if len(dependents) == 1 else "depend"
-        pronoun = "its" if len(dependents) == 1 else "their"
-        print(
-            f"warning: {', '.join(dependents)} still {verb} on "
-            f"{args.name}; {pronoun} deploy will fail without it.",
-        )
-        if _interactive(args) and not _confirm("Remove anyway?"):
-            print("Aborted.")
-            return 0
+    if not _confirm_dependents_block(
+        workspace, table, args.name, args, action_label="Remove",
+    ):
+        return 0
 
     remove_library(workspace.root, args.name)
     entry = table[args.name]
@@ -302,17 +334,10 @@ def _cmd_library_forget(args: argparse.Namespace) -> int:
         print(f"library forget: not curated: {args.name}", file=sys.stderr)
         return 2
 
-    dependents = _dependents_of(workspace, table, args.name)
-    if dependents:
-        verb = "depends" if len(dependents) == 1 else "depend"
-        pronoun = "its" if len(dependents) == 1 else "their"
-        print(
-            f"warning: {', '.join(dependents)} still {verb} on "
-            f"{args.name}; {pronoun} deploy will fail without it.",
-        )
-        if _interactive(args) and not _confirm("Forget anyway?"):
-            print("Aborted.")
-            return 0
+    if not _confirm_dependents_block(
+        workspace, table, args.name, args, action_label="Forget",
+    ):
+        return 0
 
     remove_library(workspace.root, args.name)
     del table[args.name]
@@ -388,7 +413,10 @@ def _cmd_library_switch_channel(args: argparse.Namespace) -> int:
 
 
 def _apply_selected(
-    workspace, channel: str, roots: list[str], http_get,
+    workspace: WorkspaceLayout,
+    channel: str,
+    roots: list[str],
+    http_get: Callable[[str], bytes],
 ) -> int:
     """Fetch each chosen root's closure and record it; the browser's tail.
 

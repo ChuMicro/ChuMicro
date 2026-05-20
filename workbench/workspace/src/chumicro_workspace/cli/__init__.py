@@ -100,11 +100,6 @@ from chumicro_workspace.cli.setup import _add_setup_parsers
 from chumicro_workspace.library import _real_http_get as _default_http_get
 
 # ---------------------------------------------------------------------------
-# Implemented commands
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
 # Parser construction
 # ---------------------------------------------------------------------------
 
