@@ -14,9 +14,6 @@ Mirrors the structure of :mod:`chumicro_deploy.testing` and
 :mod:`chumicro_workspace.testing`.
 """
 
-#: Test-support: PyPI sdist / wheel only — bundles and product /
-#: app / functional device deploys exclude it; the on-device unit
-#: sweep is the one path that stages it.
 __chumicro_test_support__ = True
 
 

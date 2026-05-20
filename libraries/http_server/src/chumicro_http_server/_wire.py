@@ -124,6 +124,7 @@ class CaseInsensitiveDict:
     """
 
     def __init__(self):
+        # noqa: CHU027 — sibling impl in chumicro-requests _wire.py; candidate for shared http-wire library hoist
         # Lowercase key -> (original_name, value).  Paired with
         # ``_order`` (list of lowercase keys) so iteration preserves
         # insertion order on every runtime — MicroPython and
@@ -182,7 +183,7 @@ class CaseInsensitiveDict:
         for lower in self._order:
             yield self._entries[lower]
 
-    def add(self, name, value):
+    def add(self, name, value):  # noqa: CHU027  docstring shared with chumicro-requests _wire.add — candidate for shared http-wire library
         """Append *value* to the existing header, joining with ``, ``.
 
         New keys behave like :meth:`__setitem__`.  Used by the parser
@@ -523,7 +524,7 @@ class RequestParser:
         self.state = RequestParseState.HEADERS
         return True
 
-    def _try_parse_headers(self):
+    def _try_parse_headers(self):  # noqa: CHU027  docstring shared with chumicro-requests _wire._try_parse_headers — candidate for shared http-wire library
         """Consume one header line; return True if state advanced or
         another header was parsed."""
         crlf_index = self._live_find(CRLF)
