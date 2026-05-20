@@ -107,9 +107,9 @@ _STAGE_EXCLUDED_NAMES: frozenset[str] = frozenset(
 #:
 #: Kept in sync with :data:`chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`
 #: + :data:`chumicro_deploy.protocol.DEPLOY_SCOPE_PREFIXES`.  The mirror
-#: is intentional — embedding the constants directly in the on-device
-#: script keeps each side self-contained and the host doesn't need to
-#: marshal a values list every call.
+#: is intentional, because embedding the constants directly in the
+#: on-device script keeps each side self-contained and the host doesn't
+#: need to marshal a values list every call.
 _LIST_SCOPE_SCRIPT: str = (
     "import os\n"
     "def _walk(p):\n"
@@ -139,7 +139,7 @@ _LIST_SCOPE_SCRIPT: str = (
 #: Clean-slate scope: every file on the device.  The host filters out
 #: :data:`flash_drive.DEVICE_KEEP_SET` (and any dot-prefixed path, for
 #: parity with the CP drive walk), so the diff reconciles the whole
-#: device down to payload + keep set — a stale board ``settings.toml``
+#: device down to payload + keep set, so a stale board ``settings.toml``
 #: / leftover file is removed, not just stale ``/lib`` packages.
 _LIST_ALL_SCRIPT: str = (
     "import os\n"
@@ -206,7 +206,7 @@ _WIPE_FILESYSTEM_SCRIPT: str = (
 #: :data:`_WIPE_FILESYSTEM_SCRIPT`) and re-opening the persistent
 #: serial transport.  rp2 and esp32 keep their host-side USB-CDC alive
 #: across a soft reset, so this is settle time for the runtime to
-#: remount ``/`` on the freshly-formatted volume — not a full USB-CDC
+#: remount ``/`` on the freshly-formatted volume, not a full USB-CDC
 #: re-enumeration like CircuitPython's ``storage.erase_filesystem``
 #: triggers.
 _WIPE_REBOOT_SETTLE_SECONDS: float = 2.0
@@ -273,8 +273,8 @@ def _decode_exec_result(result: Any) -> str:
 
     mpremote returns ``(stdout_bytes, stderr_bytes)`` in newer versions and
     raw ``bytes`` (or already-decoded ``str``) in older ones.  Tracebacks
-    land on stderr, so both streams are merged — callers downstream parse
-    the combined output with ``result_parser.parse_output``.
+    land on stderr, so both streams are merged, and callers downstream
+    parse the combined output with ``result_parser.parse_output``.
 
     Args:
         result: Return value from ``exec_raw`` (tuple, bytes, or str).
@@ -361,7 +361,7 @@ class MicropythonTransport:
         self._serial: Any = None
         self._mounted: bool = False
         #: Top-level device-root names written by the last copy-mode
-        #: :meth:`stage`.  ``mpremote fs cp`` is additive — it has no
+        #: :meth:`stage`.  ``mpremote fs cp`` is additive, and it has no
         #: ``--delete`` analog (the CircuitPython flash rsync does), so a
         #: multi-library sweep must delete the prior library's tree
         #: before the next ``fs cp`` or the device LittleFS fills and
@@ -413,7 +413,7 @@ class MicropythonTransport:
 
         Safe to call repeatedly on the same transport (RAM-mode
         orchestration re-stages per file).  On re-stage in mount mode
-        the existing mount is dropped first — otherwise mpremote's
+        the existing mount is dropped first.  Otherwise mpremote's
         ``mount_local`` hits ``OSError: [Errno 1] EPERM`` because the
         device-side mount hook refuses to replace a live mount.
 
@@ -472,8 +472,8 @@ class MicropythonTransport:
                 destination.write_bytes(module_path.read_bytes())
 
         # Land binary extra_files at their declared device paths inside
-        # the staging tree.  Copy mode rsync's the whole tree to flash;
-        # mount mode mounts the tree as the device filesystem.  Either
+        # the staging tree.  Copy mode rsync's the whole tree to flash,
+        # and mount mode mounts the tree as the device filesystem.  Either
         # way, the file appears at the requested device path.  Leading
         # slash stripped to make the device-path → staging-path
         # translation reversible.
@@ -601,7 +601,7 @@ class MicropythonTransport:
             self._subprocess_reset_with_retry()
             return
 
-        # Umount while the device-side mount state is still live — after
+        # Umount while the device-side mount state is still live.  After
         # Ctrl-D the ``os`` module and mount hook are gone and
         # ``umount_local`` would error when it tries to run
         # ``os.umount(...)``.  umount_local also unwraps the
@@ -623,13 +623,13 @@ class MicropythonTransport:
         """Attempt to recover after a failed test.
 
         Closes the persistent transport (if open) and reconnects from
-        scratch — more aggressive than :meth:`soft_reset` because the
+        scratch.  More aggressive than :meth:`soft_reset` because the
         previous failure might have left the raw REPL in an unknown
         state where ``exit_raw_repl`` itself could hang.
         """
         self._close_serial()
         # Subprocess reset so we don't immediately try to grab the port
-        # again — mpremote handles the whole open/reset/close cycle.
+        # again.  mpremote handles the whole open/reset/close cycle.
         # The retry+settle rides out a USB-CDC re-enumeration on a
         # wedged board and settles before returning, so the next
         # per-library stage()/soft_reset() doesn't race the reboot.
@@ -642,13 +642,13 @@ class MicropythonTransport:
         """Subprocess ``mpremote ... reset``, riding out re-enumeration.
 
         A board wedged by a prior hard failure (e.g. a stage
-        ``ENOSPC``) drops its USB-CDC; ``mpremote connect <port>
+        ``ENOSPC``) drops its USB-CDC, and ``mpremote connect <port>
         reset`` then fails ``it may be in use by another program`` /
         ``device not configured`` until it re-enumerates.  Settle and
         retry across that window, and settle once more after the reset
         reboots the board so the *next* port grab (the following
         per-library ``stage()`` / ``soft_reset()``) doesn't land
-        mid-re-enumeration.  Raises only if every attempt fails —
+        mid-re-enumeration.  Raises only if every attempt fails, since
         failing loud beats silently wedging the rest of the sweep.
         """
         last_error: Exception | None = None
@@ -670,17 +670,17 @@ class MicropythonTransport:
         """Issue ``machine.bootloader()`` to drop into the UF2 bootloader.
 
         Whether the call actually puts the chip in bootloader mode
-        depends on the board's MicroPython build — RP2040 / RP2350
+        depends on the board's MicroPython build.  RP2040 / RP2350
         ports wire ``machine.bootloader()`` to the native UF2 ROM
-        bootloader and it just works; other ports may not implement
+        bootloader and it just works.  Other ports may not implement
         the function at all, or may implement it as a plain reset
         that boots straight back into the app.  We try blindly
         rather than maintain a board / firmware-version table: a
         successful entry shows up as a new ROM-bootloader serial
         port for the caller's drive-poll to spot, and an
-        unsuccessful entry surfaces as no-new-port → fall back to
+        unsuccessful entry surfaces as no-new-port, falling back to
         the manual-entry prompt.  Don't add board-specific
-        branching here; the try-and-poll architecture is the right
+        branching here.  The try-and-poll architecture is the right
         abstraction.
         """
         try:
@@ -691,9 +691,9 @@ class MicropythonTransport:
                 )
             except Exception:
                 # Reset drops the serial link before a clean response
-                # comes back — expected on success.  We can't easily
-                # distinguish that from "bootloader attr missing" here,
-                # so trust the exec_raw fired and let the caller's
+                # comes back, which is expected on success.  We can't
+                # easily distinguish that from "bootloader attr missing"
+                # here, so trust the exec_raw fired and let the caller's
                 # drive-poll be the authoritative signal.
                 pass
         except Exception:
@@ -704,7 +704,7 @@ class MicropythonTransport:
         """Query ``sys.implementation`` on the board for PR-summary metadata.
 
         Opens the persistent raw REPL if needed and runs a short inline
-        script — no staging required because ``sys.implementation`` is a
+        script.  No staging required because ``sys.implementation`` is a
         built-in attribute.  Failures are swallowed (``None`` returned)
         so a flaky or unusual firmware never blocks the real test run.
 
@@ -927,7 +927,7 @@ class MicropythonTransport:
         device and the host drops :data:`flash_drive.DEVICE_KEEP_SET`
         + any dot-prefixed path (parity with the CP drive walk), so
         the diff reconciles a stale board ``settings.toml`` /
-        leftover file away — not just stale ``/lib`` packages.
+        leftover file away, not just stale ``/lib`` packages.
         ``clean_slate=False`` (the ``--no-wipe`` opt-out) keeps the
         additive scope: ``/lib/`` recursively + the four entrypoint /
         state files in :data:`~chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`
@@ -935,8 +935,8 @@ class MicropythonTransport:
         ``/runtime_config.msgpack``).  Returns paths in leading-slash
         form.
 
-        Mount-mode (RAM) deploys return an empty list — mount mode
-        doesn't write to flash, so there's nothing persistent to
+        Mount-mode (RAM) deploys return an empty list, because mount
+        mode doesn't write to flash, so there's nothing persistent to
         diff between deploys.
 
         Raises :class:`MicropythonTransportError` on raw-REPL failure.
@@ -971,7 +971,7 @@ class MicropythonTransport:
     def delete_files(self, paths: list[str]) -> None:
         """Delete *paths* and reap directories that become empty.
 
-        No-op in mount (RAM) mode — mount mode doesn't write to
+        No-op in mount (RAM) mode, because mount mode doesn't write to
         flash, so there's nothing to delete.  Otherwise sends a
         small script that calls ``os.remove`` on each path then walks
         the whole filesystem bottom-up and ``os.rmdir``-reaps any
@@ -987,7 +987,7 @@ class MicropythonTransport:
         is ``None``, ``dir()`` empty) and shadows the populated
         ``/lib/<pkg>/`` deeper in the path.  ``rmdir`` only removes
         an empty directory so live packages are never touched.
-        Dot-prefixed entries are skipped — parity with the listing
+        Dot-prefixed entries are skipped for parity with the listing
         script's filter and with the CP host-side reap.
         """
         if not paths:
@@ -1044,7 +1044,7 @@ class MicropythonTransport:
     def clear_entrypoints(self) -> None:
         """Remove ``main.py`` / ``code.py`` and confirm they are gone.
 
-        Copy mode only — mount (RAM) mode never writes a persistent
+        Copy mode only.  Mount (RAM) mode never writes a persistent
         entrypoint.  Runs ``os.remove`` *on the device* (authoritative
         immediately — unlike the CIRCUITPY host-FAT path there is no
         flush lag) and, in the same raw-REPL script, re-``stat``s each
@@ -1085,7 +1085,7 @@ class MicropythonTransport:
     def wipe_filesystem(self) -> None:
         """Reformat the LittleFS user partition and soft-reset the runtime.
 
-        Mount-mode (RAM) is a no-op — nothing was written to flash.
+        Mount-mode (RAM) is a no-op, because nothing was written to flash.
 
         Otherwise dispatches :data:`_WIPE_FILESYSTEM_SCRIPT` which
         ``os.umount('/')`` s the live volume, calls
@@ -1165,8 +1165,8 @@ class MicropythonTransport:
         3. Read serial bytes via ``mpremote.SerialTransport.read_until``
            with ``ending=b"\\r\\n>>> "`` (friendly-REPL prompt — the
            analog of CircuitPython's ``Code done running.`` end
-           marker).  ``timeout_overall=self.timeout`` bounds the wait
-           — for ``while True`` bodies the prompt never appears and
+           marker).  ``timeout_overall=self.timeout`` bounds the wait,
+           and for ``while True`` bodies the prompt never appears and
            the read returns whatever accumulated.
 
         Returns:
@@ -1207,7 +1207,7 @@ class MicropythonTransport:
         line + ``Type "help()" for more information.`` line + ``>>> ``
         prompt) when ``main.py`` returned cleanly.  When ``main.py`` is
         a ``while True`` body the read times out without those markers
-        and the trim is a no-op — partial accumulated output is
+        and the trim is a no-op, so partial accumulated output is
         returned verbatim.
 
         Tracebacks are kept (they're diagnostic for the user); only
@@ -1280,9 +1280,9 @@ class MicropythonTransport:
         and is evicted (competing wifi authority), matching CP.
 
         One device-side script (one round trip, authoritative),
-        best-effort per entry — a stray leftover is cleaned next
-        deploy and the post-``fs cp`` free space is the real guard; a
-        hard failure here would mask the staging it precedes.
+        best-effort per entry.  A stray leftover is cleaned next
+        deploy and the post-``fs cp`` free space is the real guard.
+        A hard failure here would mask the staging it precedes.
         """
         keep = sorted(DEVICE_KEEP_SET)
         script = (
@@ -1305,7 +1305,7 @@ class MicropythonTransport:
         try:
             # mpremote subprocess (not the persistent serial): the
             # caller `_close_serial()`d before this and the `fs cp`
-            # that follows is also a subprocess — opening the serial
+            # that follows is also a subprocess.  Opening the serial
             # here would hold the port and fail that push.  Mirrors
             # `_remove_device_entries`.
             self._run_mpremote(["exec", script])
@@ -1323,9 +1323,9 @@ class MicropythonTransport:
         library's staged tree must be cleared or a multi-library sweep
         fills the device LittleFS.  One device-side script (one round
         trip, authoritative) ``rmtree``s each entry, tolerating
-        already-absent paths.  Best-effort — a stray leftover is
+        already-absent paths.  Best-effort: a stray leftover is
         cleaned by the next switch and the post-``fs cp`` free space is
-        the real guard; a hard failure here would mask the staging
+        the real guard.  A hard failure here would mask the staging
         operation it precedes.
         """
         listed = ", ".join(repr(name) for name in entries)
@@ -1427,6 +1427,6 @@ class MicropythonTransport:
             and not self._include_test_support
         ):
             # Test-support fakes never reach a product/app/functional
-            # deploy; only the on-device unit sweep opts in.
+            # deploy.  Only the on-device unit sweep opts in.
             return True
         return False

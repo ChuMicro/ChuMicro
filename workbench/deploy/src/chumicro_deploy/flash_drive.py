@@ -12,7 +12,7 @@ Contents:
 - :func:`rsync` — rsync a staging tree onto the CIRCUITPY USB drive,
   excluding the closed keep set that must persist across deploys
   (:data:`DEVICE_KEEP_SET` — ``boot.py``, ``boot_out.txt``,
-  ``_chu_kv.msgpack``; ``settings.toml`` is *not* in it).
+  ``_chu_kv.msgpack``.  ``settings.toml`` is *not* in it).
 - :func:`strip_extended_attributes` — macOS-only: strip xattrs before
   rsync to prevent ``._`` resource fork files from reaching FAT32.
 - :func:`clean_dot_files` — macOS-only: ``dot_clean`` to merge or
@@ -24,7 +24,7 @@ Contents:
 - :func:`cleanup_macos_noise_dirs_post_rsync` — macOS-only:
   best-effort ``rmtree`` of legacy noise dirs (``.Spotlight-V100``,
   ``.TemporaryItems``, ``.DocumentRevisions-V100``) on already-
-  contaminated drives.  Runs *after* rsync; idempotent.
+  contaminated drives.  Runs *after* rsync, and is idempotent.
 - :func:`flush_volume` — ``sync`` + settle-delay so FAT32 media is
   consistent before the device reads new content.
 """
@@ -62,7 +62,7 @@ RSYNC_TIMEOUT_MIN_SECONDS = 240.0
 
 #: Base seconds added to every rsync timeout regardless of size.
 #: Covers handshake / enumeration / checksum-sweep jitter that
-#: doesn't scale with payload size — slow boards need 60-90s of
+#: doesn't scale with payload size.  Slow boards need 60-90s of
 #: cold-start latency before rsync's first write.
 RSYNC_TIMEOUT_BASE_SECONDS = 120.0
 
@@ -78,13 +78,13 @@ RSYNC_TIMEOUT_BASE_SECONDS = 120.0
 RSYNC_TIMEOUT_PER_MB_SECONDS = 600.0
 
 #: Hard cap on ``sync``.  A clean flush wraps in single-digit seconds
-#: even with 1 MB pending; 30 s is the same "USB stack wedged" guard
+#: even with 1 MB pending.  30 s is the same "USB stack wedged" guard
 #: as the rsync floor.
 SYNC_TIMEOUT_SECONDS = 30.0
 
 #: Hard cap on the small metadata helpers (``xattr``, ``mdutil``,
 #: ``dot_clean``).  These touch the staging tree (xattr) or the drive
-#: at the root level (mdutil / dot_clean) — a healthy invocation
+#: at the root level (mdutil / dot_clean), and a healthy invocation
 #: returns immediately.  10 s catches the wedged-USB case without
 #: penalizing slow USB enumeration.
 METADATA_HELPER_TIMEOUT_SECONDS = 10.0
@@ -118,7 +118,7 @@ def compute_rsync_timeout_seconds(staging_size_bytes: int) -> float:
             RSYNC_TIMEOUT_MIN_SECONDS)
 
     For a typical chumicro deploy (~200 KB staging) this lands at the
-    240 s floor; a 1 MB deploy grows to 720 s; a 5 MB deploy to 3120 s.
+    240 s floor.  A 1 MB deploy grows to 720 s, and a 5 MB deploy to 3120 s.
     Keeps fast boards (Pi Pico W, a few seconds rsync in practice) on
     a tight leash while giving slow boards (Lolin S2 / ESP32-S2,
     often 60-120 s for the same payload) enough headroom to finish
@@ -150,8 +150,8 @@ def _run_subprocess_with_timeout(
     Wraps :func:`subprocess.run` with the timeout-as-error pattern so
     every USB-touching subprocess gets the same diagnostic when the
     USB stack wedges.  ``TimeoutExpired`` is raised by
-    :func:`subprocess.run` only when the *child* process can be reaped
-    — if the child is in D-state on a stuck USB I/O, ``run()`` itself
+    :func:`subprocess.run` only when the *child* process can be reaped.
+    If the child is in D-state on a stuck USB I/O, ``run()`` itself
     hangs in ``waitpid``, so the timeout enforcement is best-effort
     on the most pathological cases.  But for the common
     "rsync got 95% through and the next ``write()`` hangs" scenario
@@ -303,7 +303,7 @@ def rsync(
     * **Clean deploys and functional tests** both call ``delete=True``
       with ``additional_excludes=DEVICE_KEEP_SET`` — clean slate, only
       the closed keep set survives.  Production ships ``code.py`` as
-      payload (the boot shim); the functional-test stage ships no
+      payload (the boot shim).  The functional-test stage ships no
       entrypoint (its harness runs over the live raw REPL, not by
       booting ``code.py``), so a stale board ``code.py`` is reconciled
       away by ``--delete``.  ``settings.toml`` is not in the keep set: a
@@ -391,15 +391,15 @@ def rsync(
 #: per-context exclude: the functional-test stage uses this same set,
 #: never a wider one.
 #:
-#: * ``boot_out.txt`` — CP writes it only on a *hard* reboot; a deploy
-#:   soft-reboots, so wiping it strands the drive without identity
-#:   until the next power cycle and breaks the next deploy's UID
-#:   drive-match on multi-board hosts.
-#: * ``boot.py`` — a device necessity; a project that ships its own
-#:   ``boot.py`` overwrites it as payload (payload always wins).
+#: * ``boot_out.txt`` — CP writes it only on a *hard* reboot, and a
+#:   deploy soft-reboots, so wiping it strands the drive without
+#:   identity until the next power cycle and breaks the next deploy's
+#:   UID drive-match on multi-board hosts.
+#: * ``boot.py`` — a device necessity, and a project that ships its
+#:   own ``boot.py`` overwrites it as payload (payload always wins).
 #: * ``_chu_kv.msgpack`` — the only filesystem-backed kvstore case
-#:   (MP non-NVS boards); CP ``nvm`` / ESP32 ``nvs`` are off-filesystem
-#:   and never at risk.
+#:   (MP non-NVS boards), and CP ``nvm`` / ESP32 ``nvs`` are
+#:   off-filesystem and never at risk.
 #:
 #: ``settings.toml`` is deliberately NOT here: a board-resident one is
 #: a competing wifi authority vs chumicro's config-driven wifi
@@ -435,7 +435,7 @@ def verify_rsync(
     (``<`` / ``>`` / ``c`` / ``h`` mean "would transfer"; ``.`` /
     ``*`` mean "no update needed").  We filter on the first character
     so cosmetic time / permission deltas (``.f..T....``) don't fire
-    a false positive — only real content / size diffs do.
+    a false positive.  Only real content / size diffs do.
 
     Args:
         source: Staging tree that was rsynced to *destination*.
@@ -572,10 +572,10 @@ def clean_dot_files(drive_path: Path) -> None:
 #: read-only at the kernel level so even the mounting user can't
 #: ``unlinkat`` it (``rsync --delete`` aborts with ``Operation not
 #: permitted``).  Planting ``.Trashes`` as a *file*
-#: blocks macOS from creating the directory in the first place — the
-#: kernel can't ``mkdir`` over an existing non-directory entry.
-#: Already-contaminated drives keep their protected dir; the rsync
-#: exclude in :func:`rsync` handles those.
+#: blocks macOS from creating the directory in the first place,
+#: because the kernel can't ``mkdir`` over an existing non-directory
+#: entry.  Already-contaminated drives keep their protected dir, and
+#: the rsync exclude in :func:`rsync` handles those.
 _MACOS_SKIP_SENTINELS = (
     ".metadata_never_index",  # Spotlight: skip indexing this volume.
     ".fseventsd/no_log",      # FSEvents daemon: skip logging this volume.
@@ -583,7 +583,7 @@ _MACOS_SKIP_SENTINELS = (
 )
 
 #: Metadata directories macOS auto-creates on FAT volumes.  Removed defensively
-#: at deploy time — they re-appear if macOS still wants them, but the sentinel
+#: at deploy time.  They re-appear if macOS still wants them, but the sentinel
 #: files above usually persuade it not to.
 #:
 #: ``.Trashes`` is deliberately absent here: the sentinel above
@@ -602,7 +602,7 @@ def plant_macos_sentinels_in_staging(staging_path: Path) -> None:
 
     The sentinels (see :data:`_MACOS_SKIP_SENTINELS` for what each
     suppresses) go at the staging-tree root so rsync ships them onto
-    CIRCUITPY in the same pass as the payload — no host-side write to
+    CIRCUITPY in the same pass as the payload.  No host-side write to
     the live drive before rsync starts, since every such write can
     wedge rsync in uninterruptible kernel I/O.
 

@@ -74,12 +74,12 @@ def _deploy_files_kwargs(
     soft-reboot follow mode so ``while True`` app code captures partial
     output instead of timing out waiting for the raw-REPL EOF marker
     that an infinite loop never emits.  Other paths (CP, MP RAM, MP
-    flash with non-``/main.py`` entrypoints) keep transport defaults —
+    flash with non-``/main.py`` entrypoints) keep transport defaults.
     CP doesn't accept ``follow``, and MP RAM / test-harness deploys
     want ``follow="exec"`` because their entrypoints return cleanly
     and the EOF marker fires.
 
-    *tail_seconds* is CP-only — it tunes how long
+    *tail_seconds* is CP-only, and it tunes how long
     :meth:`CircuitpythonTransport._read_code_py_output` waits for
     boot-time prints before exiting.  MP transports ignore it
     (mpremote follow mode owns its own timing).
@@ -123,7 +123,7 @@ class Deployer:
         """Return the effective :class:`Device` for deploying *source*.
 
         The configured device is the starting point, but the deploy
-        *mode* is a policy decision that depends on the source — hence
+        *mode* is a policy decision that depends on the source, hence
         the name takes ``_for_source``.  This method computes the
         policy inputs (the staged file set, and the ``requires_flash``
         closure when *source* exposes ``host_paths()``) and delegates
@@ -131,15 +131,15 @@ class Deployer:
         the one shared deploy-mode policy.  An app deploy has no single
         owning library, so it passes ``resolution_unit=None`` (no
         "declare requires_flash" recommendation) and the default
-        :class:`DeviceCaps` (every board this path targets can RAM —
+        :class:`DeviceCaps` (every board this path targets can RAM, and
         the per-device capability is a registry concern the test path
         threads in).
 
         Returns a :class:`Device` whose ``deploy_mode`` is the
-        resolved mode.  ``self._device`` is never mutated — when the
+        resolved mode.  ``self._device`` is never mutated, and when the
         mode changes, ``dataclasses.replace`` produces a fresh frozen
         copy.  Any override message is surfaced through
-        *on_preflight_message* (or stderr when ``None``); the deploy
+        *on_preflight_message* (or stderr when ``None``).  The deploy
         always continues, never silently skipped.
         """
         host_paths_method = getattr(source, "host_paths", None)
@@ -184,16 +184,16 @@ class Deployer:
         ] | None,
         transport_kwargs: dict[str, object],
     ) -> DeployResult:
-        """Run the shared connect → (pre-stage) → deploy_files → disconnect flow.
+        """Run the shared connect, then (pre-stage), then deploy_files, then disconnect flow.
 
         :meth:`deploy` and :meth:`deploy_diff` share every step except
         the pre-stage phase: a plain deploy has no extra work
-        (``pre_stage_hook=None`` — _run_deploy emits the 0.1 /
+        (``pre_stage_hook=None``, and _run_deploy emits the 0.1 /
         0.2 milestones inline), while deploy_diff lists in-scope files
         and deletes the stale set (or wipes the filesystem outright)
         via its hook.  When supplied, *pre_stage_hook* receives the
         live transport plus the new payload's file map and the same
-        progress reporter the outer flow uses; it owns its own milestones.
+        progress reporter the outer flow uses, and it owns its own milestones.
 
         *transport_kwargs* are passed straight through to
         ``transport.deploy_files`` after merging with the runtime-
@@ -266,7 +266,7 @@ class Deployer:
         on_preflight_message: Callable[[str], None] | None = None,
         tail_seconds: float | None = None,
     ) -> DeployResult:
-        """Diff-deploy *source* — delete stale in-scope files, then deploy.
+        """Diff-deploy *source*: delete stale in-scope files, then deploy.
 
         1. Connect.
         2. Ask the transport for every in-scope file currently on the
@@ -284,7 +284,7 @@ class Deployer:
         Mode-aware: in RAM-mode deploys (CP RAM, MP mount) the
         transport's ``list_files_in_scope`` returns an empty list and
         the diff routine collapses to a plain :meth:`deploy_files`
-        call — RAM mode never wrote to flash so there's nothing
+        call, because RAM mode never wrote to flash so there's nothing
         persistent to diff against.
 
         Args:

@@ -6,7 +6,7 @@ text-only; the one code-shape constraint is the ``retryable`` flag
 that :class:`~chumicro_deploy.recovery.RecoveringDeployer` reads to
 decide whether to loop or bail.
 
-The :data:`PLANS` mapping is the source of truth — the
+The :data:`PLANS` mapping is the source of truth.  The
 :func:`~chumicro_deploy.recovery.recovery_plan_for` accessor reads
 straight through it.  Tests import it directly to assert content.
 """

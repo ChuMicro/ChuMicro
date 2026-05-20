@@ -72,7 +72,7 @@ _PORT_UNAVAILABLE_PATTERNS = (
 
 #: CIRCUITPY drive detection / mount failures.  The "not writable"
 #: variant covers the stale-mount case where ``/Volumes/CIRCUITPY``
-#: lingers after a Finder eject (or macOS FSKit wedge) — the
+#: lingers after a Finder eject (or macOS FSKit wedge): the
 #: directory exists but writes fail with EACCES, which the transport
 #: surfaces as "CIRCUITPY drive not found or not writable".
 _CIRCUITPY_DRIVE_PATTERNS = (
@@ -210,19 +210,19 @@ _CLASSIFICATION_TABLE: tuple[
 def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     """Map a deploy-path exception to a :class:`DeployFailureKind`.
 
-    The classifier is intentionally string-based — it inspects
+    The classifier is intentionally string-based: it inspects
     ``str(error).lower()`` against :data:`_CLASSIFICATION_TABLE`.
     That keeps the classifier decoupled from the specific exception
     subclass, which matters because a raised
     ``CircuitpythonTransportError`` often wraps a ``SerialException``
     or ``OSError`` whose text is the real signal.
 
-    Returns :attr:`DeployFailureKind.UNKNOWN` when no row matches —
+    Returns :attr:`DeployFailureKind.UNKNOWN` when no row matches, and
     :class:`RecoveringDeployer` treats that as retryable so the
     user isn't locked out of an unclassified hiccup.
     """
-    # Typed disconnect subclasses skip the string-pattern dance —
-    # they were raised because the device dropped, period.  Routes
+    # Typed disconnect subclasses skip the string-pattern dance.
+    # They were raised because the device dropped, period.  Routes
     # to PORT_UNAVAILABLE because the user-facing fix is the same
     # ("plug it back in").
     if isinstance(
@@ -324,12 +324,12 @@ def diagnose_port_holders(
     Uses ``lsof -F pcn <port>`` on POSIX — output format is one
     field per line tagged with a single character (``p`` for PID,
     ``c`` for short command, ``n`` for path).  Each PID record
-    starts with a ``p`` line; subsequent ``c`` / ``n`` lines belong
+    starts with a ``p`` line, and subsequent ``c`` / ``n`` lines belong
     to it until the next ``p`` or EOF.
 
     Returns an empty list on Windows (no portable equivalent
     without ``handle.exe``), when ``lsof`` isn't installed, when
-    the port is not held, or on any subprocess failure — the
+    the port is not held, or on any subprocess failure.  The
     caller treats absence of holders as "we couldn't tell, fall
     through to the generic recovery hint" rather than an error.
 
@@ -404,7 +404,7 @@ class RecoveringDeployer:
 
     On a :class:`DeployResult` with ``success=False`` and a
     ``traceback``, both modes print the traceback + the
-    ``TRACEBACK_RETURNED`` plan and return the result unchanged — a
+    ``TRACEBACK_RETURNED`` plan and return the result unchanged.  A
     source-level bug isn't something retrying the same bytes will fix.
 
     Args:
@@ -513,7 +513,7 @@ class RecoveringDeployer:
         raise AssertionError("unreachable")  # pragma: no cover
 
     def _ask_retry(self, attempt: int) -> bool:
-        """Ask the user whether to retry; return ``True`` to continue.
+        """Ask the user whether to retry, returning ``True`` to continue.
 
         Any response starting with ``q`` (``quit``), ``a`` (``abort``),
         or ``e`` (``exit``) is interpreted as "stop retrying".  Empty

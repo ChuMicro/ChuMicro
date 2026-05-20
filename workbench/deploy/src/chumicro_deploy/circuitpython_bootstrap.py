@@ -11,12 +11,12 @@ prefix:
 - :func:`build_circuitpython_deploy_scripts` — deploy flavor.
   Registers every non-entrypoint file as an importable module, then
   ``exec()``-s the entrypoint as ``__main__``.  No test-harness
-  dependency — the deploy tail is two lines long, kept as an inline
-  string constant rather than a separate template file.
+  dependency is needed, and the deploy tail is two lines long, kept
+  as an inline string constant rather than a separate template file.
 
 Both share the static helper functions in
 ``circuitpython_bootstrap_template.txt`` (read once per builder
-call) — ``_register_stub`` and ``_populate_module`` are universal.
+call).  ``_register_stub`` and ``_populate_module`` are universal.
 Only the dynamic parts (module sources, entrypoint / test source,
 filter) are generated here.
 
@@ -42,9 +42,9 @@ _TEST_EXECUTION_MARKER = "# Execute the test file."
 
 #: Inline tail for RAM-mode deploy bootstrap.  Kept as a string
 #: constant rather than a template file because it is two
-#: statements long — dwarfed by the helpers.  ``_retry_deferred`` is
-#: defined by the shared helper script; ``$ENTRYPOINT_SOURCE`` gets
-#: replaced with a ``repr()``-safe Python string literal at
+#: statements long, dwarfed by the helpers.  ``_retry_deferred`` is
+#: defined by the shared helper script, and ``$ENTRYPOINT_SOURCE``
+#: gets replaced with a ``repr()``-safe Python string literal at
 #: generation time.  Passing an explicit ``__name__`` makes
 #: ``if __name__ == '__main__':`` blocks in user entrypoints behave
 #: the way they would after an ordinary boot.
@@ -107,7 +107,7 @@ def build_circuitpython_deploy_scripts(
     """Generate raw-REPL scripts for CircuitPython RAM-mode deploy.
 
     Mirrors :func:`build_circuitpython_bootstrap_scripts` but drops
-    the test-harness tail — the returned scripts inject every
+    the test-harness tail.  The returned scripts inject every
     non-entrypoint file as an importable module via ``sys.modules``,
     then ``exec()`` the entrypoint as ``__main__``.  No
     ``chumicro_test_harness`` dependency is required on the device.
@@ -117,8 +117,8 @@ def build_circuitpython_deploy_scripts(
     ``/lib/foo.py`` registers as ``foo`` and
     ``/lib/foo/bar.py`` as ``foo.bar``.  Files at the device root
     (``/foo.py``) register as top-level ``foo``.  Non-``.py`` files
-    are silently skipped — RAM-mode deploy has no device filesystem
-    to write them to; callers that need to ship assets must use
+    are silently skipped.  RAM-mode deploy has no device filesystem
+    to write them to.  Callers that need to ship assets must use
     flash mode.
 
     Args:
@@ -224,7 +224,7 @@ def _escape_source(source_text: str) -> str:
     Returns:
         A Python string literal suitable for embedding in generated code.
     """
-    # Use repr() for safe escaping — it handles all special characters.
+    # Use repr() for safe escaping, which handles all special characters.
     return repr(source_text)
 
 
@@ -321,7 +321,7 @@ class _InlineDocstringStripper(ast.NodeTransformer):
     """Remove docstrings before AST unparsing shrinks inline source.
 
     The visit methods cast ``generic_visit`` back to the specific
-    node type — `ast.NodeTransformer.generic_visit` is typed as
+    node type.  `ast.NodeTransformer.generic_visit` is typed as
     returning ``AST`` in typeshed, but per the documented
     transformer contract a ``visit_<Specific>`` method that mutates
     in place returns the same node type that was passed in.

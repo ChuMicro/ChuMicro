@@ -7,8 +7,8 @@ baudrate, CIRCUITPY drive path), and the deploy-mode preference.
 :class:`~chumicro_deploy.protocol.TransportProtocol` instance, so
 callers don't have to branch on runtime themselves.
 
-Two fields — ``entrypoint_name`` and ``resource_prefix`` — aren't
-read by :meth:`create_transport`; :class:`~chumicro_deploy.deployer.Deployer`
+Two fields, ``entrypoint_name`` and ``resource_prefix``, aren't
+read by :meth:`create_transport`.  :class:`~chumicro_deploy.deployer.Deployer`
 reads them off the Device when running a deploy.  Carrying them on
 Device means a deploy takes one configured object, not Device plus
 a separate deploy-config struct.
@@ -26,8 +26,8 @@ from .protocol import DeployMode, Runtime, TransportProtocol
 DEFAULT_BAUDRATE = 115200
 
 #: Default deploy mode.  ``"flash"`` writes files to the board (maps to
-#: ``copy`` on MicroPython / CIRCUITPY drive copy on CircuitPython) —
-#: this is the production-shaped path and matches how a real deploy
+#: ``copy`` on MicroPython / CIRCUITPY drive copy on CircuitPython).
+#: This is the production-shaped path and matches how a real deploy
 #: behaves on the device.  ``"ram"`` is opt-in for fast iteration on
 #: single-library unit-style tests (maps to ``mount`` on MicroPython /
 #: inline-exec on CircuitPython).
@@ -44,7 +44,7 @@ class Device:
     Constructed explicitly in code, from a dict
     (``Device.from_dict(...)``), or via the built-in
     ``devices.yml`` loader
-    (``chumicro_deploy.config.default.load_devices_yml``) — or a
+    (``chumicro_deploy.config.default.load_devices_yml``), or a
     third-party loader registered through the
     ``chumicro_deploy.config_loaders`` entry-point group.
 

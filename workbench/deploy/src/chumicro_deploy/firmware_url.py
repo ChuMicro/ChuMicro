@@ -11,11 +11,11 @@ Two runtimes, two strategies:
   ``.hex``) anchors, and pick the most recent build of the latest
   stable version.  The ``machine`` string a board reports maps to
   the published BOARD name via the hand-curated
-  :data:`MICROPYTHON_BOARD_BY_MACHINE` table — the table extends
+  :data:`MICROPYTHON_BOARD_BY_MACHINE` table.  The table extends
   as new boards land but the scrape itself doesn't depend on it.
 
 Custom forks: any device entry whose ``hardware.firmware_source``
-field is set short-circuits the lookup — the value is returned
+field is set short-circuits the lookup, and the value is returned
 verbatim.  Vendor builds, locally-compiled firmware, mirrored
 URLs all pass through.
 
@@ -41,15 +41,16 @@ CIRCUITPYTHON_S3_BUCKET_URL = "https://adafruit-circuit-python.s3.amazonaws.com/
 
 #: Adafruit's CDN download URL — used for the actual firmware
 #: download (lower latency than the bucket URL).  Listing happens on
-#: the bucket; download happens on the CDN.  Single source of truth
-#: for the CP firmware URL shape; ``firmware.resolve_firmware_url``
-#: also formats against this constant.
+#: the bucket, and download happens on the CDN.  Single source of
+#: truth for the CP firmware URL shape, and
+#: ``firmware.resolve_firmware_url`` also formats against this
+#: constant.
 CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE = (
     "https://downloads.circuitpython.org/bin/{board_id}/{language}/"
     "adafruit-circuitpython-{board_id}-{language}-{version}.uf2"
 )
 
-#: S3 ``ListBucketResult`` XML namespace — every element in the
+#: S3 ``ListBucketResult`` XML namespace.  Every element in the
 #: response carries this namespace, so XPath needs the prefix.
 _S3_NS = "{http://s3.amazonaws.com/doc/2006-03-01/}"
 
@@ -79,7 +80,7 @@ _CIRCUITPYTHON_FILENAME_VERSION = re.compile(
 _STABLE_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
 #: Hand-curated subset of the MicroPython ``machine`` → BOARD map.
-#: Extends as new boards land; the project-workspace template will
+#: Extends as new boards land.  The project-workspace template will
 #: ship periodic refreshes pulled from ``micropython.org/download/``.
 #: Boards not in this table fall through to the prompt-and-cache
 #: path.
@@ -123,7 +124,7 @@ class UnresolvedFirmwareError(Exception):
       uf2 keys for the prefix.  Wrong board id, or the language
       isn't published for that board.
     - ``cause="no_stable_versions"`` — the listing has only
-      pre-release / unstable versions; pass ``allow_prerelease=True``.
+      pre-release / unstable versions.  Pass ``allow_prerelease=True``.
     - ``cause="no_mp_builds_listed"`` — the
       ``micropython.org/download/<BOARD>/`` page returned no parsable
       firmware anchors.  Likely a wrong BOARD name or a board that
@@ -158,7 +159,7 @@ def list_circuitpython_versions(
 
     Pre-release versions (``10.2.0-rc.0`` etc.) appear alongside
     stable releases.  Filtering happens in
-    :func:`latest_circuitpython_version` — this function returns
+    :func:`latest_circuitpython_version`.  This function returns
     everything published, in the order S3 returns it (typically
     chronological-ish, but not guaranteed).
 
@@ -202,13 +203,13 @@ def latest_circuitpython_version(
 ) -> str:
     """Pick the newest version from the S3 listing.
 
-    Stable-only by default — pre-releases (``-rc.0``, ``-beta.1``,
+    Stable-only by default.  Pre-releases (``-rc.0``, ``-beta.1``,
     ``-alpha.0`` suffixes) are filtered out unless
     *allow_prerelease* is ``True``.  The user-facing knob matches
     what Adafruit's release pipeline produces.
 
     Sort order is canonical SemVer-style numeric:
-    ``(major, minor, patch)`` ascending; the last element wins.
+    ``(major, minor, patch)`` ascending, and the last element wins.
 
     Raises:
         UnresolvedFirmwareError: No matching versions after the
@@ -295,7 +296,7 @@ MICROPYTHON_FIRMWARE_BASE_URL = "https://micropython.org"
 #:   - ``<DATE>`` is YYYYMMDD (e.g. ``20240222``).
 #:   - ``<VERSION>`` is ``v1.22.2`` for stable;
 #:     ``v1.29.0-preview.69.g8a56be6660`` for a preview build (newer
-#:     shape — no leading ``unstable-``); legacy builds prepend
+#:     shape, no leading ``unstable-``).  Legacy builds prepend
 #:     ``unstable-`` and append a commit suffix
 #:     (e.g. ``unstable-v1.23.0-preview-32-g1a2b3c4d5``).
 #:   - ``<ext>`` is one of ``uf2`` / ``bin`` / ``hex`` / ``elf``
@@ -316,7 +317,7 @@ _MICROPYTHON_FILENAME_PATTERN = re.compile(
 #: Pattern that picks <a href="..."> values out of a typical MP
 #: download listing.  Browsers tolerate single-quoted, unquoted, and
 #: attribute-order-shuffled HTML, but the upstream page is well-formed
-#: enough that a forgiving regex is plenty — and we don't want a full
+#: enough that a forgiving regex is plenty, and we don't want a full
 #: HTML parser dep just for this.  Uses case-insensitive matching for
 #: the ``HREF=`` form.
 _HTML_HREF_PATTERN = re.compile(
@@ -342,15 +343,15 @@ def list_micropython_builds(
     Returns ``(date, version, unstable_marker, prerelease_suffix,
     absolute_url)`` tuples — every published build whose filename
     matches :data:`_MICROPYTHON_FILENAME_PATTERN` and ends in the
-    requested *file_extension*.  ``date`` is YYYYMMDD; ``version`` is
-    the raw ``v1.x.y`` (or ``v1.x``) portion; ``unstable_marker`` is
+    requested *file_extension*.  ``date`` is YYYYMMDD.  ``version`` is
+    the raw ``v1.x.y`` (or ``v1.x``) portion.  ``unstable_marker`` is
     ``"unstable-"`` for legacy unstable builds (empty for stable +
-    new-shape preview); ``prerelease_suffix`` is ``"-preview.69.gSHA"``
+    new-shape preview).  ``prerelease_suffix`` is ``"-preview.69.gSHA"``
     or similar for new-shape preview builds (empty for stable).
     A build is "stable" iff both markers are empty.
 
     Order follows the order anchors appear in the page (newest
-    first, by convention) — :func:`latest_micropython_url` does
+    first, by convention), and :func:`latest_micropython_url` does
     its own sort so callers don't have to trust the listing.
 
     Args:
@@ -400,7 +401,7 @@ def latest_micropython_url(
 ) -> str:
     """Pick the most recent MP build for *board* and return its URL.
 
-    Stable-only by default — unstable / preview builds are filtered
+    Stable-only by default.  Unstable / preview builds are filtered
     out unless *allow_prerelease* is ``True``.  Sort is by
     ``(version, date)`` with the newest pair winning, so an old-
     date build of a newer version doesn't lose to a recent build
@@ -511,7 +512,7 @@ def derive_firmware_url(
         # for boards whose port doesn't publish UF2 (ESP32 family →
         # `.bin`, micro:bit → `.hex`).  Falls back to "uf2" when
         # absent, which covers RP2040 / RP2350 / SAMD51 / nRF52840
-        # / TinyUF2 — the majority of the boards the workspace
+        # / TinyUF2, the majority of the boards the workspace
         # template targets.
         file_extension = hardware.get("firmware_extension") or "uf2"
         return latest_micropython_url(
@@ -573,8 +574,8 @@ def _parse_circuitpython_versions(body: bytes, *, prefix: str) -> list[str]:
 def _version_sort_key(version: str) -> tuple[int, int, int, int, int, int]:
     """Sort key for SemVer-shaped version strings.
 
-    Stable releases (``10.1.4``) sort as ``(10, 1, 4, 1, 0, 0)`` —
-    the ``1`` in slot 4 lifts them above any pre-release of the
+    Stable releases (``10.1.4``) sort as ``(10, 1, 4, 1, 0, 0)``.
+    The ``1`` in slot 4 lifts them above any pre-release of the
     same base version.  Pre-releases (``10.2.0-rc.0``) sort as
     ``(10, 2, 0, 0, <label-rank>, <label-index>)`` so
     ``rc > beta > alpha`` orders cleanly.  Unknown pre-release
@@ -619,13 +620,13 @@ def _parse_micropython_builds(
     against the requested *file_extension* and is namespaced by
     *board* (the URL must contain ``/<BOARD>-``).
 
-    Anchors that don't decode as UTF-8 are skipped — micropython.org
+    Anchors that don't decode as UTF-8 are skipped.  micropython.org
     serves UTF-8, so failure here means the response was something
     other than an HTML page (a redirect-loop body, a 404 placeholder
     served as 200 etc.).
 
-    De-duplicates while preserving first-seen order — listing pages
-    sometimes repeat the same build under multiple sections.
+    De-duplicates while preserving first-seen order, because listing
+    pages sometimes repeat the same build under multiple sections.
     """
     try:
         text = body.decode("utf-8")
@@ -669,7 +670,7 @@ def _micropython_build_sort_key(
 ) -> tuple[int, int, int, int, int]:
     """Sort key: ``(version_major, version_minor, version_patch, date, stable_rank)``.
 
-    Stable wins over unstable at the same version+date — stable_rank
+    Stable wins over unstable at the same version+date.  stable_rank
     is ``1`` for stable, ``0`` for unstable, so the last-element-wins
     comparison picks the stable build.
 

@@ -24,14 +24,14 @@ A third marker — ``__chumicro_host_only__ = True`` — flags a
 ``tests/test_*.py`` file as host-lane only: it runs on CPython and the
 MicroPython / CircuitPython unix-ports but never on real silicon (it
 drives runtime-specific source through host fakes and asserts
-off-target behaviour).  Orthogonal to runtime ABI — these files run on
+off-target behaviour).  Orthogonal to runtime ABI: these files run on
 every host interpreter, so ``__chumicro_runtimes__`` cannot express
 them.  :func:`is_host_only_test` reads it; the on-device unit sweep
 excludes host-only files while the unix-port lane keeps them.
 
-The readers use :func:`ast.parse` (no execution) — runtime-specific
-files commonly import device-only modules at top level
-(``import wifi``, ``import esp32``) that fail on the host.
+The readers use :func:`ast.parse` (no execution), because
+runtime-specific files commonly import device-only modules at top
+level (``import wifi``, ``import esp32``) that fail on the host.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ KNOWN_RUNTIMES: frozenset[str] = frozenset({
 
 #: Runtimes that land on a microcontroller.  The source bundle passes
 #: this set as *target_runtime* so files marked exclusively for
-#: ``cpython`` drop out — they only belong in the PyPI sdist / wheel,
+#: ``cpython`` drop out.  They only belong in the PyPI sdist / wheel,
 #: which doesn't go through the bundle pipeline.
 DEVICE_RUNTIMES: frozenset[str] = frozenset({"circuitpython", "micropython"})
 
@@ -103,9 +103,9 @@ def is_test_support_module(python_file: Path) -> bool:
     A test-support module (a library's ``testing.py`` fakes) exists
     only to support tests and must never reach a shipped product.  It
     is filtered out of every bundle and every product / app /
-    functional device deploy, independent of runtime — the fakes run
-    on every runtime (the cross-runtime unit suite executes them on
-    MicroPython and CircuitPython).  The on-device unit sweep
+    functional device deploy, independent of runtime, because the
+    fakes run on every runtime (the cross-runtime unit suite executes
+    them on MicroPython and CircuitPython).  The on-device unit sweep
     (``--target device-unit``) is the one path that stages them,
     because the cross-runtime unit tests legitimately import the
     fakes.
@@ -126,7 +126,7 @@ def is_host_only_test(python_file: Path) -> bool:
     off-target behaviour (e.g. ``RuntimeError`` because the device
     module is absent on the host).  The deploy filter would correctly
     strip the imported runtime module on a non-matching board, and a
-    *matching* board would fail the off-target assertion — so these
+    *matching* board would fail the off-target assertion, so these
     files are not on-device-sweep-eligible by construction.
 
     This is orthogonal to ``__chumicro_runtimes__`` (the files run on
@@ -150,17 +150,17 @@ def file_targets_runtime(
 ) -> bool:
     """Return ``True`` when *python_file* should ship to *target_runtime*.
 
-    ``target_runtime=None`` is the unfiltered case — every file matches.
+    ``target_runtime=None`` is the unfiltered case, and every file matches.
     Used by deploy paths that ship every file regardless of marker.
     PyPI sdist / wheel building uses its own filter and doesn't pass
     through this function.
 
     A string target (``"circuitpython"`` / ``"micropython"`` /
-    ``"cpython"``) means "this single concrete runtime" — a marked file
-    matches only when its marker contains the target.  Used by per-
-    runtime mpy bundles and by transports that know their target.
+    ``"cpython"``) means "this single concrete runtime", so a marked
+    file matches only when its marker contains the target.  Used by
+    per-runtime mpy bundles and by transports that know their target.
 
-    A frozenset target means "any of these runtimes" — a marked file
+    A frozenset target means "any of these runtimes", so a marked file
     matches when its marker overlaps the set.  Used by the source
     bundle (:data:`DEVICE_RUNTIMES`) to drop ``("cpython",)``-only
     files while keeping every CP- and MP-bound file.

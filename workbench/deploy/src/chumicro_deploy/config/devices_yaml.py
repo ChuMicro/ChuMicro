@@ -13,17 +13,17 @@ zones:
   :class:`HardwareOverwriteError` unless the caller passes
   ``force=True`` (``add-device --force``).
 * **probed-always** — fully tool-owned, refreshed every probe
-  (``address``, ``firmware_version``).  Silent overwrites — these
-  *should* drift across deploys.
+  (``address``, ``firmware_version``).  Silent overwrites, because
+  these *should* drift across deploys.
 
 The writer preserves user comments and field ordering on round-trip
-via :mod:`ruamel.yaml`.  PyYAML can't do this — it discards comments
-and sorts keys alphabetically by default — so the runtime cost of
-the extra dep buys the no-clobber-of-user-edits property the
+via :mod:`ruamel.yaml`.  PyYAML can't do this, because it discards
+comments and sorts keys alphabetically by default, so the runtime
+cost of the extra dep buys the no-clobber-of-user-edits property the
 workspace template depends on.
 
 The empty-registry text for a fresh workspace ships in
-``_payloads/devices.yml.template`` next to this module; consumers
+``_payloads/devices.yml.template`` next to this module, and consumers
 materialize it via :func:`read_devices_yml_template`.  Schema and
 default content live together so changes stay co-located.
 """
@@ -40,8 +40,8 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 #: Path to the ``devices.yml`` template inside the ``chumicro_deploy``
-#: package.  Resolved at import time so reads stay simple — the wheel
-#: ships the same path.
+#: package.  Resolved at import time so reads stay simple, and the
+#: wheel ships the same path.
 _DEVICES_YML_TEMPLATE_PATH = (
     Path(__file__).resolve().parent.parent
     / "_payloads"
@@ -61,7 +61,7 @@ def read_devices_yml_template() -> str:
     return _DEVICES_YML_TEMPLATE_PATH.read_text(encoding="utf-8")
 
 #: Field classification — see module docstring.  Top-level entry keys
-#: only; the nested ``hardware:`` block is classified separately by
+#: only.  The nested ``hardware:`` block is classified separately by
 #: :data:`HARDWARE_BLOCK_ZONES` since each leaf has its own zone.
 USER_OWNED_FIELDS: frozenset[str] = frozenset({
     "id",
@@ -76,7 +76,7 @@ PROBED_ALWAYS_FIELDS: frozenset[str] = frozenset({
     "firmware_version",
 })
 
-#: Fields that are tool-owned but only written once — overwriting
+#: Fields that are tool-owned but only written once, so overwriting
 #: requires explicit ``force=True``.  ``runtime`` is included because
 #: the runtime a board boots into doesn't change without a reflash.
 HARDWARE_ONCE_FIELDS: frozenset[str] = frozenset({
@@ -84,7 +84,7 @@ HARDWARE_ONCE_FIELDS: frozenset[str] = frozenset({
 })
 
 #: Per-leaf zone classification for the nested ``hardware:`` block.
-#: Every key here is hardware-once; no probed-always or user-owned
+#: Every key here is hardware-once.  No probed-always or user-owned
 #: keys live under ``hardware:``.
 HARDWARE_BLOCK_ZONES: dict[str, str] = {
     "uid": "hardware-once",
@@ -94,11 +94,11 @@ HARDWARE_BLOCK_ZONES: dict[str, str] = {
 }
 
 #: Every top-level entry key the writer knows about.  The single
-#: source of truth for "is this a recognized devices.yml field?" —
-#: deploy's reader (``_validate_device``) derives its
+#: source of truth for "is this a recognized devices.yml field?".
+#: Deploy's reader (``_validate_device``) derives its
 #: ``known_keys`` from this so adding a field in one place keeps the
 #: reader in sync automatically.  ``"hardware"`` is the nested
-#: block; its leaves are classified by :data:`HARDWARE_BLOCK_ZONES`.
+#: block, and its leaves are classified by :data:`HARDWARE_BLOCK_ZONES`.
 ALL_TOP_LEVEL_ENTRY_FIELDS: frozenset[str] = (
     USER_OWNED_FIELDS
     | PROBED_ALWAYS_FIELDS
@@ -146,7 +146,7 @@ def _yaml() -> YAML:
     """
     yaml = YAML()
     yaml.preserve_quotes = True
-    # Match the indentation style the template ships with — 2 spaces
+    # Match the indentation style the template ships with: 2 spaces
     # for mappings, 2 spaces for sequence items aligned with the key.
     yaml.indent(mapping=2, sequence=4, offset=2)
     return yaml
@@ -182,8 +182,8 @@ def dump_devices(data: CommentedMap, path: Path) -> None:
 
     Atomicity matters: a half-written devices.yml after a power loss
     or interrupted edit would force the user to recover their entries
-    by hand.  Write to a sibling temp file + rename — POSIX rename is
-    atomic within a filesystem.
+    by hand.  Write to a sibling temp file + rename, because POSIX
+    rename is atomic within a filesystem.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     yaml = _yaml()
@@ -214,7 +214,7 @@ def _devices_list(data: CommentedMap) -> CommentedSeq:
     """Return the ``devices:`` list, creating an empty one if absent."""
     devices = data.setdefault("devices", CommentedSeq())
     if not isinstance(devices, CommentedSeq):
-        # User wrote `devices: foo` instead of a list — surface as a
+        # User wrote `devices: foo` instead of a list.  Surface as a
         # malformed-file error rather than silently coercing.
         raise DevicesYamlError(
             f"'devices' key must be a list, got {type(devices).__name__}",
@@ -354,11 +354,11 @@ def update_device_address(
 ) -> None:
     """Silently update a device's cached ``address`` (probed-always zone).
 
-    Address is the canonical "moves around" field — macOS reassigns
-    ``/dev/cu.usbmodem...`` numbers, and a board moved between ports
-    on the same hub looks like a fresh device unless we cache.
-    Identity follows ``hardware.uid``, not the port; this updater is
-    the silent-cache-refresh side of that contract.
+    Address is the canonical "moves around" field, because macOS
+    reassigns ``/dev/cu.usbmodem...`` numbers, and a board moved
+    between ports on the same hub looks like a fresh device unless we
+    cache.  Identity follows ``hardware.uid``, not the port, and this
+    updater is the silent-cache-refresh side of that contract.
 
     Raises:
         DeviceNotFoundError: No entry with that id.
@@ -376,7 +376,7 @@ def update_device_firmware_version(
 ) -> None:
     """Silently refresh a device's cached ``firmware_version`` (probed-always).
 
-    Mirrors :func:`update_device_address` — the firmware on a board
+    Mirrors :func:`update_device_address`.  The firmware on a board
     can be upgraded out of band (the user runs `install-firmware`,
     or flashes via a vendor tool), so a fresh probe just overwrites
     the cached value with no prompt.  Used by the ``add-device
@@ -404,7 +404,7 @@ def update_device_hardware(
     (or absent from the entry) is written without a prompt, but a
     leaf that already has a different value raises
     :class:`HardwareOverwriteError` unless *force* is ``True``.  This
-    is the "did you swap boards?" guard — the typical case is a
+    is the "did you swap boards?" guard.  The typical case is a
     re-probe of the same board returning identical values, which
     no-ops cleanly.
 
@@ -443,7 +443,7 @@ def rename_device(
     The user-owned ``defaults.<runtime>`` references and any
     third-party ``defaults.<custom>`` references that happen to match
     ``old_id`` are all updated.  Comments + key order on the entry
-    itself are preserved; the rename is a single-key mutation, not a
+    itself are preserved.  The rename is a single-key mutation, not a
     delete-and-re-add.
 
     Raises:
@@ -468,10 +468,10 @@ def remove_device(data: CommentedMap, device_id: str) -> CommentedMap:
     """Delete a device entry and null any ``defaults:`` ref to it.
 
     The destructive counterpart to :func:`add_device`.  Drops the
-    matching entry from the ``devices:`` list; every ``defaults.<key>``
+    matching entry from the ``devices:`` list.  Every ``defaults.<key>``
     whose value is *device_id* is set to ``None`` (the canonical
-    "unset" sentinel the template ships) rather than left dangling — a
-    stale default would make :func:`load_devices_yml` raise.  Mirrors
+    "unset" sentinel the template ships) rather than left dangling,
+    since a stale default would make :func:`load_devices_yml` raise.  Mirrors
     :func:`rename_device`'s defaults fix-up, minus a replacement id.
     Nulling *every* matching default, not just the active runtime's, is
     deliberate: a board whose firmware was reflashed CP↔MP must not

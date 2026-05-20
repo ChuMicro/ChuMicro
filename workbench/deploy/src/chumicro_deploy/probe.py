@@ -4,12 +4,12 @@ Thin wrapper over :meth:`TransportProtocol.probe_implementation` that
 owns the transport lifecycle (connect / probe / disconnect) and
 returns a :class:`DeviceInfo` callers can surface to users.
 
-CPU UID is populated from the probe script itself —
+CPU UID is populated from the probe script itself.
 :data:`~chumicro_deploy.protocol.PROBE_IMPLEMENTATION_SCRIPT` reads
 ``microcontroller.cpu.uid`` on CircuitPython and
 ``machine.unique_id()`` on MicroPython and emits it as the fourth
 field of the ``__CHU_IMPL__:`` marker line.  Board-ID discovery is
-not yet implemented — the field is reserved on :class:`DeviceInfo`
+not yet implemented, so the field is reserved on :class:`DeviceInfo`
 and populated with the empty string.
 """
 
