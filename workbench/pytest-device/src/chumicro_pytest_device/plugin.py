@@ -96,6 +96,14 @@ from .runtime_config import get_runtime_config, missing_required_keys
 #: PyPI, libraries ship to boards via circup / mip).
 _RUNTIME_CONFIG_DEVICE_PATH = "/runtime_config.msgpack"
 
+#: Cache of encoded runtime-config bytes keyed by ``id(payload)`` so
+#: the per-stage ``packb`` cost amortises to one ``packb`` per pytest
+#: invocation.  Invalidated automatically: if a fixture overwrites
+#: the stashed payload, ``id()`` changes and we re-encode.
+_ENCODED_RUNTIME_CONFIG_KEY: pytest.StashKey[tuple[int, bytes]] = (
+    pytest.StashKey()
+)
+
 
 def _encode_runtime_config_extra_files(
     config: pytest.Config,
@@ -111,14 +119,20 @@ def _encode_runtime_config_extra_files(
     Encoding uses ``use_single_float=True`` so float values round-trip
     through CircuitPython's native ``msgpack`` decoder (CP doesn't
     support float64).  Mirrors :func:`chumicro_workspace.writer.write_runtime_config`'s
-    encoding contract.
+    encoding contract.  The encoded bytes are cached on the config
+    stash keyed by ``id(payload)`` — every device sweep stages once
+    per file batch, and re-encoding the same dotted-key dict 50+ times
+    is wasted work.
     """
     payload = get_runtime_config(config)
     if payload is None:
         return None
-    return {
-        _RUNTIME_CONFIG_DEVICE_PATH: packb(payload, use_single_float=True),
-    }
+    cached = config.stash.get(_ENCODED_RUNTIME_CONFIG_KEY, None)
+    if cached is not None and cached[0] == id(payload):
+        return {_RUNTIME_CONFIG_DEVICE_PATH: cached[1]}
+    encoded = packb(payload, use_single_float=True)
+    config.stash[_ENCODED_RUNTIME_CONFIG_KEY] = (id(payload), encoded)
+    return {_RUNTIME_CONFIG_DEVICE_PATH: encoded}
 
 
 def _workspace_root(session: pytest.Session) -> Path:

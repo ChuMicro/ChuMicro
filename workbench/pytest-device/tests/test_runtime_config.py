@@ -160,3 +160,57 @@ class TestEncodeRuntimeConfigExtraFiles:
         config = _StashConfigStub()
         set_runtime_config(config, None)
         assert _encode_runtime_config_extra_files(config) is None
+
+    def test_repeated_calls_reuse_cached_bytes(
+        self, monkeypatch: object,
+    ) -> None:
+        """A steady payload pays one ``packb`` per pytest invocation,
+        not per stage call.  Every device sweep stages once per file
+        batch; re-encoding the same dotted-key dict 50+ times across
+        a run is wasted work."""
+        from chumicro_pytest_device import plugin
+
+        call_count = 0
+        real_packb = plugin.packb
+
+        def counting_packb(*args: object, **kwargs: object) -> bytes:
+            nonlocal call_count
+            call_count += 1
+            return real_packb(*args, **kwargs)
+
+        monkeypatch.setattr(plugin, "packb", counting_packb)  # type: ignore[attr-defined]
+        config = _StashConfigStub()
+        set_runtime_config(config, {"wifi.ssid": "Net"})
+
+        for _ in range(5):
+            _encode_runtime_config_extra_files(config)
+
+        assert call_count == 1
+
+    def test_overwriting_payload_invalidates_cache(
+        self, monkeypatch: object,
+    ) -> None:
+        """A fixture overwriting the stashed dict flips ``id()`` and
+        the next call re-encodes."""
+        from chumicro_pytest_device import plugin
+
+        call_count = 0
+        real_packb = plugin.packb
+
+        def counting_packb(*args: object, **kwargs: object) -> bytes:
+            nonlocal call_count
+            call_count += 1
+            return real_packb(*args, **kwargs)
+
+        monkeypatch.setattr(plugin, "packb", counting_packb)  # type: ignore[attr-defined]
+        config = _StashConfigStub()
+
+        set_runtime_config(config, {"wifi.ssid": "first"})
+        _encode_runtime_config_extra_files(config)
+        set_runtime_config(config, {"wifi.ssid": "second"})
+        result = _encode_runtime_config_extra_files(config)
+
+        assert call_count == 2
+        assert result is not None
+        decoded = unpackb(result["/runtime_config.msgpack"], raw=False)
+        assert decoded == {"wifi.ssid": "second"}
