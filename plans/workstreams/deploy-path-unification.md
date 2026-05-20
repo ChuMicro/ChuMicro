@@ -593,6 +593,7 @@ subsystem deleted; browser front-end + promote-pipeline channel
 remain). Phase 4 root-convergence largely subsumed; Phase 5 CHU
 mechanization pending. Companion *completed* work this session
 (`run.py` bootstrap self-heal, `init` retirement / Decision 0075,
-template `--device`/ruamel fixes) shipped on `main` of both repos and
-is recorded in `next-up.md` `## Done (recent)`; it is the context
-that surfaced this workstream, not part of it.
+template `--device`/ruamel fixes) shipped on `main` of both repos
+(see `git log` around the deploy-path-unification surfacing for the
+landing commits); it is the context that surfaced this workstream,
+not part of it.

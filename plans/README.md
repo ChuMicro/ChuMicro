@@ -10,7 +10,7 @@ Project knowledge base — decisions, roadmap, and active work.
 
 | File / folder | Purpose | When to read it |
 |---|---|---|
-| `next-up.md` | **Single source of truth for the work queue.** `## Now` (active items) / `## Next` (backlog) / `## Out of scope` / `## Investigations` / `## Done (recent)` (last ~25 shipped items). Agent-managed. | **First, every session**, after a quick `git log -20`. |
+| `next-up.md` | **Single source of truth for the work queue.** `## Now` (active items) / `## Next` (backlog) / `## Out of scope` / `## Investigations`. Agent-managed.  No `## Done` section — `git log` carries history. | **First, every session**, after a quick `git log -20`. |
 | `decisions/` | Durable decision records (ADRs) — *why* the workspace has its current shape | Before proposing structural or pattern changes |
 | `patterns.md` | Reusable implementation patterns with code examples | When writing a new library or implementing a common pattern |
 | `open-questions.md` | Unresolved questions that need thought but aren't blocking | When exploring design tradeoffs or looking for things to investigate |
@@ -21,7 +21,7 @@ Project knowledge base — decisions, roadmap, and active work.
 
 ## Rules
 
-- **`next-up.md` is the working queue and the front door.**  Each top-level bullet ≤5 bullet markers; promote to `workstreams/<name>.md` when bigger (CHU011).  `## Done (recent)` ≤5 entries — drop the oldest when adding a new one.  Move checked-off items to Done in the same edit.  Each Done entry: subject + commit hashes + headline result + workstream pointer; aim for under ~500 chars.  Verbose detail belongs in commit messages or workstream docs.
+- **`next-up.md` is the working queue and the front door.**  Each top-level bullet is one line, no sub-bullets; promote to `workstreams/<name>.md` when bigger (CHU011).  Remove the matching bullet in the same edit that lands the work.  No `## Done` section — `git --no-pager log` is the journal; the commit message carries the headline result + any workstream pointer.
 - **Decisions are append-only.**  Record a new decision when tradeoffs matter or when the reasoning would otherwise have to be rediscovered.  Use the format in `decisions/README.md`.  Decisions can start as `proposed` and be promoted to `accepted` after review.
 - **Open questions are low-pressure.**  Add freely, resolve when the answer becomes clear.  Promote to a decision when the answer involves tradeoffs.
 - **Patterns are prescriptive.**  They show *how* to implement correctly.  Link to the decision that explains *why*.

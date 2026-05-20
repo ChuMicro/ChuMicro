@@ -136,7 +136,7 @@ The README is the source of truth for these rules; mirror its language when in d
 
 ### 8. Close out
 
-Follow the [`task-checkpoint`](../task-checkpoint/SKILL.md) skill — preflight, refresh `plans/next-up.md`, then commit + push via the [`git-commit`](../git-commit/SKILL.md) skill.  The ADR is a unit of work; it earns its `## Done (recent)` entry like any other.
+Follow the [`task-checkpoint`](../task-checkpoint/SKILL.md) skill — preflight, refresh `plans/next-up.md`, then commit + push via the [`git-commit`](../git-commit/SKILL.md) skill.  The ADR is a unit of work; the commit message carries the narrative and `git log` makes it discoverable.
 
 ## Style notes
 

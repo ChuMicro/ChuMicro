@@ -82,7 +82,7 @@ Practical guard: find the sentence that states the rule.  If it names a technolo
 
 ADRs capture *decision and reasoning*.  They are not living status dashboards.  When you're tempted to append any of the following to an existing ADR, route the content here instead:
 
-- **Implementation progress / status updates** → the relevant `plans/workstreams/<name>.md` file (or `plans/next-up.md` `## Done (recent)` for one-line pointers).
+- **Implementation progress / status updates** → the relevant `plans/workstreams/<name>.md` file, or the commit message of the landing commit (`git log` carries the history; `plans/next-up.md` has no `## Done` section).
 - **Hardware validation logs, test reports, "N boards passed"** → commit messages on the validating commit; the ADR can name a commit hash if it needs to point at validation evidence.
 - **Per-phase rollout dashboards** → `plans/workstreams/<name>.md`.
 - **Future-work checklists or implementation TODO lists** → `plans/next-up.md` or `plans/open-questions.md` with a one-line pointer back from the ADR if needed.
