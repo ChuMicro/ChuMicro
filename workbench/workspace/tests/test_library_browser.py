@@ -164,3 +164,37 @@ class TestEmptyCatalog:
         model.enter()
         assert model.view == "list"
         assert model.current is None
+
+
+class TestCommitTarget:
+    """Backs the Enter-as-action keybinding on the list view."""
+
+    def test_no_selection_returns_cursor_row(self):
+        model = _model()
+        # No Space presses; cursor on first entry (mqtt).
+        assert model.commit_target() == ["chumicro_mqtt"]
+
+    def test_selection_wins_over_cursor(self):
+        model = _model()
+        model.move(1)
+        model.toggle_select()              # select timing
+        model.move(-1)                     # cursor back on mqtt
+        # User built an explicit set — that wins, cursor row ignored.
+        assert model.commit_target() == ["chumicro_timing"]
+
+    def test_multi_select_returns_sorted_set(self):
+        model = _model()
+        model.toggle_select()
+        model.move(1)
+        model.toggle_select()
+        assert model.commit_target() == ["chumicro_mqtt", "chumicro_timing"]
+
+    def test_empty_catalog_returns_none(self):
+        model = _model(names=())
+        assert model.commit_target() is None
+
+    def test_detail_view_returns_none(self):
+        model = _model()
+        model.enter()                      # list → detail
+        assert model.view == "detail"
+        assert model.commit_target() is None
