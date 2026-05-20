@@ -784,7 +784,7 @@ Related: Decision 0027 (device testing infrastructure), Decision 0028
 ## Subprocess binary resolution (host tools)
 
 Rule + code shape live in [Style Guide § Subprocess binary resolution](../docs/contributing/style-guide.md#subprocess-binary-resolution-host-tools).
-Canonical implementation: `MicropythonTransport._run_mpremote` (commit `e4f669e`).
+Reference implementation: `MicropythonTransport._run_mpremote` (commit `e4f669e`).
 Apply the pattern to any new host-side shell-out to `mpremote` / `esptool` / `rshell` / `ampy`.
 
 ## Eager imports are the default — lazy is only for genuinely optional paths
@@ -810,7 +810,7 @@ stub that silently bypasses PEP 562**.  Lookups hit the stub's
 `__dict__` directly without calling `__getattr__`, so the lazy attr
 table just doesn't fire.  MP + the unix-ports both honor PEP 562
 correctly; only CP RAM-mode is affected — but that's the
-canonical deploy path for chumicro libraries.
+primary deploy path for chumicro libraries.
 
 The pattern is **safe for workbench packages** (`chumicro-deploy`,
 `chumicro-repl`) because they're CPython-only.  For device

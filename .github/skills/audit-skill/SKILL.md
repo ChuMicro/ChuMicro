@@ -38,7 +38,7 @@ Most skill drift falls into:
 * **Sibling duplication** — re-implementing what `task-checkpoint` / `git-commit` already covers instead of deferring
 * **Bloat** — body grown past the point where the agent reads it carefully
 * **Anti-self-assertions** — *"I have read all rules"* / *"always follow X"* style affirmations that backfire (Cline community failure mode)
-* **AI-tic phrasing** — same vocabulary list as `audit-docs` dim 2
+* **AI-tic phrasing** — phrase bans and standing regex live in [`agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md)
 
 ## Audit dimensions
 
@@ -113,7 +113,7 @@ Every citation in the body should still resolve.  Walk the file and verify:
 
 * **Re-stated AGENTS.md rules** — if the skill restates a non-negotiable rule (test-skip loudness, runner-shape, absolute-imports-in-libraries, etc.) and the AGENTS.md wording has changed, flag.  Prefer a one-line citation: *"Per AGENTS.md → Testing, test skips must be loud (see [Decision 0058](../../../plans/decisions/0058-test-skips-must-be-loud.md))"*.
 * **Re-stated ADR content** — same.  If the skill explains *why* a Decision exists, that explanation can drift from the ADR body.  Cite, don't restate.
-* **Tone bans cite `feedback_doc_writing_taste`** — the writing-tone memory is the source of truth; the skill should match it, not invent its own list.  If the project's AI-tic list has new entries (`feedback_doc_writing_taste.md`), the AI-tic regex in `audit-docs` dim 2 should mirror them, and any skill that carries its own AI-tic list is drift.
+* **Tone bans cite [`agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md).**  The agent style guide is the source of truth for the phrase bans, the standing regex, and per-word handling.  Any skill that carries its own AI-tic list, restates the per-word handling, or maintains a parallel regex is drift.  Cite, do not restate.  When a new word lands, it goes into the right § Phrase bans subsection and the regex in § Standing AI-tic regex; every audit skill picks it up automatically.
 
 ### 7. Composability with sibling skills
 
@@ -126,9 +126,9 @@ The end-of-work bookend (`task-checkpoint`) and the commit step (`git-commit`) a
 
 ### 8. Tone — AI-tics + skill-specific anti-patterns
 
-Run the **AI-tic grep from [`audit-docs` dim 2](../audit-docs/SKILL.md#2-vocabulary--grammar-tics)** — that regex is the source of truth.  Treat hits the same way `audit-docs` does (drop / replace / case-by-case).  Same rules apply to skill bodies as to user-facing docs.
+Run the **AI-tic grep from [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex)** — that section is the source of truth.  Treat hits per [§ Phrase bans](../../../docs/contributing/agent-style-guide.md#phrase-bans) (drop / replace / case-by-case).  Same rules apply to skill bodies as to user-facing docs.
 
-**Degraded passages get rewritten, not re-trimmed.**  SKILL.md bodies rot exactly the way code comments and READMEs do — these skills are long and have been trimmed pass after pass, each removing a word, none asking *what should this say?*  An `ai-tic` or `shape` finding whose passage has rotted that far (illegible, says nothing, would lose nothing it doesn't already lack if deleted) is not fixed by removing another word.  Discard it and rewrite from a fresh read of *what this skill does and when it fires* — the cold-loader / cold-triggering-agent test (Audit philosophy).  Tag it `rewrite` and show the proposed replacement text inline; MEDIUM by default, since the rebuilt prose is a judgment call.  This is the AGENTS.md → Writing tone single rule applied to SKILL.md bodies (`/audit-comments` and `/audit-docs` make the same move for their scopes) — re-trimming the wreckage manufactures the residue the rule exists to stop.
+**Degraded passages get rewritten, not re-trimmed.**  SKILL.md bodies rot exactly the way code comments and READMEs do.  These skills are long and have been trimmed pass after pass, each removing a word, none asking *what should this say?*  An `ai-tic` or `shape` finding whose passage has rotted that far (illegible, says nothing, would lose nothing it doesn't already lack if deleted) is not fixed by removing another word.  Discard it and rewrite from a fresh read of *what this skill does and when it fires*, applying the cold-loader / cold-triggering-agent test (Audit philosophy).  Tag it `rewrite` and show the proposed replacement text inline.  MEDIUM by default, since the rebuilt prose is a judgment call.  This is [`agent-style-guide.md` § Degraded prose is rewritten, not trimmed again](../../../docs/contributing/agent-style-guide.md#degraded-prose-is-rewritten-not-trimmed-again) applied to SKILL.md bodies.  `/audit-comments` and `/audit-docs` make the same move for their scopes.  Re-trimming the wreckage manufactures the residue the rule exists to stop.
 
 Skill-specific anti-patterns on top of the standard list:
 
@@ -275,8 +275,8 @@ LOW-CONFIDENCE (questions for the user):
 * `rot` — reference rot (dim 5)
 * `drift` — restated rule diverged from source of truth (dim 6)
 * `composability` — sibling-skill duplication or missing deferral (dim 7)
-* `ai-tic` — vocabulary / phrasing (dim 8, lifted from `audit-docs`)
-* `rewrite` — passage degraded by prior subtractive passes; discard and rebuild from a fresh read of what the skill does (dim 8 / AGENTS.md → Writing tone). Replacement shown inline; MEDIUM by default — rebuilt prose is a judgment call.
+* `ai-tic` — vocabulary or phrasing flagged by [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex) (dim 8)
+* `rewrite` — passage degraded by prior subtractive passes; discard and rebuild from a fresh read of what the skill does (dim 8, per [`agent-style-guide.md` § Degraded prose is rewritten, not trimmed again](../../../docs/contributing/agent-style-guide.md#degraded-prose-is-rewritten-not-trimmed-again)). Replacement shown inline; MEDIUM by default — rebuilt prose is a judgment call.
 * `overlap` — cross-skill trigger / directive overlap (dim 9)
 * `redundant` — line-overlap merge candidate (dim 9)
 * `conflict` — cross-skill directive contradiction (dim 9)
