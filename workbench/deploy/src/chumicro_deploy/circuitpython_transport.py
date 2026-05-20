@@ -558,12 +558,6 @@ class CircuitpythonTransport:
         for a match.  Raises when the probe is unavailable or no
         candidate matches.  Silently returning *drive_path* would risk
         landing on the wrong board's mount on multi-CP-board hosts.
-
-        Reads each ``boot_out.txt`` exactly once into a
-        ``(path, uid, machine)`` list and matches both fields
-        in-memory.  The UID and machine probes target the same files
-        on the same FAT volumes, so reading twice (one per probe)
-        would double the disk I/O on the auto-correct path.
         """
         probe = self.probe_implementation()
         if probe is None or (not probe.uid and not probe.machine):

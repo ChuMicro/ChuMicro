@@ -72,14 +72,8 @@ _RAW_REPL_PATTERNS = (
     "malformed raw repl response",
 )
 
-#: Probe / handshake found a port that responds, but with no Python
-#: runtime — the board is running Arduino, raw bootloader output, or
-#: some other non-Python firmware.  Distinct from
-#: :data:`_RAW_REPL_PATTERNS` (Python interpreter present but hung) and
-#: :data:`_PORT_UNAVAILABLE_PATTERNS` (port not reachable at all).  The
-#: recovery plan points at ``install-firmware``; the user must
-#: explicitly consent before flashing because the operation is
-#: destructive (overwrites whatever the board is currently running).
+#: Port responds but no Python runtime is present (Arduino, raw
+#: bootloader, or other firmware).
 _NO_PYTHON_RUNTIME_PATTERNS = (
     "no python runtime detected",
     "no python runtime on",
