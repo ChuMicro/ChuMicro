@@ -1,6 +1,6 @@
 # Workstream: `chumicro_deploy.config` docstring references deleted symbol
 
-Status: **proposed.**  Surfaced 2026-05-19 during the repl audit; out of scope for that pass.
+Status: **resolved 2026-05-20** during `/audit-comments deploy` Pass 1 MEDIUM (commit `6917cdfe`).  The `_default_loader` docstring no longer cites the deleted symbol.  Surfaced 2026-05-19 during the repl audit, out of scope for that pass.
 
 ## Problem
 
