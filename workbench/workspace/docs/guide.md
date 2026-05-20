@@ -10,7 +10,8 @@ A workspace has this shape:
 
 ```
 my-workspace/
-├── workspace.yml          # gitignored — defaults + library_sources + your credentials
+├── workspace.yml          # gitignored — workspace machinery (library_sources, deploy_targets, quality)
+├── secrets.toml           # gitignored — workspace-wide credentials + device defaults
 ├── devices.yml            # board registry — three-zone (defaults / devices / device-credentials)
 ├── pyproject.toml
 ├── projects/
@@ -126,13 +127,14 @@ chumicro-workspace new gpio --library
 
 ### How config flows from your edits to the device
 
-The runtime config a project receives at boot is the deep-merge of two gitignored host-side sources, both sharing the same section-namespaced shape:
+The runtime config a project receives at boot is the deep-merge of two host-side sources, both sharing the same section-namespaced shape:
 
 ```
-workspace.yml ──────────────────► projects/<name>/project_config.toml
-  (gitignored — workspace-wide       (gitignored when scaffolded by `new`;
-   defaults + your credentials        per-project knobs — sample period,
-   in one place)                      mqtt topic, sensor pins)
+secrets.toml ──────────────────► projects/<name>/project_config.toml
+  (gitignored — workspace-wide       (per-project knobs — sample period,
+   credentials + device defaults     mqtt topic, sensor pins;
+   in one place; deep-merge          gitignored when scaffolded by `new`)
+   loser to per-project)
 
                             │
                             ▼
@@ -149,25 +151,24 @@ workspace.yml ──────────────────► projects
                      chumicro_config.runtime           ← READS the msgpack on the device
 ```
 
+`workspace.yml` is separate — it carries workspace **machinery** (`library_sources`, `deploy_targets`, `quality`, the curated `libraries` table), not runtime config.  Nothing from it lands on the device.
+
 Use `chumicro-workspace dump-config <project>` to print the merged dict your project would receive without actually deploying — useful for debugging which layer a key landed in.
 
-`project_config.toml` carries the per-project knobs; `workspace.yml` carries workspace-wide defaults plus your credentials (the file is gitignored, so credentials never reach git):
+`secrets.toml` is gitignored and carries credentials + workspace-wide device defaults; `project_config.toml` carries the per-project knobs:
+
+```toml
+# secrets.toml — gitignored; values flow into every project that doesn't override
+[wifi]
+ssid = "HomeNet"
+password = "my-real-wifi-password"
+```
 
 ```toml
 # projects/back-porch/project_config.toml — gitignored when scaffolded by `new`
-[wifi]
-ssid = "HomeNet"
-
 [mqtt]
 host = "192.168.1.10"
 topic = "projects/back-porch/state"
-```
-
-```yaml
-# workspace.yml — gitignored; defaults flow into every project that doesn't override
-defaults:
-  wifi:
-    password: my-real-wifi-password
 ```
 
 `app.py` exports a `run()` function — `workspace_runtime.boot()` calls it after import:
@@ -296,7 +297,7 @@ When the deploy traceback matches a known workspace-shaped pattern, an indented 
 * `NameError: name '<sym>' is not defined` → "did you forget to import…"
 * `OSError ... runtime_config.msgpack` → "RAM-mode deploys don't persist the config msgpack — switch to flash mode."
 * `ImportError`/`ModuleNotFoundError ... chumicro_*` → "library not installed in this venv — run `chumicro-workspace setup`."
-* `KeyError: '<key>'` → "missing config key — check `projects/<project>/project_config.toml` or `workspace.yml`'s `defaults:` block (the gitignored workspace config carrying defaults + credentials)."
+* `KeyError: '<key>'` → "missing config key — check `projects/<project>/project_config.toml` or `secrets.toml` (the gitignored workspace-wide credentials + device defaults)."
 
 Driven by [`detect_hints`](api.md) over the captured traceback + execute output.  Empty hints → no section header (so unmatched failures don't carry an empty heading).
 
@@ -363,8 +364,8 @@ Loader: [`load_quality_config`](api.md).  Missing block → permissive defaults 
 
 [`build_runtime_config`](api.md) is the deploy-time pipeline:
 
-1. Read `workspace.yml`'s `defaults:` block (gitignored — workspace-wide defaults + credentials in one place).
-2. Read `projects/<name>/config.{toml,yml,yaml}`.
+1. Read `secrets.toml` (gitignored — workspace-wide credentials + device defaults).
+2. Read `projects/<name>/project_config.toml`.
 3. Deep-merge in that order (later layer wins at any nesting depth; lists replace wholesale; dicts recurse).
 4. Pack as msgpack via the standard `msgpack` library (with `use_single_float=True` for CircuitPython compatibility), write to `projects/<name>/_generated/runtime_config.msgpack`.
 
@@ -374,10 +375,10 @@ To regenerate the msgpack without deploying — useful in tests or pre-flight ch
 
 ```python
 from pathlib import Path
-from chumicro_workspace import build_runtime_config
+from chumicro_workspace.pipeline import build_runtime_config
 
 build_runtime_config(
-    workspace_yaml=Path("workspace.yml"),
+    secrets_toml=Path("secrets.toml"),
     project_config=Path("projects/back-porch/project_config.toml"),
     output_path=Path("projects/back-porch/_generated/runtime_config.msgpack"),
 )
