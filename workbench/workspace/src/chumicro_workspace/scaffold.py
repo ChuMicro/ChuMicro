@@ -29,10 +29,9 @@ The output layout::
     └── examples/
         └── basic_usage.py
 
-The CLI exposes this as ``python run.py new --library <name>``
-(see :func:`chumicro_workspace.cli._cmd_new`).  Callers that need
-finer control construct an explicit target directory and call
-:func:`scaffold_library` directly.
+The CLI exposes this as ``python run.py new --library <name>``.
+Callers that need finer control construct an explicit target
+directory and call :func:`scaffold_library` directly.
 """
 
 from __future__ import annotations

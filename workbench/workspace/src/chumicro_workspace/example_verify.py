@@ -16,11 +16,6 @@ no bearing on the verification path.
 Examples may import sibling modules from their own ``examples/``
 directory (e.g. a per-library ``helpers.py``).  Each example's parent
 directory is added to ``sys.path`` for the duration of its verification.
-
-Workspace users — both the mono-repo and the workspace-template repo —
-import this from ``chumicro_workspace`` directly; the mono-repo's
-``scripts/verify_examples.py`` is a thin shim that picks the
-mono-repo package list.
 """
 
 from __future__ import annotations

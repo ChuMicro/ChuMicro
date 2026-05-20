@@ -32,8 +32,7 @@ that block in sync with the dev-mode checkout:
 
 The CLI wires this into ``setup`` so the user gets the right
 ``library_sources`` automatically every time they bootstrap a dev-mode
-workspace.  Gap 3(a) of the workspace-template
-dev-and-regular-mode-gaps audit.
+workspace.
 """
 
 from __future__ import annotations

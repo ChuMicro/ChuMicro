@@ -129,8 +129,7 @@ def _set_nested(
     ``tomlkit.table`` for TOML round-trip preservation, plain ``dict``
     for YAML (ruamel auto-promotes plain dicts to ``CommentedMap`` on
     dump).  Existing intermediates that aren't mapping-shaped get
-    replaced — the YAML path used to do this explicitly; the TOML
-    path now matches.
+    replaced.
     """
     cursor = doc
     for segment in segments[:-1]:

@@ -1340,7 +1340,8 @@ class TestDeployFailureHints:
         captured_stderr = capsys.readouterr().err
         assert "--- hints ---" in captured_stderr
         assert "wifi_password" in captured_stderr
-        assert "workspace.yml" in captured_stderr
+        assert "project_config.toml" in captured_stderr
+        assert "secrets.toml" in captured_stderr
 
     def test_no_hints_section_when_no_pattern_matches(
         self,

@@ -65,12 +65,6 @@ class BoardState(StrEnum):
 
 
 #: Where a UF2 bootloader drive typically mounts per platform.
-#: Mirrors ``chumicro_deploy.firmware._UF2_MOUNT_SEARCH_PATHS`` —
-#: kept local because that table is private.  Bringing it into
-#: workspace-runtime avoids reaching into a sibling package's
-#: underscore-prefixed surface and lets the onboarding module
-#: ship its own UF2 scanner without promoting helpers in deploy
-#: just for this consumer.
 _UF2_MOUNT_SEARCH_PATHS: dict[str, list[Path]] = {
     "darwin": [Path("/Volumes")],
     "linux": [

@@ -44,11 +44,11 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
     from chumicro_workspace.workspace import WorkspaceLayout
 
 #: Three-line ``code.py`` (CP) / ``main.py`` (MP) shim.  Imports
-#: the project's ``app.run`` and calls it.  The shim is shipped by
-#: chumicro-deploy; users should not edit it (it gets overwritten
-#: on every deploy).
+#: the project's ``app.run`` and calls it.  The shim is synthesized
+#: by chumicro-workspace; users should not edit it (it gets
+#: overwritten on every deploy).
 SHIM_ENTRYPOINT_SOURCE = (
-    "# Shipped by chumicro-deploy; do not edit.\n"
+    "# Shipped by chumicro-workspace; do not edit.\n"
     "from app import run as _run\n"
     "_run()\n"
 )
@@ -116,10 +116,10 @@ def project_app_exports_run(project_dir: Path) -> bool:
     deploy auto-detect rejects it with an actionable message rather
     than shipping a board that boots and silently does nothing.
 
-    Used by :func:`chumicro_workspace.cli._cmd_deploy`'s auto-detect
-    pass: when the project ships ``app.py`` with a sync ``run()`` and
-    no runtime-specific entrypoint (``code.py`` / ``main.py``), boot-
-    shim mode is the right default.
+    Auto-detect rule for the CLI deploy command: when the project
+    ships ``app.py`` with a sync ``run()`` and no runtime-specific
+    entrypoint (``code.py`` / ``main.py``), boot-shim mode is the
+    right default.
     """
     return isinstance(_top_level_run_node(project_dir), ast.FunctionDef)
 

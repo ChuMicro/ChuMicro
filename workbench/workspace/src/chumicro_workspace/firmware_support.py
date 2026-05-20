@@ -6,11 +6,10 @@ owns the floor constants, parses the dotted version string the
 probe returns, and classifies a
 :class:`chumicro_deploy.DeviceImplementation` against the floor.
 
-The classification is consumed by ``_cmd_add_device`` to print a
-warning at registration time when the floor isn't met.  It's also
-consumed by future commands (the bootstrap wizard) — both go
-through the same :func:`check_firmware_supported` + :func:`explain`
-pair so the policy stays in one place.
+The ``add-device`` command prints a warning at registration when
+the floor isn't met; other commands needing the same check route
+through :func:`check_firmware_supported` + :func:`explain` so the
+policy lives in one place.
 
 Strictness is warn-not-block.  ``add-device`` proceeds on every
 status; the warning is informational.

@@ -8,10 +8,9 @@ for the on-device location lives in ``chumicro_config.runtime`` so
 the write side and the read side stay in sync through one source
 of truth.
 
-Encoder choice: standard ``msgpack`` from PyPI (the well-maintained
-host-side library).  Workbench packages don't import from
-``libraries/`` per the ecosystem boundary — those packages are
-*for the board*.  Wire compatibility with the device-side reader
+Encoder choice: standard ``msgpack`` from PyPI.  Workbench packages
+don't import from ``libraries/`` per the ecosystem boundary — those
+packages are *for the board*.  Wire compatibility with the device-side reader
 is preserved by passing ``use_single_float=True`` so floats encode
 as float32 (``0xca`` + 4 bytes), which CircuitPython's native
 ``msgpack`` module accepts (CP doesn't support float64).  The
