@@ -9,8 +9,7 @@ callers don't have to branch on runtime themselves.
 
 Two fields, ``entrypoint_name`` and ``resource_prefix``, aren't
 read by :meth:`create_transport`.  They are deploy-config carried
-on Device so a deploy takes one configured object, not Device plus
-a separate deploy-config struct.
+on Device so a deploy takes one configured object.
 """
 
 from __future__ import annotations
@@ -120,8 +119,8 @@ class Device:
         ``address``, and optional ``baudrate``, ``deploy_mode``,
         ``entrypoint_name``, and ``resource_prefix``.  Unknown keys
         are ignored so YAML / TOML / JSON inputs with extra metadata
-        fields (``id``, ``description``, ``circuitpy_drive_path`` from
-        legacy registries, etc.) pass through without filtering.
+        fields (``id``, ``description``, ``circuitpy_drive_path``,
+        etc.) pass through without filtering.
 
         Args:
             data: Mapping of field names to values.  ``transport``

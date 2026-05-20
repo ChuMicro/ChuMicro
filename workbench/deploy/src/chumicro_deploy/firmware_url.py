@@ -79,9 +79,8 @@ _CIRCUITPYTHON_FILENAME_VERSION = re.compile(
 _STABLE_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
 #: Hand-curated subset of the MicroPython ``machine`` → BOARD map.
-#: Extends as new boards land, refreshed periodically against
-#: ``micropython.org/download/``.  Boards not in this table return
-#: ``None`` from :func:`micropython_board_for_machine`.
+#: Boards not in this table return ``None`` from
+#: :func:`micropython_board_for_machine`.
 #:
 #: Vendor-published Adafruit boards (Feather ESP32-S2 / S3 etc.)
 #: deliberately *aren't* in the map: Adafruit ships their own
@@ -257,9 +256,8 @@ def latest_circuitpython_url(
 def micropython_board_for_machine(machine_string: str) -> str | None:
     """Return the published MP BOARD name for *machine_string*, or ``None``.
 
-    Lookup is exact-match against :data:`MICROPYTHON_BOARD_BY_MACHINE`.
-    The map is hand-curated; entries appear here as new boards land,
-    refreshed from periodic ``micropython.org/download/`` scrapes.
+    Lookup is exact-match against :data:`MICROPYTHON_BOARD_BY_MACHINE`,
+    a hand-curated map.
     """
     if not machine_string:
         return None
@@ -403,7 +401,7 @@ def latest_micropython_url(
     out unless *allow_prerelease* is ``True``.  Sort is by
     ``(version, date)`` with the newest pair winning, so an old-
     date build of a newer version doesn't lose to a recent build
-    of an older version (rare but observed during preview windows).
+    of an older version.
 
     Raises:
         UnresolvedFirmwareError: No matching builds after the

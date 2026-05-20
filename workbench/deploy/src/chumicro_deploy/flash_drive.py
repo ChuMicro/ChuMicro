@@ -62,13 +62,11 @@ RSYNC_TIMEOUT_MIN_SECONDS = 240.0
 
 #: Base seconds added to every rsync timeout regardless of size.
 #: Covers handshake / enumeration / checksum-sweep jitter that
-#: doesn't scale with payload size.  Slow boards need 60-90s of
-#: cold-start latency before rsync's first write.
+#: doesn't scale with payload size.
 RSYNC_TIMEOUT_BASE_SECONDS = 120.0
 
 #: Per-MB allowance for rsync.  600 s/MB ≈ 1.7 KB/s, sized for the
-#: slowest sustained USB-MSC FAT12 write rate seen on real boards
-#: (under macOS cache pressure or several back-to-back deploys).
+#: slowest sustained USB-MSC FAT12 write rate.
 #: Generous on purpose: a false-positive timeout surfaces as "wedge!"
 #: recovery noise, while a real wedge is a clear failure regardless
 #: of how long we waited.
@@ -118,12 +116,8 @@ def compute_rsync_timeout_seconds(staging_size_bytes: int) -> float:
         max(RSYNC_TIMEOUT_BASE_SECONDS + size_mb * RSYNC_TIMEOUT_PER_MB_SECONDS,
             RSYNC_TIMEOUT_MIN_SECONDS)
 
-    For a typical chumicro deploy (~200 KB staging) this lands at the
-    240 s floor.  A 1 MB deploy grows to 720 s, and a 5 MB deploy to 3120 s.
-    Keeps fast boards (Pi Pico W, a few seconds rsync in practice) on
-    a tight leash while giving slow boards (Lolin S2 / ESP32-S2,
-    often 60-120 s for the same payload) enough headroom to finish
-    without false-positive timeouts.
+    Keeps fast boards on a tight leash while giving slow boards
+    enough headroom to finish without false-positive timeouts.
 
     Args:
         staging_size_bytes: Sum of file sizes in the local staging
@@ -430,8 +424,7 @@ def verify_rsync(
             ``--exclude`` so the dry-run scope matches the original
             rsync's scope exactly.
         timeout: Subprocess deadline (seconds).  Verification reads
-            every file from the FAT volume; 30 s is well above the
-            empirical worst-case for typical CIRCUITPY payloads.
+            every file from the FAT volume.
 
     Returns:
         Sorted list of source-relative paths that the verification

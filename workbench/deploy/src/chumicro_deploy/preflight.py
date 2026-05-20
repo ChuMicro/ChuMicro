@@ -39,10 +39,7 @@ class DeviceCaps:
     There are exactly two deploy modes and flash is always available
     (every board can write its own filesystem, since it is the
     production-shaped path), so the only real degree of freedom is
-    whether the board can run RAM mode at all.  A struct rather than a
-    bare bool so a second capability can be added later without
-    re-threading every resolver call site; today it carries one field
-    with no producer setting it ``False`` (no known board needs it).
+    whether the board can run RAM mode at all.
     """
 
     supports_ram_mode: bool = True

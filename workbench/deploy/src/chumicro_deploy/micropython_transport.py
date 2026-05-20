@@ -6,7 +6,7 @@ Two execution paths:
   uses ``mpremote.transport_serial.SerialTransport`` directly — opens
   the serial port once per session, enters raw REPL once, mounts the
   staging directory once, and runs each bootstrap via ``exec_raw``.
-  Eliminates the ~2-3 s cold-start cost of spawning ``mpremote`` per
+  Avoids the cold-start cost of spawning ``mpremote`` per
   ``execute()`` call.
 - **Subprocess fallback** (copy mode staging, reset/recover): uses the
   ``mpremote`` CLI for operations that are one-shot and easier to express
@@ -46,10 +46,9 @@ if TYPE_CHECKING:  # pragma: no cover - type-only
 #: ``read_until`` timeout, **not** a wall-clock budget: every received
 #: byte resets the clock, so it bounds only a run of *consecutive
 #: silence*.  Sized large because on-device tests can run long
-#: allocation loops that emit no output for minutes (the fragmentation
-#: suite allocates until ``MemoryError``, with ``gc.collect()`` pauses
-#: between).  Short interactive ops (probe, scope listing, delete,
-#: wipe, bootloader) keep their own short timeouts.
+#: allocation loops that emit no output for minutes.  Short
+#: interactive ops (probe, scope listing, delete, wipe, bootloader)
+#: keep their own short timeouts.
 _EXECUTE_IDLE_TIMEOUT: float = 300.0
 
 
@@ -166,11 +165,9 @@ _LIST_ALL_SCRIPT: str = (
 #:
 #: A plain recursive ``os.remove`` walk leaves LittleFS metadata
 #: blocks + wear-leveling artifacts on flash, so a board that
-#: filled up over many test runs (Pi Pico W LittleFS partition is
-#: ~850 KB; lolin-s2-mp's ``vfs`` partition is 2 MB) can still hit
-#: ``ENOSPC`` mid-deploy after a "wipe."  ``VfsLfs2.mkfs`` reformats
-#: the partition, which is the only reliable way to recover the
-#: full block budget.
+#: filled up over many test runs can still hit ``ENOSPC`` mid-deploy
+#: after a "wipe."  ``VfsLfs2.mkfs`` reformats the partition, which
+#: is the only reliable way to recover the full block budget.
 #:
 #: Substrate-dispatched: each MicroPython port exposes its flash /
 #: data partition through a different module.  The dispatch covers
@@ -1251,8 +1248,8 @@ class MicropythonTransport:
 
         Reconciles a board left dirty by a prior run without destroying
         the keep set.  ``mpremote fs cp`` never deletes, so without
-        this each deploy stacks onto the previous tree and a Pi Pico W
-        MP fills its ~860 KB flash.
+        this each deploy stacks onto the previous tree until the LFS
+        partition fills up.
         Every root entry except the keep set (``boot.py`` /
         ``boot_out.txt`` / ``_chu_kv.msgpack``) is removed
         recursively; the subsequent ``fs cp -r`` repopulates the
@@ -1363,9 +1360,7 @@ class MicropythonTransport:
         Skips host-only build artifacts that have no business on a
         device: CPython bytecode caches (``__pycache__``, ``*.pyc``),
         editable-install metadata (``*.egg-info``), and other VCS /
-        tooling dirs.  Without this filter, a Pi-Pico-W-MP flash
-        deploy of the requests stack triples in size from CPython
-        3.14 .pyc files alone.
+        tooling dirs.
 
         Also drops ``.py`` files whose ``__chumicro_runtimes__`` marker
         excludes MicroPython, so a wrong-runtime adapter (e.g. ``cp.py``)

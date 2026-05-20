@@ -17,11 +17,6 @@ This module provides:
   catches transport failures, surfaces the plan, and either reports
   + re-raises (when ``prompt=None``) or prompts the user to retry
   after fixing the condition and loops up to *max_attempts*.
-
-Keeping recovery as a sibling instead of baking it into
-:class:`Deployer` preserves a deterministic programmatic API.
-Interactive recovery is opt-in via :class:`RecoveringDeployer` with
-a prompt callable.
 """
 
 from __future__ import annotations

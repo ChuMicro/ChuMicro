@@ -8,9 +8,7 @@ CPU UID is populated from the probe script itself.
 :data:`~chumicro_deploy.protocol.PROBE_IMPLEMENTATION_SCRIPT` reads
 ``microcontroller.cpu.uid`` on CircuitPython and
 ``machine.unique_id()`` on MicroPython and emits it as the fourth
-field of the ``__CHU_IMPL__:`` marker line.  Board-ID discovery is
-not yet implemented, so the field is reserved on :class:`DeviceInfo`
-and populated with the empty string.
+field of the ``__CHU_IMPL__:`` marker line.
 """
 
 from __future__ import annotations
@@ -35,8 +33,8 @@ class DeviceInfo:
             script ran but no marker came back — almost always a
             hardware or connection issue.
         board_id: Normalized board identifier (e.g.
-            ``"raspberry_pi_pico_w"``).  Empty string today;
-            reserved for a future board-specific probe.
+            ``"raspberry_pi_pico_w"``).  Empty string when no
+            board-specific probe has populated it.
         uid: Hex-uppercase CPU UID probed from
             ``microcontroller.cpu.uid`` (CP) or ``machine.unique_id()``
             (MP) via :data:`PROBE_IMPLEMENTATION_SCRIPT`.  Empty when
@@ -62,8 +60,7 @@ def probe_device(device: Device) -> DeviceInfo:
     Returns:
         :class:`DeviceInfo` with the implementation field populated
         when the board returned the probe marker.  ``uid`` mirrors
-        ``implementation.uid`` when the probe could read it;
-        ``board_id`` stays empty until a board-ID probe is added.
+        ``implementation.uid`` when the probe could read it.
     """
     check_supported_platform()
     transport = device.create_transport()
