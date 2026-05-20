@@ -190,57 +190,139 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
     coverage (the device-adapter convention).  Every binding delegates
     straight to :class:`BrowserModel`; the logic lives there and is
     tested there.
+
+    Layout shape: status line + help line + horizontal rule + a
+    content pane that swaps by view (list view is a plain
+    ``FormattedTextControl``; detail / example views are a scrollable
+    ``TextArea`` so a long README / example file can be navigated).
     """
     from prompt_toolkit.application import Application
     from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.layout import Layout
-    from prompt_toolkit.layout.containers import Window
+    from prompt_toolkit.layout.containers import (
+        DynamicContainer,
+        HSplit,
+        Window,
+    )
     from prompt_toolkit.layout.controls import FormattedTextControl
+    from prompt_toolkit.layout.dimension import Dimension
+    from prompt_toolkit.widgets import TextArea
 
-    def render() -> str:
+    # -- text area for scrollable README / example content -------------
+    #
+    # focusable=True so prompt_toolkit's built-in scroll bindings
+    # (PgUp/PgDn/Home/End + arrow keys) work natively.  Our app-level
+    # bindings declared with ``eager=True`` win over the TextArea's
+    # arrow-key bindings inside detail view, so Up/Down cycle examples
+    # there; PgUp/PgDn always scroll the buffer.
+    content = TextArea(
+        text="",
+        read_only=True,
+        scrollbar=True,
+        focusable=True,
+        wrap_lines=True,
+    )
+
+    # -- top status + help bars (always visible) -----------------------
+
+    def render_status() -> str:
         if model.view == "list":
-            lines = [
-                f"  ChuMicro libraries — {model.status}",
-                "  [Enter] add  [Space] select  [i] info  "
-                "[Tab] channel  [q] quit",
-                "",
-            ]
-            for index, entry in enumerate(model.entries):
-                mark = "x" if entry.name in model.selected else " "
-                pointer = ">" if index == model.cursor else " "
-                lines.append(
-                    f"{pointer} [{mark}] {entry.name}  {entry.version}  "
-                    f"{entry.description}",
-                )
-            return "\n".join(lines)
+            return f" ChuMicro libraries — {model.status}"
         entry = model.current
-        if model.view == "detail" and entry and entry.examples:
-            header = (
-                f"  {entry.name} — [Up/Down] pick example  "
-                f"[Enter] view  [Backspace] back"
-            )
-            example_lines = "\n".join(
-                f"{'>' if index == model.example_cursor else ' '} {name}"
-                for index, name in enumerate(entry.examples)
-            )
+        if entry is None:
+            return ""
+        if model.view == "detail":
+            if entry.examples:
+                selected_name = entry.examples[model.example_cursor]
+                return (
+                    f" {entry.name} — README   "
+                    f"(example {model.example_cursor + 1}/"
+                    f"{len(entry.examples)}: {selected_name})"
+                )
+            return f" {entry.name} — README   (no examples)"
+        # example view — show which example file is on screen
+        if entry.examples:
+            selected_name = entry.examples[model.example_cursor]
+            return f" {entry.name} — {selected_name}"
+        return f" {entry.name}"
+
+    def render_help() -> str:
+        if model.view == "list":
             return (
-                f"{header}\n\n{model.detail_text}\n\n"
-                f"  Examples:\n{example_lines}"
+                " [Enter] add  [Space] select  [i] info  "
+                "[Tab] channel  [Up/Down] move  [q] quit"
             )
-        header = (
-            f"  {entry.name if entry else ''} — [Backspace] back"
-        )
-        return f"{header}\n\n{model.detail_text}"
+        if model.view == "detail":
+            entry = model.current
+            if entry and entry.examples:
+                return (
+                    " [Backspace] back  [Up/Down] cycle example  "
+                    "[Enter] view example  [PgUp/PgDn] scroll README"
+                )
+            return " [Backspace] back  [PgUp/PgDn] scroll README"
+        return " [Backspace] back  [PgUp/PgDn] scroll"
+
+    status_window = Window(
+        FormattedTextControl(render_status), height=Dimension.exact(1),
+    )
+    help_window = Window(
+        FormattedTextControl(render_help), height=Dimension.exact(1),
+    )
+    rule_window = Window(height=Dimension.exact(1), char="─")
+
+    # -- list view content ---------------------------------------------
+
+    def render_list() -> str:
+        lines = []
+        for index, entry in enumerate(model.entries):
+            mark = "x" if entry.name in model.selected else " "
+            pointer = ">" if index == model.cursor else " "
+            lines.append(
+                f"{pointer} [{mark}] {entry.name}  {entry.version}  "
+                f"{entry.description}",
+            )
+        return "\n".join(lines)
+
+    list_window = Window(FormattedTextControl(render_list))
+
+    def get_content_container():
+        if model.view == "list":
+            return list_window
+        return content
+
+    # Push the model's detail_text into the scrollable buffer.  Called
+    # whenever a key handler changes view (list → detail, detail →
+    # example, example → detail → list).  Cursor reset to 0 so the
+    # new content shows from the top, not wherever the previous view's
+    # cursor happened to land.
+    def refresh_text_area() -> None:
+        if model.view == "list":
+            return
+        content.text = model.detail_text
+        content.buffer.cursor_position = 0
+
+    root = HSplit([
+        status_window,
+        help_window,
+        rule_window,
+        DynamicContainer(get_content_container),
+    ])
 
     bindings = KeyBindings()
 
-    @bindings.add("up")
+    @bindings.add("up", eager=True)
     def _(event) -> None:
-        model.move(-1)
+        # eager=True so this wins over the TextArea's own Up binding
+        # when detail view is active (the TextArea has focus there).
+        # In example view we let PgUp/PgDn handle scroll; cycling
+        # examples is meaningless once you're inside one.
+        if model.view != "example":
+            model.move(-1)
 
-    @bindings.add("down")
+    @bindings.add("down", eager=True)
     def _(event) -> None:
-        model.move(1)
+        if model.view != "example":
+            model.move(1)
 
     @bindings.add("space")
     def _(event) -> None:
@@ -248,21 +330,22 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
 
     @bindings.add("tab")
     def _(event) -> None:
-        model.switch_channel()
+        if model.view == "list":
+            model.switch_channel()
 
     @bindings.add("enter")
     def _(event) -> None:
         # On the list, Enter is the action key: commits the cursor row
         # (single-shot) or the explicit Space-selected set if the user
         # built one up.  Inside detail view it drills into the example
-        # under the example cursor — same drill behavior the model has
-        # always exposed.
+        # under the example cursor.
         if model.view == "list":
             target = model.commit_target()
             if target is not None:
                 event.app.exit(result=target)
-        else:
+        elif model.view == "detail":
             model.enter()
+            refresh_text_area()
 
     @bindings.add("i")
     def _(event) -> None:
@@ -271,12 +354,14 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
         # list once Enter took over as the commit key.
         if model.view == "list":
             model.enter()
+            refresh_text_area()
 
     @bindings.add("b")
     @bindings.add("escape")
     @bindings.add("backspace")
     def _(event) -> None:
-        model.back()
+        if model.back():
+            refresh_text_area()
 
     @bindings.add("a")
     def _(event) -> None:
@@ -291,7 +376,7 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
         event.app.exit(result=None)
 
     application: Application = Application(
-        layout=Layout(Window(FormattedTextControl(render))),
+        layout=Layout(root, focused_element=content),
         key_bindings=bindings,
         full_screen=True,
     )
