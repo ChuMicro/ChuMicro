@@ -73,9 +73,8 @@ _CIRCUITPYTHON_FILENAME_VERSION = re.compile(
 )
 
 #: Pattern for stable versions: ``<major>.<minor>.<patch>`` with no
-#: pre-release label.  Pre-releases like ``10.2.0-rc.0`` /
-#: ``10.2.0-beta.1`` /  ``10.2.0-alpha.0`` carry an extra ``-`` plus
-#: tag and won't match.
+#: pre-release label.  See :data:`_CIRCUITPYTHON_FILENAME_VERSION` for
+#: the pre-release-suffix grammar this filter excludes.
 _STABLE_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
 #: Hand-curated subset of the MicroPython ``machine`` → BOARD map.

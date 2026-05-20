@@ -1,16 +1,8 @@
 """Test fakes for the device transport layer.
 
-Provides fakes for host-side tests of ``chumicro-deploy``:
-
-- :class:`FakeTransport` — a transport implementation that records
-  all calls and returns configurable output.  Drop-in replacement for
-  ``MicropythonTransport`` / ``CircuitpythonTransport`` in unit tests.
-- :class:`FakeSerialPort` — simulates a ``serial.Serial`` instance
-  without real hardware, for testing ``CircuitpythonTransport``
-  internals.
-- :class:`FakeTime` — deterministic seconds-domain time source that
-  satisfies the ``TimeSource`` protocol the transport accepts via
-  constructor injection, so tests never touch wall-clock time::
+Exports :class:`FakeTransport`, :class:`FakeSerialPort`,
+:class:`FakeTime`, and :func:`isolate_from_host_filesystem` — see
+each one's docstring for shape and usage.  Typical injection::
 
     from chumicro_deploy.testing import FakeSerialPort, FakeTime
 
@@ -19,13 +11,6 @@ Provides fakes for host-side tests of ``chumicro-deploy``:
         port_factory=lambda *_args, **_kwargs: FakeSerialPort(...),
         time=FakeTime(),
     )
-
-- :func:`isolate_from_host_filesystem` — keep tests hermetic on a dev
-  machine with real CIRCUITPY boards plugged in.  ``flash_drive``
-  shells out to macOS ``sync`` / ``xattr`` / ``dot_clean`` and probes
-  ``/Volumes/CIRCUITPY*`` for real mounts; without this stub, tests
-  block on real USB latency and scribble probe files onto whichever
-  board happens to be connected.
 """
 
 from __future__ import annotations
@@ -250,23 +235,18 @@ class FakeTransport:
     methods default to delegating to ``execute`` so the chunked
     behavior is not required up front.
 
-    Attributes:
-        execute_output: The string returned by ``execute()``.
-        mode: Deploy mode label (e.g. ``"ram"``, ``"flash"``, ``"mount"``,
-            ``"copy"``).  Defaults to ``"ram"``.
-        free_memory_bytes: The value returned by ``probe_free_memory()``
-            and the basis for ``inline_script_budget_bytes()``.
-        calls: List of ``(method_name, args_tuple)`` recording every call.
-        connected: Whether ``connect()`` has been called without a
-            subsequent ``disconnect()``.
+    See the per-field ``#:`` comments below for each attribute's role.
     """
 
+    #: Fallback string returned by ``execute()`` when :attr:`outputs`
+    #: is empty.
     execute_output: str = ""
     #: Per-call output queue.  ``execute()`` and ``execute_scripts()``
     #: pop the head and return it; an empty list falls back to
     #: :attr:`execute_output`.  Scripts "first invocation returns X,
     #: second returns Y" without subclassing the fake.
     outputs: list[str] = field(default_factory=list)
+    #: Deploy mode label (``"ram"``, ``"flash"``, ``"mount"``, ``"copy"``).
     mode: str = "ram"
     #: Default ~64 KB — a realistic floor for the boards this fake stands in for.
     free_memory_bytes: int = 64 * 1024
@@ -303,7 +283,9 @@ class FakeTransport:
     #: argument raises :class:`UnsupportedExtraFilesError` and this
     #: dict stays empty.
     staged_extra_files: dict[str, bytes] = field(default_factory=dict)
+    #: Ordered ``(method_name, args_tuple)`` log of every call.
     calls: list[tuple[str, tuple]] = field(default_factory=list)
+    #: ``True`` after ``connect()`` and before any ``disconnect()``.
     connected: bool = False
 
     def connect(self) -> None:

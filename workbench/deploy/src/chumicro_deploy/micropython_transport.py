@@ -93,20 +93,15 @@ _STAGE_EXCLUDED_NAMES: frozenset[str] = frozenset(
 )
 
 
-#: On-device script that walks the deploy's managed scope and prints a
-#: marker-prefixed listing of every file in scope.  Pure stdlib —
+#: Implements the additive (``clean_slate=False``) walk for
+#: :func:`chumicro_deploy.protocol.is_in_deploy_scope`.  Pure stdlib —
 #: ``os.listdir`` + ``os.stat`` — so it runs on every CP / MP build
-#: without preinstalling helper libs.
-#:
-#: The four managed entrypoint / state files
-#: (:data:`chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`) are probed at
-#: the device root; ``/lib/`` is walked recursively.  Missing dirs and
-#: per-file ``OSError`` are tolerated so a fresh-flashed board (no
-#: ``/lib/`` yet) returns an empty listing instead of erroring out.
-#:
-#: Embedding the path constants directly in the on-device script keeps
-#: each side self-contained and the host doesn't need to marshal a
-#: values list every call.
+#: without preinstalling helper libs.  Missing dirs and per-file
+#: ``OSError`` are tolerated so a fresh-flashed board (no ``/lib/``
+#: yet) returns an empty listing instead of erroring out.  Embedding
+#: the path constants directly in the on-device script keeps each
+#: side self-contained and the host doesn't need to marshal a values
+#: list every call.
 _LIST_SCOPE_SCRIPT: str = (
     "import os\n"
     "def _walk(p):\n"
@@ -133,11 +128,9 @@ _LIST_SCOPE_SCRIPT: str = (
     "_walk('/lib')\n"
 )
 
-#: Clean-slate scope: every file on the device.  The host filters out
-#: :data:`flash_drive.DEVICE_KEEP_SET` (and any dot-prefixed path), so
-#: the diff reconciles the whole device down to payload + keep set, so
-#: a stale board ``settings.toml`` / leftover file is removed, not just
-#: stale ``/lib`` packages.
+#: Implements the ``clean_slate=True`` walk: every file on the device.
+#: The host filters out :data:`flash_drive.DEVICE_KEEP_SET` (and any
+#: dot-prefixed path) post-walk.
 _LIST_ALL_SCRIPT: str = (
     "import os\n"
     "def _walk(p):\n"
@@ -159,22 +152,13 @@ _LIST_ALL_SCRIPT: str = (
 )
 
 
-#: Wipe the user filesystem by reformatting the LittleFS volume the
-#: runtime is mounted on, then soft-reset so the new (empty) volume
-#: gets remounted on boot.
-#:
-#: A plain recursive ``os.remove`` walk leaves LittleFS metadata
-#: blocks + wear-leveling artifacts on flash, so a board that
-#: filled up over many test runs can still hit ``ENOSPC`` mid-deploy
-#: after a "wipe."  ``VfsLfs2.mkfs`` reformats the partition, which
-#: is the only reliable way to recover the full block budget.
+#: Implements the MicroPython half of the wipe_filesystem contract
+#: documented on :meth:`TransportProtocol.wipe_filesystem`.
 #:
 #: Substrate-dispatched: each MicroPython port exposes its flash /
 #: data partition through a different module.  The dispatch covers
 #: rp2 and esp32; other ports raise ``RuntimeError`` so the failure
 #: has a name instead of surfacing as "mkfs got no block device."
-#: Firmware lives on a separate partition (``factory`` on esp32, the
-#: bootloader region on rp2), untouched by the LFS-only reformat.
 _WIPE_FILESYSTEM_SCRIPT: str = (
     "import os, sys, machine\n"
     "if sys.platform == 'rp2':\n"
@@ -899,23 +883,12 @@ class MicropythonTransport:
         return output
 
     def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
-        """List on-device files within the deploy's managed scope.
+        """Implements the contract on :meth:`TransportProtocol.list_files_in_scope`.
 
-        ``clean_slate=True`` (the deploy default) walks the *whole*
-        device and the host drops :data:`flash_drive.DEVICE_KEEP_SET`
-        + any dot-prefixed path (parity with the CP drive walk), so
-        the diff reconciles a stale board ``settings.toml`` /
-        leftover file away, not just stale ``/lib`` packages.
-        ``clean_slate=False`` (the ``--no-wipe`` opt-out) keeps the
-        additive scope: ``/lib/`` recursively + the four entrypoint /
-        state files in :data:`~chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`
-        (``/code.py``, ``/main.py``, ``/active.py``,
-        ``/runtime_config.msgpack``).  Returns paths in leading-slash
-        form.
-
-        Mount-mode (RAM) deploys return an empty list, because mount
-        mode doesn't write to flash, so there's nothing persistent to
-        diff between deploys.
+        Copy mode dispatches the on-device walk via raw REPL
+        (:data:`_LIST_ALL_SCRIPT` for ``clean_slate=True``,
+        :data:`_LIST_SCOPE_SCRIPT` otherwise).  Mount mode (RAM)
+        returns an empty list.
 
         Raises :class:`MicropythonTransportError` on raw-REPL failure.
         """
@@ -1060,31 +1033,17 @@ class MicropythonTransport:
             ) from error
 
     def wipe_filesystem(self) -> None:
-        """Reformat the LittleFS user partition and soft-reset the runtime.
+        """Implements the contract on :meth:`TransportProtocol.wipe_filesystem`.
 
-        Mount-mode (RAM) is a no-op, because nothing was written to flash.
-
-        Otherwise dispatches :data:`_WIPE_FILESYSTEM_SCRIPT` which
-        ``os.umount('/')`` s the live volume, calls
-        ``os.VfsLfs2.mkfs(<block_device>)`` for the running platform
-        (rp2 → ``rp2.Flash()``, esp32 → the ``vfs`` data partition),
-        and ends with ``machine.soft_reset()`` so the runtime
-        re-mounts the freshly formatted volume on boot.  An
-        ``os.remove`` walk would leave LittleFS metadata + wear-
-        leveling artifacts on flash, so a board that filled up over
-        many test runs can still hit ``ENOSPC`` mid-deploy after a
-        non-mkfs "wipe."  The mkfs path recovers the full block
-        budget every time.
-
-        The script is dispatched as a one-shot ``mpremote exec``
-        subprocess rather than via the persistent :class:`SerialTransport`:
-        ``machine.soft_reset()`` clears interpreter state and the
-        ``raw_repl`` framing, so reusing the persistent transport
-        across the reset would leave it in an inconsistent state.
-        After the subprocess returns, the serial port is given
-        :data:`_WIPE_REBOOT_SETTLE_SECONDS` to settle so the next
-        :meth:`connect` / :meth:`stage` call sees a fully booted
-        runtime ready to accept a fresh raw-REPL session.
+        Dispatches :data:`_WIPE_FILESYSTEM_SCRIPT` as a one-shot
+        ``mpremote exec`` subprocess rather than over the persistent
+        :class:`SerialTransport`: ``machine.soft_reset()`` clears
+        interpreter state and the ``raw_repl`` framing, so reusing the
+        persistent transport across the reset would leave it in an
+        inconsistent state.  After the subprocess returns, the serial
+        port is given :data:`_WIPE_REBOOT_SETTLE_SECONDS` to settle so
+        the next :meth:`connect` / :meth:`stage` call sees a fully
+        booted runtime ready to accept a fresh raw-REPL session.
         """
         if self.mode != "copy":
             return
