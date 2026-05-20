@@ -53,6 +53,7 @@ from ._serial import (
     RAW_REPL_PROMPT,
     SerialPort,
     TimeSource,
+    read_chunk,
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
@@ -339,13 +340,9 @@ def _read_until_marker(
     while True:
         if marker in accumulated:
             return bytes(accumulated)
-        waiting = port.in_waiting
-        if waiting:
-            accumulated.extend(port.read(waiting))
-            continue
-        new_byte = port.read(1)
-        if new_byte:
-            accumulated.extend(new_byte)
+        chunk = read_chunk(port)
+        if chunk:
+            accumulated.extend(chunk)
             continue
         if time.monotonic() >= deadline:
             raise TimeoutError(

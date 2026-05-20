@@ -128,6 +128,27 @@ RAW_REPL_PROMPT = b"raw REPL; CTRL-B to exit\r\n>"
 RAW_REPL_EOT = b"\x04"
 
 
+def read_chunk(port: SerialPort) -> bytes:
+    """Return whatever bytes *port* has buffered, or one polled byte.
+
+    Prefers ``read(in_waiting)`` so a burst of output comes through
+    in one call; falls back to ``read(1)`` which blocks up to the
+    port's timeout so a caller waiting on a marker doesn't spin on
+    an idle link.
+
+    Lets :class:`OSError` (typically ``serial.SerialException``)
+    propagate when the device disappears mid-read — every caller
+    has a different disconnect contract (``tail`` classifies it as
+    :attr:`ExitCode.DISCONNECTED`, ``ReplSession`` raises
+    :class:`ReplSessionDisconnected`, the completion fetcher bails
+    to ``None``), so the helper stays exception-neutral.
+    """
+    available = port.in_waiting
+    if available:
+        return port.read(available)
+    return port.read(1)
+
+
 def close_quietly(port: SerialPort) -> None:
     """Close *port*, swallowing the OSError a dead port often raises.
 

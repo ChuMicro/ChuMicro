@@ -33,6 +33,7 @@ from ._serial import (
     close_quietly,
     default_port_factory,
     flush_quietly,
+    read_chunk,
     resolve_address,
     write_disconnect_notice,
 )
@@ -170,7 +171,7 @@ def tail(
             if remaining <= 0:
                 return ExitCode.OK
             try:
-                chunk = _read_chunk(port)
+                chunk = read_chunk(port)
             except KeyboardInterrupt:  # pragma: no cover — platform-dependent
                 return ExitCode.INTERRUPTED
             except OSError as disconnect_error:
@@ -226,23 +227,6 @@ def tail(
             active_output.write(tail_text)
             flush_quietly(active_output)
         close_quietly(port)
-
-
-def _read_chunk(port: SerialPort) -> bytes:
-    """Return whatever bytes the port has buffered, or a single byte.
-
-    Prefers ``read(in_waiting)`` so a burst of output comes through
-    in one call; falls back to ``read(1)`` which blocks up to the
-    port's timeout so the tail does not spin on an idle link.
-
-    Raises :class:`OSError` (typically ``serial.SerialException``)
-    when the device disappears mid-read — the caller catches and
-    returns :attr:`ExitCode.DISCONNECTED`.
-    """
-    available = port.in_waiting
-    if available:
-        return port.read(available)
-    return port.read(1)
 
 
 def _write_reconnecting_notice(output: TextIO, seconds: float) -> None:
