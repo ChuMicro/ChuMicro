@@ -1,10 +1,9 @@
-"""Tests for the YAML / TOML config readers."""
+"""Tests for the TOML config readers."""
 
 from pathlib import Path
 
 import pytest
 from chumicro_workspace.loaders import (
-    WorkspaceConfigError,
     read_project_config,
     read_secrets_toml,
 )
@@ -74,56 +73,12 @@ class TestReadProjectConfig:
             "app": {"sample_period_ms": 30000},
         }
 
-    def test_legacy_config_toml_filename_works(self, tmp_path: Path) -> None:
-        """``config.toml`` parses the same — accepted as a legacy name."""
-        path = tmp_path / "config.toml"
-        path.write_text("[wifi]\nssid = 'HomeNet'\n")
-        result = read_project_config(path)
-        assert result["wifi"]["ssid"] == "HomeNet"
-
-    def test_yaml_round_trips(self, tmp_path: Path) -> None:
-        path = tmp_path / "config.yml"
-        path.write_text(
-            "wifi:\n"
-            "  ssid: HomeNet\n"
-            "app:\n"
-            "  sample_period_ms: 30000\n"
-        )
-        result = read_project_config(path)
-        assert result["wifi"]["ssid"] == "HomeNet"
-        assert result["app"]["sample_period_ms"] == 30000
-
-    def test_yaml_extension_alias(self, tmp_path: Path) -> None:
-        """``.yaml`` works the same as ``.yml``."""
-        path = tmp_path / "config.yaml"
-        path.write_text("wifi:\n  ssid: x\n")
-        result = read_project_config(path)
-        assert result["wifi"]["ssid"] == "x"
-
-    def test_unrecognized_suffix_raises(self, tmp_path: Path) -> None:
-        path = tmp_path / "config.json"
-        path.write_text('{"wifi": {"ssid": "x"}}')
-        with pytest.raises(WorkspaceConfigError):
-            read_project_config(path)
-
-    def test_yaml_top_level_list_raises(self, tmp_path: Path) -> None:
-        path = tmp_path / "config.yml"
-        path.write_text("- one\n: two\n")
-        with pytest.raises(WorkspaceConfigError):
-            read_project_config(path)
-
-    def test_yaml_parse_error_wraps_in_workspace_config_error(
-        self, tmp_path: Path,
-    ) -> None:
-        # Malformed YAML — ruamel raises ``YAMLError`` which the
-        # loader wraps in ``WorkspaceConfigError`` so callers only
-        # catch one exception type.
-        path = tmp_path / "config.yml"
-        path.write_text("wifi: ssid: nested colon mid-flow\n  - badly indented\n")
-        with pytest.raises(WorkspaceConfigError, match="parse error"):
-            read_project_config(path)
-
-    def test_yaml_empty_file_returns_empty_dict(self, tmp_path: Path) -> None:
-        path = tmp_path / "config.yml"
+    def test_empty_file_returns_empty_dict(self, tmp_path: Path) -> None:
+        path = tmp_path / "project_config.toml"
         path.write_text("")
         assert read_project_config(path) == {}
+
+    def test_missing_file_raises(self, tmp_path: Path) -> None:
+        path = tmp_path / "project_config.toml"
+        with pytest.raises(FileNotFoundError):
+            read_project_config(path)

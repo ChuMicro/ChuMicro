@@ -14,7 +14,7 @@ class TestClassify:
             "AGENTS.md",  # noqa: CHU006  template-payload filename data
             "CONTRIBUTING.md",  # noqa: CHU006  template-payload filename data
             "pyproject.toml",
-            "projects/_template/config.toml",
+            "projects/_template/project_config.toml",
             "projects/_template/app.py",
             ".github/skills/deploy-and-debug/SKILL.md",
             ".github/skills/add-new-project/SKILL.md",
@@ -23,7 +23,7 @@ class TestClassify:
             # the canonical content from upstream.
             "examples/README.md",
             "examples/hello_world/app.py",
-            "examples/wifi_only/config.toml",
+            "examples/wifi_only/project_config.toml",
             "examples/two_projects/server/app.py",
         ],
     )

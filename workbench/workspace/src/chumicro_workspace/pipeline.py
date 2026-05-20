@@ -74,8 +74,7 @@ def build_runtime_config(
     Args:
         secrets_toml: Path to ``secrets.toml`` (workspace-wide
             credentials + device defaults).
-        project_config: Path to ``projects/<name>/project_config.toml``
-            (or ``config.toml`` / ``.yml`` / ``.yaml``).
+        project_config: Path to ``projects/<name>/project_config.toml``.
         output_path: Where to write the msgpack file on the host.
             Typically ``projects/<name>/_generated/runtime_config.msgpack``.
 

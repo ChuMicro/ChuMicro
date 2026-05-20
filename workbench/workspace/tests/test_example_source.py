@@ -325,8 +325,8 @@ class TestRuntimeConfigIntegration:
         assert decoded["wifi.password"] == "pw"
 
     def test_per_example_config_merges_with_secrets(self, tmp_path: Path) -> None:
-        """When examples/config.toml exists, its keys override + extend
-        secrets.toml."""
+        """When examples/project_config.toml exists, its keys override +
+        extend secrets.toml."""
         from chumicro_msgpack import unpackb
 
         libs = tmp_path / "libraries"
@@ -336,7 +336,7 @@ class TestRuntimeConfigIntegration:
             tmp_path, body="[wifi]\nssid = 'home'\n",
         )
         # Per-example config overrides the wifi.ssid + adds an app key.
-        (timing / "examples" / "config.toml").write_text(
+        (timing / "examples" / "project_config.toml").write_text(
             "[wifi]\nssid = 'override'\n\n[demo]\ntopic = 'led'\n",
         )
 
@@ -355,7 +355,7 @@ class TestRuntimeConfigIntegration:
         self, tmp_path: Path,
     ) -> None:
         """Caller-supplied project_config wins over the default
-        examples/config.toml lookup."""
+        examples/project_config.toml lookup."""
         from chumicro_msgpack import unpackb
 
         libs = tmp_path / "libraries"
@@ -363,7 +363,7 @@ class TestRuntimeConfigIntegration:
         _seed_example(timing, "blink.py", "pass\n")
         secrets = _seed_secrets(tmp_path, body="")
         # Default-lookup config exists but should be ignored.
-        (timing / "examples" / "config.toml").write_text(
+        (timing / "examples" / "project_config.toml").write_text(
             "[demo]\ntopic = 'auto-default'\n",
         )
         # Caller supplies a different config.

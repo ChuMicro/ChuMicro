@@ -53,12 +53,10 @@ SHIM_ENTRYPOINT_SOURCE = (
     "_run()\n"
 )
 
-#: Filenames under ``projects/<name>/`` that are workspace-tooling
-#: inputs, not runtime payload — same exclusions
+#: Filename under ``projects/<name>/`` that is workspace-tooling
+#: input, not runtime payload — same exclusion
 #: :func:`project_directory_source` applies.
-_PROJECT_HOST_ONLY_NAMES: frozenset[str] = frozenset(
-    {"config.toml", "config.yml", "config.yaml"},
-)
+_PROJECT_HOST_ONLY_NAMES: frozenset[str] = frozenset({"project_config.toml"})
 
 #: Filenames the synthesised shim owns at the device root.  Excluded
 #: from the project walk so a stray ``code.py`` / ``main.py`` in the

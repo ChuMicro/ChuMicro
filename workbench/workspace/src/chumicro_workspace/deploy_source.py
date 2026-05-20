@@ -48,45 +48,29 @@ RUNTIME_CONFIG_DEVICE_PATH: str = "/runtime_config.msgpack"
 #: workspace level so the file isn't committed alongside the source.
 GENERATED_DIRNAME: str = "_generated"
 
-#: Filenames under ``projects/<name>/`` that are workspace-tooling
-#: inputs, not runtime payload, and so are skipped when shipping the
+#: Filename under ``projects/<name>/`` that is workspace-tooling
+#: input, not runtime payload, and so is skipped when shipping the
 #: project's directory to the device.
-_SKIP_FILENAMES: frozenset[str] = frozenset(
-    {"project_config.toml", "config.toml", "config.yml", "config.yaml"},
-)
+_SKIP_FILENAMES: frozenset[str] = frozenset({"project_config.toml"})
 
 
 def find_project_config(project_dir: Path) -> Path:
-    """Return the per-project config file for *project_dir*.
+    """Return the per-project config path for *project_dir*.
 
-    Picks the first existing file in this priority order:
-
-    1. ``project_config.toml`` — current canonical name.  Self-documenting
-       (a beginner reading the project directory immediately sees this
-       is project-specific config, not a generic ``config.toml``).
-    2. ``config.toml`` — legacy name, accepted so user-edited workspaces
-       from before the rename keep working without a migration.
-    3. ``config.yml`` / ``config.yaml`` — YAML opt-in.
+    The project-config filename is ``project_config.toml`` — the only
+    name the workspace accepts.
 
     Args:
         project_dir: Path to ``projects/<name>/``.
 
     Raises:
-        FileNotFoundError: When no recognized config file exists.
+        FileNotFoundError: ``project_config.toml`` does not exist in
+            *project_dir*.
     """
-    for filename in (
-        "project_config.toml",
-        "config.toml",
-        "config.yml",
-        "config.yaml",
-    ):
-        candidate = project_dir / filename
-        if candidate.is_file():
-            return candidate
-    raise FileNotFoundError(
-        f"no project_config.toml / config.toml / config.yml / config.yaml "
-        f"in {project_dir}",
-    )
+    candidate = project_dir / "project_config.toml"
+    if candidate.is_file():
+        return candidate
+    raise FileNotFoundError(f"no project_config.toml in {project_dir}")
 
 
 class WithRuntimeConfig:
@@ -102,8 +86,7 @@ class WithRuntimeConfig:
         inner: The base ``FileSource`` (typically the project's app code).
         secrets_toml: Path to ``secrets.toml`` (workspace-wide
             credentials + device defaults).
-        project_config: Path to ``projects/<name>/project_config.toml``
-            (or legacy ``config.toml`` / ``.yml`` / ``.yaml``).
+        project_config: Path to ``projects/<name>/project_config.toml``.
         output_path: Where to write the msgpack on the host.  Defaults
             to ``project_config.parent / _generated / runtime_config.msgpack``.
         device_path: On-device path for the msgpack.  Defaults to
@@ -215,8 +198,7 @@ def wrap_with_runtime_config(
 
     * *secrets_toml* → ``workspace.secrets_toml`` (requires *workspace*).
     * *project_config* → :func:`find_project_config` under
-      *project_dir* (the per-project ``project_config.toml`` /
-      legacy ``config.*``).
+      *project_dir* (the per-project ``project_config.toml``).
     * *output_path* → ``project_dir / _generated /
       runtime_config.msgpack`` (the gitignored build-artifact dir).
     * *library_roots* (for manifest validation) → derived from
@@ -239,7 +221,7 @@ def wrap_with_runtime_config(
             *workspace* fallback.
         project_config: Explicit per-project config path; overrides
             the *project_dir* lookup (an example passes its own
-            ``examples/config.toml``).
+            ``examples/project_config.toml`` via :func:`example_source`).
         output_path: Explicit host path for the generated msgpack;
             overrides the ``_generated/`` default.
 

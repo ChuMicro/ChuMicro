@@ -16,7 +16,7 @@ my-workspace/
 ├── projects/
 │   ├── _template/         # `chumicro-workspace new` copies from here
 │   ├── back-porch/        # one project
-│   │   ├── config.toml
+│   │   ├── project_config.toml
 │   │   └── app.py         # def run(): ...
 │   └── kitchen/
 │       └── ...
@@ -129,7 +129,7 @@ chumicro-workspace new gpio --library
 The runtime config a project receives at boot is the deep-merge of two gitignored host-side sources, both sharing the same section-namespaced shape:
 
 ```
-workspace.yml ──────────────────► projects/<name>/config.toml
+workspace.yml ──────────────────► projects/<name>/project_config.toml
   (gitignored — workspace-wide       (gitignored when scaffolded by `new`;
    defaults + your credentials        per-project knobs — sample period,
    in one place)                      mqtt topic, sensor pins)
@@ -151,10 +151,10 @@ workspace.yml ──────────────────► projects
 
 Use `chumicro-workspace dump-config <project>` to print the merged dict your project would receive without actually deploying — useful for debugging which layer a key landed in.
 
-`config.toml` carries the per-project knobs; `workspace.yml` carries workspace-wide defaults plus your credentials (the file is gitignored, so credentials never reach git):
+`project_config.toml` carries the per-project knobs; `workspace.yml` carries workspace-wide defaults plus your credentials (the file is gitignored, so credentials never reach git):
 
 ```toml
-# projects/back-porch/config.toml — gitignored when scaffolded by `new`
+# projects/back-porch/project_config.toml — gitignored when scaffolded by `new`
 [wifi]
 ssid = "HomeNet"
 
@@ -191,7 +191,7 @@ def run():
 chumicro-workspace deploy back-porch
 ```
 
-Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the path the on-device `chumicro_config.load_runtime_config()` reads).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
+Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `project_config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the path the on-device `chumicro_config.load_runtime_config()` reads).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
 
 ### Single project, AST-walked
 
@@ -296,7 +296,7 @@ When the deploy traceback matches a known workspace-shaped pattern, an indented 
 * `NameError: name '<sym>' is not defined` → "did you forget to import…"
 * `OSError ... runtime_config.msgpack` → "RAM-mode deploys don't persist the config msgpack — switch to flash mode."
 * `ImportError`/`ModuleNotFoundError ... chumicro_*` → "library not installed in this venv — run `chumicro-workspace setup`."
-* `KeyError: '<key>'` → "missing config key — check `projects/<project>/config.toml` or `workspace.yml`'s `defaults:` block (the gitignored workspace config carrying defaults + credentials)."
+* `KeyError: '<key>'` → "missing config key — check `projects/<project>/project_config.toml` or `workspace.yml`'s `defaults:` block (the gitignored workspace config carrying defaults + credentials)."
 
 Driven by [`detect_hints`](api.md) over the captured traceback + execute output.  Empty hints → no section header (so unmatched failures don't carry an empty heading).
 
@@ -378,7 +378,7 @@ from chumicro_workspace import build_runtime_config
 
 build_runtime_config(
     workspace_yaml=Path("workspace.yml"),
-    project_config=Path("projects/back-porch/config.toml"),
+    project_config=Path("projects/back-porch/project_config.toml"),
     output_path=Path("projects/back-porch/_generated/runtime_config.msgpack"),
 )
 ```

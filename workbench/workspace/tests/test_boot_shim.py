@@ -207,8 +207,8 @@ class TestProjectBootSource:
         workspace, project_dir = _seed_project_for_boot(tmp_path)
         source = project_boot_source(project_dir, workspace=workspace)
         files = source.files()
-        # config.toml is host-only; must not land on the device.
-        assert "/config.toml" not in files
+        # project_config.toml is host-only; must not land on the device.
+        assert "/project_config.toml" not in files
 
     def test_skips_generated_dir(self, tmp_path: Path) -> None:
         workspace, project_dir = _seed_project_for_boot(tmp_path)
@@ -435,7 +435,7 @@ class TestProjectBootWithImportGraphSource:
         (tmp_path / "secrets.toml").write_text('')
         project_dir = tmp_path / "projects" / "no-app"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[wifi]\n")
+        (project_dir / "project_config.toml").write_text("[wifi]\n")
         # No app.py.
         workspace = WorkspaceLayout(root=tmp_path)
         with pytest.raises(FileNotFoundError, match="app.py"):
