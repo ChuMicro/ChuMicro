@@ -28,6 +28,7 @@ A functional test reads like a normal unit test — it just runs on the board:
 # libraries/timing/functional_tests/test_heartbeat.py
 import time
 from chumicro_timing import Heartbeat
+from chumicro_timing.ticks import ticks_ms
 
 
 def test_heartbeat_fires_on_real_clock() -> None:
@@ -35,7 +36,7 @@ def test_heartbeat_fires_on_real_clock() -> None:
     deadline = time.monotonic() + 1.0
     fires = 0
     while time.monotonic() < deadline:
-        if heartbeat.check(int(time.monotonic() * 1000)):
+        if heartbeat.poll(ticks_ms()):
             fires += 1
     assert fires > 50
 ```

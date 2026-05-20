@@ -222,9 +222,9 @@ def _init_runtime_item(
     item.test_file = test_file
     item.target_device = device
     item.library_dir = test_file.parent.parent
-    item._library_name = item.library_dir.name
-    item._reported_duration = None
-    item._reported_test_total_duration = None
+    item.library_name = item.library_dir.name
+    item.reported_duration = None
+    item.reported_test_total_duration = None
 
 
 def make_prepare_item(
@@ -258,5 +258,5 @@ def make_test_item(
     """Build a :class:`DeviceTestItem` bypassing pytest's collect."""
     item = _plugin.DeviceTestItem.__new__(_plugin.DeviceTestItem)
     _init_runtime_item(item, session, device, test_file)
-    item._function_name = function_name
+    item.function_name = function_name
     return item

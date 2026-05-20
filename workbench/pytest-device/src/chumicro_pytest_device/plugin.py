@@ -270,14 +270,6 @@ def _session_targets(session: pytest.Session) -> list[DeviceEntry] | None:
     return cast("list[DeviceEntry]", targets)
 
 
-def _session_deploy_mode_override(session: pytest.Session) -> str | None:
-    """Return the ``--deploy-mode`` override, if any."""
-    return cast(
-        "str | None",
-        session.config.getoption("--deploy-mode", default=None),
-    )
-
-
 def _device_closure_source_dirs(
     session: pytest.Session, device_entry: DeviceEntry,
 ) -> list[Path]:
@@ -402,8 +394,12 @@ def _session_effective_deploy_mode(
     if memoized is not None:
         return memoized
 
+    deploy_mode_override = cast(
+        "str | None",
+        session.config.getoption("--deploy-mode", default=None),
+    )
     configured = resolve_effective_deploy_mode(
-        device_entry, _session_deploy_mode_override(session),
+        device_entry, deploy_mode_override,
     )
     closure = _device_closure_source_dirs(session, device_entry)
     staged_dirs = (
@@ -540,11 +536,11 @@ class _PRSummaryCollector:
             status = "FAIL"
             file_result.failed += 1
 
-        per_test_duration = item._reported_duration  # noqa: SLF001
+        per_test_duration = item.reported_duration
         if per_test_duration is not None:
             file_result.duration_seconds += per_test_duration
         file_result.tests.append(TestResult(
-            name=item._function_name,  # noqa: SLF001
+            name=item.function_name,
             status=status,
             duration=per_test_duration,
             message=None,
@@ -739,13 +735,13 @@ def _apply_reported_duration(
     if report.when != "call":
         return
 
-    reported_duration = getattr(item, "_reported_duration", None)
+    reported_duration = getattr(item, "reported_duration", None)
     if reported_duration is not None:
         report.duration = reported_duration
         return
 
     reported_test_total_duration = getattr(
-        item, "_reported_test_total_duration", None,
+        item, "reported_test_total_duration", None,
     )
     if reported_test_total_duration is None:
         return
@@ -838,7 +834,7 @@ class _TransportCache:
 
         Args:
             batch_key: ``(device_id, library_name, test_file_name)``
-                from ``DeviceRuntimeItem._batch_key``.
+                from ``DeviceRuntimeItem.batch_key``.
 
         Returns:
             ``True`` if staging is needed.
@@ -851,7 +847,7 @@ class _TransportCache:
 
         Args:
             batch_key: ``(device_id, library_name, test_file_name)``
-                from ``DeviceRuntimeItem._batch_key``.
+                from ``DeviceRuntimeItem.batch_key``.
         """
         device_id, library_name, test_file_name = batch_key
         self._last_staged[device_id] = (library_name, test_file_name)
@@ -883,7 +879,7 @@ class _TransportCache:
 
         Args:
             batch_key: ``(device_id, library_name, test_file_name)``
-                from ``DeviceRuntimeItem._batch_key``.
+                from ``DeviceRuntimeItem.batch_key``.
 
         Returns:
             Tuple of ``(parsed_result, raw_output)`` if cached, else
@@ -903,7 +899,7 @@ class _TransportCache:
 
         Args:
             batch_key: ``(device_id, library_name, test_file_name)``
-                from ``DeviceRuntimeItem._batch_key``.
+                from ``DeviceRuntimeItem.batch_key``.
             parsed_result: Parsed harness output, or ``None`` on failure.
             raw_output: Raw device output or error message.
         """
@@ -1069,7 +1065,7 @@ class DeviceBackend:
             # prepare() runs twice per file batch (DevicePrepareItem
             # then DeviceRunFileItem) — the pending check fires the
             # reset+stage exactly once.
-            batch_key = item._batch_key(device_entry)  # noqa: SLF001
+            batch_key = item.batch_key(device_entry)
             if cache.per_file_reset_pending(batch_key):
                 if cache.current_staged_library(
                     device_entry.identifier,
@@ -1112,14 +1108,14 @@ class DeviceBackend:
                 )
                 cache.mark_library_staged(
                     device_entry.identifier,
-                    item._library_name,  # noqa: SLF001
+                    item.library_name,
                 )
                 cache.mark_per_file_reset(batch_key)
         elif is_filesystem_mode:
             current_library = cache.current_staged_library(
                 device_entry.identifier,
             )
-            if current_library != item._library_name:  # noqa: SLF001
+            if current_library != item.library_name:
                 if current_library is None:
                     # First library on this device: drop any stale
                     # code.py/main.py a prior deploy left behind so the
@@ -1156,20 +1152,20 @@ class DeviceBackend:
                     item.session,
                     device_entry,
                     transport,
-                    library_filter=item._library_name,  # noqa: SLF001
+                    library_filter=item.library_name,
                 )
                 cache.mark_library_staged(
                     device_entry.identifier,
-                    item._library_name,  # noqa: SLF001
+                    item.library_name,
                 )
         else:
-            staging_key = item._batch_key(device_entry)  # noqa: SLF001
+            staging_key = item.batch_key(device_entry)
             if cache.needs_staging(staging_key):
                 if _should_soft_reset_before_stage(
                     cache,
                     device_entry,
                     transport,
-                    item._library_name,  # noqa: SLF001
+                    item.library_name,
                     item.test_file.name,
                 ):
                     try:
@@ -1381,9 +1377,9 @@ class DeviceRuntimeItem(pytest.Item):
         self.test_file = test_file
         self.target_device: DeviceEntry | None = target_device
         self.library_dir: Path = _resolve_library_dir(test_file)
-        self._library_name = self.library_dir.name
-        self._reported_duration: float | None = None
-        self._reported_test_total_duration: float | None = None
+        self.library_name = self.library_dir.name
+        self.reported_duration: float | None = None
+        self.reported_test_total_duration: float | None = None
 
     def _resolve_device_entry(self) -> DeviceEntry:
         """Return the resolved target device for this item."""
@@ -1393,11 +1389,11 @@ class DeviceRuntimeItem(pytest.Item):
             self.target_device = device_entry
         return device_entry
 
-    def _batch_key(self, device_entry: DeviceEntry) -> tuple[str, str, str]:
+    def batch_key(self, device_entry: DeviceEntry) -> tuple[str, str, str]:
         """Return the cache key for this item's file/runtime batch."""
         return (
             device_entry.identifier,
-            self._library_name,
+            self.library_name,
             self.test_file.name,
         )
 
@@ -1419,7 +1415,7 @@ class DeviceRuntimeItem(pytest.Item):
         except BackendPrepareError as error:
             cache = _session_cache(self.session)
             cache.cache_batch_result(
-                self._batch_key(device_entry),
+                self.batch_key(device_entry),
                 None,
                 str(error),
             )
@@ -1431,7 +1427,7 @@ class DeviceRuntimeItem(pytest.Item):
     ) -> tuple[RunResult | None, str]:
         """Run the file batch once if needed and return its cached result."""
         cache = _session_cache(self.session)
-        batch_key = self._batch_key(device_entry)
+        batch_key = self.batch_key(device_entry)
 
         # Check for cached batch result from a previous item.
         batch = cache.get_batch_result(batch_key)
@@ -1462,7 +1458,7 @@ class DeviceRuntimeItem(pytest.Item):
 
     def reportinfo(self) -> tuple[Path, int | None, str]:
         """Return location info for test reporting."""
-        return self.path, None, f"[device] {self._library_name}::{self.name}"
+        return self.path, None, f"[device] {self.library_name}::{self.name}"
 
 
 class DevicePrepareItem(DeviceRuntimeItem):
@@ -1486,7 +1482,7 @@ class DeviceRunFileItem(DeviceRuntimeItem):
             pytest.fail(raw_output)
         if not result.tests:
             pytest.fail(f"No test results in device output:\n{raw_output}")
-        self._reported_test_total_duration = _sum_reported_test_durations(result.tests)
+        self.reported_test_total_duration = _sum_reported_test_durations(result.tests)
 
 
 class DeviceTestItem(DeviceRuntimeItem):
@@ -1505,7 +1501,7 @@ class DeviceTestItem(DeviceRuntimeItem):
             target_device=target_device,
             **kwargs,
         )
-        self._function_name = function_name
+        self.function_name = function_name
 
     def runtest(self) -> None:
         """Look up this test's result from the batched device run."""
@@ -1523,11 +1519,11 @@ class DeviceTestItem(DeviceRuntimeItem):
 
         # Find this specific test in the results.
         for test_result in result.tests:
-            if test_result.name == self._function_name:
-                self._reported_duration = test_result.duration
+            if test_result.name == self.function_name:
+                self.reported_duration = test_result.duration
                 if test_result.status == "FAIL":
                     pytest.fail(
-                        f"Device test FAIL: {self._function_name}\n{raw_output}"
+                        f"Device test FAIL: {self.function_name}\n{raw_output}"
                     )
                 if test_result.status == "SKIP":
                     pytest.skip(test_result.message or "Skipped on device")
@@ -1536,7 +1532,7 @@ class DeviceTestItem(DeviceRuntimeItem):
         # Test name not found in output — may have been filtered or
         # errored before reaching the harness.
         pytest.fail(
-            f"Test {self._function_name!r} not found in device output:\n{raw_output}"
+            f"Test {self.function_name!r} not found in device output:\n{raw_output}"
         )
 
 
