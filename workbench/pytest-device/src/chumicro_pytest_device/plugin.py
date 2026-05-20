@@ -1084,45 +1084,13 @@ class DeviceBackend:
                 if cache.current_staged_library(
                     device_entry.identifier,
                 ) is None:
-                    # First file on this device: drop any stale
-                    # code.py/main.py a prior deploy left behind so the
-                    # soft_reset cannot race a leftover entrypoint.
-                    # Once cleared it stays cleared (the sweep's rsync
-                    # excludes entrypoints; the harness never writes
-                    # one).
-                    try:
-                        transport.clear_entrypoints()
-                    except Exception as error:
-                        pytest.fail(
-                            "Failed to clear stale entrypoint before "
-                            f"sweep: {error}",
-                        )
-                try:
-                    transport.soft_reset()
-                except Exception as error:
-                    pytest.fail(
-                        "Device reset failed before test file "
-                        f"(--per-file): {error}",
-                    )
-                source_dirs = resolve_library_source_dirs(
-                    item.library_dir,
-                    libraries_root=_libraries_root(item.session),
-                    test_files=[item.test_file],
+                    _clear_entrypoints_or_fail(transport)
+                _soft_reset_or_fail(
+                    transport, "before test file (--per-file)",
                 )
-                transport.stage(
-                    source_dirs,
-                    [item.test_file],
-                    _harness_source_dir(item.session),
-                    extra_files=_encode_runtime_config_extra_files(
-                        item.session.config,
-                    ),
-                    include_test_support=_target_is_device_unit(
-                        item.session.config,
-                    ),
-                )
+                _stage_one_item(item.session, transport, item)
                 cache.mark_library_staged(
-                    device_entry.identifier,
-                    item.library_name,
+                    device_entry.identifier, item.library_name,
                 )
                 cache.mark_per_file_reset(batch_key)
         elif is_filesystem_mode:
@@ -1131,20 +1099,7 @@ class DeviceBackend:
             )
             if current_library != item.library_name:
                 if current_library is None:
-                    # First library on this device: drop any stale
-                    # code.py/main.py a prior deploy left behind so the
-                    # soft_reset below cannot race a leftover entrypoint
-                    # (one that hard-faults or resets would make the
-                    # sweep flaky).  The sweep's rsync excludes these
-                    # and the harness never writes one, so a single
-                    # clear holds for the whole session.
-                    try:
-                        transport.clear_entrypoints()
-                    except Exception as error:
-                        pytest.fail(
-                            "Failed to clear stale entrypoint before "
-                            f"sweep: {error}",
-                        )
+                    _clear_entrypoints_or_fail(transport)
                 # The flash/copy sweep runs every library over one
                 # persistent interpreter.  Soft-reset *before* staging
                 # each library so it runs from a fresh VM (cleared
@@ -1156,12 +1111,7 @@ class DeviceBackend:
                 # guarantee mount/RAM mode already gets per file.
                 # Reset before the first library too, so the run never
                 # inherits whatever VM state the board booted with.
-                try:
-                    transport.soft_reset()
-                except Exception as error:
-                    pytest.fail(
-                        f"Device reset failed before staging library: {error}",
-                    )
+                _soft_reset_or_fail(transport, "before staging library")
                 _bulk_stage_for_device(
                     item.session,
                     device_entry,
@@ -1169,8 +1119,7 @@ class DeviceBackend:
                     library_filter=item.library_name,
                 )
                 cache.mark_library_staged(
-                    device_entry.identifier,
-                    item.library_name,
+                    device_entry.identifier, item.library_name,
                 )
         else:
             staging_key = item.batch_key(device_entry)
@@ -1182,28 +1131,8 @@ class DeviceBackend:
                     item.library_name,
                     item.test_file.name,
                 ):
-                    try:
-                        transport.soft_reset()
-                    except Exception as error:
-                        pytest.fail(
-                            f"Device reset failed between test files: {error}",
-                        )
-                source_dirs = resolve_library_source_dirs(
-                    item.library_dir,
-                    libraries_root=_libraries_root(item.session),
-                    test_files=[item.test_file],
-                )
-                transport.stage(
-                    source_dirs,
-                    [item.test_file],
-                    _harness_source_dir(item.session),
-                    extra_files=_encode_runtime_config_extra_files(
-                        item.session.config,
-                    ),
-                    include_test_support=_target_is_device_unit(
-                        item.session.config,
-                    ),
-                )
+                    _soft_reset_or_fail(transport, "between test files")
+                _stage_one_item(item.session, transport, item)
                 cache.mark_staged(staging_key)
 
     def execute(
@@ -1642,6 +1571,66 @@ def _should_soft_reset_before_stage(
         return False
     return cache.needs_staging(
         (device_entry.identifier, library_name, test_file_name),
+    )
+
+
+def _clear_entrypoints_or_fail(transport: TransportProtocol) -> None:
+    """Drop any stale ``code.py``/``main.py`` left over from a prior deploy.
+
+    The on-device unit + functional sweeps soft-reset between
+    libraries/files, and a leftover entrypoint that hard-faults
+    would race the reboot.  The sweep's rsync excludes entrypoints
+    and the harness never writes one, so a single clear at the
+    sweep's start holds for the rest of the session.  ``pytest.fail``
+    on error gives a clear single-line failure rather than a
+    transport-level traceback.
+    """
+    try:
+        transport.clear_entrypoints()
+    except Exception as error:
+        pytest.fail(
+            f"Failed to clear stale entrypoint before sweep: {error}",
+        )
+
+
+def _soft_reset_or_fail(transport: TransportProtocol, when: str) -> None:
+    """Soft-reset the device, raising ``pytest.fail`` with *when* on error.
+
+    *when* is a short phrase describing where the reset sits in the
+    sweep (e.g. ``"before test file (--per-file)"``) so the failure
+    message names the lifecycle point.
+    """
+    try:
+        transport.soft_reset()
+    except Exception as error:
+        pytest.fail(f"Device reset failed {when}: {error}")
+
+
+def _stage_one_item(
+    session: pytest.Session,
+    transport: TransportProtocol,
+    item: DeviceRuntimeItem,
+) -> None:
+    """Stage one ``DeviceRuntimeItem``'s library closure + test file.
+
+    The per-file staging shape shared by the RAM/mount path and the
+    ``--per-file`` flash path: resolve the library's source closure
+    (intra-workspace dependency walk), call ``transport.stage()``
+    with the single test file, harness, runtime-config extras, and
+    the device-unit support flag.  Bulk per-library staging uses
+    :func:`_bulk_stage_for_device` instead.
+    """
+    source_dirs = resolve_library_source_dirs(
+        item.library_dir,
+        libraries_root=_libraries_root(session),
+        test_files=[item.test_file],
+    )
+    transport.stage(
+        source_dirs,
+        [item.test_file],
+        _harness_source_dir(session),
+        extra_files=_encode_runtime_config_extra_files(session.config),
+        include_test_support=_target_is_device_unit(session.config),
     )
 
 
