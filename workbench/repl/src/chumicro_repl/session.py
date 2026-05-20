@@ -47,19 +47,12 @@ from ._serial import (
 )
 from .framing import Utf8StreamDecoder
 
-#: Default per-exec timeout.  Matches
-#: :data:`chumicro_deploy.circuitpython_transport.DEFAULT_TIMEOUT` so
-#: users moving between the two packages don't have to re-learn one
-#: number.
+#: Default per-exec timeout.
 DEFAULT_TIMEOUT = 10.0
 
 #: Pause between handshake steps — after each Ctrl-C to give the
 #: board time to settle, and after Ctrl-A to let the raw-REPL
-#: banner fully emit before we read for the prompt.  Matches the
-#: paired ``_INTERRUPT_DELAY`` / ``_ENTER_DELAY`` in
-#: ``chumicro_deploy.circuitpython_transport``; same value
-#: collapsed to one name here since both pauses serve the same
-#: "give the device a tick" purpose.
+#: banner fully emit before we read for the prompt.
 _HANDSHAKE_SETTLE = 0.1
 
 #: Poll interval inside :meth:`ReplSession.read_until` /
@@ -169,7 +162,7 @@ class ReplSession:
         # has its ``seconds`` parameter marked position-only at the C
         # layer, while ``TimeSource`` declares it as a regular keyword
         # parameter.  Both call shapes work at runtime; pyright flags
-        # the mismatch.  Same workaround chumicro-deploy uses.
+        # the mismatch.
         self._time: TimeSource = (
             time if time is not None else cast(TimeSource, _time_module)
         )
@@ -367,9 +360,7 @@ class ReplSession:
         # Re-scan baseline.  Each loop searches from
         # ``last_scanned - _READ_UNTIL_LOOKBACK`` so a pattern
         # straddling the previous / current decode boundary still
-        # matches, but we never re-scan the full accumulated text
-        # from offset 0.  256 chars comfortably covers any realistic
-        # REPL marker without unbounding the search cost.
+        # matches without re-scanning from offset 0.
         last_scanned = 0
         while True:
             match = compiled.search(

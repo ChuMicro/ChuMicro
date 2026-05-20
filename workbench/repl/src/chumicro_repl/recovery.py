@@ -9,10 +9,7 @@ not factor a shared classifier into a third package.  See
 Public surface:
 
 - :class:`ReplFailureKind` — enum of session-start failure modes.
-- :class:`RecoveryPlan` — headline + ordered fix-steps for one
-  kind.  Shallower than :class:`chumicro_deploy.recovery.RecoveryPlan`
-  (no ``retryable`` flag) because repl's coaching loop retries every
-  classified kind.
+- :class:`RecoveryPlan` — headline + ordered fix-steps for one kind.
 - :func:`classify_session_failure` — classify an :class:`OSError` /
   :class:`ReplSessionError` raised during session-start into a
   :class:`ReplFailureKind`.
@@ -48,9 +45,7 @@ from .session import (
 _T = TypeVar("_T")
 
 
-#: Default ceiling on retry attempts.  Three matches
-#: :class:`chumicro_deploy.recovery.RecoveringDeployer` so users
-#: switching between the two see the same retry budget.
+#: Default ceiling on retry attempts.
 _DEFAULT_MAX_ATTEMPTS = 3
 
 
@@ -147,11 +142,11 @@ def classify_session_failure(error: Exception) -> ReplFailureKind:
     Returns:
         The matching :class:`ReplFailureKind`.
     """
-    # Disconnected during handshake → treat as "not plugged in".
+    # Disconnected during handshake counts as "not plugged in".
     if isinstance(error, ReplSessionDisconnected):
         return ReplFailureKind.PORT_NOT_FOUND
 
-    # ReplSessionError (non-disconnect) → unresponsive raw REPL.
+    # ReplSessionError (non-disconnect) means an unresponsive raw REPL.
     if isinstance(error, ReplSessionError):
         message = str(error).lower()
         for pattern in _UNRESPONSIVE_PATTERNS:
@@ -190,10 +185,6 @@ def classify_session_failure(error: Exception) -> ReplFailureKind:
 @dataclass(frozen=True)
 class RecoveryPlan:
     """User-facing guidance for a single :class:`ReplFailureKind`.
-
-    Mirrors :class:`chumicro_deploy.recovery.RecoveryPlan` so a
-    contributor moving between the two recovery layers reads the
-    same shape.
 
     Attributes:
         headline: One-line summary the user reads first.
@@ -280,8 +271,7 @@ def recovery_plan_for(kind: ReplFailureKind) -> RecoveryPlan:
     """Return the :class:`RecoveryPlan` registered for *kind*.
 
     Every member of :class:`ReplFailureKind` has an entry; the
-    function is total.  Mirrors
-    :func:`chumicro_deploy.recovery.recovery_plan_for`.
+    function is total.
     """
     return _PLANS[kind]
 
@@ -433,10 +423,7 @@ class InteractiveReplSession:
     On a session-start failure, classifies the exception, prints
     the matching :class:`RecoveryPlan` to *output*, prompts the
     user to fix the condition + press Enter to retry, and tries
-    again — up to *max_attempts* times.  Mirrors
-    :class:`chumicro_deploy.recovery.RecoveringDeployer`'s shape
-    so a contributor moving between deploy and repl sees the same
-    pattern.
+    again — up to *max_attempts* times.
 
     Use as a context manager that yields a live :class:`ReplSession`::
 

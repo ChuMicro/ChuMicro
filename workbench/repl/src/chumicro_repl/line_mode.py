@@ -30,9 +30,6 @@ Key bindings mirror ``mpremote repl`` and the passthrough TUI:
 History is persistent at
 ``~/.chumicro-repl/history/<sanitized-address>/history.txt`` so a
 session on ``back-porch`` doesn't pollute one on ``greenhouse``.
-
-:func:`run_line_mode` is the line-mode analog of
-:func:`chumicro_repl.tui.run_loop`.
 """
 
 from __future__ import annotations
@@ -95,8 +92,7 @@ COMMAND_PREFIX: str = ":"
 
 #: Regex for sanitizing a serial address into a filesystem path
 #: segment.  Keeps alphanumerics + underscore + dash; collapses
-#: runs of anything else into a single underscore.  Idempotent on
-#: already-clean inputs.
+#: runs of anything else into a single underscore.
 _SANITIZE_PATTERN = re.compile(r"[^A-Za-z0-9_\-]+")
 
 
@@ -174,10 +170,8 @@ class LineModeContext:
     def send_line(self, line: str) -> None:
         """Ship *line* to the device with a CRLF; record in the history list.
 
-        Used by ``:edit`` / ``:load`` to replay buffered text.  The
-        non-command branch of :func:`run_line_mode` also calls this
-        so editor- and snippet-replayed lines line up alongside
-        manually-typed ones in the session history.
+        Editor- and snippet-replayed lines land in ``input_history``
+        alongside manually-typed ones, in send order.
         """
         self.port.write((line + "\r\n").encode("utf-8"))
         self.input_history.append(line)
@@ -185,8 +179,7 @@ class LineModeContext:
 
 #: Signature: ``(context, rest) -> True | False``.  *rest* is the
 #: substring after the command name.  Return False to ask the loop
-#: to exit.  The context-bearing form lets `:edit` ship lines and
-#: `:save` read history.
+#: to exit.
 CommandHandler = Callable[["LineModeContext", str], bool]
 
 
@@ -407,8 +400,8 @@ def _split_command(line: str) -> tuple[str, str]:
 
 
 class _ExitLineMode(Exception):  # noqa: N818 — internal control-flow sentinel, not a user-facing error
-    """Internal sentinel — Ctrl-X raises this from a key binding so the
-    main loop exits without rebooting the device."""
+    """Ctrl-X raises this from a key binding so the main loop exits
+    without rebooting the device."""
 
 
 def _forward_ctrl_c(port: SerialPort) -> None:
