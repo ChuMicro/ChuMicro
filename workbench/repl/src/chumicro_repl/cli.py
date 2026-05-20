@@ -1,9 +1,9 @@
 """``chumicro-repl`` command-line interface.
 
 Thin wrapper over :func:`chumicro_repl.tui.interactive` and
-:func:`chumicro_repl.tail.tail`.  No logic beyond argument
-translation — the CLI exists so the common cases ("connect to my
-board", "tail my deploy") don't require a Python script.
+:func:`chumicro_repl.tail`.  No logic beyond argument translation —
+the CLI exists so the common cases ("connect to my board",
+"tail my deploy") don't require a Python script.
 
 Invoked via ``python -m chumicro_repl ...`` or, after installation,
 the ``chumicro-repl`` console script.  Takes a bare serial-port

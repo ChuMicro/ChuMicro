@@ -19,7 +19,7 @@ both.  The only divergence is what a soft-reboot (Ctrl-D in the
 *friendly* REPL) prints: MicroPython emits ``MPY: soft reboot``,
 CircuitPython is silent.  :meth:`ReplSession.exec` never exits raw
 REPL, so that divergence never surfaces here; it is a concern for
-the :func:`~chumicro_repl.tail.tail` path and the interactive TUI.
+the :func:`~chumicro_repl.tail` path and the interactive TUI.
 """
 
 from __future__ import annotations
