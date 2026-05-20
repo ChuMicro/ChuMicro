@@ -79,7 +79,7 @@ Two sessions on one board in one run is supported by the existing per-device-per
 - **The on-device unit sweep is behavioral pass/fail only — it does NOT gate coverage.**  `coverage.py` cannot trace MicroPython / CircuitPython bytecode, so per-library coverage gating (Decisions 0009 / 0025, the 94 % agent threshold) stays exclusively the unix-port / CPython responsibility and is unchanged.  The sweep answers "does this behave on real silicon" (catching rp2 absent `MBEDTLS_PEM_PARSE_C`, non-compacting GC fragmentation, real `gc.mem_free` — divergences unix-port hides), not "is it covered."  `--with-device-unit` therefore takes no coverage-threshold argument.
 - New `devices.yml` key, back-compatible (absent ⇒ both modes).  `chumicro-deploy` + `chumicro-pytest-device` minor bumps when implemented; the shared resolver lives in `chumicro-deploy` (pytest-device already depends on it).
 - 0047 §3's "pre-flight check in chumicro-deploy" is superseded by the unified resolver; 0047 §3 is edited in place to cross-link here, its `requires_flash` schema decision unchanged.
-- Phased implementation tracked in [`plans/workstreams/deploy-mode-unification.md`](../workstreams/deploy-mode-unification.md).
+- Phased implementation tracked in [`plans/workstreams/archive/deploy-mode-unification.md`](../workstreams/archive/deploy-mode-unification.md).
 
 ### Alternatives considered
 
