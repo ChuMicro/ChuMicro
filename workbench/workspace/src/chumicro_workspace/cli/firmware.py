@@ -76,24 +76,12 @@ def _cmd_install_firmware(args: argparse.Namespace) -> int:
 
 
 def _cmd_reset_board(args: argparse.Namespace) -> int:
-    """Erase the device's user filesystem and leave it idle.
+    """Wipe the device's user filesystem and leave the board idle.
 
-    Standalone counterpart to ``deploy --wipe`` — same destructive
-    primitive (:meth:`chumicro_deploy.TransportProtocol.wipe_filesystem`)
-    without coupling the wipe to a follow-up redeploy.  Used to recover
-    a board whose flash filled up with stage residue (LittleFS
-    metadata + wear-leveling artifacts that ``os.remove`` cannot
-    reclaim — see the :meth:`wipe_filesystem` docstring for the
-    per-runtime recipe matrix).
-
-    Destructive — every user file the runtime can see is gone after
-    this returns, including out-of-scope files like ``settings.toml``,
-    hand-edited ``boot.py``, and uploaded assets.  Gated behind
-    ``--yes`` to avoid wiping a board on a typoed device id.
-
-    No-op (with a printed note) when the device's effective deploy
-    mode is RAM / mount — those modes never wrote to flash so there's
-    nothing persistent to wipe.
+    Standalone counterpart to ``deploy --wipe``.  See the
+    ``reset-board`` argparse description in
+    :func:`_add_firmware_parsers` for the destructive-recovery and
+    RAM-mode caveats.
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
