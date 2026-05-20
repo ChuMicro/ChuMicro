@@ -10,9 +10,6 @@ hand-rolled byte literal in a test doesn't drift when the wire format
 gets a tweak.
 """
 
-#: Test-support: PyPI sdist / wheel only -- bundles and product /
-#: app / functional device deploys exclude it; the on-device unit
-#: sweep is the one path that stages it.
 __chumicro_test_support__ = True
 
 import struct
