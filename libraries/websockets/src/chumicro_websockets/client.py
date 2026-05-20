@@ -8,8 +8,7 @@ LED can keep blinking on the same board through the opening
 handshake, frame I/O, and the close handshake.
 
 Single-connection per client: two parallel websocket sessions need
-two :class:`WebSocketClient` instances.  Mirrors
-:class:`chumicro_mqtt.MQTTClient`'s "one broker per client" shape.
+two :class:`WebSocketClient` instances.
 
 The OPEN/CLOSING/CLOSED machinery — frame dispatch, oversize policy,
 control-frame handling, close handshake, send queue, pong watchdog —
