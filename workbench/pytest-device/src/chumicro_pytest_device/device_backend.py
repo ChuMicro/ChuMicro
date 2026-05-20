@@ -14,19 +14,18 @@ consumer.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 from chumicro_deploy import DeviceEntry, TransportProtocol
 
 from .backends import BackendExecuteError, BackendPrepareError
+from .collection import _bulk_stage_for_device, _session_effective_deploy_mode
 from .session import (
     _encode_runtime_config_extra_files,
     _harness_source_dir,
     _libraries_root,
     _session_cache,
-    _session_effective_deploy_mode,
     _session_per_file,
     _target_is_device_unit,
 )
@@ -151,78 +150,6 @@ def _stage_one_item(
     transport.stage(
         source_dirs,
         [item.test_file],
-        _harness_source_dir(session),
-        extra_files=_encode_runtime_config_extra_files(session.config),
-        include_test_support=_target_is_device_unit(session.config),
-    )
-
-
-def _bulk_stage_for_device(
-    session: pytest.Session,
-    device_entry: DeviceEntry,
-    transport: TransportProtocol,
-    *,
-    library_filter: str | None = None,
-) -> None:
-    """Stage one library's sources and test files for a device in one pass.
-
-    In flash/copy modes, files persist on the device filesystem so
-    we deploy a library's full source + every test file for that
-    library in one rsync (or ``mpremote fs cp``).  This reduces
-    invocations from N-per-file to 1-per-library — and per-library
-    scope keeps the drive working-set bounded, since a 491 KB Pi
-    Pico W CIRCUITPY drive can't hold every library's source + every
-    library's test files at once.  Switching libraries triggers a
-    fresh stage; rsync ``--delete`` cleans the prior library off.
-
-    Collects all :class:`DeviceTestItem` instances targeting the
-    given device + library from the session's collected items,
-    deduplicates their library source directories and test files,
-    and calls ``transport.stage()`` once.
-
-    Args:
-        session: The pytest session (provides ``items``).
-        device_entry: The target device.
-        transport: A connected transport instance.
-        library_filter: When set, only items whose ``library_dir.name``
-            matches are included.  Required in practice for
-            filesystem-mode staging — ``None`` collects every library
-            in the session, which only fits on devices with ample
-            spare flash.
-    """
-    from .plugin import DeviceTestItem  # noqa: PLC0415 — break import cycle
-
-    seen_source_dirs: list[Path] = []
-    seen_test_files: list[Path] = []
-    seen_test_file_ids: set[str] = set()
-
-    for item in session.items:
-        if not isinstance(item, DeviceTestItem):
-            continue
-        target = item.target_device
-        if target is None or target.identifier != device_entry.identifier:
-            continue
-        if library_filter is not None and item.library_dir.name != library_filter:
-            continue
-
-        # Collect source dirs for this item's library.
-        for source_dir in resolve_library_source_dirs(
-            item.library_dir,
-            libraries_root=_libraries_root(session),
-            test_files=[item.test_file],
-        ):
-            if source_dir not in seen_source_dirs:
-                seen_source_dirs.append(source_dir)
-
-        # Collect test file (deduplicate by path string).
-        test_file_key = str(item.test_file)
-        if test_file_key not in seen_test_file_ids:
-            seen_test_file_ids.add(test_file_key)
-            seen_test_files.append(item.test_file)
-
-    transport.stage(
-        seen_source_dirs,
-        seen_test_files,
         _harness_source_dir(session),
         extra_files=_encode_runtime_config_extra_files(session.config),
         include_test_support=_target_is_device_unit(session.config),

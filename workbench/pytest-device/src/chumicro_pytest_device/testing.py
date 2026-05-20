@@ -36,10 +36,12 @@ from typing import TYPE_CHECKING
 
 from chumicro_deploy import DeviceEntry
 
-from . import plugin as _plugin
+from . import collection as _collection
+from . import device_backend as _device_backend
+from . import transport_cache as _transport_cache
 
 if TYPE_CHECKING:
-    from .plugin import (
+    from .collection import (
         DevicePrepareItem,
         DeviceRunFileItem,
         DeviceTestItem,
@@ -87,12 +89,12 @@ class FakeSession:
 
     def __init__(
         self,
-        cache: _plugin._TransportCache,
+        cache: _transport_cache._TransportCache,
         *,
         rootpath: Path,
     ) -> None:
         self._device_transport_cache = cache
-        self._backend = _plugin.DeviceBackend()
+        self._backend = _device_backend.DeviceBackend()
         self.config = FakeConfig(rootpath=rootpath)
 
 
@@ -112,7 +114,7 @@ def hot_path_device(runtime: str = "circuitpython") -> DeviceEntry:
 
 
 def prime_transport_cache(
-    cache: _plugin._TransportCache,
+    cache: _transport_cache._TransportCache,
     device: DeviceEntry,
     transport: object,
 ) -> None:
@@ -151,7 +153,7 @@ def make_prepare_item(
     test_file: Path,
 ) -> DevicePrepareItem:
     """Build a :class:`DevicePrepareItem` bypassing pytest's collect."""
-    item = _plugin.DevicePrepareItem.__new__(_plugin.DevicePrepareItem)
+    item = _collection.DevicePrepareItem.__new__(_collection.DevicePrepareItem)
     _init_runtime_item(item, session, device, test_file)
     return item
 
@@ -162,7 +164,7 @@ def make_run_file_item(
     test_file: Path,
 ) -> DeviceRunFileItem:
     """Build a :class:`DeviceRunFileItem` bypassing pytest's collect."""
-    item = _plugin.DeviceRunFileItem.__new__(_plugin.DeviceRunFileItem)
+    item = _collection.DeviceRunFileItem.__new__(_collection.DeviceRunFileItem)
     _init_runtime_item(item, session, device, test_file)
     return item
 
@@ -174,7 +176,7 @@ def make_test_item(
     function_name: str,
 ) -> DeviceTestItem:
     """Build a :class:`DeviceTestItem` bypassing pytest's collect."""
-    item = _plugin.DeviceTestItem.__new__(_plugin.DeviceTestItem)
+    item = _collection.DeviceTestItem.__new__(_collection.DeviceTestItem)
     _init_runtime_item(item, session, device, test_file)
     item.function_name = function_name
     return item

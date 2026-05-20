@@ -1,0 +1,1047 @@
+"""Collection-time machinery: AST-based test discovery + pytest items.
+
+Pytest sees test files under ``libraries/<name>/functional_tests/``
+and (under ``--target unix-port`` / ``--target device-unit``)
+``libraries/<name>/tests/`` via :func:`pytest_collect_file`, which
+returns a :class:`DeviceTestFile` instead of letting pytest's default
+``Module`` factory import the file on the host (device-only imports
+would fail).  The collector parses test names via AST and yields a
+:class:`DeviceTestItem` per ``(test_function, target_runtime)`` pair,
+plus the synthetic :class:`DevicePrepareItem` / :class:`DeviceRunFileItem`
+that own the file-batch connect / stage / execute cost.
+
+Item attributes are public (no underscores): ``library_name``,
+``function_name``, ``batch_key()``, ``reported_duration``, and
+``reported_test_total_duration`` are read by helpers in :mod:`plugin`
+and :mod:`device_backend` without ``# noqa: SLF001`` noise.
+"""
+
+from __future__ import annotations
+
+import ast
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any, cast
+
+import pytest
+from chumicro_deploy import (
+    DeviceCaps,
+    DeviceConfigError,
+    DeviceEntry,
+    TransportProtocol,
+    find_libraries_requiring_flash,
+    load_device_registry,
+    resolve_deploy_mode,
+    resolve_ide_devices,
+)
+from chumicro_deploy.runtime_marker import is_host_only_test, read_runtime_marker
+
+from .backends import BackendExecuteError, BackendPrepareError
+from .features import (
+    FEATURE_PROBE_SCRIPT,
+    parse_feature_probe_output,
+    read_features_marker,
+)
+from .pr_summary import runtime_display_name
+from .result_parser import RunResult, TestResult, parse_output
+from .runtime_config import missing_required_keys
+from .session import (
+    _collect_unit_tests_on_device_backend,
+    _encode_runtime_config_extra_files,
+    _harness_source_dir,
+    _is_library_functional_test,
+    _is_library_unit_test,
+    _libraries_root,
+    _session_backend,
+    _session_cache,
+    _session_targets,
+    _target_is_device_unit,
+    _target_is_unix_port,
+    _workspace_root,
+)
+from .test_runner import resolve_effective_deploy_mode, resolve_library_source_dirs
+
+
+def _parse_test_functions(filepath: Path) -> list[str]:
+    """Use AST to discover test names without importing.
+
+    Functional test files import device-only modules that are not
+    available on the host, so we cannot import them.
+
+    Mirrors the on-device runner's discovery rules
+    (:func:`chumicro_test_harness.runner._iter_test_functions`):
+    module-level ``def test_*`` functions, plus ``test_*`` methods on
+    ``class Test*`` classes reported as ``ClassName.test_method`` — the
+    exact qualified-name format the runner produces, so single-test
+    name filters and per-item reporting line up between collection and
+    execution.
+
+    Args:
+        filepath: Path to the test file.
+
+    Returns:
+        Sorted list of test names: bare ``test_*`` for module-level
+        functions, ``ClassName.test_method`` for class methods.
+    """
+    source = filepath.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(filepath))
+    names: list[str] = []
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+            names.append(node.name)
+        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+            names.extend(
+                f"{node.name}.{method.name}"
+                for method in ast.iter_child_nodes(node)
+                if isinstance(method, ast.FunctionDef)
+                and method.name.startswith("test_")
+            )
+    return sorted(names)
+
+
+def _resolve_library_dir(test_file: Path) -> Path:
+    """Derive the library root directory from a functional test file path.
+
+    Expects the pattern ``libraries/<name>/functional_tests/test_*.py``.
+
+    Args:
+        test_file: Path to a test file inside ``functional_tests/``.
+
+    Returns:
+        The library root directory (e.g. ``libraries/timing``).
+    """
+    return test_file.parent.parent
+
+
+def _filter_targets_by_marker(
+    targets: list[DeviceEntry] | None,
+    test_file: Path,
+) -> list[DeviceEntry] | None:
+    """Drop targets the file's ``__chumicro_runtimes__`` marker excludes.
+
+    Functional test files that exercise a single-runtime backend
+    (``test_cp_nvm_backend.py``, ``test_mp_adapter_on_device.py``)
+    declare a module-level marker matching the source-file convention::
+
+        __chumicro_runtimes__ = ("circuitpython",)
+
+    Without this filter, the plugin parametrizes every test in the
+    file with both runtimes when ``defaults.ide_runtime: both`` is
+    set in ``devices.yml`` — and the wrong-runtime parametrization
+    fails at import time because the per-runtime source module
+    (e.g. ``chumicro_kvstore._backends.cp_nvm``) was never staged on
+    the wrong-runtime device.
+
+    The marker is read via :func:`read_runtime_marker` (AST-only,
+    same path the deploy pipeline uses).  Sub-runtime names like
+    ``micropython_esp32`` fold into their base (``micropython``),
+    matching :func:`chumicro_deploy.runtime_marker.file_targets_runtime`.
+
+    Files without a marker keep every target — the default-safe path
+    for runtime-agnostic tests.
+    """
+    if targets is None:
+        return None
+    marker = read_runtime_marker(test_file)
+    if marker is None:
+        return targets
+    folded = {
+        name.split("_", 1)[0] if name.startswith("micropython_") else name
+        for name in marker
+    }
+    return [device for device in targets if device.runtime in folded]
+
+
+def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
+    """Return the synthetic pytest item name for a runtime prepare step."""
+    return f"Setup — {runtime_display_name(device_entry.runtime)}"
+
+
+def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
+    """Return the synthetic pytest item name for a runtime file-run step."""
+    return f"Run overhead — {runtime_display_name(device_entry.runtime)}"
+
+
+def _sum_reported_test_durations(test_results: list[TestResult]) -> float:
+    """Return the total device-reported duration across parsed tests."""
+    total_duration = 0.0
+    for test_result in test_results:
+        if test_result.duration is not None:
+            total_duration += test_result.duration
+    return total_duration
+
+
+def _device_closure_source_dirs(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> list[Path]:
+    """Union of every test's library source closure for one device.
+
+    Walks the same dependency closure the staging path uses
+    (:func:`resolve_library_source_dirs`) for every ``DeviceTestItem``
+    targeting *device_entry*, deduplicated.  Deploy mode is
+    session-scoped (one cached transport per device), so the resolver
+    must see the whole device's closure up front — a functional test
+    that pulls a dependency's data file has to force the session to
+    flash *before* a RAM-mode transport gets cached.
+    """
+    closure: list[Path] = []
+    # ``getattr`` guard mirrors the feature pass: test stubs (FakeSession)
+    # don't populate ``items``; no items ⇒ empty closure ⇒ the resolver
+    # returns the configured mode unchanged.
+    for item in getattr(session, "items", ()):
+        if not isinstance(item, DeviceTestItem):
+            continue
+        target = item.target_device
+        if target is None or target.identifier != device_entry.identifier:
+            continue
+        for source_dir in resolve_library_source_dirs(
+            item.library_dir,
+            libraries_root=_libraries_root(session),
+            test_files=[item.test_file],
+        ):
+            if source_dir not in closure:
+                closure.append(source_dir)
+    return closure
+
+
+def _device_is_unit_sweep(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> bool:
+    """True when every test targeting *device_entry* is a unit test.
+
+    The cross-runtime *unit* suite (``libraries/<name>/tests``) and a
+    *functional* run (``libraries/<name>/functional_tests``) scope
+    ``staged_files`` differently: functional needs the full
+    dependency closure (it exercises a dependency's data-file code
+    path for real), the unit sweep needs the library's own ``src``
+    only (a pure unit test cannot reach a dependency's data file by the
+    runtime-boundary contract, so a dependency's data file must not
+    poison every dependent suite into flash).  A run is unit-scoped
+    only when *all* of the device's items are unit tests; any
+    functional item makes it closure-scoped (the safe direction).
+    """
+    items = [
+        item
+        for item in getattr(session, "items", ())
+        if isinstance(item, DeviceTestItem)
+        and item.target_device is not None
+        and item.target_device.identifier == device_entry.identifier
+    ]
+    return bool(items) and all(
+        _is_library_unit_test(item.test_file) for item in items
+    )
+
+
+def _device_own_source_dirs(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> list[Path]:
+    """Each tested library's *own* ``src`` dir (no dependency closure).
+
+    The unit-sweep ``staged_files`` scope: only ``chumicro_sockets``'s
+    own suite sees its ``_ca_bundle.der``; a light sockets *user*
+    (``ntp``) does not, so the data file does not flip it to flash.
+    """
+    own: list[Path] = []
+    for item in getattr(session, "items", ()):
+        if not isinstance(item, DeviceTestItem):
+            continue
+        target = item.target_device
+        if target is None or target.identifier != device_entry.identifier:
+            continue
+        source_dir = item.library_dir / "src"
+        if source_dir.is_dir() and source_dir not in own:
+            own.append(source_dir)
+    return own
+
+
+def _staged_file_names(source_dirs: list[Path]) -> list[str]:
+    """Every file the closure would stage, by name.
+
+    ``transport.stage`` copies whole ``src`` trees, so the resolver's
+    "any non-``.py`` data file" check must see them all.
+    ``__pycache__`` is build cruft the staging rsync never carries —
+    excluding it stops a stray ``.pyc`` being misread as a shipped
+    asset and wrongly forcing flash.
+    """
+    names: list[str] = []
+    for source_dir in source_dirs:
+        for path in source_dir.rglob("*"):
+            if path.is_file() and "__pycache__" not in path.parts:
+                names.append(path.name)
+    return names
+
+
+def _session_effective_deploy_mode(
+    session: pytest.Session, device_entry: DeviceEntry,
+) -> str:
+    """Resolve the device's deploy mode through the shared policy, once.
+
+    Combines the precedence resolution (CLI → per-device → global →
+    flash) with the one shared :func:`resolve_deploy_mode`.  Two inputs
+    have opposite scoping: ``requires_flash_libs``
+    is *always* the full transitive closure (a flash-only dependency
+    OOMs on import regardless of test shape), while ``staged_files`` is
+    caller-scoped — the full closure for a functional run (it really
+    uses a dependency's data file) but the libraries' own ``src`` for
+    the unit sweep (a pure unit test can't reach a dependency's data
+    file, so ``sockets``'s ``_ca_bundle.der`` must not poison every
+    sockets-dependent suite).  Memoized per device: the transport is
+    cached per device so the mode is fixed for the session, and the
+    explanation prints exactly once.
+    """
+    cache = _session_cache(session)
+    device_id = device_entry.identifier
+    memoized = cache.resolved_deploy_mode(device_id)
+    if memoized is not None:
+        return memoized
+
+    deploy_mode_override = cast(
+        "str | None",
+        session.config.getoption("--deploy-mode", default=None),
+    )
+    configured = resolve_effective_deploy_mode(
+        device_entry, deploy_mode_override,
+    )
+    closure = _device_closure_source_dirs(session, device_entry)
+    staged_dirs = (
+        _device_own_source_dirs(session, device_entry)
+        if _device_is_unit_sweep(session, device_entry)
+        else closure
+    )
+    mode, message = resolve_deploy_mode(
+        configured,
+        staged_files=_staged_file_names(staged_dirs),
+        device_caps=DeviceCaps(
+            supports_ram_mode=device_entry.supports_ram_mode,
+        ),
+        requires_flash_libs=find_libraries_requiring_flash(closure),
+        resolution_unit=None,
+        force=None,
+    )
+    if message is not None:
+        import warnings  # noqa: PLC0415 — only used on the override path
+
+        warnings.warn(f"Device {device_id!r}: {message}", stacklevel=2)
+    cache.set_resolved_deploy_mode(device_id, mode)
+    return mode
+
+
+
+class DeviceTestFile(pytest.File):
+    """Collector that discovers ``test_*`` functions via AST parsing.
+
+    When ``ide_runtime`` is ``both`` in the ``defaults:`` section,
+    each test function is collected twice — once per runtime — so
+    pytest shows separate results for each board.
+    """
+
+    def collect(self) -> Iterator[pytest.Item]:
+        """Yield a :class:`DeviceTestItem` for each test function and target device."""
+        function_names = _parse_test_functions(self.path)
+        raw_targets = _session_targets(self.session)
+        targets = _filter_targets_by_marker(raw_targets, self.path)
+
+        if targets is not None and not targets:
+            # File's ``__chumicro_runtimes__`` marker excludes every
+            # configured target.  Yield nothing so the IDE / pytest
+            # collection shows zero items for this file rather than
+            # generating wrong-runtime ImportError items.
+            return
+
+        if not function_names:
+            # Reached here only when the file is NOT marker-excluded
+            # (the ``not targets`` branch above already handled
+            # ``__chumicro_runtimes__`` / host-only opt-outs): the file
+            # is meant to run on these targets, yet AST finds zero
+            # ``test_*`` functions or ``Test*`` class methods.  The
+            # harness discovers both shapes, so a zero here means the
+            # file is pytest-style (fixtures / parametrize / bare
+            # ``import pytest``) the cross-runtime harness cannot run.
+            # Fail loudly instead of yielding a silent no-op, so the
+            # gap can't hide.
+            if _is_library_unit_test(self.path):
+                raise pytest.Collector.CollectError(
+                    f"{self.path} is collected for the cross-runtime / "
+                    "on-device lane but defines no discoverable tests "
+                    "(no module-level 'def test_*' and no 'class Test*' "
+                    "with 'test_*' methods — its tests are pytest-style, "
+                    "which the cross-runtime harness does not run).  "
+                    "Either rewrite the tests as plain functions or "
+                    "'class Test*' methods, or declare "
+                    "'__chumicro_runtimes__ = (\"cpython\",)' to make the "
+                    "CPython-only lane explicit.  A silent zero-test "
+                    "file is not allowed."
+                )
+            # Functional-test files (the other DeviceTestFile user)
+            # keep the prior no-op behaviour — out of scope here.
+            return
+
+        # Preserve the original "session has both runtimes ⇒ suffix names"
+        # convention even when the marker filters down to a single target.
+        # That keeps the IDE display consistent across runtime-agnostic and
+        # runtime-restricted files when ``defaults.ide_runtime: both``.
+        session_has_both_runtimes = (
+            raw_targets is not None and len(raw_targets) > 1
+        )
+
+        if targets is None or (len(targets) <= 1 and not session_has_both_runtimes):
+            # No config, single target, or no devices — one item per function.
+            device = targets[0] if targets else None
+            if device is not None:
+                yield DevicePrepareItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
+                    self,
+                    name=_runtime_prepare_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
+                yield DeviceRunFileItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
+                    self,
+                    name=_runtime_run_file_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
+            for name in function_names:
+                yield DeviceTestItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
+                    self,
+                    name=name,
+                    test_file=self.path,
+                    function_name=name,
+                    target_device=device,
+                )
+        else:
+            # Multiple targets (both mode) — parametrize by runtime.
+            for device in targets:
+                yield DevicePrepareItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
+                    self,
+                    name=_runtime_prepare_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
+                yield DeviceRunFileItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
+                    self,
+                    name=_runtime_run_file_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
+            # Function-then-runtime order keeps the two runtime variants
+            # of each base function adjacent in the item stream — some IDE
+            # test explorers build parameterized groups from incoming
+            # order and produce duplicate parent nodes when variants are
+            # split apart.
+            for name in function_names:
+                for device in targets:
+                    display_name = f"{name}[{runtime_display_name(device.runtime)}]"
+                    yield DeviceTestItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
+                        self,
+                        name=display_name,
+                        test_file=self.path,
+                        function_name=name,
+                        target_device=device,
+                    )
+
+
+class DeviceRuntimeItem(pytest.Item):
+    """Base class for synthetic and per-test device pytest items.
+
+    All leaf items for a ``functional_tests/`` file share the same device
+    preparation and batch-execution helpers.  Those helpers are idempotent,
+    so synthetic control items can perform the expensive work during full-file
+    runs while direct single-test targeting still works.
+    """
+
+    def __init__(
+        self,
+        *,
+        test_file: Path,
+        target_device: DeviceEntry | None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)  # pyright: ignore[reportUnknownMemberType]
+        self.test_file = test_file
+        self.target_device: DeviceEntry | None = target_device
+        self.library_dir: Path = _resolve_library_dir(test_file)
+        self.library_name = self.library_dir.name
+        self.reported_duration: float | None = None
+        self.reported_test_total_duration: float | None = None
+
+    def _resolve_device_entry(self) -> DeviceEntry:
+        """Return the resolved target device for this item."""
+        device_entry = self.target_device
+        if device_entry is None:
+            device_entry = _load_fallback_device(self.session)
+            self.target_device = device_entry
+        return device_entry
+
+    def batch_key(self, device_entry: DeviceEntry) -> tuple[str, str, str]:
+        """Return the cache key for this item's file/runtime batch."""
+        return (
+            device_entry.identifier,
+            self.library_name,
+            self.test_file.name,
+        )
+
+    def _ensure_prepared(self, device_entry: DeviceEntry) -> None:
+        """Run the backend's prepare step for this item.
+
+        Connection-style failures (transport-level on device, binary
+        not found on unix-port) raise :class:`BackendPrepareError`,
+        which we cache as a batch failure so subsequent items for the
+        same file fail fast without re-attempting.  Other prepare
+        failures (staging exceptions) propagate naturally — they
+        either match the previous "uncaught exception during prepare"
+        behavior or get caught by ``_ensure_batch_result`` when
+        prepare runs as part of execute.
+        """
+        backend = _session_backend(self.session)
+        try:
+            backend.prepare(self, device_entry)
+        except BackendPrepareError as error:
+            cache = _session_cache(self.session)
+            cache.cache_batch_result(
+                self.batch_key(device_entry),
+                None,
+                str(error),
+            )
+            pytest.fail(str(error))
+
+    def _ensure_batch_result(
+        self,
+        device_entry: DeviceEntry,
+    ) -> tuple[RunResult | None, str]:
+        """Run the file batch once if needed and return its cached result."""
+        cache = _session_cache(self.session)
+        batch_key = self.batch_key(device_entry)
+
+        # Check for cached batch result from a previous item.
+        batch = cache.get_batch_result(batch_key)
+
+        if batch is None:
+            # First item for this (device, file) — run all tests.
+            self._ensure_prepared(device_entry)
+            backend = _session_backend(self.session)
+            try:
+                raw_output = backend.execute(self, device_entry)
+            except BackendExecuteError as error:
+                cache.cache_batch_result(batch_key, None, str(error))
+                pytest.fail(str(error))
+
+            result = parse_output(raw_output)
+            cache.cache_batch_result(batch_key, result, raw_output)
+            return result, raw_output
+
+        return batch
+
+    def repr_failure(
+        self,
+        excinfo: pytest.ExceptionInfo[BaseException],
+        style: str | None = None,
+    ) -> str:
+        """Produce a readable failure representation."""
+        return str(excinfo.value)
+
+    def reportinfo(self) -> tuple[Path, int | None, str]:
+        """Return location info for test reporting."""
+        return self.path, None, f"[device] {self.library_name}::{self.name}"
+
+
+class DevicePrepareItem(DeviceRuntimeItem):
+    """Synthetic item that owns transport connect/stage time for a runtime."""
+
+    def runtest(self) -> None:
+        """Prepare the runtime for a file batch."""
+        device_entry = self._resolve_device_entry()
+        self._ensure_prepared(device_entry)
+
+
+class DeviceRunFileItem(DeviceRuntimeItem):
+    """Synthetic item that owns file-batch execution time for a runtime."""
+
+    def runtest(self) -> None:
+        """Run the file batch once and validate the harness-level result."""
+        device_entry = self._resolve_device_entry()
+        result, raw_output = self._ensure_batch_result(device_entry)
+
+        if result is None:
+            pytest.fail(raw_output)
+        if not result.tests:
+            pytest.fail(f"No test results in device output:\n{raw_output}")
+        self.reported_test_total_duration = _sum_reported_test_durations(result.tests)
+
+
+class DeviceTestItem(DeviceRuntimeItem):
+    """A single parsed test result from a batched file run on device."""
+
+    def __init__(
+        self,
+        *,
+        test_file: Path,
+        function_name: str,
+        target_device: DeviceEntry | None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            test_file=test_file,
+            target_device=target_device,
+            **kwargs,
+        )
+        self.function_name = function_name
+
+    def runtest(self) -> None:
+        """Look up this test's result from the batched device run."""
+        device_entry = self._resolve_device_entry()
+        result, raw_output = self._ensure_batch_result(device_entry)
+
+        # If the batch failed, all items from it fail.
+        if result is None:
+            pytest.fail(raw_output)
+
+        if not result.tests:
+            pytest.fail(
+                f"No test results in device output:\n{raw_output}"
+            )
+
+        # Find this specific test in the results.
+        for test_result in result.tests:
+            if test_result.name == self.function_name:
+                self.reported_duration = test_result.duration
+                if test_result.status == "FAIL":
+                    pytest.fail(
+                        f"Device test FAIL: {self.function_name}\n{raw_output}"
+                    )
+                if test_result.status == "SKIP":
+                    pytest.skip(test_result.message or "Skipped on device")
+                return
+
+        # Test name not found in output — may have been filtered or
+        # errored before reaching the harness.
+        pytest.fail(
+            f"Test {self.function_name!r} not found in device output:\n{raw_output}"
+        )
+
+
+def _load_fallback_device(session: pytest.Session) -> DeviceEntry:
+    """Fallback device loading for items created without a target.
+
+    Called when ``devices.yml`` was unavailable at collection time
+    but may exist at run time.  Note (see :file:`plans/next-up.md`):
+    this is *not* duplicate handling of
+    :func:`chumicro_pytest_device.plugin.pytest_sessionstart`'s
+    ``DeviceConfigError`` swallowing.  Sessionstart silently sets
+    ``_device_targets = None`` so collection finishes (IDE
+    play-button flows on ``__chumicro_runtimes__=("cpython",)``-
+    filtered files depend on it); this fallback surfaces the same
+    error verbosely at runtest with setup instructions.
+
+    Returns:
+        A ``DeviceEntry`` from the device registry.
+
+    Raises:
+        pytest.skip: If no devices.yml exists or no devices are configured.
+        pytest.fail: If devices.yml is malformed.
+    """
+    try:
+        devices, defaults = load_device_registry(
+            workspace_root=_workspace_root(session),
+        )
+    except DeviceConfigError as error:
+        error_message = str(error)
+        if "not found" in error_message:
+            pytest.skip(
+                "No devices.yml found.  Run "
+                "`chumicro-workspace add-device <id> --address <port>` "
+                "to register a board for functional tests."
+            )
+        pytest.fail(f"Device config error: {error}")
+
+    targets = resolve_ide_devices(devices, defaults)
+    if not targets:
+        pytest.skip(
+            "No devices registered in devices.yml.  Run "
+            "`chumicro-workspace add-device <id> --address <port>` "
+            "to register a board — probes hardware identity + fills in "
+            "defaults on first registration."
+        )
+
+    return targets[0]
+
+
+class _NoImportModule(pytest.Module):
+    """Stub Module that yields nothing without importing the file.
+
+    Returned by :func:`pytest_pycollect_makemodule` for files under
+    ``libraries/<name>/functional_tests/`` so the host never tries to
+    import device-only modules at collection time.  The
+    :class:`DeviceTestFile` collector returned by
+    :func:`pytest_collect_file` handles those files via AST — no import.
+    """
+
+    def collect(self) -> Iterator[pytest.Item]:
+        """Yield nothing.  The device-side collector owns these items."""
+        return iter([])
+
+
+def pytest_pycollect_makemodule(
+    module_path: Path, parent: pytest.Collector,
+) -> pytest.Module | None:
+    """Suppress default Module collection for plugin-owned paths.
+
+    Always claims ``libraries/<name>/functional_tests/`` files — the
+    default Module factory would import them on the host, which fails
+    for runtime-restricted files that ``import microcontroller`` /
+    ``import wifi`` at top level.
+
+    Under ``--target unix-port`` *or* ``--target device-unit`` we also
+    claim ``libraries/<name>/tests/`` files so the harness backend
+    (unix-port subprocess, or the device transport for the on-device
+    unit sweep) gets them — without this, pytest's default Module
+    factory runs them as plain CPython tests, the lane bare ``pytest``
+    already covers.  Plain ``--target device`` leaves them there.
+
+    AST-based discovery in :class:`DeviceTestFile` means the file is
+    never executed on the host.
+
+    A ``__chumicro_host_only__`` file under ``--target device-unit``
+    is still claimed here (returns the empty :class:`_NoImportModule`,
+    so it yields nothing and is never imported on the host) — the
+    device-unit exclusion is enforced by :func:`pytest_collect_file`
+    returning ``None`` for it; the net effect is zero items for that
+    file on the sweep.
+    """
+    if _is_library_functional_test(module_path):
+        return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
+            parent, path=module_path,
+        )
+    if (
+        _is_library_unit_test(module_path)
+        and _collect_unit_tests_on_device_backend(parent.config)
+    ):
+        return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
+            parent, path=module_path,
+        )
+    return None
+
+
+def pytest_collect_file(
+    parent: pytest.Collector, file_path: Path,
+) -> DeviceTestFile | None:
+    """Collect harness-shaped test files as runtime test items.
+
+    Two activation paths:
+
+    - ``libraries/<name>/functional_tests/test_*.py`` — always claimed,
+      runs through the device-transport backend.
+    - ``libraries/<name>/tests/test_*.py`` — claimed under
+      ``--target unix-port`` (unix-port subprocess backend) and
+      ``--target device-unit`` (device transport backend, the
+      on-device unit sweep).  Under the default ``--target device``
+      these files stay in the plain-pytest CPython lane.  A file
+      marked ``__chumicro_host_only__ = True`` is excluded from the
+      device-unit sweep here (it drives runtime-specific source
+      through host fakes and would ``ImportError`` on a board); it
+      still runs on the unix-ports and CPython.  A file marked
+      ``__chumicro_runtimes__ = ("cpython",)`` is collected but
+      yields nothing on the device/unix-port lanes via
+      :func:`_filter_targets_by_marker`.
+
+    Workbench packages also keep hardware-gated tests under a
+    ``functional_tests/`` directory, but those are plain host-side
+    pytest that call ``chumicro_deploy`` against a real board; they
+    must not be routed through the library test harness and are left
+    to run as ordinary pytest collection.
+    """
+
+    if _is_library_functional_test(file_path):
+        return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
+    if (
+        _is_library_unit_test(file_path)
+        and _collect_unit_tests_on_device_backend(parent.config)
+        and not (
+            _target_is_device_unit(parent.config)
+            and is_host_only_test(file_path)
+        )
+    ):
+        return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
+    return None
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item],
+) -> None:
+    """Three passes:
+
+    1. Belt-and-suspenders: deselect any non-device items under
+       functional tests.  The :func:`pytest_pycollect_makemodule` hook
+       already prevents the default Module factory from importing
+       files under ``libraries/<name>/functional_tests/``, so duplicate
+       items should never be produced in practice.  This sweep exists
+       as a safety net in case another plugin re-introduces a
+       non-:class:`DeviceRuntimeItem` for one of these paths — the
+       device transport remains the sole execution surface.
+    2. Deselect every :class:`DeviceRuntimeItem` whose test file
+       declares :data:`__chumicro_features__` requirements that the
+       target device doesn't satisfy.  Lazy-probes each device only
+       when at least one feature-marked item targets it; warns rather
+       than failing if the probe can't reach the device, so an offline
+       board doesn't poison the whole session.  Items are
+       *deselected*, not skipped — feature mismatches mean the test
+       genuinely shouldn't run on that device, not that it's pending.
+    3. Apply a session-wide skip marker to every
+       :class:`DeviceRuntimeItem` when the conftest declared required
+       runtime-config keys via :func:`set_runtime_config(...,
+       required_keys=...)` and one or more are absent from the staged
+       payload.  Catches "I forgot to populate ``mqtt.broker.host`` in
+       ``secrets.toml``" before the device boots and crashes with a
+       cryptic ``MissingConfigKey``.
+    """
+    deselected: list[pytest.Item] = []
+    selected: list[pytest.Item] = []
+    for item in items:
+        if (
+            "functional_tests" in item.nodeid
+            and "libraries/" in item.nodeid
+            and not isinstance(item, DeviceRuntimeItem)
+        ):
+            deselected.append(item)
+        else:
+            selected.append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
+
+    if _target_is_unix_port(config):
+        platform_deselected = _deselect_items_for_non_targeting_libraries(items)
+        if platform_deselected:
+            config.hook.pytest_deselected(items=platform_deselected)
+            platform_dropped = set(map(id, platform_deselected))
+            items[:] = [
+                item for item in items if id(item) not in platform_dropped
+            ]
+    else:
+        feature_deselected = _deselect_items_missing_required_features(items)
+        if feature_deselected:
+            config.hook.pytest_deselected(items=feature_deselected)
+            feature_dropped = set(map(id, feature_deselected))
+            items[:] = [
+                item for item in items if id(item) not in feature_dropped
+            ]
+
+    missing = missing_required_keys(config)
+    if missing:
+        skip_reason = (
+            "Functional tests require runtime-config keys not present "
+            f"in the staged payload: {', '.join(missing)}.  Populate "
+            "them in your secrets.toml (or the per-project config) and "
+            "re-run."
+        )
+        skip_marker = pytest.mark.skip(reason=skip_reason)
+        for item in items:
+            if isinstance(item, DeviceRuntimeItem):
+                item.add_marker(skip_marker)
+
+
+def _read_library_platforms(library_dir: Path) -> tuple[str, ...] | None:
+    """Return ``[tool.chumicro].platforms`` for a library, or ``None``.
+
+    ``None`` means "no explicit declaration, library targets every
+    runtime" (the same default the workspace-wide
+    :mod:`scripts.repo_layout` enforces).  An explicit empty tuple
+    means "no runtimes" — never seen in practice but valid input.
+    """
+    pyproject = library_dir / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    import tomllib  # noqa: PLC0415
+
+    with pyproject.open("rb") as toml_file:
+        data = tomllib.load(toml_file)
+    platforms = data.get("tool", {}).get("chumicro", {}).get("platforms")
+    if platforms is None:
+        return None
+    return tuple(platforms)
+
+
+def _deselect_items_for_non_targeting_libraries(
+    items: list[pytest.Item],
+) -> list[pytest.Item]:
+    """Drop items whose library doesn't target the item's runtime.
+
+    Mirrors :func:`scripts.repo_layout.filter_by_platform` but operates
+    on collected items: for each :class:`DeviceRuntimeItem`, read its
+    library's ``[tool.chumicro].platforms``; if present and the target
+    runtime isn't in the list, the item is deselected.  Libraries
+    without an explicit ``platforms`` key target all three runtimes
+    and are always kept.
+    """
+    deselected: list[pytest.Item] = []
+    platforms_cache: dict[Path, tuple[str, ...] | None] = {}
+    for item in items:
+        if not isinstance(item, DeviceRuntimeItem):
+            continue
+        device = item.target_device
+        if device is None:
+            continue
+        library_dir = item.library_dir
+        if library_dir not in platforms_cache:
+            platforms_cache[library_dir] = _read_library_platforms(library_dir)
+        platforms = platforms_cache[library_dir]
+        if platforms is None:
+            continue
+        if device.runtime not in platforms:
+            deselected.append(item)
+    return deselected
+
+
+def _deselect_items_missing_required_features(
+    items: list[pytest.Item],
+) -> list[pytest.Item]:
+    """Return items whose target device lacks a feature their file declares.
+
+    Reads :data:`__chumicro_features__` from each ``DeviceRuntimeItem``'s
+    test file via AST.  When at least one item declares features, lazy-
+    probes each unique target device once via the existing transport
+    cache, parses :data:`FEATURE_PROBE_SCRIPT` output, and caches the
+    result on the session's ``_device_features_cache``.
+
+    A probe failure (offline device, transport error) is *not* a hard
+    failure — a warning is emitted and the device's feature set is
+    treated as empty for this session.  Tests requiring the missing
+    feature get deselected for that device, the rest still run.
+
+    Args:
+        items: The current item list.  Items reach back to their
+            session via ``item.session`` — we use that to share the
+            transport cache and stash the feature cache.
+    """
+    feature_targets: list[tuple[pytest.Item, DeviceEntry, frozenset[str]]] = []
+    session: pytest.Session | None = None
+    for item in items:
+        if not isinstance(item, DeviceRuntimeItem):
+            continue
+        # Defensive ``getattr`` for both fields — test stubs that mock
+        # ``DeviceRuntimeItem`` via ``spec=`` won't expose attributes
+        # set in ``__init__``.  Skip gracefully so the feature pass
+        # never breaks an unrelated test.
+        device = getattr(item, "target_device", None)
+        test_file = getattr(item, "test_file", None)
+        if device is None or test_file is None:
+            continue
+        marker = read_features_marker(test_file)
+        if not marker:
+            continue
+        feature_targets.append((item, device, marker))
+        if session is None:
+            session = getattr(item, "session", None)
+
+    if not feature_targets or session is None:
+        return []
+
+    cache: dict[str, frozenset[str]] = cast(
+        "dict[str, frozenset[str]]",
+        getattr(session, "_device_features_cache", None) or {},
+    )
+    session._device_features_cache = cache  # type: ignore[attr-defined]
+
+    devices_to_probe: dict[str, DeviceEntry] = {
+        device.identifier: device
+        for _, device, _ in feature_targets
+        if device.identifier not in cache
+    }
+    if devices_to_probe:
+        transport_cache = _session_cache(session)
+        for device_id, device_entry in devices_to_probe.items():
+            try:
+                transport = transport_cache.get_transport(
+                    device_entry,
+                    _session_effective_deploy_mode(session, device_entry),
+                )
+                output = transport.run_script(FEATURE_PROBE_SCRIPT)
+            except Exception as error:  # noqa: BLE001 — graceful per-device fallback
+                import warnings  # noqa: PLC0415 — only used on the failure path
+
+                warnings.warn(
+                    f"Feature probe failed for device {device_id!r}: "
+                    f"{error}.  Tests declaring "
+                    f"`__chumicro_features__` will be deselected for "
+                    f"this device.",
+                    stacklevel=3,
+                )
+                cache[device_id] = frozenset()
+            else:
+                cache[device_id] = parse_feature_probe_output(output)
+
+    return [
+        item
+        for item, device, required in feature_targets
+        if not required.issubset(cache[device.identifier])
+    ]
+
+def _bulk_stage_for_device(
+    session: pytest.Session,
+    device_entry: DeviceEntry,
+    transport: TransportProtocol,
+    *,
+    library_filter: str | None = None,
+) -> None:
+    """Stage one library's sources and test files for a device in one pass.
+
+    In flash/copy modes, files persist on the device filesystem so
+    we deploy a library's full source + every test file for that
+    library in one rsync (or ``mpremote fs cp``).  This reduces
+    invocations from N-per-file to 1-per-library — and per-library
+    scope keeps the drive working-set bounded, since a 491 KB Pi
+    Pico W CIRCUITPY drive can't hold every library's source + every
+    library's test files at once.  Switching libraries triggers a
+    fresh stage; rsync ``--delete`` cleans the prior library off.
+
+    Collects all :class:`DeviceTestItem` instances targeting the
+    given device + library from the session's collected items,
+    deduplicates their library source directories and test files,
+    and calls ``transport.stage()`` once.
+
+    Args:
+        session: The pytest session (provides ``items``).
+        device_entry: The target device.
+        transport: A connected transport instance.
+        library_filter: When set, only items whose ``library_dir.name``
+            matches are included.  Required in practice for
+            filesystem-mode staging — ``None`` collects every library
+            in the session, which only fits on devices with ample
+            spare flash.
+    """
+    seen_source_dirs: list[Path] = []
+    seen_test_files: list[Path] = []
+    seen_test_file_ids: set[str] = set()
+
+    for item in session.items:
+        if not isinstance(item, DeviceTestItem):
+            continue
+        target = item.target_device
+        if target is None or target.identifier != device_entry.identifier:
+            continue
+        if library_filter is not None and item.library_dir.name != library_filter:
+            continue
+
+        # Collect source dirs for this item's library.
+        for source_dir in resolve_library_source_dirs(
+            item.library_dir,
+            libraries_root=_libraries_root(session),
+            test_files=[item.test_file],
+        ):
+            if source_dir not in seen_source_dirs:
+                seen_source_dirs.append(source_dir)
+
+        # Collect test file (deduplicate by path string).
+        test_file_key = str(item.test_file)
+        if test_file_key not in seen_test_file_ids:
+            seen_test_file_ids.add(test_file_key)
+            seen_test_files.append(item.test_file)
+
+    transport.stage(
+        seen_source_dirs,
+        seen_test_files,
+        _harness_source_dir(session),
+        extra_files=_encode_runtime_config_extra_files(session.config),
+        include_test_support=_target_is_device_unit(session.config),
+    )
+
+
