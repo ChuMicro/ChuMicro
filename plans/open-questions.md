@@ -62,7 +62,7 @@ mode is clean (RESET, FAT volume intact); the crash happens inside CP core code
   `pool.socket(pool.AF_INET, pool.SOCK_STREAM)` → `connect((unreachable, port))`).
   Verify firmware-side responsibility before any chumicro-side workaround.
 
-Was follow-up #5 in `plans/workstreams/example-sweep-stability.md`; moved here
+Was follow-up #5 in `plans/workstreams/archive/example-sweep-stability.md`; moved here
 because the workstream's sweep harness can't trigger it on demand and the issue
 needs a natural occurrence.
 
@@ -283,7 +283,7 @@ There's no in-process equivalent.
 ### Boot-cost measurement benchmark for libraries
 
 The 2026-04-25 lazy-loading investigation
-(`plans/workstreams/lazy-loading-research.md`) recommends a Tier A /
+(`plans/workstreams/archive/lazy-loading-research.md`) recommends a Tier A /
 Tier B classification but lacks quantitative numbers — we have one
 data point (`chumicro-msgpack` pure-Python fallback ≈ 700 B heap on
 CP per its docstring) and no systematic measurement.  A small

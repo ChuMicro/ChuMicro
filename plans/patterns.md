@@ -797,7 +797,7 @@ Don't lazify "to reduce import-time RAM" when the deferred-to point sits a few s
 
 The lazy patterns documented below (PEP 562, per-function adapter selection) apply only after this default has been chosen against.
 
-Related: Decision 0010 (constructor injection — same "defer the cost" philosophy at the class-instance scope), `plans/workstreams/lazy-loading-research.md` for the Tier A / Tier B classification.
+Related: Decision 0010 (constructor injection — same "defer the cost" philosophy at the class-instance scope), `plans/workstreams/archive/lazy-loading-research.md` for the Tier A / Tier B classification.
 
 ## Lazy module-level imports via PEP 562 `__getattr__` (workbench)
 
@@ -885,7 +885,7 @@ introspection tools (`dir()`, REPL completion) working.
 modules, no per-runtime adapters), tightly-coupled submodules
 (`chumicro-timing` always uses both `heartbeat` and `ticks`), and
 hot-path code where lazy first-use overhead would show up as a tick
-spike.  See `plans/workstreams/lazy-loading-research.md` for the
+spike.  See `plans/workstreams/archive/lazy-loading-research.md` for the
 full Tier A vs Tier B classification.
 
 Existing names (e.g. `from chumicro_deploy import Deployer`) keep
