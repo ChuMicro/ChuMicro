@@ -15,6 +15,7 @@ from chumicro_deploy import Device
 from chumicro_deploy.protocol import TransportProtocol
 from chumicro_deploy.testing import FakeTransport
 from chumicro_workspace import cli
+from chumicro_workspace.cli import examples as cli_examples
 from chumicro_workspace.testing import (
     FakePort,
     FakeSubprocessRunner,
@@ -2086,7 +2087,7 @@ class TestDemo:
         hardware-touching line and the demo silently breaks on
         boards that don't expose the imported module.
         """
-        from chumicro_workspace.cli import DEMO_PAYLOAD
+        from chumicro_workspace.cli.examples import DEMO_PAYLOAD
 
         assert "import board" not in DEMO_PAYLOAD
         assert "import machine" not in DEMO_PAYLOAD
@@ -2105,7 +2106,7 @@ class TestBootstrapHelpers:
 
     def test_suggest_device_id_strips_with_chip_tail(self) -> None:
         from chumicro_deploy import DeviceImplementation
-        from chumicro_workspace.cli import _suggest_device_id
+        from chumicro_workspace.cli.devices import _suggest_device_id
 
         result = _suggest_device_id(DeviceImplementation(
             name="circuitpython",
@@ -2117,7 +2118,7 @@ class TestBootstrapHelpers:
 
     def test_suggest_device_id_handles_blank_machine(self) -> None:
         from chumicro_deploy import DeviceImplementation
-        from chumicro_workspace.cli import _suggest_device_id
+        from chumicro_workspace.cli.devices import _suggest_device_id
 
         result = _suggest_device_id(DeviceImplementation(
             name="micropython", version="1.27.0", machine="", uid="",
@@ -2134,7 +2135,7 @@ class TestBootstrapHelpers:
         The strip pattern matches `` with .*$`` (anchored at EOL).
         """
         from chumicro_deploy import DeviceImplementation
-        from chumicro_workspace.cli import _suggest_device_id
+        from chumicro_workspace.cli.devices import _suggest_device_id
 
         result = _suggest_device_id(DeviceImplementation(
             name="circuitpython",
@@ -2154,7 +2155,7 @@ class TestBootstrapHelpers:
 
     def test_suggest_device_id_falls_back_to_board(self) -> None:
         from chumicro_deploy import DeviceImplementation
-        from chumicro_workspace.cli import _suggest_device_id
+        from chumicro_workspace.cli.devices import _suggest_device_id
 
         result = _suggest_device_id(DeviceImplementation(
             name="", version="0.0.0", machine="!@#$%", uid="",
@@ -2162,7 +2163,7 @@ class TestBootstrapHelpers:
         assert result == "board"
 
     def test_resolve_serial_port_explicit_wins(self) -> None:
-        from chumicro_workspace.cli import _resolve_serial_port
+        from chumicro_workspace.cli._common import _resolve_serial_port
 
         result = _resolve_serial_port("/dev/cu.fake")
         assert result == "/dev/cu.fake"
@@ -2170,7 +2171,7 @@ class TestBootstrapHelpers:
     def test_resolve_serial_port_no_ports_returns_none(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace.cli import _resolve_serial_port
+        from chumicro_workspace.cli._common import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(list_ports, "comports", lambda: [])
@@ -2180,7 +2181,7 @@ class TestBootstrapHelpers:
     def test_resolve_serial_port_single_port_auto_picks(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace.cli import _resolve_serial_port
+        from chumicro_workspace.cli._common import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(
@@ -2194,7 +2195,7 @@ class TestBootstrapHelpers:
     def test_resolve_serial_port_multiple_ports_prompts(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace.cli import _resolve_serial_port
+        from chumicro_workspace.cli._common import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(
@@ -2208,7 +2209,7 @@ class TestBootstrapHelpers:
     def test_resolve_serial_port_invalid_choice_returns_none(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from chumicro_workspace.cli import _resolve_serial_port
+        from chumicro_workspace.cli._common import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(
@@ -2233,7 +2234,7 @@ class TestBootstrapHelpers:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """``command_name`` keyword tunes the user-facing log prefix."""
-        from chumicro_workspace.cli import _resolve_serial_port
+        from chumicro_workspace.cli._common import _resolve_serial_port
         from serial.tools import list_ports
 
         monkeypatch.setattr(list_ports, "comports", lambda: [])
@@ -2254,7 +2255,7 @@ class TestSuggestAddDeviceId:
         )
 
     def test_pi_pico_w_circuitpython(self) -> None:
-        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+        from chumicro_workspace.cli.devices import _suggest_add_device_id  # noqa: PLC0415
 
         result = _suggest_add_device_id(
             implementation=self._impl(
@@ -2265,7 +2266,7 @@ class TestSuggestAddDeviceId:
         assert result == "raspberry-pi-pico-w-cp"
 
     def test_lolin_s2_micropython(self) -> None:
-        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+        from chumicro_workspace.cli.devices import _suggest_add_device_id  # noqa: PLC0415
 
         result = _suggest_add_device_id(
             implementation=self._impl(
@@ -2276,7 +2277,7 @@ class TestSuggestAddDeviceId:
         assert result == "lolin-s2-mini-mp"
 
     def test_collision_appends_numeric_suffix(self) -> None:
-        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+        from chumicro_workspace.cli.devices import _suggest_add_device_id  # noqa: PLC0415
 
         impl = self._impl(
             "Raspberry Pi Pico W with rp2040", "micropython",
@@ -2304,7 +2305,7 @@ class TestSuggestAddDeviceId:
         ``"micropython-mp"`` that the suffix layer would produce if
         the underlying helper still used the runtime name as fallback.
         """
-        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+        from chumicro_workspace.cli.devices import _suggest_add_device_id  # noqa: PLC0415
 
         assert _suggest_add_device_id(
             implementation=self._impl("", "circuitpython"),
@@ -2321,7 +2322,7 @@ class TestSuggestAddDeviceId:
         the probe only returns ``circuitpython`` / ``micropython``,
         but kept defensive.
         """
-        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+        from chumicro_workspace.cli.devices import _suggest_add_device_id  # noqa: PLC0415
 
         result = _suggest_add_device_id(
             implementation=self._impl(
@@ -3061,25 +3062,25 @@ class TestResolveReplMode:
     """`_resolve_repl_mode` picks line for TTY stdin, passthrough otherwise."""
 
     def test_explicit_line_passes_through(self) -> None:
-        from chumicro_workspace.cli import _resolve_repl_mode
+        from chumicro_workspace.cli.repl import _resolve_repl_mode
 
         # Caller-specified value wins over the auto check.
         assert _resolve_repl_mode("line", stdin=_StubStdin(isatty=False)) == "line"
 
     def test_explicit_passthrough_passes_through(self) -> None:
-        from chumicro_workspace.cli import _resolve_repl_mode
+        from chumicro_workspace.cli.repl import _resolve_repl_mode
 
         assert _resolve_repl_mode(
             "passthrough", stdin=_StubStdin(isatty=True),
         ) == "passthrough"
 
     def test_auto_picks_line_on_tty(self) -> None:
-        from chumicro_workspace.cli import _resolve_repl_mode
+        from chumicro_workspace.cli.repl import _resolve_repl_mode
 
         assert _resolve_repl_mode("auto", stdin=_StubStdin(isatty=True)) == "line"
 
     def test_auto_picks_passthrough_otherwise(self) -> None:
-        from chumicro_workspace.cli import _resolve_repl_mode
+        from chumicro_workspace.cli.repl import _resolve_repl_mode
 
         assert _resolve_repl_mode(
             "auto", stdin=_StubStdin(isatty=False),
@@ -3087,7 +3088,7 @@ class TestResolveReplMode:
 
     def test_auto_picks_passthrough_when_stdin_lacks_isatty(self) -> None:
         """A non-stream stdin (e.g. None / a stub without isatty) falls back."""
-        from chumicro_workspace.cli import _resolve_repl_mode
+        from chumicro_workspace.cli.repl import _resolve_repl_mode
 
         class _Bare:
             pass
@@ -5246,7 +5247,7 @@ class TestDeployExampleListing:
             "deploy-example", "--workspace-dir", str(root),
             "--list", "ghost",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
         assert "no examples under" in capsys.readouterr().err
 
 
@@ -5264,7 +5265,7 @@ class TestDeployExamplePrechecks:
             "deploy-example", "--workspace-dir", str(root),
             "noexlib", "blink", "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
         assert "noexlib" in capsys.readouterr().err
 
     def test_missing_example_file_returns_precheck_error(
@@ -5278,7 +5279,7 @@ class TestDeployExamplePrechecks:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "ghost", "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
         assert "ghost.py not found" in capsys.readouterr().err
 
     def test_runtime_mismatch_returns_precheck_error(
@@ -5307,7 +5308,7 @@ class TestDeployExamplePrechecks:
             "timing", "circuitpython_only", "--non-interactive",
             "--device", "lolin-s2",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
         assert "requires circuitpython" in capsys.readouterr().err
 
 
@@ -5330,7 +5331,7 @@ class TestDeployExampleNoDevice:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "circuitpython_blink", "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
         stderr = capsys.readouterr().err
         assert "no circuitpython device registered" in stderr
         assert "add-device" in stderr
@@ -5351,7 +5352,7 @@ class TestDeployExampleNoDevice:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "circuitpython_blink", "--no-auto-register",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED
 
 
 class TestDeployExampleHappyPath:
@@ -5457,7 +5458,7 @@ class TestDeployExampleModes:
     def test_non_interactive_flag_forces_no_tail(self) -> None:
         """``--non-interactive`` always disables tail, even with --tail."""
         args = argparse.Namespace(non_interactive=True, tail=True)
-        non_interactive, should_tail = cli._resolve_deploy_example_modes(args)
+        non_interactive, should_tail = cli_examples._resolve_deploy_example_modes(args)
         assert non_interactive is True
         assert should_tail is False
 
@@ -5467,7 +5468,7 @@ class TestDeployExampleModes:
         """No --non-interactive + isatty=True → interactive + tail."""
         monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         args = argparse.Namespace(non_interactive=False, tail=True)
-        non_interactive, should_tail = cli._resolve_deploy_example_modes(args)
+        non_interactive, should_tail = cli_examples._resolve_deploy_example_modes(args)
         assert non_interactive is False
         assert should_tail is True
 
@@ -5477,7 +5478,7 @@ class TestDeployExampleModes:
         """No TTY → non-interactive default; tail also off."""
         monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
         args = argparse.Namespace(non_interactive=False, tail=True)
-        non_interactive, should_tail = cli._resolve_deploy_example_modes(args)
+        non_interactive, should_tail = cli_examples._resolve_deploy_example_modes(args)
         assert non_interactive is True
         assert should_tail is False
 
@@ -5487,7 +5488,7 @@ class TestDeployExampleModes:
         """Interactive but ``--no-tail`` → exit cleanly after deploy."""
         monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         args = argparse.Namespace(non_interactive=False, tail=False)
-        non_interactive, should_tail = cli._resolve_deploy_example_modes(args)
+        non_interactive, should_tail = cli_examples._resolve_deploy_example_modes(args)
         assert non_interactive is False
         assert should_tail is False
 
@@ -5508,7 +5509,7 @@ class TestDeployExampleAdditionalBranches:
             "deploy-example", "--workspace-dir", str(root),
             "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
         assert "library positional required" in capsys.readouterr().err
 
     def test_missing_example_positional_returns_precheck_error(
@@ -5523,7 +5524,7 @@ class TestDeployExampleAdditionalBranches:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
         assert "example positional required" in capsys.readouterr().err
 
     def test_list_with_no_libraries_dir_returns_precheck_error(
@@ -5539,7 +5540,7 @@ class TestDeployExampleAdditionalBranches:
         exit_code = cli.main([
             "deploy-example", "--workspace-dir", str(root), "--list",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
         assert "libraries" in capsys.readouterr().err.lower()
 
     def test_multi_runtime_example_without_runtime_flag_exits_two(
@@ -5563,7 +5564,7 @@ class TestDeployExampleAdditionalBranches:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "universal", "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED
         assert "multiple runtimes" in capsys.readouterr().err
 
     def test_multi_runtime_example_with_runtime_flag_proceeds(
@@ -5658,7 +5659,7 @@ class TestDeployExampleAdditionalBranches:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "circuitpython_blink",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED
 
     def test_no_python_runtime_classifies_to_exit_six(
         self,
@@ -5692,7 +5693,7 @@ class TestDeployExampleAdditionalBranches:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "circuitpython_blink", "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME
 
     def test_generic_deploy_exception_exits_four(
         self,
@@ -5722,7 +5723,7 @@ class TestDeployExampleAdditionalBranches:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "circuitpython_blink", "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
 
     def test_traceback_in_execute_output_exits_four(
         self,
@@ -5747,7 +5748,7 @@ class TestDeployExampleAdditionalBranches:
             "deploy-example", "--workspace-dir", str(root),
             "timing", "circuitpython_blink", "--non-interactive",
         ])
-        assert exit_code == cli.DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
+        assert exit_code == cli_examples.DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
         assert "RuntimeError: boom" in capsys.readouterr().err
 
 

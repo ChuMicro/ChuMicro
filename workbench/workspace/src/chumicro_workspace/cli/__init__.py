@@ -23,15 +23,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from chumicro_workspace.cli._common import (
-    _resolve_serial_port as _resolve_serial_port,
-)
-from chumicro_workspace.cli.bootstrap import (
-    _add_bootstrap_parser,
-)
-from chumicro_workspace.cli.bootstrap import (
-    _cmd_bootstrap as _cmd_bootstrap,
-)
+from chumicro_workspace.cli.bootstrap import _add_bootstrap_parser
 from chumicro_workspace.cli.config import _add_config_parsers
 from chumicro_workspace.cli.deploy import (
     _add_deploy_parser,
@@ -41,39 +33,9 @@ from chumicro_workspace.cli.devices import (
     _add_devices_parsers,
     _add_rename_parser,
 )
-from chumicro_workspace.cli.devices import (
-    _suggest_add_device_id as _suggest_add_device_id,
-)
-from chumicro_workspace.cli.devices import (
-    _suggest_device_id as _suggest_device_id,
-)
-from chumicro_workspace.cli.examples import (
-    DEMO_PAYLOAD as DEMO_PAYLOAD,
-)
-from chumicro_workspace.cli.examples import (
-    DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED as DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED,
-)
-from chumicro_workspace.cli.examples import (
-    DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED as DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED,
-)
-from chumicro_workspace.cli.examples import (
-    DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME as DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME,
-)
-from chumicro_workspace.cli.examples import (
-    DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED as DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED,
-)
-from chumicro_workspace.cli.examples import (
-    DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED as DEPLOY_EXAMPLE_EXIT_WIZARD_CANCELLED,
-)
 from chumicro_workspace.cli.examples import (
     _add_demo_parser,
     _add_deploy_example_parser,
-)
-from chumicro_workspace.cli.examples import (
-    _cmd_demo as _cmd_demo,
-)
-from chumicro_workspace.cli.examples import (
-    _resolve_deploy_example_modes as _resolve_deploy_example_modes,
 )
 from chumicro_workspace.cli.firmware import (
     _add_firmware_parsers,
@@ -81,23 +43,10 @@ from chumicro_workspace.cli.firmware import (
 )
 from chumicro_workspace.cli.health import _add_health_parsers
 from chumicro_workspace.cli.library import _add_library_parsers
-from chumicro_workspace.cli.quality import (
-    _add_quality_parsers,
-)
-from chumicro_workspace.cli.quality import (
-    _cmd_lint as _cmd_lint,
-)
-from chumicro_workspace.cli.quality import (
-    _cmd_test as _cmd_test,
-)
-from chumicro_workspace.cli.repl import (
-    _add_repl_parser,
-)
-from chumicro_workspace.cli.repl import (
-    _resolve_repl_mode as _resolve_repl_mode,
-)
+from chumicro_workspace.cli.quality import _add_quality_parsers
+from chumicro_workspace.cli.repl import _add_repl_parser
 from chumicro_workspace.cli.setup import _add_setup_parsers
-from chumicro_workspace.library import _real_http_get as _default_http_get
+from chumicro_workspace.library import _real_http_get
 
 # ---------------------------------------------------------------------------
 # Parser construction
@@ -180,7 +129,7 @@ class CliEnv:
     #: (``library add`` / ``update`` / ``switch-channel``).  Returns
     #: the response body bytes.  Tests pass a fixture that serves
     #: in-memory snapshot tarballs / ``index.json`` so no sockets open.
-    http_get: Callable[[str], bytes] = _default_http_get
+    http_get: Callable[[str], bytes] = _real_http_get
     #: Override the firmware-flash callable.  ``None`` means use
     #: :func:`chumicro_deploy.flash_firmware`.  Tests pass a recording
     #: stub to assert on the URL / device / kwargs the CLI forwards.
