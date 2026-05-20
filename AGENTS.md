@@ -26,6 +26,12 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 **Workflow**
 
 - Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop.
+- Anchor claims to evidence (file, symbol, test, or command). Don't fabricate. Verify by reading code, running tests, or checking command output. Training recall is not verification. For anything time-sensitive, version-specific, or newer than the model cutoff, web-search rather than asserting from memory.
+- Verify sub-agent (Explore / audit-* / general-purpose) concrete claims before relaying. Grep or read the referenced files. Reports describe intent, not state.
+- Don't modify unrelated code when fixing a focused bug. Mention pre-existing issues separately.
+- Don't add features, abstractions, or speculative error handling beyond what was asked. Removing unnecessary complexity from code you're already touching is fine.
+- Clean up after yourself. If you make an import, variable, function, or test unused, remove it. If your change affects docs, update them. Do not fix pre-existing issues unless asked.
+- Re-verify state after recovery actions. When a fix depends on the user running a recovery action (replug, reset-board, unwedge), re-run the failing detection and the smallest failing test before committing. "Done" from the user is the signal to verify, not proof the fix worked.
 - While the repo is private, commit directly to `main`. No feature branches, no PRs.
 - Pass the commit message via a single-quoted heredoc (`git commit -m "$(cat <<'EOF' … EOF)"`) so backticks, `$`, parens, and newlines pass literally. Read the [`git-commit`](.github/skills/git-commit/SKILL.md) skill before every commit.
 - `.scratch/` is gitignored. Use this folder for temp files and log captures.
@@ -35,6 +41,7 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 - Don't hard-code or commit secrets. Wifi passwords, MQTT credentials, API tokens belong only in the gitignored `secrets.toml`.
 - Pair lint suppressions with a brief explanation why so a reviewer can verify.
 - Before writing implementation code in `libraries/` or `workbench/`, skim [`plans/patterns.md`](plans/patterns.md) for an established shape.
+- Never deploy `code.py` / `main.py` containing `microcontroller.reset()` (CircuitPython) or `machine.reset()` (MicroPython). The runtime re-runs the file every boot, an infinite loop until safe mode (physical replug to recover). Trigger hard reset via raw REPL exec, one-shot, never persisted. The pattern is `workbench/deploy/src/chumicro_deploy/circuitpython_transport.py::_reset_into_bootloader`.
 
 **Testing**
 
@@ -44,7 +51,7 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 - Every cross-runtime test file must run green on a freshly-reset Pi Pico W (264 KB) under both CircuitPython and MicroPython. A PSRAM-only pass does not validate the 256 KB HAL these libraries exist for. A file that OOMs there even with `--per-file` is a tracked defect.
 - Tests in any package may depend only on: the package's own `src/` + `testing.py`, stdlib, pytest + plugins, and `support/test_harness/`. Don't `import chumicro_<other-package>` for inputs or read sibling-repo filesystems.
 
-**Code shape (libraries — runs on a microcontroller)**
+**Code shape (libraries, microcontroller only)**
 
 - Do not use `async` / `await` and ISRs. Use the tick-based runner pattern from [Decision 0014](plans/decisions/0014-runner-pattern.md). Every device library that owns time or I/O must be runner-shaped: no `time.sleep(N)` for `N > 0.005`, no `select.poll(timeout > 0)`.
 - Constructor injection for time, I/O, network deps. Fakes go in the library's `testing.py` submodule.
@@ -54,14 +61,14 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 - Use f-strings. Use `const()`, `memoryview`, pre-allocated buffers in library code only.
 - No `__slots__` in `libraries/`. MP/CP have no `__slots__` implementation.
 - No pure-passthrough `@property` in `libraries/`. Computed non marked up properties (doing actual work) stay legitimate. Workbench packages are out of scope.
-- Use descriptive names. No single-letter variables (except `_`); expand abbreviations to full words: `env`→`environment`, `buf`→`buffer`, `src`→`source`, `cmd`→`command`, `msg`→`message`, `err`→`error`, `ref`→`reference`, `addr`→`address`, `exc`→`exception`, `exec`→`execute`. The `for i in range(10)` exemption is humans-only. Enforced by `CHU001`; suppress only when matching an upstream API.
+- Use descriptive names. No single-letter variables except `_`. Expand abbreviations to full words. For example, write `environment` rather than `env`, `buffer` rather than `buf`, `source` rather than `src`, `command` rather than `cmd`, `message` rather than `msg`, `error` rather than `err`, `reference` rather than `ref`, `address` rather than `addr`, `exception` rather than `exc`, and `execute` rather than `exec`. The `for i in range(10)` exemption is humans-only. Enforced by `CHU001`. Suppress only when matching an upstream API.
 - Minimize dependencies. Prefer pure-Python implementations compatible with all three runtimes.
 - Do not apply embedded code shape rules to `workbench/` or `scripts/` folders.
 
-**Code shape (workbench — runs on a laptop)**
+**Code shape (workbench, cpython only)**
 
 - Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`). Embedded payload bytes are fine.
-- Workbench tools that touch hardware must classify failures. Every host-side tool exposes a closed-set failure-kind enum, classifier, and recovery plans in `<package>.recovery`; CLIs wrap entry points in coaching loops. Generic `raise Exception` is a UX defect.
+- Workbench tools that touch hardware must classify failures. Every host-side tool exposes a closed-set failure-kind enum, classifier, and recovery plans in `<package>.recovery`. CLIs wrap entry points in coaching loops. Generic `raise Exception` is a UX defect.
 - Workbench CLIs and `scripts/run.py` tasks callable by humans and agents support a non-interactive mode: TTY auto-detected via `sys.stdin.isatty()`, `--non-interactive` override, no prompts/tails when non-interactive, distinct exit codes per failure mode. Inherently-interactive subcommands document the TTY requirement and exit cleanly without one.
 - Code reaches a board only through the deploy stage + diff/`rsync --delete` primitive.
 
@@ -85,51 +92,44 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 
 - **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies. Whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed. A prose-only contract is exactly the drift class that ships wrong. See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
 - **Unit of work landed?** Remove the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) in the *same* edit. No `## Done` section, `git log` carries history. Items grow only by promotion to [`plans/workstreams/<name>.md`](plans/workstreams/) referenced from the bullet, never by adding sub-bullets. Enforced by `CHU011`.
-- **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands. The file is not session-start reading; consult on demand when working an area with a known open thread.
+- **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands. The file is not session-start reading. Consult on demand when working an area with a known open thread.
 - **Adding or changing an ADR?** See [`plans/decisions/README.md`](plans/decisions/README.md) for the rules (in-place edits, in-place correction of wrong reasoning, state the principle not the mechanism). New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill.
-- **End of every unit of work** → run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill: preflight green, plans-doc updated, docs in sync, commit + push. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial, and say so.
+- **End of every unit of work.** Run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill. It verifies preflight green, plans-doc updated, docs in sync, and commit and push. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial, and say so.
 
 ## Common pitfalls
 
 - Don't `pip install -e` manually to fix imports. Run `python scripts/run.py setup`.
 - If bare `python` errors `command not found`, the agent shell didn't inherit a `python` alias. Run `source .venv/bin/activate` once, or invoke `.venv/bin/python scripts/run.py …` directly.
-- Don't modify unrelated code when fixing a focused bug. Mention pre-existing issues separately.
-- Don't fabricate. Verify by reading code, running tests, or checking command output. Training recall is not verification. For anything time-sensitive, version-specific, or newer than the model cutoff, web-search it rather than asserting from memory.
-- Don't add features, abstractions, or speculative error handling beyond what was asked. If 200 lines could be 50, rewrite.
-- Don't critique an architectural split from docs alone. Read the code on both sides; docstrings often encode constraints.
-- Verify sub-agent (Explore / audit-* / general-purpose) concrete claims before relaying. Grep or read the referenced files. Reports describe intent, not state.
+- Don't critique an architectural split from docs alone. Read the code on both sides. Docstrings often encode constraints.
 - `replace_all` is literal substring substitution. Before renaming a short identifier like `_foo`, grep for longer names containing it (`_apply_foo`).
-- Editing IDE config files (`.iml`, `.idea/`, `pyrightconfig.json`, `.vscode/settings.json`): `cd` to the main checkout first; `sync-ide` from a worktree writes paths that break in main.
+- When editing IDE config files (`.iml`, `.idea/`, `pyrightconfig.json`, `.vscode/settings.json`), `cd` to the main checkout first. `sync-ide` from a worktree writes paths that break in main.
 - Don't manipulate CIRCUITPY mount state from the host (`diskutil unmount` / `eject` / `mount`, `rm /Volumes/CIRCUITPY*`). The deploy/transport code owns mount state, and manual interference defeats its mount probing + EACCES classifier (a macOS FSKit wedge can leave the volume unmountable). Destructive remediation: `chumicro-workspace reset-board --yes`.
-- Never deploy `code.py` / `main.py` containing `microcontroller.reset()` (CircuitPython) or `machine.reset()` (MicroPython). The runtime re-runs the file every boot, an infinite loop until safe mode (physical replug to recover). Trigger hard reset via raw REPL exec, one-shot, never persisted. The pattern is `workbench/deploy/src/chumicro_deploy/circuitpython_transport.py::_reset_into_bootloader`.
-- A `git rm` / `git add` stages immediately and rides into the *next* commit, even a later narrowly-scoped one. Before a scoped commit, `git --no-pager diff --cached --stat` and `git restore --staged <unrelated>`, or stage with explicit pathspecs. A pre-staged `mqtt/test_client.py` deletion once rode into an unrelated `http_server` split. Main carried a deleted-but-not-replaced suite for one commit; cost a fixup and a broken-main window.
+- A `git rm` or `git add` stages immediately and rides into the next commit, even a later narrowly-scoped one. Before a scoped commit, run `git --no-pager diff --cached --stat` and `git restore --staged <unrelated>`, or stage with explicit pathspecs. A pre-staged `mqtt/test_client.py` deletion once rode into an unrelated `http_server` split. Main carried a deleted-but-not-replaced suite for one commit, which cost a fixup and a broken-main window.
 
 ## Working style
 
-- **Anchor claims to evidence:** file, symbol, test, or command. No guessing.
-- **Grep is for verifying a specific claim, not for replacing the read on judgment tasks.** When the deliverable is a judgment that requires holding context (audit, code review, comprehending unfamiliar code), workload size is not permission to drop to pattern-scanning. Split the target into smaller sequential passes; do not switch tools. Token cost is not the success metric when the work *is* the read. Grep is the right primary tool when the deliverable is *finding* something specific (callers of X, occurrences of a pattern); it is the wrong primary tool when the deliverable is *judging* prose, structure, or design. Worked application for code comments: [`audit-comments`](.github/skills/audit-comments/SKILL.md) "Method discipline: read fully, do not grep-shortcut." Other audit-* skills inherit this rule; `audit-publishable-isolation` is exempt (grep is its right primary tool, cross-repo leak hunting).
-- **Surface tradeoffs early.** Multiple reasonable approaches → name them. Ambiguity affects correctness → ask. Simpler approach would work → say so.
+- **Grep is for verifying a specific claim, not for replacing the read on judgment tasks.** When the deliverable is a judgment that requires holding context (audit, code review, comprehending unfamiliar code), workload size is not permission to drop to pattern-scanning. Split the target into smaller sequential passes. Do not switch tools. Token cost is not the success metric when the work *is* the read. Grep is the right primary tool when the deliverable is *finding* something specific, like callers of X or occurrences of a pattern. It is the wrong primary tool when the deliverable is *judging* prose, structure, or design. Worked application for code comments lives in [`audit-comments`](.github/skills/audit-comments/SKILL.md) under "Method discipline: read fully, do not grep-shortcut." Other audit-* skills inherit this rule. `audit-publishable-isolation` is exempt, since grep is its right primary tool for cross-repo leak hunting.
+- **Surface tradeoffs early.** When multiple reasonable approaches exist, name them. When ambiguity affects correctness, ask. When a simpler approach would work, say so.
 - **Default to action on reversible local work.** File edits, tests, refactors, plans-doc updates: execute, don't ask. Surface before destructive ops (deletions, force-pushes, breaking API changes), anything visible outside this repo, or unasked scope expansion. Auto mode amplifies *lean toward action*, not *skip the destructive-op check*.
-- **Clean up after yourself.** Make an import / variable / function / test unused → remove it. Affect docs → update them. But don't fix pre-existing issues unless asked.
-- **Re-verify state after recovery actions.** When a fix depends on the user running a recovery action (replug, reset-board, unwedge), re-run the failing detection and the smallest failing test *before* committing. "Done" from the user is the signal to verify, not proof the fix worked.
 - **Quality bar.** Small focused diffs, preflight green, commit messages that name the rule / decision / pattern applied.
 
 ## Writing tone
 
-Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. The fix is usually structural, not vocabulary. When you write *"the X promise"* or *"the X pattern"*, name X concretely in the same sentence. When you catch yourself writing one, rewrite the sentence to *demonstrate* the property concretely instead of asserting it abstractly.
+Write in sentences. Don't use em-dashes, semicolons, or arrows as shortcuts that paper over missing connective tissue. If two ideas are linked, write them as two sentences or join with a comma and a connector. This applies to code comments, docstrings, and all markdown prose.
 
-**Degraded prose is rewritten, not trimmed again.** A passage rotted by repeated subtractive edits (each pass removed a word, none asked *what should this say?*) is not fixed by removing another word. That only makes it shorter and no clearer. Discard it and rewrite from a fresh read of what the thing is and why it exists. This is the *why* of the entire comment/doc-audit family: code comments → [`audit-comments`](.github/skills/audit-comments/SKILL.md), user-facing markdown → [`audit-docs`](.github/skills/audit-docs/SKILL.md), SKILL.md bodies → [`audit-skill`](.github/skills/audit-skill/SKILL.md), ADR bodies → in-place edit per [`plans/decisions/README.md`](plans/decisions/README.md). Those skills carry the scope-specific application; this is the rule they apply.
+Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. The fix is usually structural, not vocabulary. When you write "the X promise" or "the X pattern", name X concretely in the same sentence. When you catch yourself writing one, rewrite the sentence to demonstrate the property concretely instead of asserting it abstractly.
+
+**Degraded prose is rewritten, not trimmed again.** A passage rotted by repeated subtractive edits is not fixed by removing another word. That only makes it shorter and no clearer. Discard it and rewrite from a fresh read of what the thing is and why it exists. The rewrite discipline anchors the entire comment and doc audit family. Code comments route through [`audit-comments`](.github/skills/audit-comments/SKILL.md). User-facing markdown routes through [`audit-docs`](.github/skills/audit-docs/SKILL.md). SKILL.md bodies route through [`audit-skill`](.github/skills/audit-skill/SKILL.md). ADR bodies are in-place edits per [`plans/decisions/README.md`](plans/decisions/README.md). Each skill applies the rule to its scope.
 
 Specific bans:
 
-- **"the canonical promise" / "the canonical pattern"** → just name the promise or pattern. Bad: *"Verifies the canonical promise: an LED keeps blinking…"* Good: *"Verifies the LED-blink invariant: an LED keeps blinking…"*
-- **"the canonical X" generally** → check whether *"the X"* or *"the standard X"* is enough. Keep `canonical encoding`, `canonical form`, `canonical path`; these are real technical terms with no fluff substitute.
-- **"the one/single/sole X that …"** as a definition opener → same tic as "the canonical X"; define the thing plainly (*"`run.py` enforces coverage"*, not *"`run.py` is the single mechanism that enforces coverage"*). Applies to comments and docstrings in `src/`, not just prose docs. Tone guidance, not a lint. Legitimate invariant prose (*"the single owner of the staging path"*, Decision 0077's *"exactly one mechanism"*) is correct and stays; this is judgement, not a mechanizable matcher (see the CHU020 entry in [`plans/next-up.md`](plans/next-up.md)).
-- **`the X` only when X is a specific established instance** → per-noun forward-reference test for every `the` in prose; the failure mode that compounds across REWRITE passes the way the superlative tic above does. Three-way call: **`the X`** when the reader already has a definite singular referent (established by surrounding code, the prior sentence, or method lifecycle, e.g. *"the open raw-REPL session"* after `_enter_raw_repl` has run); **`a / an X`** when X is a category or a forward reference the reader has not acquired yet (*"send an autoreload-off REPL command"*, one of many commands the call could send, named for the first time); **bare `X`** when X is a system / category / brand name where the article is decoration (*"per-user launchd respawns the agent"*, *"ESP32-S2 USB-CDC firmware"*). Two nouns in one sentence often deserve different choices, e.g. *"Send an autoreload-off REPL command on the open raw-REPL session"*: command is forward-reference (`an`), session is established singular (`the`). "Without it the prose reads telegraphic" is a defense of `the → bare`, never of `the → an/a` (an indefinite article is not clinical); conflating them is how `the`s the rewrite did not earn survive. Tone guidance, not a lint.
-- **"comprehensive" / "robust" / "seamlessly" / "cutting-edge" / "best-in-class"** → drop outright. If you'd reach for *"comprehensive"*, list what it covers; for *"robust"*, name what it survives.
-- **"It is worth noting that" / "It should be noted that" / "Note that"** (sentence opener) → just say the thing.
-- **"Let's dive into" / "Let's explore" / "In this section, we will"** → start with the content.
-- **CHU lint codes in prose** in publishable trees → name the rule's intent (*"silent test skips"*). Enforced by `CHU006`, which exempts `# noqa: CHUNNN` directives.
+- Avoid "the canonical X" framing. Often "the X" or "the standard X" works as well, and frequently the bare phrase reads better still. Keep canonical encoding, canonical form, and canonical path. These are real technical terms with no fluff substitute.
+- Avoid "the one / single / sole X that…" as a definition opener. It is the same tic as canonical X. Say plainly what X does. Legitimate invariant prose like "the single owner of the staging path" stays. Tone guidance, not a lint.
+- Use "the X" only when X is an established singular referent the reader already has. Use "a X" or "an X" for forward references or categories the reader has not acquired yet. Use bare X for systems and brand names where the article is decoration. For example, write "ESP32-S2 firmware" rather than "the ESP32-S2 firmware". Two nouns in one sentence often need different articles. Indefinite articles are not clinical. Reaching for "the" everywhere to sound terse is a frequent miss.
+- Don't open sentences with "this is the" or "this is a" to point back at what was just said. State the thing directly. For example, write "The rewrite discipline anchors the audit family" rather than "This is the rule the audit family applies".
+- Drop adjectives that don't carry information: comprehensive, robust, seamlessly, cutting-edge, best-in-class. If you'd reach for "comprehensive", list what it covers. If you'd reach for "robust", name what it survives.
+- Don't open sentences with filler like "It is worth noting that", "It should be noted that", "Note that", "Let's dive into", "Let's explore", or "In this section, we will". Start with the content.
+- In publishable trees, don't cite CHU lint codes in prose. Name the rule's intent instead. For example, write "silent test skips" rather than "CHU009". Enforced by CHU006. The `# noqa: CHUNNN` directive is exempt.
 
 ## Project overview
 
@@ -157,7 +157,7 @@ The installer's destination decides the folder. Workbench-shipped *payload* (tem
 
 ### Libraries
 
-`ls libraries/` is the live inventory; each has a `README.md` and `docs/guide.md`. The dependency stack, broadly:
+`ls libraries/` is the live inventory. Each library has a `README.md` and `docs/guide.md`. The dependency stack, broadly:
 
 - **Primitives:** `timing`, `runner`, `compat`, `logging`, `events`. Depended-on-by-everyone.
 - **Persistence + serialization:** `msgpack`, `config`, `kvstore`.
@@ -169,15 +169,15 @@ Per-library deps are declared in each `pyproject.toml`. When a library doesn't a
 
 `ls workbench/` is the live inventory. Currently:
 
-- **`deploy`:** push code, probe identity, flash firmware; failure-classifying recovery layer.
-- **`repl`:** serial REPL with traceback highlighting and `tail()` follow-mode.
-- **`workspace`:** project workspace CLI (composes `deploy` + `repl` + config); starter is the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo.
-- **`pytest-device`:** pytest plugin (auto-registered via `pytest11`) that stages source onto a board and runs tests in the device runtime.
-- **`checks`:** the `CHU0NN` lint rules (`chumicro-checks`).
+- **`deploy`** pushes code, probes identity, and flashes firmware. It also provides a failure-classifying recovery layer.
+- **`repl`** is a serial REPL with traceback highlighting and a `tail()` follow-mode.
+- **`workspace`** is the project workspace CLI. It composes `deploy`, `repl`, and config. The starter is the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo.
+- **`pytest-device`** is a pytest plugin (auto-registered via `pytest11`) that stages source onto a board and runs tests in the device runtime.
+- **`checks`** carries the `CHU0NN` lint rules (`chumicro-checks`).
 
 ## Commands
 
-The mono-repo has workspace shape (`workspace.yml` + `devices.yml` at root), so the workbench CLIs work directly here. `python scripts/run.py setup` editable-installs every package into `.venv/`; activate it or use `.venv/bin/<cli>`. System `python3` won't find `chumicro_*`.
+The mono-repo has workspace shape (`workspace.yml` + `devices.yml` at root), so the workbench CLIs work directly here. `python scripts/run.py setup` editable-installs every package into `.venv/`. Activate it or use `.venv/bin/<cli>`. System `python3` won't find `chumicro_*`.
 
 ### `python scripts/run.py <cmd>`: CI-mirror runner
 
@@ -197,9 +197,9 @@ Core commands for active development and troubleshooting:
 
 ### Workbench CLIs, directly invocable from the mono-repo
 
-- **`chumicro-workspace`:** top-level dispatcher: project-workspace lifecycle, device registry, running things on a board, config, firmware, curated libraries, health, and quality gates. Run `chumicro-workspace --help` for the live subcommand list.
-- **`chumicro-deploy`:** lower-level transport: `probe`, `flash`, `deploy`, `resolve-firmware-url`. Prefer the `chumicro-workspace` wrappers; reach for this when composing custom flows.
-- **`chumicro-repl`:** direct REPL without a workspace project.
+- **`chumicro-workspace`** is the top-level dispatcher. It covers project-workspace lifecycle, device registry, running things on a board, config, firmware, curated libraries, health, and quality gates. Run `chumicro-workspace --help` for the live subcommand list.
+- **`chumicro-deploy`** is the lower-level transport, with subcommands `probe`, `flash`, `deploy`, and `resolve-firmware-url`. Prefer the `chumicro-workspace` wrappers. Reach for this when composing custom flows.
+- **`chumicro-repl`** is a direct REPL without a workspace project.
 
 `<cli> --help` and `<cli> <sub> --help` for full flag lists. Walkthroughs in [docs/contributing/device-testing.md](docs/contributing/device-testing.md) and [docs/contributing/working-with-agents.md](docs/contributing/working-with-agents.md).
 
@@ -230,9 +230,9 @@ For deeper implementation detail:
 - [plans/patterns.md](plans/patterns.md): implementation cookbooks. Service pattern, recv-buffer + memoryview, lazy adapter selection, FIFO deque, mpremote internals, and more.
 - [docs/contributing/style-guide.md](docs/contributing/style-guide.md): naming, annotations, imports, layout, doc tone.
 - [docs/contributing/device-testing.md](docs/contributing/device-testing.md): functional tests, deploy modes, devices.yml.
-- [docs/contributing/releases.md](docs/contributing/releases.md): VERSION, SemVer, experimental → stable promotion.
+- [docs/contributing/releases.md](docs/contributing/releases.md) covers VERSION, SemVer, and experimental-to-stable promotion.
 - [docs/contributing/pull-requests.md](docs/contributing/pull-requests.md): PR conventions.
 
-Tests live under each library's `tests/`; shared fakes in `src/chumicro_<name>/testing.py`. On-device tests live under `functional_tests/` and use `support/test_harness/`.
+Tests live under each library's `tests/`. Shared fakes live in `src/chumicro_<name>/testing.py`. On-device tests live under `functional_tests/` and use `support/test_harness/`.
 
-Each library's `VERSION` file is the source of truth, bump only affected libraries. Development code stays as plain `.py`; `.mpy` compilation happens in the release pipeline.
+Each library's `VERSION` file is the source of truth. Bump only affected libraries. Development code stays as plain `.py`. `.mpy` compilation happens in the release pipeline.
