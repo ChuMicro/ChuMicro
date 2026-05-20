@@ -1,36 +1,16 @@
 """Tab-completion for the line-mode REPL.
 
-The line-mode loop hands a `prompt_toolkit.completion.Completer`
-to its `PromptSession`.  Tab on a partial token yields a list of
-completion strings drawn from two sources:
+Provides a :class:`Completer` protocol, two implementations (a
+static keyword/builtins catalog and a device-backed fetcher), a
+:class:`CombinedCompleter` that layers them, and a prompt_toolkit
+adapter.
 
-* :class:`KeywordCompleter` — Python keywords + common builtins.
-  Always works, no device round-trip.
-* :class:`DeviceCompleter` — queries the on-device REPL for
-  ``dir(<expression>)`` and caches the result in a
-  :class:`CompletionCache` keyed by namespace expression.
-
-The mode-switch round-trip
---------------------------
-:func:`fetch_device_names` drives the friendly-REPL → raw-REPL →
-``print(repr(dir(<expression>)))`` → friendly-REPL cycle in one
-function call.  Hardware-measured RTT across the canonical
-four-board matrix (Lolin S2 CP/MP, Pi Pico W CP/MP) sits between
-8 and 45 ms — well below the perceptual threshold for "instant"
-Tab response.  The friendly-banner reprint that ``Ctrl-B``
-triggers is consumed by the fetcher's read-until-``>>> ``,
-so the bytes never surface into the line-mode drain loop or the
-user's terminal.
-
-The fetcher runs synchronously inside the prompt_toolkit
-completer callback — the line-mode loop is parked in
-``session.prompt(...)`` while the user is typing, so no other
-code is touching the port.  No locking required.
-
-Caching policy: a successful ``dir()`` populates the cache for
-the lifetime of the session.  ``DeviceCompleter.cache.clear()``
-forces a re-query on the next Tab — wired into the line-mode
-``:rescan`` builtin command.
+The device-backed source drives a friendly-REPL to raw-REPL to
+``dir()`` round-trip per Tab and caches the result, so successive
+Tabs in the same namespace are served from memory.  The fetcher
+runs synchronously inside the prompt_toolkit callback because the
+line-mode loop is parked in ``session.prompt(...)`` while the user
+is typing, so nothing else is touching the port.
 """
 
 from __future__ import annotations

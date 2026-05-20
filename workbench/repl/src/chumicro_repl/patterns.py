@@ -149,18 +149,15 @@ class StreamingPatternDetector:
     """Scan an unbounded byte stream for noteworthy patterns.
 
     Feed decoded text into :meth:`feed` as it arrives.  The detector
-    buffers up to a bounded amount of trailing context so a pattern
-    that spans a chunk boundary still matches, yields every match
-    contained entirely within the current buffer, and trims matched
-    content plus anything older than the buffer-size window.
-
-    Bounded memory: long-running streams that never match keep the
-    buffer at or below *buffer_limit*.
+    buffers a trailing window of *buffer_limit* characters so a
+    pattern that spans a chunk boundary still matches, yields every
+    match contained entirely within that window, and drops older
+    content as new text arrives.
 
     Args:
-        buffer_limit: Soft cap on buffered bytes.  Patterns longer
-            than this limit are not detected — the default (8 KiB)
-            comfortably covers any realistic traceback.
+        buffer_limit: Soft cap on buffered characters.  Patterns
+            longer than this limit are not detected; the default
+            (8 KiB) comfortably covers any realistic traceback.
     """
 
     __slots__ = ("_buffer", "_offset", "_buffer_limit", "_total_fed")

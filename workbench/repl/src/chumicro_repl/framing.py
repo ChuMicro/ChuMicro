@@ -26,16 +26,18 @@ _MAX_UTF8_SEQUENCE_BYTES = 4
 def _utf8_continuation_start(chunk: bytes) -> int:
     """Return the byte index where a trailing incomplete UTF-8 sequence starts.
 
-    Walks backward from the end of *chunk* up to
-    :data:`_MAX_UTF8_SEQUENCE_BYTES` bytes.  A UTF-8 leading byte is
-    any byte that is **not** a continuation byte (continuation bytes
-    match ``0b10xxxxxx``).  Once we find the leading byte, we check
-    how many bytes its pattern says the sequence needs — if the chunk
-    has fewer remaining bytes from that position than the sequence
-    requires, the tail is incomplete and the caller should buffer it.
+    Returns ``len(chunk)`` when the chunk ends on a complete sequence,
+    so the caller can decode the whole chunk and keep nothing
+    buffered.  Otherwise returns the position of the last leading
+    byte, marking where to split so the incomplete tail can be
+    prepended to the next chunk.
 
-    Returns ``len(chunk)`` (no truncation) when the chunk ends on a
-    complete sequence.
+    Walks backward from the end of *chunk* up to
+    :data:`_MAX_UTF8_SEQUENCE_BYTES` bytes looking for the most
+    recent leading byte (any byte that does not match the
+    ``0b10xxxxxx`` continuation pattern), then checks whether the
+    remaining bytes from that position are enough to complete the
+    sequence the leading byte introduces.
     """
     chunk_length = len(chunk)
     if chunk_length == 0:
@@ -73,17 +75,12 @@ def _utf8_continuation_start(chunk: bytes) -> int:
 class Utf8StreamDecoder:
     """Incremental UTF-8 decoder with chunk-boundary buffering.
 
-    Use one instance per live stream.  Call :meth:`decode` with each
-    chunk of bytes as they arrive; the return value is every
-    code-point that can be fully decoded so far.  Call :meth:`flush`
-    when the stream ends to emit any remaining (incomplete) bytes
-    with error-replacement.
-
-    Invalid byte sequences in the middle of a chunk are decoded with
-    ``errors="replace"`` — the caller never has to handle a
-    :class:`UnicodeDecodeError`.  Bytes that look like the start of a
-    not-yet-complete sequence at the tail of a chunk are buffered and
-    prepended to the next chunk.
+    One instance per live stream.  :meth:`decode` returns every
+    fully-decodable code point in the chunk so far, holding any
+    trailing incomplete sequence for the next call.  :meth:`flush`
+    releases the remaining buffered bytes at end-of-stream.  Both
+    methods decode with ``errors="replace"``, so a caller never sees
+    :class:`UnicodeDecodeError`.
 
     Example::
 
