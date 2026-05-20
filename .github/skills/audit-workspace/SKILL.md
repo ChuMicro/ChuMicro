@@ -107,7 +107,7 @@ These cross-library invariants only show up at workspace scope.
 
 * **Coverage gate consistency** (Decision [0025](../../../plans/decisions/0025-dual-coverage-thresholds.md)) — agents pass `--coverage-threshold 94`.  If any library is materially below 94% AND has unjustified `# pragma: no cover` exclusions, flag for cleanup.
 
-* **Four-board canonical matrix.**  Hardware-touching changes verify against `devices.yml` defaults: Pi Pico W CP, Pi Pico W MP, Lolin S2 CP, Lolin S2 MP.  When the workspace audit surfaces a workstream that needs hardware verification, propose using this matrix unless there's a specific reason to subset.
+* **Four-board verification matrix.**  Hardware-touching changes verify against `devices.yml` defaults: Pi Pico W CP, Pi Pico W MP, Lolin S2 CP, Lolin S2 MP.  When the workspace audit surfaces a workstream that needs hardware verification, propose using this matrix unless there's a specific reason to subset.
 
 * **`requires_flash` flagging** (Decision [0047](../../../plans/decisions/0047-deploy-mode-flash-default.md)) — libraries that OOM in CP RAM-mode on minimum-tier boards should set `[tool.chumicro].requires_flash = true` in pyproject.  Audit which libraries have it; flag any large device libraries that don't but probably should.
 

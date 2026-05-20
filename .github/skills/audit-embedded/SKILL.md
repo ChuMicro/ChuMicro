@@ -146,6 +146,11 @@ Audit each of these patterns honestly against the actual MicroPython / CircuitPy
 
 The "code comments" rule in AGENTS.md says comments document the *why* of current code. The embedded angle adds: `.py` is what installs in practice, so every comment line is a flash byte on the device.
 
+**Scope split with sibling skills.**
+
+* For the **prose-quality lens** (cold-reader test, KEEP / TRIM / REWRITE / DELETE classification, definition-by-superlative, the *new prose written from a fresh read of the code* discipline), route to [`/audit-comments`](../audit-comments/SKILL.md).  This skill stays focused on the flash-cost angle: density, signature-restating bulk, per-change justification residue.
+* For **AI-tic vocabulary in docstrings** (*"comprehensive"*, *"robust"*, *"seamlessly"*, etc.), run the standing regex from [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex) over `src/` docstrings and comments.  The cost amplifies here — every byte of empty-adjective prose ships to every board.  Treat hits per [§ Phrase bans](../../../docs/contributing/agent-style-guide.md#phrase-bans).
+
 * **Multi-paragraph docstrings that re-state the signature in prose.** Flag — collapse to one sentence (or drop, if the name is self-evident).
 * **Block comments narrating history.** "Previously this returned a list, we switched to deque for…" — belongs in the commit message. Delete.
 * **Stale TODO / FIXME / XXX.** Same. Delete unless actionable now.
@@ -154,7 +159,9 @@ The "code comments" rule in AGENTS.md says comments document the *why* of curren
 
 ### 9. Docs match code — code is the source of truth
 
-The library's `docs/guide.md`, the library's `README.md`, the docstrings in `src/`, and any examples under `examples/` make claims about the API. Each claim is a candidate for drift.
+The library's `docs/guide.md`, the library's `README.md`, the docstrings in `src/`, and any examples under `examples/` make claims about the API.  Each claim is a candidate for drift.
+
+**Scope split with `/audit-docs`.**  This skill catches the *factual* drift: a documented CLI flag the code no longer accepts, a renamed exception, a default value that changed, a dead cap-knob.  When the fix opens prose that needs reshaping — a paragraph rotted from prior trims, a structural-flow issue, AI-tic phrases that won't survive the rewrite, a section that no longer matches the cold-reader arc — route the prose-shape work to [`/audit-docs`](../audit-docs/SKILL.md).  Two skills, two scopes, one library.
 
 * **Every CLI command / flag mentioned in docs:** does it still exist in the code with the documented shape? Grep the code for the flag name; if absent, the doc is wrong. Default: fix the doc to match the code.
 * **Every public symbol mentioned in docs:** still exported from `__all__`? Same parameter list? Same return-shape?
