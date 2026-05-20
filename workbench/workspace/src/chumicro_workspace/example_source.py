@@ -37,16 +37,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
     WithRuntimeConfig,
     wrap_with_runtime_config,
 )
-
-if TYPE_CHECKING:  # pragma: no cover — type-only
-    pass
 
 #: On-device entrypoint name keyed by runtime.  CircuitPython runs
 #: ``code.py`` at boot; MicroPython runs ``main.py``.  CPython has no
