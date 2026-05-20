@@ -495,15 +495,16 @@ class TestTransportCache:
         )
 
         # Monkey-patch build_transport_for_entry to avoid real hardware.
-        original = pytest_device.build_transport_for_entry
-        pytest_device.build_transport_for_entry = fake_create
+        from chumicro_pytest_device import transport_cache as transport_cache_module
+        original = transport_cache_module.build_transport_for_entry
+        transport_cache_module.build_transport_for_entry = fake_create
         try:
             transport_a = cache.get_transport(device, None)
             transport_b = cache.get_transport(device, None)
             assert transport_a is transport_b
             assert len(calls) == 1
         finally:
-            pytest_device.build_transport_for_entry = original
+            transport_cache_module.build_transport_for_entry = original
 
     def test_current_staged_library_not_set_initially(self) -> None:
         """A fresh cache should report no library staged on any device."""
@@ -539,8 +540,9 @@ class TestTransportCache:
             runtime="micropython",
             address="/dev/ttyUSB0",
         )
-        original = pytest_device.build_transport_for_entry
-        pytest_device.build_transport_for_entry = (
+        from chumicro_pytest_device import transport_cache as transport_cache_module
+        original = transport_cache_module.build_transport_for_entry
+        transport_cache_module.build_transport_for_entry = (
             lambda device_entry, deploy_mode=None: FakeTransport()
         )
         try:
@@ -559,7 +561,7 @@ class TestTransportCache:
             # Disconnect was called on the transport.
             assert transport.calls[-1] == ("disconnect", ())
         finally:
-            pytest_device.build_transport_for_entry = original
+            transport_cache_module.build_transport_for_entry = original
 
     def test_invalidate_device_keeps_batch_results(self) -> None:
         """Cached batch results survive invalidate_device.
@@ -1084,7 +1086,10 @@ class TestEnsurePrepared:
         def raise_on_create(device_entry, deploy_mode=None):
             raise RuntimeError("device not reachable")
 
-        monkeypatch.setattr(pytest_device, "build_transport_for_entry", raise_on_create)
+        from chumicro_pytest_device import transport_cache as transport_cache_module
+        monkeypatch.setattr(
+            transport_cache_module, "build_transport_for_entry", raise_on_create,
+        )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
         item = make_prepare_item(hot_path_session, device, test_file)
