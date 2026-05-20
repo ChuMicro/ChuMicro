@@ -452,13 +452,13 @@ def derive_firmware_url(
 
     Resolution order:
 
-    1. ``hardware.firmware_source`` is set → return it verbatim
+    1. When ``hardware.firmware_source`` is set, return it verbatim
        (custom URL or local path; vendor forks live here).
-    2. Runtime is ``circuitpython`` → look up
+    2. When the runtime is ``circuitpython``, look up
        ``hardware.board_id`` against the S3 bucket and return the
        latest CDN URL.
-    3. Runtime is ``micropython`` → look up ``hardware.machine``
-       against the curated map.  No MP URL is constructed — the
+    3. When the runtime is ``micropython``, look up ``hardware.machine``
+       against the curated map.  No MP URL is constructed; the
        caller (CLI) prompts for one and stores it via
        ``hardware.firmware_source`` for next time.
 

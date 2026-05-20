@@ -1,13 +1,12 @@
 """Canned :class:`RecoveryPlan` text for every :class:`DeployFailureKind`.
 
-Extracted from :mod:`recovery` so the user-facing coaching strings
-live next to one another (and apart from the classifier + deployer-
-wrapper machinery that consumes them).  Edits here are text-only;
-the only code-shape constraint is the ``retryable`` flag that
-:class:`~chumicro_deploy.recovery.RecoveringDeployer` reads to
+The user-facing coaching strings live here, apart from the classifier
+and deployer-wrapper machinery that consumes them.  Edits here are
+text-only; the one code-shape constraint is the ``retryable`` flag
+that :class:`~chumicro_deploy.recovery.RecoveringDeployer` reads to
 decide whether to loop or bail.
 
-The :data:`PLANS` mapping is the single source of truth — the
+The :data:`PLANS` mapping is the source of truth — the
 :func:`~chumicro_deploy.recovery.recovery_plan_for` accessor reads
 straight through it.  Tests import it directly to assert content.
 """

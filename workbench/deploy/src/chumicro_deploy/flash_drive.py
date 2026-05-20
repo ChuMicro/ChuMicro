@@ -1,8 +1,9 @@
 """CircuitPython flash-mode USB-drive staging and FAT32 hygiene helpers.
 
-Extracted from :mod:`circuitpython_transport` so the raw-REPL transport
-stays focused on serial protocol concerns and the flash-drive staging
-lives in one coherent module.
+Every helper here operates on filesystem paths or subprocess calls
+and has no transport state to carry, so they live as module-level
+functions instead of methods on a class.  :func:`flush_volume` takes
+an injected sleep callable so tests can skip the real settle delay.
 
 Contents:
 
@@ -26,11 +27,6 @@ Contents:
   contaminated drives.  Runs *after* rsync; idempotent.
 - :func:`flush_volume` — ``sync`` + settle-delay so FAT32 media is
   consistent before the device reads new content.
-
-All helpers are module-level functions (not methods on a class) because
-they operate on filesystem paths or subprocess calls and have no
-transport state to carry.  :func:`flush_volume` takes an injected
-sleep callable so tests can skip the real settle delay.
 """
 
 from __future__ import annotations
@@ -122,11 +118,11 @@ def compute_rsync_timeout_seconds(staging_size_bytes: int) -> float:
             RSYNC_TIMEOUT_MIN_SECONDS)
 
     For a typical chumicro deploy (~200 KB staging) this lands at the
-    floor (90 s); for a 1 MB deploy it grows to 180 s; for a 5 MB
-    deploy to 660 s.  Keeps fast boards (Pi Pico W, ~5 s rsync in
-    practice) on a tight leash while giving slow boards (Lolin S2 /
-    ESP32-S2, often 60-120 s for the same payload) enough headroom
-    to finish without false-positive timeouts.
+    240 s floor; a 1 MB deploy grows to 720 s; a 5 MB deploy to 3120 s.
+    Keeps fast boards (Pi Pico W, a few seconds rsync in practice) on
+    a tight leash while giving slow boards (Lolin S2 / ESP32-S2,
+    often 60-120 s for the same payload) enough headroom to finish
+    without false-positive timeouts.
 
     Args:
         staging_size_bytes: Sum of file sizes in the local staging
@@ -267,12 +263,12 @@ def _rsync_exclude_and_endpoint_args(
     *,
     additional_excludes: tuple[str, ...] | list[str],
 ) -> list[str]:
-    """Return the tail args shared by :func:`rsync` and :func:`verify_rsync`.
+    """Return the ``--exclude=…`` flags + trailing-slash endpoint args.
 
-    Both callers append the same ``--exclude=…`` flags (from
-    :data:`_BASE_RSYNC_EXCLUDES` + the caller's additions) followed by
-    ``str(source) + "/"`` and ``str(destination) + "/"``.  Keeps the
-    exclude set + the trailing-slash convention in one place.
+    Combines :data:`_BASE_RSYNC_EXCLUDES` with the caller's additions,
+    then appends ``str(source) + "/"`` and ``str(destination) + "/"``.
+    Centralizes the exclude set and the trailing-slash convention in
+    one place.
     """
     args: list[str] = []
     for pattern in _BASE_RSYNC_EXCLUDES:

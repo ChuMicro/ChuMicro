@@ -422,7 +422,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         default=True,
         help=(
-            "Legacy additive deploy: reconcile only the entrypoint / "
+            "Additive deploy: reconcile only the entrypoint / "
             "state files + /lib, leaving every other board file in "
             "place.  The default is clean-slate — the deploy removes "
             "anything that isn't the new payload or a device-required "

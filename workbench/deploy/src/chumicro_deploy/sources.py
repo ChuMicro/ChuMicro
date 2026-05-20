@@ -428,12 +428,13 @@ class ImportGraphSource:
                 discovered.append(node.module)
                 # ``from foo.bar import baz`` could be importing a
                 # ``foo/bar/baz.py`` submodule or a name defined in
-                # ``foo/bar/__init__.py``.  AST can't tell — probe both.
+                # ``foo/bar/__init__.py``.  AST can't tell which form
+                # an import resolves to, so probe both.
                 # ``_resolve_module`` skips names that don't resolve to
                 # a real file, so probing harmless function/class names
-                # is a no-op.  Closes the gap where a runtime-gated
-                # ``from chumicro_sockets._adapters import mp`` inside
-                # a function body shipped only ``_adapters/__init__.py``,
+                # is a no-op.  Without this, a runtime-gated
+                # ``from chumicro_sockets._adapters import mp`` inside a
+                # function body ships only ``_adapters/__init__.py``,
                 # not the named adapter file.
                 for alias in node.names:
                     if alias.name != "*":
@@ -481,10 +482,7 @@ class ImportGraphSource:
         """Return the host filesystem paths every contributed module
         was read from, including the entrypoint.
 
-        Used by :mod:`chumicro_deploy.preflight` to walk back from
-        each module to its containing ``pyproject.toml`` and read
-        the ``[tool.chumicro].requires_flash`` flag.  Returns a copy
-        so callers can mutate without affecting the source's
-        internal record.
+        Returns a copy so callers can mutate without affecting the
+        source's internal record.
         """
         return list(self._host_paths)

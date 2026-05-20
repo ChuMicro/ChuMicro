@@ -57,10 +57,9 @@ def is_native_windows() -> bool:
 def check_supported_platform() -> None:
     """Raise :class:`WindowsNotSupportedError` on native Windows.
 
-    Called from :class:`~chumicro_deploy.deployer.Deployer` and
-    :func:`~chumicro_deploy.probe.probe_device` so users see one clean
-    error before the deploy flow tries to enumerate POSIX-only paths.
-    No-op on macOS, Linux, and WSL2.
+    Call before any path that enumerates serial ports or USB mount
+    points, so users see one clean error before the deploy flow tries
+    to walk POSIX-only paths.  No-op on macOS, Linux, and WSL2.
     """
     if is_native_windows():
         raise WindowsNotSupportedError(_WINDOWS_GUIDANCE)
@@ -101,11 +100,10 @@ def install_hint_for_rsync() -> str:
 def check_rsync_available() -> None:
     """Raise :class:`RsyncMissingError` if ``rsync`` is not on PATH.
 
-    Called from :class:`~chumicro_deploy.deployer.Deployer` before
-    flash-mode CircuitPython deploys so users see one clear error
-    before the transport opens a serial connection and starts
-    staging.  The error embeds the install hint from
-    :func:`install_hint_for_rsync`.
+    Call before a CircuitPython flash-mode deploy so a missing rsync
+    surfaces as one clear error before the transport opens a serial
+    connection and starts staging.  The error embeds the install hint
+    from :func:`install_hint_for_rsync`.
     """
     if shutil.which("rsync") is None:
         raise RsyncMissingError(

@@ -106,7 +106,7 @@ class DeviceEntry:
     #: mode at all (none known — the field exists so the schema
     #: is stable when one appears).  RAM being merely *tight* (e.g. Pi
     #: Pico W's 256 KB) is a per-library concern, not this.  Absent in
-    #: ``devices.yml`` ⇒ ``True`` (back-compatible).
+    #: ``devices.yml`` defaults to ``True`` for back-compatibility.
     supports_ram_mode: bool = True
     extra: dict = field(default_factory=dict)
 
@@ -414,12 +414,10 @@ def _resolve_raw_entry(
 ) -> tuple[dict[str, Any], str | None]:
     """Resolve one raw ``devices.yml`` entry by the precedence rules.
 
-    The single owner of devices.yml selection logic.  Both
-    :func:`load_devices_yml` (returns a :class:`Device`) and
-    :func:`load_devices_yml_raw` (returns the entry dict) delegate
-    here so the resolution order lives in exactly one place — no
-    consumer reimplements ``device_id → defaults.<runtime> →
-    single-default`` for itself.
+    Owns the selection logic so both :func:`load_devices_yml` (returns
+    a :class:`Device`) and :func:`load_devices_yml_raw` (returns the
+    entry dict) share one resolution order: ``device_id → defaults.<runtime>
+    → single-default``.
 
     Returns ``(chosen_entry, default_deploy_mode)``.  Raises as
     documented on :func:`load_devices_yml`.

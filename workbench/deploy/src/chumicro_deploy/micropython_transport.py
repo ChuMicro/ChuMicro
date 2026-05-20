@@ -62,8 +62,7 @@ class MicropythonMidDeployDisconnected(MicropythonTransportError):
 
     Subclass so callers can ``except`` "the cable came out" without
     conflating it with other mpremote transport errors (mount
-    failure, copy failure, bootstrap exec failed).  Mirrors
-    :class:`CircuitpythonMidDeployDisconnected`.
+    failure, copy failure, bootstrap exec failed).
 
     The original :class:`OSError` is attached as :attr:`cause` so
     callers that need the underlying errno can read it without
@@ -87,9 +86,9 @@ _SCOPE_LISTING_MARKER: str = "__CHU_F:"
 
 #: Directory / file basenames the test-harness staging path skips when
 #: copying library `src/` trees into the device-bound staging dir.
-#: Mirrors the exclude set used by `chumicro_deploy.sources.PackageSource`
-#: and `flash_drive.rsync` — keeps host-only build artifacts off device
-#: flash.  ``*.pyc`` and ``*.egg-info`` are matched by suffix elsewhere.
+#: Keeps host-only build artifacts (bytecode caches, VCS dirs, IDE
+#: caches) off device flash.  ``*.pyc`` and ``*.egg-info`` are matched
+#: by suffix elsewhere.
 _STAGE_EXCLUDED_NAMES: frozenset[str] = frozenset(
     {"__pycache__", ".DS_Store", ".git", ".pytest_cache", ".mypy_cache"},
 )
@@ -346,11 +345,10 @@ class MicropythonTransport:
         self.address = address
         self.baudrate = baudrate
         self.mode = mode
-        #: Wall-clock budget for the soft-reboot read in
-        #: :meth:`deploy_files` ``follow="soft_reboot"``.  Mirrors
-        #: :class:`CircuitpythonTransport`'s ``timeout`` (10 s default)
-        #: so the partial-output window for ``while True`` app code
-        #: feels the same on both runtimes.  ``follow="exec"`` ignores
+        #: Wall-clock budget (10 s default) for the soft-reboot read
+        #: in :meth:`deploy_files` ``follow="soft_reboot"``.  Sized so
+        #: the partial-output window for ``while True`` app code
+        #: matches across both runtimes.  ``follow="exec"`` ignores
         #: this — that path uses :data:`_EXECUTE_IDLE_TIMEOUT` (an
         #: inter-byte idle timeout, not a wall-clock budget) for raw-
         #: REPL EOF reception.
@@ -555,11 +553,10 @@ class MicropythonTransport:
     def run_script(self, script: str, *, timeout: float = 10.0) -> str:
         """Run *script* via the persistent serial REPL with no staging.
 
-        Mirrors :meth:`probe_implementation` — opens the raw REPL if
-        needed and runs the script directly via ``exec_raw``.  The
-        ``stage()``-first precondition that :meth:`execute` enforces
-        is bypassed because *script* is expected to be self-contained
-        (no imports of staged modules).
+        Opens the raw REPL if needed and runs the script directly via
+        ``exec_raw``.  Bypasses the ``stage()``-first precondition
+        that :meth:`execute` enforces because *script* is expected to
+        be self-contained (no imports of staged modules).
 
         Args:
             script: Self-contained Python source to run.
@@ -584,14 +581,11 @@ class MicropythonTransport:
         ``sys.modules`` and the device heap without toggling USB, so
         it is safe to run between every file.
 
-        The mount is **not** restored by this method.  The caller (the
-        device orchestration layer) always calls ``stage()`` next, and
-        ``stage()`` owns the fresh mount.  Restoring the mount here
-        instead would double-wrap mpremote's ``SerialIntercept``
-        (``mount_local`` unconditionally wraps ``self.serial``) and
-        garble subsequent I/O — that was the cause of the
-        ``ImportError: no module named 'chumicro_test_harness'`` seen
-        on the second file of an IDE folder run.
+        The mount is **not** restored by this method.  Callers always
+        call ``stage()`` next, and ``stage()`` owns the fresh mount.
+        Restoring the mount here would double-wrap mpremote's
+        ``SerialIntercept`` (``mount_local`` unconditionally wraps
+        ``self.serial``) and garble subsequent I/O.
 
         Used between test groups so each group starts with a clean
         interpreter and an un-wrapped serial.  If no persistent
@@ -945,10 +939,7 @@ class MicropythonTransport:
         doesn't write to flash, so there's nothing persistent to
         diff between deploys.
 
-        Raises :class:`MicropythonTransportError` on raw-REPL failure
-        — :meth:`Deployer.deploy_diff` translates this to "skip the
-        diff cleanup, fall through to a plain deploy_files" so a
-        transient REPL hiccup doesn't block a deploy.
+        Raises :class:`MicropythonTransportError` on raw-REPL failure.
         """
         if self.mode != "copy":
             return []
@@ -994,11 +985,8 @@ class MicropythonTransport:
         FIRST.  An empty root-level ``/<pkg>/`` resolves
         ``import <pkg>`` to a PEP 420 namespace package (``__file__``
         is ``None``, ``dir()`` empty) and shadows the populated
-        ``/lib/<pkg>/`` deeper in the path.  Bench-confirmed against
-        Lolin S2 MP carrying ``/chumicro_timing/*.py`` at root from a
-        prior deploy convention while the new payload targeted
-        ``/lib/chumicro_timing/*.py``.  ``rmdir`` only removes an
-        empty directory so live packages are never touched.
+        ``/lib/<pkg>/`` deeper in the path.  ``rmdir`` only removes
+        an empty directory so live packages are never touched.
         Dot-prefixed entries are skipped — parity with the listing
         script's filter and with the CP host-side reap.
         """
@@ -1061,9 +1049,9 @@ class MicropythonTransport:
         immediately — unlike the CIRCUITPY host-FAT path there is no
         flush lag) and, in the same raw-REPL script, re-``stat``s each
         path so a still-present entrypoint raises on the device and
-        surfaces as a loud error.  The sweep calls this once before its
-        first :meth:`soft_reset` so the reboot cannot race a stale
-        entrypoint a prior deploy left behind.
+        surfaces as a loud error.  Call once before a soft-reset so
+        the reboot cannot race a stale entrypoint left by a prior
+        deploy.
         """
         if self.mode != "copy":
             return
@@ -1159,16 +1147,14 @@ class MicropythonTransport:
     def _trigger_soft_reboot_and_read(self) -> str:
         """Exit raw REPL, soft-reboot, read main.py output, return user text.
 
-        Mirror of :meth:`CircuitpythonTransport._read_code_py_output`'s
-        flash-mode pattern.  Used by
-        ``deploy_files(follow="soft_reboot")`` for app-code deploys
-        whose entrypoint may be a ``while True`` body that never
-        returns.  The raw-REPL ``exec_raw`` path (``follow="exec"``)
-        works for return-bounded scripts because raw REPL emits the
-        EOF (``\\x04``) marker when the script returns; for an
-        infinite-loop body the EOF never fires and the deploy hangs.
-        Soft-reboot bypasses raw REPL and reads serial directly with
-        a wall-clock timeout, returning whatever accumulated.
+        Used for app-code deploys whose entrypoint may be a
+        ``while True`` body that never returns.  The raw-REPL
+        ``exec_raw`` path (``follow="exec"``) works for return-bounded
+        scripts because raw REPL emits the EOF (``\\x04``) marker when
+        the script returns; for an infinite-loop body the EOF never
+        fires and the deploy hangs.  Soft-reboot bypasses raw REPL
+        and reads serial directly with a wall-clock timeout, returning
+        whatever accumulated.
 
         Sequence:
 
@@ -1282,13 +1268,11 @@ class MicropythonTransport:
         """Clean-slate the device root, preserving only the keep set.
 
         The MP analog of the CP ``rsync --delete`` +
-        :data:`flash_drive.DEVICE_KEEP_SET` clean push.  Called from
-        :meth:`deploy_files` when ``clean=True`` in copy mode, and from
-        :meth:`stage`'s first copy-mode stage, so a board left dirty by
-        a prior run is reconciled without destroying the keep set.
-        ``mpremote fs cp`` never deletes, so without this each deploy
-        stacks onto the previous tree and a Pi Pico W MP fills its
-        ~860 KB flash.
+        :data:`flash_drive.DEVICE_KEEP_SET` clean push.  Used by the
+        copy-mode staging path so a board left dirty by a prior run
+        is reconciled without destroying the keep set.  ``mpremote fs cp``
+        never deletes, so without this each deploy stacks onto the
+        previous tree and a Pi Pico W MP fills its ~860 KB flash.
         Every root entry except the keep set (``boot.py`` /
         ``boot_out.txt`` / ``_chu_kv.msgpack``) is removed
         recursively; the subsequent ``fs cp -r`` repopulates the

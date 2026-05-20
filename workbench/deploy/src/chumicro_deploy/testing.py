@@ -110,21 +110,14 @@ class FakeTime:
 
     Bundles ``monotonic()`` and ``sleep()`` into a single injectable
     object that satisfies the ``TimeSource`` protocol used by
-    :class:`~chumicro_deploy.CircuitpythonTransport`.  The clock is
-    stable — ``monotonic()`` returns the same value until ``advance()``
-    or ``sleep()`` is called — and ``sleep()`` does not actually wait,
-    so tests run instantly regardless of production timeouts.
-
-    Design decisions:
-
-    - ``monotonic()`` is **stable**: repeated calls return the same
-      value until the clock is explicitly advanced.
-    - ``sleep(duration)`` auto-advances the clock by *duration*, so
-      production code that sleeps moves the fake clock forward without
-      any real wait.
-    - ``advance(seconds)`` moves the clock forward explicitly, for
-      scenarios where production does not sleep but the test needs to
-      simulate elapsed time (e.g., timeout expiry).
+    :class:`~chumicro_deploy.CircuitpythonTransport`.  ``monotonic()``
+    is **stable** — repeated calls return the same value until the
+    clock is explicitly advanced.  ``sleep(duration)`` auto-advances
+    the clock by *duration* without any real wait, so production
+    code that sleeps still moves the fake clock forward.
+    ``advance(seconds)`` moves the clock forward explicitly, for
+    scenarios where production does not sleep but the test needs to
+    simulate elapsed time (e.g., timeout expiry).
 
     Example::
 
@@ -149,32 +142,15 @@ class FakeTime:
         self._current = start
 
     def monotonic(self) -> float:
-        """Return the current fake time in seconds.
-
-        The value is stable — calling ``monotonic()`` repeatedly
-        returns the same value until ``advance()`` or ``sleep()``
-        is called.
-        """
+        """Return the current fake time in seconds."""
         return self._current
 
     def sleep(self, duration: float) -> None:
-        """Advance the clock by *duration* seconds (no wall-clock wait).
-
-        Args:
-            duration: Seconds to advance.
-        """
+        """Advance the clock by *duration* seconds (no wall-clock wait)."""
         self._current += duration
 
     def advance(self, seconds: float) -> None:
-        """Move the clock forward by *seconds*.
-
-        Use this when production does not sleep but the test needs to
-        simulate elapsed time — for example, pushing past a timeout
-        deadline.
-
-        Args:
-            seconds: Seconds to advance.
-        """
+        """Move the clock forward by *seconds*."""
         self._current += seconds
 
 
@@ -437,9 +413,9 @@ class FakeTransport:
         When :attr:`outputs` is non-empty, pops a single head value and
         returns it — treating the whole chunked execute as one batched
         operation, with no synthetic per-script ``execute`` entries.
-        Otherwise (the legacy path), records synthetic per-script
-        ``execute`` entries so tests that count ``execute`` invocations
-        still see one per chunk, and returns :attr:`execute_output`.
+        Otherwise records synthetic per-script ``execute`` entries so
+        tests that count ``execute`` invocations still see one per
+        chunk, and returns :attr:`execute_output`.
         """
         self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
         if self.execute_raises is not None:
