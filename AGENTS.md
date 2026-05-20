@@ -2,31 +2,6 @@
 
 > Operating manual for AI coding agents. Human contributors should use [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Session start
-
-Every session, in this order:
-
-1. `git --no-pager log --oneline -10` — see what just shipped.  The subjects are fact (what landed), not voice (how to write): the dense commit-subject register is a strong stylistic prior, and inheriting it into chat replies / doc prose / audit framing is a feedback loop that hardens unwanted phrasings across sessions ("canonical X" propagating through five workstream archives is the worked example).  For deeper context on a specific change, `git show <hash>` or `git --no-pager log --stat -5` is the right read.
-2. Read [`plans/next-up.md`](plans/next-up.md) — the work queue (`## Now`, `## Next`).  Tracks status only: one bullet per item, no sub-bullets — sub-content lives in [`plans/workstreams/<name>.md`](plans/workstreams/).  A queued session-handoff pointer in `## Now` is not a resume directive; invoke [`session-resume`](.github/skills/session-resume/SKILL.md) only on an explicit user signal.
-3. `ls plans/decisions/` — the filename slug carries topic *and* lifecycle; treat the listing as the index. A `SUPERSEDED-BY-NNNN` or `INERT` marker means a dead record — skip it on the scan; open it only to trace *why* something changed (`SUPERSEDED-BY-NNNN` names the replacement). For live candidates, `head -n 10` for the gist; full read before any structural / pattern / tooling change. ADRs are co-located with the code they govern.
-4. Before writing implementation code in `libraries/` or `workbench/`, skim [`plans/patterns.md`](plans/patterns.md) for an established shape.
-
-Commit history is the primary fallback when planning docs are stale. Write commit messages that aid future context recovery.
-
-## Keeping plans and docs current — load-bearing
-
-**A feature that exists only in code is incomplete.** Docs, ADRs, planning files, scaffold templates, and CI are part of the deliverable. Every unit of work touches them in lockstep:
-
-- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed — a prose-only contract is exactly the drift class that ships wrong. See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
-- **Unit of work landed?** Remove the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) in the *same* edit — no `## Done` section, `git log` carries history.  Items grow only by promotion to [`plans/workstreams/<name>.md`](plans/workstreams/) referenced from the bullet, never by adding sub-bullets.  Enforced by `CHU011`.
-- **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands.  (The file is not session-start reading; consult on demand when working an area with a known open thread.)
-- **Adding or changing an ADR?** Hard rules below; they bind editing an existing decision as much as a new one. Full detail + rejected alternatives in [`plans/decisions/README.md`](plans/decisions/README.md). New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill.
-  - **Edit the body in place.** An `accepted` ADR describes *current* state. Scope changed, path renamed, alternative now rejected → rewrite the affected paragraphs. No `Amended by` banners, no `## Update` sections, no "this was revised twice" preambles — `git log` carries history.
-  - **A correction of reasoning that was *wrong* is an in-place edit — never a new ADR.** A new superseding ADR is only for a genuine reasoning *shift*. If you fix the old ADR's prose, you do not also mint a standalone ADR repeating the corrected rule: one invariant, one home. A partial-supersession that leaves the same corrected principle stated in full in *both* records is the bloat this rule exists to stop (worked case: 0038 §3 ↔ 0075).
-  - **State the principle, not the mechanism.** The decision sentence states the invariant, not the implementation that prompted it. Treat any "Rejected: [the stricter thing actually asked for], because [convenience]" bullet as the narrowing happening in real time — challenge it before the ADR lands. (Cautionary case: 0038's clone-not-pip wording let a clone-based `init` CLI through the hole.)
-  - **Argument-stopping rationale is part of the directive — it lives inline.** A *why* clause is directive if an agent reading only the bare rule would plausibly argue it, take a shortcut it forecloses, or misapply it for want of the concrete form. Such clauses stay inline in this file and in ADRs; they may not move to any separate location (auto-loaded or not). A compaction pass that can't keep one within budget has found the budget wrong, not the clause optional. Size is not the success metric.
-- **End of every unit of work** → run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill: preflight green, plans-doc updated, docs in sync, commit + push. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial — and say so.
-
 ## Instruction priority
 
 When instructions overlap:
@@ -36,7 +11,16 @@ When instructions overlap:
 3. Accepted decisions in [`plans/decisions/`](plans/decisions/)
 4. Repository docs ([style guide](docs/contributing/style-guide.md), [contributing/](docs/contributing/))
 
-Before proposing a structural or pattern change, check `plans/decisions/` first.
+## Session start
+
+Every session, in this order:
+
+1. `git --no-pager log --oneline -10` to see what just shipped.
+2. Read [`plans/next-up.md`](plans/next-up.md) for the current open work items.
+3. Read the ADRs at `ls plans/decisions/`.
+4. Before writing implementation code in `libraries/` or `workbench/`, skim [`plans/patterns.md`](plans/patterns.md) for an established shape.
+
+Commit history is the primary fallback when planning docs are stale. Write commit messages that aid future context recovery.
 
 ## Non-negotiable rules
 
@@ -97,6 +81,16 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 - [`plans/next-up.md`](plans/next-up.md) is the single source of truth for what's in flight. One bullet per item, no sub-bullets — anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. No `## Done` section. Enforced by `CHU011`.
 - `Phase N` / `Slice N` references in commit subjects must carry a 3-word topic (`Phase 6 — transport seams`, not bare `Phase 6`).
+
+## Keeping plans and docs current — load-bearing
+
+**A feature that exists only in code is incomplete.** Docs, ADRs, planning files, scaffold templates, and CI are part of the deliverable. Every unit of work touches them in lockstep:
+
+- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies — whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed — a prose-only contract is exactly the drift class that ships wrong. See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
+- **Unit of work landed?** Remove the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) in the *same* edit — no `## Done` section, `git log` carries history.  Items grow only by promotion to [`plans/workstreams/<name>.md`](plans/workstreams/) referenced from the bullet, never by adding sub-bullets.  Enforced by `CHU011`.
+- **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands.  (The file is not session-start reading; consult on demand when working an area with a known open thread.)
+- **Adding or changing an ADR?** See [`plans/decisions/README.md`](plans/decisions/README.md) for the rules (in-place edits, in-place correction of wrong reasoning, state the principle not the mechanism).  New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill.
+- **End of every unit of work** → run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill: preflight green, plans-doc updated, docs in sync, commit + push. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial — and say so.
 
 ## Common pitfalls
 
