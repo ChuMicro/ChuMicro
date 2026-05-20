@@ -37,9 +37,7 @@ class PatternKind(StrEnum):
 
     Inherits from :class:`enum.StrEnum` so ``kind.value`` is
     interchangeable with ``str(kind)``, which keeps JSON / dict
-    serialization trivial (matches the
-    :class:`~chumicro_deploy.protocol.Runtime` pattern in
-    chumicro-deploy).
+    serialization trivial.
     """
 
     TRACEBACK = "traceback"
@@ -124,9 +122,7 @@ def detect_patterns(text: str) -> list[PatternMatch]:
 
     Overlapping matches are possible in principle (a traceback inside
     a safe-mode block, say) but the three non-traceback patterns all
-    terminate cleanly, so in practice matches are disjoint.  The
-    caller that renders ANSI highlight uses the sorted order to walk
-    the input once.
+    terminate cleanly, so in practice matches are disjoint.
 
     Args:
         text: Decoded REPL output to scan.

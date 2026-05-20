@@ -72,11 +72,9 @@ _POLL_INTERVAL = 0.005
 
 
 #: Default reconnect window for ``tail()`` when the device drops
-#: mid-stream.  30 seconds covers the typical "unplug, fumble for
-#: the right cable, plug back in" cycle without keeping a CI script
-#: hung indefinitely.  Pass ``reconnect_seconds=0.0`` to disable.
-#: Named to distinguish from the longer interactive default in
-#: :mod:`.tui` — the two surfaces want different ceilings.
+#: mid-stream.  30 seconds covers the typical unplug-and-replug cycle
+#: without keeping a CI script hung indefinitely.  Pass
+#: ``reconnect_seconds=0.0`` to disable.
 DEFAULT_TAIL_RECONNECT_SECONDS = 30.0
 
 #: Interval between reconnect attempts.  500 ms is fast enough that
@@ -109,7 +107,7 @@ def tail(
     Args:
         device: :class:`chumicro_deploy.Device` or a serial port path
             string.  Only the address + baudrate are consulted; the
-            deploy-mode fields are ignored (tail does not push code).
+            deploy-mode fields are ignored.
         seconds: Length of the tail window.  A :class:`float` is
             accepted so sub-second tails are possible in tests.
         fail_on_traceback: When ``True`` (default), a matched
@@ -150,8 +148,7 @@ def tail(
     # has its ``seconds`` parameter marked position-only at the C layer,
     # while the ``TimeSource`` protocol declares it as a regular keyword
     # parameter.  At runtime both call shapes work; pyright flags the
-    # mismatch.  Same workaround chumicro-deploy uses for its identical
-    # ``TimeSource`` protocol.
+    # mismatch.
     active_time: TimeSource = (
         time if time is not None else cast(TimeSource, _time_module)
     )

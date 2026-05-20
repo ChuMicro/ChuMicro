@@ -10,9 +10,6 @@ Provides three fakes for host-side tests:
   :func:`chumicro_repl.tui.run_loop` tests.
 - :class:`FakeTime` — deterministic seconds-domain time source that
   satisfies the ``TimeSource`` protocol so tests never sleep.
-
-Mirrors the structure of :mod:`chumicro_deploy.testing` so a
-contributor moving between the two packages sees the same shapes.
 """
 
 from __future__ import annotations
@@ -28,8 +25,6 @@ class FakeTime:
     ``monotonic()`` is stable — repeated calls return the same value
     until the clock is explicitly advanced.  ``sleep()`` advances the
     clock by *duration* without a real wait.
-
-    Mirrors :class:`chumicro_deploy.testing.FakeTime`.
     """
 
     __slots__ = ("_current",)

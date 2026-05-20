@@ -77,7 +77,7 @@ class Theme:
         return ""  # pragma: no cover — defensive, enum is closed today
 
 
-#: Default theme used by :func:`highlight` and the TUI when no theme
+#: Default theme used by :func:`colorize` and the TUI when no theme
 #: is specified.  Exposed as a module-level singleton so callers can
 #: reference a stable instance for comparison / tests.
 DEFAULT_THEME = Theme()
@@ -153,11 +153,10 @@ def colorize_stream_chunk(
 ) -> str:
     """Render *text* with ANSI highlighting using stream-coordinate *matches*.
 
-    Streaming callers (``tail()``, the interactive TUI, line mode) feed
-    the :class:`~chumicro_repl.patterns.StreamingPatternDetector` chunk
-    by chunk; it returns matches whose ``start`` / ``end`` are absolute
-    offsets from the start of the logical stream.  This helper
-    translates those offsets back into indices within the
+    A :class:`~chumicro_repl.patterns.StreamingPatternDetector` fed
+    chunk by chunk returns matches whose ``start`` / ``end`` are
+    absolute offsets from the start of the logical stream.  This
+    helper translates those offsets back into indices within the
     most-recently-fed chunk and wraps each in-range span via
     :func:`colorize`.  Matches whose translated coordinates fall
     entirely outside *text* are skipped.

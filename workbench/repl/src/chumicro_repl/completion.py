@@ -5,8 +5,7 @@ to its `PromptSession`.  Tab on a partial token yields a list of
 completion strings drawn from two sources:
 
 * :class:`KeywordCompleter` — Python keywords + common builtins.
-  Always works, no device round-trip; covers ~80 % of Tab presses
-  (``print``, ``range``, ``for``, ``import``, …).
+  Always works, no device round-trip.
 * :class:`DeviceCompleter` — queries the on-device REPL for
   ``dir(<expression>)`` and caches the result in a
   :class:`CompletionCache` keyed by namespace expression.
@@ -68,17 +67,17 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 NamespaceFetcher = Callable[[str], Iterable[str] | None]
 
 
-#: Identifier-ish character class — matches the trailing token
-#: prompt_toolkit hands us as the partial word being completed.
+#: Identifier-ish character class for the trailing token of a
+#: partial-word completion.
 _IDENTIFIER_TAIL = re.compile(r"[A-Za-z_][A-Za-z_0-9]*$")
 
 
 def _completable_tail(text_before_cursor: str) -> str:
     """Return the trailing identifier-shape from *text_before_cursor*.
 
-    ``"x = pri"`` → ``"pri"``.  ``"foo()"`` → ``""``.  ``"x.y"`` →
-    ``"y"`` (attribute completion is partial in v1 — we only match
-    the symbol fragment, not the `dir(x)` lookup that would feed it).
+    Examples: ``"x = pri"`` yields ``"pri"``; ``"foo()"`` yields
+    ``""``; ``"x.y"`` yields ``"y"`` (the symbol fragment only, not
+    the namespace it would belong to).
     """
     match = _IDENTIFIER_TAIL.search(text_before_cursor)
     return match.group(0) if match else ""
@@ -125,33 +124,27 @@ def _python_keywords() -> list[str]:
 def _public_builtin_names() -> list[str]:
     """Return public names from `builtins` (anything not starting with `_`).
 
-    Filters dunders so users don't see `__import__` etc. — the public
-    surface of `print` / `range` / `len` / `range` / `enumerate` / etc.
-    is what people actually want from Tab.
+    Filters dunders (``__import__`` etc.) so Tab only surfaces the
+    public builtins (``print``, ``range``, ``len``, ``enumerate``, ...).
     """
     return sorted(
         name for name in dir(builtins) if not name.startswith("_")
     )
 
 
-#: Combined static catalog — keywords first (alphabetical order
-#: keeps the listing predictable; prompt_toolkit re-sorts on its
-#: own anyway).  Computed once at module load.
+#: Combined static catalog of keywords + public builtins, sorted
+#: alphabetically.  Computed once at module load.
 STATIC_CATALOG: tuple[str, ...] = tuple(
     sorted(set(_python_keywords()) | set(_public_builtin_names())),
 )
 
 
 class KeywordCompleter:
-    """Static catalog completer — Python keywords + public builtins.
+    """Static catalog completer: Python keywords + public builtins.
 
     Zero device interaction; works on every Tab regardless of board
-    state.  Covers the lion's share of "what's that builtin called
-    again" Tab presses.
-
-    Composes with :class:`DeviceCompleter` via :class:`CombinedCompleter`
-    when richer completion lands (the device-backed source
-    contributes module / attribute names that are session-specific).
+    state.  Composes with :class:`DeviceCompleter` via
+    :class:`CombinedCompleter` to add session-specific names.
     """
 
     __slots__ = ("_catalog",)
@@ -162,8 +155,8 @@ class KeywordCompleter:
     def candidates(self, prefix: str) -> Iterable[str]:
         if not prefix:
             return iter(self._catalog)
-        # Linear scan — the catalog is small (~150 entries) so the
-        # constant factor wins over building a trie.
+        # Linear scan; the catalog is small enough that a trie is not
+        # worth the overhead.
         return (entry for entry in self._catalog if entry.startswith(prefix))
 
 
@@ -231,9 +224,8 @@ class DeviceCompleter:
         return self._cache
 
     def candidates(self, prefix: str) -> Iterable[str]:
-        # Only the bare namespace ("") is queried today.  Attribute
-        # completion (`foo.bar<Tab>` → `dir(foo)`) is future work
-        # alongside the wire-protocol implementation.
+        # Only the bare namespace ("") is queried; attribute
+        # completion is not implemented.
         cached = self._cache.get("")
         if cached is None and self._fetcher is not None:
             fetched = self._fetcher("")
@@ -318,9 +310,8 @@ _FETCH_TIMEOUT_SECONDS: float = 2.0
 _FETCH_POLL_INTERVAL: float = 0.005
 
 #: Friendly-REPL prompt the device emits after ``Ctrl-B``.  The
-#: fetcher reads through this so the friendly-banner reprint that
-#: precedes it is consumed cleanly and never leaks into line-mode's
-#: next drain.
+#: fetcher reads through this so the banner reprint preceding it is
+#: consumed cleanly.
 _FRIENDLY_PROMPT: bytes = b">>> "
 
 
@@ -362,8 +353,7 @@ def fetch_device_names(
 
     Drives one friendly-REPL → raw-REPL → ``print(repr(dir(...)))`` →
     friendly-REPL round-trip.  Reads through the friendly-banner
-    reprint so its bytes don't surface into the next drain — see the
-    module docstring for the design rationale.
+    reprint so its bytes do not surface into the next drain.
 
     Args:
         port: Open :class:`SerialPort` already in friendly REPL.  The
@@ -471,9 +461,8 @@ def build_default_completer(
             result.
         time: Injectable :class:`TimeSource` for tests.
         cache: Pre-constructed :class:`CompletionCache` the caller
-            wants to retain a reference to (for ``:rescan``-style
-            invalidation).  When ``None``, a fresh cache is created
-            internally; the caller has no handle on it.
+            can retain for ``:rescan``-style invalidation.  Defaults
+            to an internally-managed cache.
 
     Returns:
         A :class:`PromptToolkitCompleter` ready to plug into a

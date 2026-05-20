@@ -1,4 +1,4 @@
-"""Serial-port helpers shared by :mod:`.tail`, :mod:`.session`, :mod:`.tui`.
+"""Serial-port helpers for the REPL package.
 
 Hides the optional ``pyserial`` import behind a function — the
 package can be imported (``import chumicro_repl``) without pyserial
@@ -6,15 +6,13 @@ installed, which keeps ``--help`` and the pattern-detector /
 highlighter paths light-weight for callers that never open a serial
 port.
 
-Also owns the small set of helpers that every streaming consumer
-(``tail`` / ``run_loop`` / ``run_line_mode`` / ``ReplSession``) calls
-on the disconnect / shutdown paths — closing a port quietly, writing
-the standard disconnect notice, flushing a TextIO without crashing on
-closed streams, and resolving ``(address, baudrate)`` from either a
-device object exposing an ``.address`` attribute (e.g. a
-``chumicro_deploy.Device``) or a bare port-path string.  Sharing the
-implementations here keeps the four entry points behaviorally
-consistent without three copies of each helper drifting apart.
+Also owns the small set of helpers used on the disconnect / shutdown
+paths: closing a port quietly, writing the standard disconnect
+notice, flushing a TextIO without crashing on closed streams, and
+resolving ``(address, baudrate)`` from either a device object
+exposing an ``.address`` attribute (e.g. a ``chumicro_deploy.Device``)
+or a bare port-path string.  Sharing the implementations here keeps
+the streaming surfaces behaviorally consistent.
 """
 
 from __future__ import annotations
@@ -42,10 +40,8 @@ class DeviceLike(Protocol):
 class SerialPort(Protocol):
     """Structural interface for the pyserial subset this package uses.
 
-    Matches the slice of ``serial.Serial`` we rely on for raw-REPL
-    framing and the interactive TUI.  Fakes in
-    :mod:`chumicro_repl.testing` satisfy this protocol without
-    importing pyserial.
+    Covers the operations needed for raw-REPL framing and the
+    interactive TUI; fakes can satisfy it without importing pyserial.
     """
 
     @property
@@ -59,9 +55,8 @@ class SerialPort(Protocol):
 class TimeSource(Protocol):
     """Structural interface for an injectable ``time`` module.
 
-    Matches the subset of the stdlib ``time`` module the package
-    uses.  :class:`~chumicro_repl.testing.FakeTime` satisfies it so
-    tests eliminate wall-clock waits.
+    Covers the ``monotonic()`` + ``sleep()`` subset the package uses;
+    a fake satisfies it so tests need no wall-clock waits.
     """
 
     def monotonic(self) -> float: ...
@@ -69,8 +64,7 @@ class TimeSource(Protocol):
 
 
 #: Factory signature: ``(address, baudrate, timeout) -> SerialPort``.
-#: Passed through the public entry points so tests can inject a fake
-#: without pyserial installed.
+#: Exposed so callers can inject a fake without pyserial installed.
 PortFactory = Callable[[str, int, float], SerialPort]
 
 
@@ -152,9 +146,8 @@ def read_chunk(port: SerialPort) -> bytes:
 def close_quietly(port: SerialPort) -> None:
     """Close *port*, swallowing the OSError a dead port often raises.
 
-    Reused on the disconnect / reconnect paths so the dead-port
-    teardown can't itself crash the streaming loop or the
-    ``ReplSession.__exit__`` path.
+    Lets teardown code run unconditionally without a dead-port close
+    failure crashing the surrounding loop.
     """
     try:
         port.close()
@@ -163,12 +156,11 @@ def close_quietly(port: SerialPort) -> None:
 
 
 def flush_quietly(stream: TextIO) -> None:
-    """Flush *stream*, swallowing closed-stream errors from tests.
+    """Flush *stream*, swallowing closed-stream errors.
 
-    Used by every streaming surface after each render — the user's
-    output may be a real terminal, a captured ``StringIO``, or a
-    pipe that closed mid-tail; we never want a flush failure to
-    propagate into the protocol loop.
+    Output may be a real terminal, a captured ``StringIO``, or a pipe
+    that closed mid-stream; a flush failure should not propagate into
+    the read loop.
     """
     try:
         stream.flush()
@@ -198,9 +190,9 @@ def resolve_address(
 ) -> tuple[str, int]:
     """Return ``(address, baudrate)`` for a device-like object or path string.
 
-    Duck-typed — accepts any object with an ``address`` attribute
-    (and optionally ``baudrate``) so callers don't pull in a hard
-    ``chumicro_deploy`` import for the bare-port-path case.
+    Accepts any object with an ``address`` attribute (and optionally
+    ``baudrate``) so a bare port-path caller works without a
+    deploy-style device object.
     """
     if isinstance(device, str):
         return device, fallback_baudrate
