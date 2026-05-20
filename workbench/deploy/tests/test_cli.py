@@ -384,10 +384,10 @@ class TestCommandDeploy:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        # With --non-interactive, a transport error escapes
-        # NonInteractiveDeployer (which only prints coaching, no retry
-        # loop) and is caught by main()'s friendly-error wrapper —
-        # users see "error: <message>" instead of a Python traceback.
+        # With --non-interactive, the CLI's RecoveringDeployer prints
+        # coaching once and re-raises — main()'s friendly-error wrapper
+        # catches the transport error and users see "error: <message>"
+        # instead of a Python traceback.
         from chumicro_deploy.circuitpython_transport import (
             CircuitpythonTransportError,
         )
@@ -417,14 +417,14 @@ class TestCommandDeploy:
         captured = capsys.readouterr()
         assert "error: Failed to open serial port" in captured.err
 
-    def test_default_wraps_in_interactive_deployer(
+    def test_default_wraps_in_recovering_deployer(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     ) -> None:
         # Without --non-interactive (default), the CLI must wrap the
-        # underlying Deployer in InteractiveDeployer.  Sentinel-patch
-        # the wrapper class so we can observe construction without
-        # actually entering its retry loop (which would block on
-        # input()).
+        # underlying Deployer in RecoveringDeployer with a real prompt.
+        # Sentinel-patch the wrapper class so we can observe
+        # construction without actually entering its retry loop (which
+        # would block on input()).
         source_dir = tmp_path / "app"
         source_dir.mkdir()
         (source_dir / "main.py").write_text("print('ok')")
@@ -439,10 +439,11 @@ class TestCommandDeploy:
                 from chumicro_deploy import DeployResult
                 return DeployResult(success=True, execute_output="")
 
-        class _SpyInteractive:
-            def __init__(self, inner):  # noqa: ANN001
+        class _SpyRecovering:
+            def __init__(self, inner, *, prompt=None):  # noqa: ANN001
                 captured["wrapped"] = True
                 captured["inner"] = inner
+                captured["prompt"] = prompt
 
             def deploy_diff(self, source, **kwargs):  # noqa: ANN001
                 from chumicro_deploy import DeployResult
@@ -450,7 +451,7 @@ class TestCommandDeploy:
 
         monkeypatch.setattr("chumicro_deploy.deployer.Deployer", FakeDeployer)
         monkeypatch.setattr(
-            "chumicro_deploy.recovery.InteractiveDeployer", _SpyInteractive,
+            "chumicro_deploy.recovery.RecoveringDeployer", _SpyRecovering,
         )
 
         exit_code = main([
@@ -463,6 +464,8 @@ class TestCommandDeploy:
         assert exit_code == 0
         assert captured["wrapped"] is True
         assert isinstance(captured["inner"], FakeDeployer)
+        # Default (no --non-interactive) selects the prompt-driven mode.
+        assert captured["prompt"] is not None
 
 
 class TestCommandDeployRuntimeFiltering:

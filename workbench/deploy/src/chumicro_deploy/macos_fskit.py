@@ -44,13 +44,10 @@ from collections.abc import Callable
 #: - ``diskarbitrationd`` — the system-level mount arbiter stuck in
 #:   uninterruptible wait.
 #: - ``DiskArbitrationAgent`` — the per-user agent that registers
-#:   volumes with Finder's Locations sidebar.  An earlier version of
-#:   this command tried to bounce it via
-#:   ``launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent``;
-#:   that path is SIP-blocked on modern macOS.  Killing it directly
-#:   with ``killall -9`` works — the per-user launchd respawns it
-#:   despite ``KeepAlive=false`` because XPC clients re-trigger
-#:   on-demand load.
+#:   volumes with Finder's Locations sidebar.  ``killall -9`` works
+#:   against it because the per-user launchd respawns it on the next
+#:   on-demand XPC load, even with ``KeepAlive=false``.  ``launchctl
+#:   kickstart`` is SIP-blocked on modern macOS and won't substitute.
 #:
 #: ``-9`` is required because the wedged daemons are stuck in kernel
 #: wait and can't handle a normal signal.  A reboot is the
@@ -58,8 +55,7 @@ from collections.abc import Callable
 #:
 #: This string is the single source of truth for the recovery
 #: command — the prose copy in ``docs/troubleshooting/macos-circuitpy.md``
-#: pulls from it.  Update one and the test in
-#: ``test_macos_fskit.py`` will catch drift in the other.
+#: pulls from it.  A test pins the two together so they cannot drift.
 MACOS_FSKIT_RECOVERY_COMMAND = (
     "sudo killall -9 com.apple.fskit.msdos fskit_helper "
     "fskitd fskit_agent diskarbitrationd DiskArbitrationAgent"

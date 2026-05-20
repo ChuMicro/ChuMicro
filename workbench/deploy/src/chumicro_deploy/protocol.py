@@ -429,10 +429,9 @@ class TransportProtocol(Protocol):
         the whole device minus the closed keep set
         (:data:`flash_drive.DEVICE_KEEP_SET`) and device-managed noise,
         so a stale board ``settings.toml`` or leftover user file is
-        reconciled away.  ``clean_slate=False`` is the legacy additive
-        scope (the ``--no-wipe`` opt-out): only the entrypoint /
-        state files and the library tree, leaving other root files in
-        place.
+        reconciled away.  ``clean_slate=False`` is the additive scope
+        (the ``--no-wipe`` opt-out): only the entrypoint / state files
+        and the library tree, leaving other root files in place.
 
         Returns paths in the same leading-slash form
         :meth:`deploy_files` accepts (``"/lib/foo.py"``,
