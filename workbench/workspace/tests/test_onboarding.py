@@ -329,7 +329,6 @@ class TestProbeWithRuntimeInference:
             device_factory=_device_factory,
         )
         assert result.runtime == "micropython"
-        assert result.transport_used == "micropython"
         assert result.info is not None
         assert attempts == ["micropython"]
 
@@ -349,7 +348,6 @@ class TestProbeWithRuntimeInference:
             device_factory=_device_factory,
         )
         assert result.runtime == "circuitpython"
-        assert result.transport_used == "circuitpython"
         assert attempts == ["micropython", "circuitpython"]
 
     def test_implementation_name_takes_precedence_over_transport(self) -> None:
@@ -370,7 +368,6 @@ class TestProbeWithRuntimeInference:
             device_factory=_device_factory,
         )
         assert result.runtime == "circuitpython"
-        assert result.transport_used == "micropython"  # first candidate
 
     def test_all_candidates_fail_returns_empty_result(self) -> None:
         attempts: list[str] = []
@@ -385,7 +382,6 @@ class TestProbeWithRuntimeInference:
             device_factory=_device_factory,
         )
         assert result.runtime is None
-        assert result.transport_used is None
         assert result.info is None
         assert isinstance(result.last_exception, RuntimeError)
         assert attempts == ["micropython", "circuitpython"]

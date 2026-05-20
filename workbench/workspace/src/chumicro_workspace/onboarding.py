@@ -269,10 +269,6 @@ class RuntimeInferenceResult:
             as the candidate transport that succeeded (an MP
             transport on a CP board still returns
             ``implementation.name == "circuitpython"``).
-        transport_used: The candidate transport that opened cleanly
-            and delivered the probe — useful for follow-on calls
-            that want a working :class:`Device`.  ``None`` on
-            complete failure.
         last_exception: The last exception encountered during the
             search, when no candidate succeeded.  ``None`` on
             success or when no exceptions were raised (every
@@ -281,7 +277,6 @@ class RuntimeInferenceResult:
 
     info: DeviceInfo | None
     runtime: str | None
-    transport_used: str | None
     last_exception: BaseException | None = None
 
 
@@ -320,11 +315,11 @@ def probe_with_runtime_inference(
             address)`` and returns a Device.  Tests pass a fake.
 
     Returns:
-        :class:`RuntimeInferenceResult` with ``info``, ``runtime``,
-        and ``transport_used`` populated on success; on failure
-        every field is ``None`` except ``last_exception``, which
-        carries the most recent exception (or ``None`` when every
-        candidate completed cleanly without a marker).
+        :class:`RuntimeInferenceResult` with ``info`` and ``runtime``
+        populated on success; on failure both are ``None`` and
+        ``last_exception`` carries the most recent exception (or
+        ``None`` when every candidate completed cleanly without a
+        marker).
     """
     if probe_function is None:
         from chumicro_deploy import probe_device  # noqa: PLC0415
@@ -348,12 +343,10 @@ def probe_with_runtime_inference(
             return RuntimeInferenceResult(
                 info=info,
                 runtime=info.implementation.name,
-                transport_used=candidate,
             )
     return RuntimeInferenceResult(
         info=None,
         runtime=None,
-        transport_used=None,
         last_exception=last_exception,
     )
 

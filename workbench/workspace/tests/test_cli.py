@@ -2366,7 +2366,6 @@ class TestBootstrapWizard:
                     version="1.27.0",
                 ),
                 runtime="micropython",
-                transport_used="micropython",
             )
 
         monkeypatch.setattr(
@@ -2408,7 +2407,7 @@ class TestBootstrapWizard:
 
         def fake_inference(address: str, **_kw):
             return onboarding.RuntimeInferenceResult(
-                info=None, runtime=None, transport_used=None,
+                info=None, runtime=None,
                 last_exception=OSError("could not open port /dev/cu.x"),
             )
 
@@ -2460,7 +2459,6 @@ class TestBootstrapWizard:
                     runtime="micropython", version="1.26.0",
                 ),
                 runtime="micropython",
-                transport_used="micropython",
             )
 
         monkeypatch.setattr(
@@ -2509,7 +2507,6 @@ class TestBootstrapWizard:
             return onboarding.RuntimeInferenceResult(
                 info=fake_probe_info(version="1.27.0"),
                 runtime="micropython",
-                transport_used="micropython",
             )
 
         monkeypatch.setattr(
@@ -2549,7 +2546,6 @@ class TestBootstrapWizard:
             return onboarding.RuntimeInferenceResult(
                 info=fake_probe_info(version="1.27.0"),
                 runtime="micropython",
-                transport_used="micropython",
             )
 
         monkeypatch.setattr(
@@ -2594,7 +2590,6 @@ class TestBootstrapWizard:
             return onboarding.RuntimeInferenceResult(
                 info=fake_probe_info(version="1.27.0"),
                 runtime="micropython",
-                transport_used="micropython",
             )
 
         monkeypatch.setattr(
@@ -4151,7 +4146,6 @@ class TestAddDeviceRuntimeInference:
                     runtime="circuitpython", version="10.1.4",
                 ),
                 runtime="circuitpython",
-                transport_used="circuitpython",
             )
 
         monkeypatch.setattr(
@@ -4222,7 +4216,6 @@ class TestAddDeviceRuntimeInference:
             return onboarding.RuntimeInferenceResult(
                 info=None,
                 runtime=None,
-                transport_used=None,
                 last_exception=OSError("could not open port /dev/cu.x"),
             )
 
@@ -4274,7 +4267,6 @@ class TestAddDeviceRuntimeInference:
             return onboarding.RuntimeInferenceResult(
                 info=None,
                 runtime=None,
-                transport_used=None,
                 last_exception=None,
             )
 
@@ -4333,7 +4325,6 @@ class TestAddDeviceOmittedId:
                     version="10.1.4",
                 ),
                 runtime="circuitpython",
-                transport_used="circuitpython",
             )
 
         monkeypatch.setattr(
@@ -4371,7 +4362,6 @@ class TestAddDeviceOmittedId:
                     uid="ABCD1234",
                 ),
                 runtime="circuitpython",
-                transport_used="circuitpython",
             )
 
         monkeypatch.setattr(
@@ -4399,7 +4389,6 @@ class TestAddDeviceOmittedId:
                     uid="EF567890",
                 ),
                 runtime="circuitpython",
-                transport_used="circuitpython",
             )
 
         monkeypatch.setattr(
@@ -4440,7 +4429,6 @@ class TestAddDeviceOmittedId:
                     version="10.1.4",
                 ),
                 runtime="circuitpython",
-                transport_used="circuitpython",
             )
 
         monkeypatch.setattr(
@@ -4483,7 +4471,6 @@ class TestAddDeviceOmittedAddress:
                     version=version,
                 ),
                 runtime="circuitpython",
-                transport_used="circuitpython",
             )
 
         monkeypatch.setattr(
@@ -5984,7 +5971,6 @@ class TestResetDevice:
             return onboarding.RuntimeInferenceResult(
                 info=fake_probe_info(runtime="micropython"),
                 runtime="micropython",
-                transport_used="micropython",
             )
 
         monkeypatch.setattr(
