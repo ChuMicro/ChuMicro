@@ -134,7 +134,7 @@ class FakeConnection:
         return take
 
     def close(self) -> None:
-        """Mark the connection closed (idempotent)."""
+        """Mark the connection closed."""
         self.closed = True
 
 
@@ -166,5 +166,5 @@ class FakeListener:
         return peer, ("127.0.0.1", 12345)
 
     def close(self) -> None:
-        """Mark the listener closed (idempotent)."""
+        """Mark the listener closed."""
         self.closed = True

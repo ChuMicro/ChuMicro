@@ -121,9 +121,7 @@ CRLF = b"\r\n"
 #: Header / body separator.
 CRLF_CRLF = b"\r\n\r\n"
 
-#: Default per-tick recv cap.  Mirrors :data:`chumicro_mqtt.MQTTClient`
-#: and :data:`chumicro_requests.HttpClient`; keeps tick latency
-#: LED-friendly.
+#: Default per-tick recv cap.  Keeps tick latency LED-friendly.
 DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 
 #: Default per-tick send cap.
@@ -139,8 +137,7 @@ DEFAULT_MAX_TX_QUEUE_SIZE = const(8)
 #: Default steady-state payload buffer size for :class:`FrameParser`.
 #: Sized to cover the common short text/binary frame without per-frame
 #: allocation; frames bigger than this fall back to a one-shot
-#: ``bytearray(payload_length)``.  Same trade-off as
-#: :data:`chumicro_mqtt._wire.DEFAULT_RX_BUFFER_SIZE`.
+#: ``bytearray(payload_length)``.
 DEFAULT_PAYLOAD_BUFFER_SIZE = const(256)
 
 #: Default opening-handshake budget in ms.
@@ -226,19 +223,11 @@ class CaseInsensitiveDict:
     ``upgrade``) keyed off the lowercased form.  ``items()`` yields
     in insertion order on every runtime — MicroPython and CircuitPython
     dicts do not preserve insertion order unlike CPython 3.7+, so a
-    paired ``_order`` list of lowercase keys drives iteration.  Mirrors
-    the order-preserving shape in
-    :class:`chumicro_requests._wire.CaseInsensitiveDict` so the WS
-    opening handshake emits headers in the same order it accepted them
-    on every runtime; without ``_order`` the handshake on MP / CP
-    randomized header order vs. CPython tests.
+    paired ``_order`` list of lowercase keys drives iteration.
 
     Slim subset (no ``__iter__`` / ``__len__`` / ``__eq__`` / ``__repr__``
     / ``add()``) since the WS encoders + parsers only need the methods
-    below.  Inlined from chumicro-requests per the copy-don't-couple
-    rule until a third HTTP/1.1-aware consumer (http_server is the
-    third — re-evaluate at next workspace audit) triggers extracting
-    a shared ``chumicro-http`` package.
+    below.
     """
 
     def __init__(self):
@@ -503,11 +492,9 @@ class _HandshakeLineParser:
     def __init__(self, *, max_header_bytes: int = 8192):
         self._max_header_bytes = max_header_bytes
         self._buffer = bytearray()
-        # Read cursor into ``_buffer`` — same pattern as
-        # :class:`chumicro_requests._wire.ResponseParser`.  Per-line
-        # ``_buffer = bytearray(_buffer[N:])`` was the 1024-tier
-        # fragmentation source on Lolin S2 ESP32-S2.  See on-device
-        # tests in ``functional_tests/test_memory_fragmentation_on_device.py``.
+        # Read cursor into ``_buffer``.  Per-line
+        # ``_buffer = bytearray(_buffer[N:])`` fragments the embedded
+        # heap into 1024-byte tiers under sustained handshake load.
         self._read_offset = 0
         self.state = self._initial_state
         self.http_version = ""
@@ -809,10 +796,7 @@ class FrameParser:
       consumed off the wire without being stored (rolling discard).
       :attr:`oversized` is set on ``FRAME_READY`` and :attr:`payload`
       returns ``b""``.  The higher layer applies its ``WhenOversized``
-      policy on the empty frame — matches the shared cross-library
-      contract with ``chumicro-mqtt`` and ``chumicro-requests``,
-      where ``DROP_WITH_EVENT`` drops the oversized payload and
-      stays connected for the next inbound unit.
+      policy on the empty frame.
 
     Args:
         max_payload_bytes: Per-frame payload cap.  Frames declaring a
@@ -849,8 +833,7 @@ class FrameParser:
         self.had_mask = False
         self._payload_length = 0
         self._mask_key = b""
-        # Steady-state payload buffer reused across frames — same shape
-        # as :class:`chumicro_mqtt._wire.PacketDecoder`.  Frames whose
+        # Steady-state payload buffer reused across frames.  Frames whose
         # payload fits in ``payload_buffer_size`` reuse the buffer
         # (zero alloc per frame).  Tier-2 frames fall back to a
         # one-shot ``bytearray(payload_length)`` that gets dropped on
@@ -858,10 +841,7 @@ class FrameParser:
         # buffer and discard.  ``_payload_view`` is the cached
         # memoryview so per-write slice indexing doesn't construct a
         # fresh view object every call; refreshed only when ``_payload``
-        # rebinds to a one-shot oversized buffer.  Live-board signal
-        # came from ``test_short_text_frame_no_leak_no_fragmentation
-        # _on_device``: per-frame ``bytearray(N)`` was the residual
-        # fragmentation source after the recv-buffer fix.
+        # rebinds to a one-shot oversized buffer.
         self._payload_buffer = bytearray(payload_buffer_size)
         self._payload_buffer_view = memoryview(self._payload_buffer)
         self._payload_capacity = payload_buffer_size
@@ -931,10 +911,9 @@ class FrameParser:
         were used (relative to *start*).
 
         *start* lets a caller feed the same buffer across multiple
-        per-frame passes without slicing it each iteration — the inner
-        loop in :meth:`chumicro_websockets._session._BaseSession._feed_frame_bytes`
-        used to ``chunk[offset:]`` per pass, which allocated a fresh
-        memoryview window each time.
+        per-frame passes without slicing it each iteration; a fresh
+        ``chunk[offset:]`` per pass allocates a new memoryview window
+        each time.
 
         Per-state chunked consumption — header / length / mask states
         copy the bytes they need in one slice, payload state extends

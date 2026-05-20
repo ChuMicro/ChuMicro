@@ -58,10 +58,7 @@ _MAX_EMPTY_FRAGMENT_RUN = 64
 
 
 class WhenOversized:
-    """Policy for inbound messages exceeding ``max_message_bytes``.
-    Mirrors :class:`chumicro_mqtt.WhenOversized` /
-    :class:`chumicro_requests.WhenOversized`.
-    """
+    """Policy for inbound messages exceeding ``max_message_bytes``."""
 
     #: Drop the message silently; stay connected for the next one.
     DROP_SILENT = "drop_silent"
@@ -89,9 +86,7 @@ def _new_tx_queue(maxlen):
     """Return a fresh outbound ``deque`` sized at *maxlen*.
 
     MicroPython / CircuitPython require ``flags=1`` to enable
-    ``appendleft`` (used to push close-frames to the front of the
-    queue so they jump the line); CPython's deque needs no flag.
-    Mirrors :func:`chumicro_mqtt.client._new_tx_queue`.
+    ``appendleft``; CPython's deque needs no flag.
     """
     try:
         return deque((), maxlen, 1)
@@ -170,14 +165,10 @@ class _BaseSession:
 
         # Pre-allocated recv scratch buffer — reused on every tick so we
         # don't churn the heap with ~1 KB allocations per handle() call.
-        # Live-board MemoryError on Pi Pico W (124 KB free heap) caught
-        # the per-call allocation; matches chumicro-mqtt's
-        # PacketDecoder.fill_buffer() pre-allocation pattern.  Capped at
-        # 512 B so a session configured with a large ``recv_budget_per_tick``
-        # doesn't pin a big steady-state buffer; the recv loop calls back
-        # for the next chunk in the same tick if the budget remains.
-        # Mirrors chumicro_requests.HttpClient + chumicro_http_server
-        # connection-state pattern.
+        # Capped at 512 B so a session configured with a large
+        # ``recv_budget_per_tick`` doesn't pin a big steady-state buffer;
+        # the recv loop calls back for the next chunk in the same tick
+        # if the budget remains.
         recv_scratch_size = min(recv_budget_per_tick, 512)
         self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
@@ -582,9 +573,7 @@ class _BaseSession:
         path in ``FrameParser.feed``) and copy bytes they keep into their
         own buffers before returning, so the view's lifetime ends with the
         caller's drain pass.  Returning ``bytes()`` instead would allocate
-        per-recv and defeat the recv_into win.  Mirrors the zero-copy
-        handoff in chumicro_requests.HttpClient._drive_recv +
-        chumicro_http_server connection._drive_recv.
+        per-recv and defeat the recv_into win.
         """
         cap = min(max_bytes, len(self._recv_buffer))
         try:
@@ -613,8 +602,8 @@ class _BaseSession:
         ``handle()`` path; pass ``None`` from user-entry callers
         (``close()``) so the deadline gets a freshly-fetched base.
 
-        Idempotent — a second :meth:`_send_close` while already CLOSING
-        is a no-op (peer's CLOSE may arrive after we sent ours).
+        A second :meth:`_send_close` while already CLOSING is a no-op
+        (peer's CLOSE may arrive after we sent ours).
         """
         if self.state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
             return
