@@ -2981,6 +2981,67 @@ class TestListFilesInScopeAndDelete:
         assert lib.is_dir()
         assert (lib / "keep" / "__init__.py").exists()
 
+    def test_delete_reaps_root_level_empty_pkg_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A root-level orphan `/<pkg>/` (from a prior deploy convention) gets reaped.
+
+        Regression: the reap used to be ``/lib/``-only, so a board
+        carrying ``/<pkg>/`` at root from an older deploy layout kept
+        the husk after stale-file removal.  An empty root-level
+        ``/<pkg>/`` resolves ``import <pkg>`` to a PEP 420 namespace
+        package and shadows the populated ``/lib/<pkg>/`` underneath
+        in ``sys.path`` — exactly the failure that bit Lolin S2 MP.
+        Widening the reap to the whole drive scope closes the gap.
+        """
+        (tmp_path / "chumicro_timing").mkdir()
+        (tmp_path / "chumicro_timing" / "old.py").write_text("# stale")
+        (tmp_path / "lib" / "chumicro_timing").mkdir(parents=True)
+        (tmp_path / "lib" / "chumicro_timing" / "__init__.py").write_text(
+            "# new payload",
+        )
+
+        _plant_verifiable_circuitpy(tmp_path, monkeypatch)
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
+        )
+        transport.delete_files(["/chumicro_timing/old.py"])
+
+        # Husk reaped — no more shadowing namespace package at root.
+        assert not (tmp_path / "chumicro_timing").exists()
+        # New payload survives (it has a live file).
+        assert (tmp_path / "lib" / "chumicro_timing" / "__init__.py").is_file()
+
+    def test_delete_skips_dot_prefixed_dirs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """macOS noise (``.Spotlight-V100`` etc.) isn't reaped.
+
+        Mirrors ``_list_scope_on_drive``'s dot-prefix filter — these
+        entries are managed by the host OS and outside the deploy's
+        scope.  Reaping an empty one would be harmless functionally
+        but would burn FAT writes on a class of files we deliberately
+        don't track.
+        """
+        (tmp_path / ".Spotlight-V100").mkdir()  # empty macOS noise
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "old.py").write_text("# stale")
+
+        _plant_verifiable_circuitpy(tmp_path, monkeypatch)
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            time=FakeTime(),
+            drive_scanner=lambda: [tmp_path],
+        )
+        transport.delete_files(["/lib/old.py"])
+
+        # Dot-prefixed entry survives even though it's empty.
+        assert (tmp_path / ".Spotlight-V100").is_dir()
+
     def test_delete_keeps_dir_that_still_has_files(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:

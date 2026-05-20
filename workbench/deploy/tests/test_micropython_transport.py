@@ -1848,6 +1848,38 @@ class TestDeleteFiles:
         assert "/active.py" in script
         assert "os.remove" in script
 
+    def test_copy_mode_script_reaps_empty_dirs(self) -> None:
+        """The deletion script also walks the device + rmdirs empties.
+
+        Without this reap an emptied `/<pkg>/` at root resolves
+        ``import <pkg>`` to a PEP 420 namespace package and shadows
+        the populated `/lib/<pkg>/` deeper in MicroPython's default
+        ``sys.path`` (``['', '.frozen', '/lib']`` — root FIRST).
+        Bench-confirmed against Lolin S2 MP carrying root-level
+        ``/chumicro_timing/*.py`` from a prior deploy convention.
+        Unit-asserts the script *contains* the reap; the on-silicon
+        confirmation is the functional 4-board bench.
+        """
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0", exec_outputs=[b""],
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        transport.delete_files(["/foo/old.py"])
+        script = next(
+            call[1][0] for call in serial.calls if call[0] == "exec_raw"
+        )
+        # Reap step is bottom-up + skips dot-prefixed + skips '/' itself.
+        assert "os.rmdir" in script
+        assert "_reap(" in script and "_reap('/')" in script
+        assert "name.startswith('.')" in script
+        assert "if p != '/'" in script
+
     def test_copy_mode_unmounts_before_delete(self) -> None:
         serial = FakeSerialTransport(
             "/dev/ttyUSB0", exec_outputs=[b""],
