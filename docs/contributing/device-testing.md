@@ -428,7 +428,7 @@ flash so there's nothing persistent to wipe.
 | A normal `python scripts/run.py test` run ignores `functional_tests/` | Expected behavior | Use `test-libraries-functional` or explicitly target the `functional_tests/` path from your IDE |
 | `mpremote: cp: ...: No space left on device` mid-deploy | LittleFS partition full of stage residue from prior runs | `chumicro-workspace reset-board --device <id> --yes` — see "Wiping a board's filesystem" above |
 | Lolin S2 CircuitPython deploys take 30–60 s per example | The board's flash write speed is the floor — not a recovery or retry signal | Expected; use Pi Pico W as the faster CP development target when iterating. Lolin S2 CP rsync slowness is a baseline characteristic, not a regression |
-| CIRCUITPY drive visible but every write fails with `Read-only file system` | Device firmware has put its own filesystem into read-only state (not the FSKit wedge — that hides the drive entirely) | `chumicro-workspace reset-board --device <id> --yes` or unplug-and-replug; see [docs/troubleshooting/macos-circuitpy.md](../troubleshooting/macos-circuitpy.md) |
+| CIRCUITPY drive visible but every write fails with `Read-only file system` | Drive is mounted RO — either the device-side FS flipped read-only, or FSKit handed the mount up with the RO flag.  Distinct from the FSKit wedge, where the drive never appears at all | `chumicro-workspace reset-board --device <id> --yes` or unplug-and-replug; see [docs/troubleshooting/macos-circuitpy.md](../troubleshooting/macos-circuitpy.md) |
 
 ## Related guides
 

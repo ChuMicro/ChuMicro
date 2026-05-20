@@ -73,13 +73,18 @@ In the observed cases so far the command chain always worked.  If it doesn't:
 
 **What's happening**
 
-This is **not** the FSKit wedge.  The FSKit wedge keeps the drive from appearing at all; here the drive is fully visible to the host and just refuses writes.  The fault is on the device side: CircuitPython has put its own user filesystem into a read-only state.  Observed triggers include recent file-manipulation paths on the device that confuse the runtime's filesystem state — the canonical recovery is to reset the device, not to escalate against the host.
+Distinct symptom from the FSKit wedge above — there the drive never appears at all; here the drive is fully visible to the host and just refuses writes.  Two plausible causes:
+
+- The device-side filesystem entered a read-only state (CircuitPython's own filesystem can flip read-only when on-device file manipulation confuses its state).
+- FSKit handed the mount up with a read-only flag (the host-side daemons are healthy enough to mount but bounced writes off the FAT layer).
+
+Either way the recovery is the same and lives on the device side: reset the board's user filesystem.
 
 **Recovery**
 
 - `chumicro-workspace reset-board --yes --device <id>` — wipes the device filesystem clean-slate; CircuitPython rebuilds an empty writable FS on next boot.  This destroys user files on the board; back up first if anything on the board is the only copy.
 - Or unplug, hold the BOOT/RESET button if the board has one, replug.  The runtime re-initializes and the user FS comes back writable.
-- Do **not** reach for the FSKit recovery `killall` here — the host daemons are healthy; the problem is on the device.
+- The FSKit recovery `killall` from the section above is a separate flow — that one is for the drive-never-appears wedge, not for a writable-side refusal.
 
 **Symptom**
 
