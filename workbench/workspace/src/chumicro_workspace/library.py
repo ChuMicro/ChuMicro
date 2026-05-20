@@ -48,9 +48,27 @@ COPIED_FILES = ("pyproject.toml", "VERSION", "README.md")
 #: Workspace-relative dir holding pre-upgrade backups of edited trees.
 LIBRARY_BACKUPS_DIRNAME = "_library-backups"
 
+#: File the user drops into ``libraries/<name>/`` to claim the tree as
+#: their own — ``library add`` / ``update`` / ``switch-channel`` then
+#: leave it untouched, even when a transitive walk would otherwise
+#: re-fetch it.  Dot-prefixed for parity with the deploy scope filter
+#: (skipped by both transports' on-device listings).  Delete the file
+#: to resume tracking the channel.  Same shape as the other
+#: artifact-level claims in this codebase (``__chumicro_test_support__``,
+#: ``__chumicro_runtimes__``): the marker lives with the artifact it
+#: governs, not in a side manifest.
+LOCAL_EDIT_SENTINEL = ".chumicro-local"
+
 #: Sentinel recorded in ``workspace.yml`` for ``--floating`` entries —
 #: "track the channel's latest snapshot" rather than a pinned tag.
 HEAD = "HEAD"
+
+
+def is_locally_held(workspace_root: Path, package: str) -> bool:
+    """Whether ``libraries/<package>/`` carries the user-edit sentinel."""
+    return (
+        workspace_root / "libraries" / package / LOCAL_EDIT_SENTINEL
+    ).is_file()
 
 
 class LibraryFetchFailureKind(Enum):
@@ -130,15 +148,37 @@ def _backup_existing(destination: Path, workspace_root: Path) -> Path | None:
 def _place_library(
     source_root: Path, package: str, workspace_root: Path,
 ) -> Path:
-    """Install an extracted tree, preserving any edited copy first.
+    """Install an extracted tree, respecting the local-edit sentinel.
 
-    Validates the tree, backs up an existing curated copy
-    (edit-preserving — never an implicit clobber), then copies the
-    curated subset into ``libraries/<package>/``.  Returns the
-    destination.
+    Validates the tree, then:
+
+    * If the destination carries ``.chumicro-local``
+      (:data:`LOCAL_EDIT_SENTINEL`), leave it alone and return the
+      existing path — the user has claimed the tree as their own and
+      doesn't want it replaced, even on a transitive re-fetch.  Prints
+      a one-line notice so the user knows the channel had a different
+      version available.
+    * Otherwise, back up an existing curated copy (edit-preserving —
+      never an implicit clobber), then copy the curated subset into
+      ``libraries/<package>/``.
+
+    Returns the destination either way.
     """
     _validate_curated_content(source_root, package)
     destination = workspace_root / "libraries" / package
+    if is_locally_held(workspace_root, package):
+        channel_version = (source_root / "VERSION").read_text(
+            encoding="utf-8",
+        ).strip()
+        installed_version = read_installed_version(
+            workspace_root, package,
+        ) or "unknown"
+        print(
+            f"library: kept local edits in libraries/{package}/ "
+            f"({LOCAL_EDIT_SENTINEL} sentinel present; on-disk "
+            f"v{installed_version}, channel has v{channel_version}).",
+        )
+        return destination
     _backup_existing(destination, workspace_root)
     destination.mkdir(parents=True)
     for tree in REQUIRED_TREES:
