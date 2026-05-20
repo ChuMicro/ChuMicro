@@ -185,17 +185,6 @@ Core commands for active development and troubleshooting:
 
 `<cli> --help` and `<cli> <sub> --help` for full flag lists. Walkthroughs in [docs/contributing/device-testing.md](docs/contributing/device-testing.md) and [docs/contributing/working-with-agents.md](docs/contributing/working-with-agents.md).
 
-## File routing
-
-| Task | Where |
-|------|-------|
-| New device library | `python scripts/run.py new-library <name>` |
-| New host-only tool | `python scripts/run.py new-library --workbench <name>`; see [docs/contributing/workbench.md](docs/contributing/workbench.md) |
-| Shared infra (internal) | `support/` |
-| Build / CI tooling | `scripts/` |
-| Design decision | `plans/decisions/NNNN-<slug>.md` (use [`new-decision`](.github/skills/new-decision/SKILL.md) skill) |
-| Docs assets | `support/docs/` |
-
 ## Reference implementations
 
 Pinned local clones of runtime source trees live under `.tools/` (gitignored). Browse these first when inspecting C implementations or built-in module behavior.
@@ -214,7 +203,3 @@ For deeper implementation detail:
 - [docs/contributing/device-testing.md](docs/contributing/device-testing.md): functional tests, deploy modes, devices.yml.
 - [docs/contributing/releases.md](docs/contributing/releases.md) covers VERSION, SemVer, and experimental-to-stable promotion.
 - [docs/contributing/pull-requests.md](docs/contributing/pull-requests.md): PR conventions.
-
-Tests live under each library's `tests/`. Shared fakes live in `src/chumicro_<name>/testing.py`. On-device tests live under `functional_tests/` and use `support/test_harness/`.
-
-Each library's `VERSION` file is the source of truth. Bump only affected libraries. Development code stays as plain `.py`. `.mpy` compilation happens in the release pipeline.
