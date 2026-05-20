@@ -148,7 +148,7 @@ _BOOTSTRAP_EXEC_PATTERNS = (
 )
 
 #: Deploy-call misconfiguration — wrong flag, missing file, etc.
-#: These are programr errors, not runtime conditions.  Classifier
+#: These are programmer errors, not runtime conditions.  Classifier
 #: only flags them to steer retry decisions; the message is what
 #: the caller actually reads.
 _CONFIGURATION_PATTERNS = (
@@ -332,11 +332,11 @@ def diagnose_port_holders(
     caller treats absence of holders as "we couldn't tell, fall
     through to the generic recovery hint" rather than an error.
 
-    Beginners hit "failed to access ... it may be in use by
-    another program" after a SIGINT'd deploy leaves an orphan
-    chumicro-deploy / mpremote subprocess holding the port.
-    Surfacing the PID in the recovery message lets the user kill
-    the right thing without having to run ``lsof`` themselves.
+    A deploy interrupted by Ctrl-C that leaves an orphan
+    chumicro-deploy / mpremote subprocess holding the port surfaces
+    as "failed to access ... it may be in use by another program".
+    Showing the PID lets the user kill the right thing without
+    running ``lsof`` themselves.
     """
     if sys.platform.startswith("win"):
         return []
@@ -514,8 +514,8 @@ class NonInteractiveDeployer(_RecoveringDeployer):
 
     On :class:`CircuitpythonTransportError` or
     :class:`MicropythonTransportError`: classifies the failure,
-    prints the coached recovery output (headline + F6 lsof
-    diagnosis when applicable + fix steps), and re-raises.
+    prints the coached recovery output (headline + lsof diagnosis
+    when applicable + fix steps), and re-raises.
     No retry loop, no user prompt — designed for callers that
     have nowhere to read stdin from (CI runners, log-driven
     automation, ``--non-interactive`` CLI flag).

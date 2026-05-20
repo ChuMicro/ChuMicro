@@ -220,7 +220,7 @@ def _entrypoint_for(runtime: str) -> str:
 def _deploy_device_for(context: BoardContext) -> Device | None:
     """Pick the Device config that's actually usable for a deploy.
 
-    RAM mode now works on both runtimes (CP inlines the files into
+    RAM mode works on both runtimes (CP inlines the files into
     ``sys.modules`` via raw REPL; MP mounts the host dir).  Preferring
     RAM across the board keeps the demo fast and avoids depending on
     a mounted CIRCUITPY drive for scenarios that don't need one.
@@ -492,7 +492,7 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
 
 
 def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
-    """CP only — verify the disconnect fix: no spurious warnings on intentional reset."""
+    """CP only — verify intentional reset_into_bootloader emits no warnings on disconnect."""
     _print_step(
         "Scenario: intentional bootloader reset emits no warnings",
     )
@@ -504,10 +504,10 @@ def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
         return True
     _print_note(
         "Connects, triggers reset_into_bootloader, disconnects.  "
-        "Before the fix you would see two 'WARNING: Failed to ...' "
-        "lines because disconnect() tried to talk to a board that "
-        "was already rebooting.  After the fix the sequence is "
-        "silent — _reset_pending skips the restore dance.\n"
+        "The sequence should be silent: reset_into_bootloader closes "
+        "the serial port itself, and disconnect then skips the "
+        "restore dance that would otherwise log 'WARNING: Failed to "
+        "...' against a rebooting board.\n"
         "  Note: your CP board WILL enter the UF2 bootloader.  "
         "Afterwards you'll need to tap RESET (or unplug/replug) "
         "to get it out of the bootloader and back to CIRCUITPY."
@@ -534,8 +534,8 @@ def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
         return False
     _print_ok(
         "reset_into_bootloader dispatched and disconnect returned "
-        "without printing warnings.  If you saw zero 'WARNING:' "
-        "lines scroll past, the fix is working."
+        "without printing warnings.  Zero 'WARNING:' lines is the "
+        "correct outcome."
     )
     _print_note(
         "Tap RESET on the board now (or unplug/replug) to exit the "

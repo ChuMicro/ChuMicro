@@ -186,8 +186,7 @@ class FakeSerialPort:
     verbatim on the matching ``read()`` call) or an instance of
     ``BaseException`` (raised on that call) — the exception form
     lets tests script "first read returns bytes, second read drops
-    the cable" scenarios without subclassing the fake.  Mirrors the
-    pattern in :class:`chumicro_repl.testing.FakeSerialPort`.
+    the cable" scenarios without subclassing the fake.
 
     Instances are callable and return themselves, so a
     ``FakeSerialPort`` instance can be passed directly as a transport's

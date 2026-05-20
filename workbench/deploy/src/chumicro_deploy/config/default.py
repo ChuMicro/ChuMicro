@@ -1,8 +1,8 @@
 """Default YAML config loader that ships with ``chumicro-deploy``.
 
 This is the built-in loader for the ``devices.yml`` schema that
-``chumicro-deploy`` defines and owns.  Any project — the `chumicro`
-mono repo, a project-workspace template, or a third-party consumer —
+``chumicro-deploy`` defines and owns.  Any project — its own
+workspace, a project-workspace template, or a third-party consumer —
 can write this shape to configure its deploy targets without
 depending on any upstream tooling.
 
@@ -315,10 +315,10 @@ def load_raw_entries(
     The schema-shape primitive that ``chumicro-deploy`` owns: read
     the YAML, return the ``devices:`` list and the ``defaults:``
     mapping verbatim — no field validation, no Device construction,
-    no normalization.  Consumers with richer schemas (the chumicro
-    mono-repo's IDE-test orchestration, future project-workspace
-    template loaders) call this and layer their own validation on
-    top, so the YAML shape lives in one place.
+    no normalization.  Consumers with richer schemas (IDE-test
+    orchestrators, future project-workspace template loaders) call
+    this and layer their own validation on top, so the YAML shape
+    lives in one place.
 
     Args:
         path: Filesystem path to the YAML file.

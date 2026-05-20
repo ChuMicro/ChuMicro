@@ -15,9 +15,9 @@ Two protocols are defined:
   ``inline_script_budget_bytes``).  ``MicropythonTransport`` does not
   need these — there is no per-script RAM budget on mpremote.
 
-CPython-only — these protocols ride on ``typing.Protocol`` which the
-support package can use freely (``support/device_transport`` is not
-constrained to the embedded-runtime subset).
+CPython-only — these protocols ride on ``typing.Protocol``, which only
+the workbench tooling uses (the cross-runtime device libraries that
+satisfy the contract don't import this module).
 """
 
 from __future__ import annotations
@@ -204,7 +204,7 @@ def validate_entrypoint_in_files(
 ) -> None:
     """Raise *error_cls* if *entrypoint* is not a key of *files*.
 
-    The canonical message text (``"entrypoint <name> missing from
+    The exact message text (``"entrypoint <name> missing from
     files ..."``) is pattern-matched by
     :func:`~chumicro_deploy.recovery.classify_deploy_failure` to route
     to :attr:`DeployFailureKind.CONFIGURATION_ERROR`, so every deploy
@@ -223,11 +223,10 @@ def parse_probe_output(output: str) -> DeviceImplementation | None:
 
     Scans for the ``__CHU_IMPL__:`` marker line emitted by
     :data:`PROBE_IMPLEMENTATION_SCRIPT` and ignores any surrounding
-    output.  When an accompanying ``__CHU_UID__:`` line is present
-    (new probe path), its hex payload is attached to
-    :attr:`DeviceImplementation.uid`; output from older recordings
-    that pre-date the UID line still parses cleanly with
-    ``uid=""``.  Returns ``None`` when the ``__CHU_IMPL__:`` marker
+    output.  When an accompanying ``__CHU_UID__:`` line is present,
+    its hex payload is attached to :attr:`DeviceImplementation.uid`;
+    output without that line parses cleanly with ``uid=""``.
+    Returns ``None`` when the ``__CHU_IMPL__:`` marker
     is missing or its payload is malformed — callers treat that as
     "probe unavailable" and fall back to per-device metadata from
     ``devices.yml``.
@@ -260,7 +259,7 @@ def parse_probe_output(output: str) -> DeviceImplementation | None:
 class UnsupportedExtraFilesError(NotImplementedError):
     """Raised when ``transport.stage(extra_files=...)`` can't be honored.
 
-    Today's only producer is CircuitPython RAM mode: there is no
+    Currently raised only by CircuitPython RAM mode: there is no
     writable device-side filesystem to land bytes on (RAM mode runs
     inline-execed source via raw REPL; CIRCUITPY is host-write but
     a host write while the device is running can trigger a soft reset
@@ -467,14 +466,14 @@ class TransportProtocol(Protocol):
         """Remove any persisted ``code.py`` / ``main.py`` and confirm
         the removal committed before the caller soft-resets.
 
-        The on-device unit sweep calls this once per device before its
-        first :meth:`soft_reset`, so the reboot cannot race a stale
-        entrypoint a prior deploy left behind (a leftover ``code.py``
-        that hard-faults or resets would make the sweep flaky).
-        Filesystem transports unlink the files and verify they are
-        gone — flushing FAT first on CIRCUITPY so the deletion is on
-        the physical medium before the reboot re-reads it.  RAM/mount
-        transports never persist an entrypoint, so this is a no-op.
+        Call once before a soft-reset when a stale entrypoint from a
+        prior deploy could otherwise run on the reboot (a leftover
+        ``code.py`` that hard-faults or resets would propagate that
+        failure into the post-reset session).  Filesystem transports
+        unlink the files and verify they are gone — flushing FAT first
+        on CIRCUITPY so the deletion is on the physical medium before
+        the reboot re-reads it.  RAM/mount transports never persist an
+        entrypoint, so this is a no-op.
         """
         ...
 
