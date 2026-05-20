@@ -611,15 +611,14 @@ class MicropythonTransport:
     def _subprocess_reset_with_retry(self) -> None:
         """Subprocess ``mpremote ... reset``, riding out re-enumeration.
 
-        A board wedged by a prior hard failure (e.g. a stage
-        ``ENOSPC``) drops its USB-CDC, and ``mpremote connect <port>
-        reset`` then fails ``it may be in use by another program`` /
-        ``device not configured`` until it re-enumerates.  Settle and
-        retry across that window, and settle once more after the reset
-        reboots the board so the *next* port grab (the following
-        per-library ``stage()`` / ``soft_reset()``) doesn't land
-        mid-re-enumeration.  Raises only if every attempt fails, since
-        failing loud beats silently wedging the rest of the sweep.
+        Runs ``mpremote reset`` in a retry loop with a settle pause
+        between attempts and one final settle on success.  A board
+        wedged by a prior failure can drop its USB-CDC and reject
+        ``mpremote connect <port> reset`` with "in use" or "device not
+        configured" until it re-enumerates, so the loop bridges that
+        window.  The trailing settle keeps the next port grab from
+        landing mid-re-enumeration.  Raises only when every attempt
+        fails.
         """
         last_error: Exception | None = None
         for _attempt in range(_RESET_RETRY_ATTEMPTS):
@@ -711,63 +710,51 @@ class MicropythonTransport:
     ) -> str:
         """Write *files* onto the device and execute *entrypoint*.
 
-        Mount mode writes the file tree to a host-side staging dir,
-        mounts it through the persistent raw REPL, and execs the
-        entrypoint from the mount point.  Copy mode writes to the
-        host-side staging dir and uses ``mpremote fs cp -r`` to push
-        to the device's flash, then runs the entrypoint via one of two
-        follow modes selected by the *follow* parameter.
+        In **mount mode**, the file tree is staged host-side, mounted
+        through the persistent raw REPL, and the entrypoint runs from
+        the mount point.  In **copy mode**, the staging tree is pushed
+        to flash via ``mpremote fs cp -r`` and the entrypoint runs in
+        whichever follow mode *follow* selects.
 
         Args:
-            files: On-device-path -> bytes mapping.  Paths may start
-                with ``/``; the leading slash is stripped before
-                joining with the staging dir / device root.
-            entrypoint: On-device path (must be a key of *files*).
+            files: On-device-path -> bytes mapping.  Leading slashes
+                are stripped before joining with the staging dir or
+                device root.
+            entrypoint: On-device path, must be a key of *files*.
             on_file_staged: Per-file callback invoked with the
                 on-device path as each file is written to staging.
-            on_execute_line: Callback invoked once per line of the
-                execute output (in order) after execution completes.
-            follow: Selects how the staged entrypoint is run + how
-                its output is captured.
+            on_execute_line: Callback invoked once per output line, in
+                order, after execution completes.
+            follow: Selects how the entrypoint runs.
 
-                ``"exec"`` (default) — raw-REPL synchronous execution.
-                The entrypoint is wrapped in an ``exec(open(...).read())``
-                bootstrap and run via ``self._serial.exec_raw`` with
-                ``timeout=_EXECUTE_IDLE_TIMEOUT`` (inter-byte idle).
-                Captures full stdout once the script returns and raw
-                REPL emits the EOF (``\\x04``) marker.  Right for
-                return-bounded scripts (test-harness ``test_*.py``
-                files); breaks for ``while True`` app code because
-                the EOF marker never fires.
+                ``"exec"`` (default) wraps the entrypoint in an
+                ``exec(open(...).read())`` bootstrap and runs it via
+                ``self._serial.exec_raw`` with an inter-byte idle
+                timeout.  Captures full stdout once the script returns
+                and the raw REPL emits its EOF (``\\x04``) marker.
+                Right for return-bounded scripts, hangs forever on
+                ``while True`` bodies.
 
-                ``"soft_reboot"`` — friendly-REPL soft-reboot pattern.
-                Sends ``Ctrl-B + Ctrl-D`` from the persistent serial
-                connection, lets MicroPython auto-run ``/main.py``,
-                reads serial output up to :attr:`timeout` seconds
-                (returning partial output for infinite-loop bodies).
-                Mount mode is rejected — the soft-reboot pattern
-                requires the entrypoint at ``/main.py`` on flash, not
-                via mount, because MicroPython only auto-runs files at
-                known boot paths on flash, never from a host-mounted
-                directory.
-            clean: When ``True`` and ``mode="copy"``, wipe the
-                device's ``/lib`` tree before pushing the new staging
-                contents.  Top-level user-managed files (``boot.py``,
-                ``main.py``, ``settings.toml``, etc.) live outside
-                ``/lib`` and survive unchanged.  No-op for
-                ``mode="mount"`` (mount mode is transient by design —
-                nothing on the device's flash to clean).  Default
-                ``False`` preserves the additive-by-default contract.
+                ``"soft_reboot"`` sends ``Ctrl-B + Ctrl-D`` and lets
+                MicroPython auto-run ``/main.py``, then reads serial
+                output up to :attr:`timeout` seconds (returning
+                partial output for infinite-loop bodies).  Requires
+                copy mode with ``/main.py`` as the entrypoint, since
+                MicroPython only auto-runs boot paths on flash.
+            clean: Copy mode only.  When ``True``, wipe the device's
+                ``/lib`` tree before pushing.  Top-level user files
+                (``boot.py``, ``main.py``, ``settings.toml``) live
+                outside ``/lib`` and survive.
 
         Returns:
             Combined stdout captured from the entrypoint execution.
-            For ``follow="soft_reboot"`` and an infinite-loop entry
-            point, this is whatever accumulated up to *self.timeout*.
+            For ``follow="soft_reboot"`` and an infinite-loop body,
+            this is whatever accumulated up to *self.timeout*.
 
         Raises:
             MicropythonTransportError: ``follow="soft_reboot"`` was
-                requested with ``mode="mount"`` (unsupported) or with
-                an entrypoint other than ``/main.py``.
+                requested with mount mode or with an entrypoint other
+                than ``/main.py``.
         """
         validate_entrypoint_in_files(
             files, entrypoint, error_cls=MicropythonTransportError,
