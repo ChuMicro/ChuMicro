@@ -29,9 +29,10 @@ Design notes:
   "missing required runtime-config keys: …" message.  Beats the
   cryptic on-device ``MissingConfigKey`` boot crash that the silent-
   skip path produces.
-* The plugin re-encodes the payload on each ``transport.stage()`` call.
-  Cheap (one ``packb`` on a small dict), and the dict identity is
-  preserved so the round-trip is stable.
+* The plugin caches the encoded bytes keyed by ``id(payload)``, so a
+  steady payload pays one ``msgpack.packb`` per pytest invocation, not
+  per stage call.  Overwriting the stashed dict (e.g. from a session
+  fixture) flips the id and invalidates the cache automatically.
 
 """
 
