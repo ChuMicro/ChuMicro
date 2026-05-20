@@ -153,25 +153,9 @@ If a third-party library doesn't support CircuitPython or MicroPython, prefer a 
 | [`plans/`](plans/) | Decisions, work queue, workstreams | Not published |
 | [`docs/`](docs/) | Contributor + user docs | Published as the docs site |
 
-### Libraries
+See [`libraries/README.md`](libraries/README.md) and [`workbench/README.md`](workbench/README.md) for the live inventory and per-package summaries.
 
-`ls libraries/` is the live inventory. Each library has a `README.md` and `docs/guide.md`. The dependency stack, broadly:
-
-- **Primitives:** `timing`, `runner`, `compat`, `logging`, `events`. Depended-on-by-everyone.
-- **Persistence + serialization:** `msgpack`, `config`, `kvstore`.
-- **Networking transport + protocols:** `wifi` (link), `sockets` (TCP/TLS/UDP), then app protocols: `ntp`, `requests`, `http_server`, `websockets`, `mqtt`.
-
-Per-library deps are declared in each `pyproject.toml`. When a library doesn't already exist for a job, check `plans/decisions/` for a planned design. Look for `00NN-chumicro-<name>.md` files, which name libraries that have been designed but not yet built.
-
-### Workbench (host-only)
-
-`ls workbench/` is the live inventory. Currently:
-
-- **`deploy`** pushes code, probes identity, and flashes firmware. It also provides a failure-classifying recovery layer.
-- **`repl`** is a serial REPL with traceback highlighting and a `tail()` follow-mode.
-- **`workspace`** is the project workspace CLI. It composes `deploy`, `repl`, and config. The starter is the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo.
-- **`pytest-device`** is a pytest plugin (auto-registered via `pytest11`) that stages source onto a board and runs tests in the device runtime.
-- **`checks`** carries the `CHU0NN` lint rules (`chumicro-checks`).
+When a library doesn't already exist for a job, check `plans/decisions/` for a planned design.  Look for `00NN-chumicro-<name>.md` files, which name libraries that have been designed but not yet built.
 
 ## Commands
 
