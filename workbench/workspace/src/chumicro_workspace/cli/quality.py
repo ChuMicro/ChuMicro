@@ -51,16 +51,15 @@ def _cmd_lint(args: argparse.Namespace) -> int:
 
     Picks up the workspace's ``[tool.ruff]`` config from
     ``pyproject.toml`` automatically — the workspace template ships
-    a ruff config that matches chumicro's own tone.
-    Extra args after ``--`` forward to ruff (e.g. ``--fix``,
-    ``--select`` overrides).
+    a pre-configured ruff block.  Extra args after ``--`` forward to
+    ruff (e.g. ``--fix``, ``--select`` overrides).
 
     After ruff, runs ``chumicro-checks`` for the workspace-internal
     rules ruff can't express.  Each rule self-scopes — silent
     no-op in repos where its target paths don't exist — so most
     don't fire in a user workspace; the upstream-derivative-leak
-    detector is the one that does.  ``chumicro-checks`` reads its
-    own ``[tool.chumicro-checks]`` config from ``pyproject.toml``.
+    detector typically does.  ``chumicro-checks`` reads its own
+    ``[tool.chumicro-checks]`` config from ``pyproject.toml``.
 
     No-op (exit 0 with a hint) when either ``ruff`` or
     ``chumicro-checks`` isn't installed — keeps the command
