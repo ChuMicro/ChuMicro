@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from chumicro_workspace.cli._common import (
     _add_non_interactive_arg,
@@ -63,6 +64,37 @@ def _confirm(question: str) -> bool:
     """Y/n prompt defaulting to yes."""
     answer = input(f"{question} [Y/n] ").strip().lower()
     return answer in ("", "y", "yes")
+
+
+def _print_install_summary(
+    workspace_root: Path,
+    channel: str,
+    primary: str,
+    closure: list[str],
+    declined: set[str],
+) -> None:
+    """One library per line so the requested package + its version are
+    not lost in a comma-soup of transitive deps.
+
+    *primary* is what the user actually asked for; the rest of
+    *closure* came along through ``[project].dependencies``.  Sentinel-
+    held trees show their on-disk version + a marker so the user can
+    tell at a glance why one closure member kept its local edits while
+    the others tracked the channel.
+    """
+    primary_version = read_installed_version(workspace_root, primary) or "?"
+    print(f"Added {primary} v{primary_version} ({channel})")
+    for name in closure:
+        if name == primary:
+            continue
+        if name in declined:
+            print(f"  + {name} (declined)")
+            continue
+        version = read_installed_version(workspace_root, name) or "?"
+        if is_locally_held(workspace_root, name):
+            print(f"  + {name} v{version} (kept local edits — sentinel)")
+        else:
+            print(f"  + {name} v{version}")
 
 
 def _declined_transitive(
@@ -163,10 +195,9 @@ def _cmd_library_add(args: argparse.Namespace) -> int:
             table[name] = CuratedLibrary(name, args.channel, version)
     write_curated_libraries(workspace.workspace_yaml, table)
 
-    kept = [pkg for pkg in closure if pkg not in declined]
-    print(f"Added {', '.join(kept)} ({args.channel}).")
-    if declined:
-        print(f"Declined: {', '.join(sorted(declined))}.")
+    _print_install_summary(
+        workspace.root, args.channel, args.name, closure, declined,
+    )
     return 0
 
 
@@ -369,7 +400,7 @@ def _apply_selected(
     returns 1.
     """
     table = read_curated_libraries(workspace.workspace_yaml)
-    added: list[str] = []
+    closures: list[tuple[str, list[str]]] = []
     for root in roots:
         try:
             closure = fetch_closure(
@@ -391,12 +422,15 @@ def _apply_selected(
                 workspace.root, name, floating=False, pin=None,
             )
             table[name] = CuratedLibrary(name, channel, version)
-            added.append(name)
+        closures.append((root, closure))
     write_curated_libraries(workspace.workspace_yaml, table)
-    print(
-        f"Added {', '.join(sorted(set(added)))} ({channel})."
-        if added else "Nothing selected.",
-    )
+    if not closures:
+        print("Nothing selected.")
+        return 0
+    for root, closure in closures:
+        _print_install_summary(
+            workspace.root, channel, root, closure, declined=set(),
+        )
     return 0
 
 
