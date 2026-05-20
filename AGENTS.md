@@ -6,7 +6,7 @@
 
 Every session, in this order:
 
-1. `git --no-pager log --oneline -20` — see what just shipped.
+1. `git --no-pager log --oneline -10` — see what just shipped.  The subjects are fact (what landed), not voice (how to write): the dense commit-subject register is a strong stylistic prior, and inheriting it into chat replies / doc prose / audit framing is a feedback loop that hardens unwanted phrasings across sessions ("canonical X" propagating through five workstream archives is the worked example).  For deeper context on a specific change, `git show <hash>` or `git --no-pager log --stat -5` is the right read.
 2. Read [`plans/next-up.md`](plans/next-up.md) — the work queue (`## Now`, `## Next`, `## Done (recent)`). A queued session-handoff pointer in `## Now` is not a resume directive; invoke [`session-resume`](.github/skills/session-resume/SKILL.md) only on an explicit user signal.
 3. `ls plans/decisions/` — the filename slug carries topic *and* lifecycle; treat the listing as the index. A `SUPERSEDED-BY-NNNN` or `INERT` marker means a dead record — skip it on the scan; open it only to trace *why* something changed (`SUPERSEDED-BY-NNNN` names the replacement). For live candidates, `head -n 10` for the gist; full read before any structural / pattern / tooling change. ADRs are co-located with the code they govern.
 4. Check [`plans/open-questions.md`](plans/open-questions.md) for unresolved threads on what you're touching.
