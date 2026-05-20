@@ -91,11 +91,10 @@ def tail(
 ) -> ExitCode:
     """Stream *seconds* of serial output from *device* to *output*.
 
-    The function opens the serial port, reads until either the
-    window elapses or (when *fail_on_traceback* is ``True``) a
-    noteworthy pattern is detected.  Output is decoded UTF-8 safely
-    and highlighted inline — the caller sees tracebacks in red as
-    they stream by, instead of waiting for the window to close.
+    Runs until the window elapses, the caller interrupts, the device
+    drops past the reconnect budget, or (when *fail_on_traceback* is
+    ``True``) a noteworthy pattern is detected.  Highlighting is
+    inline, so the caller sees tracebacks in red as bytes stream by.
 
     Args:
         device: :class:`chumicro_deploy.Device` or a serial port path

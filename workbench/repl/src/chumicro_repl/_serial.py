@@ -1,18 +1,14 @@
-"""Serial-port helpers for the REPL package.
+"""Serial-port helpers shared across the REPL package.
 
-Hides the optional ``pyserial`` import behind a function — the
-package can be imported (``import chumicro_repl``) without pyserial
-installed, which keeps ``--help`` and the pattern-detector /
-highlighter paths light-weight for callers that never open a serial
-port.
+Defines the structural protocols a serial port and time source must
+satisfy, the raw-REPL control-byte constants, and a handful of
+teardown helpers used on disconnect and shutdown paths.
 
-Also owns the small set of helpers used on the disconnect / shutdown
-paths: closing a port quietly, writing the standard disconnect
-notice, flushing a TextIO without crashing on closed streams, and
-resolving ``(address, baudrate)`` from either a device object
-exposing an ``.address`` attribute (e.g. a ``chumicro_deploy.Device``)
-or a bare port-path string.  Sharing the implementations here keeps
-the streaming surfaces behaviorally consistent.
+The pyserial import is deferred to ``default_port_factory`` so
+importing the package costs nothing for callers that never open a
+port (``--help``, pattern detector, highlighter).  A caller that
+injects its own ``SerialPort`` fake via a custom ``PortFactory``
+need not install pyserial at all.
 """
 
 from __future__ import annotations
