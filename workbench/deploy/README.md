@@ -63,7 +63,7 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 | `Device(transport, address, deploy_mode, ...)` | Configure a target board.  Build explicitly or via `Device.from_dict(...)`; or load a registry via `load_devices_yml(...)` / `load_device_registry(...)` |
 | `Deployer(device)` | Push a `FileSource` onto the board and execute the entrypoint.  Returns a `DeployResult` with success / output / traceback |
 | `Deployer.deploy_diff(source, *, wipe=False, ...)` | Same shape, but first lists in-scope files on the device and deletes any that aren't in the new payload |
-| `InteractiveDeployer(deployer)` | Wrapper that classifies transport failures, surfaces a `RecoveryPlan`, and prompts the user to retry.  Default for both CLIs (`--non-interactive` to opt out) |
+| `RecoveringDeployer(deployer, *, prompt=None, max_attempts=3)` | Wraps `Deployer` with failure classification and a `RecoveryPlan`.  Pass `prompt=input` for an interactive retry loop; default `prompt=None` reports once and re-raises.  Both CLIs use the interactive form by default (`--non-interactive` to opt out) |
 | `FileMapSource(files, entrypoint)` | In-memory `dict[device_path, bytes]` source — for generated payloads or one-off scripts |
 | `DirectorySource(directory, entrypoint, resource_prefix)` | Walk a host directory and ship every file under it |
 | `ImportGraphSource(entrypoint, search_paths, device_entrypoint)` | AST-walk the entrypoint and ship only transitively-imported modules |

@@ -521,7 +521,7 @@ def main(
     Wraps the subcommand dispatch in a friendly-error catch so users
     see a one-line ``error: <message>`` for the documented exception
     types instead of a Python traceback.  Recovery output (e.g. the
-    coaching block from :class:`NonInteractiveDeployer`) still prints
+    coaching block from :class:`RecoveringDeployer`) still prints
     before the catch fires.  Unrecognized exceptions propagate — a
     traceback there is a bug, not a UX defect.
 

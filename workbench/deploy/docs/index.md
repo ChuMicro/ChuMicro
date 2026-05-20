@@ -27,7 +27,7 @@ print(result.execute_output)
 
 - **`Device`** — configure a target board (runtime, address, deploy mode). Construct it explicitly, from a dict via `Device.from_dict`, or load it from a `devices.yml` workspace file (see below).
 - **`Deployer`** — write files onto the board and run the entrypoint.
-- **`InteractiveDeployer`** — sibling deployer that classifies transport failures and coaches the user through a retry loop (unplug, drive ejected, REPL stuck, macOS FSKit wedge).
+- **`RecoveringDeployer`** — wraps `Deployer` with failure classification and user-facing coaching (unplug, drive ejected, REPL stuck, macOS FSKit wedge).  Pass `prompt=input` for an interactive retry loop; the default `prompt=None` reports once and re-raises.
 - **`FileSource` variants** — `FileMapSource` for in-memory dicts, `DirectorySource` for a host directory, `ImportGraphSource` to walk Python imports.
 - **`probe_device`** — identify a connected board (runtime, version, machine, CPU UID).
 - **`flash_firmware`** — download and flash firmware via UF2 (Pi Pico family) or esptool (ESP32 family), with programmatic bootloader entry + interactive fallback.

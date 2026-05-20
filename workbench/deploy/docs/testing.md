@@ -4,7 +4,7 @@
 
 | Fake | Replaces | Use it when |
 |------|----------|-------------|
-| `FakeTransport` | `MicropythonTransport` / `CircuitpythonTransport` | You're testing `Deployer` / `InteractiveDeployer` orchestration and don't care which physical transport runs underneath. |
+| `FakeTransport` | `MicropythonTransport` / `CircuitpythonTransport` | You're testing `Deployer` / `RecoveringDeployer` orchestration and don't care which physical transport runs underneath. |
 | `FakeSerialPort` | `serial.Serial` | You're testing `CircuitpythonTransport` internals (the raw-REPL state machine, chunked execution, drive-flash timing) and want to script port behavior byte-for-byte. |
 | `FakeTime` | Python's `time` module | The transport accepts a `TimeSource` via its `time=` parameter; pass `FakeTime()` so timeout-driven retry loops execute instantly instead of waiting on the real clock. |
 

@@ -4,7 +4,7 @@ Extracted from :mod:`recovery` so the user-facing coaching strings
 live next to one another (and apart from the classifier + deployer-
 wrapper machinery that consumes them).  Edits here are text-only;
 the only code-shape constraint is the ``retryable`` flag that
-:class:`~chumicro_deploy.recovery.InteractiveDeployer` reads to
+:class:`~chumicro_deploy.recovery.RecoveringDeployer` reads to
 decide whether to loop or bail.
 
 The :data:`PLANS` mapping is the single source of truth — the

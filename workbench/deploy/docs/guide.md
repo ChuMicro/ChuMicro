@@ -2,7 +2,7 @@
 
 `chumicro-deploy` writes Python code onto CircuitPython and MicroPython boards from your laptop, then helps you recover when something goes wrong.
 
-This guide walks `Device`, `Deployer.deploy_diff()`, file sources, probing, firmware URL resolution, end-to-end firmware flashing with `flash_firmware`, and the `InteractiveDeployer` recovery wrapper that classifies transport failures and coaches you through retry loops for unplug / ejected-drive / REPL-stuck failures.
+This guide walks `Device`, `Deployer.deploy_diff()`, file sources, probing, firmware URL resolution, end-to-end firmware flashing with `flash_firmware`, and the `RecoveringDeployer` recovery wrapper that classifies transport failures and coaches you through retry loops for unplug / ejected-drive / REPL-stuck failures.
 
 ## Install
 
@@ -45,7 +45,7 @@ chumicro-deploy deploy \
     --directory ./my_app --entrypoint /code.py
 ```
 
-All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash-firmware` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `InteractiveDeployer` (see [Recover from deploy failures](#recover-from-deploy-failures-interactivedeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts.
+All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash-firmware` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `RecoveringDeployer` with `prompt=input` (see [Recover from deploy failures](#recover-from-deploy-failures-recoveringdeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts — that builds the same wrapper with `prompt=None`, which reports once and re-raises.
 
 `main()` catches the documented exception types (transport errors, `FlashFirmwareError`, `UnresolvedFirmwareError`, `DeviceConfigError`, `FileNotFoundError`, `ValueError`) and prints `error: <message>` on stderr with exit code 1.  Anything else propagates as a Python traceback — those are bugs, not user-facing failures.
 
@@ -217,32 +217,38 @@ The lifecycle is `create_transport() -> connect() -> list_files_in_scope() -> de
 
 Callbacks are all optional. `on_progress` emits coarse milestones (0.0 connecting, 0.1 listing in-scope, 0.2 cleaning stale — only when there is a stale set, 0.3 staging, 0.9 executing, 1.0 done). `on_file_staged`, `on_file_deleted`, and `on_execute_line` are forwarded to the transport / diff step; the real transports emit them after the fact rather than live-streaming.
 
-## Recover from deploy failures — `InteractiveDeployer`
+## Recover from deploy failures — `RecoveringDeployer`
 
-`Deployer.deploy_diff()` raises transport errors directly — it's the deterministic programmatic surface that automation pipelines depend on.  For interactive use, `InteractiveDeployer` wraps a `Deployer` with classification, retry-loop, and user-facing coaching on failure.  The `chumicro-deploy deploy` CLI does this wrapping for you by default; pass `--non-interactive` to opt out.  `chumicro-workspace deploy` / `deploy-example` / `demo` do the same.  When you call `Deployer.deploy_diff()` from your own Python code you opt in by constructing the wrapper explicitly:
+`Deployer.deploy_diff()` raises transport errors directly — it's the deterministic programmatic surface that automation pipelines depend on.  For interactive use, `RecoveringDeployer` wraps a `Deployer` with classification and user-facing coaching on failure, and optionally an Enter-to-retry loop.  Two modes selected by the `prompt` argument:
+
+- `prompt=None` (default — CI / scripted flows): runs once, prints the classified failure + ordered fix steps on a transport error, then re-raises.
+- `prompt=input` (or any `(str) -> str` callable — interactive flows): runs up to `max_attempts` times, asks the user between attempts.  Any reply starting with `q`, `a`, or `e` aborts.
+
+The `chumicro-deploy deploy` CLI builds the wrapper with `prompt=input` by default; pass `--non-interactive` to switch to `prompt=None`.  `chumicro-workspace deploy` / `deploy-example` / `demo` do the same.  When you call `Deployer.deploy_diff()` from your own Python code you opt in by constructing the wrapper explicitly:
 
 ```python
-from chumicro_deploy import Deployer, InteractiveDeployer
+from chumicro_deploy import Deployer, RecoveringDeployer
 
-interactive = InteractiveDeployer(
+runner = RecoveringDeployer(
     Deployer(device),
-    max_attempts=3,         # retry ceiling per deploy_diff() call
+    prompt=input,           # omit (default None) for one-shot non-interactive coaching
+    max_attempts=3,         # retry ceiling; ignored when prompt is None
 )
 
-result = interactive.deploy_diff(source)
+result = runner.deploy_diff(source)
 
 # clean=False is the additive opt-out; wipe=True is a full erase.
-result = interactive.deploy_diff(source, wipe=True)
+result = runner.deploy_diff(source, wipe=True)
 ```
 
-When the underlying `Deployer.deploy_diff()` raises a `CircuitpythonTransportError` or `MicropythonTransportError`, the interactive deployer:
+When the underlying `Deployer.deploy_diff()` raises a `CircuitpythonTransportError` or `MicropythonTransportError`, `RecoveringDeployer`:
 
 1. Classifies the error into a `DeployFailureKind` — one of `PORT_UNAVAILABLE`, `RAW_REPL_UNRESPONSIVE`, `CIRCUITPY_DRIVE_MISSING`, `MACOS_FSKIT_WEDGED`, `FLASH_COPY_FAILED`, `BOOTSTRAP_EXEC_FAILED`, `INSUFFICIENT_MEMORY`, `TRACEBACK_RETURNED`, `CONFIGURATION_ERROR`, or `UNKNOWN`.
 2. Prints a headline, the underlying error, and the canned `RecoveryPlan` for that kind (the physical actions that typically fix it — close the app holding the port, tap RESET, replug USB, switch to flash mode, etc.).
-3. Prompts the user to fix the condition and press Enter to retry, up to `max_attempts` times.  Typing `q` / `quit` / `abort` / `exit` at the prompt stops retrying and re-raises the last error.
-4. For non-retryable kinds (`INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, `TRACEBACK_RETURNED`) it prints the coaching once and returns / re-raises without prompting — a source-level bug can't be fixed by replugging, and a too-small board can't grow more RAM by retrying.
+3. With `prompt=input`: asks the user to fix the condition and press Enter to retry, up to `max_attempts` times.  Typing `q` / `quit` / `abort` / `exit` at the prompt stops retrying and re-raises the last error.  With `prompt=None`: re-raises immediately after printing.
+4. For non-retryable kinds (`INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, `TRACEBACK_RETURNED`) it prints the coaching once and re-raises without prompting, regardless of mode — a source-level bug can't be fixed by replugging, and a too-small board can't grow more RAM by retrying.
 
-When `Deployer.deploy_diff()` returns a `DeployResult` with `success=False` and a `traceback`, `InteractiveDeployer` prints the traceback and a source-fix recovery plan, then returns the unchanged result.
+When `Deployer.deploy_diff()` returns a `DeployResult` with `success=False` and a `traceback`, `RecoveringDeployer` prints the traceback and a source-fix recovery plan, then returns the unchanged result.
 
 ### Plug in your own prompt and output
 
@@ -259,7 +265,7 @@ def my_output(line: str) -> None:
     # e.g. push to a logging framework or a progress widget.
     ...
 
-interactive = InteractiveDeployer(
+runner = RecoveringDeployer(
     Deployer(device),
     prompt=my_prompt,
     output=my_output,
@@ -268,7 +274,7 @@ interactive = InteractiveDeployer(
 
 ### Classify errors directly
 
-`classify_deploy_failure(exception)` is exported so you can build your own orchestrator without using `InteractiveDeployer`:
+`classify_deploy_failure(exception)` is exported so you can build your own orchestrator without using `RecoveringDeployer`:
 
 ```python
 from chumicro_deploy import DeployFailureKind, classify_deploy_failure
@@ -285,7 +291,7 @@ except Exception as error:
 
 Recent macOS releases replaced the in-kernel `msdosfs` driver with a user-space FSKit extension.  When that extension errors out mid-probe — most often on a small CIRCUITPY FAT12 volume — it can leave `diskarbitrationd` stuck in an uninterruptible kernel wait, and newly inserted CIRCUITPY drives never appear under `/Volumes`.
 
-`InteractiveDeployer` auto-detects this condition.  On a `CIRCUITPY_DRIVE_MISSING` failure it calls `detect_fskit_wedge()` (from `chumicro_deploy.macos_fskit`); if the daemon is wedged, it promotes the kind to `MACOS_FSKIT_WEDGED` and prints a coaching block with the exact recovery command:
+`RecoveringDeployer` auto-detects this condition.  On a `CIRCUITPY_DRIVE_MISSING` failure it calls `detect_fskit_wedge()` (from `chumicro_deploy.macos_fskit`); if the daemon is wedged, it promotes the kind to `MACOS_FSKIT_WEDGED` and prints a coaching block with the exact recovery command:
 
 ```
 sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd fskit_agent diskarbitrationd DiskArbitrationAgent

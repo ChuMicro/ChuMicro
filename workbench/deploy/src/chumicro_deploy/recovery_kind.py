@@ -23,7 +23,7 @@ class DeployFailureKind(Enum):
     ~20 distinct ``CircuitpythonTransportError`` sites and MP
     transport errors into these buckets.  Each bucket has a canned
     :class:`RecoveryPlan` in :mod:`chumicro_deploy.recovery_plans`;
-    ``InteractiveDeployer`` consults the plan's ``retryable`` flag to
+    ``RecoveringDeployer`` consults the plan's ``retryable`` flag to
     decide whether to loop or bail.
     """
 
