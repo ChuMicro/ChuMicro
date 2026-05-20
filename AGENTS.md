@@ -153,8 +153,6 @@ If a third-party library doesn't support CircuitPython or MicroPython, prefer a 
 | [`plans/`](plans/) | Decisions, work queue, workstreams | Not published |
 | [`docs/`](docs/) | Contributor + user docs | Published as the docs site |
 
-The installer's destination decides the folder. Workbench-shipped *payload* (template files written onto a device) lives inside the workbench package, not an installable.
-
 ### Libraries
 
 `ls libraries/` is the live inventory. Each library has a `README.md` and `docs/guide.md`. The dependency stack, broadly:
