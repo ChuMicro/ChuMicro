@@ -326,7 +326,6 @@ def _session_effective_deploy_mode(
     return mode
 
 
-
 class DeviceTestFile(pytest.File):
     """Collector that discovers ``test_*`` functions via AST parsing.
 
@@ -623,10 +622,9 @@ def _load_fallback_device(session: pytest.Session) -> DeviceEntry:
     """Fallback device loading for items created without a target.
 
     Called when ``devices.yml`` was unavailable at collection time
-    but may exist at run time.  Note (see :file:`plans/next-up.md`):
-    this is *not* duplicate handling of
+    but may exist at run time.  Not duplicate handling of
     :func:`chumicro_pytest_device.plugin.pytest_sessionstart`'s
-    ``DeviceConfigError`` swallowing.  Sessionstart silently sets
+    ``DeviceConfigError`` swallowing: sessionstart silently sets
     ``_device_targets = None`` so collection finishes (IDE
     play-button flows on ``__chumicro_runtimes__=("cpython",)``-
     filtered files depend on it); this fallback surfaces the same
@@ -1043,5 +1041,3 @@ def _bulk_stage_for_device(
         extra_files=_encode_runtime_config_extra_files(session.config),
         include_test_support=_target_is_device_unit(session.config),
     )
-
-
