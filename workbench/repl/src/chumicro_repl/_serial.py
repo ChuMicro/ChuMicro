@@ -124,17 +124,15 @@ RAW_REPL_EOT = b"\x04"
 def read_chunk(port: SerialPort) -> bytes:
     """Return whatever bytes *port* has buffered, or one polled byte.
 
-    Prefers ``read(in_waiting)`` so a burst of output comes through
-    in one call; falls back to ``read(1)`` which blocks up to the
-    port's timeout so a caller waiting on a marker doesn't spin on
-    an idle link.
+    When ``in_waiting`` reports buffered bytes, returns the whole
+    burst in one call.  Otherwise issues ``read(1)``, which blocks up
+    to the port's configured timeout so a caller waiting on a marker
+    does not spin on an idle link.
 
-    Lets :class:`OSError` (typically ``serial.SerialException``)
-    propagate when the device disappears mid-read — every caller
-    has a different disconnect contract (``tail`` classifies it as
-    :attr:`ExitCode.DISCONNECTED`, ``ReplSession`` raises
-    :class:`ReplSessionDisconnected`, the completion fetcher bails
-    to ``None``), so the helper stays exception-neutral.
+    ``OSError`` (typically ``serial.SerialException``) from a device
+    that disappeared mid-read is allowed to propagate.  Each caller
+    shapes its own disconnect response, so this helper stays
+    exception-neutral.
     """
     available = port.in_waiting
     if available:

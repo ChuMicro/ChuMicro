@@ -1,28 +1,30 @@
-"""Hand-holding recovery layer for ``chumicro-repl`` session-start failures.
+"""Classifies ``chumicro-repl`` session-start failures and coaches the user through a fix.
 
-Mirrors the ``chumicro_deploy.recovery`` pattern at a smaller scale —
-repl's failure surface is a strict subset of deploy's (no flash-mode,
-no drive-missing, no bootstrap-exec) so this module deliberately does
-not factor a shared classifier into a third package.  See
-:doc:`/guide` for the rationale.
+A bad cable, a held port, a missing ``dialout`` membership, or a
+board stuck in unresponsive user code all surface as ``OSError`` or
+:class:`ReplSessionError` when a caller opens a :class:`ReplSession`.
+This module maps those exceptions to a small enum of recognized
+failure kinds, pairs each kind with a :class:`RecoveryPlan` of
+ordered physical steps the user can take, and offers a coaching
+loop that prints the plan and retries the session start.
 
 Public surface:
 
 - :class:`ReplFailureKind` — enum of session-start failure modes.
 - :class:`RecoveryPlan` — headline + ordered fix-steps for one kind.
-- :func:`classify_session_failure` — classify an :class:`OSError` /
-  :class:`ReplSessionError` raised during session-start into a
-  :class:`ReplFailureKind`.
-- :func:`recovery_plan_for` — look up the plan for a kind.
-- :class:`InteractiveReplSession` — context-manager wrapper around
-  :class:`ReplSession` that catches session-start failures,
-  classifies them, prints the plan to *output*, and retries up to
-  ``max_attempts`` times.
+- :func:`classify_session_failure` — map a session-start exception
+  to a :class:`ReplFailureKind`.
+- :func:`recovery_plan_for` — look up the plan registered for a kind.
+- :func:`coached_session_start` — reusable classify-render-retry
+  loop around any zero-arg session-opening callable.
+- :class:`InteractiveReplSession` — context manager that applies
+  the coaching loop around a :class:`ReplSession`.
 
-Mid-session disconnects do NOT route through this module — those are
-handled by the auto-reconnect loop in :func:`tail` and
-:func:`run_loop`.  This module only addresses the "it never opened in
-the first place" failures.
+Mid-session disconnects do not route through this module.  The
+auto-reconnect loop in :func:`chumicro_repl.tail` and
+:func:`chumicro_repl.tui.run_loop` handles the "device was open and
+then dropped" case; this module only addresses the "it never opened
+in the first place" failures.
 """
 
 from __future__ import annotations

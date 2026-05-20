@@ -1,21 +1,14 @@
 """Stream REPL output for a bounded window.
 
-The deploy pipeline wants a "push code, then watch the board for a
-few seconds" primitive — :func:`tail` is that primitive.  It reads
-the friendly REPL (no raw-REPL switch), decodes bytes UTF-8 safely,
-writes them to *output* with ANSI highlighting, and returns an
-:class:`ExitCode` that reflects why the tail ended:
+:func:`tail` opens a serial port, reads for *seconds* of wall-clock
+time, decodes bytes UTF-8 safely, writes them to *output* with ANSI
+highlighting, and returns an :class:`ExitCode` describing why the
+window ended.  When the device drops mid-stream, tail can hold the
+window open and reopen the port on replug.
 
-- :attr:`ExitCode.OK` — the *seconds* window elapsed with no
-  noteworthy patterns.
-- :attr:`ExitCode.TRACEBACK_DETECTED` — a pattern match ended the
-  tail early (only when *fail_on_traceback* is ``True``).
-- :attr:`ExitCode.INTERRUPTED` — the caller's signal handler raised
-  :class:`KeyboardInterrupt` while we were reading.
-
-Tail operates on whatever the board emits to the serial port.  It
-does not send Ctrl-A / Ctrl-B — the caller controls whether the
-session is in raw REPL or friendly REPL before tail runs.
+Tail does not touch the REPL mode (no Ctrl-A / Ctrl-B sent).  The
+caller decides whether the board is in raw or friendly REPL before
+tail runs, and what to do with the returned :class:`ExitCode`.
 """
 
 from __future__ import annotations
