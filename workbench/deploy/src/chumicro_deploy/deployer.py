@@ -11,14 +11,14 @@ The transport-level primitive this builds on is
 Test orchestrators that need per-file iteration and per-group resets
 stick with the richer ``stage()`` / ``execute()`` flow.
 
-Both :meth:`Deployer.deploy` and :meth:`Deployer.deploy_diff` run a
-pre-flight pass before transport setup: when the device's
-``deploy_mode == "ram"`` and the source exposes ``host_paths()``
-referencing any library with ``[tool.chumicro] requires_flash = true``,
-the deploy auto-switches to flash mode for this run only and emits
-a human-readable explanation through the optional
-``on_preflight_message`` callback (or stderr by default).  The
-explicit ``force_deploy_mode`` parameter bypasses pre-flight entirely.
+:meth:`Deployer.deploy_diff` runs a pre-flight pass before transport
+setup: when the device's ``deploy_mode == "ram"`` and the source
+exposes ``host_paths()`` referencing any library with
+``[tool.chumicro] requires_flash = true``, the deploy auto-switches
+to flash mode for this run only and emits a human-readable
+explanation through the optional ``on_preflight_message`` callback
+(or stderr by default).  The explicit ``force_deploy_mode`` parameter
+bypasses pre-flight entirely.
 """
 
 from __future__ import annotations

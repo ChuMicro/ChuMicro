@@ -900,8 +900,8 @@ class CircuitpythonTransport:
             rsync_delete: ``--delete`` flag.  Clean callers — production
                 deploy *and* functional-test stage — pass ``True``
                 (clean slate, only ``rsync_additional_excludes``
-                survives); legacy additive deploys pass ``False``
-                (preserve drive files not in the staging tree).
+                survives); additive deploys pass ``False`` (preserve
+                drive files not in the staging tree).
             post_stage: Which :class:`PostStageStep` the caller will
                 run once this helper returns.  Recorded on
                 ``self._post_stage_step``; the post-stage action itself
@@ -1459,7 +1459,7 @@ class CircuitpythonTransport:
         ``clean_slate`` (the deploy default ``True``, forwarded by
         :meth:`Deployer.deploy_diff`) widens the scope to the whole
         drive minus :data:`flash_drive.DEVICE_KEEP_SET` + macOS noise;
-        ``False`` is the legacy additive scope.
+        ``False`` is the additive scope.
 
         Flash mode walks the CIRCUITPY USB drive directly via stdlib
         ``pathlib`` — faster + simpler than a raw-REPL round-trip,
@@ -1539,8 +1539,8 @@ class CircuitpythonTransport:
         # (b) an empty `/<pkg>/` at the drive root resolves
         # `import <pkg>` to a PEP 420 namespace package and shadows
         # the populated `/lib/<pkg>/` deeper in `sys.path` — the same
-        # shape that bit Lolin S2 MP (bench-confirmed across both
-        # runtimes).  rsync --delete prunes empty dirs; the diff
+        # shape that bit Lolin S2 MP.  rsync --delete prunes empty
+        # dirs; the diff
         # path matches that by sweeping the whole scope (not just
         # this run's deletions) so pre-existing husks clear too.
         # Bottom-up so nested husks collapse; rmdir only removes an
