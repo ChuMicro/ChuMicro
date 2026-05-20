@@ -2,6 +2,16 @@
 
 Reads a physical button with software debounce using ``ticks_ms``
 and ``ticks_diff``.  Toggles the onboard LED on each accepted press.
+Prints a startup banner and a line on every accepted press so a serial
+console (or a sweep harness) can verify the loop without a probe.
+
+Example output::
+
+    Button debounce — press button to flip the LED.
+
+      [  815 ms] press → toggle
+      [ 1407 ms] press → toggle
+      ...
 
 Setup:
 1. Install ``chumicro_timing`` (``mpremote mip install chumicro-timing``
@@ -34,6 +44,8 @@ last_stable = button.value()
 last_change_ms = ticks_ms()
 led_state = False
 
+print("Button debounce — press button to flip the LED.\n")
+
 while True:
     now = ticks_ms()
     raw = button.value()  # 0 when pressed (active-low)
@@ -45,3 +57,4 @@ while True:
         if not raw:  # button just pressed
             led_state = not led_state
             led.value(led_state)
+            print(f"  [{now:>5} ms] press → toggle")

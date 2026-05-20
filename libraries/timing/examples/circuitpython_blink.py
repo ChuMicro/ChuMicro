@@ -1,7 +1,9 @@
 """Heartbeat LED blink — CircuitPython.
 
 Toggles the onboard LED once per second using a non-blocking
-``Heartbeat`` timer.
+``Heartbeat`` timer.  Prints a line on each toggle so a serial
+console (or a sweep harness) can verify the loop without watching
+the LED itself.
 
 Setup:
 1. Install ``chumicro_timing`` (``circup install chumicro-timing``
@@ -9,6 +11,14 @@ Setup:
 2. No extra wiring — uses the built-in LED (``board.LED``).
    Works on most CircuitPython boards (Feather, QT Py, Metro, etc.).
 3. Save this file as ``code.py`` on the board.
+
+Example output::
+
+    Running LED blink (heartbeat 1 Hz)...
+
+      blink!
+      blink!
+      ...
 
 Runs on CircuitPython.
 """
@@ -28,9 +38,12 @@ led.direction = digitalio.Direction.OUTPUT
 # Create a heartbeat that fires once per second.
 heartbeat = Heartbeat(period_ms=1000)
 
+print("Running LED blink (heartbeat 1 Hz)...\n")
+
 while True:
     now = ticks_ms()
 
     # poll() returns True once per period, then resets.
     if heartbeat.poll(now):
         led.value = not led.value
+        print("  blink!")

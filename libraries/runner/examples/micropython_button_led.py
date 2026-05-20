@@ -2,7 +2,17 @@
 
 Reads a button and toggles an LED using the runner's check/handle
 gate pattern.  The runner calls ``check()`` every tick; when the
-button is pressed, ``handle()`` fires and toggles the LED.
+button is pressed, ``handle()`` fires and toggles the LED.  Prints
+a startup banner and a line on every accepted press so a serial
+console (or a sweep harness) can verify the loop without a probe.
+
+Example output::
+
+    Button toggle — press button to flip the LED.
+
+      [  815 ms] press → toggle
+      [ 1407 ms] press → toggle
+      ...
 
 Setup:
 1. Install ``chumicro_runner`` and ``chumicro_timing``
@@ -59,16 +69,19 @@ class ButtonToggle:
         return just_pressed
 
     def handle(self, now_ms: int) -> None:
-        """Toggle the LED.
+        """Toggle the LED and print a marker line.
 
         Args:
             now_ms: Current tick value.
         """
         led.value(not led.value())
+        print(f"  [{now_ms:>5} ms] press → toggle")
 
 
 runner = Runner()
 runner.add(ButtonToggle())
+
+print("Button toggle — press button to flip the LED.\n")
 
 while True:
     runner.tick()

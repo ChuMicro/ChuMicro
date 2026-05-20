@@ -2,6 +2,16 @@
 
 Reads a physical button with software debounce using ``ticks_ms``
 and ``ticks_diff``.  Toggles the onboard LED on each accepted press.
+Prints a startup banner and a line on every accepted press so a serial
+console (or a sweep harness) can verify the loop without a probe.
+
+Example output::
+
+    Button debounce — press button to flip the LED.
+
+      [  815 ms] press → toggle
+      [ 1407 ms] press → toggle
+      ...
 
 Setup:
 1. Install ``chumicro_timing`` (``circup install chumicro-timing``
@@ -75,6 +85,8 @@ led.direction = digitalio.Direction.OUTPUT
 last_stable = button.value
 last_change_ms = ticks_ms()
 
+print("Button debounce — press button to flip the LED.\n")
+
 while True:
     now = ticks_ms()
     raw = button.value  # False when pressed (active-low)
@@ -85,3 +97,4 @@ while True:
 
         if not raw:  # button just pressed
             led.value = not led.value
+            print(f"  [{now:>5} ms] press → toggle")
