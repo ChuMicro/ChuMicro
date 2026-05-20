@@ -128,8 +128,8 @@ _UF2_MOUNT_SEARCH_PATHS: dict[str, list[Path]] = {
 _UF2_POLL_INTERVAL = 0.5
 
 #: Seconds to allow for the UF2 bootloader drive to mount after
-#: a programmatic reset.  Pi Pico W typically takes ~3 s, and the
-#: larger budget covers slower hubs and macOS mount quirks.
+#: a programmatic reset.  Budget covers slower hubs and macOS mount
+#: quirks.
 _UF2_MOUNT_TIMEOUT = 15.0
 
 #: Seconds to allow for the board to re-enumerate after the UF2
@@ -751,9 +751,7 @@ def _flash_firmware_esptool(
             "retry."
         )
 
-    # esptool v5 dropped chained sub-commands (its click-based CLI
-    # treats each sub-command as its own invocation).  Erase and
-    # write-flash run as two separate esptool calls.  Add
+    # Erase and write-flash run as two separate esptool calls.  Add
     # `--after no_reset` to the erase step so the chip stays in ROM
     # bootloader for the write step.  esptool's default
     # `--after hard_reset` after erase would leave an empty-flash
@@ -794,8 +792,7 @@ def _flash_firmware_esptool(
         # Give macOS a moment to release the serial port.  Without
         # this, the next invocation trips "Resource busy" because
         # the kernel still holds the cu.usbmodem FD briefly after
-        # esptool returns.  1 second is a conservative settle that
-        # covers observed FD-release latency.
+        # esptool returns.
         time.sleep(1.0)
 
     _report(

@@ -65,8 +65,7 @@ _VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
 #: Derived from the zone-classified spec
 #: (:data:`chumicro_deploy.config.devices_yaml.ALL_TOP_LEVEL_ENTRY_FIELDS`)
 #: plus the small set of deploy-only fields the writer doesn't need
-#: to manage zone-wise (``connection_type`` is always ``"serial"``,
-#: carried for forward-compatibility with future transports).
+#: to manage zone-wise.
 #: Anything outside this set falls into :attr:`DeviceEntry.extra`.
 _DEPLOY_ONLY_FIELDS: frozenset[str] = frozenset(
     {"connection_type", "supports_ram_mode"},
@@ -102,10 +101,9 @@ class DeviceEntry:
     deploy_mode: str = DEFAULT_DEPLOY_MODE
     #: Board *capability*, orthogonal to the ``deploy_mode``
     #: *preference*: ``False`` only for a board that cannot run RAM
-    #: mode at all (none known, but the field exists so the schema
-    #: is stable when one appears).  RAM being merely *tight* (e.g. Pi
-    #: Pico W's 256 KB) is a per-library concern, not this.  Absent in
-    #: ``devices.yml`` defaults to ``True`` for back-compatibility.
+    #: mode at all.  RAM being merely *tight* (e.g. Pi Pico W's 256 KB)
+    #: is a per-library concern, not this.  Absent in ``devices.yml``
+    #: defaults to ``True``.
     supports_ram_mode: bool = True
     extra: dict = field(default_factory=dict)
 

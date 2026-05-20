@@ -77,8 +77,7 @@ DEFAULT_TIMEOUT = 10.0
 
 #: Idle timeout for ``execute()`` — the bootstrap execution path.
 #: Longer than ``DEFAULT_TIMEOUT`` because test bootstraps can include
-#: silent CPU-bound work (the fragmentation suite allocates until
-#: ``MemoryError``) that outlasts the interactive-op default.
+#: silent CPU-bound work that outlasts the interactive-op default.
 #: Short-running interactive ops (probe, autoreload, ``gc.collect``
 #: between chunks) still use ``DEFAULT_TIMEOUT`` via
 #: :meth:`_send_repl_command`.
@@ -118,12 +117,11 @@ _BOARD_FILE_VISIBLE_POST_SETTLE = 2.0
 #: starting to poll for the port.
 _WIPE_REBOOT_SETTLE_SECONDS = 2.0
 #: Total wall-clock budget for the post-wipe reconnect.  A CP board
-#: with a populated FAT volume can take 6-10 seconds to re-enumerate
+#: with a populated FAT volume can take several seconds to re-enumerate
 #: after ``storage.erase_filesystem()`` reformats the volume, and a
 #: stricter budget surfaces as a bare ``could not open port`` error
 #: during a deploy the user reasonably expects to recover
-#: transparently.  Sized above observed re-enumeration latency on
-#: real boards.
+#: transparently.
 _WIPE_RECONNECT_TIMEOUT_SECONDS = 30.0
 #: Poll interval between reconnect attempts inside
 #: ``_WIPE_RECONNECT_TIMEOUT_SECONDS``.  Short enough to keep a
@@ -137,10 +135,9 @@ _WIPE_RECONNECT_POLL_SECONDS = 0.5
 #: independent macOS timelines — CDC first, FAT typically a few
 #: seconds later.  Without this wait, a ``deploy_files`` call
 #: immediately after ``wipe_filesystem`` returns races the volume
-#: mount and dies with "CIRCUITPY drive not found".  10 s is well
-#: above observed FAT-remount latency on real boards while staying
-#: short enough that a genuinely unmounted drive (board ejected from
-#: Finder, USB cable popped) surfaces quickly.
+#: mount and dies with "CIRCUITPY drive not found".  Short enough
+#: that a genuinely unmounted drive (board ejected from Finder, USB
+#: cable popped) surfaces quickly.
 _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS = 10.0
 
 
@@ -1583,7 +1580,7 @@ class CircuitpythonTransport:
         # Settle, then poll-reconnect.  USB-CDC takes a beat to come
         # back after ``storage.erase_filesystem()`` reformats the
         # volume + reboots; on boards with a populated FAT it can be
-        # 6-10 seconds before the host sees the device again.  A
+        # several seconds before the host sees the device again.  A
         # one-shot connect after a fixed sleep races that window;
         # poll up to ``_WIPE_RECONNECT_TIMEOUT_SECONDS`` so a slower
         # board still recovers transparently.
@@ -1927,11 +1924,9 @@ class CircuitpythonTransport:
         Per-call override exists because two workload classes share this
         primitive: short interactive ops (autoreload toggle,
         ``gc.mem_free`` probe) finish in <1 s, while bootstrap scripts
-        can include silent CPU loops longer than that (the Lolin S2
-        fragmentation-test bisection runs ~7,500 silent ``bytearray()``
-        allocs at the 256-byte tier).  A longer ``idle_timeout`` keeps
-        the parser from firing mid-script and raising "Malformed raw
-        REPL response".
+        can include silent CPU loops longer than that.  A longer
+        ``idle_timeout`` keeps the parser from firing mid-script and
+        raising "Malformed raw REPL response".
 
         Args:
             marker: Byte sequence to look for.
