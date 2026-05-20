@@ -13,8 +13,9 @@ from types import SimpleNamespace
 import pytest
 from chumicro_deploy import DeviceEntry
 from chumicro_deploy.testing import FakeTransport
-from chumicro_pytest_device import backends, pr_summary
+from chumicro_pytest_device import backends, device_backend, pr_summary
 from chumicro_pytest_device import plugin as pytest_device
+from chumicro_pytest_device import session as plugin_session
 from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
 from chumicro_pytest_device.testing import (
     FakeSession,
@@ -644,7 +645,7 @@ class TestShouldSoftResetBeforeStage:
         )
         transport = FakeTransport(mode="ram")
 
-        should_reset = pytest_device._should_soft_reset_before_stage(
+        should_reset = device_backend._should_soft_reset_before_stage(
             cache, device, transport, "timing", "test_heartbeat.py",
         )
 
@@ -663,7 +664,7 @@ class TestShouldSoftResetBeforeStage:
         )
         transport = FakeTransport(mode="ram")
 
-        should_reset = pytest_device._should_soft_reset_before_stage(
+        should_reset = device_backend._should_soft_reset_before_stage(
             cache, device, transport, "timing", "test_heartbeat_ticks.py",
         )
 
@@ -682,7 +683,7 @@ class TestShouldSoftResetBeforeStage:
         )
         transport = FakeTransport(mode="ram")
 
-        should_reset = pytest_device._should_soft_reset_before_stage(
+        should_reset = device_backend._should_soft_reset_before_stage(
             cache, device, transport, "timing", "test_heartbeat.py",
         )
 
@@ -701,7 +702,7 @@ class TestShouldSoftResetBeforeStage:
         )
         transport = FakeTransport(mode="flash")
 
-        should_reset = pytest_device._should_soft_reset_before_stage(
+        should_reset = device_backend._should_soft_reset_before_stage(
             cache, device, transport, "timing", "test_heartbeat_ticks.py",
         )
 
@@ -725,7 +726,7 @@ class TestShouldSoftResetBeforeStage:
         )
         transport = FakeTransport(mode="mount")
 
-        should_reset = pytest_device._should_soft_reset_before_stage(
+        should_reset = device_backend._should_soft_reset_before_stage(
             cache, device, transport, "timing", "test_heartbeat_ticks.py",
         )
 
@@ -744,7 +745,7 @@ class TestShouldSoftResetBeforeStage:
         )
         transport = FakeTransport(mode="copy")
 
-        should_reset = pytest_device._should_soft_reset_before_stage(
+        should_reset = device_backend._should_soft_reset_before_stage(
             cache, device, transport, "timing", "test_heartbeat_ticks.py",
         )
 
@@ -795,7 +796,7 @@ class TestIsLibraryUnitTest:
     """Tests for _is_library_unit_test path-shape classification."""
 
     def test_matches_libraries_tests_test_file(self) -> None:
-        assert pytest_device._is_library_unit_test(
+        assert plugin_session._is_library_unit_test(
             Path("libraries/timing/tests/test_heartbeat.py"),
         ) is True
 
@@ -808,22 +809,22 @@ class TestIsLibraryUnitTest:
         downstream (``_filter_targets_by_marker`` / the collect hooks),
         not by this path-shape check.
         """
-        assert pytest_device._is_library_unit_test(
+        assert plugin_session._is_library_unit_test(
             Path("libraries/timing/tests/test_ticks_pytest.py"),
         ) is True
 
     def test_excludes_functional_tests_path(self) -> None:
-        assert pytest_device._is_library_unit_test(
+        assert plugin_session._is_library_unit_test(
             Path("libraries/timing/functional_tests/test_real.py"),
         ) is False
 
     def test_excludes_workbench_tests(self) -> None:
-        assert pytest_device._is_library_unit_test(
+        assert plugin_session._is_library_unit_test(
             Path("workbench/deploy/tests/test_device.py"),
         ) is False
 
     def test_excludes_non_test_file(self) -> None:
-        assert pytest_device._is_library_unit_test(
+        assert plugin_session._is_library_unit_test(
             Path("libraries/timing/tests/conftest.py"),
         ) is False
 
@@ -1004,8 +1005,7 @@ class TestEnsurePrepared:
         prime_transport_cache(hot_path_cache, device, transport)
 
         bulk_calls: list[tuple] = []
-        monkeypatch.setattr(
-            pytest_device, "_bulk_stage_for_device",
+        monkeypatch.setattr(device_backend, "_bulk_stage_for_device",
             lambda session, device_entry, transport, *, library_filter=None: bulk_calls.append(
                 (session, device_entry.identifier, library_filter),
             ),
@@ -1029,8 +1029,7 @@ class TestEnsurePrepared:
         prime_transport_cache(hot_path_cache, device, transport)
 
         bulk_calls: list[tuple] = []
-        monkeypatch.setattr(
-            pytest_device, "_bulk_stage_for_device",
+        monkeypatch.setattr(device_backend, "_bulk_stage_for_device",
             lambda session, device_entry, transport, *, library_filter=None: bulk_calls.append(
                 (session, device_entry.identifier, library_filter),
             ),
@@ -1058,8 +1057,7 @@ class TestEnsurePrepared:
         transport = FakeTransport(mode="ram")
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1125,9 +1123,9 @@ class TestPerFileReset:
         self, hot_path_session,
     ) -> None:
         """``_session_per_file`` is False by default, True when set."""
-        assert pytest_device._session_per_file(hot_path_session) is False
+        assert plugin_session._session_per_file(hot_path_session) is False
         self._enable_per_file(hot_path_session)
-        assert pytest_device._session_per_file(hot_path_session) is True
+        assert plugin_session._session_per_file(hot_path_session) is True
 
     def test_default_resets_per_library_only(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
@@ -1136,8 +1134,7 @@ class TestPerFileReset:
         device = hot_path_device()
         transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(
-            pytest_device, "_bulk_stage_for_device",
+        monkeypatch.setattr(device_backend, "_bulk_stage_for_device",
             lambda *args, **kwargs: None,
         )
 
@@ -1162,12 +1159,10 @@ class TestPerFileReset:
         transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
         bulk_calls: list = []
-        monkeypatch.setattr(
-            pytest_device, "_bulk_stage_for_device",
+        monkeypatch.setattr(device_backend, "_bulk_stage_for_device",
             lambda *args, **kwargs: bulk_calls.append(1),
         )
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [
                 library_dir / "src",
             ],
@@ -1218,8 +1213,7 @@ class TestEnsureBatchResult:
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1246,8 +1240,7 @@ class TestEnsureBatchResult:
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1276,8 +1269,7 @@ class TestEnsureBatchResult:
         )
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1314,8 +1306,7 @@ class TestEnsureBatchResult:
         )
         prime_transport_cache(hot_path_cache, device, transport)
 
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1345,8 +1336,7 @@ class TestDevicePrepareItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(
-            pytest_device, "_bulk_stage_for_device",
+        monkeypatch.setattr(device_backend, "_bulk_stage_for_device",
             lambda session, device_entry, transport, *, library_filter=None: None,
         )
 
@@ -1365,8 +1355,7 @@ class TestDeviceRunFileItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1403,8 +1392,7 @@ class TestDeviceTestItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1422,8 +1410,7 @@ class TestDeviceTestItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1441,8 +1428,7 @@ class TestDeviceTestItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1464,8 +1450,7 @@ class TestDeviceTestItemRuntest:
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
-        monkeypatch.setattr(
-            pytest_device, "resolve_library_source_dirs",
+        monkeypatch.setattr(device_backend, "resolve_library_source_dirs",
             lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
@@ -1880,13 +1865,13 @@ class TestStagedFileNames:
         (source_dir / "mod.py").write_text("X = 1\n")
         (source_dir / "_ca_bundle.der").write_bytes(b"\x30\x82")
         (source_dir / "__pycache__" / "mod.cpython-313.pyc").write_bytes(b"\x00")
-        assert sorted(pytest_device._staged_file_names([source_dir])) == [
+        assert sorted(plugin_session._staged_file_names([source_dir])) == [
             "_ca_bundle.der",
             "mod.py",
         ]
 
     def test_empty_for_no_dirs(self) -> None:
-        assert pytest_device._staged_file_names([]) == []
+        assert plugin_session._staged_file_names([]) == []
 
 
 class TestDeviceClosureSourceDirs:
@@ -1898,7 +1883,7 @@ class TestDeviceClosureSourceDirs:
         device = DeviceEntry(
             identifier="d1", runtime="micropython", address="/dev/x",
         )
-        assert pytest_device._device_closure_source_dirs(session, device) == []
+        assert plugin_session._device_closure_source_dirs(session, device) == []
 
     def test_missing_items_attr_is_safe(self, tmp_path: Path) -> None:
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
@@ -1906,7 +1891,7 @@ class TestDeviceClosureSourceDirs:
             identifier="d1", runtime="micropython", address="/dev/x",
         )
         # FakeSession has no ``items`` — the getattr guard must not raise.
-        assert pytest_device._device_closure_source_dirs(session, device) == []
+        assert plugin_session._device_closure_source_dirs(session, device) == []
 
 
 class TestSessionEffectiveDeployMode:
@@ -1928,15 +1913,13 @@ class TestSessionEffectiveDeployMode:
         lib.mkdir()
         (lib / "__init__.py").write_text("")
         (lib / "_ca_bundle.der").write_bytes(b"\x30\x82")
-        monkeypatch.setattr(
-            pytest_device,
-            "_device_closure_source_dirs",
+        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
             lambda _session, _device: [lib],
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
 
         with pytest.warns(UserWarning, match="_ca_bundle.der"):
-            mode = pytest_device._session_effective_deploy_mode(
+            mode = plugin_session._session_effective_deploy_mode(
                 session, self._ram_device(),
             )
         assert mode == "flash"
@@ -1950,13 +1933,11 @@ class TestSessionEffectiveDeployMode:
         lib = tmp_path / "light-src"
         lib.mkdir()
         (lib / "__init__.py").write_text("X = 1\n")
-        monkeypatch.setattr(
-            pytest_device,
-            "_device_closure_source_dirs",
+        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
             lambda _session, _device: [lib],
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
-        mode = pytest_device._session_effective_deploy_mode(
+        mode = plugin_session._session_effective_deploy_mode(
             session, self._ram_device(),
         )
         assert mode == "ram"
@@ -1974,13 +1955,12 @@ class TestSessionEffectiveDeployMode:
             calls["n"] += 1
             return [lib]
 
-        monkeypatch.setattr(
-            pytest_device, "_device_closure_source_dirs", _counting,
+        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs", _counting,
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
         device = self._ram_device()
-        first = pytest_device._session_effective_deploy_mode(session, device)
-        second = pytest_device._session_effective_deploy_mode(session, device)
+        first = plugin_session._session_effective_deploy_mode(session, device)
+        second = plugin_session._session_effective_deploy_mode(session, device)
         assert first == second == "ram"
         assert calls["n"] == 1  # closure walked once, then memoized
 
@@ -1992,9 +1972,7 @@ class TestSessionEffectiveDeployMode:
         lib = tmp_path / "light-src"
         lib.mkdir()
         (lib / "__init__.py").write_text("X = 1\n")
-        monkeypatch.setattr(
-            pytest_device,
-            "_device_closure_source_dirs",
+        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
             lambda _session, _device: [lib],
         )
         device = DeviceEntry(
@@ -2006,7 +1984,7 @@ class TestSessionEffectiveDeployMode:
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
         with pytest.warns(UserWarning, match="does not support RAM mode"):
-            mode = pytest_device._session_effective_deploy_mode(session, device)
+            mode = plugin_session._session_effective_deploy_mode(session, device)
         assert mode == "flash"
 
 
@@ -2045,7 +2023,7 @@ class TestUnitSweepScoping:
         session = self._session(
             [self._item(device, lib, "tests/test_ntp.py")],
         )
-        assert pytest_device._device_is_unit_sweep(session, device) is True
+        assert plugin_session._device_is_unit_sweep(session, device) is True
 
     def test_is_unit_sweep_false_with_a_functional_item(
         self, tmp_path: Path,
@@ -2056,12 +2034,12 @@ class TestUnitSweepScoping:
             self._item(device, lib, "tests/test_ntp.py"),
             self._item(device, lib, "functional_tests/test_real.py"),
         ])
-        assert pytest_device._device_is_unit_sweep(session, device) is False
+        assert plugin_session._device_is_unit_sweep(session, device) is False
 
     def test_is_unit_sweep_false_with_no_items(self) -> None:
         device = self._device()
         assert (
-            pytest_device._device_is_unit_sweep(self._session([]), device)
+            plugin_session._device_is_unit_sweep(self._session([]), device)
             is False
         )
 
@@ -2077,7 +2055,7 @@ class TestUnitSweepScoping:
             self._item(device, ntp, "tests/test_ntp.py"),
             self._item(device, sockets, "tests/test_sockets.py"),
         ])
-        assert pytest_device._device_own_source_dirs(session, device) == [
+        assert plugin_session._device_own_source_dirs(session, device) == [
             ntp / "src",
             sockets / "src",
         ]
@@ -2094,18 +2072,15 @@ class TestUnitSweepScoping:
         own = tmp_path / "ntp-src"
         own.mkdir()
         (own / "__init__.py").write_text("X = 1\n")
-        monkeypatch.setattr(
-            pytest_device, "_device_closure_source_dirs",
+        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
             lambda _s, _d: [dep, own],
         )
-        monkeypatch.setattr(
-            pytest_device, "_device_is_unit_sweep", lambda _s, _d: True,
+        monkeypatch.setattr(plugin_session, "_device_is_unit_sweep", lambda _s, _d: True,
         )
-        monkeypatch.setattr(
-            pytest_device, "_device_own_source_dirs", lambda _s, _d: [own],
+        monkeypatch.setattr(plugin_session, "_device_own_source_dirs", lambda _s, _d: [own],
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
-        mode = pytest_device._session_effective_deploy_mode(
+        mode = plugin_session._session_effective_deploy_mode(
             session, self._device(),
         )
         assert mode == "ram"
@@ -2126,19 +2101,16 @@ class TestUnitSweepScoping:
         own = tmp_path / "light-src"
         own.mkdir()
         (own / "__init__.py").write_text("X = 1\n")
-        monkeypatch.setattr(
-            pytest_device, "_device_closure_source_dirs",
+        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
             lambda _s, _d: [heavy_source, own],
         )
-        monkeypatch.setattr(
-            pytest_device, "_device_is_unit_sweep", lambda _s, _d: True,
+        monkeypatch.setattr(plugin_session, "_device_is_unit_sweep", lambda _s, _d: True,
         )
-        monkeypatch.setattr(
-            pytest_device, "_device_own_source_dirs", lambda _s, _d: [own],
+        monkeypatch.setattr(plugin_session, "_device_own_source_dirs", lambda _s, _d: [own],
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
         with pytest.warns(UserWarning, match="requires_flash"):
-            mode = pytest_device._session_effective_deploy_mode(
+            mode = plugin_session._session_effective_deploy_mode(
                 session, self._device(),
             )
         assert mode == "flash"
