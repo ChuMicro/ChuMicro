@@ -177,7 +177,7 @@ Per-library deps are declared in each `pyproject.toml`. When a library doesn't a
 
 ## Commands
 
-The mono-repo has workspace shape (`workspace.yml` + `devices.yml` at root), so the workbench CLIs work directly here. `python scripts/run.py setup` editable-installs every package into `.venv/`. Activate it or use `.venv/bin/<cli>`. System `python3` won't find `chumicro_*`.
+Activate any virtual environment first. If one isn't installed yet, run `python scripts/prepare_workspace.py` to bootstrap.
 
 ### `python scripts/run.py <cmd>`: CI-mirror runner
 
