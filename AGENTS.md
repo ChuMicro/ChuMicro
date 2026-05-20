@@ -60,22 +60,22 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 - Mark runtime-specific files with `__chumicro_runtimes__ = ("circuitpython",)` (or `"micropython"`, `"cpython"`). Test-support modules (`testing.py` fakes) declare `__chumicro_test_support__ = True` and no runtime marker.
 - Use f-strings. Use `const()`, `memoryview`, pre-allocated buffers in library code only.
 - No `__slots__` in `libraries/`. MP/CP have no `__slots__` implementation.
-- No pure-passthrough `@property` in `libraries/`. Computed non marked up properties (doing actual work) stay legitimate. Workbench packages are out of scope.
+- No pure-passthrough `@property` in `libraries/`. Properties that compute or transform values stay legitimate. Workbench packages are out of scope.
 - Use descriptive names. No single-letter variables except `_`. Expand abbreviations to full words. For example, write `environment` rather than `env`, `buffer` rather than `buf`, `source` rather than `src`, `command` rather than `cmd`, `message` rather than `msg`, `error` rather than `err`, `reference` rather than `ref`, `address` rather than `addr`, `exception` rather than `exc`, and `execute` rather than `exec`. The `for i in range(10)` exemption is humans-only. Enforced by `CHU001`. Suppress only when matching an upstream API.
 - Minimize dependencies. Prefer pure-Python implementations compatible with all three runtimes.
-- Do not apply embedded code shape rules to `workbench/` or `scripts/` folders.
+- The rules above apply only inside `libraries/`. Do not apply them to `workbench/` or `scripts/`.
 
 **Code shape (workbench, cpython only)**
 
-- Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`). Embedded payload bytes are fine.
+- Workbench packages do not import library packages. `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`. Use third-party PyPI equivalents (`pyserial`, `ruamel.yaml`, `msgpack`). Embedding device-side code as raw bytes is fine. That counts as payload data, not a library import.
 - Workbench tools that touch hardware must classify failures. Every host-side tool exposes a closed-set failure-kind enum, classifier, and recovery plans in `<package>.recovery`. CLIs wrap entry points in coaching loops. Generic `raise Exception` is a UX defect.
 - Workbench CLIs and `scripts/run.py` tasks callable by humans and agents support a non-interactive mode: TTY auto-detected via `sys.stdin.isatty()`, `--non-interactive` override, no prompts/tails when non-interactive, distinct exit codes per failure mode. Inherently-interactive subcommands document the TTY requirement and exit cleanly without one.
-- Code reaches a board only through the deploy stage + diff/`rsync --delete` primitive.
+- Code reaches a board only through `chumicro-deploy`, which uses a diff plus `rsync --delete`.
 
 **Code comments**
 
-- A code comment first states, in plain words, what the thing does or returns, written so a reader who has not read the code is oriented, then the non-obvious why.
-- A confined helper's comment must not name its callers, it has no business knowing them.
+- A code comment first states, in plain words, what the function, method, or class does or returns, written so a reader who has not read the code is oriented. Then state the non-obvious why.
+- A private helper's comment must not name its callers. The helper has no business knowing them.
 - A comment must not point outside this code's world: no "mirrors the reference impl", no upstream-repo / sibling-project names.
 - A comment documents the why of current code, nothing else. No history ("previously this did X"), no dated incidents ("2026-05-09 ESP32-S2 bake"), no removed-code explanations ("we used to also send Ctrl-C, dropped because…"), no workstream pointers ("Step 2 of workbench-deploy-reliability"). Defer to the commit message instead, or update the relevant ADR or workstream file. Applies to docstrings and test-body comments too.
 - Audit-pass commits may add general "what this work is doing" framing, but never per-change justification ("bench-validated -25% allocation", "skips the bytes() copy") and never the same comment repeated across many sites. Per-change rationale goes in the commit message body.
@@ -90,11 +90,11 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 
 **A feature that exists only in code is incomplete.** Docs, ADRs, planning files, scaffold templates, and CI are part of the deliverable. Every unit of work touches them in lockstep:
 
-- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, [style guide](docs/contributing/style-guide.md), [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies. Whatever your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed. A prose-only contract is exactly the drift class that ships wrong. See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
+- **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update READMEs, the [style guide](docs/contributing/style-guide.md), the [cheat sheet](docs/contributing/cheat-sheet.md), CI workflows, scaffold templates, this file, ADR bodies, and anything else your change made wrong. A drift class that *can* be deterministically linted must be, not just doc-fixed. A prose-only contract is exactly the drift class that ships wrong. See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
 - **Unit of work landed?** Remove the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) in the *same* edit. No `## Done` section, `git log` carries history. Items grow only by promotion to [`plans/workstreams/<name>.md`](plans/workstreams/) referenced from the bullet, never by adding sub-bullets. Enforced by `CHU011`.
 - **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands. The file is not session-start reading. Consult on demand when working an area with a known open thread.
 - **Adding or changing an ADR?** See [`plans/decisions/README.md`](plans/decisions/README.md) for the rules (in-place edits, in-place correction of wrong reasoning, state the principle not the mechanism). New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill.
-- **End of every unit of work.** Run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill. It verifies preflight green, plans-doc updated, docs in sync, and commit and push. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial, and say so.
+- **End of every unit of work.** Run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill. It verifies preflight is green, plans-doc is updated, and docs are in sync, then commits and pushes. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial, and say so.
 
 ## Common pitfalls
 
@@ -119,7 +119,7 @@ Write in sentences. Don't use em-dashes, semicolons, or arrows as shortcuts that
 
 Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. The fix is usually structural, not vocabulary. When you write "the X promise" or "the X pattern", name X concretely in the same sentence. When you catch yourself writing one, rewrite the sentence to demonstrate the property concretely instead of asserting it abstractly.
 
-**Degraded prose is rewritten, not trimmed again.** A passage rotted by repeated subtractive edits is not fixed by removing another word. That only makes it shorter and no clearer. Discard it and rewrite from a fresh read of what the thing is and why it exists. The rewrite discipline anchors the entire comment and doc audit family. Code comments route through [`audit-comments`](.github/skills/audit-comments/SKILL.md). User-facing markdown routes through [`audit-docs`](.github/skills/audit-docs/SKILL.md). SKILL.md bodies route through [`audit-skill`](.github/skills/audit-skill/SKILL.md). ADR bodies are in-place edits per [`plans/decisions/README.md`](plans/decisions/README.md). Each skill applies the rule to its scope.
+**Degraded prose is rewritten, not trimmed again.** A passage rotted by repeated subtractive edits is not fixed by removing another word. That only makes it shorter and no clearer. Discard it and rewrite from a fresh read of what the thing is and why it exists. Several skills apply this rule in their scope: [`audit-comments`](.github/skills/audit-comments/SKILL.md) for code comments, [`audit-docs`](.github/skills/audit-docs/SKILL.md) for user-facing markdown, [`audit-skill`](.github/skills/audit-skill/SKILL.md) for SKILL.md bodies, and the in-place-edit rule in [`plans/decisions/README.md`](plans/decisions/README.md) for ADR bodies.
 
 Specific bans:
 
@@ -161,7 +161,7 @@ If a third-party library doesn't support CircuitPython or MicroPython, prefer a 
 - **Persistence + serialization:** `msgpack`, `config`, `kvstore`.
 - **Networking transport + protocols:** `wifi` (link), `sockets` (TCP/TLS/UDP), then app protocols: `ntp`, `requests`, `http_server`, `websockets`, `mqtt`.
 
-Per-library deps are declared in each `pyproject.toml`. When a library doesn't already exist for a job, check `plans/decisions/` for a chartered design (`00NN-chumicro-<name>.md`).
+Per-library deps are declared in each `pyproject.toml`. When a library doesn't already exist for a job, check `plans/decisions/` for a planned design. Look for `00NN-chumicro-<name>.md` files, which name libraries that have been designed but not yet built.
 
 ### Workbench (host-only)
 
