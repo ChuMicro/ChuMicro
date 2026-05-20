@@ -29,11 +29,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from chumicro_deploy import (
-    CircuitpythonTransport,
-    FakeTransport,
-    UnsupportedExtraFilesError,
-)
+from chumicro_deploy import FakeTransport, UnsupportedExtraFilesError
+from chumicro_deploy.circuitpython_transport import CircuitpythonTransport
 from chumicro_deploy.micropython_transport import (
     MicropythonTransport,
     MicropythonTransportError,
