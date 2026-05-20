@@ -20,7 +20,8 @@
       "Bash(awk '/Product ID:/ {pid=$3} /Vendor ID:/ {print $3, \"/\", pid}')",
       "Bash(.venv/bin/chumicro-workspace*)",
       "Bash(.venv/bin/chumicro-deploy*)",
-      "Bash(.venv/bin/chumicro-repl*)"
+      "Bash(.venv/bin/chumicro-repl*)",
+      "Bash(git push --force-with-lease*:*)"
     ]
   },
   "enabledPlugins": {
