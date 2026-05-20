@@ -4,12 +4,6 @@ Host-side helpers for tests that exercise the plugin without spinning
 up a real ``pytest.Session`` or building items through pytest's collect
 machinery.
 
-- :class:`HotPathTransport` — focused ``FakeTransport`` covering the
-  plugin's hot path (``connect`` / ``stage`` / ``execute`` /
-  ``execute_scripts`` / ``recover`` / ``soft_reset`` /
-  ``inline_script_budget_bytes`` / ``disconnect``).  Configurable
-  per-call ``execute``/``execute_scripts`` outputs and per-method raise
-  hooks for failure-path tests.
 - :class:`FakeConfig` — minimal ``pytest.Config`` stand-in with
   ``rootpath`` + ``stash`` + ``getoption``.
 - :class:`FakeSession` — minimal ``pytest.Session`` stand-in carrying
@@ -25,6 +19,11 @@ machinery.
   :class:`DeviceRunFileItem` / :class:`DeviceTestItem` without
   pytest's collect machinery (uses ``__new__`` + attribute assignment
   the way the production ``__init__`` does).
+
+The transport fake itself lives in :mod:`chumicro_deploy.testing` —
+:class:`~chumicro_deploy.testing.FakeTransport` carries the full
+``TransportProtocol`` surface plus the per-call ``outputs`` queue and
+per-method ``*_raises`` hooks the plugin tests script.
 
 Mirrors the structure of :mod:`chumicro_deploy.testing` and
 :mod:`chumicro_workspace.testing`.
@@ -49,93 +48,12 @@ if TYPE_CHECKING:
 __all__ = [
     "FakeConfig",
     "FakeSession",
-    "HotPathTransport",
     "hot_path_device",
     "make_prepare_item",
     "make_run_file_item",
     "make_test_item",
     "prime_transport_cache",
 ]
-
-
-class HotPathTransport:
-    """Focused ``FakeTransport`` for the plugin hot path.
-
-    Supports the deploy modes the plugin cares about (``ram``,
-    ``mount``, ``flash``) and the methods the deploy / probe / recover
-    flow calls.  Records every call to ``calls`` as
-    ``(method_name, args_tuple)``.  Configurable per-method raise
-    hooks let failure-path tests script "connect fails" / "execute
-    raises" without subclassing.
-    """
-
-    def __init__(
-        self,
-        *,
-        mode: str = "ram",
-        outputs: list[str] | None = None,
-        connect_raises: Exception | None = None,
-        execute_raises: Exception | None = None,
-        recover_raises: Exception | None = None,
-    ) -> None:
-        self.mode = mode
-        self._outputs = list(outputs or [])
-        self._connect_raises = connect_raises
-        self._execute_raises = execute_raises
-        self._recover_raises = recover_raises
-        self.calls: list[tuple[str, tuple]] = []
-        self.staged_sources: list[tuple[str, str]] = []
-
-    def connect(self) -> None:
-        self.calls.append(("connect", ()))
-        if self._connect_raises is not None:
-            raise self._connect_raises
-
-    def stage(
-        self,
-        source_dirs: list[Path],
-        test_files: list[Path],
-        harness_source: Path,
-        *,
-        extra_modules: list[Path] | None = None,
-        extra_files: dict[str, bytes] | None = None,
-        include_test_support: bool = False,
-    ) -> None:
-        self.calls.append(
-            (
-                "stage",
-                (source_dirs, test_files, harness_source, extra_modules, extra_files),
-            ),
-        )
-
-    def execute(self, bootstrap_script: str) -> str:
-        self.calls.append(("execute", (bootstrap_script,)))
-        if self._execute_raises is not None:
-            raise self._execute_raises
-        return self._outputs.pop(0) if self._outputs else ""
-
-    def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
-        self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
-        if self._execute_raises is not None:
-            raise self._execute_raises
-        return self._outputs.pop(0) if self._outputs else ""
-
-    def inline_script_budget_bytes(self) -> int:
-        return 32 * 1024
-
-    def soft_reset(self) -> None:
-        self.calls.append(("soft_reset", ()))
-
-    def clear_entrypoints(self) -> None:
-        self.calls.append(("clear_entrypoints", ()))
-
-    def recover(self) -> None:
-        self.calls.append(("recover", ()))
-        if self._recover_raises is not None:
-            raise self._recover_raises
-
-    def disconnect(self) -> None:
-        self.calls.append(("disconnect", ()))
 
 
 class FakeConfig:

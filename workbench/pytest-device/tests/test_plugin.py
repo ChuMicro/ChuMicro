@@ -12,12 +12,12 @@ from types import SimpleNamespace
 
 import pytest
 from chumicro_deploy import DeviceEntry
+from chumicro_deploy.testing import FakeTransport
 from chumicro_pytest_device import backends, pr_summary
 from chumicro_pytest_device import plugin as pytest_device
 from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
 from chumicro_pytest_device.testing import (
     FakeSession,
-    HotPathTransport,
     hot_path_device,
     make_prepare_item,
     make_run_file_item,
@@ -998,7 +998,7 @@ class TestEnsurePrepared:
     ) -> None:
         """Flash mode bulk-stages on first use per library; same-library re-entry is a no-op."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="flash")
+        transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
 
         bulk_calls: list[tuple] = []
@@ -1023,7 +1023,7 @@ class TestEnsurePrepared:
     ) -> None:
         """Flash mode re-stages when the next test belongs to a different library."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="flash")
+        transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
 
         bulk_calls: list[tuple] = []
@@ -1053,7 +1053,7 @@ class TestEnsurePrepared:
     ) -> None:
         """RAM mode stages per (device, library, file); changing file triggers re-stage."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="ram")
+        transport = FakeTransport(mode="ram")
         prime_transport_cache(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
@@ -1129,7 +1129,7 @@ class TestPerFileReset:
     ) -> None:
         """Without ``--per-file``, a second same-library file does not reset."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="flash")
+        transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "_bulk_stage_for_device",
@@ -1154,7 +1154,7 @@ class TestPerFileReset:
         batch, and never via the bulk-stage-whole-suite path."""
         self._enable_per_file(hot_path_session)
         device = hot_path_device()
-        transport = HotPathTransport(mode="flash")
+        transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
         bulk_calls: list = []
         monkeypatch.setattr(
@@ -1210,7 +1210,7 @@ class TestEnsureBatchResult:
     ) -> None:
         """First call runs the batch, parses output, and caches the result."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
@@ -1238,7 +1238,7 @@ class TestEnsureBatchResult:
     ) -> None:
         """Second call looks up the cached result instead of re-running."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
@@ -1265,7 +1265,7 @@ class TestEnsureBatchResult:
     ) -> None:
         """Execute failures trigger recover() and cache the error message."""
         device = hot_path_device()
-        transport = HotPathTransport(
+        transport = FakeTransport(
             mode="ram",
             execute_raises=RuntimeError("timeout"),
         )
@@ -1302,7 +1302,7 @@ class TestEnsureBatchResult:
         instead of hitting a cached transport stuck mid-raw-REPL.
         """
         device = hot_path_device()
-        transport = HotPathTransport(
+        transport = FakeTransport(
             mode="ram",
             execute_raises=RuntimeError("timeout"),
             recover_raises=RuntimeError("board wedged"),
@@ -1338,7 +1338,7 @@ class TestDevicePrepareItemRuntest:
     ) -> None:
         """Prepare item succeeds after staging."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="flash")
+        transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "_bulk_stage_for_device",
@@ -1358,7 +1358,7 @@ class TestDeviceRunFileItemRuntest:
     ) -> None:
         """A successful batch with tests lets the run-file item pass."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1396,7 +1396,7 @@ class TestDeviceTestItemRuntest:
     ) -> None:
         """test_one in a passing batch → item passes."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1415,7 +1415,7 @@ class TestDeviceTestItemRuntest:
     ) -> None:
         """test_two failed in the harness output → item fails with the raw output."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
+        transport = FakeTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1434,7 +1434,7 @@ class TestDeviceTestItemRuntest:
     ) -> None:
         """If the function name isn't in the parsed output, fail with a clear error."""
         device = hot_path_device()
-        transport = HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
+        transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
@@ -1457,7 +1457,7 @@ class TestDeviceTestItemRuntest:
         run as ONE on-device invocation, not 7.
         """
         device = hot_path_device()
-        transport = HotPathTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
+        transport = FakeTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
