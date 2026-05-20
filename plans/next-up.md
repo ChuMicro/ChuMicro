@@ -14,7 +14,6 @@ _(nothing in flight)_
 - [ ] **Expand the device test matrix beyond ESP32-S2.**
 - [ ] **Performance + resource benchmarking infrastructure** — heap + CPU per library op, regression gates, on-schedule CI.
 - [ ] **Deploy-path unification — one mechanism puts code on a board.**  [workstreams/deploy-path-unification.md](workstreams/deploy-path-unification.md)
-- [ ] **`chumicro_deploy.config` docstring references deleted symbol.**  [workstreams/deploy-config-docstring-stale-ref.md](workstreams/deploy-config-docstring-stale-ref.md)
 - [ ] **`/audit-comments pytest-device/plugin.py` — three degraded comments.**  [workstreams/audit-comments-pytest-device-plugin.md](workstreams/audit-comments-pytest-device-plugin.md)
 - [ ] **`_load_fallback_device` — stash sessionstart error.**  [workstreams/load-fallback-device-stash-sessionstart.md](workstreams/load-fallback-device-stash-sessionstart.md)
 - [ ] **Deploy walker fails on unresolved imports.**  [workstreams/walker-unresolved-import-failure.md](workstreams/walker-unresolved-import-failure.md)
