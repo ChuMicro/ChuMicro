@@ -158,8 +158,6 @@ def scaffold_library(
     # VERSION — every package starts at 0.1.0 per the SemVer policy.
     (library_dir / "VERSION").write_text("0.1.0\n")
 
-    # Top-level config + docs.  Workbench-kind packages use a
-    # different pyproject template with a CLI entry point.
     pyproject_template = (
         "pyproject.workbench.toml.template"
         if package_kind == "workbench"
@@ -179,10 +177,8 @@ def scaffold_library(
         ),
     )
 
-    # docs/.  Workbench-kind packages pull these four files from a
-    # separate template tree — workbench tools have no Runner pattern,
-    # no Memory notes, no cross-runtime story, and footer links go to
-    # PyPI + Issues only (no bundle).
+    # docs/.  Workbench-kind packages pull from _WORKBENCH_TEMPLATE_DIR
+    # per the constants above.
     docs_template_dir = (
         _WORKBENCH_TEMPLATE_DIR
         if package_kind == "workbench"
