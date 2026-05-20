@@ -163,6 +163,25 @@ class BrowserModel:
         """Selected import names, deterministic order (BFS-stable add)."""
         return sorted(self.selected)
 
+    def commit_target(self) -> list[str] | None:
+        """Roots the user is asking to install right now.
+
+        Two modes the same Enter keystroke covers — multi-select then
+        commit (Space to build up a set, then act) and single-shot
+        (no Space at all, just Enter on the row you want).  When the
+        user has built explicit selections, those win; otherwise the
+        cursor row is the single-shot target.  Returns ``None`` when
+        the user is in a non-list view or the catalog is empty —
+        there's nothing for a commit keystroke to act on.
+        """
+        if self.view != "list":
+            return None
+        if self.selected:
+            return sorted(self.selected)
+        if self.current is not None:
+            return [self.current.name]
+        return None
+
 
 def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no cover
     """Full-screen prompt_toolkit shell; returns the chosen roots or None.
@@ -182,8 +201,8 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
         if model.view == "list":
             lines = [
                 f"  ChuMicro libraries — {model.status}",
-                "  [Space] select  [Tab] channel  [Enter] details  "
-                "[a] add selected  [q] quit",
+                "  [Enter] add  [Space] select  [i] info  "
+                "[Tab] channel  [q] quit",
                 "",
             ]
             for index, entry in enumerate(model.entries):
@@ -195,16 +214,22 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
                 )
             return "\n".join(lines)
         entry = model.current
-        header = f"  {entry.name if entry else ''} — [b] back"
         if model.view == "detail" and entry and entry.examples:
+            header = (
+                f"  {entry.name} — [Up/Down] pick example  "
+                f"[Enter] view  [Backspace] back"
+            )
             example_lines = "\n".join(
                 f"{'>' if index == model.example_cursor else ' '} {name}"
                 for index, name in enumerate(entry.examples)
             )
             return (
-                f"{header}  [Enter] view example\n\n{model.detail_text}\n\n"
+                f"{header}\n\n{model.detail_text}\n\n"
                 f"  Examples:\n{example_lines}"
             )
+        header = (
+            f"  {entry.name if entry else ''} — [Backspace] back"
+        )
         return f"{header}\n\n{model.detail_text}"
 
     bindings = KeyBindings()
@@ -227,15 +252,37 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
 
     @bindings.add("enter")
     def _(event) -> None:
-        model.enter()
+        # On the list, Enter is the action key: commits the cursor row
+        # (single-shot) or the explicit Space-selected set if the user
+        # built one up.  Inside detail view it drills into the example
+        # under the example cursor — same drill behavior the model has
+        # always exposed.
+        if model.view == "list":
+            target = model.commit_target()
+            if target is not None:
+                event.app.exit(result=target)
+        else:
+            model.enter()
+
+    @bindings.add("i")
+    def _(event) -> None:
+        # Drill from list → detail.  Mirrors the old Enter behavior so
+        # users keep a one-key path to a library's README + example
+        # list once Enter took over as the commit key.
+        if model.view == "list":
+            model.enter()
 
     @bindings.add("b")
     @bindings.add("escape")
+    @bindings.add("backspace")
     def _(event) -> None:
         model.back()
 
     @bindings.add("a")
     def _(event) -> None:
+        # Explicit "add only what I Space-selected" — exits with the
+        # selection set even when empty.  Kept alongside Enter for
+        # users who want the selections-only contract spelled out.
         event.app.exit(result=model.selected_roots())
 
     @bindings.add("q")
