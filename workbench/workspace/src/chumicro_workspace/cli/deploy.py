@@ -422,7 +422,6 @@ def _build_deploy_plan(
     else:
         if len(args.names) > 1:
             raise _DeployPlanError(
-                "multi-project deploys are no longer supported — "
                 "pass one positional name per `deploy` call.",
             )
         project_name = _resolve_project_name(workspace, args.names[0])
@@ -738,8 +737,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         help=(
             "Name of the project under projects/ to deploy.  Optional when "
             "the workspace contains exactly one project — that project is "
-            "deployed by default.  One positional per `deploy` call; "
-            "multi-project deploys are no longer supported."
+            "deployed by default.  One positional per `deploy` call."
         ),
     )
     deploy_parser.add_argument(
