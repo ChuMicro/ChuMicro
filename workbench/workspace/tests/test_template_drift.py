@@ -1,11 +1,11 @@
 """Tests for ``chumicro_workspace.template_drift``.
 
-Surfaces fields the canonical workbench-owned template has gained
-since the user materialized their ``workspace.yml`` / ``secrets.toml``.
-The result feeds :func:`chumicro_workspace.additive_apply.additive_reapply`,
+Surfaces fields the workbench-owned template has gained since the
+user materialized their ``workspace.yml`` / ``secrets.toml``.  The
+result feeds :func:`chumicro_workspace.additive_apply.additive_reapply`,
 which lands the missing keys in place.
 
-Tests inject synthetic templates by monkeypatching the canonical reader
+Tests inject synthetic templates by monkeypatching the template reader
 so each case can exercise a tailored diff scenario.
 """
 
@@ -68,7 +68,7 @@ class TestCollectMissingTemplatePaths:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Template gained a whole new top-level section since the user
-        # materialized — that's the canonical case the diff catches.
+        # materialized — that's the case the diff catches.
         template = (
             "defaults:\n  wifi:\n    ssid: ap\n"
             "quality:\n  coverage_threshold: 85\n"
@@ -187,12 +187,12 @@ class TestCollectMissingTemplatePaths:
         _write_workspace_yml(tmp_path, "defaults:\n  wifi: [unclosed\n")
         assert collect_missing_template_paths(workspace_root=tmp_path) == []
 
-    def test_uses_canonical_template_when_unpatched(
+    def test_uses_shipped_template_when_unpatched(
         self, tmp_path: Path,
     ) -> None:
-        # The canonical workspace.yml template ships with everything
-        # commented out — so any uncommented user file is a strict
-        # superset and produces no drift.
+        # The workspace.yml template ships with everything commented
+        # out — so any uncommented user file is a strict superset and
+        # produces no drift.
         _write_workspace_yml(
             tmp_path,
             "defaults:\n  wifi:\n    ssid: ap\n",
@@ -258,7 +258,7 @@ class TestSecretsTomlDrift:
         )
 
     def test_template_ships_real_placeholder_keys(self) -> None:
-        # The canonical secrets.toml template ships with real
+        # The secrets.toml template ships with real
         # ``wifi.ssid`` / ``wifi.password`` placeholder keys (not
         # commented examples) so the additive setup re-apply path
         # can append new template keys to a user file without

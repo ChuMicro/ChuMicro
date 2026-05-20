@@ -66,7 +66,7 @@ def compose_runtime_config(
 def build_runtime_config(
     *,
     secrets_toml: Path,
-    project_config: Path,
+    project_config: Path | None,
     output_path: Path,
 ) -> dict:
     """Read all sources, deep-merge, flatten, write msgpack.
@@ -74,7 +74,8 @@ def build_runtime_config(
     Args:
         secrets_toml: Path to ``secrets.toml`` (workspace-wide
             credentials + device defaults).
-        project_config: Path to ``projects/<name>/project_config.toml``.
+        project_config: Path to ``projects/<name>/project_config.toml``,
+            or ``None`` when no per-project overrides apply.
         output_path: Where to write the msgpack file on the host.
             Typically ``projects/<name>/_generated/runtime_config.msgpack``.
 

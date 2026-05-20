@@ -1,4 +1,4 @@
-"""Tests for ``chumicro_workspace.templates`` — the canonical first-write
+"""Tests for ``chumicro_workspace.templates`` — the first-write
 content shipped from the workbench wheel for ``workspace.yml`` /
 ``secrets.toml``, plus the re-exported ``devices.yml`` reader from
 ``chumicro_deploy``.

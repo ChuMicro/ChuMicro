@@ -20,7 +20,7 @@ class TestClassify:
             ".github/skills/add-new-project/SKILL.md",
             ".github/skills/register-board/SKILL.md",
             # `examples/` is reading material; `update` re-flows
-            # the canonical content from upstream.
+            # the content from upstream.
             "examples/README.md",
             "examples/hello_world/app.py",
             "examples/wifi_only/project_config.toml",
@@ -76,7 +76,7 @@ class TestClassify:
 
     def test_workspace_yml_user_owned(self) -> None:
         """Gitignored ``workspace.yml`` is the materialized output of
-        the canonical template; ``update`` must never touch it.
-        Same for ``secrets.toml``."""
+        the template; ``update`` must never touch it.  Same for
+        ``secrets.toml``."""
         assert classify("workspace.yml") is Zone.USER_OWNED
         assert classify("secrets.toml") is Zone.USER_OWNED

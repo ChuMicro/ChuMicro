@@ -86,7 +86,11 @@ class WithRuntimeConfig:
         inner: The base ``FileSource`` (typically the project's app code).
         secrets_toml: Path to ``secrets.toml`` (workspace-wide
             credentials + device defaults).
-        project_config: Path to ``projects/<name>/project_config.toml``.
+        project_config: Path to ``projects/<name>/project_config.toml``,
+            or ``None`` when no per-project overrides apply (the merged
+            config is then just the secrets.toml contents).  When
+            ``None``, *output_path* must be supplied — there is no
+            project file to anchor the ``_generated/`` default to.
         output_path: Where to write the msgpack on the host.  Defaults
             to ``project_config.parent / _generated / runtime_config.msgpack``.
         device_path: On-device path for the msgpack.  Defaults to
@@ -104,7 +108,7 @@ class WithRuntimeConfig:
         inner: FileSource,
         *,
         secrets_toml: Path,
-        project_config: Path,
+        project_config: Path | None,
         output_path: Path | None = None,
         device_path: str = RUNTIME_CONFIG_DEVICE_PATH,
         library_roots: tuple[Path, ...] | list[Path] | None = None,
@@ -113,11 +117,18 @@ class WithRuntimeConfig:
         self._secrets_toml = secrets_toml
         self._project_config = project_config
         self._device_path = device_path
-        self._output_path = (
-            output_path
-            if output_path is not None
-            else project_config.parent / GENERATED_DIRNAME / "runtime_config.msgpack"
-        )
+        if output_path is not None:
+            self._output_path = output_path
+        elif project_config is not None:
+            self._output_path = (
+                project_config.parent / GENERATED_DIRNAME / "runtime_config.msgpack"
+            )
+        else:
+            raise ValueError(
+                "WithRuntimeConfig requires output_path when "
+                "project_config is None (no project file to anchor "
+                "the _generated/ default to)",
+            )
         # ``library_roots`` enables manifest validation: each path is
         # a library checkout (``libraries/<name>/`` with a
         # ``pyproject.toml``); ``files()`` reads each one's
@@ -220,8 +231,7 @@ def wrap_with_runtime_config(
         secrets_toml: Explicit ``secrets.toml`` path; overrides the
             *workspace* fallback.
         project_config: Explicit per-project config path; overrides
-            the *project_dir* lookup (an example passes its own
-            ``examples/project_config.toml`` via :func:`example_source`).
+            the *project_dir* lookup.
         output_path: Explicit host path for the generated msgpack;
             overrides the ``_generated/`` default.
 

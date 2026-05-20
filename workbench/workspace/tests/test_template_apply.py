@@ -27,13 +27,13 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def fake_template_repo(tmp_path: Path) -> Path:
-    """A local git repo populated like the canonical workspace template.
+    """A local git repo populated like the workspace template.
 
     Layout mirrors the ChuMicro-Workspace-Template repo: tool-owned
     files at the root, a tracked but user-editable `README.md`.
     `workspace.yml` /
     `secrets.toml` / `devices.yml` are gitignored — setup
-    materializes them from the canonical workspace templates.
+    materializes them from the workspace templates.
 
     Returns the absolute path to the repo (suitable as a
     ``template_url=str(path)`` argument).
@@ -92,7 +92,7 @@ def _files(report_iter: Iterable[tuple[str, str]]) -> dict[str, str]:
 
 
 class TestDefaultTemplateUrl:
-    def test_default_url_is_canonical_chumicro_template(self) -> None:
+    def test_default_url_is_chumicro_template(self) -> None:
         # Smoke check on the constant — no network call.
         assert DEFAULT_TEMPLATE_URL.endswith("ChuMicro-Workspace-Template")
         assert DEFAULT_TEMPLATE_URL.startswith("https://github.com/")
@@ -189,7 +189,7 @@ class TestMaterializeWorkspaceTemplates:
         report = materialize_workspace_templates(workspace)
         actions = _files(report)
         assert actions["devices.yml"] == ApplyAction.MATERIALIZED
-        # Content matches the canonical reader.
+        # Content matches the template reader.
         from chumicro_workspace import read_devices_yml_template  # noqa: PLC0415
 
         assert (workspace / "devices.yml").read_text() == read_devices_yml_template()

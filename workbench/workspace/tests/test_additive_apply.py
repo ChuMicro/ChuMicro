@@ -16,7 +16,7 @@ from chumicro_workspace.additive_apply import additive_reapply
 def _patch_workspace_yml_template(
     monkeypatch: pytest.MonkeyPatch, content: str,
 ) -> None:
-    """Make the canonical workspace.yml template return *content* for the test."""
+    """Make the workspace.yml template return *content* for the test."""
     monkeypatch.setattr(
         "chumicro_workspace.template_drift.read_workspace_yml_template",
         lambda: content,
@@ -26,7 +26,7 @@ def _patch_workspace_yml_template(
 def _patch_secrets_toml_template(
     monkeypatch: pytest.MonkeyPatch, content: str,
 ) -> None:
-    """Make the canonical secrets.toml template return *content* for the test."""
+    """Make the secrets.toml template return *content* for the test."""
     monkeypatch.setattr(
         "chumicro_workspace.template_drift.read_secrets_toml_template",
         lambda: content,

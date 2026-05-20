@@ -324,20 +324,22 @@ class TestRuntimeConfigIntegration:
         assert decoded["wifi.ssid"] == "home"
         assert decoded["wifi.password"] == "pw"
 
-    def test_per_example_config_merges_with_secrets(self, tmp_path: Path) -> None:
-        """When examples/project_config.toml exists, its keys override +
-        extend secrets.toml."""
+    def test_ignores_per_example_config_file_if_present(
+        self, tmp_path: Path,
+    ) -> None:
+        """A stray ``examples/project_config.toml`` is not consulted —
+        only ``secrets.toml`` drives the runtime config for examples."""
         from chumicro_msgpack import unpackb
 
         libs = tmp_path / "libraries"
         timing = _seed_library(libs, "timing")
         _seed_example(timing, "blink.py", "pass\n")
         secrets = _seed_secrets(
-            tmp_path, body="[wifi]\nssid = 'home'\n",
+            tmp_path, body="[wifi]\nssid = 'from-secrets'\n",
         )
-        # Per-example config overrides the wifi.ssid + adds an app key.
+        # File exists but the example_source path doesn't read it.
         (timing / "examples" / "project_config.toml").write_text(
-            "[wifi]\nssid = 'override'\n\n[demo]\ntopic = 'led'\n",
+            "[wifi]\nssid = 'from-example'\n",
         )
 
         source = example_source(
@@ -348,38 +350,7 @@ class TestRuntimeConfigIntegration:
             output_path=tmp_path / "out.msgpack",
         )
         decoded = unpackb(source.files()[RUNTIME_CONFIG_DEVICE_PATH])
-        assert decoded["wifi.ssid"] == "override"
-        assert decoded["demo.topic"] == "led"
-
-    def test_explicit_project_config_overrides_default_lookup(
-        self, tmp_path: Path,
-    ) -> None:
-        """Caller-supplied project_config wins over the default
-        examples/project_config.toml lookup."""
-        from chumicro_msgpack import unpackb
-
-        libs = tmp_path / "libraries"
-        timing = _seed_library(libs, "timing")
-        _seed_example(timing, "blink.py", "pass\n")
-        secrets = _seed_secrets(tmp_path, body="")
-        # Default-lookup config exists but should be ignored.
-        (timing / "examples" / "project_config.toml").write_text(
-            "[demo]\ntopic = 'auto-default'\n",
-        )
-        # Caller supplies a different config.
-        explicit = tmp_path / "explicit_config.toml"
-        explicit.write_text("[demo]\ntopic = 'caller-supplied'\n")
-
-        source = example_source(
-            timing, "blink",
-            library_roots=[timing],
-            runtime="circuitpython",
-            secrets_toml=secrets,
-            project_config=explicit,
-            output_path=tmp_path / "out.msgpack",
-        )
-        decoded = unpackb(source.files()[RUNTIME_CONFIG_DEVICE_PATH])
-        assert decoded["demo.topic"] == "caller-supplied"
+        assert decoded["wifi.ssid"] == "from-secrets"
 
 
 # ---------------------------------------------------------------------------

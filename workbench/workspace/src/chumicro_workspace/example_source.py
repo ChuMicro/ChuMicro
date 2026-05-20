@@ -4,8 +4,7 @@ The ``deploy-example`` front-door command ships
 ``libraries/<lib>/examples/<name>.py`` to a board as ``code.py``
 (CircuitPython) or ``main.py`` (MicroPython), bringing along every
 ``chumicro_*`` module the example imports under ``/lib/`` and a
-merged ``runtime_config.msgpack`` baked from ``secrets.toml`` plus
-an optional per-example ``examples/project_config.toml``.
+``runtime_config.msgpack`` baked from ``secrets.toml``.
 
 This module owns the shape of that source.  The CLI just asks for
 one and hands it to ``Deployer.deploy_diff()`` like any other
@@ -17,10 +16,11 @@ The shape composes existing pieces:
   resolves each module against the union of every
   ``libraries/<name>/src`` directory.  Wrong-runtime files
   (``__chumicro_runtimes__`` marker mismatch) drop out automatically.
-* ``WithRuntimeConfig`` merges ``secrets.toml`` + the per-example
-  config (if present) into ``/runtime_config.msgpack`` and validates
-  the merged dict against each library's ``[tool.chumicro.config]``
-  manifest before writing.
+* ``WithRuntimeConfig`` writes ``secrets.toml``'s contents into
+  ``/runtime_config.msgpack`` (no per-example overrides — examples
+  read the workspace defaults verbatim) and validates the result
+  against each library's ``[tool.chumicro.config]`` manifest before
+  writing.
 
 What this module adds:
 
@@ -38,10 +38,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
+from chumicro_workspace.config_manifest import find_library_roots
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
     WithRuntimeConfig,
-    wrap_with_runtime_config,
 )
 
 #: On-device entrypoint name keyed by runtime.  CircuitPython runs
@@ -91,7 +91,6 @@ def example_source(
     library_roots: Iterable[Path],
     runtime: str,
     secrets_toml: Path,
-    project_config: Path | None = None,
     output_path: Path | None = None,
     extra_modules: list[str] | None = None,
 ) -> WithRuntimeConfig:
@@ -103,7 +102,11 @@ def example_source(
     :class:`WithRuntimeConfig` so a single ``Deployer.deploy_diff(source)``
     call ships the example as ``/code.py`` (CP) or ``/main.py`` (MP)
     plus every reachable ``chumicro_*`` module under ``/lib/`` plus
-    the merged ``/runtime_config.msgpack``.
+    a ``/runtime_config.msgpack`` baked from ``secrets.toml``.
+
+    Examples have no per-example config — the runtime config they
+    receive is just ``secrets.toml`` contents.  A library that needs
+    example-specific values writes them inline in the example source.
 
     Wrong-runtime files (``__chumicro_runtimes__`` marker mismatch)
     drop out automatically — neither the example file nor any walked
@@ -140,11 +143,6 @@ def example_source(
         secrets_toml: Path to the workspace's ``secrets.toml`` —
             workspace-wide credentials and device defaults consumed
             by ``WithRuntimeConfig``.
-        project_config: Optional per-example
-            ``libraries/<lib>/examples/project_config.toml``.  When
-            absent or non-existent, only ``secrets_toml`` drives the
-            merged runtime config.  Defaults to looking for
-            ``<library_root>/examples/project_config.toml`` automatically.
         output_path: Where to write the generated
             ``runtime_config.msgpack`` on the host.  Defaults to
             ``libraries/<lib>/examples/_generated/example_runtime_config_<lib>_<name>.msgpack``
@@ -207,20 +205,13 @@ def example_source(
         target_runtime=runtime,
     )
 
-    if project_config is None:
-        project_config = library_root / "examples" / "project_config.toml"
     if output_path is None:
         output_path = _default_output_path(library_root, example_name)
 
-    # An example's per-example config + msgpack path are
-    # example-specific (resolved just above), so they are passed
-    # explicitly; only the import-graph library-root derivation is
-    # the shared convention the helper owns.
-    return wrap_with_runtime_config(
+    return WithRuntimeConfig(
         inner,
-        project_dir=library_root,
-        search_paths=search_paths,
         secrets_toml=secrets_toml,
-        project_config=project_config,
+        project_config=None,
         output_path=output_path,
+        library_roots=find_library_roots(search_paths),
     )

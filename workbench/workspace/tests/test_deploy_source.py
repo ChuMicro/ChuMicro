@@ -62,7 +62,7 @@ def _seed_paths(tmp_path: Path) -> tuple[Path, Path]:
 
 
 class TestWithRuntimeConfig:
-    def test_injects_msgpack_at_canonical_device_path(self, tmp_path: Path) -> None:
+    def test_injects_msgpack_at_device_path(self, tmp_path: Path) -> None:
         secrets_toml, project_config = _seed_paths(tmp_path)
         inner = FileMapSource({"/code.py": "print('hi')\n"}, entrypoint="/code.py")
 
