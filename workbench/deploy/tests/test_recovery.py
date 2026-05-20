@@ -9,7 +9,7 @@ from chumicro_deploy.circuitpython_transport import CircuitpythonTransportError
 from chumicro_deploy.micropython_transport import MicropythonTransportError
 from chumicro_deploy.recovery import (
     DeployFailureKind,
-    InteractiveDeployer,
+    RecoveringDeployer,
     RecoveryPlan,
     classify_deploy_failure,
     recovery_plan_for,
@@ -406,7 +406,7 @@ def test_physical_failures_are_retryable(kind: DeployFailureKind) -> None:
 
 
 # ---------------------------------------------------------------------------
-# InteractiveDeployer — retry loop + prompt behavior
+# RecoveringDeployer (prompt= set) — retry loop + prompt behavior
 # ---------------------------------------------------------------------------
 
 
@@ -486,7 +486,7 @@ def test_interactive_deployer_returns_result_when_deploy_succeeds() -> None:
     fake = _FakeDeployer([ok])
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt([])  # no prompts expected
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -513,7 +513,7 @@ def test_retries_on_port_unavailable_then_succeeds() -> None:
     )
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt([""])  # user hits Enter to retry
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -545,7 +545,7 @@ def test_retries_up_to_max_attempts_then_reraises() -> None:
     )
     sink, _lines = _capturing_output()
     prompt = _ScriptedPrompt(["", ""])  # only two prompts happen
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         max_attempts=3,
         prompt=prompt,
@@ -572,7 +572,7 @@ def test_non_retryable_failure_raises_without_prompting() -> None:
     )
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt([])  # zero prompts expected
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -599,7 +599,7 @@ def test_user_quit_stops_retries() -> None:
     )
     sink, _lines = _capturing_output()
     prompt = _ScriptedPrompt(["quit"])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -625,7 +625,7 @@ def test_quit_aliases(quit_response: str) -> None:
     )
     sink, _lines = _capturing_output()
     prompt = _ScriptedPrompt([quit_response])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -648,7 +648,7 @@ def test_traceback_returns_result_but_prints_coaching() -> None:
     fake = _FakeDeployer([failing])
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt([])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -656,7 +656,7 @@ def test_traceback_returns_result_but_prints_coaching() -> None:
 
     result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
-    # Source-level bug — InteractiveDeployer still returns the
+    # Source-level bug — RecoveringDeployer still returns the
     # result (no retry) but prints the traceback-coaching block.
     assert result is failing
     assert fake.calls == 1
@@ -679,7 +679,7 @@ def test_mpremote_transport_error_is_handled() -> None:
     )
     sink, _lines = _capturing_output()
     prompt = _ScriptedPrompt([""])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -694,7 +694,7 @@ def test_mpremote_transport_error_is_handled() -> None:
 def test_max_attempts_validation() -> None:
     fake = _FakeDeployer([])
     with pytest.raises(ValueError, match="max_attempts"):
-        InteractiveDeployer(fake, max_attempts=0)  # type: ignore[arg-type]
+        RecoveringDeployer(fake, max_attempts=0)  # type: ignore[arg-type]
 
 
 def test_forwards_callbacks_to_deployer() -> None:
@@ -713,7 +713,7 @@ def test_forwards_callbacks_to_deployer() -> None:
     spy = _SpyDeployer()
     sink, _lines = _capturing_output()
     prompt = _ScriptedPrompt([])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         spy,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -744,7 +744,7 @@ def test_deployer_property_exposes_wrapped_instance() -> None:
     fake = _FakeDeployer([])
     sink, _lines = _capturing_output()
     prompt = _ScriptedPrompt([])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -753,7 +753,7 @@ def test_deployer_property_exposes_wrapped_instance() -> None:
 
 
 # ---------------------------------------------------------------------------
-# InteractiveDeployer.deploy_diff — mirror of .deploy with wipe + on_file_deleted
+# RecoveringDeployer.deploy_diff — mirror of .deploy with wipe + on_file_deleted
 # ---------------------------------------------------------------------------
 
 
@@ -761,7 +761,7 @@ def test_deploy_diff_succeeds_on_first_attempt() -> None:
     ok = DeployResult(success=True, execute_output="ok\n")
     fake = _FakeDeployer([ok])
     sink, lines = _capturing_output()
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=_ScriptedPrompt([]),
         output=sink,
@@ -778,7 +778,7 @@ def test_deploy_diff_succeeds_on_first_attempt() -> None:
 def test_deploy_diff_forwards_wipe_to_underlying_deployer() -> None:
     ok = DeployResult(success=True)
     fake = _FakeDeployer([ok])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=_ScriptedPrompt([]),
         output=_capturing_output()[0],
@@ -801,7 +801,7 @@ def test_deploy_diff_retries_on_port_unavailable_then_succeeds() -> None:
     )
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt([""])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -823,7 +823,7 @@ def test_deploy_diff_traceback_returns_result_but_prints_coaching() -> None:
     )
     fake = _FakeDeployer([bad])
     sink, lines = _capturing_output()
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=_ScriptedPrompt([]),
         output=sink,
@@ -836,7 +836,7 @@ def test_deploy_diff_traceback_returns_result_but_prints_coaching() -> None:
 
 
 # ---------------------------------------------------------------------------
-# macOS FSKit / DiskArbitration wedge — plan + InteractiveDeployer promotion
+# macOS FSKit / DiskArbitration wedge — plan + RecoveringDeployer promotion
 # ---------------------------------------------------------------------------
 
 
@@ -871,7 +871,7 @@ def test_stale_mount_eaccess_message_promotes_to_fskit_wedged() -> None:
     )
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt(["quit"])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -900,7 +900,7 @@ def test_drive_missing_is_promoted_to_fskit_wedged_when_detector_trips() -> None
     )
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt(["quit"])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -942,7 +942,7 @@ def test_wipe_filesystem_remount_timeout_promotes_to_fskit_wedged() -> None:
     )
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt(["quit"])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -966,7 +966,7 @@ def test_drive_missing_stays_generic_when_detector_says_healthy() -> None:
     )
     sink, lines = _capturing_output()
     prompt = _ScriptedPrompt(["quit"])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -1001,7 +1001,7 @@ def test_detector_not_called_for_unrelated_failure_kinds() -> None:
     )
     sink, _lines = _capturing_output()
     prompt = _ScriptedPrompt(["quit"])
-    interactive = InteractiveDeployer(
+    interactive = RecoveringDeployer(
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
@@ -1362,7 +1362,7 @@ class TestReportFailureWithPortHolders:
         )
         sink, lines = _capturing_output()
         prompt = _ScriptedPrompt(["", ""])
-        interactive = recovery.InteractiveDeployer(
+        interactive = recovery.RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             prompt=prompt,
             output=sink,
@@ -1407,7 +1407,7 @@ class TestReportFailureWithPortHolders:
         )
         sink, lines = _capturing_output()
         prompt = _ScriptedPrompt(["", ""])
-        interactive = recovery.InteractiveDeployer(
+        interactive = recovery.RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             prompt=prompt,
             output=sink,
@@ -1444,7 +1444,7 @@ class TestReportFailureWithPortHolders:
         )
         sink, lines = _capturing_output()
         prompt = _ScriptedPrompt(["", ""])
-        interactive = recovery.InteractiveDeployer(
+        interactive = recovery.RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             prompt=prompt,
             output=sink,
@@ -1479,7 +1479,7 @@ class TestReportFailureWithPortHolders:
         )
         sink, lines = _capturing_output()
         prompt = _ScriptedPrompt(["", ""])
-        interactive = recovery.InteractiveDeployer(
+        interactive = recovery.RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             prompt=prompt,
             output=sink,
@@ -1494,27 +1494,28 @@ class TestReportFailureWithPortHolders:
 
 
 # ---------------------------------------------------------------------------
-# NonInteractiveDeployer — same recovery output as InteractiveDeployer
-# but without a retry loop.  CI / scripted flows.
+# RecoveringDeployer (prompt=None) — single attempt, no retry loop.
+# CI / scripted flows.
 # ---------------------------------------------------------------------------
 
 
-class TestNonInteractiveDeployer:
-    """``NonInteractiveDeployer`` reports the failure once and re-raises.
+class TestRecoveringDeployer:
+    """``RecoveringDeployer`` with ``prompt=None`` reports the failure
+    once and re-raises.
 
-    Same coached output as :class:`InteractiveDeployer` (classify +
-    F6 lsof diagnosis when applicable + canonical fix steps), but
-    no retry loop and no prompt — for CI / scripted flows where
-    stdin has nowhere to go.
+    Same coached output as the prompt-driven mode (classify + lsof
+    diagnosis when applicable + fix steps), but no retry loop and
+    no stdin probe — for CI / scripted flows where stdin has nowhere
+    to go.
     """
 
     def test_returns_result_when_deploy_succeeds(self) -> None:
-        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+        from chumicro_deploy.recovery import RecoveringDeployer  # noqa: PLC0415
 
         ok = DeployResult(success=True, execute_output="hi\n")
         fake = _FakeDeployer([ok])
         sink, lines = _capturing_output()
-        runner = NonInteractiveDeployer(
+        runner = RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             output=sink,
         )
@@ -1528,7 +1529,7 @@ class TestNonInteractiveDeployer:
 
     def test_reports_and_reraises_on_transport_failure(self) -> None:
         """Single transport failure → one coached report, then re-raise."""
-        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+        from chumicro_deploy.recovery import RecoveringDeployer  # noqa: PLC0415
 
         fake = _FakeDeployer(
             [
@@ -1539,7 +1540,7 @@ class TestNonInteractiveDeployer:
             ],
         )
         sink, lines = _capturing_output()
-        runner = NonInteractiveDeployer(
+        runner = RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             output=sink,
         )
@@ -1557,30 +1558,16 @@ class TestNonInteractiveDeployer:
         # Canonical fix hints still present.
         assert "Close any app" in joined.lower() or "close any app" in joined.lower()
 
-    def test_does_not_prompt_for_retry(self) -> None:
-        """``NonInteractiveDeployer`` doesn't take a prompt parameter
-        and never reaches for stdin — the constructor signature
-        enforces the no-retry contract.
-        """
-        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
-
-        # No ``prompt=`` kwarg in NonInteractiveDeployer's signature.
-        with pytest.raises(TypeError):
-            NonInteractiveDeployer(
-                object(),  # type: ignore[arg-type]
-                prompt=lambda _: "",  # type: ignore[call-arg]
-            )
-
     def test_diff_signature_mirrors_deployer(self) -> None:
         """``deploy_diff`` accepts clean + wipe + on_file_deleted just
         like the underlying :class:`Deployer`, and forwards them.
         """
-        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+        from chumicro_deploy.recovery import RecoveringDeployer  # noqa: PLC0415
 
         ok = DeployResult(success=True)
         fake = _FakeDeployer([ok])
         sink, _lines = _capturing_output()
-        runner = NonInteractiveDeployer(
+        runner = RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             output=sink,
         )
@@ -1596,11 +1583,11 @@ class TestNonInteractiveDeployer:
 
     def test_diff_clean_defaults_true(self) -> None:
         """clean-slate is the default — the wrapper forwards clean=True."""
-        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+        from chumicro_deploy.recovery import RecoveringDeployer  # noqa: PLC0415
 
         fake = _FakeDeployer([DeployResult(success=True)])
         sink, _lines = _capturing_output()
-        runner = NonInteractiveDeployer(fake, output=sink)  # type: ignore[arg-type]
+        runner = RecoveringDeployer(fake, output=sink)  # type: ignore[arg-type]
         runner.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
         assert fake.last_clean is True
 
@@ -1631,7 +1618,7 @@ class TestNonInteractiveDeployer:
             ],
         )
         sink, lines = _capturing_output()
-        runner = recovery.NonInteractiveDeployer(
+        runner = recovery.RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             output=sink,
         )
@@ -1645,9 +1632,9 @@ class TestNonInteractiveDeployer:
 
     def test_traceback_result_is_reported(self) -> None:
         """A ``DeployResult`` with ``success=False`` + ``traceback``
-        gets reported (not raised) — same contract as InteractiveDeployer.
+        gets reported (not raised) — same contract as RecoveringDeployer.
         """
-        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+        from chumicro_deploy.recovery import RecoveringDeployer  # noqa: PLC0415
 
         bad = DeployResult(
             success=False,
@@ -1656,7 +1643,7 @@ class TestNonInteractiveDeployer:
         )
         fake = _FakeDeployer([bad])
         sink, lines = _capturing_output()
-        runner = NonInteractiveDeployer(
+        runner = RecoveringDeployer(
             fake,  # type: ignore[arg-type]
             output=sink,
         )

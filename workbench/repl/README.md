@@ -73,7 +73,7 @@ if result is ExitCode.TRACEBACK_DETECTED:
 | Symbol | Description |
 |---|---|
 | `ReplSession(device)` | Context manager wrapping the raw REPL.  `exec(code)`, `call(function_name, *args, **kwargs)`, `read_until(pattern, timeout)` |
-| `InteractiveReplSession(session)` | Wraps `ReplSession` with classify + retry + coaching for session-start failures (mirrors `chumicro_deploy.InteractiveDeployer` shape) |
+| `InteractiveReplSession(session)` | Wraps `ReplSession` with classify + retry + coaching for session-start failures (mirrors `chumicro_deploy.RecoveringDeployer` shape) |
 | `interactive_line(device)` | Line-mode TUI — host-side line editor with persistent per-device history, `:edit` / `:save` / `:load` / `:snippets` builtins, Tab against keywords + on-device `dir()` |
 | `interactive(device)` | Passthrough TUI — `mpremote`-compatible keybindings (Ctrl-C / Ctrl-D / Ctrl-X / Ctrl-E), auto-reconnect through the configured serial-port factory, Ctrl-X quits without rebooting the device |
 | `tail(device, seconds, *, fail_on_traceback=True)` → `ExitCode` | Stream serial output for a window, highlight tracebacks as they arrive, return one of the `ExitCode` enum values |

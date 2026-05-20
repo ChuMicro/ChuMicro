@@ -65,8 +65,7 @@ from .protocol import (
 )
 from .recovery import (
     DeployFailureKind,
-    InteractiveDeployer,
-    NonInteractiveDeployer,
+    RecoveringDeployer,
     RecoveryPlan,
     classify_deploy_failure,
     recovery_plan_for,
@@ -104,11 +103,10 @@ __all__ = [
     "FileSource",
     "FlashFirmwareError",
     "ImportGraphSource",
-    "InteractiveDeployer",
     "MACOS_FSKIT_RECOVERY_COMMAND",
     "MicropythonMidDeployDisconnected",
     "MicropythonTransportError",
-    "NonInteractiveDeployer",
+    "RecoveringDeployer",
     "RecoveryPlan",
     "RsyncMissingError",
     "Runtime",

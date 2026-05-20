@@ -150,7 +150,7 @@ The session accepts a `chumicro_deploy.Device`, a bare serial-port path, or any 
 
 ## Recover from session-start failures — `InteractiveReplSession`
 
-`ReplSession` raises directly on a failed session-start — that's the deterministic surface programmatic callers want.  For interactive use, `InteractiveReplSession` wraps a `ReplSession` with classification + a retry-loop + user-facing coaching, mirroring `chumicro_deploy.InteractiveDeployer`.
+`ReplSession` raises directly on a failed session-start — that's the deterministic surface programmatic callers want.  For interactive use, `InteractiveReplSession` wraps a `ReplSession` with classification + a retry-loop + user-facing coaching, mirroring `chumicro_deploy.RecoveringDeployer`.
 
 ```python
 from chumicro_repl import InteractiveReplSession

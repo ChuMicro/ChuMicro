@@ -1,4 +1,4 @@
-"""Interactive recovery layer around :class:`Deployer`.
+"""Recovery layer around :class:`Deployer`.
 
 Transport failures during deploy come in a small number of flavors —
 port busy, CIRCUITPY drive missing, raw REPL unresponsive, rsync
@@ -13,16 +13,17 @@ This module provides:
   maps a transport exception onto one of the kinds.
 - :class:`RecoveryPlan` + :func:`recovery_plan_for` — canned
   headline + ordered fix-steps per kind.
-- :class:`InteractiveDeployer` — sibling of :class:`Deployer` that
-  catches transport failures, surfaces the plan, prompts the user
-  to retry after they've fixed the physical condition, and loops
-  up to a configurable attempt ceiling.
+- :class:`RecoveringDeployer` — sibling of :class:`Deployer` that
+  catches transport failures, surfaces the plan, and either reports
+  + re-raises (``prompt=None``, CI / scripted flows) or prompts the
+  user to retry after fixing the condition and loops up to
+  *max_attempts* (interactive flows).
 
 Keeping this as a sibling instead of baking it into
 :class:`Deployer` preserves the deterministic programmatic API
 that programmatic callers depend on.  Interactive use (the
 ``chumicro-deploy`` CLI, direct human invocation) opts in by
-instantiating :class:`InteractiveDeployer` instead.
+instantiating :class:`RecoveringDeployer` with a prompt callable.
 """
 
 from __future__ import annotations
@@ -381,36 +382,63 @@ def recovery_plan_for(kind: DeployFailureKind) -> RecoveryPlan:
     return PLANS[kind]
 
 
-#: Default number of deploy attempts before :class:`InteractiveDeployer`
-#: gives up and re-raises.  Three matches the common recovery
-#: pattern: user had another program open, closes it, retries once,
-#: maybe needs a RESET.
+#: Default attempts for :class:`RecoveringDeployer` with a prompt.
+#: Three matches the common recovery pattern: user had another
+#: program open, closes it, retries once, maybe needs a RESET.
 _DEFAULT_MAX_ATTEMPTS = 3
 
 
-class _RecoveringDeployer:
-    """Shared scaffolding for Deployer wrappers that surface recovery
-    output on transport failures.
+class RecoveringDeployer:
+    """:class:`Deployer` wrapper that classifies failures and coaches recovery.
 
-    Holds the classify → fskit-promote → format chain that's common
-    to both :class:`NonInteractiveDeployer` (raises after one report)
-    and :class:`InteractiveDeployer` (loops with a user prompt).
-    Not part of the public API — call sites pick one of the two
-    concrete subclasses based on whether they have a stdin to prompt
-    against.
+    Two modes selected by the *prompt* argument:
 
-    Subclasses implement ``deploy`` / ``deploy_diff`` themselves;
-    this base only provides the helpers they share.
+    - **Non-interactive** (``prompt=None``, the default — CI /
+      scripted flows): runs once, prints the classified failure +
+      ordered fix steps on a transport error, then re-raises.
+    - **Interactive** (``prompt=input`` or any callable taking the
+      prompt text and returning the user's reply): runs up to
+      *max_attempts* times, asks between attempts.  An empty / pure-
+      whitespace reply continues; any reply starting with ``q``,
+      ``a``, or ``e`` aborts.
+
+    On a :class:`DeployResult` with ``success=False`` and a
+    ``traceback``, both modes print the traceback + the
+    ``TRACEBACK_RETURNED`` plan and return the result unchanged — a
+    source-level bug isn't something retrying the same bytes will fix.
+
+    Args:
+        deployer: Underlying :class:`Deployer` that owns the device
+            and transport construction.
+        prompt: Callable that asks the user whether to retry.  ``None``
+            (default) is non-interactive: report once and re-raise.
+            Pass :func:`input` (or any ``(str) -> str`` callable) for
+            the interactive retry loop.
+        max_attempts: Ceiling on retry attempts when *prompt* is set.
+            Ignored in non-interactive mode (always 1 attempt).
+        output: Injectable output sink.  Defaults to :func:`print`.
+        fskit_wedge_detector: Injectable probe for the macOS FSKit
+            wedge.  Promotes ``CIRCUITPY_DRIVE_MISSING`` failures to
+            ``MACOS_FSKIT_WEDGED`` when the detector fires, so the
+            recovery plan points the user at the right fix.
     """
 
     def __init__(
         self,
         deployer: Deployer,
         *,
+        prompt: Callable[[str], str] | None = None,
+        max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
         output: Callable[[str], None] = print,
         fskit_wedge_detector: Callable[[], bool] = detect_fskit_wedge,
     ) -> None:
+        if max_attempts < 1:
+            raise ValueError(
+                f"max_attempts must be >= 1, got {max_attempts}"
+            )
         self._deployer = deployer
+        self._prompt = prompt
+        self._max_attempts = max_attempts if prompt is not None else 1
         self._output = output
         self._fskit_wedge_detector = fskit_wedge_detector
 
@@ -419,10 +447,94 @@ class _RecoveringDeployer:
         """The underlying non-recovery :class:`Deployer`."""
         return self._deployer
 
+    def deploy_diff(
+        self,
+        source: FileSource,
+        *,
+        clean: bool = True,
+        wipe: bool = False,
+        on_progress: Callable[[float, str], None] | None = None,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_file_deleted: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+        tail_seconds: float | None = None,
+    ) -> DeployResult:
+        """Diff-deploy *source* with classify / coach / (optional retry)."""
+        return self._run(
+            lambda: self._deployer.deploy_diff(
+                source,
+                clean=clean,
+                wipe=wipe,
+                on_progress=on_progress,
+                on_file_staged=on_file_staged,
+                on_file_deleted=on_file_deleted,
+                on_execute_line=on_execute_line,
+                tail_seconds=tail_seconds,
+            ),
+        )
+
+    def _run(self, call: Callable[[], DeployResult]) -> DeployResult:
+        """Drive *call* through the classify / coach / (optional retry) loop.
+
+        Non-interactive mode (``prompt=None``) loops once: report the
+        failure (with a ``"1/1"`` attempt header that makes the no-
+        retry contract explicit in the output) and re-raise.
+        Interactive mode loops up to ``max_attempts`` and asks the
+        prompt callable between attempts.  Every exit path returns
+        or raises from inside the loop.
+        """
+        attempt = 0
+        while attempt < self._max_attempts:
+            attempt += 1
+            try:
+                result = call()
+            except (
+                CircuitpythonTransportError,
+                MicropythonTransportError,
+            ) as error:
+                kind = self._resolve_kind(error)
+                plan = recovery_plan_for(kind)
+                self._report_failure(
+                    attempt, self._max_attempts, error, kind, plan,
+                )
+                if not plan.retryable:
+                    raise
+                if attempt >= self._max_attempts:
+                    raise
+                if self._prompt is None or not self._ask_retry(attempt):
+                    raise
+                continue
+
+            if not result.success and result.traceback is not None:
+                plan = recovery_plan_for(DeployFailureKind.TRACEBACK_RETURNED)
+                self._report_traceback(attempt, result.traceback, plan)
+            return result
+
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    def _ask_retry(self, attempt: int) -> bool:
+        """Ask the user whether to retry; return ``True`` to continue.
+
+        Any response starting with ``q`` (``quit``), ``a`` (``abort``),
+        or ``e`` (``exit``) is interpreted as "stop retrying".  Empty
+        input (plain Enter) is the expected continue path.  Only
+        called in interactive mode (``self._prompt is not None``).
+        """
+        assert self._prompt is not None
+        response = self._prompt(
+            f"[chumicro-deploy] Fix the condition above and press "
+            f"Enter to retry (attempt {attempt + 1}/"
+            f"{self._max_attempts}), or type 'quit' to abort: "
+        )
+        normalized = response.strip().lower()
+        if not normalized:
+            return True
+        first_char = normalized[0]
+        return first_char not in ("q", "a", "e")
+
     def _resolve_kind(self, error: Exception) -> DeployFailureKind:
-        """Classify *error* and promote ``CIRCUITPY_DRIVE_MISSING``
-        to ``MACOS_FSKIT_WEDGED`` when the macOS FSKit detector
-        flags the wedge.
+        """Classify *error* and promote ``CIRCUITPY_DRIVE_MISSING`` to
+        ``MACOS_FSKIT_WEDGED`` when the macOS FSKit detector fires.
         """
         kind = classify_deploy_failure(error)
         if (
@@ -507,231 +619,3 @@ class _RecoveringDeployer:
         self._output("[chumicro-deploy] Try this:")
         for step in plan.fix_steps:
             self._output(f"  - {step}")
-
-
-class NonInteractiveDeployer(_RecoveringDeployer):
-    """:class:`Deployer` wrapper for CI / scripted flows.
-
-    On :class:`CircuitpythonTransportError` or
-    :class:`MicropythonTransportError`: classifies the failure,
-    prints the coached recovery output (headline + lsof diagnosis
-    when applicable + fix steps), and re-raises.
-    No retry loop, no user prompt — designed for callers that
-    have nowhere to read stdin from (CI runners, log-driven
-    automation, ``--non-interactive`` CLI flag).
-
-    On a :class:`DeployResult` with ``success=False`` and a
-    ``traceback``: prints the traceback + the ``TRACEBACK_RETURNED``
-    plan and returns the result unchanged — same contract as
-    :class:`InteractiveDeployer` for that case.
-
-    For interactive flows where a retry-prompt has somewhere to
-    go, use :class:`InteractiveDeployer` instead.
-
-    Args:
-        deployer: Underlying :class:`Deployer` that owns the device
-            and transport construction.
-        output: Injectable output sink.  Defaults to :func:`print`.
-        fskit_wedge_detector: Injectable probe for the macOS FSKit
-            wedge.  See :class:`_RecoveringDeployer` for the
-            promotion semantics.
-    """
-
-    def deploy_diff(
-        self,
-        source: FileSource,
-        *,
-        clean: bool = True,
-        wipe: bool = False,
-        on_progress: Callable[[float, str], None] | None = None,
-        on_file_staged: Callable[[str], None] | None = None,
-        on_file_deleted: Callable[[str], None] | None = None,
-        on_execute_line: Callable[[str], None] | None = None,
-        tail_seconds: float | None = None,
-    ) -> DeployResult:
-        """Diff-deploy *source*; classify + report + re-raise on failure."""
-        return self._run(
-            lambda: self._deployer.deploy_diff(
-                source,
-                clean=clean,
-                wipe=wipe,
-                on_progress=on_progress,
-                on_file_staged=on_file_staged,
-                on_file_deleted=on_file_deleted,
-                on_execute_line=on_execute_line,
-                tail_seconds=tail_seconds,
-            ),
-        )
-
-    def _run(
-        self, call: Callable[[], DeployResult],
-    ) -> DeployResult:
-        """Run *call*; report transport / traceback failures and re-raise."""
-        try:
-            result = call()
-        except (
-            CircuitpythonTransportError,
-            MicropythonTransportError,
-        ) as error:
-            kind = self._resolve_kind(error)
-            plan = recovery_plan_for(kind)
-            # Single attempt — the "1/1" header makes the no-retry
-            # contract explicit in the output.
-            self._report_failure(1, 1, error, kind, plan)
-            raise
-        if not result.success and result.traceback is not None:
-            plan = recovery_plan_for(DeployFailureKind.TRACEBACK_RETURNED)
-            self._report_traceback(1, result.traceback, plan)
-        return result
-
-
-class InteractiveDeployer(_RecoveringDeployer):
-    """:class:`Deployer` wrapper that coaches the user through failures.
-
-    On :class:`CircuitpythonTransportError` or
-    :class:`MicropythonTransportError`, this deployer classifies the
-    failure, prints a headline + recovery steps, and (when the plan
-    is retryable) prompts the user to fix the condition and press
-    Enter to retry.  After ``max_attempts`` attempts the last
-    exception re-raises.
-
-    On a :class:`DeployResult` with ``success=False`` and a
-    ``traceback``, the deployer prints the traceback + a
-    ``TRACEBACK_RETURNED`` plan but returns the result unchanged —
-    a source-level bug isn't something retrying the same bytes
-    will fix.
-
-    For CI / scripted flows where the retry prompt has nowhere to
-    go, use :class:`NonInteractiveDeployer` instead.
-
-    Args:
-        deployer: Underlying :class:`Deployer` that owns the device
-            and transport construction.
-        max_attempts: Ceiling on retry attempts.  Defaults to 3.
-        prompt: Injectable prompt callable.  Defaults to
-            :func:`input`.  Return an empty / whitespace-only string
-            to continue, or ``"quit"`` / ``"q"`` / ``"abort"`` /
-            ``"exit"`` to stop retrying and re-raise the last error.
-        output: Injectable output sink.  Defaults to :func:`print`.
-        fskit_wedge_detector: Injectable probe for the macOS FSKit
-            wedge.  See :class:`_RecoveringDeployer` for the
-            promotion semantics.
-    """
-
-    def __init__(
-        self,
-        deployer: Deployer,
-        *,
-        max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
-        prompt: Callable[[str], str] = input,
-        output: Callable[[str], None] = print,
-        fskit_wedge_detector: Callable[[], bool] = detect_fskit_wedge,
-    ) -> None:
-        if max_attempts < 1:
-            raise ValueError(
-                f"max_attempts must be >= 1, got {max_attempts}"
-            )
-        super().__init__(
-            deployer,
-            output=output,
-            fskit_wedge_detector=fskit_wedge_detector,
-        )
-        self._max_attempts = max_attempts
-        self._prompt = prompt
-
-    def deploy_diff(
-        self,
-        source: FileSource,
-        *,
-        clean: bool = True,
-        wipe: bool = False,
-        on_progress: Callable[[float, str], None] | None = None,
-        on_file_staged: Callable[[str], None] | None = None,
-        on_file_deleted: Callable[[str], None] | None = None,
-        on_execute_line: Callable[[str], None] | None = None,
-        tail_seconds: float | None = None,
-    ) -> DeployResult:
-        """Diff-deploy *source*, prompting the user to recover on failure.
-
-        Signature matches :meth:`Deployer.deploy_diff` exactly — all
-        callback parameters and the ``wipe`` flag are forwarded.  The
-        only new behavior is the retry loop + user prompts on
-        classified failures (the
-        :class:`NonInteractiveDeployer` reports once and re-raises
-        instead of prompting).
-        """
-        return self._retry_loop(
-            lambda: self._deployer.deploy_diff(
-                source,
-                clean=clean,
-                wipe=wipe,
-                on_progress=on_progress,
-                on_file_staged=on_file_staged,
-                on_file_deleted=on_file_deleted,
-                tail_seconds=tail_seconds,
-                on_execute_line=on_execute_line,
-            ),
-        )
-
-    def _retry_loop(
-        self, call: Callable[[], DeployResult],
-    ) -> DeployResult:
-        """Drive *call* through the classify / coach / retry loop.
-
-        Same shape for both :meth:`deploy` and :meth:`deploy_diff` —
-        only the inner deployer call differs, so the loop body lives
-        here once and the public methods are thin lambda wrappers.
-
-        Every exit path returns or raises from inside the loop:
-        success returns the :class:`DeployResult`; non-retryable
-        plans, exhausted attempts, and user-requested aborts all
-        ``raise``.  The loop has no trailing fallthrough.
-        """
-        attempt = 0
-        while attempt < self._max_attempts:
-            attempt += 1
-            try:
-                result = call()
-            except (
-                CircuitpythonTransportError,
-                MicropythonTransportError,
-            ) as error:
-                kind = self._resolve_kind(error)
-                plan = recovery_plan_for(kind)
-                self._report_failure(
-                    attempt, self._max_attempts, error, kind, plan,
-                )
-                if not plan.retryable:
-                    raise
-                if attempt >= self._max_attempts:
-                    raise
-                if not self._ask_retry(attempt):
-                    raise
-                continue
-
-            if not result.success and result.traceback is not None:
-                plan = recovery_plan_for(
-                    DeployFailureKind.TRACEBACK_RETURNED,
-                )
-                self._report_traceback(attempt, result.traceback, plan)
-            return result
-
-        raise AssertionError("unreachable")  # pragma: no cover
-
-    def _ask_retry(self, attempt: int) -> bool:
-        """Ask the user whether to retry; return ``True`` to continue.
-
-        Any response starting with ``q`` (``quit``), ``a`` (``abort``),
-        or ``e`` (``exit``) is interpreted as "stop retrying".  Empty
-        input (plain Enter) is the expected continue path.
-        """
-        response = self._prompt(
-            f"[chumicro-deploy] Fix the condition above and press "
-            f"Enter to retry (attempt {attempt + 1}/"
-            f"{self._max_attempts}), or type 'quit' to abort: "
-        )
-        normalized = response.strip().lower()
-        if not normalized:
-            return True
-        first_char = normalized[0]
-        return first_char not in ("q", "a", "e")
