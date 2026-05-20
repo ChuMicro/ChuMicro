@@ -164,23 +164,17 @@ class BrowserModel:
         return sorted(self.selected)
 
     def commit_target(self) -> list[str] | None:
-        """Roots the user is asking to install right now.
+        """Selected import names, or ``None`` when nothing is selected.
 
-        Two modes the same Enter keystroke covers — multi-select then
-        commit (Space to build up a set, then act) and single-shot
-        (no Space at all, just Enter on the row you want).  When the
-        user has built explicit selections, those win; otherwise the
-        cursor row is the single-shot target.  Returns ``None`` when
-        the user is in a non-list view or the catalog is empty —
-        there's nothing for a commit keystroke to act on.
+        Enter is gated on having an explicit Space-selection — pressing
+        Enter on a row you were just exploring shouldn't accidentally
+        install it.  The binding layer interprets ``None`` as "Enter
+        means open the info view instead," so the cursor row still
+        has a one-key path to its README + examples.
         """
-        if self.view != "list":
+        if self.view != "list" or not self.selected:
             return None
-        if self.selected:
-            return sorted(self.selected)
-        if self.current is not None:
-            return [self.current.name]
-        return None
+        return sorted(self.selected)
 
 
 def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no cover
@@ -249,8 +243,8 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
     def render_help() -> str:
         if model.view == "list":
             return (
-                " [Enter] add  [Space] select  [i] info  "
-                "[Tab] channel  [Up/Down] move  [q] quit"
+                " [Space] select  [Enter] add selected (or info if none)  "
+                "[i] info  [Tab] channel  [Up/Down] move  [q] quit"
             )
         if model.view == "detail":
             entry = model.current
@@ -344,14 +338,20 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
 
     @bindings.add("enter")
     def _(event) -> None:
-        # On the list, Enter is the action key: commits the cursor row
-        # (single-shot) or the explicit Space-selected set if the user
-        # built one up.  Inside detail view it drills into the example
+        # On the list, Enter commits the explicit Space-selected set
+        # (the user has to mark `[x]` first — Enter on a row you're
+        # just exploring should never accidentally install it).  With
+        # no selection, Enter falls through to the same drill `i` does
+        # so the cursor row still has a one-key path to its README +
+        # example list.  Inside detail view, Enter opens the example
         # under the example cursor.
         if model.view == "list":
             target = model.commit_target()
             if target is not None:
                 event.app.exit(result=target)
+                return
+            model.enter()
+            refresh_text_area(event)
         elif model.view == "detail":
             model.enter()
             refresh_text_area(event)
@@ -365,10 +365,15 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
             model.enter()
             refresh_text_area(event)
 
-    @bindings.add("b")
-    @bindings.add("escape")
-    @bindings.add("backspace")
+    @bindings.add("b", eager=True)
+    @bindings.add("escape", eager=True)
+    @bindings.add("backspace", eager=True)
     def _(event) -> None:
+        # eager=True wins over the TextArea's own Esc / Backspace
+        # bindings — TextArea consumes Esc as a focus / cancel signal
+        # under prompt_toolkit's default key set, so without the eager
+        # flag the user couldn't back out of detail / example views
+        # with Esc even though the binding existed.
         if model.back():
             refresh_text_area(event)
 
