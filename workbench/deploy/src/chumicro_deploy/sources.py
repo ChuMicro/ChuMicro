@@ -35,7 +35,7 @@ class FileSource(Protocol):
 
     Implementations return the deploy-time file map and declare which
     of those files is the entrypoint.  The Deployer does not mutate
-    either result — sources own their own state.
+    either result.  Sources own their own state.
     """
 
     def files(self) -> dict[str, bytes]:
@@ -222,7 +222,7 @@ class ImportGraphSource:
     *extra_modules*.
 
     Modules that don't resolve against any search path are skipped
-    silently — they are assumed to be device-runtime built-ins
+    silently.  They are assumed to be device-runtime built-ins
     (``gc``, ``time``, ``board``, etc.) the host can't provide
     regardless.
 
@@ -375,7 +375,7 @@ class ImportGraphSource:
                 # Wrong-runtime module, or a test-support module
                 # (testing.py fakes) that must never reach a
                 # product/app deploy: drop it and don't walk its
-                # imports — they are likely runtime-specific too.
+                # imports, which are likely runtime-specific too.
                 continue
             device_path = self._device_path_for(module_name, resolved_path)
             collected[device_path] = resolved_path.read_bytes()
@@ -391,7 +391,7 @@ class ImportGraphSource:
         For an exact-form entry like ``"chumicro_websockets.sockets_factory"``,
         dead means the user lists it but never imports ``chumicro_websockets``.
         For a family-form entry like ``"sockets_factory"`` that matches
-        five libraries, dead means none of those five were used — a
+        five libraries, dead means none of those five were used.  A
         single-library project listing the family form is *not* dead.
 
         Visit-set membership of the skip targets themselves is excluded
@@ -457,7 +457,7 @@ class ImportGraphSource:
         if resolved_path.name == "__init__.py":
             relative_device = "/".join([*dotted_parts, "__init__.py"])
         else:
-            # Use the on-disk filename, not ``dotted_parts[-1]`` — the
+            # Use the on-disk filename, not ``dotted_parts[-1]``.  The
             # import statement's case may differ from the file's actual
             # case on the host (e.g. ``from chumicro_timing import
             # Heartbeat`` resolves to ``heartbeat.py`` on case-

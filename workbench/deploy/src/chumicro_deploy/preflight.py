@@ -1,6 +1,6 @@
 """Deploy-time mode resolution and the inputs it reads.
 
-:func:`resolve_deploy_mode` is pure policy — given the configured
+:func:`resolve_deploy_mode` is pure policy.  Given the configured
 mode and the resolution unit's inputs, it returns the effective mode
 plus an optional human-readable message when a requested RAM mode
 was overridden to flash.  One rule, byte-identical for every caller:
@@ -38,7 +38,7 @@ class DeviceCaps:
     """Static capabilities of a deploy target relevant to mode resolution.
 
     There are exactly two deploy modes and flash is always available
-    (every board can write its own filesystem — it is the
+    (every board can write its own filesystem, since it is the
     production-shaped path), so the only real degree of freedom is
     whether the board can run RAM mode at all.  A struct rather than a
     bare bool so a second capability can be added later without
@@ -87,8 +87,8 @@ def resolve_deploy_mode(
     is emitted).
 
     Returns ``(mode, message_or_None)``.  The message is non-``None``
-    only when a requested RAM mode was overridden to flash; the caller
-    emits it and continues — never a silent skip.
+    only when a requested RAM mode was overridden to flash, and the
+    caller emits it and continues — never a silent skip.
 
     Resolution order:
 
@@ -104,8 +104,8 @@ def resolve_deploy_mode(
     4. RAM requested and *staged_files* contains a non-``.py`` data
        file → flash.  RAM-mode deploy is not a persistent filesystem
        write (CircuitPython is a raw-REPL ``exec()`` with no device
-       filesystem; MicroPython is a host mount), so a non-``.py``
-       asset is not reliably on the device — switch rather than risk a
+       filesystem, and MicroPython is a host mount), so a non-``.py``
+       asset is not reliably on the device.  Switch rather than risk a
        silent drop.
     5. Otherwise → *configured_mode* unchanged (a RAM preference stays
        RAM).
@@ -158,8 +158,8 @@ def find_libraries_requiring_flash(host_paths: list[Path]) -> list[str]:
     ``pyproject.toml`` is found, reads its
     ``[tool.chumicro].requires_flash`` flag, and collects the
     ``[project].name`` values of every flagged library.  Skips paths
-    with no containing pyproject and pyprojects that fail to parse —
-    pre-flight is best-effort, not authoritative.
+    with no containing pyproject and pyprojects that fail to parse.
+    Pre-flight is best-effort, not authoritative.
 
     Args:
         host_paths: Filesystem paths the deploy graph drew files

@@ -33,7 +33,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 #: Entry-point group name third parties declare to register a loader.
 CONFIG_LOADERS_ENTRY_POINT_GROUP = "chumicro_deploy.config_loaders"
 
-#: Registered name of the built-in loader.  Reserved — third-party
+#: Registered name of the built-in loader.  Reserved, so third-party
 #: entry points registering under this name are rejected rather than
 #: silently shadowing the built-in.
 BUILTIN_LOADER_NAME = "default"
@@ -70,7 +70,7 @@ def discover_config_loaders() -> dict[str, ConfigLoader]:
 
     The ``default`` entry is always present (built-in).  Third-party
     entries come from Python entry points in the
-    ``chumicro_deploy.config_loaders`` group — any name collision
+    ``chumicro_deploy.config_loaders`` group.  Any name collision
     with ``default`` is rejected by the registry so built-in
     behavior is not silently shadowed.
 

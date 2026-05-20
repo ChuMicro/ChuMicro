@@ -61,8 +61,8 @@ def isolate_from_host_filesystem(
        ``subprocess.run(["sync"])`` / ``["xattr", ...]`` / ``["dot_clean",
        ...]`` / ``["mdutil", ...]`` on macOS.  Each blocks for seconds
        on a busy host (concurrent test workers, IDE indexing, git
-       activity).  Real ``rsync`` is left intact — tests rely on its
-       file-copy side effect.
+       activity).  Real ``rsync`` is left intact, because tests rely
+       on its file-copy side effect.
     2. **CIRCUITPY drive scanning → controllable.**  Production calls
        :func:`chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates`
        to find ``/Volumes/CIRCUITPY*`` mounts.  On a dev box with a real
@@ -71,7 +71,7 @@ def isolate_from_host_filesystem(
        point at a test-controlled directory; pass ``None`` (default)
        to make scans return empty so tests don't depend on host state.
 
-    Per-test monkeypatches override these — calling
+    Per-test monkeypatches override these.  Calling
     ``monkeypatch.setattr("chumicro_deploy.circuitpy_drive
     ._circuitpy_volume_candidates", ...)`` again later in the same test
     replaces the stub for that test only.
@@ -111,7 +111,7 @@ class FakeTime:
     Bundles ``monotonic()`` and ``sleep()`` into a single injectable
     object that satisfies the ``TimeSource`` protocol used by
     :class:`~chumicro_deploy.CircuitpythonTransport`.  ``monotonic()``
-    is **stable** — repeated calls return the same value until the
+    is **stable**: repeated calls return the same value until the
     clock is explicitly advanced.  ``sleep(duration)`` auto-advances
     the clock by *duration* without any real wait, so production
     code that sleeps still moves the fake clock forward.
@@ -160,13 +160,13 @@ class FakeSerialPort:
     Records all writes and returns canned responses for reads.
     Each entry in ``read_responses`` is either ``bytes`` (returned
     verbatim on the matching ``read()`` call) or an instance of
-    ``BaseException`` (raised on that call) — the exception form
+    ``BaseException`` (raised on that call).  The exception form
     lets tests script "first read returns bytes, second read drops
     the cable" scenarios without subclassing the fake.
 
     Instances are callable and return themselves, so a
     ``FakeSerialPort`` instance can be passed directly as a transport's
-    ``serial_port_factory`` kwarg — no wrapper closure needed.  Pass
+    ``serial_port_factory`` kwarg with no wrapper closure needed.  Pass
     *open_error* to script "factory raises when the transport asks for
     a port" without writing a custom closure.
     """
@@ -276,7 +276,7 @@ class FakeTransport:
     probe_result: DeviceImplementation | None = None
     #: Module sources returned by ``staged_sources``; matches the
     #: ``ExtendedTransportProtocol`` shape used by the RAM-mode path.
-    #: Defaults to an empty list — non-``None`` so the CP RAM
+    #: Defaults to an empty list (non-``None``) so the CP RAM
     #: bootstrap path's "stage() must be called first" assertion
     #: passes for fake-backed plugin / bootstrap tests that don't
     #: bother to inject sources.
@@ -292,7 +292,7 @@ class FakeTransport:
     #: call then raise this exception.
     execute_raises: BaseException | None = None
     #: When set, ``recover()`` records the call then raises this
-    #: exception — exercises the cache's "recovery failed → evict
+    #: exception, exercising the cache's "recovery failed → evict
     #: transport" path.
     recover_raises: BaseException | None = None
     #: Simulated on-device file state for the diff-deploy primitives
@@ -411,7 +411,7 @@ class FakeTransport:
         :attr:`execute_raises` after recording when set.
 
         When :attr:`outputs` is non-empty, pops a single head value and
-        returns it — treating the whole chunked execute as one batched
+        returns it, treating the whole chunked execute as one batched
         operation, with no synthetic per-script ``execute`` entries.
         Otherwise records synthetic per-script ``execute`` entries so
         tests that count ``execute`` invocations still see one per

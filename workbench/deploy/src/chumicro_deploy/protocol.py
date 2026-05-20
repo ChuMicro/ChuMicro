@@ -13,7 +13,7 @@ Two protocols are defined:
   CircuitPython-specific RAM-mode chunking helpers
   (``execute_scripts``, ``probe_free_memory``,
   ``inline_script_budget_bytes``).  ``MicropythonTransport`` does not
-  need these — there is no per-script RAM budget on mpremote.
+  need these, because there is no per-script RAM budget on mpremote.
 
 CPython-only — these protocols ride on ``typing.Protocol``, which only
 the workbench tooling uses (the cross-runtime device libraries that
@@ -78,7 +78,7 @@ class DeviceImplementation:
 
     Populated by ``probe_implementation`` on transports that support
     it.  Identifies the runtime + board behind a connected device, and
-    pins a UID that disambiguates two boards of the same model — used
+    pins a UID that disambiguates two boards of the same model.  Used
     downstream to match a mounted CIRCUITPY drive to its connected
     board, so ``devices.yml`` doesn't have to encode a
     mount-order-dependent path.
@@ -115,7 +115,7 @@ class DeviceImplementation:
 #:   contains ``|`` (rare but legal) still round-trips intact.
 #: - ``__CHU_UID__:<hex>`` — emitted on a best-effort basis from
 #:   ``microcontroller.cpu.uid`` (CircuitPython) or
-#:   ``machine.unique_id()`` (MicroPython); an empty value means the
+#:   ``machine.unique_id()`` (MicroPython).  An empty value means the
 #:   probe couldn't read a UID on this firmware.
 #:
 #: Uses only ``sys.implementation`` (present on both CP and MP) and
@@ -224,7 +224,7 @@ def parse_probe_output(output: str) -> DeviceImplementation | None:
     its hex payload is attached to :attr:`DeviceImplementation.uid`;
     output without that line parses cleanly with ``uid=""``.
     Returns ``None`` when the ``__CHU_IMPL__:`` marker
-    is missing or its payload is malformed — callers treat that as
+    is missing or its payload is malformed, and callers treat that as
     "probe unavailable" and fall back to per-device metadata from
     ``devices.yml``.
 
@@ -308,8 +308,8 @@ class TransportProtocol(Protocol):
         code can call :func:`chumicro_config.load_runtime_config`.
         Per-mode semantics: flash and copy modes write
         each file to the device's filesystem alongside library + test
-        sources; mount mode writes to the host directory mounted as the
-        device filesystem; RAM mode raises
+        sources.  Mount mode writes to the host directory mounted as the
+        device filesystem.  RAM mode raises
         :class:`UnsupportedExtraFilesError` because it has no writable
         device-side filesystem to land bytes on.
         """
@@ -363,7 +363,7 @@ class TransportProtocol(Protocol):
         (``machine.bootloader()`` on MicroPython,
         ``microcontroller.on_next_reset(RunMode.BOOTLOADER)`` +
         ``microcontroller.reset()`` on CircuitPython) and swallows
-        the connection-drop that follows — the serial link is torn
+        the connection-drop that follows.  The serial link is torn
         down as the board resets, so a clean response is not
         expected.
 
@@ -389,7 +389,7 @@ class TransportProtocol(Protocol):
     ) -> str:
         """Write files onto the device and execute the entrypoint.
 
-        Distinct from :meth:`stage` + :meth:`execute` — the former pair
+        Distinct from :meth:`stage` + :meth:`execute`.  The former pair
         is test-harness-shaped (dirs + test files + harness source),
         while this method takes a generic path-to-bytes map and a
         single entrypoint path.  Used by :class:`Deployer` and by any
@@ -416,7 +416,7 @@ class TransportProtocol(Protocol):
         """Enumerate device files within the deploy's managed scope.
 
         Returns the file set the diff routine reads as "what's on the
-        device today that the next deploy would replace" — the
+        device today that the next deploy would replace".  The
         difference becomes the *stale* set the diff routine deletes
         before writing the new payload.
 
@@ -447,11 +447,11 @@ class TransportProtocol(Protocol):
         normalize internally.  Missing paths are tolerated silently
         (the diff-routine call site is `delete what isn't in the new
         payload`, and a previous deploy may have already removed
-        something — re-deleting shouldn't error).
+        something, so re-deleting shouldn't error).
 
         Best-effort: a single delete failure logs a warning but does
         not abort the batch.  The deploy that follows still writes
-        the new payload — leaving a stale file in scope is preferable
+        the new payload, and leaving a stale file in scope is preferable
         to skipping the deploy outright.
         """
         ...
@@ -464,7 +464,7 @@ class TransportProtocol(Protocol):
         prior deploy could otherwise run on the reboot (a leftover
         ``code.py`` that hard-faults or resets would propagate that
         failure into the post-reset session).  Filesystem transports
-        unlink the files and verify they are gone — flushing FAT first
+        unlink the files and verify they are gone, flushing FAT first
         on CIRCUITPY so the deletion is on the physical medium before
         the reboot re-reads it.  RAM/mount transports never persist an
         entrypoint, so this is a no-op.
@@ -480,7 +480,7 @@ class TransportProtocol(Protocol):
         user-uploaded assets).  Used by ``chumicro-workspace deploy
         --wipe`` and ``chumicro-workspace reset-board`` for
         clean-slate / corruption-recovery flows where an ordinary
-        diff-deploy isn't enough — and by functional-test runs that
+        diff-deploy isn't enough, and by functional-test runs that
         filled the board's flash with stage residue and now hit
         ``ENOSPC`` mid-deploy.
 
@@ -506,8 +506,8 @@ class TransportProtocol(Protocol):
         ``ENOSPC`` mid-deploy after a non-mkfs "wipe."  Firmware
         partitions are untouched on every runtime.
 
-        RAM-mode / mount-mode deploys (CP RAM, MP mount) are no-ops
-        — neither writes to flash, so there's nothing persistent to
+        RAM-mode / mount-mode deploys (CP RAM, MP mount) are no-ops,
+        since neither writes to flash, so there's nothing persistent to
         wipe.  Callers don't need to gate on mode; the transport
         does the right thing.
         """

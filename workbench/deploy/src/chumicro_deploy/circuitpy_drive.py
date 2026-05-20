@@ -93,7 +93,7 @@ def _resolve_username() -> str:
 def _circuitpy_base_paths() -> list[Path]:
     """Return the OS-specific base directories that CIRCUITPY mounts under.
 
-    macOS uses ``/Volumes``; Linux uses ``/media/<user>`` and, under
+    macOS uses ``/Volumes``.  Linux uses ``/media/<user>`` and, under
     systemd, ``/run/media/<user>``.  Centralizes the per-OS list so
     volume discovery has one source.
     """
@@ -108,7 +108,7 @@ def _circuitpy_base_paths() -> list[Path]:
 def _circuitpy_volume_candidates() -> list[Path]:
     """Return every mounted CIRCUITPY* directory across the base paths.
 
-    macOS assigns ``/Volumes/CIRCUITPY`` by mount order; additional
+    macOS assigns ``/Volumes/CIRCUITPY`` by mount order, and additional
     CircuitPython boards get ``/Volumes/CIRCUITPY 1``, ``CIRCUITPY 2``,
     etc.  Globs all of them so the drive-verification path can scan
     every mounted device to find the one whose ``boot_out.txt``
@@ -178,8 +178,8 @@ def find_circuitpy_drive_for_uid(target_uid: str) -> str | None:
     Scans every mounted ``CIRCUITPY*`` volume, reads the ``UID:...``
     line from ``boot_out.txt``, and returns the first path whose UID
     equals *target_uid* (case-insensitive).  Returns ``None`` when no
-    mount matches.  This is the preferred discovery path —
-    transport-side identity verification only falls back to
+    mount matches.  This is the preferred discovery path.
+    Transport-side identity verification only falls back to
     :func:`find_circuitpy_drive_for_machine` when the UID probe is
     unavailable on either side of the comparison.
     """
@@ -201,8 +201,8 @@ def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
     missing its ``UID:...`` line).  Scans every mounted ``CIRCUITPY*``
     volume, reads ``boot_out.txt``, and returns the first path whose
     board identity equals *target_machine*.  Returns ``None`` when no
-    mount matches.  Cannot disambiguate two boards of the same model
-    — prefer :func:`find_circuitpy_drive_for_uid` when the UID is
+    mount matches.  Cannot disambiguate two boards of the same model,
+    so prefer :func:`find_circuitpy_drive_for_uid` when the UID is
     known.
     """
     if not target_machine:
@@ -221,7 +221,7 @@ def _list_scope_on_drive(drive: Path, *, clean_slate: bool = False) -> list[str]
 
     ``clean_slate=True`` (the deploy default) puts *every* drive file
     in scope except the closed keep set
-    (:data:`flash_drive.DEVICE_KEEP_SET`) and macOS-managed noise — so
+    (:data:`flash_drive.DEVICE_KEEP_SET`) and macOS-managed noise, so
     the diff reconciles the whole drive and a stale board
     ``settings.toml`` / leftover user file is removed.  All macOS
     noise (``.Spotlight-V100``, ``.fseventsd``, ``._`` AppleDouble,

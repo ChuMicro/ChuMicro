@@ -20,7 +20,7 @@ sleep), a wedged one sits in ``Us`` / ``U*`` (uninterruptible wait).
 and reports the wedge.
 
 Recovery requires ``sudo`` (killing system daemons), so this module
-does not auto-run it — it just surfaces the exact command in
+does not auto-run it.  It just surfaces the exact command in
 :data:`MACOS_FSKIT_RECOVERY_COMMAND` for :mod:`recovery` to paste
 into the user-facing coaching output.
 """
@@ -54,7 +54,7 @@ from collections.abc import Callable
 #: always-safe alternative when the paste approach doesn't stick.
 #:
 #: This string is the single source of truth for the recovery
-#: command — the prose copy in ``docs/troubleshooting/macos-circuitpy.md``
+#: command.  The prose copy in ``docs/troubleshooting/macos-circuitpy.md``
 #: pulls from it.  A test pins the two together so they cannot drift.
 MACOS_FSKIT_RECOVERY_COMMAND = (
     "sudo killall -9 com.apple.fskit.msdos fskit_helper "
@@ -69,22 +69,22 @@ def detect_fskit_wedge(
 ) -> bool:
     """Return ``True`` when macOS ``diskarbitrationd`` is wedged.
 
-    Always returns ``False`` on non-macOS platforms — the FSKit
+    Always returns ``False`` on non-macOS platforms, because the FSKit
     rewrite is Apple-only, so the wedge mode does not exist
     elsewhere.
 
     Implementation:
 
     1. ``pgrep diskarbitrationd`` to find the PID.  No PID (daemon
-       missing or in the process of respawning) → not wedged.
+       missing or in the process of respawning) means not wedged.
     2. ``ps -o state= -p <pid>`` reads the process state column.
        A state containing ``U`` means uninterruptible kernel wait,
        which is the wedge signature.  Healthy daemons sit in ``S``
        (interruptible sleep).
 
-    Both subprocess calls get short timeouts — a wedged system
-    can stall *other* commands too, and we don't want detection
-    itself to hang.
+    Both subprocess calls get short timeouts, because a wedged
+    system can stall *other* commands too, and we don't want
+    detection itself to hang.
 
     Args:
         runner: Subprocess runner (injected for tests).  Must match

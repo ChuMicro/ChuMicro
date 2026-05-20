@@ -48,8 +48,8 @@ def is_native_windows() -> bool:
     """Return ``True`` on native Windows (``win32`` / ``cygwin``).
 
     WSL2 reports ``sys.platform == "linux"`` and is treated as Linux
-    throughout the deploy code, which is correct — the POSIX paths
-    work inside WSL2.
+    throughout the deploy code, which is correct since the POSIX
+    paths work inside WSL2.
     """
     return sys.platform.startswith("win") or sys.platform == "cygwin"
 

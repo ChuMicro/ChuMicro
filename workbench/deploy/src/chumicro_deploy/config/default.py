@@ -65,7 +65,7 @@ _VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
 #: Derived from the zone-classified spec
 #: (:data:`chumicro_deploy.config.devices_yaml.ALL_TOP_LEVEL_ENTRY_FIELDS`)
 #: plus the small set of deploy-only fields the writer doesn't need
-#: to manage zone-wise (``connection_type`` is always ``"serial"``;
+#: to manage zone-wise (``connection_type`` is always ``"serial"``,
 #: carried for forward-compatibility with future transports).
 #: Anything outside this set falls into :attr:`DeviceEntry.extra`.
 _DEPLOY_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -81,7 +81,7 @@ _KNOWN_KEYS: frozenset[str] = ALL_TOP_LEVEL_ENTRY_FIELDS | _DEPLOY_ONLY_FIELDS
 # description and arbitrary extra metadata that
 # orchestration layers (IDE-test orchestrators, project-workspace
 # template loaders) carry alongside the deploy-relevant fields.
-# :class:`Device` is the transport-construction primitive;
+# :class:`Device` is the transport-construction primitive.
 # :class:`DeviceEntry` is the devices.yml record.
 # ---------------------------------------------------------------------------
 
@@ -103,7 +103,7 @@ class DeviceEntry:
     deploy_mode: str = DEFAULT_DEPLOY_MODE
     #: Board *capability*, orthogonal to the ``deploy_mode``
     #: *preference*: ``False`` only for a board that cannot run RAM
-    #: mode at all (none known — the field exists so the schema
+    #: mode at all (none known, but the field exists so the schema
     #: is stable when one appears).  RAM being merely *tight* (e.g. Pi
     #: Pico W's 256 KB) is a per-library concern, not this.  Absent in
     #: ``devices.yml`` defaults to ``True`` for back-compatibility.
@@ -218,7 +218,7 @@ def load_device_registry(
 ) -> tuple[list[DeviceEntry], DeviceDefaults]:
     """Load and validate ``devices.yml`` into ``(entries, defaults)``.
 
-    The full validated registry — useful for orchestration layers
+    The full validated registry.  Useful for orchestration layers
     that need the rich :class:`DeviceEntry` shape with descriptions
     and extra metadata, not just one :class:`Device` for a single
     transport.
@@ -384,12 +384,12 @@ def _normalize_device_entry(
 
     Schema vs. :class:`Device` differences:
 
-    - Schema uses ``runtime`` (``"micropython"`` / ``"circuitpython"``);
+    - Schema uses ``runtime`` (``"micropython"`` / ``"circuitpython"``).
       :class:`Device` uses ``transport``.
-    - Schema uses ``serial_baudrate``; :class:`Device` uses
+    - Schema uses ``serial_baudrate``.  :class:`Device` uses
       ``baudrate``.
     - ``deploy_mode`` falls back to ``defaults.deploy_mode`` when
-      absent from the entry; the fallback is applied here so the
+      absent from the entry.  The fallback is applied here so the
       :class:`Device` is complete.
     """
     normalized: dict[str, Any] = {
@@ -506,7 +506,7 @@ def load_devices_yml(
        two-runtime ``defaults:`` block without naming the device id.
     3. Single-default fallback — when both *device_id* and *runtime*
        are ``None``, exactly one runtime default in the file picks
-       itself; otherwise raises.
+       itself, otherwise raises.
 
     *device_id* and *runtime* are mutually exclusive: passing both
     raises so the caller cannot accidentally override a specific id

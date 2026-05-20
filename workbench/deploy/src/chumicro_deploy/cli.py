@@ -1,9 +1,9 @@
 """``chumicro-deploy`` command-line interface.
 
-Thin wrapper over the public Python API — every CLI action maps to a
+Thin wrapper over the public Python API.  Every CLI action maps to a
 single :mod:`chumicro_deploy` function, no logic beyond argument
 translation.  Third parties who prefer the programmatic API don't
-need the CLI; the CLI exists for quick one-off flashes, probes, and
+need the CLI.  The CLI exists for quick one-off flashes, probes, and
 URL lookups without writing a Python script.
 
 Invoked via ``python -m chumicro_deploy <command> ...`` or, after
@@ -32,7 +32,7 @@ from .sources import DirectorySource, FileMapSource
 
 #: Exceptions ``main()`` converts into a one-line ``error: <message>``
 #: + exit 1.  Everything else propagates and gets the default Python
-#: traceback — those are bugs, not user-facing failures.
+#: traceback, since those are bugs, not user-facing failures.
 _FRIENDLY_ERRORS: tuple[type[Exception], ...] = (
     CircuitpythonTransportError,
     DeviceConfigError,
@@ -115,7 +115,7 @@ def _device_from_args(args: argparse.Namespace) -> Device:
     """Build a :class:`Device` from a parsed subcommand namespace.
 
     Routes through :func:`chumicro_deploy.config.default.load_devices_yml`
-    when ``--devices-file`` is supplied; otherwise falls back to the
+    when ``--devices-file`` is supplied.  Otherwise falls back to the
     explicit ``--transport`` + ``--address`` path.
     """
     if args.devices_file is not None:
@@ -244,9 +244,9 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        # FileMapSource is bytes-already-chosen by the caller — no
-        # filesystem walk to filter.  --target-runtime is silently
-        # ignored for this source.
+        # FileMapSource is bytes-already-chosen by the caller, so
+        # there is no filesystem walk to filter.  --target-runtime is
+        # silently ignored for this source.
         source = FileMapSource(file_map_data, entrypoint=args.entrypoint)
     else:
         print(
@@ -487,11 +487,11 @@ def build_parser() -> argparse.ArgumentParser:
 class CliEnv:
     """Test-injectable seams for :func:`main`.
 
-    Production callers don't need to construct this — :func:`main`
+    Production callers don't need to construct this.  :func:`main`
     defaults to a no-override :class:`CliEnv` that uses production
     behavior everywhere.  Tests pass a custom env to swap one seam
     for the duration of the call without monkeypatching module
-    internals; production code reads the values off ``args._env``
+    internals.  Production code reads the values off ``args._env``
     inside CLI sub-commands.
 
     Attributes:
@@ -522,8 +522,8 @@ def main(
     see a one-line ``error: <message>`` for the documented exception
     types instead of a Python traceback.  Recovery output (e.g. the
     coaching block from :class:`RecoveringDeployer`) still prints
-    before the catch fires.  Unrecognized exceptions propagate — a
-    traceback there is a bug, not a UX defect.
+    before the catch fires.  Unrecognized exceptions propagate, since
+    a traceback there is a bug, not a UX defect.
 
     Args:
         argv: Command-line arguments (``None`` reads from ``sys.argv``).
