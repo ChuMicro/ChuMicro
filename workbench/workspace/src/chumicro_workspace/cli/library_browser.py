@@ -290,16 +290,25 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
             return list_window
         return content
 
-    # Push the model's detail_text into the scrollable buffer.  Called
-    # whenever a key handler changes view (list → detail, detail →
-    # example, example → detail → list).  Cursor reset to 0 so the
-    # new content shows from the top, not wherever the previous view's
-    # cursor happened to land.
-    def refresh_text_area() -> None:
+    # Push the model's detail_text into the scrollable buffer and
+    # claim focus for the TextArea so its built-in PgUp / PgDn / Home
+    # / End / arrow scroll bindings start firing.  Called whenever a
+    # key handler changes the view into detail or example.  Cursor
+    # reset to 0 so the new content shows from the top, not wherever
+    # the previous view's cursor happened to land.  Focus is best-
+    # effort because the TextArea sits inside a ``DynamicContainer``
+    # and isn't in the static layout tree at Layout-init time — the
+    # first transition after init may race the placement; the next
+    # transition catches up.
+    def refresh_text_area(event) -> None:
         if model.view == "list":
             return
         content.text = model.detail_text
         content.buffer.cursor_position = 0
+        try:
+            event.app.layout.focus(content)
+        except ValueError:  # pragma: no cover — TextArea not yet placed
+            pass
 
     root = HSplit([
         status_window,
@@ -345,7 +354,7 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
                 event.app.exit(result=target)
         elif model.view == "detail":
             model.enter()
-            refresh_text_area()
+            refresh_text_area(event)
 
     @bindings.add("i")
     def _(event) -> None:
@@ -354,14 +363,14 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
         # list once Enter took over as the commit key.
         if model.view == "list":
             model.enter()
-            refresh_text_area()
+            refresh_text_area(event)
 
     @bindings.add("b")
     @bindings.add("escape")
     @bindings.add("backspace")
     def _(event) -> None:
         if model.back():
-            refresh_text_area()
+            refresh_text_area(event)
 
     @bindings.add("a")
     def _(event) -> None:
@@ -376,7 +385,7 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
         event.app.exit(result=None)
 
     application: Application = Application(
-        layout=Layout(root, focused_element=content),
+        layout=Layout(root),
         key_bindings=bindings,
         full_screen=True,
     )
