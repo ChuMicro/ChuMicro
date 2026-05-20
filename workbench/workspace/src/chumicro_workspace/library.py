@@ -1,13 +1,10 @@
 """Snapshot-channel fetch backend for curated workspace libraries.
 
-Pull a chumicro library — and the chumicro libraries it declares —
-out of a published snapshot channel into the user's workspace
+Pull a chumicro library — and its transitive chumicro deps — out of
+a published snapshot channel into the user's workspace
 ``libraries/<name>/`` so the deploy walker treats it like any local
-library.  A channel snapshot is an internally-consistent set every
-library was built together in (library ``pyproject.toml``s carry no
-version constraints, so the correct dependency set is definitionally
-the one in the same snapshot); a closure is therefore resolved from a
-single snapshot, fetched as one tarball.
+library.  See :mod:`chumicro_workspace.library_channel` for the
+snapshot model and why a closure resolves to one tarball fetch.
 
 The acquired tree is the user's source to read, run, and edit.  A
 re-fetch never silently clobbers it: the current tree is moved aside
@@ -249,20 +246,17 @@ def fetch_closure(
     workspace_root: Path,
     http_get: Callable[[str], bytes] = _real_http_get,
 ) -> list[str]:
-    """Fetch *root* and every chumicro library it transitively needs.
+    """Fetch *root* and every chumicro library reachable from it.
 
-    The whole closure comes from one snapshot — one ``index.json``
-    GET, one tarball GET — because a snapshot is the
-    internally-consistent set every library was built together in
-    (library pyprojects carry no version constraints, so the right
-    dependency set is whatever shipped in the same snapshot).
-    Breadth-first from *root* over each placed library's ``chumicro-``
-    deps,
-    via the shared :func:`~chumicro_workspace.dep_resolver.
-    transitive_closure`.  Returns the closure as import names in BFS
-    order (root first); cycle-safe.  Raises :class:`LibraryFetchError`
-    from the first member that fails to extract (already-placed
-    members stay on disk; the caller decides whether to roll back).
+    One ``index.json`` GET + one tarball GET cover the whole closure;
+    see :mod:`chumicro_workspace.library_channel` for why.
+    Breadth-first from *root* over each placed library's
+    ``chumicro-`` deps, via the shared
+    :func:`~chumicro_workspace.dep_resolver.transitive_closure`.
+    Returns the closure as import names in BFS order (root first);
+    cycle-safe.  Raises :class:`LibraryFetchError` from the first
+    member that fails to extract (already-placed members stay on
+    disk; the caller decides whether to roll back).
     """
     snapshot, tarball = _snapshot_and_tarball(channel, version, http_get)
     from chumicro_workspace.library_channel import extract_library
