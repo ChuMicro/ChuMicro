@@ -1,4 +1,4 @@
-"""Interactive demo for :class:`InteractiveDeployer` hand-holding on real boards.
+"""Interactive demo for :class:`RecoveringDeployer` hand-holding on real boards.
 
 Run this against plugged-in hardware to see the coached failure
 output you get from ``chumicro-deploy`` when things go wrong.
@@ -38,8 +38,8 @@ from chumicro_deploy import (
     DeviceConfigError,
     DeviceEntry,
     FileMapSource,
-    InteractiveDeployer,
     MicropythonTransportError,
+    RecoveringDeployer,
     classify_deploy_failure,
     load_device_registry,
 )
@@ -251,16 +251,13 @@ def scenario_happy_path_ram(context: BoardContext) -> bool:
             "Deployer.deploy_diff.  Mount the board's USB drive and retry."
         )
         return False
-    interactive = InteractiveDeployer(
-        Deployer(device),
-        max_attempts=1,  # no retry loop on the baseline run
-    )
+    runner = RecoveringDeployer(Deployer(device))  # non-interactive: one attempt
     entrypoint = _entrypoint_for(context.runtime)
     source = FileMapSource(
         {entrypoint: "print('chu-demo-ok')\n"}, entrypoint=entrypoint,
     )
     try:
-        result = interactive.deploy_diff(source)
+        result = runner.deploy_diff(source)
     except (CircuitpythonTransportError, MicropythonTransportError) as error:
         _print_warn(f"Baseline deploy failed: {error}")
         return False
@@ -276,7 +273,7 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
     _print_step("Scenario: entrypoint raises (TRACEBACK_RETURNED)")
     _print_note(
         "Deploys an entrypoint that raises a ZeroDivisionError.  The "
-        "InteractiveDeployer should NOT retry — source-level bugs "
+        "RecoveringDeployer should NOT retry — source-level bugs "
         "aren't fixable by replugging.  Instead you should see a "
         "'--- traceback ---' block followed by the recovery plan "
         "(fix source, open REPL, etc.)."
@@ -288,10 +285,7 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
             "the baseline scenario's message above."
         )
         return False
-    interactive = InteractiveDeployer(
-        Deployer(device),
-        max_attempts=1,
-    )
+    runner = RecoveringDeployer(Deployer(device))  # non-interactive: source bug, no retry
     entrypoint = _entrypoint_for(context.runtime)
     source = FileMapSource(
         {
@@ -308,19 +302,19 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
     # - MP (both modes) and CP flash mode: the board prints the
     #   traceback to stdout after the soft-reboot / exec returns.
     #   Deployer extracts it and returns a DeployResult(success=False,
-    #   traceback=...).  InteractiveDeployer prints the
+    #   traceback=...).  RecoveringDeployer prints the
     #   TRACEBACK_RETURNED plan once and returns the result — the
     #   normal "source bug, not a transport failure" path.
     # - CP RAM mode: the raw REPL separates stdout / stderr with \x04
     #   markers, and a stderr-on-chunk gets raised as
     #   CircuitpythonTransportError containing the traceback inline.
-    #   InteractiveDeployer classifies that as TRACEBACK_RETURNED
+    #   RecoveringDeployer classifies that as TRACEBACK_RETURNED
     #   (non-retryable) via the "Traceback (most recent call last)"
     #   substring rule in classify_deploy_failure, prints the same
     #   coaching block, and re-raises.  Either outcome is "correct"
     #   hand-holding for the user.
     try:
-        result = interactive.deploy_diff(source)
+        result = runner.deploy_diff(source)
     except (CircuitpythonTransportError, MicropythonTransportError) as error:
         kind = classify_deploy_failure(error)
         if kind is not DeployFailureKind.TRACEBACK_RETURNED:
@@ -388,8 +382,9 @@ def scenario_port_unavailable(context: BoardContext) -> bool:
             "No usable deploy device — skipping the unplug scenario.",
         )
         return False
-    interactive = InteractiveDeployer(
+    runner = RecoveringDeployer(
         Deployer(device),
+        prompt=input,
         max_attempts=3,
     )
     entrypoint = _entrypoint_for(context.runtime)
@@ -398,11 +393,11 @@ def scenario_port_unavailable(context: BoardContext) -> bool:
         entrypoint=entrypoint,
     )
     try:
-        result = interactive.deploy_diff(source)
+        result = runner.deploy_diff(source)
     except (CircuitpythonTransportError, MicropythonTransportError) as error:
         kind = classify_deploy_failure(error)
         _print_warn(
-            f"Could not recover after {interactive._max_attempts} "  # noqa: SLF001 — demo introspection
+            f"Could not recover after {runner._max_attempts} "  # noqa: SLF001 — demo introspection
             f"attempts.  Final kind: {kind.value}.  Underlying: {error}"
         )
         return False
@@ -466,8 +461,9 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
         f"Enter to start the deploy.",
     )
     _pause()
-    interactive = InteractiveDeployer(
+    runner = RecoveringDeployer(
         Deployer(device_flash),
+        prompt=input,
         max_attempts=3,
     )
     source = FileMapSource(
@@ -475,7 +471,7 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
         entrypoint="/code.py",
     )
     try:
-        result = interactive.deploy_diff(source)
+        result = runner.deploy_diff(source)
     except CircuitpythonTransportError as error:
         _print_warn(
             f"Could not recover after retries.  Underlying: {error}"
@@ -567,7 +563,7 @@ def scenario_flash_copy_failed(context: BoardContext) -> bool:
         "drive's capacity (~2 MiB of junk on a 512 KiB–1 MiB FAT12 "
         "volume).  The rsync inside flash mode should fail with "
         "'No space left on device', the error should classify as "
-        "FLASH_COPY_FAILED, and the InteractiveDeployer should print "
+        "FLASH_COPY_FAILED, and the RecoveringDeployer should print "
         "the free-space / read-only / unplug-replug coaching.  We "
         "deliberately do NOT retry — the fix (free up space) is a "
         "user action outside the scope of this demo."
@@ -587,15 +583,12 @@ def scenario_flash_copy_failed(context: BoardContext) -> bool:
         },
         entrypoint="/code.py",
     )
-    # max_attempts=1 — retrying the same oversized payload would hit
+    # Non-interactive: retrying the same oversized payload would hit
     # the same error.  Real recovery is "free space + smaller
     # payload", which isn't a physical retry action.
-    interactive = InteractiveDeployer(
-        Deployer(device_flash),
-        max_attempts=1,
-    )
+    runner = RecoveringDeployer(Deployer(device_flash))
     try:
-        result = interactive.deploy_diff(source)
+        result = runner.deploy_diff(source)
     except CircuitpythonTransportError as error:
         kind = classify_deploy_failure(error)
         if kind is not DeployFailureKind.FLASH_COPY_FAILED:
