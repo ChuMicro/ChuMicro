@@ -53,11 +53,11 @@ def resolve_firmware_url(
 ) -> str:
     """Format the firmware download URL for a known board + version.
 
-    Pure URL formatter.  No network access.  When you have an
-    explicit version (e.g. from CI, a release script, or
-    user-supplied), this is the right primitive.  For "give me the
-    latest version available" use :func:`firmware_url.derive_firmware_url`
-    or :func:`firmware_url.latest_circuitpython_url` instead.
+    Pure URL formatter.  No network access.  Use this when you have
+    an explicit version (e.g. from CI, a release script, or
+    user-supplied).  For "give me the latest version available" use
+    :func:`firmware_url.derive_firmware_url` or
+    :func:`firmware_url.latest_circuitpython_url` instead.
 
     Args:
         board_id: Board identifier.  CircuitPython boards use the
@@ -615,11 +615,11 @@ def _enter_esp32_rom_bootloader(
        the poll window", not declared per-board.
     3. If no new port appears, and *interactive* is ``True``,
        prompt the user to hold BOOT + press RESET, then poll
-       again.  This is the fallback for any board whose firmware
-       can't reach the ROM bootloader programmatically (a missing
-       ``machine.bootloader()`` implementation, a board without
-       bootstrap-wired RTS/DTR, etc.), so try-and-fall-back rather
-       than maintain a per-board table.
+       again.  Falls back to a human prompt for any board whose
+       firmware can't reach the ROM bootloader programmatically (a
+       missing ``machine.bootloader()`` implementation, a board
+       without bootstrap-wired RTS/DTR, etc.), so try-and-fall-back
+       rather than maintain a per-board table.
 
     Args:
         device: Target device.
@@ -831,11 +831,11 @@ def flash_firmware(
       Programmatic bootloader entry works on CircuitPython and on
       MicroPython ports that implement ``machine.bootloader()``.
     - **``"esptool"``** for ESP32 family boards (ESP32, S2, S3, C3,
-      C6) regardless of runtime.  This is the right path whenever
-      the CP ``microcontroller.on_next_reset`` drops into the ROM
-      bootloader (typical on S2 Mini without TinyUF2) or when
-      installing MicroPython on ESP32 hardware.  Requires a
-      ``.bin`` URL, not ``.uf2``.  The caller is responsible for
+      C6) regardless of runtime.  Use this whenever the CP
+      ``microcontroller.on_next_reset`` drops into the ROM bootloader
+      (typical on S2 Mini without TinyUF2) or when installing
+      MicroPython on ESP32 hardware.  Requires a ``.bin`` URL, not
+      ``.uf2``.  The caller is responsible for
       putting the board in the ROM bootloader (hold GPIO0 / BOOT
       while plugging in).  esptool handles the rest via USB-CDC
       DTR/RTS on boards wired for it, and on bare ESP32 DevKits the

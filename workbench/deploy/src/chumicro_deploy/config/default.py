@@ -1,10 +1,9 @@
 """Default YAML config loader that ships with ``chumicro-deploy``.
 
-This is the built-in loader for the ``devices.yml`` schema that
-``chumicro-deploy`` defines and owns.  Any project — its own
-workspace, a project-workspace template, or a third-party consumer —
-can write this shape to configure its deploy targets without
-depending on any upstream tooling.
+Loads the ``devices.yml`` schema that ``chumicro-deploy`` defines and
+owns.  Any project — its own workspace, a project-workspace template,
+or a third-party consumer — can write this shape to configure its
+deploy targets without depending on any upstream tooling.
 
 The schema (stable subset that the loader accepts):
 

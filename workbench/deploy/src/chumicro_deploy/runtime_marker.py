@@ -35,10 +35,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-#: Canonical runtime names recognized in ``__chumicro_runtimes__``
-#: markers.  Sub-runtime names like ``micropython_esp32`` are accepted
-#: at parse time but fold into ``micropython`` for matching: both MP
-#: variants share the same ``mpy6/`` bundle and deploy-time filter.
+#: Runtime names recognized in ``__chumicro_runtimes__`` markers.
+#: Sub-runtime names like ``micropython_esp32`` are accepted at parse
+#: time but fold into ``micropython`` for matching: both MP variants
+#: share the same ``mpy6/`` bundle and deploy-time filter.
 KNOWN_RUNTIMES: frozenset[str] = frozenset({
     "circuitpython", "micropython",
     "micropython_esp32", "micropython_rp2",

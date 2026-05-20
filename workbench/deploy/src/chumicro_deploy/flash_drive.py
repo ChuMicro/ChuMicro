@@ -24,7 +24,8 @@ Contents:
 - :func:`cleanup_macos_noise_dirs_post_rsync` — macOS-only:
   best-effort ``rmtree`` of legacy noise dirs (``.Spotlight-V100``,
   ``.TemporaryItems``, ``.DocumentRevisions-V100``) on already-
-  contaminated drives.  Runs *after* rsync, and is idempotent.
+  contaminated drives.  Runs *after* rsync.  Safe to re-run: once
+  the sentinels are planted, the dirs do not come back.
 - :func:`flush_volume` — ``sync`` + settle-delay so FAT32 media is
   consistent before the device reads new content.
 """
@@ -407,7 +408,7 @@ def verify_rsync(
     returns the list of paths rsync reports as needing update.  When
     the previous real :func:`rsync` call committed every byte, the
     list is empty.  Non-empty means content on the volume diverged
-    from the staging tree — the canonical signal for FAT corruption,
+    from the staging tree, which is the signal for FAT corruption,
     USB-MSC partial-write, or a drive that quietly went read-only
     after the writes started.
 
