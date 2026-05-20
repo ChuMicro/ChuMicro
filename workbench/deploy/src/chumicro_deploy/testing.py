@@ -287,19 +287,38 @@ class FakeTransport:
     """
 
     execute_output: str = ""
+    #: Per-call output queue.  ``execute()`` and ``execute_scripts()``
+    #: pop the head and return it; an empty list falls back to
+    #: :attr:`execute_output`.  Lets a test script "first invocation
+    #: returns X, second returns Y" without subclassing the fake.
+    outputs: list[str] = field(default_factory=list)
     mode: str = "ram"
     #: Default ~64 KB matches the real CP transport's lower bound.
     free_memory_bytes: int = 64 * 1024
     #: Canned return value for ``probe_implementation``.  ``None``
     #: simulates a probe that couldn't complete.
     probe_result: DeviceImplementation | None = None
-    #: Module sources to return from ``staged_sources``; matches the
+    #: Module sources returned by ``staged_sources``; matches the
     #: ``ExtendedTransportProtocol`` shape used by the RAM-mode path.
-    staged_sources: list[tuple[str, str]] | None = None
+    #: Defaults to an empty list — non-``None`` so the CP RAM
+    #: bootstrap path's "stage() must be called first" assertion
+    #: passes for fake-backed plugin / bootstrap tests that don't
+    #: bother to inject sources.
+    staged_sources: list[tuple[str, str]] = field(default_factory=list)
     #: Canned return value for :meth:`reset_into_bootloader`.  ``True``
     #: simulates a successful dispatch; ``False`` exercises the
     #: flasher's interactive-manual-entry fallback path.
     bootloader_reset_result: bool = True
+    #: When set, ``connect()`` records the call then raises this
+    #: exception.  Failure-injection hook for the connect path.
+    connect_raises: BaseException | None = None
+    #: When set, ``execute()`` and ``execute_scripts()`` record the
+    #: call then raise this exception.
+    execute_raises: BaseException | None = None
+    #: When set, ``recover()`` records the call then raises this
+    #: exception — exercises the cache's "recovery failed → evict
+    #: transport" path.
+    recover_raises: BaseException | None = None
     #: Simulated on-device file state for the diff-deploy primitives
     #: (`list_files_in_scope` / `delete_files`).  Tests pre-populate this
     #: to assert what the deploy routine considers "stale" + verify
@@ -318,8 +337,10 @@ class FakeTransport:
     connected: bool = False
 
     def connect(self) -> None:
-        """Record a connect call."""
+        """Record a connect call; raise :attr:`connect_raises` if set."""
         self.calls.append(("connect", ()))
+        if self.connect_raises is not None:
+            raise self.connect_raises
         self.connected = True
 
     def stage(
@@ -330,6 +351,7 @@ class FakeTransport:
         *,
         extra_modules: list[Path] | None = None,
         extra_files: dict[str, bytes] | None = None,
+        include_test_support: bool = False,
     ) -> None:
         """Record a stage call.
 
@@ -358,7 +380,10 @@ class FakeTransport:
         self.calls.append(
             (
                 "stage",
-                (source_dirs, test_files, harness_source, extra_modules, extra_files),
+                (
+                    source_dirs, test_files, harness_source,
+                    extra_modules, extra_files, include_test_support,
+                ),
             ),
         )
         if extra_files:
@@ -374,13 +399,15 @@ class FakeTransport:
     def execute(self, bootstrap_script: str) -> str:
         """Record an execute call and return canned output.
 
-        Args:
-            bootstrap_script: The bootstrap code string.
-
-        Returns:
-            The configured ``execute_output``.
+        Returns the head of :attr:`outputs` when non-empty (popped),
+        otherwise :attr:`execute_output`.  Raises :attr:`execute_raises`
+        after recording when set.
         """
         self.calls.append(("execute", (bootstrap_script,)))
+        if self.execute_raises is not None:
+            raise self.execute_raises
+        if self.outputs:
+            return self.outputs.pop(0)
         return self.execute_output
 
     def run_script(self, script: str, *, timeout: float = 10.0) -> str:
@@ -404,12 +431,21 @@ class FakeTransport:
     def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
         """Record a chunked-execute call and return the configured output.
 
-        Mirrors :meth:`CircuitpythonTransport.execute_scripts`.  Records
-        the full list of scripts as one call, then synthetic per-script
-        ``execute`` entries so existing tests that count ``execute``
-        invocations still work.
+        Mirrors :meth:`CircuitpythonTransport.execute_scripts`.  Raises
+        :attr:`execute_raises` after recording when set.
+
+        When :attr:`outputs` is non-empty, pops a single head value and
+        returns it — treating the whole chunked execute as one batched
+        operation, with no synthetic per-script ``execute`` entries.
+        Otherwise (the legacy path), records synthetic per-script
+        ``execute`` entries so tests that count ``execute`` invocations
+        still see one per chunk, and returns :attr:`execute_output`.
         """
         self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
+        if self.execute_raises is not None:
+            raise self.execute_raises
+        if self.outputs:
+            return self.outputs.pop(0)
         last_output = self.execute_output
         for bootstrap_script in bootstrap_scripts:
             last_output = self.execute(bootstrap_script)
@@ -435,8 +471,10 @@ class FakeTransport:
         self.calls.append(("soft_reset", ()))
 
     def recover(self) -> None:
-        """Record a recover call (post-failure recovery hook)."""
+        """Record a recover call; raise :attr:`recover_raises` if set."""
         self.calls.append(("recover", ()))
+        if self.recover_raises is not None:
+            raise self.recover_raises
 
     def disconnect(self) -> None:
         """Record a disconnect call."""
