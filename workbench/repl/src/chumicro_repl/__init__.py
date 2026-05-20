@@ -14,9 +14,8 @@ boards over pyserial.  Three surfaces:
   :meth:`~ReplSession.read_until` for headless fixtures.
 
 The heavy third-party deps (pyserial, prompt_toolkit) are imported
-lazily inside the call sites that actually need them
-(``default_port_factory``, ``_build_prompt_session``) — so ``import
-chumicro_repl`` is cheap regardless of which surface a caller uses.
+lazily inside ``default_port_factory`` and ``_build_prompt_session``,
+so ``import chumicro_repl`` stays cheap.
 """
 
 from __future__ import annotations
