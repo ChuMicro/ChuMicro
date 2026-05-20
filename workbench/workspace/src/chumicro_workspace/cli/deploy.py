@@ -104,11 +104,9 @@ class _ResolvedLayout:
 class ExampleSpec:
     """A library example resolved as a deploy payload.
 
-    An example is a project through the one staging pipeline: this
-    is the example-specific *payload* fork (the legitimate
-    per-context variance) handed to the single source owner
-    :func:`resolve_project_deploy_source`; the stage / delete / keep
-    policy is shared, never forked per command.
+    The example-specific payload :func:`resolve_project_deploy_source`
+    branches on; the staging contract (one source owner, shared
+    delete / keep policy) is stated there.
 
     Attributes:
         library_root: ``libraries/<lib>/`` — the library that owns
@@ -614,7 +612,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     if args.tail is not None and tail_target is not None and exit_code == 0:
         # One deploy path; the watch is a flag on it — not a second
         # deploy path inside `repl`.  repl owns only the interactive /
-        # standalone-tail surface now.
+        # standalone-tail surface.
         from chumicro_repl import tail  # noqa: PLC0415
 
         return int(tail(
@@ -705,10 +703,7 @@ def _cmd_projects(args: argparse.Namespace) -> int:
     Local-only: walks ``projects/`` via
     :meth:`WorkspaceLayout.list_projects` and
     :meth:`WorkspaceLayout.iter_projects_with_classification`, both of
-    which skip ``_template`` and leading ``.`` / ``_`` names.  An
-    on-device variant that probes ``/lib/projects/`` for installed
-    payloads is a follow-on once the REPL one-shot pattern lands as
-    a public helper.
+    which skip ``_template`` and leading ``.`` / ``_`` names.
     """
     workspace = _resolve_workspace(args)
     if args.flat:

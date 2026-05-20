@@ -103,10 +103,9 @@ def _declined_transitive(
     """Per-dependency deselect prompt for the transitive set.
 
     Returns the deps the user declined.  Non-interactive (or an empty
-    set) keeps everything — the agent-runnable default (Decision
-    0066).  Interactive asks per dep so a user injecting a custom
-    transport can drop just ``chumicro_sockets`` without losing the
-    rest of the closure.
+    set) keeps everything — the agent-runnable default.  Interactive
+    asks per dep so a user injecting a custom transport can drop just
+    ``chumicro_sockets`` without losing the rest of the closure.
     """
     if not transitive or not _interactive(args):
         return set()

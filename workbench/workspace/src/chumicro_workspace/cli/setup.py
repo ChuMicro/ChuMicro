@@ -185,10 +185,10 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         return pip_exit_code
 
     _setup_materialize_templates(workspace)
-    # Gap 3(a): chumicro-dev.toml mode — sync workspace.yml's
-    # library_sources: block so deploy --import-graph resolves
-    # `import chumicro_<name>` against the sibling checkout rather
-    # than the empty packages/ dir.
+    # chumicro-dev.toml mode — sync workspace.yml's library_sources:
+    # block so deploy --import-graph resolves `import chumicro_<name>`
+    # against the sibling checkout rather than the empty packages/
+    # dir.
     _setup_sync_chumicro_dev(workspace)
     _setup_additive_reapply(workspace)
     return 0

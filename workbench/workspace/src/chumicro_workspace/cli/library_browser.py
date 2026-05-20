@@ -358,9 +358,9 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
 
     @bindings.add("i")
     def _(event) -> None:
-        # Drill from list → detail.  Mirrors the old Enter behavior so
-        # users keep a one-key path to a library's README + example
-        # list once Enter took over as the commit key.
+        # Drill from list → detail.  Keeps a one-key path from the
+        # cursor row to the README + example list; Enter is reserved
+        # as the commit key on the list view.
         if model.view == "list":
             model.enter()
             refresh_text_area(event)

@@ -50,8 +50,8 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     """Run ``ruff check`` plus ``chumicro-checks`` across the workspace.
 
     Picks up the workspace's ``[tool.ruff]`` config from
-    ``pyproject.toml`` automatically — the canonical workspace
-    template ships a ruff config that matches chumicro's own tone.
+    ``pyproject.toml`` automatically — the workspace template ships
+    a ruff config that matches chumicro's own tone.
     Extra args after ``--`` forward to ruff (e.g. ``--fix``,
     ``--select`` overrides).
 
