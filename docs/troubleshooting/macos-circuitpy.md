@@ -63,7 +63,23 @@ In the observed cases so far the command chain always worked.  If it doesn't:
 - Reboot.  That always clears the wedge (and the sidebar regression together).
 - File a report against `chumicro-deploy` with the macOS version (`sw_vers -productVersion`), the board model, and the output of `ps -o state= -p $(pgrep diskarbitrationd)`.  We'd like to know about reproductions.
 
-## Stale `/Volumes/CIRCUITPY` after Finder eject
+## CIRCUITPY drive mounts but is read-only
+
+**Symptoms**
+
+- `/Volumes/CIRCUITPY` exists and `ls` lists the device's files normally.
+- Any deploy fails with `rsync(...): error: ...: mkpathat: Read-only file system` (or similar rsync write-side errors), even before the host has done anything destructive.
+- Reading `boot_out.txt`, `lib/`, etc. works fine — only writes fail.
+
+**What's happening**
+
+This is **not** the FSKit wedge.  The FSKit wedge keeps the drive from appearing at all; here the drive is fully visible to the host and just refuses writes.  The fault is on the device side: CircuitPython has put its own user filesystem into a read-only state.  Observed triggers include recent file-manipulation paths on the device that confuse the runtime's filesystem state — the canonical recovery is to reset the device, not to escalate against the host.
+
+**Recovery**
+
+- `chumicro-workspace reset-board --yes --device <id>` — wipes the device filesystem clean-slate; CircuitPython rebuilds an empty writable FS on next boot.  This destroys user files on the board; back up first if anything on the board is the only copy.
+- Or unplug, hold the BOOT/RESET button if the board has one, replug.  The runtime re-initializes and the user FS comes back writable.
+- Do **not** reach for the FSKit recovery `killall` here — the host daemons are healthy; the problem is on the device.
 
 **Symptom**
 
