@@ -294,13 +294,11 @@ def probe_with_runtime_inference(
     probed runtime + version without having forced the user to type
     ``--runtime``.
 
-    Both runtimes speak the same probe script — it reads
-    ``sys.implementation`` — so the implementation name in the
-    probe output is the truthful answer regardless of which
-    transport delivered it.  In practice the MP raw-REPL transport
-    works on CP boards too (CP supports Ctrl-A raw mode), but
-    both candidates are tried in case timing differs on a slow
-    USB hub or port.
+    Both runtimes speak the same probe script (reads
+    ``sys.implementation``), so the returned implementation name is
+    truthful regardless of which transport delivered it.  See
+    :data:`DEFAULT_RUNTIME_INFERENCE_ORDER` for why both candidates
+    are tried.
 
     Args:
         address: Serial port path of the board.
