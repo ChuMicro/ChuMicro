@@ -40,6 +40,12 @@ Each library's own README has a one-line install command for that library.
 
 ## Dependencies
 
+The stack runs roughly bottom-up:
+
+- **Primitives:** `timing`, `runner`, `compat`, `logging`, `events`.  Depended-on by most others.
+- **Persistence and serialization:** `msgpack`, `config`, `kvstore`.
+- **Networking transport and protocols:** `wifi` (link), `sockets` (TCP / TLS / UDP), then the app protocols `ntp`, `requests`, `http_server`, `websockets`, and `mqtt`.
+
 ![ChuMicro library dependency graph](../support/docs/dependency-graph.svg)
 
 Solid arrows are strict pyproject.toml dependencies — `pip install chumicro-mqtt` brings `chumicro-sockets` and `chumicro-timing` along.  Dashed arrows are typical-wiring dependencies expressed through constructor injection — every networked service registers with `chumicro-runner` and most accept a `ticks_ms` function as a parameter, so the runtime objects don't `import` each other; apps wire them up.
