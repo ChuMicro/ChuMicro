@@ -1,21 +1,9 @@
 """Firmware URL resolution + flashing.
 
-Two surfaces:
-
-- :func:`resolve_firmware_url` — download URL from a board id +
-  runtime + version (pure, no network).
-- :func:`flash_firmware` — download and apply firmware to a
-  connected board.  Destructive: overwrites whatever's currently
-  installed.  UF2 path writes to a bootloader drive after entering
-  bootloader mode; esptool path shells out to the ``esptool`` CLI
-  over serial.
-
-The UF2 path tries programmatic bootloader entry through the
-connected transport first, then falls back to an interactive prompt
-so users on ESP32 ROM bootloaders (no Python-side bootloader entry
-available) can still drive the flow.  Both paths document their
-recovery strategies in the exception messages, and every failure mode
-leaves the board in a known state or points the user at the fix.
+Two surfaces: :func:`resolve_firmware_url` (pure URL formatter) and
+:func:`flash_firmware` (download + apply, destructive).  See
+:func:`flash_firmware`'s docstring for the UF2-vs-esptool method
+selection and per-path recovery strategies.
 """
 
 from __future__ import annotations
@@ -76,8 +64,7 @@ def resolve_firmware_url(
     Raises:
         UnresolvedFirmwareError: If *runtime* is not supported, or
             if any required field is empty.  ``cause`` carries the
-            specific failure (``"no_board_id"``, ``"no_version"``,
-            ``"micropython_needs_listing"``, ``"unsupported_runtime"``).
+            specific failure — see :class:`UnresolvedFirmwareError`.
     """
     if not board_id:
         raise UnresolvedFirmwareError(

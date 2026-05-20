@@ -32,9 +32,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 #: Entry-point group name third parties declare to register a loader.
 CONFIG_LOADERS_ENTRY_POINT_GROUP = "chumicro_deploy.config_loaders"
 
-#: Registered name of the built-in loader.  Reserved, so third-party
-#: entry points registering under this name are rejected rather than
-#: silently shadowing the built-in.
+#: Registered name of the built-in loader.
 BUILTIN_LOADER_NAME = "default"
 
 #: Type of a config-loader callable.  Loaders take a path (or any
@@ -80,9 +78,6 @@ def discover_config_loaders() -> dict[str, ConfigLoader]:
     group_entries = entry_points(group=CONFIG_LOADERS_ENTRY_POINT_GROUP)
     for entry_point in group_entries:
         if entry_point.name == BUILTIN_LOADER_NAME:
-            # Prevent third parties from shadowing the built-in.
-            # Surface loudly rather than silently swallow, so the
-            # collision is fixable upstream.
             raise ValueError(
                 f"Third-party package registered a "
                 f"{BUILTIN_LOADER_NAME!r} config_loaders entry point "

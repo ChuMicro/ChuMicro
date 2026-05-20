@@ -4,30 +4,6 @@ Every helper here operates on filesystem paths or subprocess calls
 and has no transport state to carry, so they live as module-level
 functions instead of methods on a class.  :func:`flush_volume` takes
 an injected sleep callable so tests can skip the real settle delay.
-
-Contents:
-
-- :func:`merge_packages` — copy top-level packages from a ``src/``
-  directory into a local staging tree (no device I/O).
-- :func:`rsync` — rsync a staging tree onto the CIRCUITPY USB drive,
-  excluding the closed keep set that must persist across deploys
-  (:data:`DEVICE_KEEP_SET` — ``boot.py``, ``boot_out.txt``,
-  ``_chu_kv.msgpack``.  ``settings.toml`` is *not* in it).
-- :func:`strip_extended_attributes` — macOS-only: strip xattrs before
-  rsync to prevent ``._`` resource fork files from reaching FAT32.
-- :func:`clean_dot_files` — macOS-only: ``dot_clean`` to merge or
-  remove leftover ``._`` files on the drive after rsync.
-- :func:`plant_macos_sentinels_in_staging` — macOS-only: write the
-  three skip-sentinels into the local rsync staging tree so they
-  ride along in the single rsync pass instead of being separate
-  on-drive writes (which compound the wedge risk).
-- :func:`cleanup_macos_noise_dirs_post_rsync` — macOS-only:
-  best-effort ``rmtree`` of legacy noise dirs (``.Spotlight-V100``,
-  ``.TemporaryItems``, ``.DocumentRevisions-V100``) on already-
-  contaminated drives.  Runs *after* rsync.  Safe to re-run: once
-  the sentinels are planted, the dirs do not come back.
-- :func:`flush_volume` — ``sync`` + settle-delay so FAT32 media is
-  consistent before the device reads new content.
 """
 
 from __future__ import annotations
@@ -291,9 +267,7 @@ def rsync(
 
     * **Clean push** — ``delete=True`` with
       ``additional_excludes=DEVICE_KEEP_SET``.  Clean slate, only the
-      closed keep set survives.  ``settings.toml`` is not in the keep
-      set: a board-resident one is a competing wifi authority and is
-      evicted.
+      closed keep set survives.
     * **Additive push** — ``delete=False`` with no extra excludes.
       Stale files persist.  Used when other board files are
       hand-managed.
@@ -663,7 +637,4 @@ def flush_volume(
     else:
         os.sync()  # pragma: no cover — tests run on macOS
 
-    # Allow time for the USB controller to finish writing to the FAT32
-    # media.  Without this pause, the device may read stale content
-    # even after sync returns.
     sleep(settle_delay)

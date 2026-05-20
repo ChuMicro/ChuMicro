@@ -7,23 +7,9 @@ A module-level marker declares which runtimes a file is meant for::
 Bundle filtering and per-runtime deploy filtering both consume this
 marker so wrong-runtime files never land on a board.
 
-:func:`file_targets_runtime` accepts a single runtime name (concrete
-target) or a frozenset of runtimes (set-of-acceptable-targets, e.g.
-"every device-bound runtime").
-
-A separate, runtime-independent marker — ``__chumicro_test_support__
-= True`` — flags a library's ``testing.py`` fakes as test-support
-and gates whether they reach a device deploy.
-:func:`is_test_support_module` reads it.
-
-A third marker — ``__chumicro_host_only__ = True`` — flags a
-``tests/test_*.py`` file as host-lane only: it runs on CPython and
-the MicroPython / CircuitPython unix-ports but never on real
-silicon, because it exercises a runtime-specific source module
-through host fakes and asserts off-target behaviour.  Orthogonal to
-runtime ABI: these files run on every host interpreter, so
-``__chumicro_runtimes__`` cannot express them.
-:func:`is_host_only_test` reads it.
+Three readers: :func:`file_targets_runtime`,
+:func:`is_test_support_module`, :func:`is_host_only_test`.  See each
+one's docstring for the marker shape it consumes.
 
 The readers use :func:`ast.parse` (no execution), because
 runtime-specific files commonly import device-only modules at top

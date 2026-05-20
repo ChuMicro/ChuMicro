@@ -88,18 +88,12 @@ _INTERRUPT_DELAY = 0.1
 #: Delay after entering raw REPL in seconds.
 _ENTER_DELAY = 0.1
 
-#: How many times to poll the board's view of a just-written entrypoint
-#: before giving up.  USB MSC writes can trail the host-side ``sync`` +
-#: settle delay on slower controllers, and soft-rebooting before CP
-#: sees the new blocks produces a one-cycle-
-#: delayed capture (the previous ``code.py`` runs again against the
-#: cached FAT view).  Polling ``os.stat`` via raw REPL gives us a
-#: deterministic sync point.
+#: Poll budget for :meth:`_wait_for_board_to_see_entrypoint` — see
+#: that method for the USB-MSC sync rationale.
 _BOARD_FILE_VISIBLE_POLL_ATTEMPTS = 20
 
 #: Sleep between ``os.stat`` polls when waiting for a just-written
-#: entrypoint to become visible to CP (see
-#: :data:`_BOARD_FILE_VISIBLE_POLL_ATTEMPTS`).
+#: entrypoint to become visible to CP.
 _BOARD_FILE_VISIBLE_POLL_INTERVAL = 0.25
 
 #: Belt-and-suspenders settle after ``os.stat`` first reports the
@@ -656,12 +650,9 @@ class CircuitpythonTransport:
         """Return a CIRCUITPY drive path, raising if none is usable.
 
         Scans every mounted ``CIRCUITPY*`` directory via
-        :func:`_circuitpy_volume_candidates` and returns the first.  On
-        multi-board hosts that first pick may not be the one belonging
-        to *this* transport, so callers pair this with
-        :meth:`_verify_drive_for_board`, which probes the connected
-        board and silently swaps to the UID-matching mount when the
-        first pick is for the wrong board.
+        :func:`_circuitpy_volume_candidates` and returns the first.
+        Callers pair this with :meth:`_verify_drive_for_board` for
+        the multi-board mount-order correction.
 
         *probe_writable* (default ``False``) — when ``True``, additionally
         write+unlink a ``.chu-probe`` marker to confirm the mount is
@@ -884,12 +875,10 @@ class CircuitpythonTransport:
         # after this returns diverges, and only into these two values.
         self._post_stage_step = post_stage
 
-        # Order is load-bearing.  Enter raw REPL FIRST + disable
-        # autoreload BEFORE any host-side drive write, because
-        # otherwise rsync to CIRCUITPY can hang in uninterruptible
-        # kernel I/O.  ``_enter_raw_repl`` resends Ctrl-C / Ctrl-A on
-        # every call, so repeated calls after ``connect()`` or after
-        # an intervening soft-reboot are safe.
+        # ``_enter_raw_repl`` resends Ctrl-C / Ctrl-A on every call,
+        # so repeated calls after ``connect()`` or an intervening
+        # soft-reboot are safe.  Order across the two calls is
+        # load-bearing — see :meth:`_disable_autoreload_before_drive_writes`.
         self._enter_raw_repl()
         self._disable_autoreload_before_drive_writes()
         drive_path = self._resolve_circuitpy_drive()
@@ -1054,11 +1043,7 @@ class CircuitpythonTransport:
         self._port.write(bootstrap_script.encode("utf-8"))
         self._port.write(_CTRL_D)
 
-        # Read the response.  Raw REPL format:
-        # OK<stdout>\x04<stderr>\x04>
-        # Use a longer idle timeout: test-bootstrap scripts can include
-        # silent CPU-bound work that exceeds DEFAULT_TIMEOUT.  See
-        # _EXECUTE_IDLE_TIMEOUT.
+        # Raw REPL response format: OK<stdout>\x04<stderr>\x04>
         raw_response = self._read_until(
             b"\x04>", idle_timeout=_EXECUTE_IDLE_TIMEOUT,
         )
@@ -1350,12 +1335,6 @@ class CircuitpythonTransport:
                 circuitpy_drive._format_probe_error("", error),
             ) from error
 
-        # Wait for the board to see the new entrypoint before soft-
-        # rebooting.  Without this check, a slower USB-MSC controller
-        # (Pi Pico W) can report "write complete" on the host side
-        # while CP's FatFs view is still the previous run's, so the
-        # soft-reboot re-executes the stale file and the captured
-        # output is one cycle behind the deploy.
         self._wait_for_board_to_see_entrypoint(entrypoint, len(files[entrypoint]))
 
         # CP caches the FAT32 filesystem view in-memory; with autoreload
@@ -1377,24 +1356,16 @@ class CircuitpythonTransport:
         return output
 
     def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
-        """List on-device files within the deploy's managed scope.
-
-        ``clean_slate=True`` widens the scope to the whole drive minus
-        :data:`flash_drive.DEVICE_KEEP_SET` + macOS noise.  ``False``
-        is the additive scope.
+        """Implements the contract on :meth:`TransportProtocol.list_files_in_scope`.
 
         Flash mode walks the CIRCUITPY USB drive directly via stdlib
         ``pathlib``, which is faster and simpler than a raw-REPL
         round-trip, and the drive's contents *are* the device's
-        filesystem.
-
-        Pairs ``_resolve_circuitpy_drive`` with ``_verify_drive_for_board``
-        so the macOS multi-board mount-order swap is silently corrected
-        to the connected board's actual mount before the walk.
-
-        RAM mode returns an empty list, because RAM-mode deploys never
-        touch flash, so there's nothing persistent to diff between
-        deploys.
+        filesystem.  Pairs :meth:`_resolve_circuitpy_drive` with
+        :meth:`_verify_drive_for_board` so the macOS multi-board
+        mount-order swap is silently corrected to the connected
+        board's actual mount before the walk.  RAM mode returns an
+        empty list.
         """
         if self.mode != "flash":
             return []
@@ -1527,14 +1498,13 @@ class CircuitpythonTransport:
             )
 
     def wipe_filesystem(self) -> None:
-        """Reformat the CIRCUITPY drive via ``storage.erase_filesystem()``.
+        """Implements the contract on :meth:`TransportProtocol.wipe_filesystem`.
 
-        Flash mode only.  RAM mode is a no-op (nothing in flash to
-        wipe).  Drives the on-board nuclear option through raw REPL:
-        the call reformats the FAT volume and reboots the board.
-        The host-side serial session goes away mid-call as USB-CDC
-        drops, and the failure that surfaces is expected and swallowed.
-        After waiting for the reformat + reboot to settle the port is
+        Drives the on-board nuclear option through raw REPL: the call
+        reformats the FAT volume and reboots the board.  The host-side
+        serial session goes away mid-call as USB-CDC drops, and the
+        failure that surfaces is expected and swallowed.  After
+        waiting for the reformat + reboot to settle the port is
         re-opened and raw REPL re-entered, leaving the transport in
         the same state :meth:`connect` does so a follow-up
         :meth:`deploy_files` works without further setup.

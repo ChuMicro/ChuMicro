@@ -249,18 +249,11 @@ class ImportGraphSource:
             fail loudly on misclassification.  The entrypoint itself
             is never filtered.
 
-    If *entrypoint* declares a module-level
-    ``__chumicro_skip_factories__`` constant, named chumicro factory
-    submodules are filtered out of the deploy graph before resolution.
-    Family-form entries (``"sockets_factory"``) match every
-    ``chumicro_*.sockets_factory`` discovered under *search_paths*;
-    exact-form entries (``"chumicro_mqtt.sockets_factory"``) match one
-    module.  Unmatched entries fail the walk (typo guard).  Skip
-    targets the user references directly elsewhere in the entrypoint
-    survive with a warning surfaced through
-    :attr:`skip_factories_warnings`; skip targets whose parent library
-    is never imported at all emit a dead-skip notice through the same
-    property.
+    Honors a module-level ``__chumicro_skip_factories__`` opt-out on
+    *entrypoint* — see :mod:`chumicro_deploy.skip_factories` for the
+    marker shape and matching rules.  Diagnostics (direct-import
+    overrides, dead-skip notices) surface through
+    :attr:`skip_factories_warnings`.
 
     Raises:
         FileNotFoundError: If *entrypoint* does not exist.

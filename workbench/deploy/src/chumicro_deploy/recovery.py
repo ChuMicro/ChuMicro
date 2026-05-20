@@ -6,17 +6,12 @@ balked mid-copy.  All but a few are recoverable by the user taking
 a concrete physical action (close a program holding the port, tap
 RESET, replug USB) and retrying.
 
-This module provides:
-
-- :class:`DeployFailureKind` — categorical enum of deploy failures.
-- :func:`classify_deploy_failure` — string-match classifier that
-  maps a transport exception onto one of the kinds.
-- :class:`RecoveryPlan` + :func:`recovery_plan_for` — canned
-  headline + ordered fix-steps per kind.
-- :class:`RecoveringDeployer` — sibling of :class:`Deployer` that
-  catches transport failures, surfaces the plan, and either reports
-  + re-raises (when ``prompt=None``) or prompts the user to retry
-  after fixing the condition and loops up to *max_attempts*.
+:func:`classify_deploy_failure` maps a transport exception onto a
+:class:`DeployFailureKind` (defined in :mod:`recovery_kind`).
+:func:`recovery_plan_for` looks up the canned :class:`RecoveryPlan`
+for that kind from :data:`recovery_plans.PLANS`.
+:class:`RecoveringDeployer` wraps a :class:`Deployer` with a coaching
+loop that classifies, surfaces the plan, and retries when retryable.
 """
 
 from __future__ import annotations
