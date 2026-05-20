@@ -340,9 +340,9 @@ class CircuitpythonTransport:
         #: Callable returning candidate CIRCUITPY mount paths.  Defaults
         #: to :func:`circuitpy_drive._circuitpy_volume_candidates`.
         #: Tests inject a fake scanner to avoid touching real OS mount
-        #: tables; the chumicro_deploy.testing.isolate_from_host_filesystem
-        #: helper continues to work as a module-level fallback for tests
-        #: that don't construct their own transport.
+        #: tables.  Tests that don't construct their own transport fall
+        #: back to the module-level patch installed by
+        #: :func:`chumicro_deploy.testing.isolate_from_host_filesystem`.
         self._drive_scanner: Callable[[], list[Path]] = (
             drive_scanner
             if drive_scanner is not None
@@ -601,12 +601,11 @@ class CircuitpythonTransport:
     def _identify_drive_via_probe(self, drive_path: Path) -> Path:
         """Find the right drive when *drive_path* has no boot_out.txt.
 
-        Sister of :meth:`_resolve_identity_match` for the no-identity-
-        on-drive case.  Probes the connected board for its UID +
-        machine string, then scans every mounted ``CIRCUITPY*``
-        volume's ``boot_out.txt`` for a match.  Raises when the probe
-        is unavailable or no candidate matches — silently returning
-        *drive_path* would risk landing on the wrong board's mount.
+        Probes the connected board for its UID + machine string, then
+        scans every mounted ``CIRCUITPY*`` volume's ``boot_out.txt``
+        for a match.  Raises when the probe is unavailable or no
+        candidate matches — silently returning *drive_path* would risk
+        landing on the wrong board's mount on multi-CP-board hosts.
 
         Reads each ``boot_out.txt`` exactly once into a
         ``(path, uid, machine)`` list and matches both fields
@@ -655,12 +654,11 @@ class CircuitpythonTransport:
     ) -> Path:
         """Compare drive ↔ board identity; auto-correct or raise.
 
-        Extracted helper so the UID and machine-string branches of
-        :meth:`_verify_drive_for_board` share their compare-and-fix
-        logic.  ``identity_label`` is only used for the user-facing
-        error message when no sibling mount matches.  Auto-correction
-        on success is silent — the corrected path is returned and the
-        caller proceeds without host-side noise.
+        Used by both the UID and machine-string branches of drive
+        verification.  ``identity_label`` is only used for the
+        user-facing error message when no sibling mount matches.
+        Auto-correction on success is silent — the corrected path is
+        returned and the caller proceeds without host-side noise.
         """
         if drive_identity == probe_identity:
             return drive_path
@@ -913,7 +911,7 @@ class CircuitpythonTransport:
                 Clean callers — production deploy *and* functional-test
                 stage — both pass :data:`flash_drive.DEVICE_KEEP_SET`,
                 the identical invocation with no per-context exclude.
-                Legacy additive deploys leave empty.
+                Additive deploys leave empty.
             strip_xattrs: When ``True``, strip macOS extended
                 attributes from the staging tree before rsync.
                 Production deploys want this so AppleDouble ``._foo``
@@ -1124,8 +1122,7 @@ class CircuitpythonTransport:
         # Read the response.  Raw REPL format:
         # OK<stdout>\x04<stderr>\x04>
         # Use a longer idle timeout: test-bootstrap scripts can include
-        # silent CPU-bound work (e.g. fragmentation-test histogram
-        # bisection on Lolin S2) that exceeds DEFAULT_TIMEOUT — see
+        # silent CPU-bound work that exceeds DEFAULT_TIMEOUT — see
         # _EXECUTE_IDLE_TIMEOUT.
         raw_response = self._read_until(
             b"\x04>", idle_timeout=_EXECUTE_IDLE_TIMEOUT,
@@ -1538,10 +1535,9 @@ class CircuitpythonTransport:
         # package* (dir present, __init__ gone) instead of cleanly;
         # (b) an empty `/<pkg>/` at the drive root resolves
         # `import <pkg>` to a PEP 420 namespace package and shadows
-        # the populated `/lib/<pkg>/` deeper in `sys.path` — the same
-        # shape that bit Lolin S2 MP.  rsync --delete prunes empty
-        # dirs; the diff
-        # path matches that by sweeping the whole scope (not just
+        # the populated `/lib/<pkg>/` deeper in `sys.path`.  rsync
+        # --delete prunes empty dirs; the diff path matches that by
+        # sweeping the whole scope (not just
         # this run's deletions) so pre-existing husks clear too.
         # Bottom-up so nested husks collapse; rmdir only removes an
         # *empty* dir, so a live package is never touched.
@@ -1824,11 +1820,10 @@ class CircuitpythonTransport:
 
         Deterministic sync point that covers the gap between host-side
         ``sync`` + settle delay and CP actually seeing the USB-MSC
-        write in its FatFs view.  Slower USB-CDC controllers (Pi Pico W
-        is the observed case) finish the host-visible write before CP
-        has processed all block-write callbacks, so the next
-        soft-reboot can re-execute the previous file — the capture is
-        one cycle behind.
+        write in its FatFs view.  Slower USB-CDC controllers finish
+        the host-visible write before CP has processed all block-write
+        callbacks, so the next soft-reboot can re-execute the previous
+        file — the capture is one cycle behind.
 
         Polls up to :data:`_BOARD_FILE_VISIBLE_POLL_ATTEMPTS` times with
         :data:`_BOARD_FILE_VISIBLE_POLL_INTERVAL` seconds between

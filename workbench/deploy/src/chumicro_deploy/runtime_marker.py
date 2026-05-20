@@ -62,9 +62,7 @@ def _top_level_assignment_value(
     """Return the AST value node of a top-level ``<marker_name> = ...``.
 
     Returns ``None`` when the file is unreadable, unparseable, or the
-    marker is not present at module scope.  Centralizes the file-read
-    + AST scan so each marker reader stays a few lines of typed value
-    extraction.
+    marker is not present at module scope.
     """
     try:
         tree = ast.parse(python_file.read_text(), filename=str(python_file))
@@ -88,10 +86,6 @@ def read_runtime_marker(python_file: Path) -> frozenset[str] | None:
     strings.  Returns ``None`` when no marker is declared (file is
     universal — ships everywhere).  Returns an empty frozenset only if
     the marker is explicitly empty (unusual but legal).
-
-    Read via :func:`ast.parse` — never executes the file, so adapter
-    files that import device-only modules at top level remain readable
-    on the host.
     """
     value = _top_level_assignment_value(python_file, "__chumicro_runtimes__")
     if not isinstance(value, (ast.Tuple, ast.List)):
@@ -117,8 +111,7 @@ def is_test_support_module(python_file: Path) -> bool:
     fakes.
 
     The marker is a top-level ``__chumicro_test_support__ = True``
-    assignment.  Read via :func:`ast.parse` (no execution), matching
-    :func:`read_runtime_marker`.
+    assignment.
     """
     value = _top_level_assignment_value(python_file, "__chumicro_test_support__")
     return isinstance(value, ast.Constant) and value.value is True
@@ -144,8 +137,7 @@ def is_host_only_test(python_file: Path) -> bool:
     unix-port lane and plain CPython keep them.
 
     The marker is a top-level ``__chumicro_host_only__ = True``
-    assignment.  Read via :func:`ast.parse` (no execution), matching
-    :func:`read_runtime_marker` and :func:`is_test_support_module`.
+    assignment.
     """
     value = _top_level_assignment_value(python_file, "__chumicro_host_only__")
     return isinstance(value, ast.Constant) and value.value is True

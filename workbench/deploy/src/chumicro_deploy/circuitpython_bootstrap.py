@@ -232,15 +232,14 @@ def _build_shared_prelude(
     staged_sources: list[tuple[str, str]],
     max_chunk_size_bytes: int,
 ) -> list[str]:
-    """Return the helper + stub + population scripts both builders share.
+    """Return the helper + stub + population scripts both CircuitPython
+    RAM-mode bootstrap builders share.
 
-    Both :func:`build_circuitpython_bootstrap_scripts` (test-harness
-    flavor) and :func:`build_circuitpython_deploy_scripts` (deploy
-    flavor) emit the same prelude — the class-as-module helper
-    definitions, the stub-registration pass, and the population pass
-    — and diverge only on the final exec script.  Extracted here so
-    a touch to the class-as-module machinery updates one builder
-    instead of two.
+    The test-harness and deploy builders emit the same prelude — the
+    class-as-module helper definitions, the stub-registration pass,
+    and the population pass — and diverge only on the final exec
+    script, so extracting the prelude here means a touch to the
+    class-as-module machinery updates one builder instead of two.
     """
     helper_script = _build_helper_script()
     _validate_script_size(

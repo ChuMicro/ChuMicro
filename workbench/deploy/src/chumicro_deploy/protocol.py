@@ -76,13 +76,12 @@ class ReflashMethod(StrEnum):
 class DeviceImplementation:
     """Runtime identity probed from a connected board.
 
-    Populated by ``probe_implementation`` on transports that support it
-    (both :class:`MicropythonTransport` and :class:`CircuitpythonTransport`
-    do).  Consumed by hardware-test PR-summary output so reviewers see
-    the exact firmware version and board model that exercised the
-    tests, and by :meth:`CircuitpythonTransport._verify_drive_for_board`
-    to match a mounted CIRCUITPY drive to its connected board (so
-    ``devices.yml`` doesn't have to pin a mount-order-dependent path).
+    Populated by ``probe_implementation`` on transports that support
+    it.  Identifies the runtime + board behind a connected device, and
+    pins a UID that disambiguates two boards of the same model — used
+    downstream to match a mounted CIRCUITPY drive to its connected
+    board, so ``devices.yml`` doesn't have to encode a
+    mount-order-dependent path.
 
     Attributes:
         name: ``sys.implementation.name`` — ``"circuitpython"`` or
@@ -127,13 +126,11 @@ PROBE_IMPLEMENTATION_SCRIPT = (
     # CircuitPython and MicroPython both ship a 4-tuple
     # ``(major, minor, micro, marker)`` from ``sys.implementation.version``
     # — ``marker`` is ``''`` on a tagged build and ``'preview'`` on a
-    # pre-release / dev build (controlled by ``MICROPY_VERSION_PRERELEASE``
-    # at compile time; see ``py/modsys.c`` in either upstream).  Slot 3 is
-    # a string in every shipped build, so a ``[:3]`` slice keeps just the
-    # dotted ints and drops the marker.  Host CPython's 5-tuple
-    # ``(major, minor, micro, releaselevel, serial)`` also has ints in its
-    # first three slots, so the same slice works when the unit tests exec
-    # the probe under a faked ``sys.implementation``.
+    # pre-release / dev build.  Slot 3 is a string in every shipped build,
+    # so a ``[:3]`` slice keeps just the dotted ints and drops the marker.
+    # Host CPython's 5-tuple ``(major, minor, micro, releaselevel, serial)``
+    # also has ints in its first three slots, so the same slice works when
+    # the unit tests exec the probe under a faked ``sys.implementation``.
     "_probe_version_str = '.'.join("
     "str(_part) for _part in sys.implementation.version[:3])\n"
     "_probe_machine = getattr(sys.implementation, '_machine', '')\n"
@@ -362,9 +359,7 @@ class TransportProtocol(Protocol):
     def reset_into_bootloader(self) -> bool:
         """Try to put the board into its UF2 bootloader via the running runtime.
 
-        Called by :func:`~chumicro_deploy.firmware.flash_firmware`
-        before it begins polling for the bootloader drive.  The
-        implementation issues a runtime-specific reset command
+        Issues a runtime-specific reset command
         (``machine.bootloader()`` on MicroPython,
         ``microcontroller.on_next_reset(RunMode.BOOTLOADER)`` +
         ``microcontroller.reset()`` on CircuitPython) and swallows
@@ -420,7 +415,7 @@ class TransportProtocol(Protocol):
     def list_files_in_scope(self, *, clean_slate: bool = False) -> list[str]:
         """Enumerate device files within the deploy's managed scope.
 
-        Used by :meth:`Deployer.deploy_diff` to compute "what's on the
+        Returns the file set the diff routine reads as "what's on the
         device today that the next deploy would replace" — the
         difference becomes the *stale* set the diff routine deletes
         before writing the new payload.

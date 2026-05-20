@@ -369,12 +369,7 @@ def _dispatch_bootloader_reset(device: Device) -> bool:
     caller's drive-poll / serial-port-snapshot is the authoritative
     success signal because the board's serial link drops as it
     resets.  Returns ``False`` when connect() failed, the runtime
-    does not expose a bootloader API, or the dispatch raised —
-    callers fall back to interactive manual-entry prompts.
-
-    Shared by the UF2 path (uses the bool return) and the esptool
-    path (which polls a serial-port baseline for the bootloader
-    re-enumeration regardless of what the dispatch reports).
+    does not expose a bootloader API, or the dispatch raised.
     """
     try:
         transport = device.create_transport()
@@ -480,8 +475,8 @@ def _flash_firmware_uf2(
     _report(on_progress, 0.0, "entering bootloader")
     programmatic_ok = _dispatch_bootloader_reset(device)
 
-    # Step 2: locate the UF2 drive (explicit override → auto-detect
-    # → interactive prompt → give up).
+    # Step 2: locate the UF2 drive — explicit override first, else
+    # auto-detect, else interactive prompt, else give up.
     candidate_search_paths = _uf2_mount_candidates(search_paths)
     drive_path: Path | None = bootloader_drive_path
     if drive_path is None:
@@ -805,8 +800,8 @@ def _flash_firmware_esptool(
         # Give macOS a moment to release the serial port.  Without
         # this, the next invocation trips "Resource busy" because
         # the kernel still holds the cu.usbmodem FD briefly after
-        # esptool returns.  1 second is a conservative delay that
-        # matches Adafruit's tooling.
+        # esptool returns.  1 second is a conservative settle that
+        # covers observed FD-release latency.
         time.sleep(1.0)
 
     _report(

@@ -1,10 +1,8 @@
 """Host-side CIRCUITPY drive discovery, identity, and scope-listing helpers.
 
-Extracted from :mod:`circuitpython_transport` so the raw-REPL transport
-stays focused on serial-protocol concerns and the FAT-volume probing
-lives in one coherent module.  Every helper here works on host paths
-only — no serial I/O — so they can be exercised in unit tests against
-``tmp_path``-built fixtures without standing up a fake transport.
+Every helper here works on host paths only — no serial I/O — so they
+can be exercised in unit tests against ``tmp_path``-built fixtures
+without standing up a fake transport.
 
 Three concerns live here:
 
@@ -20,10 +18,6 @@ Three concerns live here:
   "which mount belongs to this board?" lookup.
 - **Scope listing** — :func:`_list_scope_on_drive` walks a mounted
   drive and returns the in-scope file set for diff-deploy.
-
-:func:`_format_probe_error` and :func:`_resolve_username` are
-ancillary host-side helpers consumed by the drive-resolution path
-in the transport.
 """
 
 from __future__ import annotations
@@ -55,11 +49,6 @@ def _format_probe_error(drive_path: Path | str, error: OSError) -> str:
     - Anything else (typically ``EACCES`` from a stale Finder-eject
       mount) — kept as the original "not found or not writable"
       wrapper that documents both candidate causes.
-
-    The first two are *drive-found* states, so the message no longer
-    leads with "not found" — that was misleading when, e.g., the user
-    was running a disk-full demo and saw the drive in Finder while
-    chumicro-deploy claimed it wasn't there.
     """
     error_name = error.__class__.__name__
     error_text = str(error) or error_name
@@ -104,9 +93,9 @@ def _resolve_username() -> str:
 def _circuitpy_base_paths() -> list[Path]:
     """Return the OS-specific base directories that CIRCUITPY mounts under.
 
-    macOS: ``/Volumes``.  Linux: ``/media/<user>``.  Linux (systemd):
-    ``/run/media/<user>``.  Used by :func:`_circuitpy_volume_candidates`
-    so the discovery list lives in one place.
+    macOS uses ``/Volumes``; Linux uses ``/media/<user>`` and, under
+    systemd, ``/run/media/<user>``.  Centralizes the per-OS list so
+    volume discovery has one source.
     """
     username = _resolve_username()
     bases = [Path("/Volumes")]
@@ -138,9 +127,8 @@ def _circuitpy_volume_candidates() -> list[Path]:
 def _read_boot_out_text(drive_path: Path) -> str | None:
     """Return the full text of ``boot_out.txt`` on *drive_path*, or ``None``.
 
-    Centralized so the identity reader has one error-swallowing policy.
-    A missing or unreadable file yields ``None`` and the caller
-    degrades gracefully.
+    Single error-swallowing policy: a missing or unreadable file yields
+    ``None`` so callers degrade gracefully.
     """
     boot_out = drive_path / "boot_out.txt"
     if not boot_out.is_file():
@@ -160,12 +148,8 @@ def _read_boot_out_identity(
 
         Adafruit CircuitPython 10.2.0-rc.0 on 2026-04-16; Raspberry Pi Pico W with rp2040
 
-    plus a ``UID:...`` line.  Both fields are needed by the
-    transport's drive-verification path on every deploy and by the
-    per-candidate identity sweep in
-    :func:`find_circuitpy_drive_for_uid` /
-    :func:`find_circuitpy_drive_for_machine`; reading once and
-    extracting both avoids redundant I/O on a USB FAT mount.
+    plus a ``UID:...`` line.  Callers that need both values pay one
+    read instead of two on a USB FAT mount.
 
     Either field is ``None`` when the file is missing, unreadable,
     or doesn't carry that field.

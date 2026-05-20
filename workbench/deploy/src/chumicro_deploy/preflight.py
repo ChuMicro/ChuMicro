@@ -1,12 +1,12 @@
 """Deploy-time mode resolution and the inputs it reads.
 
-The single deploy-mode policy lives here as :func:`resolve_deploy_mode`
-and is consumed by both ``chumicro-deploy`` (the CLI / app-deploy
-:class:`~chumicro_deploy.Deployer`) and ``chumicro-pytest-device`` (the
-on-device test path).  One rule, byte-identical for every caller — the
-unit/functional distinction is expressed only by how the caller scopes
-two inputs (``staged_files`` and ``resolution_unit``), never by a
-branch in the policy.
+:func:`resolve_deploy_mode` is pure policy — given the configured
+mode and the resolution unit's inputs, it returns the effective mode
+plus an optional human-readable message when a requested RAM mode
+was overridden to flash.  One rule, byte-identical for every caller:
+the unit/functional distinction is expressed by how each caller
+scopes ``staged_files`` and ``resolution_unit``, never by a branch
+in the policy.
 
 Public API:
 
