@@ -31,12 +31,6 @@ What this module adds:
   ``libraries/<lib>/examples/_generated/example_runtime_config_<lib>_<name>.msgpack``
   using the same gitignored ``_generated/`` build-artifact convention
   as project deploys, so it isn't committed beside the example source.
-
-Scoped to working trees that own a ``libraries/<lib>/`` directory
-layout (the upstream chumicro source tree).  Workspace template
-repos that grow user-authored library trees of the same shape can
-adopt the helper later — it's general over the directory layout,
-not the upstream consumer.
 """
 
 from __future__ import annotations

@@ -5,12 +5,10 @@ filesystem / YAML / counting operations.  Each check returns a
 :class:`HealthFinding` describing what was inspected, what state
 it found, and (when relevant) a hint the user can act on.
 
-The two consumers are :func:`chumicro_workspace.cli._cmd_status`
-(prints a one-liner per check) and :func:`_cmd_doctor` (stricter,
-prints remediation hints).  This module is the single source of
-truth for "what looks OK / off about this workspace right now";
-both commands route through the same checks so they stay
-consistent.
+The ``status`` and ``doctor`` CLI commands both route through these
+checks — ``status`` prints a one-liner per finding, ``doctor`` adds
+the stricter checks (Python version, AST, FSKit wedge, held serial
+ports).
 """
 
 from __future__ import annotations
