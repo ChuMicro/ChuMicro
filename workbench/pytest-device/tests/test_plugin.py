@@ -13,7 +13,12 @@ from types import SimpleNamespace
 import pytest
 from chumicro_deploy import DeviceEntry
 from chumicro_deploy.testing import FakeTransport
-from chumicro_pytest_device import backends, device_backend, pr_summary
+from chumicro_pytest_device import (
+    backends,
+    collection,
+    device_backend,
+    pr_summary,
+)
 from chumicro_pytest_device import plugin as pytest_device
 from chumicro_pytest_device import session as plugin_session
 from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
@@ -48,7 +53,7 @@ class TestParseTestFunctions:
         test_file = tmp_path / "test_example.py"
         test_file.write_text(source)
 
-        names = pytest_device._parse_test_functions(test_file)
+        names = collection._parse_test_functions(test_file)
         assert names == ["test_alpha", "test_beta"]
 
     def test_skips_non_test_functions(self, tmp_path: Path) -> None:
@@ -63,7 +68,7 @@ class TestParseTestFunctions:
         test_file = tmp_path / "test_helpers.py"
         test_file.write_text(source)
 
-        names = pytest_device._parse_test_functions(test_file)
+        names = collection._parse_test_functions(test_file)
         assert names == []
 
     def test_finds_class_methods_qualified(self, tmp_path: Path) -> None:
@@ -90,7 +95,7 @@ class TestParseTestFunctions:
         test_file = tmp_path / "test_mixed.py"
         test_file.write_text(source)
 
-        names = pytest_device._parse_test_functions(test_file)
+        names = collection._parse_test_functions(test_file)
         assert names == [
             "TestSomething.test_alpha",
             "TestSomething.test_beta",
@@ -122,7 +127,7 @@ class TestParseTestFunctions:
         test_file = tmp_path / "test_helpers_and_real.py"
         test_file.write_text(source)
 
-        names = pytest_device._parse_test_functions(test_file)
+        names = collection._parse_test_functions(test_file)
         assert names == ["TestReal.test_collected"]
 
     def test_ignores_nested_helper_functions_in_class(
@@ -139,7 +144,7 @@ class TestParseTestFunctions:
         test_file = tmp_path / "test_nested.py"
         test_file.write_text(source)
 
-        names = pytest_device._parse_test_functions(test_file)
+        names = collection._parse_test_functions(test_file)
         assert names == ["TestThing.test_outer"]
 
     def test_empty_file(self, tmp_path: Path) -> None:
@@ -147,7 +152,7 @@ class TestParseTestFunctions:
         test_file = tmp_path / "test_empty.py"
         test_file.write_text("")
 
-        names = pytest_device._parse_test_functions(test_file)
+        names = collection._parse_test_functions(test_file)
         assert names == []
 
     def test_pytest_style_file_yields_nothing(self, tmp_path: Path) -> None:
@@ -170,7 +175,7 @@ class TestParseTestFunctions:
         test_file = tmp_path / "test_fixtures_only.py"
         test_file.write_text(source)
 
-        names = pytest_device._parse_test_functions(test_file)
+        names = collection._parse_test_functions(test_file)
         assert names == []
 
 
@@ -185,7 +190,7 @@ class TestResolveLibraryDir:
         test_file = functional_dir / "test_example.py"
         test_file.touch()
 
-        result = pytest_device._resolve_library_dir(test_file)
+        result = collection._resolve_library_dir(test_file)
         assert result == library_dir
 
 
@@ -213,7 +218,7 @@ class TestFilterTargetsByMarker:
         test_file.write_text("def test_alpha():\n    pass\n")
         targets = self._two_runtime_targets()
 
-        result = pytest_device._filter_targets_by_marker(targets, test_file)
+        result = collection._filter_targets_by_marker(targets, test_file)
 
         assert result == targets
 
@@ -227,7 +232,7 @@ class TestFilterTargetsByMarker:
             "def test_alpha():\n    pass\n",
         )
 
-        result = pytest_device._filter_targets_by_marker(
+        result = collection._filter_targets_by_marker(
             self._two_runtime_targets(), test_file,
         )
 
@@ -243,7 +248,7 @@ class TestFilterTargetsByMarker:
             "def test_alpha():\n    pass\n",
         )
 
-        result = pytest_device._filter_targets_by_marker(
+        result = collection._filter_targets_by_marker(
             self._two_runtime_targets(), test_file,
         )
 
@@ -263,7 +268,7 @@ class TestFilterTargetsByMarker:
             "def test_alpha():\n    pass\n",
         )
 
-        result = pytest_device._filter_targets_by_marker(
+        result = collection._filter_targets_by_marker(
             self._two_runtime_targets(), test_file,
         )
 
@@ -279,7 +284,7 @@ class TestFilterTargetsByMarker:
             "def test_alpha():\n    pass\n",
         )
 
-        result = pytest_device._filter_targets_by_marker(
+        result = collection._filter_targets_by_marker(
             self._two_runtime_targets(), test_file,
         )
 
@@ -290,7 +295,7 @@ class TestFilterTargetsByMarker:
         test_file = tmp_path / "test_anything.py"
         test_file.write_text("def test_alpha():\n    pass\n")
 
-        result = pytest_device._filter_targets_by_marker(None, test_file)
+        result = collection._filter_targets_by_marker(None, test_file)
 
         assert result is None
 
@@ -311,7 +316,7 @@ class TestRuntimeControlNames:
             address="/dev/cu.usbmodem1",
         )
 
-        assert pytest_device._runtime_prepare_name(device) == "Setup — CircuitPython"
+        assert collection._runtime_prepare_name(device) == "Setup — CircuitPython"
 
     def test_runtime_run_file_name(self) -> None:
         """Run-file items should include the runtime in a stable label."""
@@ -321,7 +326,7 @@ class TestRuntimeControlNames:
             address="/dev/ttyUSB0",
         )
 
-        assert pytest_device._runtime_run_file_name(device) == "Run overhead — MicroPython"
+        assert collection._runtime_run_file_name(device) == "Run overhead — MicroPython"
 
 
 class TestReportedDurations:
@@ -335,7 +340,7 @@ class TestReportedDurations:
             ParsedTestResult(name="test_gamma", status="FAIL", duration=0.5),
         ]
 
-        total_duration = pytest_device._sum_reported_test_durations(test_results)
+        total_duration = collection._sum_reported_test_durations(test_results)
 
         assert total_duration == pytest.approx(0.625)
 
@@ -589,7 +594,7 @@ class TestLoadFallbackDevice:
     def test_skips_when_no_devices_file(self, tmp_path) -> None:
         """Should skip with setup instructions when devices.yml is missing."""
         with pytest.raises(pytest.skip.Exception, match="No devices.yml found"):
-            pytest_device._load_fallback_device(
+            collection._load_fallback_device(
                 FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
             )
 
@@ -605,7 +610,7 @@ class TestLoadFallbackDevice:
             "    address: /dev/ttyUSB0\n"
         )
         with pytest.raises(pytest.skip.Exception, match="No devices registered"):
-            pytest_device._load_fallback_device(
+            collection._load_fallback_device(
                 FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
             )
 
@@ -624,7 +629,7 @@ class TestLoadFallbackDevice:
             "    runtime: micropython\n"
             "    address: /dev/ttyUSB1\n"
         )
-        device = pytest_device._load_fallback_device(
+        device = collection._load_fallback_device(
             FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
         )
         assert device.identifier == "board2"
@@ -757,14 +762,14 @@ class TestPytestCollectFile:
 
     def test_returns_none_for_non_test_file(self) -> None:
         """Should not collect helper files."""
-        result = pytest_device.pytest_collect_file(
+        result = collection.pytest_collect_file(
             None, Path("/x/functional_tests/conftest.py"),
         )
         assert result is None
 
     def test_returns_none_outside_functional_tests(self) -> None:
         """Should not collect regular test files."""
-        result = pytest_device.pytest_collect_file(
+        result = collection.pytest_collect_file(
             None, Path("/x/tests/test_normal.py"),
         )
         assert result is None
@@ -789,7 +794,7 @@ class TestPytestCollectFile:
                 ),
             ),
         )
-        assert pytest_device.pytest_collect_file(parent, host_only) is None
+        assert collection.pytest_collect_file(parent, host_only) is None
 
 
 class TestIsLibraryUnitTest:
@@ -854,7 +859,7 @@ class TestReadLibraryPlatforms:
     """Tests for the per-library [tool.chumicro].platforms reader."""
 
     def test_returns_none_when_pyproject_absent(self, tmp_path: Path) -> None:
-        result = pytest_device._read_library_platforms(tmp_path)
+        result = collection._read_library_platforms(tmp_path)
         assert result is None
 
     def test_returns_none_when_platforms_key_absent(
@@ -863,14 +868,14 @@ class TestReadLibraryPlatforms:
         (tmp_path / "pyproject.toml").write_text(
             "[project]\nname = \"chumicro-foo\"\n",
         )
-        result = pytest_device._read_library_platforms(tmp_path)
+        result = collection._read_library_platforms(tmp_path)
         assert result is None
 
     def test_returns_declared_platforms(self, tmp_path: Path) -> None:
         (tmp_path / "pyproject.toml").write_text(
             "[tool.chumicro]\nplatforms = [\"cpython\", \"micropython\"]\n",
         )
-        result = pytest_device._read_library_platforms(tmp_path)
+        result = collection._read_library_platforms(tmp_path)
         assert result == ("cpython", "micropython")
 
 
@@ -1494,7 +1499,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         """
         from unittest.mock import Mock  # noqa: PLC0415
 
-        item = Mock(spec=pytest_device.DeviceRuntimeItem)
+        item = Mock(spec=collection.DeviceRuntimeItem)
         item.nodeid = nodeid
         return item
 
@@ -1535,7 +1540,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         config = self._stub_config(payload={"wifi.ssid": "x"})
         device_item = self._make_device_item_mock()
         items = [device_item]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
         device_item.add_marker.assert_not_called()
 
     def test_complete_payload_no_skip(self) -> None:
@@ -1546,7 +1551,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         )
         device_item = self._make_device_item_mock()
         items = [device_item]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
         device_item.add_marker.assert_not_called()
 
     def test_partial_payload_skips_with_named_missing_keys(self) -> None:
@@ -1558,7 +1563,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         device_item_a = self._make_device_item_mock()
         device_item_b = self._make_device_item_mock()
         items = [device_item_a, device_item_b]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
         # Both items got a skip marker.
         device_item_a.add_marker.assert_called_once()
         device_item_b.add_marker.assert_called_once()
@@ -1577,7 +1582,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         )
         device_item = self._make_device_item_mock()
         items = [device_item]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
         skip_marker = device_item.add_marker.call_args.args[0]
         assert "wifi.ssid" in skip_marker.kwargs["reason"]
         assert "wifi.password" in skip_marker.kwargs["reason"]
@@ -1593,7 +1598,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
             nodeid="tests/test_unrelated.py::test_x",
         )
         items = [non_device_item]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
         non_device_item.add_marker.assert_not_called()
 
 
@@ -1689,7 +1694,7 @@ class TestPytestCollectionModifyItemsFeatures:
         with ``target_device`` and ``test_file`` populated."""
         from unittest.mock import Mock  # noqa: PLC0415
 
-        item = Mock(spec=pytest_device.DeviceRuntimeItem)
+        item = Mock(spec=collection.DeviceRuntimeItem)
         item.nodeid = nodeid
         item.target_device = device
         item.test_file = test_file
@@ -1724,7 +1729,7 @@ class TestPytestCollectionModifyItemsFeatures:
         item = self._make_feature_item(session, device, test_file)
 
         items = [item]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
 
         assert items == [item]
         assert config.deselected == []
@@ -1747,7 +1752,7 @@ class TestPytestCollectionModifyItemsFeatures:
         item = self._make_feature_item(session, device, test_file)
 
         items = [item]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
 
         assert items == [item]
         assert config.deselected == []
@@ -1770,7 +1775,7 @@ class TestPytestCollectionModifyItemsFeatures:
         item = self._make_feature_item(session, device, test_file)
 
         items = [item]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
 
         assert items == []
         assert config.deselected == [item]
@@ -1790,7 +1795,7 @@ class TestPytestCollectionModifyItemsFeatures:
         item = self._make_feature_item(session, device, test_file)
 
         items = [item]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
 
         assert items == []
         assert config.deselected == [item]
@@ -1848,7 +1853,7 @@ class TestPytestCollectionModifyItemsFeatures:
         )
 
         items = [item_a, item_b]
-        pytest_device.pytest_collection_modifyitems(config, items)
+        collection.pytest_collection_modifyitems(config, items)
 
         assert items == [item_a, item_b]
         assert probe_calls == ["esp32-board"], (
@@ -1865,13 +1870,13 @@ class TestStagedFileNames:
         (source_dir / "mod.py").write_text("X = 1\n")
         (source_dir / "_ca_bundle.der").write_bytes(b"\x30\x82")
         (source_dir / "__pycache__" / "mod.cpython-313.pyc").write_bytes(b"\x00")
-        assert sorted(plugin_session._staged_file_names([source_dir])) == [
+        assert sorted(collection._staged_file_names([source_dir])) == [
             "_ca_bundle.der",
             "mod.py",
         ]
 
     def test_empty_for_no_dirs(self) -> None:
-        assert plugin_session._staged_file_names([]) == []
+        assert collection._staged_file_names([]) == []
 
 
 class TestDeviceClosureSourceDirs:
@@ -1883,7 +1888,7 @@ class TestDeviceClosureSourceDirs:
         device = DeviceEntry(
             identifier="d1", runtime="micropython", address="/dev/x",
         )
-        assert plugin_session._device_closure_source_dirs(session, device) == []
+        assert collection._device_closure_source_dirs(session, device) == []
 
     def test_missing_items_attr_is_safe(self, tmp_path: Path) -> None:
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
@@ -1891,7 +1896,7 @@ class TestDeviceClosureSourceDirs:
             identifier="d1", runtime="micropython", address="/dev/x",
         )
         # FakeSession has no ``items`` — the getattr guard must not raise.
-        assert plugin_session._device_closure_source_dirs(session, device) == []
+        assert collection._device_closure_source_dirs(session, device) == []
 
 
 class TestSessionEffectiveDeployMode:
@@ -1913,13 +1918,13 @@ class TestSessionEffectiveDeployMode:
         lib.mkdir()
         (lib / "__init__.py").write_text("")
         (lib / "_ca_bundle.der").write_bytes(b"\x30\x82")
-        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
+        monkeypatch.setattr(collection, "_device_closure_source_dirs",
             lambda _session, _device: [lib],
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
 
         with pytest.warns(UserWarning, match="_ca_bundle.der"):
-            mode = plugin_session._session_effective_deploy_mode(
+            mode = collection._session_effective_deploy_mode(
                 session, self._ram_device(),
             )
         assert mode == "flash"
@@ -1933,11 +1938,11 @@ class TestSessionEffectiveDeployMode:
         lib = tmp_path / "light-src"
         lib.mkdir()
         (lib / "__init__.py").write_text("X = 1\n")
-        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
+        monkeypatch.setattr(collection, "_device_closure_source_dirs",
             lambda _session, _device: [lib],
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
-        mode = plugin_session._session_effective_deploy_mode(
+        mode = collection._session_effective_deploy_mode(
             session, self._ram_device(),
         )
         assert mode == "ram"
@@ -1955,12 +1960,12 @@ class TestSessionEffectiveDeployMode:
             calls["n"] += 1
             return [lib]
 
-        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs", _counting,
+        monkeypatch.setattr(collection, "_device_closure_source_dirs", _counting,
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
         device = self._ram_device()
-        first = plugin_session._session_effective_deploy_mode(session, device)
-        second = plugin_session._session_effective_deploy_mode(session, device)
+        first = collection._session_effective_deploy_mode(session, device)
+        second = collection._session_effective_deploy_mode(session, device)
         assert first == second == "ram"
         assert calls["n"] == 1  # closure walked once, then memoized
 
@@ -1972,7 +1977,7 @@ class TestSessionEffectiveDeployMode:
         lib = tmp_path / "light-src"
         lib.mkdir()
         (lib / "__init__.py").write_text("X = 1\n")
-        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
+        monkeypatch.setattr(collection, "_device_closure_source_dirs",
             lambda _session, _device: [lib],
         )
         device = DeviceEntry(
@@ -1984,7 +1989,7 @@ class TestSessionEffectiveDeployMode:
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
         with pytest.warns(UserWarning, match="does not support RAM mode"):
-            mode = plugin_session._session_effective_deploy_mode(session, device)
+            mode = collection._session_effective_deploy_mode(session, device)
         assert mode == "flash"
 
 
@@ -2006,7 +2011,7 @@ class TestUnitSweepScoping:
     def _item(self, device: DeviceEntry, library_dir: Path, test_rel: str):
         from unittest.mock import Mock  # noqa: PLC0415
 
-        item = Mock(spec=pytest_device.DeviceTestItem)
+        item = Mock(spec=collection.DeviceTestItem)
         item.target_device = device
         item.library_dir = library_dir
         item.test_file = library_dir / test_rel
@@ -2023,7 +2028,7 @@ class TestUnitSweepScoping:
         session = self._session(
             [self._item(device, lib, "tests/test_ntp.py")],
         )
-        assert plugin_session._device_is_unit_sweep(session, device) is True
+        assert collection._device_is_unit_sweep(session, device) is True
 
     def test_is_unit_sweep_false_with_a_functional_item(
         self, tmp_path: Path,
@@ -2034,12 +2039,12 @@ class TestUnitSweepScoping:
             self._item(device, lib, "tests/test_ntp.py"),
             self._item(device, lib, "functional_tests/test_real.py"),
         ])
-        assert plugin_session._device_is_unit_sweep(session, device) is False
+        assert collection._device_is_unit_sweep(session, device) is False
 
     def test_is_unit_sweep_false_with_no_items(self) -> None:
         device = self._device()
         assert (
-            plugin_session._device_is_unit_sweep(self._session([]), device)
+            collection._device_is_unit_sweep(self._session([]), device)
             is False
         )
 
@@ -2055,7 +2060,7 @@ class TestUnitSweepScoping:
             self._item(device, ntp, "tests/test_ntp.py"),
             self._item(device, sockets, "tests/test_sockets.py"),
         ])
-        assert plugin_session._device_own_source_dirs(session, device) == [
+        assert collection._device_own_source_dirs(session, device) == [
             ntp / "src",
             sockets / "src",
         ]
@@ -2072,15 +2077,15 @@ class TestUnitSweepScoping:
         own = tmp_path / "ntp-src"
         own.mkdir()
         (own / "__init__.py").write_text("X = 1\n")
-        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
+        monkeypatch.setattr(collection, "_device_closure_source_dirs",
             lambda _s, _d: [dep, own],
         )
-        monkeypatch.setattr(plugin_session, "_device_is_unit_sweep", lambda _s, _d: True,
+        monkeypatch.setattr(collection, "_device_is_unit_sweep", lambda _s, _d: True,
         )
-        monkeypatch.setattr(plugin_session, "_device_own_source_dirs", lambda _s, _d: [own],
+        monkeypatch.setattr(collection, "_device_own_source_dirs", lambda _s, _d: [own],
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
-        mode = plugin_session._session_effective_deploy_mode(
+        mode = collection._session_effective_deploy_mode(
             session, self._device(),
         )
         assert mode == "ram"
@@ -2101,16 +2106,16 @@ class TestUnitSweepScoping:
         own = tmp_path / "light-src"
         own.mkdir()
         (own / "__init__.py").write_text("X = 1\n")
-        monkeypatch.setattr(plugin_session, "_device_closure_source_dirs",
+        monkeypatch.setattr(collection, "_device_closure_source_dirs",
             lambda _s, _d: [heavy_source, own],
         )
-        monkeypatch.setattr(plugin_session, "_device_is_unit_sweep", lambda _s, _d: True,
+        monkeypatch.setattr(collection, "_device_is_unit_sweep", lambda _s, _d: True,
         )
-        monkeypatch.setattr(plugin_session, "_device_own_source_dirs", lambda _s, _d: [own],
+        monkeypatch.setattr(collection, "_device_own_source_dirs", lambda _s, _d: [own],
         )
         session = FakeSession(pytest_device._TransportCache(), rootpath=tmp_path)
         with pytest.warns(UserWarning, match="requires_flash"):
-            mode = plugin_session._session_effective_deploy_mode(
+            mode = collection._session_effective_deploy_mode(
                 session, self._device(),
             )
         assert mode == "flash"
