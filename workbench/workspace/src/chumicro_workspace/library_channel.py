@@ -52,7 +52,6 @@ CHANNEL_REPOS = {
     "experimental": "ChuMicro/ChuMicro-Libraries-Experimental",
 }
 
-#: Default real fetcher.  Injected over in tests / fixtures.
 _DEFAULT_TIMEOUT_SECONDS = 30
 
 

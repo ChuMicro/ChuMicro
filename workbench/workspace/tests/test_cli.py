@@ -1,8 +1,7 @@
 """Tests for the chumicro-workspace CLI dispatcher.
 
-Covers command parsing, dispatch routing, the implemented commands
-(via mocked underlying APIs), and the contract of stubs (exit code
-2 + descriptive message).
+Covers command parsing, dispatch routing, and the subcommand handlers
+via mocked underlying APIs.
 """
 
 import argparse

@@ -32,9 +32,9 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     """Print the merged runtime config a project would receive on deploy.
 
     Runs the deploy-time pipeline up to (but not through) the msgpack
-    write — ``workspace.yml`` defaults + project config deep-merged —
-    then pretty-prints the result.  Lets users see exactly what their
-    on-device ``chumicro_config.runtime`` will read without actually
+    write — ``secrets.toml`` defaults + ``project_config.toml``
+    deep-merged — then pretty-prints the result, so users can see what
+    their on-device ``chumicro_config.runtime`` will read without
     deploying.
 
     Useful for: debugging which layer a key landed in after the merge,
@@ -142,7 +142,7 @@ def _add_config_parsers(subparsers: argparse._SubParsersAction) -> None:
         "dump-config",
         help=(
             "Print the merged runtime config a project would receive on "
-            "deploy (workspace.yml defaults + per-project config "
+            "deploy (secrets.toml defaults + project_config.toml "
             "deep-merged), without actually deploying."
         ),
     )

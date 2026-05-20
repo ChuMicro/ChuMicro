@@ -1,10 +1,9 @@
 """Deep per-key merge for the runtime-config pipeline.
 
-Workspace defaults + per-project overrides combine **key-by-key
-within sections**, with the project winning on conflict.  Sections
-present only in workspace.yml carry through as global defaults the
-project inherits without restating; sections present only in the
-project carry through as project-specific.
+``secrets.toml`` defaults + per-project overrides combine **key-by-key
+within sections**, project winning on conflict.  Sections present only
+in ``secrets.toml`` carry through as workspace-wide defaults; sections
+present only in the project carry through as project-specific.
 
 Pure functions, fully deterministic — same inputs always yield the
 same merged output.  No file IO; the loaders module handles that.

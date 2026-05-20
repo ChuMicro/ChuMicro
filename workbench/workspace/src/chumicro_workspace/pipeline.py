@@ -53,7 +53,7 @@ def compose_runtime_config(
         The merged, flattened dict with dotted keys.
 
     Raises:
-        WorkspaceConfigError: A YAML/TOML file has a malformed top level.
+        tomllib.TOMLDecodeError: A TOML source file is malformed.
     """
     secrets = read_secrets_toml(secrets_toml)
     project_data: dict = {}
@@ -85,8 +85,7 @@ def build_runtime_config(
         + lets callers inspect / log what landed on device.
 
     Raises:
-        WorkspaceConfigError: One of the YAML/TOML files has a
-            malformed top level.
+        tomllib.TOMLDecodeError: A TOML source file is malformed.
     """
     resolved = compose_runtime_config(
         secrets_toml=secrets_toml,

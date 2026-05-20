@@ -13,11 +13,11 @@ Mirrors the structure of
 moving between the two suites see the same shape.  Run this suite
 explicitly:
 
-    pytest workbench/workspace-runtime/functional_tests/
+    pytest workbench/workspace/functional_tests/
 
 or scope to one runtime:
 
-    pytest workbench/workspace-runtime/functional_tests/ -k circuitpython
+    pytest workbench/workspace/functional_tests/ -k circuitpython
 """
 
 from __future__ import annotations

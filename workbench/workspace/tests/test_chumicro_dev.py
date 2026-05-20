@@ -1,4 +1,4 @@
-"""Tests for chumicro-dev.toml integration (gap 3(a))."""
+"""Tests for chumicro-dev.toml integration."""
 
 from __future__ import annotations
 

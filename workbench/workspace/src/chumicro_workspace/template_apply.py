@@ -27,8 +27,8 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
     from collections.abc import Iterable
 
 
-#: Canonical workspace template repo.  Used as the default upstream
-#: for ``update`` (override via ``--from`` for forks).
+#: Default upstream for ``update``.  Override via ``--from`` when
+#: working with a fork.
 DEFAULT_TEMPLATE_URL = (
     "https://github.com/ChuMicro/ChuMicro-Workspace-Template"
 )
