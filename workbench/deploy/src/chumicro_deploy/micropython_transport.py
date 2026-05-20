@@ -100,8 +100,9 @@ _STAGE_EXCLUDED_NAMES: frozenset[str] = frozenset(
 #: ``os.listdir`` + ``os.stat`` — so it runs on every CP / MP build
 #: without preinstalling helper libs.
 #:
-#: The four canonical entrypoint / state files are probed at the
-#: device root; ``/lib/`` is walked recursively.  Missing dirs and
+#: The four managed entrypoint / state files
+#: (:data:`chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`) are probed at
+#: the device root; ``/lib/`` is walked recursively.  Missing dirs and
 #: per-file ``OSError`` are tolerated so a fresh-flashed board (no
 #: ``/lib/`` yet) returns an empty listing instead of erroring out.
 #:
@@ -934,8 +935,9 @@ class MicropythonTransport:
         the diff reconciles a stale board ``settings.toml`` /
         leftover file away — not just stale ``/lib`` packages.
         ``clean_slate=False`` (the ``--no-wipe`` opt-out) keeps the
-        legacy scope: ``/lib/`` recursively + the four canonical
-        files (``/code.py``, ``/main.py``, ``/active.py``,
+        additive scope: ``/lib/`` recursively + the four entrypoint /
+        state files in :data:`~chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`
+        (``/code.py``, ``/main.py``, ``/active.py``,
         ``/runtime_config.msgpack``).  Returns paths in leading-slash
         form.
 

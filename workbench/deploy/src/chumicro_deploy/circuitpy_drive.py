@@ -246,8 +246,10 @@ def _list_scope_on_drive(drive: Path, *, clean_slate: bool = False) -> list[str]
     the whole noise class without enumerating it.
 
     ``clean_slate=False`` is the additive scope (the ``--no-wipe``
-    opt-out): only the four canonical state files plus ``/lib/**``,
-    so a board ``settings.toml`` and other root files are preserved.
+    opt-out): only the four entrypoint / state files
+    (:data:`~chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`) plus
+    ``/lib/**``, so a board ``settings.toml`` and other root files
+    are preserved.
     """
     if clean_slate:
         keep = set(flash_drive.DEVICE_KEEP_SET)
