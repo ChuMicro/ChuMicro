@@ -117,19 +117,15 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 
 Write in sentences. Don't use em-dashes, semicolons, or arrows as shortcuts that paper over missing connective tissue. If two ideas are linked, write them as two sentences or join with a comma and a connector. This applies to code comments, docstrings, and all markdown prose.
 
-Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. The fix is usually structural, not vocabulary. When you write "the X promise" or "the X pattern", name X concretely in the same sentence. When you catch yourself writing one, rewrite the sentence to demonstrate the property concretely instead of asserting it abstractly.
+Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. When you write "the X promise" or "the X pattern", name X concretely in the same sentence.
 
-**Degraded prose is rewritten, not trimmed again.** A passage rotted by repeated subtractive edits is not fixed by removing another word. That only makes it shorter and no clearer. Discard it and rewrite from a fresh read of what the thing is and why it exists. Several skills apply this rule in their scope: [`audit-comments`](.github/skills/audit-comments/SKILL.md) for code comments, [`audit-docs`](.github/skills/audit-docs/SKILL.md) for user-facing markdown, [`audit-skill`](.github/skills/audit-skill/SKILL.md) for SKILL.md bodies, and the in-place-edit rule in [`plans/decisions/README.md`](plans/decisions/README.md) for ADR bodies.
+Common phrase bans, applied every time you write:
 
-Specific bans:
+- Avoid "the canonical X", "the one / single / sole X that…", and "this is the / this is a" as openers. State what X is or does directly.
+- Drop empty adjectives (`comprehensive`, `robust`, `seamlessly`, `cutting-edge`, `best-in-class`). Name what something covers or what it survives.
+- Don't open sentences with filler ("It is worth noting that", "Let's dive into", "In this section, we will", etc.). Start with the content.
 
-- Avoid "the canonical X" framing. Often "the X" or "the standard X" works as well, and frequently the bare phrase reads better still. Keep canonical encoding, canonical form, and canonical path. These are real technical terms with no fluff substitute.
-- Avoid "the one / single / sole X that…" as a definition opener. It is the same tic as canonical X. Say plainly what X does. Legitimate invariant prose like "the single owner of the staging path" stays. Tone guidance, not a lint.
-- Use "the X" only when X is an established singular referent the reader already has. Use "a X" or "an X" for forward references or categories the reader has not acquired yet. Use bare X for systems and brand names where the article is decoration. For example, write "ESP32-S2 firmware" rather than "the ESP32-S2 firmware". Two nouns in one sentence often need different articles. Indefinite articles are not clinical. Reaching for "the" everywhere to sound terse is a frequent miss.
-- Don't open sentences with "this is the" or "this is a" to point back at what was just said. Restate the subject directly, or drop the meta sentence entirely. For example, instead of "Run preflight before every commit. This is the rule the recovery skill enforces", write "The recovery skill enforces preflight before every commit".
-- Drop adjectives that don't carry information: comprehensive, robust, seamlessly, cutting-edge, best-in-class. If you'd reach for "comprehensive", list what it covers. If you'd reach for "robust", name what it survives.
-- Don't open sentences with filler like "It is worth noting that", "It should be noted that", "Note that", "Let's dive into", "Let's explore", or "In this section, we will". Start with the content.
-- In publishable trees, don't cite CHU lint codes in prose. Name the rule's intent instead. For example, write "silent test skips" rather than "CHU009". Enforced by CHU006. The `# noqa: CHUNNN` directive is exempt.
+Full phrase-ban reference, including the `the X` forward-reference test, the CHU-codes-in-prose ban, and the degraded-prose rewrite discipline that the audit skills apply, lives in [docs/contributing/style-guide.md](docs/contributing/style-guide.md) under Phrase bans.
 
 ## Project overview
 
@@ -177,13 +173,9 @@ Core commands for active development and troubleshooting:
 
 `python scripts/run.py --help` lists every flag and the full command set.
 
-### Workbench CLIs, directly invocable from the mono-repo
+### Workbench CLIs
 
-- **`chumicro-workspace`** is the top-level dispatcher. It covers project-workspace lifecycle, device registry, running things on a board, config, firmware, curated libraries, health, and quality gates. Run `chumicro-workspace --help` for the live subcommand list.
-- **`chumicro-deploy`** is the lower-level transport, with subcommands `probe`, `flash`, `deploy`, and `resolve-firmware-url`. Prefer the `chumicro-workspace` wrappers. Reach for this when composing custom flows.
-- **`chumicro-repl`** is a direct REPL without a workspace project.
-
-`<cli> --help` and `<cli> <sub> --help` for full flag lists. Walkthroughs in [docs/contributing/device-testing.md](docs/contributing/device-testing.md) and [docs/contributing/working-with-agents.md](docs/contributing/working-with-agents.md).
+`chumicro-workspace`, `chumicro-deploy`, and `chumicro-repl` are invocable directly from the mono-repo.  See [`workbench/README.md`](workbench/README.md) and each tool's `--help` for the live subcommand inventory.
 
 ## Reference implementations
 
