@@ -271,8 +271,7 @@ class CircuitpythonMidDeployDisconnected(CircuitpythonTransportError):
 
     Subclass so callers can ``except`` "the cable came out" without
     conflating it with other transport errors (raw-REPL stuck,
-    bootstrap exec failed, drive missing).  Mirrors
-    :class:`chumicro_repl.session.ReplSessionDisconnected`.
+    bootstrap exec failed, drive missing).
 
     The original :class:`OSError` (typically
     :class:`serial.SerialException`) is attached as :attr:`cause`

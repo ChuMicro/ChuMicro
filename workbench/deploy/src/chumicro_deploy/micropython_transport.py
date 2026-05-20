@@ -63,8 +63,7 @@ class MicropythonMidDeployDisconnected(MicropythonTransportError):
     Subclass so callers can ``except`` "the cable came out" without
     conflating it with other mpremote transport errors (mount
     failure, copy failure, bootstrap exec failed).  Mirrors
-    :class:`CircuitpythonMidDeployDisconnected` and
-    :class:`chumicro_repl.session.ReplSessionDisconnected`.
+    :class:`CircuitpythonMidDeployDisconnected`.
 
     The original :class:`OSError` is attached as :attr:`cause` so
     callers that need the underlying errno can read it without
