@@ -88,10 +88,10 @@ class TestChannelRepo:
             == "ChuMicro/ChuMicro-Libraries-Experimental"
         )
 
-    def test_unknown_channel_raises_unknown_kind(self):
+    def test_unknown_channel_raises_unknown_channel_kind(self):
         with pytest.raises(LibraryFetchError) as caught:
             channel_repo("nightly")
-        assert caught.value.kind is LibraryFetchFailureKind.UNKNOWN
+        assert caught.value.kind is LibraryFetchFailureKind.UNKNOWN_CHANNEL
 
 
 class TestUrlBuilders:
