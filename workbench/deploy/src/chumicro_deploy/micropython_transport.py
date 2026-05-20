@@ -441,14 +441,11 @@ class MicropythonTransport:
         staging_path = Path(self._staging_dir.name)
         self._staging_path = staging_path
 
-        # Copy source packages into staging.
         for source_dir in source_dirs:
             self._copy_tree(source_dir, staging_path)
 
-        # Copy harness source.
         self._copy_tree(harness_source, staging_path)
 
-        # Copy test files into staging root.
         for test_file in test_files:
             destination = staging_path / test_file.name
             destination.write_bytes(test_file.read_bytes())
@@ -1161,11 +1158,11 @@ class MicropythonTransport:
         # Ctrl-D as "soft-reboot from friendly REPL".  Wait for the
         # friendly-REPL prompt before issuing Ctrl-D so the transition
         # is observable.
-        port.write(b"\r\x02")  # Ctrl-B: exit raw REPL into friendly REPL.
+        port.write(b"\r\x02")
         self._serial.read_until(
             1, b">>> ", timeout=2.0, timeout_overall=2.0,
         )
-        port.write(b"\x04")    # Ctrl-D: soft-reboot from friendly REPL.
+        port.write(b"\x04")
         # Long inter-byte timeout (we don't care about idle gaps within
         # main.py output — only the overall budget); ``timeout_overall``
         # caps the total wait.

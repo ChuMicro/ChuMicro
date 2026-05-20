@@ -445,7 +445,6 @@ def _copy_uf2_to_drive(
             f"The board is still in bootloader mode — re-run "
             f"flash_firmware() to retry the copy."
         ) from error
-    # Flush host-side buffers before we start polling for re-enum.
     try:
         with destination.open("rb") as handle:
             os.fsync(handle.fileno())
@@ -467,11 +466,10 @@ def _flash_firmware_uf2(
     monotonic: Callable[[], float] = time.monotonic,
 ) -> None:
     """Drive the full UF2 reflash flow — bootloader, copy, reboot."""
-    # Step 1: put the board in bootloader mode.
     _report(on_progress, 0.0, "entering bootloader")
     programmatic_ok = _dispatch_bootloader_reset(device)
 
-    # Step 2: locate the UF2 drive — explicit override first, else
+    # Locate the UF2 drive: explicit override first, else
     # auto-detect, else interactive prompt, else give up.
     candidate_search_paths = _uf2_mount_candidates(search_paths)
     drive_path: Path | None = bootloader_drive_path
@@ -499,11 +497,9 @@ def _flash_firmware_uf2(
                 "auto-detection does not work on this platform."
             )
 
-    # Step 3: copy the .uf2 onto the drive.
     _report(on_progress, 0.5, f"copying firmware to {drive_path}")
     _copy_uf2_to_drive(firmware_path, drive_path, on_progress=on_progress)
 
-    # Step 4: wait for the board to reboot into the new firmware.
     _report(on_progress, 0.9, "waiting for reboot")
     rebooted = _wait_for_drive_gone(
         drive_path, sleep=sleep, monotonic=monotonic,
@@ -648,15 +644,14 @@ def _enter_esp32_rom_bootloader(
     """
     baseline = _list_candidate_serial_ports(globs)
 
-    # 1. If device.address is already a bootloader-style address,
-    #    trust the caller, who put the board in bootloader manually.
+    # When device.address already looks like a bootloader-style port,
+    # trust the caller, who put the board in bootloader manually.
     if "cu.usbmodem01" in device.address or device.address.endswith("usbmodem01"):
         return device.address
 
-    # 2. Programmatic entry via the transport.  Discard the bool,
-    #    because the serial-port baseline poll below is the
-    #    authoritative success signal regardless of what the dispatch
-    #    reports.
+    # Discard the dispatch result, because the serial-port baseline
+    # poll below is the authoritative success signal regardless of
+    # what the dispatch reports.
     _dispatch_bootloader_reset(device)
 
     new_port = _wait_for_new_serial_port(
@@ -665,7 +660,6 @@ def _enter_esp32_rom_bootloader(
     if new_port is not None:
         return new_port
 
-    # 3. Interactive fallback.
     if not interactive:
         raise FlashFirmwareError(
             f"This board / firmware does not currently support "

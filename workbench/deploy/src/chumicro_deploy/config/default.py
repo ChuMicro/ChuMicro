@@ -48,17 +48,13 @@ from ..device import DEFAULT_DEPLOY_MODE, Device
 from ..protocol import DeployMode
 from .devices_yaml import ALL_TOP_LEVEL_ENTRY_FIELDS
 
-#: Default filename for the device registry.
 DEFAULT_DEVICES_FILENAME = "devices.yml"
 
-#: Required fields for each device entry in ``devices.yml``.
 _REQUIRED_DEVICE_FIELDS = ("id", "runtime", "address")
-#: Allowed runtime values.
 _VALID_RUNTIMES = ("micropython", "circuitpython")
-#: Allowed deploy mode values — derived from the :class:`DeployMode`
-#: enum so the tuple can't drift from the source of truth.
+#: Derived from the :class:`DeployMode` enum so the tuple can't drift
+#: from the source of truth.
 _VALID_DEPLOY_MODES = tuple(mode.value for mode in DeployMode)
-#: Allowed ide_runtime values.
 _VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
 
 #: Fields the reader exposes as typed properties on :class:`DeviceEntry`.
