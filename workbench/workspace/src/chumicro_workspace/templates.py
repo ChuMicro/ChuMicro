@@ -1,7 +1,7 @@
-"""Workspace-template readers — canonical content shipped from the wheel.
+"""Workspace-template readers — first-write content shipped from the wheel.
 
-Three workspace-root files have their canonical first-write content
-embedded inside a workbench wheel and materialized on first ``setup``:
+Three workspace-root files have their first-write content embedded
+inside a workbench wheel and materialized on first ``setup``:
 ``devices.yml`` (board registry — schema owned by ``chumicro-deploy``,
 re-exported here for symmetry), ``workspace.yml`` (host-only workspace
 machinery), and ``secrets.toml`` (workspace-wide credentials + device
@@ -24,7 +24,7 @@ _PAYLOADS_DIR = Path(__file__).resolve().parent / "_payloads"
 
 
 def read_workspace_yml_template() -> str:
-    """Return the canonical ``workspace.yml`` template content.
+    """Return the ``workspace.yml`` template content.
 
     Complete commented-example file with schema for
     ``library_sources:`` / ``deploy_targets:`` / ``quality:`` /
@@ -34,7 +34,7 @@ def read_workspace_yml_template() -> str:
 
 
 def read_secrets_toml_template() -> str:
-    """Return the canonical ``secrets.toml`` template content.
+    """Return the ``secrets.toml`` template content.
 
     Complete TOML file carrying ``[wifi]`` and ``[mqtt.broker]``
     sections with placeholder values that fail sanity at deploy time

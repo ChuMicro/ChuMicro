@@ -14,8 +14,8 @@ Combines:
   HARDWARE_ONCE / PROBED_ALWAYS), owned by ``chumicro-deploy``.
 * **Onboarding** — board-state detection, firmware URL derivation
   (CP S3 listing + MP curated machine→BOARD map).
-* **Init / update** — clone the canonical workspace template repo
-  and re-flow tool-owned files.
+* **Init / update** — clone the workspace template repo and re-flow
+  tool-owned files.
 * **CLI dispatch** — :func:`chumicro_workspace.cli.main` powers the
   ``chumicro-workspace`` entry-point and the workspace ``run.py`` shim.
 
@@ -26,14 +26,16 @@ sibling packages reach for through the root::
     from chumicro_workspace import (
         WorkspaceLayout,             # workspace path resolution + project tree
         compose_runtime_config,      # functional-test config merge
-        read_workspace_yml_template, # canonical workspace.yml content
-        read_devices_yml_template,   # canonical devices.yml content
+        read_workspace_yml_template, # workspace.yml template content
+        read_devices_yml_template,   # devices.yml template content
         verify_examples,             # AST-based example verifier
     )
 
 Everything else lives in submodules (``chumicro_workspace.deploy_source``,
 ``chumicro_workspace.pipeline``, ``chumicro_workspace.config_manifest``,
-etc.) and stays reachable via explicit submodule imports.
+``chumicro_workspace.workspace`` for :data:`ENTRY_POINT_FILENAMES` /
+:class:`ProjectClassification`, etc.) and stays reachable via explicit
+submodule imports.
 
 Workbench-only — runs on CPython only; never lands on a
 microcontroller.  Workbench tools and the workspace's ``run.py``
@@ -48,7 +50,6 @@ from chumicro_workspace.templates import (
     read_workspace_yml_template,
 )
 from chumicro_workspace.workspace import (
-    ENTRY_POINT_FILENAMES,
     ProjectClassification,
     WorkspaceLayout,
     WorkspaceNotFoundError,
@@ -60,7 +61,6 @@ from chumicro_workspace.workspace import (
 #: submodule reach; ``from chumicro_workspace.deploy_source import
 #: WithRuntimeConfig`` etc. still works.
 __all__ = [
-    "ENTRY_POINT_FILENAMES",
     "ProjectClassification",
     "WorkspaceLayout",
     "WorkspaceNotFoundError",

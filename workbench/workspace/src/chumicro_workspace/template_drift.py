@@ -1,4 +1,4 @@
-"""Compare materialized user files to their canonical templates.
+"""Compare materialized user files to their shipped templates.
 
 Walks the parsed file and surfaces dotted-path keys present in the
 template but absent from the user's file.  Used by
@@ -7,7 +7,7 @@ append pass during ``setup``.
 
 Two files are checked: ``workspace.yml`` (workspace machinery) and
 ``secrets.toml`` (device-bound credentials + defaults).  Both diff
-against the workbench-owned canonical template from
+against the workbench-owned template from
 :mod:`chumicro_workspace.templates`.
 """
 
@@ -30,7 +30,7 @@ def collect_missing_template_paths(
     workspace_root: Path,
     filename: str = "workspace.yml",
 ) -> list[str]:
-    """Return dotted-path keys present in the canonical template but
+    """Return dotted-path keys present in the shipped template but
     absent from the user's materialized *filename*.
 
     Returns an empty list when:
@@ -62,7 +62,7 @@ def collect_missing_template_paths(
 
 
 def _resolve_template_text(filename: str) -> str:
-    """Return the text of the canonical template for *filename*.
+    """Return the text of the shipped template for *filename*.
 
     Looks up the reader by name on the module so tests can monkey-patch
     ``read_workspace_yml_template`` / ``read_secrets_toml_template``

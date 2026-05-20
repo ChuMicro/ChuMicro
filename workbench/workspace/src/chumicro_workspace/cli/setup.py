@@ -76,7 +76,7 @@ def _setup_pip_install_editable(
 
 
 def _setup_materialize_templates(workspace: WorkspaceLayout) -> None:
-    """Land the canonical first-write text for the three workspace-root files.
+    """Land the first-write text for the three workspace-root files.
 
     ``workspace.yml`` / ``secrets.toml`` / ``devices.yml`` — only files
     that don't already exist are touched.  Print one line per materialized
@@ -160,18 +160,19 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     Runs ``pip install -e .`` in the workspace root when a
     ``pyproject.toml`` is present, then materializes any missing
     workspace templates (``devices.yml``, ``workspace.yml``,
-    ``secrets.toml``) from the canonical content shipped in
+    ``secrets.toml``) from the content shipped in
     :mod:`chumicro_workspace.templates` (``devices.yml`` ships from
     ``chumicro_deploy`` since it owns the schema).  Idempotent —
     re-running is safe.
 
-    Setup is the one command that *materializes* ``workspace.yml`` —
-    it cannot use :func:`_resolve_workspace`'s walk-up-and-find-marker
-    discovery, because on a fresh clone the marker doesn't exist yet.
-    Resolve the workspace root directly from ``--workspace-dir`` or
-    ``cwd``; every other command continues to use the marker-based
-    discovery so they keep working from any subdirectory inside an
-    already-set-up workspace.
+    ``setup`` materializes ``workspace.yml`` on a fresh clone; every
+    other command requires it to already exist.  So this is the one
+    place that *cannot* use :func:`_resolve_workspace`'s walk-up-
+    and-find-marker discovery — the marker isn't there yet.  Resolve
+    the workspace root directly from ``--workspace-dir`` or ``cwd``;
+    every other command continues to use the marker-based discovery
+    so they keep working from any subdirectory inside an already-set-up
+    workspace.
     """
     starting_dir = (
         args.workspace_dir if args.workspace_dir is not None else Path.cwd()
@@ -195,7 +196,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
 
 
 def _cmd_update(args: argparse.Namespace) -> int:
-    """Re-flow tool-owned template files from the canonical upstream."""
+    """Re-flow tool-owned template files from upstream."""
     workspace = _resolve_workspace(args)
     template_url = args.template_url or DEFAULT_TEMPLATE_URL
     try:
@@ -314,7 +315,7 @@ def _resolve_new_source(
             raise SystemExit(
                 f"error: template {template} not found — run "
                 "`python3 run.py update` to re-flow it from the "
-                "canonical template, or create `projects/_template/` "
+                "shipped template, or create `projects/_template/` "
                 "by hand.",
             )
         return template
@@ -454,7 +455,7 @@ def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
         "--from",
         dest="template_url",
         default=None,
-        help="Template git URL (defaults to the canonical ChuMicro template).",
+        help="Template git URL (defaults to the ChuMicro template).",
     )
     update_parser.add_argument(
         "--ref",

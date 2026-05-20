@@ -35,8 +35,8 @@ def read_deploy_targets(workspace_yaml: Path) -> dict[str, list[str]]:
     """Parse ``deploy_targets:`` out of *workspace_yaml*.
 
     Returns ``{project_slash_path: [device_id, ...]}``.  Dotted keys
-    (``garage.door``) normalize to slash form to match the
-    canonical output of :func:`_resolve_project_name`.  A scalar
+    (``garage.door``) normalize to slash form to match the slash-form
+    output of :func:`_resolve_project_name`.  A scalar
     string value auto-promotes to a single-element list so
     one-target projects can stay terse::
 
