@@ -95,29 +95,29 @@ def default_port_factory(
     return serial.Serial(address, baudrate=baudrate, timeout=timeout)
 
 
-#: Ctrl-A — enter CircuitPython / MicroPython raw REPL.
+#: Ctrl-A: enter CircuitPython / MicroPython raw REPL.
 CTRL_A = b"\x01"
-#: Ctrl-B — exit raw REPL back to the friendly REPL.
+#: Ctrl-B: exit raw REPL back to the friendly REPL.
 CTRL_B = b"\x02"
-#: Ctrl-C — KeyboardInterrupt in the friendly REPL; cancels pending
+#: Ctrl-C: KeyboardInterrupt in the friendly REPL; cancels pending
 #: raw-REPL input.
 CTRL_C = b"\x03"
-#: Ctrl-D — terminates raw-REPL input + triggers exec; in the
+#: Ctrl-D: terminates raw-REPL input and triggers exec; in the
 #: friendly REPL, triggers a soft reboot.
 CTRL_D = b"\x04"
-#: Ctrl-E — enters paste mode in the friendly REPL.  Forwarded by
+#: Ctrl-E: enters paste mode in the friendly REPL.  Forwarded by
 #: the TUI; not used by the raw-REPL helpers.
 CTRL_E = b"\x05"
-#: Ctrl-X — reserved by the TUI to exit without rebooting.  Never
+#: Ctrl-X: reserved by the TUI to exit without rebooting.  Never
 #: forwarded to the device.
 CTRL_X = b"\x18"
 
 #: Raw-REPL prompt the board emits after Ctrl-A.
 RAW_REPL_PROMPT = b"raw REPL; CTRL-B to exit\r\n>"
-#: End-of-output marker inside a raw-REPL response.  The framing is
-#: ``OK<stdout>\\x04<stderr>\\x04>`` — Ctrl-D separates stdout from
-#: stderr, and the second Ctrl-D + ``>`` signals "ready for the next
-#: input".
+#: End-of-output marker inside a raw-REPL response.  The full framing
+#: is ``OK<stdout>\\x04<stderr>\\x04>``: Ctrl-D separates stdout from
+#: stderr, and the second Ctrl-D plus ``>`` signals that the device
+#: is ready for the next input.
 RAW_REPL_EOT = b"\x04"
 
 

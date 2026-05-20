@@ -70,12 +70,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
         help=(
             "Interactive input mode.  `auto` (default) picks `line` on a "
-            "TTY and `passthrough` when stdin is piped (CI / scripts — "
-            "line mode needs interactive input).  `line` interposes a "
-            "host-side line editor with persistent per-device history, "
-            "cursor edit, and Ctrl-R reverse search.  `passthrough` "
-            "forwards every keystroke to the device — pick it for "
-            "raw-REPL framing or paste-mode flows."
+            "TTY and `passthrough` when stdin is piped, since line mode "
+            "needs interactive input.  `line` interposes a host-side line "
+            "editor with persistent per-device history, cursor edit, and "
+            "Ctrl-R reverse search.  `passthrough` forwards every "
+            "keystroke to the device; use it for raw-REPL framing or "
+            "paste-mode flows."
         ),
     )
     return parser
@@ -101,9 +101,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.tail is not None:
-        # Lazy-import so a plain ``--help`` doesn't pay tail's pyserial
-        # dependency.  ExitCode is an IntEnum; returning it directly
-        # gives the shell the right exit status.
+        # Lazy-import so a plain ``--help`` doesn't pay tail's
+        # pyserial dependency.  ExitCode is an IntEnum, so returning
+        # it directly gives the shell the right exit status.
         from ._follow import tail  # noqa: PLC0415
 
         return int(tail(

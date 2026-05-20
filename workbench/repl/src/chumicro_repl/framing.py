@@ -10,8 +10,8 @@ them to the next chunk.
 
 Also forgives one class of garbage: if the stream emits invalid bytes
 (e.g. an interrupted power glitch), the decoder replaces them with
-``U+FFFD`` rather than exploding the REPL — the user sees a
-replacement character, not a crash.
+``U+FFFD`` so the user sees a replacement character instead of a
+crash.
 """
 
 from __future__ import annotations
