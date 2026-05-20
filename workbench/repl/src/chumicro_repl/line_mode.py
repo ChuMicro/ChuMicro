@@ -429,17 +429,15 @@ def _forward_ctrl_d(port: SerialPort) -> None:
 def build_line_mode_key_bindings(port: SerialPort) -> KeyBindings:
     """Build the prompt_toolkit key-binding table for line mode.
 
-    Matches the passthrough TUI exactly:
+    Wires Ctrl-C and Ctrl-D to forward to *port* via
+    :func:`_forward_ctrl_c` and :func:`_forward_ctrl_d`, and Ctrl-X
+    to raise :class:`_ExitLineMode` and break out of the prompt loop
+    without touching the device.  Ctrl-D fires only when the input
+    buffer is empty, matching the shell convention that Ctrl-D on a
+    non-empty line is a no-op.
 
-    * ``Ctrl-C`` forwards to the device (interrupts a running
-      program).  Local input buffer is cleared so the prompt is fresh
-      on the next iteration.
-    * ``Ctrl-D`` (at an empty prompt) forwards to the device
-      (soft-reboot).
-    * ``Ctrl-X`` exits line mode locally without touching the device.
-
-    Imported lazily — prompt_toolkit is only loaded when line mode is
-    actually entered.
+    prompt_toolkit is imported inside the function so callers that
+    never enter line mode do not pay its import cost.
     """
     from prompt_toolkit.application import get_app  # noqa: PLC0415
     from prompt_toolkit.filters import Condition  # noqa: PLC0415

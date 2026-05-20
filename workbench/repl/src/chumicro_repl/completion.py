@@ -183,24 +183,13 @@ class CompletionCache:
 
 
 class DeviceCompleter:
-    """Pluggable completer fronting a :class:`CompletionCache`.
+    """Cache-fronted completer driven by a :class:`NamespaceFetcher`.
 
-    Calls a user-supplied *fetcher* to populate the cache when a
-    namespace key is queried for the first time; subsequent Tabs
-    on the same prefix hit the cache.  ``None`` from the fetcher
-    means "no result" — the cache stores an empty tuple so we
-    don't re-query a namespace we already know is empty (the user's
-    typo of an undefined name) until the next reset.
-
-    The fetcher signature:
-
-        ``(expression: str) -> Iterable[str] | None``
-
-    where *expression* is ``""`` for ``dir()`` or ``"foo.bar"`` for
-    ``dir(foo.bar)``.  Returning ``None`` signals a hard failure
-    (timeout, parse error) — the caller can inspect the returned
-    iterable's emptiness vs. ``None`` to decide whether to fall
-    back to other sources.
+    The first query for a given namespace key calls the fetcher and
+    stores the result; subsequent queries for any prefix in that
+    namespace hit the cache.  A ``None`` from the fetcher is a soft
+    failure (timeout, parse error) and is not cached, so the next Tab
+    retries.
     """
 
     def __init__(
@@ -241,10 +230,9 @@ class DeviceCompleter:
 class CombinedCompleter:
     """Layer multiple :class:`Completer` sources into one stream.
 
-    Returns deduplicated candidates in source order; ties broken
-    alphabetically so the static catalog leads with keywords + builtins
-    and any device-driven source contributes session-specific
-    names without hiding the well-known ones.
+    Yields each candidate once across all sources, sorted
+    alphabetically.  A name that appears in more than one source is
+    emitted only once.
     """
 
     def __init__(self, sources: Iterable[Completer]) -> None:
@@ -293,9 +281,10 @@ class PromptToolkitCompleter:
 # ---------------------------------------------------------------------------
 
 
-#: Per-step deadline inside :func:`fetch_device_names`.  The whole
-#: round-trip clocks in at 8–45 ms across the four-board matrix; a
-#: 2 s budget leaves ample slack for a board that's mid-busy.
+#: Wall-clock budget for one :func:`fetch_device_names` round-trip.
+#: A healthy device responds in tens of milliseconds; the 2 s ceiling
+#: leaves room for a board that is mid-busy without hanging the
+#: prompt.
 _FETCH_TIMEOUT_SECONDS: float = 2.0
 
 #: Inner poll interval for the fetcher's read loop.  Short enough to
