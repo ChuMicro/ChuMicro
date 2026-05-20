@@ -1532,33 +1532,41 @@ class CircuitpythonTransport:
                 target.unlink()
             except (OSError, FileNotFoundError):  # pragma: no cover — best-effort
                 pass
-        # Reap empty directories under /lib/.  unlink removes files but
-        # not dirs, so a package whose every file was stale leaves an
-        # empty `/lib/<pkg>/` husk — worse than nothing: a stale
-        # `import <pkg>` then fails *mid-package* (dir present, __init__
-        # gone) instead of cleanly.  rsync --delete prunes empty dirs;
-        # the diff path matches that by sweeping the whole scope (not
-        # just this run's deletions) so pre-existing husks clear too.
+        # Reap empty directories across the whole drive scope.  unlink
+        # removes files but not dirs, so a package whose every file
+        # was stale leaves an empty `/<pkg>/` husk.  Two failure modes
+        # the husk causes: (a) a stale `import <pkg>` fails *mid-
+        # package* (dir present, __init__ gone) instead of cleanly;
+        # (b) an empty `/<pkg>/` at the drive root resolves
+        # `import <pkg>` to a PEP 420 namespace package and shadows
+        # the populated `/lib/<pkg>/` deeper in `sys.path` — the same
+        # shape that bit Lolin S2 MP (bench-confirmed across both
+        # runtimes).  rsync --delete prunes empty dirs; the diff
+        # path matches that by sweeping the whole scope (not just
+        # this run's deletions) so pre-existing husks clear too.
         # Bottom-up so nested husks collapse; rmdir only removes an
-        # *empty* dir, so a live package is never touched; lib root
-        # itself is left in place.
-        lib_root = drive / "lib"
-        if lib_root.is_dir():
-            directories = [
-                entry for entry in lib_root.rglob("*") if entry.is_dir()
-            ]
-            # Deepest first so an emptied `<pkg>/_adapters/` is reaped
-            # before `<pkg>/`, letting the parent collapse in the same
-            # pass.
-            for directory in sorted(
-                directories,
-                key=lambda candidate: len(candidate.parts),
-                reverse=True,
-            ):
-                try:
-                    directory.rmdir()
-                except OSError:  # pragma: no cover — non-empty or transient
-                    pass
+        # *empty* dir, so a live package is never touched.
+        # Dot-prefixed entries (macOS noise: ``.Spotlight-V100`` …) are
+        # skipped — parity with ``_list_scope_on_drive``; they're not
+        # ours to reap.  The drive root itself is excluded by the
+        # ``rglob("*")`` starting point.
+        directories = sorted(
+            (
+                entry for entry in drive.rglob("*")
+                if entry.is_dir()
+                and not any(
+                    part.startswith(".")
+                    for part in entry.relative_to(drive).parts
+                )
+            ),
+            key=lambda candidate: len(candidate.parts),
+            reverse=True,
+        )
+        for directory in directories:
+            try:
+                directory.rmdir()
+            except OSError:  # pragma: no cover — non-empty or transient
+                pass
 
     def clear_entrypoints(self) -> None:
         """Unlink ``code.py`` / ``main.py`` and confirm they are gone.

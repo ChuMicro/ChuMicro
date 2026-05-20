@@ -977,13 +977,29 @@ class MicropythonTransport:
         ]
 
     def delete_files(self, paths: list[str]) -> None:
-        """Delete *paths* from the device's filesystem.
+        """Delete *paths* and reap directories that become empty.
 
         No-op in mount (RAM) mode — mount mode doesn't write to
         flash, so there's nothing to delete.  Otherwise sends a
-        small script that calls ``os.remove`` on each path; missing
-        paths and per-path errors are tolerated silently so the
-        diff-cleanup pass never blocks the actual deploy.
+        small script that calls ``os.remove`` on each path then walks
+        the whole filesystem bottom-up and ``os.rmdir``-reaps any
+        directory that's now empty; missing paths and per-path errors
+        are tolerated silently so the diff-cleanup pass never blocks
+        the actual deploy.
+
+        The reap is load-bearing on MicroPython: ``os.remove`` drops
+        files but never their parent directory, and MP's default
+        ``sys.path`` is ``['', '.frozen', '/lib']`` with ``''`` (root)
+        FIRST.  An empty root-level ``/<pkg>/`` resolves
+        ``import <pkg>`` to a PEP 420 namespace package (``__file__``
+        is ``None``, ``dir()`` empty) and shadows the populated
+        ``/lib/<pkg>/`` deeper in the path.  Bench-confirmed against
+        Lolin S2 MP carrying ``/chumicro_timing/*.py`` at root from a
+        prior deploy convention while the new payload targeted
+        ``/lib/chumicro_timing/*.py``.  ``rmdir`` only removes an
+        empty directory so live packages are never touched.
+        Dot-prefixed entries are skipped — parity with the listing
+        script's filter and with the CP host-side reap.
         """
         if not paths:
             return
@@ -1006,6 +1022,28 @@ class MicropythonTransport:
             "        os.remove(_path)\n"
             "    except OSError:\n"
             "        pass\n"
+            "def _reap(p):\n"
+            "    try:\n"
+            "        entries = os.listdir(p)\n"
+            "    except OSError:\n"
+            "        return\n"
+            "    for name in entries:\n"
+            "        if name.startswith('.'):\n"
+            "            continue\n"
+            "        full = p + '/' + name if p != '/' else '/' + name\n"
+            "        try:\n"
+            "            stat = os.stat(full)\n"
+            "        except OSError:\n"
+            "            continue\n"
+            "        if stat[0] & 0x4000:\n"
+            "            _reap(full)\n"
+            "    if p != '/':\n"
+            "        try:\n"
+            "            if not os.listdir(p):\n"
+            "                os.rmdir(p)\n"
+            "        except OSError:\n"
+            "            pass\n"
+            "_reap('/')\n"
         )
         try:
             self._serial.exec_raw(script, timeout=30)
