@@ -238,9 +238,11 @@ def _cmd_library_remove(args: argparse.Namespace) -> int:
 
     dependents = _dependents_of(workspace, table, args.name)
     if dependents:
+        verb = "depends" if len(dependents) == 1 else "depend"
+        pronoun = "its" if len(dependents) == 1 else "their"
         print(
-            f"warning: {', '.join(dependents)} still depend on "
-            f"{args.name}; their deploy will fail without it.",
+            f"warning: {', '.join(dependents)} still {verb} on "
+            f"{args.name}; {pronoun} deploy will fail without it.",
         )
         if _interactive(args) and not _confirm("Remove anyway?"):
             print("Aborted.")
@@ -269,9 +271,11 @@ def _cmd_library_forget(args: argparse.Namespace) -> int:
 
     dependents = _dependents_of(workspace, table, args.name)
     if dependents:
+        verb = "depends" if len(dependents) == 1 else "depend"
+        pronoun = "its" if len(dependents) == 1 else "their"
         print(
-            f"warning: {', '.join(dependents)} still depend on "
-            f"{args.name}; their deploy will fail without it.",
+            f"warning: {', '.join(dependents)} still {verb} on "
+            f"{args.name}; {pronoun} deploy will fail without it.",
         )
         if _interactive(args) and not _confirm("Forget anyway?"):
             print("Aborted.")
