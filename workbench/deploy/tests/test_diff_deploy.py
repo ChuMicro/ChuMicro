@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import pytest
 from chumicro_deploy import (
-    DEPLOY_SCOPE_FILES,
-    DEPLOY_SCOPE_PREFIXES,
     Deployer,
     Device,
     FakeTransport,
     FileMapSource,
+)
+from chumicro_deploy.protocol import (
+    DEPLOY_SCOPE_FILES,
+    DEPLOY_SCOPE_PREFIXES,
     is_in_deploy_scope,
 )
 

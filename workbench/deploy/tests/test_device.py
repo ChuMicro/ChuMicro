@@ -5,11 +5,9 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError
 
 import pytest
-from chumicro_deploy import (
-    CircuitpythonTransport,
-    Device,
-    MicropythonTransport,
-)
+from chumicro_deploy import Device
+from chumicro_deploy.circuitpython_transport import CircuitpythonTransport
+from chumicro_deploy.micropython_transport import MicropythonTransport
 
 
 class TestConstruction:
