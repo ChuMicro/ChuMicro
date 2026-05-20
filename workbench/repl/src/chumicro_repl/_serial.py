@@ -29,9 +29,8 @@ class DeviceLike(Protocol):
     package consumes.
 
     Any object exposing ``address`` (and optionally ``baudrate``)
-    satisfies this — keeps the REPL importable and usable for
-    bare-port-path callers without ``chumicro-deploy`` installed.
-    ``chumicro_deploy.Device`` satisfies it via duck typing.
+    satisfies this, so callers can pass a deploy-style device object
+    or a bare port path without a hard dependency.
     """
 
     address: str

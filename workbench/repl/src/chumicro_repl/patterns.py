@@ -54,8 +54,7 @@ class PatternMatch:
         kind: The :class:`PatternKind` of this match.
         start: Start index into the input string (inclusive).
         end: End index into the input string (exclusive).
-        text: The matched substring itself — a convenience slice so
-            callers don't have to re-index the input.
+        text: The matched substring.
     """
 
     kind: PatternKind
@@ -155,8 +154,8 @@ class StreamingPatternDetector:
     contained entirely within the current buffer, and trims matched
     content plus anything older than the buffer-size window.
 
-    Used by :func:`~chumicro_repl.tail` to watch for tracebacks
-    without accumulating arbitrary memory on long-running sessions.
+    Bounded memory: long-running streams that never match keep the
+    buffer at or below *buffer_limit*.
 
     Args:
         buffer_limit: Soft cap on buffered bytes.  Patterns longer
@@ -176,10 +175,9 @@ class StreamingPatternDetector:
     def total_fed(self) -> int:
         """Total characters ever passed through :meth:`feed`.
 
-        Exposed so streaming consumers (the highlighter in
-        :mod:`chumicro_repl._follow` and :mod:`chumicro_repl.tui`) can
-        translate absolute match offsets back into the
-        most-recently-fed chunk: ``chunk_start = total_fed - len(chunk)``.
+        Lets a streaming consumer translate an absolute match offset
+        back into the most-recently-fed chunk:
+        ``chunk_start = total_fed - len(chunk)``.
         """
         return self._total_fed
 

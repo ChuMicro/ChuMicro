@@ -91,9 +91,8 @@ class FakeSerialPort:
     def __call__(self, *_args: object, **_kwargs: object) -> FakeSerialPort:
         """Return this port, or raise the scripted *open_error*.
 
-        Accepts both positional and keyword args; chumicro-repl calls
-        factories with positional ``(address, baudrate, timeout)``
-        while chumicro-deploy uses kwargs.
+        Accepts both positional and keyword args so the same fake
+        plugs into factories that use either calling convention.
         """
         if self._open_error is not None:
             raise self._open_error

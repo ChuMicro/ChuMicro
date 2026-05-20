@@ -7,12 +7,9 @@ string; the default theme uses the same color choices as
 ``mpremote`` + ``rich.traceback``: red/bold for tracebacks and hard
 faults, yellow for safe mode, dim/cyan for soft-reboot banners.
 
-The highlighter is intentionally terminal-agnostic — it emits raw
-ANSI escape sequences only, no ``rich`` dependency, so output
-streamed to ``stdout.isatty() is False`` (a log file, a pipe to
-``tee``, a CI capture) can be passed through
-:func:`strip_ansi_sequences` downstream without a third-party
-library.
+Emits raw ANSI escape sequences only, with no ``rich`` dependency.
+Output destined for a non-TTY stream can be passed through
+:func:`strip_ansi_sequences` downstream to recover plain text.
 """
 
 from __future__ import annotations
@@ -44,15 +41,14 @@ class Theme:
     ``\\x1b[`` and ``m``).  Default values chosen to read cleanly on
     both light and dark terminal backgrounds:
 
-    - ``traceback`` — bold red (``1;31``), mirrors CPython's own
-      traceback coloring in ``rich`` / ``pytest`` output.
-    - ``safe_mode`` — bold yellow (``1;33``), distinct from errors
+    - ``traceback``: bold red (``1;31``).
+    - ``safe_mode``: bold yellow (``1;33``), distinct from errors
       but still attention-grabbing.
-    - ``hard_fault`` — bold red background (``1;41``), maximum
+    - ``hard_fault``: bold red background (``1;41``), maximum
       attention since hard faults mean the chip is unhappy at a
       level below Python.
-    - ``soft_reboot`` — dim cyan (``2;36``), informational only —
-      the user asked for it.
+    - ``soft_reboot``: dim cyan (``2;36``), informational only.
+      The user asked for it.
     """
 
     traceback: str = "1;31"
@@ -95,10 +91,9 @@ def colorize(
     directly; pre-compute matches and pass them explicitly for
     streaming callers that already know where the patterns start.
 
-    Overlapping matches (rare — see :mod:`.patterns`) are handled by
-    walking in start-index order and skipping any match whose start
-    falls inside a previously-emitted span.  This keeps the escape
-    sequences balanced (one reset per style).
+    Overlapping matches are handled by walking in start-index order
+    and skipping any match whose start falls inside a previously-emitted
+    span.  This keeps the escape sequences balanced (one reset per style).
 
     Args:
         text: Decoded REPL output.

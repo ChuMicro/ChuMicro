@@ -456,10 +456,9 @@ def _format_welcome_banner(
 def _transport_label(device: DeviceLike | str) -> str | None:
     """Return the device's runtime label, or ``None`` for a bare path.
 
-    Duck-typed access mirrors :func:`chumicro_repl._serial.resolve_address`
-    — accepts any object with a ``.transport`` attribute (including
-    the :class:`chumicro_deploy.Device` dataclass) without a hard
-    import dependency on chumicro-deploy.
+    Accepts any object with a ``.transport`` attribute (including the
+    :class:`chumicro_deploy.Device` dataclass), so this module doesn't
+    hard-depend on chumicro-deploy.
     """
     if isinstance(device, str):
         return None

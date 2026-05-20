@@ -91,14 +91,9 @@ def _completable_tail(text_before_cursor: str) -> str:
 class Completer(Protocol):
     """Structural interface for a completion source.
 
-    Mirrors the fragment of `prompt_toolkit.completion.Completer`
-    we depend on.  The :class:`CombinedCompleter` adapter wraps a
-    list of these into the prompt_toolkit class proper so the
-    line-mode session can plug in any combination.
-
-    Implementations return an iterable of completion strings —
-    plain `str`, not `prompt_toolkit.Completion` objects — so
-    sources stay testable without a prompt_toolkit dependency.
+    Returns plain ``str`` candidates rather than
+    ``prompt_toolkit.Completion`` objects so implementations stay
+    testable without a prompt_toolkit dependency.
     """
 
     def candidates(self, prefix: str) -> Iterable[str]:
@@ -169,9 +164,8 @@ class CompletionCache:
     """In-memory cache keyed by namespace expression.
 
     ``""`` keys the bare namespace (``dir()``); ``"foo"`` keys
-    ``dir(foo)``; ``"foo.bar"`` keys ``dir(foo.bar)``.  Unbounded —
-    sessions don't accumulate enough namespaces to matter; the
-    cache clears on every device reset.
+    ``dir(foo)``; ``"foo.bar"`` keys ``dir(foo.bar)``.  Unbounded;
+    the cache clears on every device reset.
     """
 
     def __init__(self) -> None:
@@ -272,8 +266,8 @@ class CombinedCompleter:
 class PromptToolkitCompleter:
     """Adapter wrapping a :class:`Completer` for `prompt_toolkit`.
 
-    Constructed automatically by :func:`build_default_completer`;
-    callers wiring their own prompt_toolkit session use this directly.
+    Callers wiring their own prompt_toolkit session instantiate this
+    directly with a chosen completion source.
     """
 
     def __init__(self, source: Completer) -> None:
