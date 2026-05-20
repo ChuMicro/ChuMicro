@@ -4,9 +4,8 @@ Publishable workbench tool that talks to CircuitPython and MicroPython
 boards over pyserial.  Three surfaces:
 
 - :func:`interactive` / ``python -m chumicro_repl`` — interactive TUI
-  that forwards keystrokes to the board, with the same core
-  keybindings (Ctrl-C / Ctrl-D / Ctrl-X / Ctrl-E) as mpremote's
-  ``repl`` subcommand.
+  that forwards keystrokes to the board, with core keybindings
+  (Ctrl-C / Ctrl-D / Ctrl-X / Ctrl-E).
 - :func:`tail` — one-shot "stream output for N seconds" follow-up used
   by deploy orchestration; highlights tracebacks as they arrive and
   returns an :class:`ExitCode`.

@@ -270,13 +270,10 @@ def _attempt_reconnect(
 
     Args:
         output: Where to print the status notices.
-        error: The :class:`OSError` that triggered the reconnect.
-            Used in the disconnect notice so the user sees what
-            went wrong.
-        factory: Same factory the original :func:`tail` call used.
-            Each retry calls ``factory(address, baudrate,
-            _POLL_INTERVAL)`` — the closure captures address and
-            baudrate.
+        error: The :class:`OSError` that triggered the reconnect, used
+            in the disconnect notice.
+        factory: Port factory; each retry calls
+            ``factory(address, baudrate, _POLL_INTERVAL)``.
         address / baudrate: Forwarded to the factory.
         time: Injectable time source.
         reconnect_seconds: Total budget in seconds.
