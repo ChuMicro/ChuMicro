@@ -9,8 +9,10 @@ not factor a shared classifier into a third package.  See
 Public surface:
 
 - :class:`ReplFailureKind` — enum of session-start failure modes.
-- :class:`RecoveryPlan` — headline + ordered fix-steps + retryable
-  flag for one kind, mirrors :class:`chumicro_deploy.recovery.RecoveryPlan`.
+- :class:`RecoveryPlan` — headline + ordered fix-steps for one
+  kind.  Shallower than :class:`chumicro_deploy.recovery.RecoveryPlan`
+  (no ``retryable`` flag) because repl's coaching loop retries every
+  classified kind.
 - :func:`classify_session_failure` — classify an :class:`OSError` /
   :class:`ReplSessionError` raised during session-start into a
   :class:`ReplFailureKind`.

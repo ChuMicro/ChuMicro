@@ -159,7 +159,7 @@ class StreamingPatternDetector:
     contained entirely within the current buffer, and trims matched
     content plus anything older than the buffer-size window.
 
-    Used by :func:`~chumicro_repl.tail.tail` to watch for tracebacks
+    Used by :func:`~chumicro_repl.tail` to watch for tracebacks
     without accumulating arbitrary memory on long-running sessions.
 
     Args:

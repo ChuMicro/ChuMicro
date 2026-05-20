@@ -4,7 +4,7 @@ Provides three fakes for host-side tests:
 
 - :class:`FakeSerialPort` — drop-in replacement for ``serial.Serial``
   in :class:`chumicro_repl.session.ReplSession`,
-  :func:`chumicro_repl.tail.tail`, and :func:`chumicro_repl.tui.run_loop`.
+  :func:`chumicro_repl.tail`, and :func:`chumicro_repl.tui.run_loop`.
   Records writes, replays scripted reads.
 - :class:`FakeKeyboard` — replays scripted keystrokes for
   :func:`chumicro_repl.tui.run_loop` tests.
