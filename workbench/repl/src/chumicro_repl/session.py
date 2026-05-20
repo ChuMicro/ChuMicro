@@ -42,6 +42,7 @@ from ._serial import (
     SerialPort,
     TimeSource,
     default_port_factory,
+    read_chunk,
     resolve_address,
 )
 from .framing import Utf8StreamDecoder
@@ -382,10 +383,7 @@ class ReplSession:
                 return consumed_text
             last_scanned = len(accumulated)
             try:
-                if port.in_waiting:
-                    chunk = port.read(port.in_waiting)
-                else:
-                    chunk = port.read(1)
+                chunk = read_chunk(port)
             except OSError as disconnect_error:
                 raise ReplSessionDisconnected(disconnect_error) from disconnect_error
             if chunk:
@@ -458,15 +456,11 @@ class ReplSession:
                 self._read_remainder.extend(accumulated[end_index:])
                 return bytes(accumulated[:end_index])
             try:
-                available = port.in_waiting
-                if available:
-                    accumulated.extend(port.read(available))
-                    continue
-                new_byte = port.read(1)
+                chunk = read_chunk(port)
             except OSError as disconnect_error:
                 raise ReplSessionDisconnected(disconnect_error) from disconnect_error
-            if new_byte:
-                accumulated.extend(new_byte)
+            if chunk:
+                accumulated.extend(chunk)
                 continue
             if self._time.monotonic() >= deadline:
                 raise ReplSessionError(
