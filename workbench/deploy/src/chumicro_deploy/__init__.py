@@ -18,18 +18,12 @@ details + deploy-mode preference into a single object that
 
 from __future__ import annotations
 
-from .circuitpython_bootstrap import (
-    build_circuitpython_bootstrap_scripts,
-    build_circuitpython_deploy_scripts,
-)
+from .circuitpython_bootstrap import build_circuitpython_bootstrap_scripts
 from .circuitpython_transport import (
     CircuitpythonMidDeployDisconnected,
-    CircuitpythonTransport,
     CircuitpythonTransportError,
-    SerialPort,
 )
 from .config.default import (
-    DEFAULT_DEVICES_FILENAME,
     DeviceConfigError,
     DeviceDefaults,
     DeviceEntry,
@@ -45,10 +39,7 @@ from .firmware import (
     flash_firmware,
     resolve_firmware_url,
 )
-from .firmware_url import (
-    CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE,
-    UnresolvedFirmwareError,
-)
+from .firmware_url import UnresolvedFirmwareError
 from .host_platform import RsyncMissingError, WindowsNotSupportedError
 from .macos_fskit import (
     MACOS_FSKIT_RECOVERY_COMMAND,
@@ -56,7 +47,6 @@ from .macos_fskit import (
 )
 from .micropython_transport import (
     MicropythonMidDeployDisconnected,
-    MicropythonTransport,
     MicropythonTransportError,
 )
 from .preflight import (
@@ -66,16 +56,12 @@ from .preflight import (
 )
 from .probe import DeviceInfo, probe_device
 from .protocol import (
-    DEPLOY_SCOPE_FILES,
-    DEPLOY_SCOPE_PREFIXES,
     DeployMode,
     DeviceImplementation,
     ExtendedTransportProtocol,
-    ReflashMethod,
     Runtime,
     TransportProtocol,
     UnsupportedExtraFilesError,
-    is_in_deploy_scope,
 )
 from .recovery import (
     DeployFailureKind,
@@ -92,23 +78,13 @@ from .runtime_marker import (
     is_test_support_module,
     read_runtime_marker,
 )
-from .skip_factories import (
-    discover_factory_modules,
-    read_skip_factories_marker,
-    resolve_skip_targets,
-)
 from .sources import DirectorySource, FileMapSource, FileSource, ImportGraphSource
 from .testing import FakeTransport
 
 __all__ = [
-    "CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE",
     "CircuitpythonMidDeployDisconnected",
-    "CircuitpythonTransport",
     "CircuitpythonTransportError",
     "DEFAULT_DEPLOY_MODE",
-    "DEFAULT_DEVICES_FILENAME",
-    "DEPLOY_SCOPE_FILES",
-    "DEPLOY_SCOPE_PREFIXES",
     "DeployError",
     "DeployFailureKind",
     "DeployMode",
@@ -131,39 +107,31 @@ __all__ = [
     "InteractiveDeployer",
     "MACOS_FSKIT_RECOVERY_COMMAND",
     "MicropythonMidDeployDisconnected",
-    "MicropythonTransport",
     "MicropythonTransportError",
     "NonInteractiveDeployer",
     "RecoveryPlan",
-    "ReflashMethod",
     "RsyncMissingError",
     "Runtime",
-    "SerialPort",
     "TransportProtocol",
     "UnresolvedFirmwareError",
     "UnsupportedExtraFilesError",
     "WindowsNotSupportedError",
     "build_circuitpython_bootstrap_scripts",
-    "build_circuitpython_deploy_scripts",
     "classify_deploy_failure",
     "detect_fskit_wedge",
-    "discover_factory_modules",
     "file_targets_runtime",
     "find_libraries_requiring_flash",
     "flash_firmware",
     "is_host_only_test",
-    "is_in_deploy_scope",
     "is_test_support_module",
     "load_device_registry",
     "load_devices",
     "probe_device",
     "read_devices_yml_template",
     "read_runtime_marker",
-    "read_skip_factories_marker",
     "recovery_plan_for",
     "resolve_deploy_mode",
     "resolve_firmware_url",
     "resolve_ide_devices",
-    "resolve_skip_targets",
 ]
 assert sorted(__all__) == __all__, "__all__ must be alphabetized"

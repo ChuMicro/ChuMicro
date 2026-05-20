@@ -56,6 +56,31 @@ KNOWN_RUNTIMES: frozenset[str] = frozenset({
 DEVICE_RUNTIMES: frozenset[str] = frozenset({"circuitpython", "micropython"})
 
 
+def _top_level_assignment_value(
+    python_file: Path, marker_name: str,
+) -> ast.expr | None:
+    """Return the AST value node of a top-level ``<marker_name> = ...``.
+
+    Returns ``None`` when the file is unreadable, unparseable, or the
+    marker is not present at module scope.  Centralizes the file-read
+    + AST scan so each marker reader stays a few lines of typed value
+    extraction.
+    """
+    try:
+        tree = ast.parse(python_file.read_text(), filename=str(python_file))
+    except (OSError, SyntaxError):
+        return None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [
+            target.id for target in node.targets if isinstance(target, ast.Name)
+        ]
+        if marker_name in targets:
+            return node.value
+    return None
+
+
 def read_runtime_marker(python_file: Path) -> frozenset[str] | None:
     """Return the ``__chumicro_runtimes__`` set declared in *python_file*.
 
@@ -68,24 +93,14 @@ def read_runtime_marker(python_file: Path) -> frozenset[str] | None:
     files that import device-only modules at top level remain readable
     on the host.
     """
-    try:
-        tree = ast.parse(python_file.read_text(), filename=str(python_file))
-    except SyntaxError:
-        return None  # Treat unparseable files as universal — fail-safe.
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        targets = [target.id for target in node.targets if isinstance(target, ast.Name)]
-        if "__chumicro_runtimes__" not in targets:
-            continue
-        if not isinstance(node.value, (ast.Tuple, ast.List)):
-            continue
-        names: list[str] = []
-        for element in node.value.elts:
-            if isinstance(element, ast.Constant) and isinstance(element.value, str):
-                names.append(element.value)
-        return frozenset(names)
-    return None
+    value = _top_level_assignment_value(python_file, "__chumicro_runtimes__")
+    if not isinstance(value, (ast.Tuple, ast.List)):
+        return None
+    return frozenset(
+        element.value
+        for element in value.elts
+        if isinstance(element, ast.Constant) and isinstance(element.value, str)
+    )
 
 
 def is_test_support_module(python_file: Path) -> bool:
@@ -105,20 +120,8 @@ def is_test_support_module(python_file: Path) -> bool:
     assignment.  Read via :func:`ast.parse` (no execution), matching
     :func:`read_runtime_marker`.
     """
-    try:
-        tree = ast.parse(python_file.read_text(), filename=str(python_file))
-    except (OSError, SyntaxError):
-        return False  # Unreadable / unparseable → not test-support (fail-safe).
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        targets = [
-            target.id for target in node.targets if isinstance(target, ast.Name)
-        ]
-        if "__chumicro_test_support__" not in targets:
-            continue
-        return isinstance(node.value, ast.Constant) and node.value.value is True
-    return False
+    value = _top_level_assignment_value(python_file, "__chumicro_test_support__")
+    return isinstance(value, ast.Constant) and value.value is True
 
 
 def is_host_only_test(python_file: Path) -> bool:
@@ -144,20 +147,8 @@ def is_host_only_test(python_file: Path) -> bool:
     assignment.  Read via :func:`ast.parse` (no execution), matching
     :func:`read_runtime_marker` and :func:`is_test_support_module`.
     """
-    try:
-        tree = ast.parse(python_file.read_text(), filename=str(python_file))
-    except (OSError, SyntaxError):
-        return False  # Unreadable / unparseable → not host-only (fail-safe).
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        targets = [
-            target.id for target in node.targets if isinstance(target, ast.Name)
-        ]
-        if "__chumicro_host_only__" not in targets:
-            continue
-        return isinstance(node.value, ast.Constant) and node.value.value is True
-    return False
+    value = _top_level_assignment_value(python_file, "__chumicro_host_only__")
+    return isinstance(value, ast.Constant) and value.value is True
 
 
 def file_targets_runtime(
