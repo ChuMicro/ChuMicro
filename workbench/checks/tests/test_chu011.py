@@ -7,10 +7,9 @@ from pathlib import Path
 
 from chumicro_checks.rules.chu011 import (
     _BULLET_CAP,
-    _DONE_SECTION_CAP,
     CHU011,
     _find_bullet_extents,
-    _find_done_section_top_level_bullets,
+    _find_done_heading_indices,
 )
 
 
@@ -40,97 +39,98 @@ class TestSilentNoOp:
 
 
 class TestBulletCap:
-    """Top-level bullets exceeding ``_BULLET_CAP`` markers fire."""
+    """Top-level bullets with sub-bullets fire (cap of 1)."""
 
-    def test_under_cap_passes(self, tmp_path: Path) -> None:
+    def test_one_bullet_passes(self, tmp_path: Path) -> None:
         _make_repo_with_next_up(tmp_path, """
-            ## Now
+            ## Next
 
-            - top
-              - sub-1
-              - sub-2
-              - sub-3
-              - sub-4
+            - lone top-level bullet
+            - another lone bullet
         """)
         assert CHU011.check(tmp_path) == []
 
-    def test_over_cap_fires(self, tmp_path: Path) -> None:
+    def test_sub_bullet_fires(self, tmp_path: Path) -> None:
         _make_repo_with_next_up(tmp_path, """
-            ## Now
+            ## Next
 
             - top
               - sub-1
-              - sub-2
-              - sub-3
-              - sub-4
-              - sub-5
-              - sub-6
         """)
         findings = CHU011.check(tmp_path)
         assert len(findings) == 1
         assert findings[0].code == "CHU011"
-        assert "7 bullet markers" in findings[0].message
+        assert "2 bullet markers" in findings[0].message
         assert f"cap {_BULLET_CAP}" in findings[0].message
+        assert "no sub-bullets" in findings[0].message
 
     def test_per_bullet_noqa_suppresses(self, tmp_path: Path) -> None:
         _make_repo_with_next_up(tmp_path, """
-            ## Now
+            ## Next
 
             - top  <!-- noqa: CHU011 -->
               - sub-1
               - sub-2
-              - sub-3
-              - sub-4
-              - sub-5
-              - sub-6
         """)
         assert CHU011.check(tmp_path) == []
 
     def test_heading_breaks_extent(self, tmp_path: Path) -> None:
-        # The first bullet's extent ends at the heading; only its 2
-        # markers are counted, well under the cap.
+        # Each bullet has only its own marker since the heading splits them.
         _make_repo_with_next_up(tmp_path, """
             ## Now
 
-            - top
-              - sub-1
+            - first
 
             ## Next
 
-            - other
+            - second
         """)
         assert CHU011.check(tmp_path) == []
 
 
-class TestDoneSectionCap:
-    """The ``## Done (recent)`` section is capped at 5 entries."""
+class TestDoneHeadingAbsent:
+    """The ``## Done`` heading is forbidden — recent landings live in git log."""
 
-    def test_at_cap_passes(self, tmp_path: Path) -> None:
-        body = "## Done (recent)\n\n" + "\n".join(
-            f"- [x] entry {index}" for index in range(_DONE_SECTION_CAP)
-        )
-        _make_repo_with_next_up(tmp_path, body)
+    def test_no_done_heading_passes(self, tmp_path: Path) -> None:
+        _make_repo_with_next_up(tmp_path, """
+            ## Now
+
+            - one
+
+            ## Next
+
+            - two
+        """)
         assert CHU011.check(tmp_path) == []
 
-    def test_over_cap_fires(self, tmp_path: Path) -> None:
-        body = "## Done (recent)\n\n" + "\n".join(
-            f"- [x] entry {index}" for index in range(_DONE_SECTION_CAP + 3)
-        )
-        _make_repo_with_next_up(tmp_path, body)
+    def test_done_heading_fires(self, tmp_path: Path) -> None:
+        _make_repo_with_next_up(tmp_path, """
+            ## Done (recent)
+
+            - [x] shipped thing
+        """)
         findings = CHU011.check(tmp_path)
         assert len(findings) == 1
-        message = findings[0].message
-        assert f"{_DONE_SECTION_CAP + 3} entries" in message
-        assert f"cap {_DONE_SECTION_CAP}" in message
+        assert findings[0].code == "CHU011"
+        assert "`## Done` heading is not allowed" in findings[0].message
+        assert "git log" in findings[0].message
 
-    def test_file_scope_noqa_suppresses(self, tmp_path: Path) -> None:
-        body = (
-            "<!-- noqa: CHU011 -->\n## Done (recent)\n\n"
-            + "\n".join(
-                f"- [x] entry {index}" for index in range(_DONE_SECTION_CAP + 3)
-            )
-        )
-        _make_repo_with_next_up(tmp_path, body)
+    def test_done_bare_also_fires(self, tmp_path: Path) -> None:
+        _make_repo_with_next_up(tmp_path, """
+            ## Done
+
+            - [x] shipped thing
+        """)
+        findings = CHU011.check(tmp_path)
+        assert len(findings) == 1
+        assert "`## Done` heading is not allowed" in findings[0].message
+
+    def test_heading_line_noqa_suppresses(self, tmp_path: Path) -> None:
+        _make_repo_with_next_up(tmp_path, """
+            ## Done (recent) <!-- noqa: CHU011 -->
+
+            - [x] shipped thing
+        """)
         assert CHU011.check(tmp_path) == []
 
 
@@ -145,18 +145,20 @@ class TestHelpers:
         lines = ["- only"]
         assert _find_bullet_extents(lines) == [(0, 1)]
 
-    def test_find_done_section_top_level_bullets(self) -> None:
+    def test_find_done_heading_indices_matches_recent_variant(self) -> None:
         lines = [
             "## Now",
-            "- not-counted",
+            "- one",
             "## Done (recent)",
-            "- entry-a",
-            "  - sub (not counted, not top-level)",
-            "- entry-b",
+            "- [x] two",
             "## Next-section",
-            "- not-counted",
+            "- three",
         ]
-        assert _find_done_section_top_level_bullets(lines) == [3, 5]
+        assert _find_done_heading_indices(lines) == [2]
+
+    def test_find_done_heading_indices_matches_bare(self) -> None:
+        lines = ["## Done", "- [x] one"]
+        assert _find_done_heading_indices(lines) == [0]
 
 
 class TestRuleMetadata:
@@ -166,5 +168,4 @@ class TestRuleMetadata:
         assert CHU011.code == "CHU011"
 
     def test_description_mentions_caps(self) -> None:
-        # Sanity: the description tells the operator what the rule does.
         assert "bullet" in CHU011.description.lower()
