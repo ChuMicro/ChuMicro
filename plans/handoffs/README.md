@@ -25,6 +25,6 @@ the handoff file here, and adds a one-line pointer to
 [`next-up.md`](../next-up.md) `## Now` so the next session's warm-up ritual
 surfaces it.
 
-When the work picked up *from* a handoff finishes, the bullet migrates to
-`## Done (recent)` per the normal AGENTS.md rule, and the handoff file
-becomes part of git history.
+When the work picked up *from* a handoff finishes, the bullet is removed
+from `## Now` per the normal AGENTS.md rule (no `## Done` section —
+`git log` carries history) and the handoff file becomes git history.

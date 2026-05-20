@@ -49,13 +49,14 @@ Ask: **did this session produce something that future sessions need to know with
 
 ## 4. Refresh `plans/next-up.md`
 
-`next-up.md` is the agent-managed work queue and the single source of truth for what's in flight, queued, blocked, and recently shipped. Every checkpoint touches it:
+`next-up.md` is the agent-managed work queue and the single source of truth for what's in flight and what's queued.  No `## Done` section — `git log` carries history (AGENTS.md "Keeping plans and docs current").  Every checkpoint touches it:
 
-- **`## Now`** — update so it reflects what just shipped (move the closed item to `## Done`) and what (if anything) is now in flight.  If Now is empty after the move, leave it empty — the Done entry alone is enough.
-- **`## Done (recent)`** — add a ledger entry: `**Title** (YYYY-MM-DD, commit `<short>`) — terse summary + workstream / archive link if applicable.`  Subject + commit hashes + headline result + workstream pointer; under ~500 chars; detail lives in the commit message and workstream doc.  Done entries are ledger lines, not synopses — they're for a future agent picking up cold, not a status report for the user.  Drop the oldest entry if the section is at its 5-entry cap (CHU011 will fail otherwise).
-- **`## Next` / `## Investigations`** — add follow-ups discovered during the work; mark check-boxes for items that just shipped and move them to `## Done`.
+- **`## Now`** — remove the bullet for what just shipped.  If Now is now empty, leave it empty.
+- **`## Next` / `## Investigations`** — remove the bullet for any item that just shipped; add new follow-ups discovered during the work as one-line entries (promote to `plans/workstreams/<slug>.md` if the item needs more than a title).
 
-Each top-level bullet stays ≤5 bullet markers (lead + sub-bullets). If an entry needs more, promote to `plans/workstreams/<slug>.md` and link from a one-line pointer here.
+Each top-level bullet stays at one line, no sub-bullets (CHU011).  If an entry would need more, promote to `plans/workstreams/<slug>.md` and link from a one-line pointer here.
+
+The narrative of what shipped lives in the commit message you write in step 5.  A future agent picking up cold runs `git --no-pager log -20 --oneline` to see the recent landings.
 
 ## 5. Commit and push if the work is meaningful
 
@@ -75,7 +76,7 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 
 - Preflight green (or pre-existing red surfaced to the user and work paused).
 - Step 3 either lifted one bullet or explicitly decided "routine session, no lift".
-- `plans/next-up.md` reflects what just shipped: `## Done` entry added, `## Now` accurate.
+- `plans/next-up.md` reflects what just shipped: the matching `## Now` / `## Next` bullet removed; new follow-ups added.
 - Commit pushed — or the work explicitly declared partial.
 
 ## Rules
@@ -84,5 +85,5 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 - **Don't skip step 1.** A `git status` catches surprises — files you forgot, files you didn't mean to change, merge artifacts.
 - **Don't skip step 2.** Preflight is the single gate. If it passes, CI will pass. Narrow checks miss cross-cutting breakage.
 - **Step 3 is the compression tier.** `git log` is the journal — there's no separate dated-timeline file. If you find yourself writing long planning-doc prose, stop and ask whether it should be a Pattern, a Learning, a Decision, or a commit-message body instead.
-- **Step 4 is cheap.** A one-line `## Done` entry + a refreshed `## Now` is all most checkpoints need. Always do it — the next session reads `next-up.md` cold.
+- **Step 4 is cheap.** Removing the shipped bullet from `## Now` / `## Next` is all most checkpoints need. Always do it — the next session reads `next-up.md` cold.
 - **Commit and push early.** Small commits are easier to review and revert than large ones. The compression artifacts ride with the work — one commit, not two.

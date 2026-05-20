@@ -131,7 +131,7 @@ Append one top-level bullet to `## Now` pointing at the handoff:
 - [ ] **Resume <topic> from session handoff** — see [`handoffs/<YYYY-MM-DD>-<slug>.md`](handoffs/<YYYY-MM-DD>-<slug>.md).
 ```
 
-Keep it to one line (CHU011 caps each top-level bullet at 5 bullet points — lead + sub-bullets — and a one-line top-level is the right shape here). When the work picked up *from* this handoff finishes, the bullet migrates to `## Done (recent)` per the normal AGENTS.md rule, and the handoff file becomes git history.
+Keep it to one line (CHU011 caps each top-level bullet at 5 bullet points — lead + sub-bullets — and a one-line top-level is the right shape here). When the work picked up *from* this handoff finishes, the bullet is removed from `## Now` per the normal AGENTS.md rule (no `## Done` section — `git log` carries history) and the handoff file becomes git history.
 
 ### 6. Show diff, commit
 

@@ -139,7 +139,7 @@ VERSION starts at `0.1.0`. Leave it unless you're making a second release. For s
 
 ### 10. Close out
 
-Follow the [`task-checkpoint`](../task-checkpoint/SKILL.md) skill — preflight (94% coverage gate), update `plans/next-up.md` with a `## Done (recent)` entry pointing at the new library, then commit + push via the [`git-commit`](../git-commit/SKILL.md) skill.  The commit message names the new library and summarizes what it provides.
+Follow the [`task-checkpoint`](../task-checkpoint/SKILL.md) skill — preflight (94% coverage gate), remove the matching `## Next` entry from `plans/next-up.md` if one exists, then commit + push via the [`git-commit`](../git-commit/SKILL.md) skill.  The commit message names the new library and summarizes what it provides — `git log` carries history.
 
 ## Checklist
 

@@ -113,5 +113,5 @@ The 12-file post-skip count above came partly from `chumicro_deploy.sources._res
 
 Two follow-ups bring the bench-validation table back into alignment with what actually ships:
 
-1. The downstream eager imports were stripped from mqtt / requests / ntp / http_server / websockets in the 2026-05-12 DI cleanup (see `## Done (recent)` in `plans/next-up.md`).  Post-cleanup the 12-file count holds for the right reason — the consumers genuinely don't reach for those packages when the factory submodule is skipped.
+1. The downstream eager imports were stripped from mqtt / requests / ntp / http_server / websockets in the 2026-05-12 DI cleanup (`git log --grep "DI cleanup" --since=2026-05-10`).  Post-cleanup the 12-file count holds for the right reason — the consumers genuinely don't reach for those packages when the factory submodule is skipped.
 2. The walker's silent-skip is itself a deploy-time failure mode that should refuse rather than ship a broken-at-boot file.  Tracked separately as `walker-unresolved-import-failure.md`.

@@ -101,7 +101,7 @@ These cross-library invariants only show up at workspace scope.
   * When Decision N+1 supersedes part of Decision N, Decision N should be edited in place to reflect the new rule + cross-link N+1 inline.
 
 * **Stale plan files.**  AGENTS.md memory: "Don't leave docs, templates, CI, and plans stale."  Audit:
-  * `plans/next-up.md` `## Now` — items shipped should be in `## Done` with the commit reference.
+  * `plans/next-up.md` `## Now` / `## Next` — items already shipped should have their bullets removed; cross-reference recent landings via `git --no-pager log -30 --oneline`.
   * `plans/now.md` — should reflect the current in-flight workstream, not stale ones.
   * `plans/workstreams/*.md` — closed workstreams should have `Status: closed` and a closing commit; open ones should still match active work.
 
@@ -117,7 +117,7 @@ When proposing a workstream candidate (merge / split / promote / cross-cutting r
 
 ## Process
 
-1. **Read `plans/next-up.md` (including its `## Done (recent)` log) and skim `plans/workstreams/`** first.  The audit's purpose is to find work that *isn't* already tracked; knowing what's tracked saves you from re-finding it.
+1. **Read `plans/next-up.md`, run `git --no-pager log -30 --oneline` for recent landings, and skim `plans/workstreams/`** first.  The audit's purpose is to find work that *isn't* already tracked; knowing what's tracked saves you from re-finding it.
 2. **Walk every library's README + `pyproject.toml`.**  Don't read the source yet — at workspace scope, the source is too much information.  README + pyproject is the contract.
 3. **Build the dependency graph.**  Either via `support/docs/dependency-graph.svg` (if up-to-date) or by grep through `pyproject.toml` files + `import` statements.  Look for cycles, sideways deps, libraries with too many or too few dependencies.
 4. **Run the audit dimensions** against the library inventory + dep graph.  Most findings will fall under "library shape" or "cross-library pattern."
