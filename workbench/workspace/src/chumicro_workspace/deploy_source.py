@@ -253,9 +253,8 @@ def wrap_with_runtime_config(
         output_path = project_dir / GENERATED_DIRNAME / "runtime_config.msgpack"
     library_roots: tuple[Path, ...] | None = None
     if search_paths is not None:
-        # Local import: ``config_manifest`` pulls in ``tomllib`` + the
-        # dataclass machinery; keep this module's import cost flat for
-        # the no-validation (directory / boot-shim) front-ends.
+        # Local import — see :meth:`WithRuntimeConfig._validate_against_manifests`
+        # for the no-validation-path rationale.
         from chumicro_workspace.config_manifest import (  # noqa: PLC0415
             find_library_roots,
         )
