@@ -179,9 +179,9 @@ def is_in_deploy_scope(device_path: str) -> bool:
 
     Scope rule:
 
-    * The four canonical entrypoint / state files
+    * The four entrypoint / state files in :data:`DEPLOY_SCOPE_FILES`
       (``/code.py``, ``/main.py``, ``/active.py``,
-      ``/runtime_config.msgpack``) — see :data:`DEPLOY_SCOPE_FILES`.
+      ``/runtime_config.msgpack``).
     * Everything under ``/lib/`` — see :data:`DEPLOY_SCOPE_PREFIXES`.
 
     Anything else — user-uploaded images, manually-edited
