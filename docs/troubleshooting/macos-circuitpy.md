@@ -12,7 +12,7 @@ Linux deploys don't hit any of this.  Windows isn't currently supported.
 - `diskutil list` hangs indefinitely without printing output.
 - Every flash-mode deploy fails with `CIRCUITPY drive not found or not writable`, even when the board is clearly running CircuitPython and enumerates on USB.
 - `ls /Volumes` shows other drives normally but not CIRCUITPY.
-- The `InteractiveDeployer` CLI promotes the failure kind to `MACOS_FSKIT_WEDGED` and prints the recovery command.
+- `chumicro-deploy` (via `RecoveringDeployer`) promotes the failure kind to `MACOS_FSKIT_WEDGED` and prints the recovery command.
 
 **What's happening**
 
@@ -40,7 +40,7 @@ After the command:
 1. Wait 1–2 seconds for the daemons to respawn.
 2. Unplug and replug the board if its CIRCUITPY hasn't reappeared yet.
 3. `/Volumes/CIRCUITPY` should now be mounted, readable, and writable.
-4. Retry the deploy.  If you were in the `InteractiveDeployer` retry loop, press Enter at the prompt.
+4. Retry the deploy.  If you were in the `RecoveringDeployer` retry loop, press Enter at the prompt.
 
 **`chumicro-deploy` does not auto-run this command.**  Auto-escalating to `sudo` is a blast-radius decision the tool should not take without an explicit opt-in — detection is automatic (via `detect_fskit_wedge()`), but the paste-this-command step is kept human-in-the-loop on purpose.
 
@@ -95,6 +95,6 @@ macOS assigns `/Volumes/CIRCUITPY` in mount order — the first CircuitPython dr
 
 ## See also
 
-- [`chumicro-deploy` guide](../../workbench/deploy/docs/guide.md) — full user guide for the deploy tool, including `InteractiveDeployer`.
+- [`chumicro-deploy` guide](../../workbench/deploy/docs/guide.md) — full user guide for the deploy tool, including `RecoveringDeployer`.
 - [Decision 0033](../../plans/decisions/0033-macos-circuitpy-deploy-hardening.md) — *why* the deploy code handles each of these cases the way it does (FAT32 hygiene, `os.sync` + settle, board-side stat poll, FSKit detection).
 - [Device testing guide](../contributing/device-testing.md) — running `functional_tests/` against real boards via `devices.yml`.

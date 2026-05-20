@@ -218,7 +218,7 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     or ``OSError`` whose text is the real signal.
 
     Returns :attr:`DeployFailureKind.UNKNOWN` when no row matches —
-    :class:`InteractiveDeployer` treats that as retryable so the
+    :class:`RecoveringDeployer` treats that as retryable so the
     user isn't locked out of an unclassified hiccup.
     """
     # Typed disconnect subclasses skip the string-pattern dance —
