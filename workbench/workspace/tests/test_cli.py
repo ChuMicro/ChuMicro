@@ -199,7 +199,7 @@ class TestNew:
         template = root / "projects" / "_template"
         template.mkdir(parents=True)
         (template / "code.py").write_text("# template\n")
-        (template / "config.toml").write_text("[app]\n")
+        (template / "project_config.toml").write_text("[app]\n")
 
         exit_code = cli.main(
             ["new", "--workspace-dir", str(root), "kitchen_sensor"],
@@ -208,7 +208,7 @@ class TestNew:
 
         target = root / "projects" / "kitchen_sensor"
         assert (target / "code.py").read_text() == "# template\n"
-        assert (target / "config.toml").read_text() == "[app]\n"
+        assert (target / "project_config.toml").read_text() == "[app]\n"
 
     def test_missing_template_raises(self, tmp_path: Path) -> None:
         root = seed_workspace(tmp_path)
@@ -301,7 +301,7 @@ class TestNewNested:
         template = root / "projects" / "_template"
         template.mkdir(parents=True)
         (template / "code.py").write_text("# template\n")
-        (template / "config.toml").write_text("[app]\n")
+        (template / "project_config.toml").write_text("[app]\n")
         return template
 
     def test_creates_nested_project_with_intermediate_dirs(
@@ -318,7 +318,7 @@ class TestNewNested:
 
         target = root / "projects" / "garage" / "sensors" / "door_open"
         assert (target / "code.py").read_text() == "# template\n"
-        assert (target / "config.toml").read_text() == "[app]\n"
+        assert (target / "project_config.toml").read_text() == "[app]\n"
 
     def test_emits_namespace_inits_at_each_level(
         self, tmp_path: Path,
@@ -475,7 +475,7 @@ class TestNewFromFlag:
         (example_root / "app.py").write_text(
             "def run():\n    print('server')\n",
         )
-        (example_root / "config.toml").write_text("[server]\n")
+        (example_root / "project_config.toml").write_text("[server]\n")
         (example_root / "README.md").write_text("# example server\n")
         return root
 
@@ -491,7 +491,7 @@ class TestNewFromFlag:
 
         target = root / "projects" / "garage" / "heater"
         assert (target / "app.py").read_text().startswith("def run")
-        assert (target / "config.toml").read_text() == "[server]\n"
+        assert (target / "project_config.toml").read_text() == "[server]\n"
         assert (target / "README.md").read_text() == "# example server\n"
 
     def test_rejects_source_without_entry_point(
@@ -706,7 +706,7 @@ class TestDeploy:
         root = seed_workspace(tmp_path)
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text(
+        (project_dir / "project_config.toml").write_text(
             "[wifi]\nssid = 'HomeNet'\n"
         )
         (project_dir / "app.py").write_text("def run(): print('hi')\n")
@@ -748,7 +748,7 @@ class TestDeploy:
         (shared / "external_lib.py").write_text("def helper(): pass\n")
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
+        (project_dir / "project_config.toml").write_text("[wifi]\nssid = 'x'\n")
         (project_dir / "app.py").write_text(
             "import external_lib\ndef run(): pass\n",
         )
@@ -788,7 +788,7 @@ class TestDeploy:
 
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text(
+        (project_dir / "project_config.toml").write_text(
             "[wifi]\nssid = 'HomeNet'\n"
         )
         # MP runtime in seed → effective_entrypoint == 'main.py'.
@@ -851,7 +851,7 @@ class TestProjects:
         root = seed_workspace(tmp_path)
         seed_project(root, name="back-porch")
         (root / "projects" / "_template").mkdir()
-        (root / "projects" / "_template" / "config.toml").write_text("\n")
+        (root / "projects" / "_template" / "project_config.toml").write_text("\n")
         exit_code = cli.main([
             "projects", "--workspace-dir", str(root), "--flat",
         ])
@@ -1586,7 +1586,7 @@ class TestDeployDryRun:
         root = seed_workspace(tmp_path)
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
+        (project_dir / "project_config.toml").write_text("[wifi]\nssid = 'x'\n")
         (project_dir / "app.py").write_text("def run(): pass\n")
 
         transport = FakeTransport(execute_output="")

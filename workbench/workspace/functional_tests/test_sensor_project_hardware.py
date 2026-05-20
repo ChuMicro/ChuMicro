@@ -81,8 +81,8 @@ def _stage_workspace(tmp_path: Path) -> tuple[WorkspaceLayout, Path]:
         "  app_marker_prefix: fixture-sensor\n",
     )
     # `project_import_graph_source` composes runtime config from
-    # `secrets.toml` + per-project `config.toml`; the secrets file must
-    # exist even when the fixture has no secret keys.
+    # `secrets.toml` + per-project `project_config.toml`; the secrets
+    # file must exist even when the fixture has no secret keys.
     (tmp_path / "secrets.toml").write_text("")
     projects_dir = tmp_path / "projects"
     projects_dir.mkdir()

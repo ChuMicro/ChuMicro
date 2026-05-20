@@ -148,23 +148,6 @@ def test_compose_runtime_config_treats_missing_project_config_as_empty(
     assert result_missing == result_none
 
 
-def test_compose_runtime_config_yaml_project_config(tmp_path: Path) -> None:
-    """``config.yml`` works the same as TOML (suffix decides parser)."""
-    secrets_toml = tmp_path / "secrets.toml"
-    secrets_toml.write_text("[wifi]\nssid = 'default'\n")
-
-    project_dir = tmp_path / "projects" / "p1"
-    project_dir.mkdir(parents=True)
-    project_config = project_dir / "config.yml"
-    project_config.write_text("wifi:\n  ssid: from-project\n  password: yaml-secret\n")
-
-    result = compose_runtime_config(
-        secrets_toml=secrets_toml,
-        project_config=project_config,
-    )
-    assert result == {"wifi.ssid": "from-project", "wifi.password": "yaml-secret"}
-
-
 def test_write_runtime_config_round_trips_flat_dict(tmp_path: Path) -> None:
     """The msgpack output decodes back to the same flat dict."""
     output_path = tmp_path / "out" / "runtime_config.msgpack"

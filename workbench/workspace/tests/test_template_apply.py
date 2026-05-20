@@ -54,7 +54,7 @@ def fake_template_repo(tmp_path: Path) -> Path:
     (repo / "projects" / "_template" / "app.py").write_text(
         "def run(): pass\n",
     )
-    (repo / "projects" / "_template" / "config.toml").write_text(
+    (repo / "projects" / "_template" / "project_config.toml").write_text(
         '[project]\nname = "_template"\n',
     )
     _git("init", "-b", "main", cwd=repo)

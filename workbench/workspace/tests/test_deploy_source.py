@@ -33,43 +33,6 @@ class TestFindProjectConfig:
         (tmp_path / "project_config.toml").write_text("[wifi]\nssid = 'x'\n")
         assert find_project_config(tmp_path) == tmp_path / "project_config.toml"
 
-    def test_returns_legacy_config_toml_when_only_legacy_present(
-        self, tmp_path: Path,
-    ) -> None:
-        # User-edited workspaces from before the rename still work —
-        # the legacy ``config.toml`` is found if no canonical sibling
-        # exists.
-        (tmp_path / "config.toml").write_text("[wifi]\nssid = 'x'\n")
-        assert find_project_config(tmp_path) == tmp_path / "config.toml"
-
-    def test_returns_yml_when_only_yaml_present(self, tmp_path: Path) -> None:
-        (tmp_path / "config.yml").write_text("wifi:\n  ssid: x\n")
-        assert find_project_config(tmp_path) == tmp_path / "config.yml"
-
-    def test_returns_yaml_when_only_yaml_extension(self, tmp_path: Path) -> None:
-        (tmp_path / "config.yaml").write_text("wifi:\n  ssid: x\n")
-        assert find_project_config(tmp_path) == tmp_path / "config.yaml"
-
-    def test_project_config_toml_wins_over_legacy_config_toml(
-        self, tmp_path: Path,
-    ) -> None:
-        # Both the canonical and the legacy filenames present — the
-        # canonical name wins so a partly-migrated workspace doesn't
-        # silently load the older file.
-        (tmp_path / "project_config.toml").write_text("[wifi]\nssid = 'new'\n")
-        (tmp_path / "config.toml").write_text("[wifi]\nssid = 'old'\n")
-        assert find_project_config(tmp_path) == tmp_path / "project_config.toml"
-
-    def test_legacy_toml_wins_over_yml(self, tmp_path: Path) -> None:
-        (tmp_path / "config.toml").write_text("[wifi]\nssid = 'toml'\n")
-        (tmp_path / "config.yml").write_text("wifi:\n  ssid: yml\n")
-        assert find_project_config(tmp_path) == tmp_path / "config.toml"
-
-    def test_yml_wins_over_yaml(self, tmp_path: Path) -> None:
-        (tmp_path / "config.yml").write_text("wifi:\n  ssid: y\n")
-        (tmp_path / "config.yaml").write_text("wifi:\n  ssid: y\n")
-        assert find_project_config(tmp_path) == tmp_path / "config.yml"
-
     def test_raises_when_no_config_file(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
             find_project_config(tmp_path)
@@ -325,7 +288,6 @@ class TestProjectDirectorySource:
         )
         files = source.files()
         assert "/project_config.toml" not in files
-        assert "/config.toml" not in files
 
     def test_skips_generated_dir(self, tmp_path: Path) -> None:
         project_dir, secrets_toml = _seed_project_dir(tmp_path)

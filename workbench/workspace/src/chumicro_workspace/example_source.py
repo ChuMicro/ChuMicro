@@ -5,7 +5,7 @@ The ``deploy-example`` front-door command ships
 (CircuitPython) or ``main.py`` (MicroPython), bringing along every
 ``chumicro_*`` module the example imports under ``/lib/`` and a
 merged ``runtime_config.msgpack`` baked from ``secrets.toml`` plus
-an optional per-example ``examples/config.toml``.
+an optional per-example ``examples/project_config.toml``.
 
 This module owns the shape of that source.  The CLI just asks for
 one and hands it to ``Deployer.deploy_diff()`` like any other
@@ -141,11 +141,10 @@ def example_source(
             workspace-wide credentials and device defaults consumed
             by ``WithRuntimeConfig``.
         project_config: Optional per-example
-            ``libraries/<lib>/examples/config.toml`` (or
-            ``project_config.toml`` / ``.yml`` / ``.yaml``).  When
+            ``libraries/<lib>/examples/project_config.toml``.  When
             absent or non-existent, only ``secrets_toml`` drives the
             merged runtime config.  Defaults to looking for
-            ``<library_root>/examples/config.toml`` automatically.
+            ``<library_root>/examples/project_config.toml`` automatically.
         output_path: Where to write the generated
             ``runtime_config.msgpack`` on the host.  Defaults to
             ``libraries/<lib>/examples/_generated/example_runtime_config_<lib>_<name>.msgpack``
@@ -209,7 +208,7 @@ def example_source(
     )
 
     if project_config is None:
-        project_config = library_root / "examples" / "config.toml"
+        project_config = library_root / "examples" / "project_config.toml"
     if output_path is None:
         output_path = _default_output_path(library_root, example_name)
 

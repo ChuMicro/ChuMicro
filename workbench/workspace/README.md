@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Host CLI for ChuMicro project workspaces — onboard a board, write app code, deploy to one or many targets, watch the REPL.**
 
-Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (gitignored `workspace.yml` + `projects/*/config.toml` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one project without you writing a `code.py`.
+Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (gitignored `workspace.yml` + `projects/*/project_config.toml` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one project without you writing a `code.py`.
 
 <br clear="left">
 
@@ -54,7 +54,7 @@ python run.py repl                                    # interactive REPL on the 
 The runtime config a project receives at boot is the deep-merge of two gitignored host-side sources, both sharing the same section-namespaced shape:
 
 ```
-workspace.yml ──────────────────► projects/<name>/config.toml
+workspace.yml ──────────────────► projects/<name>/project_config.toml
   (gitignored — workspace-wide       (gitignored when scaffolded by `new`;
    defaults + your credentials        tracked when shipped with the workspace
    in one place; deep-merge           template; per-project knobs — sample

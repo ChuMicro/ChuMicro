@@ -158,7 +158,7 @@ def _seed_project_with_imports(tmp_path: Path) -> WorkspaceLayout:
 
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
-    (project_dir / "config.toml").write_text(
+    (project_dir / "project_config.toml").write_text(
         "[wifi]\nssid = 'HomeNet'\n"
     )
     (project_dir / "code.py").write_text(
@@ -241,7 +241,7 @@ class TestProjectImportGraphSource:
         (tmp_path / "secrets.toml").write_text('')
         project_dir = tmp_path / "projects" / "mp-project"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[app]\n")
+        (project_dir / "project_config.toml").write_text("[app]\n")
         (project_dir / "main.py").write_text("print('mp')\n")
         workspace = WorkspaceLayout(root=tmp_path)
 
@@ -260,7 +260,7 @@ class TestProjectImportGraphSource:
         (tmp_path / "secrets.toml").write_text('')
         project_dir = tmp_path / "projects" / "empty"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[app]\n")
+        (project_dir / "project_config.toml").write_text("[app]\n")
         workspace = WorkspaceLayout(root=tmp_path)
         with pytest.raises(FileNotFoundError):
             project_import_graph_source(project_dir, workspace=workspace)
@@ -278,7 +278,7 @@ class TestProjectImportGraphSource:
 
         project_dir = tmp_path / "projects" / "x"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[app]\n")
+        (project_dir / "project_config.toml").write_text("[app]\n")
         (project_dir / "code.py").write_text("import extra_module\n")
         workspace = WorkspaceLayout(root=tmp_path)
 
@@ -300,7 +300,7 @@ class TestProjectImportGraphSource:
 
         project_dir = tmp_path / "projects" / "x"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[app]\n")
+        (project_dir / "project_config.toml").write_text("[app]\n")
         # Entrypoint never imports dynamic_target — only force-include picks it up.
         (project_dir / "code.py").write_text("print('hi')\n")
         workspace = WorkspaceLayout(root=tmp_path)
@@ -333,7 +333,7 @@ class TestProjectImportGraphSource:
 
         project_dir = tmp_path / "projects" / "two-adapters"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[app]\n")
+        (project_dir / "project_config.toml").write_text("[app]\n")
         (project_dir / "code.py").write_text(
             "from _adapters import cp\nfrom _adapters import mp\n",
         )

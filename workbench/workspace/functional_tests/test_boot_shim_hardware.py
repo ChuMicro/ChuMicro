@@ -45,9 +45,9 @@ def _seed_workspace(tmp_path: Path) -> WorkspaceLayout:
         "defaults:\n  app_marker_prefix: chu-bootshim\n",
     )
     # The boot-shim deploy path composes runtime config from
-    # secrets.toml + per-project config.toml; an empty secrets.toml
-    # satisfies the file-exists precondition without supplying any
-    # workspace-wide defaults.
+    # secrets.toml + per-project project_config.toml; an empty
+    # secrets.toml satisfies the file-exists precondition without
+    # supplying any workspace-wide defaults.
     (tmp_path / "secrets.toml").write_text("")
     return WorkspaceLayout(root=tmp_path)
 
@@ -56,7 +56,9 @@ def _seed_project(workspace_root: Path, *, name: str, marker: str) -> Path:
     """Create a project whose ``app.run()`` prints *marker* and returns."""
     project_dir = workspace_root / "projects" / name
     project_dir.mkdir(parents=True)
-    (project_dir / "config.toml").write_text(f"[project]\nname = '{name}'\n")
+    (project_dir / "project_config.toml").write_text(
+        f"[project]\nname = '{name}'\n",
+    )
     (project_dir / "app.py").write_text(
         # Keep the body MicroPython / CircuitPython compatible:
         # plain print + immediate return.

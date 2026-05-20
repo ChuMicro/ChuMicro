@@ -225,10 +225,10 @@ class TestCheckPythonVersion:
 def _seed_project_with_app(
     workspace: WorkspaceLayout, name: str, app_body: str,
 ) -> Path:
-    """Create projects/<name>/app.py with *app_body* + an empty config.toml."""
+    """Create projects/<name>/app.py with *app_body* + empty project_config.toml."""
     project_dir = workspace.project_dir(name)
     project_dir.mkdir(parents=True)
-    (project_dir / "config.toml").write_text("")
+    (project_dir / "project_config.toml").write_text("")
     (project_dir / "app.py").write_text(app_body)
     return project_dir
 
