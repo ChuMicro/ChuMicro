@@ -46,10 +46,6 @@ def _cmd_repl(args: argparse.Namespace) -> int:
     * ``repl`` — interactive REPL on the selected board.
     * ``repl --tail SECONDS`` — capture the next *SECONDS* of REPL
       output, exit cleanly.
-
-    Deploying a project then watching it lives on the one deploy
-    path: ``deploy <project> --tail [SECONDS]``.  ``repl`` never
-    stages code to a board.
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
@@ -102,8 +98,8 @@ def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
         metavar="SECONDS",
         help=(
             "Run in tail mode for SECONDS instead of the interactive "
-            "TUI.  To deploy a project then tail it, use "
-            "`deploy <project> --tail [SECONDS]` instead."
+            "TUI.  (To deploy then tail in one go, use "
+            "`deploy <project> --tail`.)"
         ),
     )
     repl_parser.add_argument(
