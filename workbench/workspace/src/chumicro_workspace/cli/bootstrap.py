@@ -3,9 +3,6 @@
 Thin wrapper over ``add-device``: same probe + register flow, plus a
 "next steps" footer aimed at first-time users.  ``--demo`` is the
 opt-in flag for chaining into the built-in demo after register.
-Decisions 0039, 0059, and 0066 reference ``bootstrap`` as a named
-wizard fall-through; this module keeps that public name while
-delegating the implementation to ``add-device``.
 """
 
 from __future__ import annotations

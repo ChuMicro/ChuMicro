@@ -70,8 +70,7 @@ def _cmd_demo(args: argparse.Namespace) -> int:
 
     The payload is a runtime-agnostic print loop (no ``board`` /
     ``machine`` imports) so the demo works on any supported runtime
-    + board.  An LED-blink variant is a future enhancement once the
-    LED-pin abstraction lands.
+    + board.
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
@@ -415,8 +414,8 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
         )
         target_runtime = runtime_required or device_runtime
         # The example stages through the one source owner +
-        # clean-slate primitive every project deploy uses (Decision
-        # 0077); only the inner payload is example-specific.
+        # clean-slate primitive every project deploy uses; only the
+        # inner payload is example-specific.
         try:
             _layout, source = resolve_project_deploy_source(
                 workspace=workspace,

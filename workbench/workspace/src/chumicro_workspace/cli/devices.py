@@ -373,8 +373,8 @@ def _cmd_rename(args: argparse.Namespace) -> int:
     reference to it under ``defaults:``.
 
     A project rename does NOT touch already-deployed devices —
-    re-deploy the project under its new name to refresh ``/active.py``
-    on each board.
+    re-deploy under the new name to ship the project's files to the
+    board.
     """
     workspace = _resolve_workspace(args)
 
