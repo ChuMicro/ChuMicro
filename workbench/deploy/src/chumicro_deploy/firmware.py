@@ -2,8 +2,8 @@
 
 Two surfaces:
 
-- :func:`resolve_firmware_url` — canonical download URL from a
-  board id + runtime + version (pure, no network).
+- :func:`resolve_firmware_url` — download URL from a board id +
+  runtime + version (pure, no network).
 - :func:`flash_firmware` — download and apply firmware to a
   connected board.  Destructive: overwrites whatever's currently
   installed.  UF2 path writes to a bootloader drive after entering
@@ -51,7 +51,7 @@ def resolve_firmware_url(
     *,
     language: str = _DEFAULT_LANGUAGE,
 ) -> str:
-    """Return the canonical firmware download URL.
+    """Format the firmware download URL for a known board + version.
 
     Pure URL formatter — no network access.  When you have an
     explicit version (e.g. from CI, a release script, or
@@ -296,8 +296,8 @@ def _uf2_mount_candidates(
 def _scan_for_uf2_drive(search_paths: list[Path]) -> Path | None:
     """Return the first child directory containing ``INFO_UF2.TXT``.
 
-    INFO_UF2.TXT is the canonical marker the UF2 bootloader writes
-    on every mount; scanning for it is board-agnostic.
+    Every UF2 bootloader writes ``INFO_UF2.TXT`` on mount; scanning
+    for it is board-agnostic.
 
     Args:
         search_paths: Parent directories to scan (e.g. ``/Volumes``

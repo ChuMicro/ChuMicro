@@ -582,10 +582,10 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_false",
         default=True,
         help=(
-            "Legacy additive deploy: leave board files that aren't "
-            "this example's payload in place.  The default is "
-            "clean-slate — the deploy removes anything that isn't the "
-            "new payload or a device-required keep-set file (boot.py, "
+            "Additive mode: leave board files that aren't this "
+            "example's payload in place.  The default is clean-slate "
+            "— the deploy removes anything that isn't the new payload "
+            "or a device-required keep-set file (boot.py, "
             "boot_out.txt, _chu_kv.msgpack); a board-resident "
             "settings.toml is evicted (it competes with config-driven "
             "wifi).  Use --no-wipe only when you deliberately "
