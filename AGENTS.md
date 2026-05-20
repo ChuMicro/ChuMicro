@@ -125,7 +125,7 @@ Common phrase bans, applied every time you write:
 - Drop empty adjectives (`comprehensive`, `robust`, `seamlessly`, `cutting-edge`, `best-in-class`). Name what something covers or what it survives.
 - Don't open sentences with filler ("It is worth noting that", "Let's dive into", "In this section, we will", etc.). Start with the content.
 
-Full phrase-ban reference, including the `the X` forward-reference test, the CHU-codes-in-prose ban, and the degraded-prose rewrite discipline that the audit skills apply, lives in [docs/contributing/style-guide.md](docs/contributing/style-guide.md) under Phrase bans.
+Full phrase-ban reference, including the `the X` forward-reference test, the CHU-codes-in-prose ban, and the degraded-prose rewrite discipline that the audit skills apply, lives in [docs/contributing/agent-style-guide.md](docs/contributing/agent-style-guide.md).
 
 ## Project overview
 
