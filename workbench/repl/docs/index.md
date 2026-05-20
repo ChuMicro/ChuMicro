@@ -26,7 +26,7 @@ Press **Ctrl-X** to quit; **Ctrl-C / Ctrl-D / Ctrl-E** are forwarded to the boar
 ## What you get
 
 - **Interactive TUI** — a thin, mpremote-compatible terminal that streams the board's REPL with traceback highlighting, a startup banner that names the connection + keybindings, and auto-reconnect when the cable drops mid-session.
-- **`InteractiveReplSession`** — sibling of `chumicro_deploy.InteractiveDeployer`.  Wraps `ReplSession` with classification + retry + coaching for session-start failures.
+- **`InteractiveReplSession`** — sibling of `chumicro_deploy.RecoveringDeployer`.  Wraps `ReplSession` with classification + retry + coaching for session-start failures.
 - **`tail(device, seconds)`** — stream the friendly REPL for a window, fail fast on a traceback, return an `ExitCode`.  Useful as a post-deploy follow-up step.
 - **`ReplSession`** — programmatic raw-REPL context manager. `exec(code)`, `call(function_name, *args, **kwargs)`, `read_until(pattern, timeout)` for headless test fixtures.
 - **`detect_patterns` / `colorize`** — streaming pattern detector + ANSI renderer for CircuitPython `Traceback`, `safe mode`, `Hard fault`, MicroPython `Traceback`, and MicroPython `MPY: soft reboot` banners.

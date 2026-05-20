@@ -18,8 +18,7 @@ from typing import Any
 from chumicro_deploy import (
     Deployer,
     Device,
-    InteractiveDeployer,
-    NonInteractiveDeployer,
+    RecoveringDeployer,
 )
 from chumicro_deploy.config.default import load_devices_yml
 
@@ -61,24 +60,23 @@ _DEFAULT_TAIL_SECONDS = 30.0
 # ---------------------------------------------------------------------------
 
 
-def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
+def _make_deploy_runner(device: Any, *, non_interactive: bool) -> RecoveringDeployer:
     """Construct the deploy runner for a CLI command.
 
-    Both subclasses surface the same coached recovery output and
-    differ only in retry behavior:
+    Both modes surface the same coached recovery output and differ
+    only in retry behavior:
 
-    * ``non_interactive=True`` → :class:`NonInteractiveDeployer`:
-      prints the report once and re-raises (CI / scripted flows).
-    * ``non_interactive=False`` → :class:`InteractiveDeployer`:
-      prompts to fix the condition and press Enter to retry
-      (default ``max_attempts=3``).
+    * ``non_interactive=True`` → report once and re-raise (CI /
+      scripted flows; no stdin to prompt against).
+    * ``non_interactive=False`` → prompt to fix the condition and
+      press Enter to retry (default ``max_attempts=3``).
 
-    Caller invokes ``.deploy()`` / ``.deploy_diff()`` on the result.
+    Caller invokes ``.deploy_diff()`` on the result.
     """
     deployer = Deployer(device)
-    if non_interactive:
-        return NonInteractiveDeployer(deployer)
-    return InteractiveDeployer(deployer)
+    return RecoveringDeployer(
+        deployer, prompt=None if non_interactive else input,
+    )
 
 
 # ---------------------------------------------------------------------------

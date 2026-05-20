@@ -49,7 +49,7 @@ _T = TypeVar("_T")
 
 
 #: Default ceiling on retry attempts.  Three matches
-#: :class:`chumicro_deploy.recovery.InteractiveDeployer` so users
+#: :class:`chumicro_deploy.recovery.RecoveringDeployer` so users
 #: switching between the two see the same retry budget.
 _DEFAULT_MAX_ATTEMPTS = 3
 
@@ -434,7 +434,7 @@ class InteractiveReplSession:
     the matching :class:`RecoveryPlan` to *output*, prompts the
     user to fix the condition + press Enter to retry, and tries
     again — up to *max_attempts* times.  Mirrors
-    :class:`chumicro_deploy.recovery.InteractiveDeployer`'s shape
+    :class:`chumicro_deploy.recovery.RecoveringDeployer`'s shape
     so a contributor moving between deploy and repl sees the same
     pattern.
 

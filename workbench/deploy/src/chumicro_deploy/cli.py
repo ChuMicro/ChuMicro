@@ -212,7 +212,7 @@ def _cmd_resolve_firmware_url(args: argparse.Namespace) -> int:
 def _cmd_deploy(args: argparse.Namespace) -> int:
     """Push a file set onto a connected board and run the entrypoint."""
     from .deployer import Deployer
-    from .recovery import InteractiveDeployer, NonInteractiveDeployer
+    from .recovery import RecoveringDeployer
 
     if args.directory is not None and args.file_map is not None:
         print(
@@ -256,10 +256,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         return 2
 
     deployer = Deployer(device)
-    runner: NonInteractiveDeployer | InteractiveDeployer = (
-        NonInteractiveDeployer(deployer)
-        if args.non_interactive
-        else InteractiveDeployer(deployer)
+    runner = RecoveringDeployer(
+        deployer, prompt=None if args.non_interactive else input,
     )
     deleted: list[str] = []
     result = runner.deploy_diff(

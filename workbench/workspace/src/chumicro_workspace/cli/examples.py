@@ -442,8 +442,8 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
         f"{device.transport} @ {device.address} ...",
     )
 
-    # Wrap in the recovery-coaching deployer.  NonInteractiveDeployer
-    # re-raises after printing; InteractiveDeployer prompts to retry.
+    # Wrap in the recovery-coaching deployer.  Non-interactive mode
+    # re-raises after printing; interactive prompts to retry.
     runner = _make_deploy_runner(device, non_interactive=non_interactive)
     deleted: list[str] = []
     try:
