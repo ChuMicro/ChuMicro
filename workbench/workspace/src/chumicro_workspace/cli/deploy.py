@@ -809,8 +809,8 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_false",
         default=True,
         help=(
-            "Legacy additive deploy: reconcile only the entrypoint / "
-            "state files + /lib, leaving every other board file "
+            "Additive mode: reconcile only the entrypoint / state "
+            "files + /lib, leaving every other board file "
             "(settings.toml, uploaded assets, hand-installed circup "
             "libs) in place.  The default is clean-slate — the deploy "
             "removes anything that isn't the new payload or a "

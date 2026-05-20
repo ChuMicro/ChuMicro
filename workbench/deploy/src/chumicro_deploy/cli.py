@@ -201,7 +201,7 @@ def _cmd_flash_firmware(args: argparse.Namespace) -> int:
 
 
 def _cmd_resolve_firmware_url(args: argparse.Namespace) -> int:
-    """Print the canonical firmware download URL for a board + version."""
+    """Print the firmware download URL for a board + version."""
     url = resolve_firmware_url(
         args.board_id, args.runtime, args.version, language=args.language,
     )
@@ -368,7 +368,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     firmware_url_parser = subparsers.add_parser(
         "resolve-firmware-url",
-        help="Print the canonical firmware URL for a board + version.",
+        help="Print the firmware URL for a board + version.",
     )
     firmware_url_parser.add_argument(
         "--board-id", required=True,

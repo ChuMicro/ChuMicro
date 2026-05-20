@@ -238,7 +238,7 @@ def latest_circuitpython_url(
     allow_prerelease: bool = False,
     url_opener: UrlOpener | None = None,
 ) -> str:
-    """Return the canonical CDN download URL for the latest version."""
+    """Return the CDN download URL for the latest version."""
     version = latest_circuitpython_version(
         board_id,
         language=language,
@@ -315,10 +315,10 @@ _MICROPYTHON_FILENAME_PATTERN = re.compile(
 
 #: Pattern that picks <a href="..."> values out of a typical MP
 #: download listing.  Browsers tolerate single-quoted, unquoted, and
-#: attribute-order-shuffled HTML; for our purposes the canonical
-#: page is well-formed enough that a forgiving regex is plenty
-#: (and we don't want a full HTML parser dep just for this).  Uses
-#: case-insensitive matching for the ``HREF=`` form.
+#: attribute-order-shuffled HTML, but the upstream page is well-formed
+#: enough that a forgiving regex is plenty — and we don't want a full
+#: HTML parser dep just for this.  Uses case-insensitive matching for
+#: the ``HREF=`` form.
 _HTML_HREF_PATTERN = re.compile(
     r"""<a\b[^>]*\bhref\s*=\s*(?P<quote>["'])(?P<url>[^"']+)(?P=quote)""",
     re.IGNORECASE,
