@@ -317,7 +317,12 @@ def _resolve_deploy_example_device(
     )
     try:
         return _resolve_device(workspace, device_args)
-    except (SystemExit, Exception):  # noqa: BLE001 — every load-failure routes to wizard
+    except (SystemExit, ValueError, FileNotFoundError):
+        # devices.yml missing / unloadable / no matching entry — route
+        # to the wizard fallback below.  ``_resolve_device`` raises
+        # ``SystemExit`` for the missing-file path and forwards
+        # ``ValueError`` / ``FileNotFoundError`` from
+        # ``load_devices_yml`` for parse + lookup failures.
         pass
 
     if non_interactive or not args.auto_register:
