@@ -1,28 +1,17 @@
 """Firmware URL derivation for CircuitPython and MicroPython boards.
 
-Two runtimes, two strategies:
+CircuitPython URLs come from listing the Adafruit S3 bucket and
+picking the latest stable build.  MicroPython URLs come from
+scraping ``micropython.org/download/<BOARD>/`` and picking the most
+recent build of the latest stable version, with the reported
+``machine`` string mapped to a published BOARD name via the curated
+:data:`MICROPYTHON_BOARD_BY_MACHINE` table.  A device entry with
+``hardware.firmware_source`` set short-circuits both lookups and is
+returned verbatim, which covers vendor builds and local firmware.
 
-* **CircuitPython** — list the Adafruit S3 bucket via
-  ``?prefix=bin/<board_id>/<language>/``, parse the XML, pick the
-  highest stable version.  Zero catalog maintained on the project
-  side; Adafruit's release upload is the source of truth.
-* **MicroPython** — scrape ``micropython.org/download/<BOARD>/``,
-  parse the HTML for ``<BOARD>-<DATE>-<VERSION>.uf2`` (or ``.bin`` /
-  ``.hex``) anchors, and pick the most recent build of the latest
-  stable version.  The ``machine`` string a board reports maps to
-  the published BOARD name via the hand-curated
-  :data:`MICROPYTHON_BOARD_BY_MACHINE` table.  The table extends
-  as new boards land but the scrape itself doesn't depend on it.
-
-Custom forks: any device entry whose ``hardware.firmware_source``
-field is set short-circuits the lookup, and the value is returned
-verbatim.  Vendor builds, locally-compiled firmware, mirrored
-URLs all pass through.
-
-Network access is via an injectable ``url_opener`` callable so the
-parsing + version-picking logic can run without hitting the real
-bucket / download page.  When left unset, the default opener is
-:func:`urllib.request.urlopen`.
+Network calls go through an injectable ``url_opener`` so parsing
+and version-picking logic runs without hitting the real bucket or
+download page.
 """
 
 from __future__ import annotations
@@ -449,13 +438,16 @@ def derive_firmware_url(
     Resolution order:
 
     1. When ``hardware.firmware_source`` is set, return it verbatim
-       (custom URL or local path; vendor forks live here).
-    2. When the runtime is ``circuitpython``, look up
-       ``hardware.board_id`` against the S3 bucket and return the
-       latest CDN URL.
-    3. When the runtime is ``micropython``, look up ``hardware.machine``
-       against the curated map.  When the lookup fails, raises so the
-       caller can prompt for an explicit ``hardware.firmware_source``.
+       (custom URL or local path, vendor forks live here).
+    2. When the runtime is ``circuitpython``, query the Adafruit S3
+       bucket for ``hardware.board_id`` and return the latest CDN URL.
+    3. When the runtime is ``micropython``, map ``hardware.machine``
+       to a curated board name, then return the latest
+       micropython.org download URL for that board (the file
+       extension honors ``hardware.firmware_extension`` and defaults
+       to ``.uf2``).  When ``hardware.machine`` is unset or not in
+       the curated map, raises so the caller can set an explicit
+       ``hardware.firmware_source``.
 
     Args:
         device_entry: A devices.yml device dict (typical fields:

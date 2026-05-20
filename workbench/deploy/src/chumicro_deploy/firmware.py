@@ -587,47 +587,34 @@ def _enter_esp32_rom_bootloader(
 ) -> str:
     """Put *device* into ESP32 ROM bootloader and return the new serial port.
 
-    Resolution order:
+    Tries three steps in order until one returns a bootloader port:
 
-    1. If *device.address* itself already looks like a bootloader
-       port (exists and esptool can reach it later), return it
-       unchanged, since that address may already point at a manually-
-       entered bootloader.
-    2. Otherwise snapshot the current serial ports, dispatch a
-       runtime-specific ``reset_into_bootloader`` via the
-       transport, and poll for a new port (typically
-       ``/dev/cu.usbmodem01`` on macOS).  Whether programmatic
-       entry succeeds depends on the board's firmware build, and is
-       observable as "a new ROM-bootloader port appears within
-       the poll window", not declared per-board.
-    3. If no new port appears, and *interactive* is ``True``,
-       prompt the user to hold BOOT + press RESET, then poll
-       again.  Falls back to a human prompt for any board whose
-       firmware can't reach the ROM bootloader programmatically (a
-       missing ``machine.bootloader()`` implementation, a board
-       without bootstrap-wired RTS/DTR, etc.), so try-and-fall-back
-       rather than maintain a per-board table.
+    1. If *device.address* already looks like a ROM-bootloader port
+       (``cu.usbmodem01``), return it unchanged.
+    2. Snapshot existing serial ports, dispatch a runtime-specific
+       ``reset_into_bootloader`` via the transport, and poll up to 8s
+       for a new port to appear.
+    3. When step 2 produces no new port and *interactive* is ``True``,
+       prompt the user to hold BOOT and press RESET, then poll for
+       30s.  This is the fallback for boards whose firmware cannot
+       reach the ROM bootloader programmatically.
 
     Args:
         device: Target device.
-        interactive: When ``True``, fall back to a human prompt
-            after the programmatic path fails.  When ``False``,
-            raise :class:`FlashFirmwareError` instead.
+        interactive: When ``False``, raise :class:`FlashFirmwareError`
+            after step 2 fails instead of prompting.
         prompt: Injectable prompt callable.
         sleep: Injectable sleep for port polling.
         monotonic: Injectable clock for timeouts.
-        globs: Serial-port path glob patterns (macOS + Linux
-            defaults).
+        globs: Serial-port path glob patterns (macOS + Linux defaults).
 
     Returns:
-        Absolute path to the serial port now hosting the ROM
-        bootloader.
+        Absolute path to the serial port now hosting the ROM bootloader.
 
     Raises:
-        FlashFirmwareError: If no bootloader port appeared after
-            programmatic entry and (for non-interactive flows)
-            the user-prompt fallback is disabled, or if the
-            user's manual-entry attempt also produces no new port.
+        FlashFirmwareError: When no bootloader port appears and either
+            *interactive* is ``False`` or the manual fallback also
+            produces no new port.
     """
     baseline = _list_candidate_serial_ports(globs)
 
@@ -688,41 +675,31 @@ def _flash_firmware_esptool(
 ) -> None:
     """Shell out to ``esptool`` to write *firmware_path* to *device*.
 
-    esptool manages its own bootloader entry via the USB-CDC RTS/DTR
-    dance on boards wired for it (Lolin S2 / Feather S3 / most
-    dev kits).  Boards without that wiring require the user to hold
-    GPIO0 manually before the command runs.
-
-    Defaults to erasing flash before write-flash, because leftover
-    partitions, user data, or half-written sectors from a failed
-    previous flash routinely produce confusing "works but boots
-    weird" outcomes that aren't worth the upgrade-in-place
-    convenience.  Pass ``erase_flash=False`` to keep a CIRCUITPY
-    drive or stored wifi credentials across the reflash.  The
-    erase runs in its own esptool invocation, because chaining in a
-    single command would require staying connected across the
-    erase, and some boards re-enter bootloader differently between
-    operations.
+    Runs as two separate esptool invocations: an optional
+    ``erase-flash`` followed by ``write-flash``.  The erase step uses
+    ``--after no_reset`` so the chip stays in ROM bootloader for the
+    write that follows.  Erase defaults to on because leftover
+    partitions or half-written sectors from a failed previous flash
+    routinely produce "boots weird" outcomes.
 
     Args:
-        firmware_path: Local firmware binary.  ESP32 boards expect
-            a combined ``.bin`` image at offset ``0x0``.  ``.uf2``
-            files on ESP32 boards require TinyUF2 and belong to the
-            UF2 reflash path, not this one.
-        device: Target device (supplies serial port address).
-        on_progress: Optional callback.
-        erase_flash: When ``True``, run ``esptool erase-flash``
-            before ``write-flash``.  Wipes every user partition
-            (CIRCUITPY drive, NVS, stored wifi credentials) —
-            irreversible.  Use for recovery / first install, skip
-            for ordinary upgrades.
+        firmware_path: Local firmware binary.  ESP32 boards expect a
+            combined ``.bin`` image at ``flash_offset`` (default
+            ``0x0``).
+        device: Target device, supplies the serial port address.
+        on_progress: Optional progress callback.
+        erase_flash: When ``True`` (the default), wipe every user
+            partition (CIRCUITPY drive, NVS, stored wifi credentials)
+            before writing.  Set ``False`` to preserve those across
+            a reflash.
+        flash_offset: Write offset for the firmware image.
         runner: Injectable subprocess runner.
 
     Raises:
-        FlashFirmwareError: If esptool is not installed, either
-            command exits non-zero, or the subprocess fails to
-            launch.  Error messages include recovery guidance
-            (typically: hold GPIO0 / press BOOT while re-plugging).
+        FlashFirmwareError: When esptool is missing, the subprocess
+            fails to launch, or either command exits non-zero.  Error
+            messages carry recovery guidance (hold GPIO0 / press BOOT
+            while re-plugging).
     """
     esptool_binary = shutil.which("esptool") or shutil.which("esptool.py")
     if esptool_binary is None:
@@ -806,86 +783,59 @@ def flash_firmware(
 ) -> None:
     """Download *url* and flash it onto *device*.
 
-    Destructive: overwrites whatever firmware is currently
-    installed.  Progress is reported in rough halves: 0.0–0.5
-    covers download, 0.5–1.0 covers flash.
+    Destructive: overwrites whatever firmware is currently installed.
+    Progress is reported in rough halves, 0.0 to 0.5 covers download
+    and 0.5 to 1.0 covers flash.
 
-    Method selection guide:
+    Method selection:
 
     - **``"uf2"``** for RP2040 / RP2350 (Pi Pico family) and any
-      board shipping TinyUF2 (some nRF52, SAMD, a handful of ESP32-S2 /
-      S3).  Uses the UF2 bootloader drive; requires a ``.uf2`` URL.
-      Programmatic bootloader entry works on CircuitPython and on
-      MicroPython ports that implement ``machine.bootloader()``.
+      board shipping TinyUF2.  Requires a ``.uf2`` URL and writes
+      through the UF2 bootloader drive.  Programmatic bootloader
+      entry works on CircuitPython and on MicroPython ports that
+      implement ``machine.bootloader()``.
     - **``"esptool"``** for ESP32 family boards (ESP32, S2, S3, C3,
-      C6) regardless of runtime.  Use this whenever the CP
-      ``microcontroller.on_next_reset`` drops into the ROM bootloader
-      (typical on S2 Mini without TinyUF2) or when installing
-      MicroPython on ESP32 hardware.  Requires a ``.bin`` URL, not
-      ``.uf2``.  The caller is responsible for
-      putting the board in the ROM bootloader (hold GPIO0 / BOOT
-      while plugging in).  esptool handles the rest via USB-CDC
-      DTR/RTS on boards wired for it, and on bare ESP32 DevKits the
-      BOOT button hold is the practical answer.
+      C6) regardless of runtime.  Requires a ``.bin`` URL.  The
+      caller puts the board in ROM bootloader (the helper handles
+      programmatic entry on boards wired for USB-CDC DTR/RTS, and
+      prompts for a manual BOOT-hold otherwise).
+
+    When *reflash_method* is ``None``, the method is inferred from
+    the URL extension (``.uf2`` to UF2, ``.bin`` to esptool).
 
     Args:
-        url: Firmware download URL (typically from
-            :func:`resolve_firmware_url`).
-        device: Target :class:`Device`.  ``device.address`` is used
-            to address the board for both bootloader entry and, in
-            the esptool path, the serial flash.  On ESP32 boards
-            in ROM bootloader, this is typically
-            ``"/dev/cu.usbmodem01"`` (macOS) rather than the
-            runtime's normal serial address.
-        reflash_method: ``"uf2"`` or ``"esptool"``.  See method
-            selection guide above.  When ``None`` (default), the
-            method is inferred from the URL extension: ``.uf2`` →
-            ``"uf2"``, ``.bin`` → ``"esptool"``.  Pass explicitly
-            for ambiguous URLs (e.g. a query-string URL with no
-            extension).
-        bootloader_drive_path: UF2 path only.  When set, skips
-            auto-detection and writes directly to this path.
-            Useful when multiple UF2 drives are present or when
-            platform detection fails.
-        interactive: UF2 path only.  When ``True`` (default) and
-            programmatic bootloader entry fails, prompts the user
-            to manually put the board in bootloader mode.  Set
-            ``False`` in automated flows where stdin isn't
-            available — a failure to enter bootloader raises
-            :class:`FlashFirmwareError` directly.
-        erase_flash: esptool path only.  When ``True`` (default),
-            runs ``esptool erase-flash`` before ``write-flash`` —
-            wipes every user partition (CIRCUITPY drive, stored
-            wifi credentials, NVS) to guarantee a clean slate.
-            Pass ``False`` to preserve user data on an in-place
-            upgrade.
-        flash_offset: esptool path only.  Address to ``write-flash``
-            at.  Different firmware sources use different layouts:
-
-              - CircuitPython combined ``.bin`` (Adafruit's
-                ``adafruit-circuitpython-<board>-<lang>-<ver>.bin``)
-                → ``"0x0"`` (the default).
-              - MicroPython ESP32 / S2 / S3 ``.bin`` (separate
-                bootloader + partition table + app layout) →
-                ``"0x1000"``.
-
-            Using the wrong offset for a MicroPython build writes
-            the application image over the bootloader region,
-            leaving an unbootable chip that needs a manual BOOT +
-            RESET hold and a re-flash.  The flasher cannot
-            auto-detect reliably because ``.bin`` files from both
-            ecosystems share the extension; callers supply the
-            offset explicitly.
+        url: Firmware download URL, typically from
+            :func:`resolve_firmware_url`.
+        device: Target :class:`Device`.  ``device.address`` addresses
+            the board for both bootloader entry and, on the esptool
+            path, the serial flash.
+        reflash_method: ``"uf2"``, ``"esptool"``, or ``None`` to infer
+            from the URL extension.
+        bootloader_drive_path: UF2 path only.  Skips auto-detection
+            and writes directly to this path.
+        interactive: UF2 / esptool path.  When ``True`` (the default)
+            and programmatic bootloader entry fails, prompts the user
+            to enter bootloader manually.  Set ``False`` to raise
+            :class:`FlashFirmwareError` instead.
+        erase_flash: esptool path only.  When ``True`` (the default),
+            wipes user partitions (CIRCUITPY drive, NVS, stored wifi
+            credentials) before writing.  Set ``False`` to preserve
+            them across an in-place upgrade.
+        flash_offset: esptool path only.  Defaults to ``"0x0"`` for
+            CircuitPython's combined image.  Use ``"0x1000"`` for
+            MicroPython ESP32 / S2 / S3 builds (which ship separate
+            bootloader, partition table, and app sections).  Wrong
+            offset writes the app image over the bootloader region
+            and leaves an unbootable chip until a manual reflash.
         on_progress: Optional ``(fraction, message)`` callback.
 
     Raises:
         FlashFirmwareError: Download, bootloader entry, drive
             detection, copy, reboot, or esptool invocation failed.
-            The message names the step and includes recovery
-            guidance.
-        ValueError: Unknown *reflash_method*, or
-            *reflash_method* is ``None`` and the URL extension is
-            neither ``.uf2`` nor ``.bin``.
+            The message names the step and carries recovery guidance.
+        ValueError: Unknown *reflash_method*, or *reflash_method* is
+            ``None`` and the URL extension is neither ``.uf2`` nor
+            ``.bin``.
     """
     if reflash_method is None:
         reflash_method = _infer_reflash_method(url)

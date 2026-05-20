@@ -500,40 +500,21 @@ class CircuitpythonTransport:
     def _verify_drive_for_board(self, drive_path: Path) -> Path:
         """Confirm *drive_path* is the CIRCUITPY mount for the connected board.
 
-        macOS assigns ``/Volumes/CIRCUITPY`` / ``/Volumes/CIRCUITPY 1``
-        in mount order, so :func:`_circuitpy_volume_candidates`'s first
-        entry may belong to a different board on multi-board hosts.
-        This method probes the connected board and compares its
-        identity against ``boot_out.txt`` on *drive_path*:
-
-        1. **UID** (``microcontroller.cpu.uid`` ↔ ``UID:...`` line
-           in ``boot_out.txt``) is preferred, because it disambiguates
-           two boards of the same model.
-        2. **machine string** (``sys.implementation._machine`` ↔
-           ``...; <machine>`` suffix on line 1) is the fallback for
-           older firmware whose probe or ``boot_out.txt`` doesn't
-           expose a UID.
+        Reads ``boot_out.txt`` on *drive_path* first so the
+        single-board case skips the serial probe.  When the file is
+        missing, delegates to :meth:`_identify_drive_via_probe`.
+        Otherwise probes the board and matches its identity against
+        the drive: UID is preferred (disambiguates two boards of the
+        same model), and the machine string is the fallback for
+        firmware that does not expose a UID.
 
         On a mismatch, every mounted ``CIRCUITPY*`` volume is scanned
-        for one whose identity matches.  The match wins silently, and
-        the wrong-mount-came-up-first case is auto-corrected without
-        host-side noise.  When no match is found a
-        :class:`CircuitpythonTransportError` is raised that asks the
-        user to confirm the board is plugged in and the right
-        CIRCUITPY drive is mounted.
-
-        When ``boot_out.txt`` is missing on *drive_path* (e.g. after a
-        clean rsync that didn't exclude it, or before the first hard
-        reboot of a freshly-formatted drive), the method probes the
-        connected board and scans sibling mounts for one whose
-        ``boot_out.txt`` matches.  When no candidate can be
-        identified, the method raises rather than silently returning
-        *drive_path*.  A fall-open in that state risks landing the
-        deploy on the wrong board's mount on multi-CP-board hosts.
-
-        ``boot_out.txt`` is checked first so the serial-probe
-        roundtrip is skipped entirely when the identity already
-        matches the connected board (the common single-board case).
+        for one whose identity matches.  A found match is returned
+        silently, so the "wrong mount came up first" case is
+        self-correcting on macOS where mount order assigns
+        ``CIRCUITPY`` and ``CIRCUITPY 1`` non-deterministically across
+        multi-board hosts.  When nothing matches,
+        :class:`CircuitpythonTransportError` is raised.
         """
         boot_uid, boot_machine = circuitpy_drive._read_boot_out_identity(drive_path)
         if boot_uid is None and boot_machine is None:
@@ -1234,56 +1215,43 @@ class CircuitpythonTransport:
     ) -> str:
         """Deploy *files* and execute *entrypoint* in the configured mode.
 
-        Sister of :meth:`stage`.  Takes a flat
-        ``files: dict[device_path, bytes]`` rather than ``source_dirs``
-        + ``test_files`` so it composes cleanly with arbitrary
-        :class:`FileSource` implementations (:class:`DirectorySource`,
-        :class:`FileMapSource`, :class:`ImportGraphSource`,
-        workspace-shaped sources).
+        In **flash mode**, every entry of *files* is written to the
+        CIRCUITPY USB drive (auto-detecting the mount when not
+        configured), the volume is flushed, and the entrypoint runs
+        through the persistent raw REPL.  Autoreload is disabled
+        during writes so the board does not reset mid-deploy.
 
-        Flash mode writes every entry of *files* to the CIRCUITPY USB
-        drive (auto-detecting the mount path when not configured),
-        flushes the volume, then execs the entrypoint through the
-        persistent raw REPL.  Autoreload is disabled during writes so
-        the board does not reset mid-deploy.
-
-        RAM mode skips the filesystem entirely: every non-entrypoint
-        ``.py`` file is injected into ``sys.modules`` via the
-        class-as-module pattern (see
-        :func:`build_circuitpython_deploy_scripts`), then the
-        entrypoint runs as ``__main__``.  No CIRCUITPY drive is
-        required.  Non-``.py`` payload is silently skipped, so callers
-        that need to ship assets must use flash mode.
+        In **RAM mode**, no filesystem is touched.  Every
+        non-entrypoint ``.py`` file is injected into ``sys.modules``
+        via the class-as-module pattern (see
+        :func:`build_circuitpython_deploy_scripts`) and the entrypoint
+        runs as ``__main__``.  Non-``.py`` payload is silently skipped.
 
         Args:
             files: On-device-path -> bytes mapping.  In flash mode the
-                leading slash is stripped before joining with the drive
-                mount point; in RAM mode the path is used to derive
-                the dotted module name (``/lib/foo/bar.py`` ->
-                ``foo.bar``).
-            entrypoint: On-device path (must be a key of *files*).
-            on_file_staged: Per-file callback invoked after each file
-                is written to the drive (flash mode) or before the
-                inline scripts run (RAM mode, in sorted-key order for
-                a deterministic sequence).
-            on_execute_line: Callback invoked once per line of captured
-                output (in order) after the entrypoint returns.
-            tail_seconds: Override for how long flash mode captures
-                serial output after the soft-reboot.  ``None`` (default)
-                uses :attr:`timeout`.  Set higher when the entrypoint's
-                first ``print`` lands beyond the default window (e.g.
-                MQTT connect, blocking ``recv``); set to ``0.0`` to
-                exit immediately after triggering Ctrl-D and leave the
-                board running without capturing any output.  RAM mode
-                ignores this — its execution path is synchronous.
+                leading slash is stripped before joining with the
+                drive mount.  In RAM mode the path derives the dotted
+                module name (``/lib/foo/bar.py`` -> ``foo.bar``).
+            entrypoint: On-device path, must be a key of *files*.
+            on_file_staged: Per-file callback after each write (flash
+                mode) or before the inline scripts run (RAM mode, in
+                sorted-key order).
+            on_execute_line: Callback invoked once per captured output
+                line, in order, after the entrypoint returns.
+            tail_seconds: Flash mode only.  Override for how long
+                serial output is captured after the soft-reboot.
+                ``None`` uses :attr:`timeout`, ``0.0`` exits immediately
+                without capturing.  RAM mode ignores this.
+            clean: Flash mode only.  When ``True``, rsync ``--delete``
+                prunes drive files outside the payload.
 
         Returns:
             Combined stdout from the entrypoint execution.
 
         Raises:
-            CircuitpythonTransportError: The port is not connected,
-                the entrypoint is missing from *files*, or (flash
-                mode) the CIRCUITPY drive cannot be located.
+            CircuitpythonTransportError: Port not connected, entrypoint
+                missing from *files*, or (flash mode) the CIRCUITPY
+                drive cannot be located.
         """
         if self._port is None:
             raise CircuitpythonTransportError(

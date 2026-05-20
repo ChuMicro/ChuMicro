@@ -1,17 +1,13 @@
 """Recovery layer around :class:`Deployer`.
 
-Transport failures during deploy come in a small number of flavors —
-port busy, CIRCUITPY drive missing, raw REPL unresponsive, rsync
-balked mid-copy.  All but a few are recoverable by the user taking
-a concrete physical action (close a program holding the port, tap
-RESET, replug USB) and retrying.
-
-:func:`classify_deploy_failure` maps a transport exception onto a
-:class:`DeployFailureKind` (defined in :mod:`recovery_kind`).
-:func:`recovery_plan_for` looks up the canned :class:`RecoveryPlan`
-for that kind from :data:`recovery_plans.PLANS`.
-:class:`RecoveringDeployer` wraps a :class:`Deployer` with a coaching
-loop that classifies, surfaces the plan, and retries when retryable.
+Transport failures during deploy fall into a small set of classes
+(port busy, CIRCUITPY drive missing, raw REPL unresponsive, rsync
+balked mid-copy).  Most are recoverable when the user takes a
+concrete physical action (close the program holding the port, tap
+RESET, replug USB) and retries.  This module classifies a transport
+exception into a :class:`DeployFailureKind`, looks up the canned
+:class:`RecoveryPlan` for that kind, and wraps :class:`Deployer` in
+a coaching loop that surfaces the plan and retries when retryable.
 """
 
 from __future__ import annotations
