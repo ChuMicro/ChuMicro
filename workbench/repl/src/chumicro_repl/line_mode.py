@@ -1,13 +1,16 @@
 """Line-mode REPL — prompt_toolkit-driven input + per-device history.
 
-The default `chumicro-repl` interactive loop is byte-passthrough:
-keystrokes go straight to the device, output streams back.  That's
-right for raw-REPL framing, paste-mode, and other byte-exact
-flows, but it loses the host-side affordances every modern shell
-ships — cursor edit, history search, persistent up-arrow recall.
+`chumicro-repl`'s default loop on a TTY interposes a
+`prompt_toolkit.PromptSession` between the user and the device,
+adding the host-side affordances every modern shell ships — cursor
+edit, history search, persistent up-arrow recall.  The
+byte-passthrough sibling (:mod:`chumicro_repl.tui`) covers
+raw-REPL framing, paste-mode, and other byte-exact flows; the CLI's
+``--mode`` flag picks one or the other (``auto`` falls back to
+passthrough when stdin is piped, since line mode requires
+interactive input).
 
-Line mode interposes a `prompt_toolkit.PromptSession` between
-the user and the device.  Per-line:
+Per-line:
 
 1. ``prompt_toolkit`` reads a complete line with cursor edit,
    history navigation, and ``Ctrl-R`` reverse search.
@@ -28,10 +31,8 @@ History is persistent at
 ``~/.chumicro-repl/history/<sanitized-address>/history.txt`` so a
 session on ``back-porch`` doesn't pollute one on ``greenhouse``.
 
-This module is independent from :mod:`chumicro_repl.tui` —
-:func:`run_line_mode` is the analog of
-:func:`chumicro_repl.tui.run_loop` for the line-mode path.  The
-CLI's ``--mode`` flag picks one or the other.
+:func:`run_line_mode` is the line-mode analog of
+:func:`chumicro_repl.tui.run_loop`.
 """
 
 from __future__ import annotations

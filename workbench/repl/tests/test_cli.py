@@ -25,7 +25,13 @@ class TestParser:
         assert args.baudrate == 115200
         assert args.tail is None
         assert args.fail_on_traceback is True
-        assert args.mode == "passthrough"
+        assert args.mode == "auto"
+
+    def test_mode_choices_include_auto_line_passthrough(self):
+        parser = cli.build_parser()
+        for choice in ("auto", "line", "passthrough"):
+            args = parser.parse_args(["--address", "/dev/cu.x", "--mode", choice])
+            assert args.mode == choice
 
     def test_address_is_required(self):
         parser = cli.build_parser()
@@ -78,10 +84,12 @@ class TestMainDispatch:
             ])
             assert result == int(ExitCode.TRACEBACK_DETECTED)
 
-    def test_interactive_mode_invokes_interactive_function(self):
+    def test_passthrough_mode_invokes_interactive_function(self):
         with patch("chumicro_repl.tui.interactive") as fake_interactive:
             fake_interactive.return_value = 0
-            result = cli.main(["--address", "/dev/cu.x"])
+            result = cli.main([
+                "--address", "/dev/cu.x", "--mode", "passthrough",
+            ])
             assert result == 0
             fake_interactive.assert_called_once_with("/dev/cu.x")
 
@@ -91,6 +99,28 @@ class TestMainDispatch:
             result = cli.main(["--address", "/dev/cu.x", "--mode", "line"])
             assert result == 0
             fake_line.assert_called_once_with("/dev/cu.x")
+
+    def test_auto_picks_line_when_stdin_is_a_tty(self):
+        with (
+            patch("chumicro_repl.tui.interactive_line") as fake_line,
+            patch("chumicro_repl.cli.sys.stdin") as fake_stdin,
+        ):
+            fake_stdin.isatty.return_value = True
+            fake_line.return_value = 0
+            result = cli.main(["--address", "/dev/cu.x"])
+            assert result == 0
+            fake_line.assert_called_once_with("/dev/cu.x")
+
+    def test_auto_falls_back_to_passthrough_when_stdin_piped(self):
+        with (
+            patch("chumicro_repl.tui.interactive") as fake_interactive,
+            patch("chumicro_repl.cli.sys.stdin") as fake_stdin,
+        ):
+            fake_stdin.isatty.return_value = False
+            fake_interactive.return_value = 0
+            result = cli.main(["--address", "/dev/cu.x"])
+            assert result == 0
+            fake_interactive.assert_called_once_with("/dev/cu.x")
 
     def test_no_fail_propagates_to_tail(self):
         with patch("chumicro_repl._follow.tail") as fake_tail:

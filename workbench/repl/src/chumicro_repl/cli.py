@@ -66,18 +66,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=("line", "passthrough"),
-        default="passthrough",
+        choices=("auto", "line", "passthrough"),
+        default="auto",
         help=(
-            "Interactive input mode.  `passthrough` (default — today's "
-            "TUI) forwards every keystroke to the device; `line` "
-            "interposes a host-side line editor with persistent "
-            "per-device history, cursor edit, and Ctrl-R reverse "
-            "search.  The default flips to `line` once raw-REPL "
-            "auto-detection lands."
+            "Interactive input mode.  `auto` (default) picks `line` on a "
+            "TTY and `passthrough` when stdin is piped (CI / scripts — "
+            "line mode needs interactive input).  `line` interposes a "
+            "host-side line editor with persistent per-device history, "
+            "cursor edit, and Ctrl-R reverse search.  `passthrough` "
+            "forwards every keystroke to the device — pick it for "
+            "raw-REPL framing or paste-mode flows."
         ),
     )
     return parser
+
+
+def _resolve_mode(requested: str) -> str:
+    """Resolve ``auto`` to ``line`` (TTY) or ``passthrough`` (piped stdin).
+
+    ``line`` and ``passthrough`` pass through unchanged.  ``auto``
+    inspects ``sys.stdin.isatty()`` and picks ``line`` only when stdin
+    is a real terminal — line mode's prompt_toolkit reader needs
+    interactive input, so a piped or redirected stdin must fall back
+    to byte passthrough.
+    """
+    if requested != "auto":
+        return requested
+    isatty = getattr(sys.stdin, "isatty", None)
+    return "line" if (callable(isatty) and isatty()) else "passthrough"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             fail_on_traceback=args.fail_on_traceback,
             output=sys.stdout,
         ))
-    if args.mode == "line":
+    if _resolve_mode(args.mode) == "line":
         from .tui import interactive_line  # noqa: PLC0415
 
         return interactive_line(args.address)
