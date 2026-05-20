@@ -28,12 +28,8 @@ from typing import Any
 
 
 class WorkspaceConfigError(ValueError):
-    """Raised when a config file's top-level structure is malformed.
+    """Raised by workspace config readers on a top-level shape error.
 
-    Wraps both top-level shape failures (root must be a mapping) and
-    underlying parser errors (ruamel ``YAMLError``) so callers
-    (most importantly ``check_workspace_yaml`` in :mod:`health`)
-    only need to catch one exception type to render a clean error.
     File-level validation only — schema-level checks happen at the
     library boundary when each ``from_config`` fires on device.
     """

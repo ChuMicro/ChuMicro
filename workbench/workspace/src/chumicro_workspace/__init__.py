@@ -2,8 +2,8 @@
 
 Combines:
 
-* **Config merge** — gitignored ``workspace.yml`` (defaults +
-  credentials in one place) + per-project ``config.{toml,yml,yaml}``
+* **Config merge** — gitignored ``secrets.toml`` (workspace-wide
+  credentials + device defaults) + per-project ``project_config.toml``
   → ``/runtime_config.msgpack``.  Pure structural deep-merge; both
   layers are gitignored and share the section-namespaced shape.
 * **Deploy integration** — :class:`~chumicro_workspace.deploy_source.WithRuntimeConfig`

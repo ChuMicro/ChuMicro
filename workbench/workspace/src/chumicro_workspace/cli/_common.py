@@ -393,10 +393,11 @@ def _render_dry_run_summary(
 
 
 def _stdin_prompt(prompt_text: str) -> str:
-    """Real-stdin prompt — tests inject a deterministic substitute.
+    """Return ``input(prompt_text)``.
 
-    Sole indirection point for interactive subcommands so their
-    branching logic stays unit-testable without TTY plumbing.
+    Routed through a named helper so interactive subcommands can inject
+    a deterministic substitute under test instead of monkey-patching
+    the builtin.
     """
     return input(prompt_text)
 

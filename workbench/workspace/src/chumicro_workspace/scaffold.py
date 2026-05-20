@@ -55,10 +55,10 @@ _WORKBENCH_TEMPLATE_DIR = (
 
 
 class LibraryAlreadyExistsError(FileExistsError):
-    """Raised when the target directory already exists.
+    """Raised when the scaffold target directory already exists.
 
     Carries the path so callers can construct a precise message
-    without re-deriving it.  The CLI catches this and exits 1.
+    without re-deriving it.
     """
 
 
@@ -148,7 +148,6 @@ def scaffold_library(
     display_name = _display_name(name)
     test_name = name.replace("-", "_")
 
-    # Directory tree.
     (library_dir / "src" / import_name).mkdir(parents=True)
     (library_dir / "tests").mkdir()
     (library_dir / "functional_tests").mkdir()
@@ -210,7 +209,6 @@ def scaffold_library(
         ).format(name=name, import_name=import_name),
     )
 
-    # examples/basic_usage.py.
     (library_dir / "examples" / "basic_usage.py").write_text(
         _load_template("basic_usage.py.template").format(
             name=name,

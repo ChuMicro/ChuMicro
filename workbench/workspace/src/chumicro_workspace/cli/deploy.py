@@ -125,17 +125,14 @@ class ExampleSpec:
 class _DeployLayoutError(Exception):
     """Raised by :func:`_resolve_deploy_layout` on shape / target mismatch.
 
-    The instance's ``str`` is the multi-line user-facing message; the
-    caller in :func:`_cmd_deploy` prints it to stderr and continues to
-    the next project / device with exit code 2.
+    The instance's ``str`` is the user-facing multi-line message.
     """
 
 
 class _DeployPlanError(Exception):
     """Raised by :func:`_build_deploy_plan` on input-validation failure.
 
-    The instance's ``str`` is the user-facing message; the caller in
-    :func:`_cmd_deploy` prints it to stderr and returns 2.
+    The instance's ``str`` is the user-facing message.
     """
 
 
@@ -263,16 +260,12 @@ def resolve_project_deploy_source(
 ) -> tuple[str, object]:
     """Resolve ``(layout_label, FileSource)`` for a deploy.
 
-    The single owner of *what FileSource ships to this board*: one
-    mechanism, one source policy, for both a project and a library
-    example.  Every command that puts code on a board routes through
-    this so the payload stages identically regardless of which
-    command invoked it.  ``deploy`` passes a *project_dir* + its
-    ``--boot-shim`` / ``--import-graph`` / ``--entrypoint`` /
-    ``--target-runtime`` flags; ``deploy-example`` passes an
-    *example* spec and nothing else.  An example is a project through
-    this one pipeline: its only fork is the inner payload source,
-    never the stage / delete / keep policy.
+    Both ``deploy`` and ``deploy-example`` route through this function
+    so a project and a library example stage onto the device under the
+    same delete / keep policy; only the inner payload differs.
+    ``deploy`` passes a *project_dir* plus its ``--boot-shim`` /
+    ``--import-graph`` / ``--entrypoint`` / ``--target-runtime`` flags;
+    ``deploy-example`` passes an *example* spec.
 
     Exactly one of *project_dir* / *example* must be given.
 

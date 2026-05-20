@@ -146,8 +146,9 @@ def main(
 ) -> int:
     """Parse *argv* and dispatch to the selected command.
 
-    Returns the process exit code.  Stub commands return 2 so CI /
-    scripts can distinguish "not implemented yet" from runtime errors.
+    Returns the process exit code from the dispatched subcommand handler
+    (0 success; 1 runtime failure; 2 usage / precheck failure, per the
+    subcommand's own contract).
 
     Args:
         argv: Command-line arguments (``None`` reads from ``sys.argv``).
