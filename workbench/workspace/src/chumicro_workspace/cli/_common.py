@@ -352,9 +352,6 @@ def _render_dry_run_summary(
 
     Two sections: a one-line header naming the project / device /
     layout, and a sorted file list with size + classification.
-    The output doubles as user-facing documentation for
-    "what does deploy actually do" — link from docs/guide.md +
-    workspace template README.
 
     When *wipe* is ``True``, an additional ``would wipe filesystem``
     line surfaces between the header and the file table so dry-run

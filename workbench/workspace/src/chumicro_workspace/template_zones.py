@@ -18,9 +18,7 @@ is no scaffolding CLI command); these zones govern only what
   title is meant to be renamed; users add their own ignore lines).
 
 The classification is computed against the *target* path (the path
-relative to the workspace root after the dotfile rename, when one
-applies — the new template repo carries `.gitignore` directly so the
-rename is mostly historical), not the template-payload path.
+relative to the workspace root), not the template-payload path.
 """
 
 from __future__ import annotations
