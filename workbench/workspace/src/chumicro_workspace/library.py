@@ -76,7 +76,7 @@ class LibraryFetchFailureKind(Enum):
     BAD_ARCHIVE = "bad-archive"
     MALFORMED_PACKAGE = "malformed-package"
     INDEX_MALFORMED = "index-malformed"
-    UNKNOWN = "unknown"
+    UNKNOWN_CHANNEL = "unknown-channel"
 
 
 class LibraryFetchError(RuntimeError):

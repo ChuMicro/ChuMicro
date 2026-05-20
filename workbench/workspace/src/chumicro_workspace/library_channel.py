@@ -109,13 +109,13 @@ def channel_repo(channel: str) -> str:
     """``"stable"`` -> ``"ChuMicro/ChuMicro-Libraries"``.
 
     Raises:
-        LibraryFetchError: ``UNKNOWN`` kind for any other channel.
+        LibraryFetchError: ``UNKNOWN_CHANNEL`` kind for any other channel.
     """
     try:
         return CHANNEL_REPOS[channel]
     except KeyError:
         raise LibraryFetchError(
-            LibraryFetchFailureKind.UNKNOWN,
+            LibraryFetchFailureKind.UNKNOWN_CHANNEL,
             f"unknown channel {channel!r} "
             f"(expected {' or '.join(sorted(CHANNEL_REPOS))})",
         ) from None
