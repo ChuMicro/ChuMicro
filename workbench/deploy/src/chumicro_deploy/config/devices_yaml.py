@@ -372,10 +372,9 @@ def update_device_firmware_version(
 ) -> None:
     """Silently refresh a device's cached ``firmware_version`` (probed-always).
 
-    Mirrors :func:`update_device_address`.  The firmware on a board
-    can be upgraded out of band (the user runs `install-firmware`,
-    or flashes via a vendor tool), so a fresh probe just overwrites
-    the cached value with no prompt.
+    The firmware on a board can be upgraded out of band (the user
+    runs `install-firmware`, or flashes via a vendor tool), so a
+    fresh probe just overwrites the cached value with no prompt.
 
     Raises:
         DeviceNotFoundError: No entry with that id.

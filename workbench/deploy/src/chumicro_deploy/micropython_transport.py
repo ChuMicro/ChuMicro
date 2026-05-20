@@ -105,11 +105,9 @@ _STAGE_EXCLUDED_NAMES: frozenset[str] = frozenset(
 #: per-file ``OSError`` are tolerated so a fresh-flashed board (no
 #: ``/lib/`` yet) returns an empty listing instead of erroring out.
 #:
-#: Kept in sync with :data:`chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`
-#: + :data:`chumicro_deploy.protocol.DEPLOY_SCOPE_PREFIXES`.  The mirror
-#: is intentional, because embedding the constants directly in the
-#: on-device script keeps each side self-contained and the host doesn't
-#: need to marshal a values list every call.
+#: Embedding the path constants directly in the on-device script keeps
+#: each side self-contained and the host doesn't need to marshal a
+#: values list every call.
 _LIST_SCOPE_SCRIPT: str = (
     "import os\n"
     "def _walk(p):\n"
@@ -137,10 +135,10 @@ _LIST_SCOPE_SCRIPT: str = (
 )
 
 #: Clean-slate scope: every file on the device.  The host filters out
-#: :data:`flash_drive.DEVICE_KEEP_SET` (and any dot-prefixed path, for
-#: parity with the CP drive walk), so the diff reconciles the whole
-#: device down to payload + keep set, so a stale board ``settings.toml``
-#: / leftover file is removed, not just stale ``/lib`` packages.
+#: :data:`flash_drive.DEVICE_KEEP_SET` (and any dot-prefixed path), so
+#: the diff reconciles the whole device down to payload + keep set, so
+#: a stale board ``settings.toml`` / leftover file is removed, not just
+#: stale ``/lib`` packages.
 _LIST_ALL_SCRIPT: str = (
     "import os\n"
     "def _walk(p):\n"
@@ -206,9 +204,7 @@ _WIPE_FILESYSTEM_SCRIPT: str = (
 #: :data:`_WIPE_FILESYSTEM_SCRIPT`) and re-opening the persistent
 #: serial transport.  rp2 and esp32 keep their host-side USB-CDC alive
 #: across a soft reset, so this is settle time for the runtime to
-#: remount ``/`` on the freshly-formatted volume, not a full USB-CDC
-#: re-enumeration like CircuitPython's ``storage.erase_filesystem``
-#: triggers.
+#: remount ``/`` on the freshly-formatted volume.
 _WIPE_REBOOT_SETTLE_SECONDS: float = 2.0
 
 
@@ -344,12 +340,11 @@ class MicropythonTransport:
         self.baudrate = baudrate
         self.mode = mode
         #: Wall-clock budget (10 s default) for the soft-reboot read
-        #: in :meth:`deploy_files` ``follow="soft_reboot"``.  Sized so
-        #: the partial-output window for ``while True`` app code
-        #: matches across both runtimes.  ``follow="exec"`` ignores
-        #: this — that path uses :data:`_EXECUTE_IDLE_TIMEOUT` (an
-        #: inter-byte idle timeout, not a wall-clock budget) for raw-
-        #: REPL EOF reception.
+        #: in :meth:`deploy_files` ``follow="soft_reboot"``.  Sized for
+        #: the partial-output window for ``while True`` app code.
+        #: ``follow="exec"`` ignores this — that path uses
+        #: :data:`_EXECUTE_IDLE_TIMEOUT` (an inter-byte idle timeout,
+        #: not a wall-clock budget) for raw-REPL EOF reception.
         self.timeout = timeout
         self._runner = runner or subprocess.run
         self._transport_factory = transport_factory or _default_transport_factory
@@ -359,12 +354,12 @@ class MicropythonTransport:
         self._serial: Any = None
         self._mounted: bool = False
         #: Top-level device-root names written by the last copy-mode
-        #: :meth:`stage`.  ``mpremote fs cp`` is additive, and it has no
-        #: ``--delete`` analog (the CircuitPython flash rsync does), so a
-        #: multi-library sweep must delete the prior library's tree
-        #: before the next ``fs cp`` or the device LittleFS fills and
-        #: staging hits ``ENOSPC``.  Persists for the transport's life
-        #: (one transport per device across the whole sweep).
+        #: :meth:`stage`.  ``mpremote fs cp`` is additive and has no
+        #: deletion flag, so a multi-library sweep must delete the
+        #: prior library's tree before the next ``fs cp`` or the device
+        #: LittleFS fills and staging hits ``ENOSPC``.  Persists for
+        #: the transport's life (one transport per device across the
+        #: whole sweep).
         self._staged_device_entries: list[str] = []
         #: The deployment target is MicroPython, so files marked for
         #: another runtime via ``__chumicro_runtimes__`` are filtered out
@@ -491,14 +486,14 @@ class MicropythonTransport:
         if self.mode == "copy":
             # Subprocess `fs cp -r` — release the serial port if held.
             self._close_serial()
-            # `mpremote fs cp` only adds/overwrites — no `--delete`
-            # analog — so a stale tree must be cleared or LittleFS
-            # fills and `fs cp` hits ENOSPC.  The first stage may meet
-            # residue from a prior killed run that no in-process
-            # tracking saw, so it cleans the whole device, not just
-            # tracked roots, while preserving `DEVICE_KEEP_SET`.  Later
-            # stages only delete the prior stage's library/test roots
-            # (never keep-set names), the copy-mode `--delete` analog.
+            # `mpremote fs cp` only adds/overwrites — no deletion — so
+            # a stale tree must be cleared or LittleFS fills and `fs cp`
+            # hits ENOSPC.  The first stage may meet residue from a
+            # prior killed run that no in-process tracking saw, so it
+            # cleans the whole device, not just tracked roots, while
+            # preserving `DEVICE_KEEP_SET`.  Later stages only delete
+            # the prior stage's library/test roots (never keep-set
+            # names).
             if not self._did_initial_wipe:
                 self._clean_slate_device()
                 self._did_initial_wipe = True
@@ -767,27 +762,24 @@ class MicropythonTransport:
                 files); breaks for ``while True`` app code because
                 the EOF marker never fires.
 
-                ``"soft_reboot"`` — friendly-REPL soft-reboot pattern,
-                analog of :class:`CircuitpythonTransport`'s flash
-                mode.  Sends ``Ctrl-B + Ctrl-D`` from the persistent
-                serial connection, lets MicroPython auto-run
-                ``/main.py``, reads serial output up to
-                :attr:`timeout` seconds (returning partial output for
-                infinite-loop bodies).  Mount mode is rejected — the
-                soft-reboot pattern requires the entrypoint at
-                ``/main.py`` on flash, not via mount, because
-                MicroPython only auto-runs files at known boot paths
-                on flash, never from a host-mounted directory.
+                ``"soft_reboot"`` — friendly-REPL soft-reboot pattern.
+                Sends ``Ctrl-B + Ctrl-D`` from the persistent serial
+                connection, lets MicroPython auto-run ``/main.py``,
+                reads serial output up to :attr:`timeout` seconds
+                (returning partial output for infinite-loop bodies).
+                Mount mode is rejected — the soft-reboot pattern
+                requires the entrypoint at ``/main.py`` on flash, not
+                via mount, because MicroPython only auto-runs files at
+                known boot paths on flash, never from a host-mounted
+                directory.
             clean: When ``True`` and ``mode="copy"``, wipe the
                 device's ``/lib`` tree before pushing the new staging
-                contents — mirrors the CP transport's ``rsync --delete``
-                semantics for the most common accumulation site.
-                Top-level user-managed files (``boot.py``, ``main.py``,
-                ``settings.toml``, etc.) live outside ``/lib`` and
-                survive unchanged.  No-op for ``mode="mount"`` (mount
-                mode is transient by design — nothing on the device's
-                flash to clean).  Default ``False`` preserves the
-                additive-by-default contract.
+                contents.  Top-level user-managed files (``boot.py``,
+                ``main.py``, ``settings.toml``, etc.) live outside
+                ``/lib`` and survive unchanged.  No-op for
+                ``mode="mount"`` (mount mode is transient by design —
+                nothing on the device's flash to clean).  Default
+                ``False`` preserves the additive-by-default contract.
 
         Returns:
             Combined stdout captured from the entrypoint execution.
@@ -850,12 +842,10 @@ class MicropythonTransport:
             # boilerplate.
             self._close_serial()
             if clean:
-                # MP analog of CP's ``rsync --delete`` +
-                # DEVICE_KEEP_SET clean push: clear the whole device
-                # root (only the keep set survives), then the
-                # ``fs cp -r`` below repopulates the payload.  A board
-                # ``settings.toml`` is evicted like everything outside
-                # the keep set — same one-staging-path rule as CP.
+                # Clean push: clear the whole device root (only the
+                # keep set survives), then the ``fs cp -r`` below
+                # repopulates the payload.  A board ``settings.toml``
+                # is evicted like everything outside the keep set.
                 self._clean_slate_device()
             self._run_mpremote([
                 "fs", "cp", "-r",
@@ -870,8 +860,8 @@ class MicropythonTransport:
             # (not /), so entrypoint paths the caller wrote as
             # ``/main.py`` resolve to ``/remote/main.py`` on device.
             # Add /remote and /remote/lib to sys.path so relative
-            # imports inside the user's code work the same way copy
-            # mode and CircuitPython flash mode do.
+            # imports inside the user's code work the same way they
+            # do in copy mode.
             self._ensure_serial()
             self._serial.mount_local(str(staging_path))
             self._mounted = True
@@ -886,7 +876,7 @@ class MicropythonTransport:
             # Caller validated mode == "copy" + entrypoint == "/main.py"
             # at the top.  Files are now on flash; the persistent
             # serial connection is open in raw REPL.  Hand off to the
-            # CP-flash-style soft-reboot read.
+            # soft-reboot read.
             try:
                 output = self._trigger_soft_reboot_and_read()
             except Exception as error:
@@ -981,8 +971,7 @@ class MicropythonTransport:
         is ``None``, ``dir()`` empty) and shadows the populated
         ``/lib/<pkg>/`` deeper in the path.  ``rmdir`` only removes
         an empty directory so live packages are never touched.
-        Dot-prefixed entries are skipped for parity with the listing
-        script's filter and with the CP host-side reap.
+        Dot-prefixed entries are skipped — they're not ours to reap.
         """
         if not paths:
             return
@@ -1158,10 +1147,9 @@ class MicropythonTransport:
            auto-runs ``/main.py``.
         3. Read serial bytes via ``mpremote.SerialTransport.read_until``
            with ``ending=b"\\r\\n>>> "`` (friendly-REPL prompt — the
-           analog of CircuitPython's ``Code done running.`` end
-           marker).  ``timeout_overall=self.timeout`` bounds the wait,
-           and for ``while True`` bodies the prompt never appears and
-           the read returns whatever accumulated.
+           end-of-execution marker).  ``timeout_overall=self.timeout``
+           bounds the wait, and for ``while True`` bodies the prompt
+           never appears and the read returns whatever accumulated.
 
         Returns:
             User stdout from ``main.py`` execution, with the
@@ -1261,17 +1249,15 @@ class MicropythonTransport:
     def _clean_slate_device(self) -> None:
         """Clean-slate the device root, preserving only the keep set.
 
-        The MP analog of the CP ``rsync --delete`` +
-        :data:`flash_drive.DEVICE_KEEP_SET` clean push.  Reconciles a
-        board left dirty by a prior run without destroying the keep
-        set.  ``mpremote fs cp`` never deletes, so without this each
-        deploy stacks onto the previous tree and a Pi Pico W MP fills
-        its ~860 KB flash.
+        Reconciles a board left dirty by a prior run without destroying
+        the keep set.  ``mpremote fs cp`` never deletes, so without
+        this each deploy stacks onto the previous tree and a Pi Pico W
+        MP fills its ~860 KB flash.
         Every root entry except the keep set (``boot.py`` /
         ``boot_out.txt`` / ``_chu_kv.msgpack``) is removed
         recursively; the subsequent ``fs cp -r`` repopulates the
         payload.  A board ``settings.toml`` is *not* in the keep set
-        and is evicted (competing wifi authority), matching CP.
+        and is evicted (competing wifi authority).
 
         One device-side script (one round trip, authoritative),
         best-effort per entry.  A stray leftover is cleaned next
@@ -1311,15 +1297,14 @@ class MicropythonTransport:
     def _remove_device_entries(self, entries: list[str]) -> None:
         """Recursively remove top-level *entries* from the device root.
 
-        The copy-mode analog of the CircuitPython flash rsync
-        ``--delete``: ``mpremote fs cp`` never deletes, so the prior
-        library's staged tree must be cleared or a multi-library sweep
-        fills the device LittleFS.  One device-side script (one round
-        trip, authoritative) ``rmtree``s each entry, tolerating
-        already-absent paths.  Best-effort: a stray leftover is
-        cleaned by the next switch and the post-``fs cp`` free space is
-        the real guard.  A hard failure here would mask the staging
-        operation it precedes.
+        ``mpremote fs cp`` never deletes, so the prior library's
+        staged tree must be cleared or a multi-library sweep fills the
+        device LittleFS.  One device-side script (one round trip,
+        authoritative) ``rmtree``s each entry, tolerating already-
+        absent paths.  Best-effort: a stray leftover is cleaned by the
+        next switch and the post-``fs cp`` free space is the real
+        guard.  A hard failure here would mask the staging operation
+        it precedes.
         """
         listed = ", ".join(repr(name) for name in entries)
         script = (

@@ -106,11 +106,10 @@ def build_circuitpython_deploy_scripts(
 ) -> list[str]:
     """Generate raw-REPL scripts for CircuitPython RAM-mode deploy.
 
-    Mirrors :func:`build_circuitpython_bootstrap_scripts` but drops
-    the test-harness tail.  The returned scripts inject every
-    non-entrypoint file as an importable module via ``sys.modules``,
-    then ``exec()`` the entrypoint as ``__main__``.  No
-    ``chumicro_test_harness`` dependency is required on the device.
+    The returned scripts inject every non-entrypoint file as an
+    importable module via ``sys.modules``, then ``exec()`` the
+    entrypoint as ``__main__``.  No ``chumicro_test_harness``
+    dependency is required on the device.
 
     Module naming follows CircuitPython's ``sys.path`` convention:
     files under ``/lib/`` are stripped of that prefix, so

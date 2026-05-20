@@ -1,12 +1,8 @@
 """Shared types for the deploy-recovery layer.
 
-:class:`DeployFailureKind` and :class:`RecoveryPlan` live here, not
-in :mod:`recovery`, because both the plans registry and the
-classifier import them; keeping them in a leaf module breaks the
-otherwise-cyclic graph cleanly.
-
-Both names are re-exported from :mod:`chumicro_deploy.recovery`;
-this module is where they're defined.
+:class:`DeployFailureKind` and :class:`RecoveryPlan` live in a leaf
+module so the plans registry and the classifier can both import them
+without forming a cycle.
 """
 
 from __future__ import annotations
