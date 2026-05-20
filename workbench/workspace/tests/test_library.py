@@ -13,10 +13,12 @@ from pathlib import Path
 
 import pytest
 from chumicro_workspace.library import (
+    LOCAL_EDIT_SENTINEL,
     LibraryFetchError,
     LibraryFetchFailureKind,
     fetch_closure,
     fetch_library,
+    is_locally_held,
     read_installed_version,
     remove_library,
 )
@@ -221,3 +223,91 @@ class TestHousekeeping:
         )
         assert remove_library(tmp_path, "chumicro_mqtt") is True
         assert remove_library(tmp_path, "chumicro_mqtt") is False
+
+
+class TestLocalEditSentinel:
+    """A user-dropped `.chumicro-local` claims the tree as theirs."""
+
+    def test_is_locally_held_detects_sentinel(self, tmp_path: Path):
+        package_dir = tmp_path / "libraries" / "chumicro_mqtt"
+        package_dir.mkdir(parents=True)
+        assert is_locally_held(tmp_path, "chumicro_mqtt") is False
+        (package_dir / LOCAL_EDIT_SENTINEL).write_text(
+            "# I own this tree now.\n",
+        )
+        assert is_locally_held(tmp_path, "chumicro_mqtt") is True
+
+    def test_fetch_preserves_held_tree_and_notices(
+        self, tmp_path: Path, capsys,
+    ):
+        # First install lands the channel content (no sentinel yet —
+        # the sentinel is a user-added marker, not part of the snapshot).
+        http_get = _channel("t1", {"mqtt": {"version": "1.0.0"}})
+        fetch_library(
+            "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get,
+        )
+        edited = (
+            tmp_path / "libraries" / "chumicro_mqtt" / "src"
+            / "chumicro_mqtt" / "__init__.py"
+        )
+        edited.write_text("# my fork\n", encoding="utf-8")
+        # User drops the sentinel: "leave this alone from now on."
+        (
+            tmp_path / "libraries" / "chumicro_mqtt" / LOCAL_EDIT_SENTINEL
+        ).write_text("# my fork", encoding="utf-8")
+        capsys.readouterr()
+
+        # Channel bumps to a new version + a re-fetch runs.
+        http_get_v2 = _channel("t2", {"mqtt": {"version": "2.0.0"}})
+        fetch_library(
+            "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get_v2,
+        )
+
+        # Sentinel wins: the edited file survives intact; no backup
+        # directory was created (no clobber happened to back up from).
+        assert edited.read_text(encoding="utf-8") == "# my fork\n"
+        assert not (tmp_path / "_library-backups").exists()
+        notice = capsys.readouterr().out
+        assert "kept local edits in libraries/chumicro_mqtt/" in notice
+        assert "channel has v2.0.0" in notice
+        # The notice mentions the actual sentinel filename so a future
+        # reader can find it by grep.
+        assert LOCAL_EDIT_SENTINEL in notice
+
+    def test_transitive_walk_respects_sentinel(
+        self, tmp_path: Path, capsys,
+    ):
+        # Set up a closure where the user has held one transitive dep.
+        # First install: pull mqtt → also pulls timing.
+        http_get = _channel("t1", {
+            "mqtt": {"version": "1.0.0", "deps": ("chumicro-timing",)},
+            "timing": {"version": "0.5.0"},
+        })
+        fetch_closure(
+            "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get,
+        )
+        # User edits timing + claims it.
+        timing_init = (
+            tmp_path / "libraries" / "chumicro_timing" / "src"
+            / "chumicro_timing" / "__init__.py"
+        )
+        timing_init.write_text("# my timing fork\n", encoding="utf-8")
+        (
+            tmp_path / "libraries" / "chumicro_timing" / LOCAL_EDIT_SENTINEL
+        ).touch()
+        capsys.readouterr()
+
+        # Re-add mqtt (or anything pulling timing transitively): mqtt's
+        # tree gets replaced from the new snapshot, timing stays put.
+        http_get_v2 = _channel("t2", {
+            "mqtt": {"version": "1.1.0", "deps": ("chumicro-timing",)},
+            "timing": {"version": "0.6.0"},
+        })
+        fetch_closure(
+            "chumicro_mqtt", workspace_root=tmp_path, http_get=http_get_v2,
+        )
+        assert timing_init.read_text(encoding="utf-8") == "# my timing fork\n"
+        notice = capsys.readouterr().out
+        assert "kept local edits in libraries/chumicro_timing/" in notice
+        # The non-held member (mqtt) was actually refreshed.
+        assert read_installed_version(tmp_path, "chumicro_mqtt") == "1.1.0"

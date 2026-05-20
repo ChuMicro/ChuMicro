@@ -44,6 +44,7 @@ from chumicro_workspace.library import (
     LibraryFetchError,
     fetch_closure,
     fetch_library,
+    is_locally_held,
     read_installed_version,
     remove_library,
 )
@@ -110,6 +111,8 @@ def _cmd_library_list(args: argparse.Namespace) -> int:
             flags.append("declined")
         if not on_disk and not entry.declined:
             flags.append("missing-on-disk")
+        if on_disk and is_locally_held(workspace.root, name):
+            flags.append("local")
         suffix = f"  [{', '.join(flags)}]" if flags else ""
         print(
             f"{name}  {entry.channel}  {entry.version}{suffix}",
