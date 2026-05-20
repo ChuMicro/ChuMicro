@@ -350,11 +350,11 @@ def update_device_address(
 ) -> None:
     """Silently update a device's cached ``address`` (probed-always zone).
 
-    Address is the canonical "moves around" field, because macOS
-    reassigns ``/dev/cu.usbmodem...`` numbers, and a board moved
-    between ports on the same hub looks like a fresh device unless we
-    cache.  Identity follows ``hardware.uid``, not the port, and this
-    updater is the silent-cache-refresh side of that contract.
+    Address is the "moves around" field, because macOS reassigns
+    ``/dev/cu.usbmodem...`` numbers, and a board moved between ports
+    on the same hub looks like a fresh device unless we cache.
+    Identity follows ``hardware.uid``, not the port, and this updater
+    is the silent-cache-refresh side of that contract.
 
     Raises:
         DeviceNotFoundError: No entry with that id.
@@ -463,9 +463,9 @@ def remove_device(data: CommentedMap, device_id: str) -> CommentedMap:
 
     The destructive counterpart to :func:`add_device`.  Drops the
     matching entry from the ``devices:`` list.  Every ``defaults.<key>``
-    whose value is *device_id* is set to ``None`` (the canonical
-    "unset" sentinel the template ships) rather than left dangling,
-    since a stale default would surface as a hard error on next load.
+    whose value is *device_id* is set to ``None`` (the "unset"
+    sentinel the template ships) rather than left dangling, since a
+    stale default would surface as a hard error on next load.
     Nulling *every* matching default, not just the active runtime's,
     is deliberate: a board whose firmware was reflashed CP↔MP must
     not keep a default pointing at the now-wrong runtime.

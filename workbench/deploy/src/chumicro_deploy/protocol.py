@@ -455,7 +455,7 @@ class TransportProtocol(Protocol):
         unlink the files and verify they are gone, flushing FAT first
         on CIRCUITPY so the deletion is on the physical medium before
         the reboot re-reads it.  RAM/mount transports never persist an
-        entrypoint, so this is a no-op.
+        entrypoint, so the call is a no-op there.
         """
         ...
 

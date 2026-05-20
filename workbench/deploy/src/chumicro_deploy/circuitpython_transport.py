@@ -46,16 +46,15 @@ _SOFT_REBOOT_MARKER = b"soft reboot"
 
 
 class PostStageStep(Enum):
-    """What a context does after the rsync.  The only step that varies.
+    """What a context does after the rsync.  Names the post-rsync fork.
 
-    The device-staging path is single: every context stages through
-    the same clean-slate rsync + :data:`flash_drive.DEVICE_KEEP_SET`,
-    so the bytes reach the board identically for a project, an
-    example, and a functional test. Only the step taken once the bytes
-    have landed differs, and only two values exist. Naming them here
-    keeps the divergence explicit and gives the planned drift lint a
-    symbol to anchor on instead of two unrelated methods that happen
-    to differ.
+    Every context stages through the same clean-slate rsync +
+    :data:`flash_drive.DEVICE_KEEP_SET`, so the bytes reach the board
+    identically for a project, an example, and a functional test.
+    Only the step taken once the bytes have landed differs, and only
+    two values exist. Naming them here keeps the divergence explicit
+    and gives the planned drift lint a symbol to anchor on instead of
+    two unrelated methods that happen to differ.
 
     - :attr:`SOFT_REBOOT_AND_TAIL`: Ctrl-D soft-reboot so the board
       runs the freshly-staged ``code.py``, then capture its serial
@@ -66,7 +65,7 @@ class PostStageStep(Enum):
       walk, and let the caller exec the harness and collect asserts.
 
     The chosen value never changes how the bytes got there: everything
-    up to and including the rsync is identical by construction.
+    up to and including the rsync runs the same code path.
     """
 
     SOFT_REBOOT_AND_TAIL = "soft-reboot then capture code.py output"
@@ -113,8 +112,8 @@ _BOARD_FILE_VISIBLE_POST_SETTLE = 2.0
 
 #: Initial settle delay before the first reconnect attempt after
 #: ``storage.erase_filesystem()`` reboots the board.  CDC takes a
-#: beat to come back; this is the minimum we wait before even
-#: starting to poll for the port.
+#: beat to come back, so wait this long before even starting to
+#: poll for the port.
 _WIPE_REBOOT_SETTLE_SECONDS = 2.0
 #: Total wall-clock budget for the post-wipe reconnect.  A CP board
 #: with a populated FAT volume can take several seconds to re-enumerate
@@ -888,9 +887,9 @@ class CircuitpythonTransport:
         # Order is load-bearing.  Enter raw REPL FIRST + disable
         # autoreload BEFORE any host-side drive write, because
         # otherwise rsync to CIRCUITPY can hang in uninterruptible
-        # kernel I/O.  ``_enter_raw_repl`` is idempotent (resends
-        # Ctrl-C / Ctrl-A) so repeated calls after ``connect()`` or
-        # after an intervening soft-reboot are safe.
+        # kernel I/O.  ``_enter_raw_repl`` resends Ctrl-C / Ctrl-A on
+        # every call, so repeated calls after ``connect()`` or after
+        # an intervening soft-reboot are safe.
         self._enter_raw_repl()
         self._disable_autoreload_before_drive_writes()
         drive_path = self._resolve_circuitpy_drive()
@@ -916,8 +915,8 @@ class CircuitpythonTransport:
             ) from rsync_error
 
         # Post-rsync cleanup of legacy noise dirs.  Only fires on
-        # already-contaminated drives, and idempotent once the
-        # sentinels have prevented re-creation.
+        # already-contaminated drives.  Once the sentinels prevent
+        # re-creation, re-runs are a no-op.
         flash_drive.cleanup_macos_noise_dirs_post_rsync(drive_path)
         flash_drive.clean_dot_files(drive_path)
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)

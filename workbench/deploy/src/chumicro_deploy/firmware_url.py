@@ -205,7 +205,7 @@ def latest_circuitpython_version(
     *allow_prerelease* is ``True``.  The user-facing knob matches
     what Adafruit's release pipeline produces.
 
-    Sort order is canonical SemVer-style numeric:
+    Sort order is SemVer-style numeric:
     ``(major, minor, patch)`` ascending, and the last element wins.
 
     Raises:

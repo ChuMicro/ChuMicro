@@ -425,7 +425,7 @@ class MicropythonTransport:
         """
         self._include_test_support = include_test_support
         # Drop any mount/tempdir left from a prior stage() on this
-        # transport so re-staging is idempotent.
+        # transport so a re-stage starts from a clean tempdir.
         if self._mounted and self._serial is not None:
             try:
                 self._serial.umount_local()
@@ -1203,8 +1203,7 @@ class MicropythonTransport:
         #   * ``\nMicroPython v`` — start of the friendly-REPL banner
         #     line (``MicroPython v1.28.0 on ...; <board>``).  Cuts
         #     before the banner so any preceding traceback is
-        #     preserved.  This is the normal case after a clean
-        #     return or an exception.
+        #     preserved.  Hits on every clean return or exception.
         #   * ``\n>>> `` (or bare ``>>> `` at start) — friendly-REPL
         #     prompt.  Backstop for cases where the banner wasn't
         #     captured (e.g. a quick return whose banner straddled

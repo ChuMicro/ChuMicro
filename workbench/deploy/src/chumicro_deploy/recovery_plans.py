@@ -153,10 +153,10 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     DeployFailureKind.CONFIGURATION_ERROR: RecoveryPlan(
         headline="The deploy call was misconfigured.",
         fix_steps=(
-            "This is a code-level misuse, not a runtime failure.  "
-            "Check the error message above for the exact parameter "
-            "that's missing or wrong.  A retry will not change the "
-            "outcome until the call-site is fixed.",
+            "Code-level misuse, not a runtime failure.  Check the "
+            "error message above for the exact parameter that's "
+            "missing or wrong.  A retry will not change the outcome "
+            "until the call-site is fixed.",
         ),
         retryable=False,
     ),

@@ -53,9 +53,8 @@ from collections.abc import Callable
 #: wait and can't handle a normal signal.  A reboot is the
 #: always-safe alternative when the paste approach doesn't stick.
 #:
-#: This string is the single source of truth for the recovery
-#: command.  The prose copy in ``docs/troubleshooting/macos-circuitpy.md``
-#: pulls from it.
+#: The prose copy in ``docs/troubleshooting/macos-circuitpy.md``
+#: pulls from this string, so the command text lives in one place.
 MACOS_FSKIT_RECOVERY_COMMAND = (
     "sudo killall -9 com.apple.fskit.msdos fskit_helper "
     "fskitd fskit_agent diskarbitrationd DiskArbitrationAgent"

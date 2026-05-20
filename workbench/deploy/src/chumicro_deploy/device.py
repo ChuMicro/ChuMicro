@@ -25,10 +25,9 @@ DEFAULT_BAUDRATE = 115200
 
 #: Default deploy mode.  ``"flash"`` writes files to the board (maps to
 #: ``copy`` on MicroPython / CIRCUITPY drive copy on CircuitPython).
-#: This is the production-shaped path and matches how a real deploy
-#: behaves on the device.  ``"ram"`` is opt-in for fast iteration on
-#: single-library unit-style tests (maps to ``mount`` on MicroPython /
-#: inline-exec on CircuitPython).
+#: Matches how a real deploy behaves on the device.  ``"ram"`` is
+#: opt-in for fast iteration on single-library unit-style tests (maps
+#: to ``mount`` on MicroPython / inline-exec on CircuitPython).
 DEFAULT_DEPLOY_MODE = "flash"
 
 #: On-device directory where deployed library files land by default.
