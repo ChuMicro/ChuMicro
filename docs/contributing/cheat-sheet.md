@@ -33,7 +33,7 @@ git push -u origin fix/my-change      # then open PR on GitHub
 
 ## The 10 rules
 
-1. **One command to rule them all:** `python scripts/run.py preflight`. If it passes, CI will pass.
+1. **Preflight is the one required gate.** `python scripts/run.py preflight` — if it passes, CI will pass.
 2. **Use descriptive names.** The linter catches abbreviations and suggests replacements. Single-letter for-loop targets (`for i in range(10)`) are fine.
 3. **No `async`/`await`.** Use the tick-based runner. It's easier to test and debug on microcontrollers.
 4. **Accept dependencies as constructor parameters.** Don't import `board` or `busio` at the top level. This makes code testable without hardware.

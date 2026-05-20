@@ -33,7 +33,7 @@ This string is also exposed as `chumicro_deploy.macos_fskit.MACOS_FSKIT_RECOVERY
 Why each piece:
 
 - **`killall -9` for the FSKit system daemons** — `com.apple.fskit.msdos`, `fskit_helper`, `fskitd`, `fskit_agent`, and `diskarbitrationd` all respawn via launchd's `KeepAlive=true` plists.  Kill them and they come back a moment later in a clean state.  `-9` is required because they're stuck in kernel wait and can't handle a normal signal.
-- **`killall -9` for the per-user `DiskArbitrationAgent`** — this is the agent that registers volumes with Finder's Locations sidebar.  An earlier version of this command tried to bounce it via `launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent`, but that path is SIP-blocked on modern macOS.  Killing it directly with `killall -9` works — even though its launchd plist has `KeepAlive=false`, the per-user launchd respawns it on demand the next time a client opens an XPC connection (which happens immediately when the system-side `diskarbitrationd` comes back up).
+- **`killall -9` for the per-user `DiskArbitrationAgent`** — this is the agent that registers volumes with Finder's Locations sidebar.  `launchctl kickstart` is SIP-blocked here; `killall -9` works because even though its launchd plist has `KeepAlive=false`, the per-user launchd respawns it on demand the next time a client opens an XPC connection (which happens immediately when the system-side `diskarbitrationd` comes back up).
 
 After the command:
 

@@ -4,7 +4,7 @@
 <h1 align="center">ChuMicro</h1>
 
 <p align="center">
-  <strong><big>Cross-runtime high-level utilities for CircuitPython, MicroPython, and Python.</big></strong>
+  <strong><big>Non-blocking libraries that run unmodified on CircuitPython, MicroPython, and CPython.</big></strong>
 </p>
 
 <p align="center"><big>
@@ -33,21 +33,21 @@ Everything is non-blocking — **no `async` / `await`, no threads**.  Concurrent
 
 ## What makes ChuMicro different
 
-- **One codebase, three Python runtimes.**  Each library is written once and runs unmodified on CircuitPython, MicroPython, and CPython.  No per-runtime forks, no shim modules, no "this works on CP but breaks on MP" gotchas.  You develop and unit-test on your laptop and ship the same source to the board.
+- **One codebase, three Python runtimes.**  Each library is written once and runs unmodified on CircuitPython, MicroPython, and CPython.  No per-runtime forks, no shim modules, no "this works on CP but breaks on MP" gotchas.  Develop and unit-test on a laptop; the same source ships to the board.
 
-- **Non-blocking by design.**  No `async` / `await`, no threads.  Each long-running operation — a WiFi reconnect, a TLS handshake, an HTTP request, an MQTT subscribe — yields back to your main loop in small chunks.  Other work in the same loop (an LED heartbeat, a button check, a display update, a sensor read) keeps running alongside it.  This is the "cooperative loop" pattern.  If you've written `loop()` functions for Arduino, you'll recognize the shape.
+- **Non-blocking by design.**  No `async` / `await`, no threads.  Each long-running operation — a WiFi reconnect, a TLS handshake, an HTTP request, an MQTT subscribe — yields back to the main loop in small chunks.  Other work in the same loop (an LED heartbeat, a button check, a display update, a sensor read) keeps running alongside it.  This is the "cooperative loop" pattern — the same shape Arduino's `loop()` uses.
 
 - **Iterating on real hardware is one command.**  Drop in a board, run `chumicro-workspace deploy-example <library> <example>`, and the example runs on the device.  Firmware install (UF2 or esptool), board discovery, source push, and REPL tail are all built in.  No Makefile, no manual `mpremote`, no copying files to a USB drive that mounts inconsistently.
 
-- **Tested at every level — unit, cross-runtime, on real hardware.**  Every library has CPython unit tests for fast iteration on your laptop.  The same tests also run under MicroPython and CircuitPython's desktop builds (their "unix ports"), so "works on CPython, breaks on the device runtime" is caught before code reaches a board.  On-device functional tests stage source onto a connected board and run in its actual Python runtime.
+- **Tested at every level — unit, cross-runtime, on real hardware.**  Every library has CPython unit tests for fast iteration on a laptop.  The same tests also run under MicroPython and CircuitPython's desktop builds (their "unix ports"), so "works on CPython, breaks on the device runtime" is caught before code reaches a board.  On-device functional tests stage source onto a connected board and run in its actual Python runtime.
 
 - **One `pytest` invocation surfaces every layer.**  The unix-port and on-device paths run through regular `pytest` via the `chumicro-pytest-device` plugin, so an IDE play button drives every layer the same way.  Examples are exercised on real CircuitPython and MicroPython boards as part of the release process.
 
-- **A real project layout when you outgrow examples.**  The [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) gives you a clone-and-go starter with a `projects/` tree, atomic deploys (so the board's FAT filesystem doesn't wear out from save-on-every-keystroke editing), a device registry shared with the deploy tools, workspace-wide config + secrets, and a `pytest` setup that runs tests both on your laptop and on the board.
+- **A real project layout once examples aren't enough.**  The [workspace template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) is a clone-and-go starter with a `projects/` tree, host-staged deploys (no save-on-every-keystroke editing on the board's FAT filesystem), a device registry shared with the deploy tools, workspace-wide config + secrets, and a `pytest` setup that runs tests both on a laptop and on the board.
 
-- **Bring your own socket, your own clock.**  Each library asks for its I/O dependencies when you construct it.  `MQTTClient` asks for a socket; `Heartbeat` asks for a clock; you decide what to pass.  ChuMicro provides defaults (`chumicro-sockets`, `chumicro-timing`) so the simple setup just works.  But nothing locks you in — pass a stdlib `socket.socket` for a desktop script, a wrapper around another networking library you already use, or anything else that exposes the small set of methods the library needs.  If you've fully replaced the default, [Slimming Your Deploy](docs/contributing/slimming-your-deploy.md) shows how to drop `chumicro-sockets` from the on-device files too.
+- **Bring your own socket, your own clock.**  Each library accepts its I/O dependencies as constructor arguments.  `MQTTClient` takes a socket; `Heartbeat` takes a clock — the caller decides what to pass.  ChuMicro provides defaults (`chumicro-sockets`, `chumicro-timing`) so minimal wiring works.  Nothing locks the caller in — pass a stdlib `socket.socket` for a desktop script, a wrapper around an existing networking library, or anything else that exposes the small set of methods the library needs.  When the default is fully replaced, [Slimming Your Deploy](docs/contributing/slimming-your-deploy.md) shows how to drop `chumicro-sockets` from the on-device files too.
 
-- **Runs on common Python-capable dev boards.**  Bench-validated on Lolin S2 (ESP32-S2) and Raspberry Pi Pico W (RP2040) in CircuitPython and MicroPython.  Any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 4 MB of flash should work — the rest of the ESP32 family (S3 / C3 / C6), RP2350, STM32, and nRF52840 builds included.
+- **Runs on common Python-capable dev boards.**  Tested on real CircuitPython and MicroPython boards before each release.  Any board that runs CircuitPython or MicroPython with at least 256 KB of RAM and 4 MB of flash should work.
 
 ## From blink to a full IoT loop
 
@@ -338,8 +338,6 @@ chumicro-deploy flash-firmware --help    # full flag reference per method
 Once the firmware lands and the board reboots, the `chumicro-workspace deploy-example` step above works as written — the wizard detects the freshly-flashed board and registers it on first run.
 
 <!-- TODO(gif): flash-firmware on an Arduino-flashed board, then deploy-example. -->
-
-Few CircuitPython / MicroPython projects let you go from a fresh `git clone` to a running on-device example this quickly — and across both runtimes from a single tree.  That's the bar this repository aims for.
 
 ## Running tests
 

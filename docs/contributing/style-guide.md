@@ -63,8 +63,6 @@ from .heartbeat import Heartbeat
 
 **Why:** CircuitPython RAM mode assembles library modules as class-as-module stubs and `exec()`'s them inside the raw REPL. The namespace passed to `exec()` has no `__package__` attribute, so Python can't resolve a leading `.` — `from .foo import bar` raises `ImportError`. Flash mode works fine because files land on the device filesystem and get a real `__package__` when imported, but any module whose RAM-mode path is exercised (which includes every published library) has to work in both modes.
 
-We briefly had an `_resolve_relative_imports()` workaround that rewrote relatives inside `exec()`; it was fragile and got deleted once the codebase converted to absolutes.
-
 Host-only code can use either style:
 
 - **`workbench/*/src/`** — relative imports are fine. These packages run on CPython only and are never `exec()`'d through the raw REPL. `chumicro-deploy` uses relative intra-package imports throughout.

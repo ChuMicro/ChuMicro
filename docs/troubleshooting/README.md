@@ -19,5 +19,3 @@ Content lands here only when:
 
 - [`docs/contributing/cheat-sheet.md`](../contributing/cheat-sheet.md) — one-line fixes for common lint / test / coverage / device-setup failures.
 - [Device testing guide](../contributing/device-testing.md) — configuring `devices.yml` and running `functional_tests/`.
-- [ADR 0033](../../plans/decisions/0033-macos-circuitpy-deploy-hardening.md) — *why* the deploy tool handles macOS CIRCUITPY the way it does.
-- [ADR 0017](../../plans/decisions/0017-circuitpython-ringio-bug.md) — *why* we build the CP unix port `VARIANT=standard` with the RingIO workaround flag.
