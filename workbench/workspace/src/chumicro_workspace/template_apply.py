@@ -7,7 +7,7 @@ there is deliberately no CLI command that scaffolds a new workspace.
 tool-owned files (the zones defined in
 :mod:`chumicro_workspace.template_zones`) without touching
 user-owned ones.  `materialize_workspace_templates` fills in the
-canonical first-write text for ``devices.yml`` / ``workspace.yml`` /
+first-write text for ``devices.yml`` / ``workspace.yml`` /
 ``secrets.toml`` from the readers in
 :mod:`chumicro_workspace.templates` on first ``setup``.
 """
@@ -91,7 +91,7 @@ def update(
 
     Args:
         target: Existing workspace root.
-        template_url: Upstream URL.  Defaults to the canonical repo.
+        template_url: Upstream URL.  Defaults to the ChuMicro repo.
         git_reference: Branch or tag to fetch.
 
     Returns:
@@ -123,7 +123,7 @@ def update(
 
 
 def materialize_workspace_templates(workspace_root: Path) -> ApplyReport:
-    """Materialize the canonical first-write text for ``devices.yml`` /
+    """Materialize the first-write text for ``devices.yml`` /
     ``workspace.yml`` / ``secrets.toml`` into *workspace_root*.
 
     Existing files are never overwritten.  Idempotent — re-running on

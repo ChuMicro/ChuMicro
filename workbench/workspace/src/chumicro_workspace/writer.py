@@ -1,6 +1,6 @@
-"""Write the merged runtime config as msgpack at the canonical path.
+"""Write the merged runtime config as msgpack at the on-device path.
 
-Device format is msgpack; the canonical on-device path is
+Device format is msgpack; the on-device path is
 ``/runtime_config.msgpack``.  This module writes the host-side
 artifact at ``projects/<name>/_generated/runtime_config.msgpack``
 (deployer overlays it onto device flash later); the path constant

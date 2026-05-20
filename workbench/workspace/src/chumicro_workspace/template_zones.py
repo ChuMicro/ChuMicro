@@ -6,7 +6,7 @@ is no scaffolding CLI command); these zones govern only what
 
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,  <!-- noqa: CHU006 -->
   `pyproject.toml`, `projects/_template/`, `examples/`
-  (reading-material demos shipped from the canonical template), and
+  (reading-material demos shipped from the template), and
   the agent-skill documents under `.github/skills/`.  `update`
   rewrites these so newer template releases flow in.
 

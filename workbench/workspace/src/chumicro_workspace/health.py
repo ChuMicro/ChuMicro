@@ -169,7 +169,7 @@ def check_devices_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             level=HealthLevel.ERROR,
             message=f"malformed: {exception}",
             hint=(
-                "check the YAML structure against the canonical template "
+                "check the YAML structure against the shipped template "
                 "(chumicro_deploy.read_devices_yml_template())."
             ),
         )

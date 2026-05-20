@@ -775,7 +775,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         help=(
             "Print the file map deploy would ship without writing to "
             "the device.  Doubles as documentation: the output is the "
-            "canonical reference for 'what does deploy actually do'."
+            "reference for 'what does deploy actually do'."
         ),
     )
     deploy_parser.add_argument(

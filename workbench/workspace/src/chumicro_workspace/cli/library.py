@@ -75,14 +75,16 @@ def _print_install_summary(
     closure: list[str],
     declined: set[str],
 ) -> None:
-    """One library per line so the requested package + its version are
-    not lost in a comma-soup of transitive deps.
+    """Print one line per library in *closure* with its version + channel.
 
-    *primary* is what the user actually asked for; the rest of
-    *closure* came along through ``[project].dependencies``.  Sentinel-
-    held trees show their on-disk version + a marker so the user can
-    tell at a glance why one closure member kept its local edits while
-    the others tracked the channel.
+    *primary* (what the user asked for) prints as the headline; the
+    rest of *closure* came along through ``[project].dependencies`` and
+    prints with a ``  + `` prefix.  Sentinel-held trees show their
+    on-disk version with a ``(kept local edits — sentinel)`` marker so
+    a closure member that kept the user's edits is distinguishable
+    from one that tracked the channel — printing one line per library
+    rather than a comma-joined list is what makes that distinction
+    legible.
     """
     primary_version = read_installed_version(workspace_root, primary) or "?"
     print(f"Added {primary} v{primary_version} ({channel})")

@@ -108,11 +108,10 @@ class OnboardingDiagnosis:
 def find_uf2_drive(search_paths: list[Path] | None = None) -> Path | None:
     """Scan platform-default mount paths for a directory with ``INFO_UF2.TXT``.
 
-    INFO_UF2.TXT is the canonical marker the UF2 bootloader writes
-    to its mass-storage drive on every mount, regardless of board
-    family or drive label (RPI-RP2, RPI-RP3, SAMD51, CIRCUITPYUF2,
-    etc.).  Scanning for it is the only board-agnostic detection
-    method.
+    INFO_UF2.TXT is the marker the UF2 bootloader writes to its
+    mass-storage drive on every mount, regardless of board family or
+    drive label (RPI-RP2, RPI-RP3, SAMD51, CIRCUITPYUF2, etc.).
+    Scanning for it is the only board-agnostic detection method.
 
     Args:
         search_paths: Override platform-default mount roots.  Tests
@@ -139,7 +138,7 @@ def find_uf2_drive(search_paths: list[Path] | None = None) -> Path | None:
 
 
 def _next_steps_for(state: BoardState, *, uf2_drive: Path | None = None) -> list[str]:
-    """Return canonical recommendations for *state* — pure dispatch table."""
+    """Return the recommendation block for *state* — pure dispatch table."""
     if state is BoardState.REPL_REACHABLE:
         return [
             "Board is in REPL — register it with:",

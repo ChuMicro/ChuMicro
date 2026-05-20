@@ -1,7 +1,7 @@
 """Workspace path resolution + project-tree classification.
 
-Locates the canonical files of a project workspace (workspace.yml,
-devices.yml, ``projects/<...>/``) given a starting directory.  The
+Locates the workspace's named files (workspace.yml, devices.yml,
+``projects/<...>/``) given a starting directory.  The
 CLI walks up from the current working directory until it finds a
 ``workspace.yml`` so users can invoke commands from anywhere inside
 the workspace tree (typical Git / monorepo ergonomics).
@@ -18,8 +18,7 @@ and so on.  A directory is classified by walking its contents:
   ``docs/``, design notes, etc. anywhere in the tree without flagging
   them.
 
-The layout reified by the canonical
-``ChuMicro/ChuMicro-Workspace-Template`` repo::
+The layout reified by ``ChuMicro/ChuMicro-Workspace-Template``::
 
     <root>/
         workspace.yml          # gitignored defaults + credentials
@@ -143,7 +142,7 @@ class WorkspaceLayout:
     def secrets_toml(self) -> Path:
         """Path to ``<root>/secrets.toml`` — gitignored device-bound config.
 
-        Materialized on first ``setup`` from the canonical template
+        Materialized on first ``setup`` from the shipped template
         (:func:`read_secrets_toml_template`).  Carries wifi credentials,
         MQTT broker auth, and any other workspace-wide default that
         flows onto a board through ``runtime_config.msgpack``.
