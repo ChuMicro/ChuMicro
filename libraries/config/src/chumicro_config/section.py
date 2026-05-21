@@ -1,9 +1,9 @@
 """Flat-key runtime-config wrapper + section-loading helpers.
 
 The on-device runtime config is a flat dict with dotted keys
-(``"wifi.ssid"``, ``"mqtt.broker.host"``) — compose-time flattening on
+(``"wifi.ssid"``, ``"mqtt.broker.host"``). Compose-time flattening on
 the host turns nested TOML tables into this shape before the msgpack
-encode.  :class:`RuntimeConfig` wraps that dict for keyed access;
+encode.  :class:`RuntimeConfig` wraps that dict for keyed access.
 :func:`load_section` / :func:`try_load_section` build typed
 ``<Name>Config`` instances from it.
 """
@@ -79,7 +79,7 @@ def load_section(
     For each name in *required* / *optional*, reads
     ``config[f"{prefix}.{name}"]`` and passes it as the keyword
     argument *name* to ``target_class(**kwargs)``.  Missing required
-    keys raise :class:`MissingConfigKey`; a *config* that isn't a
+    keys raise :class:`MissingConfigKey`. A *config* that isn't a
     :class:`RuntimeConfig` / dict raises :class:`InvalidConfigType`.
     Soft "config not deployed" handling belongs in
     :func:`try_load_section`.
@@ -123,12 +123,12 @@ def try_load_section(
     required: tuple = (),
     optional: dict | None = None,
 ) -> object | None:
-    """Soft-load — return ``None`` whenever :func:`load_section` would raise.
+    """Soft-load: return ``None`` whenever :func:`load_section` would raise.
 
     Three skip-paths return ``None``: *config* is ``None`` (no
     runtime config deployed), *config* is the wrong type, or a required
     key is missing.  Treat the ``None`` return as "this section isn't
-    configured; skip the feature."
+    configured, skip the feature."
     """
     if config is None or not is_config_like(config):
         return None

@@ -1,4 +1,4 @@
-"""Runtime-config helpers — section loader + on-device reader.
+"""Runtime-config helpers: section loader + on-device reader.
 
 Apps import :data:`config` (lazy-loaded ``/runtime_config.msgpack``,
 or ``None`` when absent) or :func:`load_runtime_config` for the
@@ -31,7 +31,7 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    """Lazy-load ``config`` on first access (PEP 562 — see runtime module)."""
+    """Lazy-load ``config`` on first access (PEP 562, see runtime module)."""
     if name == "config":
         from chumicro_config.runtime import config  # noqa: PLC0415
 
