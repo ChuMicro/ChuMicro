@@ -1,4 +1,4 @@
-"""``WifiConfig`` — typed connection settings + flat-key factory.
+"""``WifiConfig``: typed connection settings + flat-key factory.
 
 Reads from the flat-key runtime config produced by
 ``chumicro_workspace.compose_runtime_config``: keys ``wifi.ssid``,
@@ -17,13 +17,13 @@ class WifiConfig:
         password: WPA passphrase.  Required.
         hostname: Hostname advertised on the AP.  Optional.
         connect_timeout_ms: Maximum wait for a single
-            ``connect()`` attempt to complete.  Optional;
+            ``connect()`` attempt to complete.  Optional,
             defaults to 15 s.
         reconnect_backoff_start_ms: Initial delay between
-            reconnect attempts after a link drop.  Optional;
+            reconnect attempts after a link drop.  Optional,
             defaults to 1 s.
         reconnect_backoff_max_ms: Cap on the exponential
-            reconnect backoff.  Optional; defaults to 60 s.
+            reconnect backoff.  Optional, defaults to 60 s.
         reconnect_max: Maximum number of reconnect attempts before
             entering ``FAILED``.  ``None`` (default) means
             unlimited.
@@ -35,7 +35,7 @@ class WifiConfig:
 
     #: Optional flat keys read by ``from_config`` / ``try_from_config``,
     #: mapped to their default when absent.  Kept in sync with the
-    #: ``__init__`` signature defaults; the signature stays the
+    #: ``__init__`` signature defaults.  The signature stays the
     #: documentation surface for direct construction.
     _OPTIONAL_DEFAULTS = {
         "hostname": None,
@@ -83,7 +83,7 @@ class WifiConfig:
             chumicro_config.MissingConfigKey: ``wifi.ssid`` or
                 ``wifi.password`` is absent from *config*.
             chumicro_config.InvalidConfigType: *config* is ``None`` or
-                not a mapping — use :meth:`try_from_config` for the
+                not a mapping.  Use :meth:`try_from_config` for the
                 soft path.
         """
         return load_section(
@@ -96,7 +96,7 @@ class WifiConfig:
 
     @classmethod
     def try_from_config(cls, config: object) -> "WifiConfig | None":
-        """Soft-load a ``WifiConfig`` — return ``None`` when not configured.
+        """Soft-load a ``WifiConfig``, returning ``None`` when not configured.
 
         Returns ``None`` whenever :meth:`from_config` would raise:
         *config* is ``None``, *config* isn't a mapping, or any required
@@ -110,7 +110,7 @@ class WifiConfig:
 
             wifi_cfg = WifiConfig.try_from_config(config)
             if wifi_cfg is None:
-                return  # not configured — skip / use defaults
+                return  # not configured, skip / use defaults
             service = WifiService(wifi_cfg)
 
         Args:

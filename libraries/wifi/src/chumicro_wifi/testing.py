@@ -36,14 +36,14 @@ class FakeWifiAdapter(WifiAdapter):
 
     The connection lifecycle is driven by:
 
-    * :meth:`set_connect_outcome` — controls what the next
+    * :meth:`set_connect_outcome`: controls what the next
       :meth:`connect` returns (``True`` for success, ``False`` for
       a clean refusal, an exception class to raise, or a one-shot
       sequence via :meth:`set_connect_outcomes`).
-    * :meth:`drop_link` — simulates a link-down event; the next
+    * :meth:`drop_link`: simulates a link-down event.  The next
       :meth:`is_linked` returns ``False``, triggering the service's
       reconnect path.
-    * :meth:`record` — every adapter call appends to ``self.calls``
+    * :meth:`record`: every adapter call appends to ``self.calls``
       so tests can assert call ordering and arguments.
     """
 
@@ -131,7 +131,7 @@ class FakeWifi(WifiService):
     the wrapper for ergonomic use in test code.
 
     Args:
-        ticks: A tick source — typically a
+        ticks: A tick source: typically a
             :class:`chumicro_timing.testing.FakeTicks` instance the
             test owns and advances explicitly.
         config: Optional :class:`WifiConfig`.  When ``None`` a
@@ -167,7 +167,7 @@ class FakeWifi(WifiService):
 
     @property
     def calls(self):
-        """List of recorded adapter calls — assertion target for tests."""
+        """List of recorded adapter calls.  Assertion target for tests."""
         return self.adapter.calls
 
     # --- convenience for tick-driven tests ---------------------------

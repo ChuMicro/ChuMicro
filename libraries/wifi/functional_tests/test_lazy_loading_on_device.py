@@ -2,12 +2,12 @@
 
 Confirms the package + key public attributes resolve cleanly on
 real CircuitPython + MicroPython boards (not just the unix-ports).
-Also documents — by demonstrating the eager-import shape — the
+Also documents (by demonstrating the eager-import shape) the
 finding that PEP 562 module-level ``__getattr__`` is silently
 bypassed by CircuitPython's RAM-mode class-as-module wrapper, so
 package-level lazy attrs can't actually fire on CP RAM deploys.
 The lazy benefit lives in :func:`_select_adapter` (named
-``from X import Y`` inside a function — works everywhere).
+``from X import Y`` inside a function, which works everywhere).
 """
 
 

@@ -19,7 +19,7 @@ class CpWifiAdapter(WifiAdapter):
 
     Args:
         radio: Optional radio substrate.  When ``None`` (default),
-            uses the live ``wifi.radio`` singleton — only available
+            uses the live ``wifi.radio`` singleton, only available
             under CircuitPython.  Tests inject a fake whose shape
             matches the subset of ``wifi.radio`` we touch:
             ``hostname`` (settable str), ``connect(ssid, password,
@@ -56,7 +56,7 @@ class CpWifiAdapter(WifiAdapter):
 
         CircuitPython's ``wifi.radio.hostname`` must be set before
         ``connect()`` to advertise on the AP.  Power-save and
-        static-IP are not exposed by ``wifi.radio`` in 10.x — we
+        static-IP are not exposed by ``wifi.radio`` in 10.x.  We
         accept the config field for cross-runtime parity but ignore
         them here (documented in the adapter docstring).
         """
@@ -66,18 +66,18 @@ class CpWifiAdapter(WifiAdapter):
     def connect(self, config):
         """Block on ``wifi.radio.connect`` budgeted by ``connect_timeout_ms``.
 
-        CP's connect is blocking — the substrate doesn't expose a
-        non-blocking variant.  ``timeout`` is in seconds; we
-        convert from the config's milliseconds.
+        CP's connect is blocking.  The substrate doesn't expose a
+        non-blocking variant.  ``timeout`` is in seconds, converted
+        from the config's milliseconds.
 
         Catches ``OSError`` (the parent of CircuitPython's
         ``TimeoutError`` / ``ConnectionError`` for the AP-refused
-        and timeout cases) so the service can retry; we use
-        ``OSError`` rather than the targeted subclasses because
+        and timeout cases) so the service can retry.  ``OSError`` is
+        the catch rather than the targeted subclasses because
         MicroPython doesn't expose those names as builtins (the
         adapter source has to load on every runtime even though
         only CP instantiates it).  Anything else (RuntimeError,
-        AttributeError — programmer errors, wrong board) propagates
+        AttributeError, programmer errors, wrong board) propagates
         to ``WifiService.last_error``.
         """
         timeout_seconds = config.connect_timeout_ms / 1000

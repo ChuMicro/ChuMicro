@@ -6,7 +6,7 @@ device defaults) deep-merged with this library's optional
 ``chumicro_pytest_device.set_runtime_config`` so the plugin
 msgpack-encodes it once and stages it at
 ``/runtime_config.msgpack`` on the device.  On-device tests read
-the same payload via ``chumicro_config.load_runtime_config()`` —
+the same payload via ``chumicro_config.load_runtime_config()``,
 the same API user code uses.
 
 When the merged config has no usable wifi credentials (fresh-clone
@@ -14,7 +14,7 @@ state, placeholder SSID still in the starter), nothing is
 registered.  Combined with the ``required_keys=("wifi.ssid",
 "wifi.password")`` declaration below, the plugin's
 ``pytest_collection_modifyitems`` hook applies ``pytest.mark.skip``
-to every device test in the session before deploy — a visible skip
+to every device test in the session before deploy: a visible skip
 with a clear message, not a silent fake-pass.
 """
 
@@ -41,13 +41,13 @@ def _merged_runtime_config() -> dict | None:
     * The merged flat config lacks ``wifi.ssid`` / ``wifi.password``
       (typically because the gitignored ``workspace.yml`` hasn't been
       filled in yet).
-    * The merged config carries the placeholder SSID — same silent-
+    * The merged config carries the placeholder SSID: same silent-
       skip path so a fresh-clone contributor isn't surprised by a
       "real network error" against a nonsense SSID.
     """
     if not _SECRETS_TOML.is_file():
         return None
-    # Any exception from ``compose_runtime_config`` propagates — a
+    # Any exception from ``compose_runtime_config`` propagates.  A
     # malformed ``secrets.toml`` is a real bug to surface, not the
     # same shape as a fresh-clone "user hasn't filled it in yet."
     # The missing-file path above is the only silent-skip case.

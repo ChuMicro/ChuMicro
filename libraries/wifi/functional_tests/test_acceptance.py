@@ -1,29 +1,29 @@
-"""wifi acceptance — connect to a real AP across all four boards.
+"""wifi acceptance: connect to a real AP across all four boards.
 
 Reads credentials from ``/runtime_config.msgpack`` on the device via
-``WifiConfig.try_from_config(config)`` — same surface user app code
-uses.  The host-side ``functional_tests/conftest.py`` builds the
-merged config dict (workspace defaults + per-library overrides) and
-hands it to ``chumicro_pytest_device.set_runtime_config()``; the
-plugin encodes + stages the file alongside the test sources.
+``WifiConfig.try_from_config(config)``, the same surface user app
+code uses.  The host-side ``functional_tests/conftest.py`` builds
+the merged config dict (workspace defaults + per-library overrides)
+and hands it to ``chumicro_pytest_device.set_runtime_config()``.
+The plugin encodes + stages the file alongside the test sources.
 
 When the wifi section isn't deployed (fresh-clone without
 credentials, RAM-mode skip) ``try_from_config`` returns ``None`` and
 every test early-returns cleanly so the suite stays committable.
 
-The test source itself never contains credentials — only the
+The test source itself never contains credentials, only the
 loader pattern + assertions about the resulting state machine.
 
 Per-board scenarios:
 
-1. **Connect to the configured AP, observe state transitions** —
+1. **Connect to the configured AP, observe state transitions**:
    `WifiState.DISCONNECTED → CONNECTING → CONNECTED`, IP populated,
    adapter reports linked.
-2. **Reconnect after deliberate disconnect** — call
+2. **Reconnect after deliberate disconnect**: call
    `service.handle()` until linked, then drop the substrate's
    association via `adapter.disconnect()`, drive ticks, watch
    `CONNECTED → RECONNECTING → CONNECTED` cycle.
-3. **state-change observability** — register an
+3. **state-change observability**: register an
    `on_state_change` listener, count transitions across the
    connect / drop / reconnect sequence.
 

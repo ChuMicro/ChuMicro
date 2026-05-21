@@ -48,8 +48,8 @@ except ImportError:
 CYW43_PM_DISABLE = const(0xA11140)
 
 #: Known CYW43-based MicroPython board identifiers.
-#: Add new entries as CYW43-bearing boards land in upstream MP — match the
-#: exact string the board reports (visible via
+#: Add new entries as CYW43-bearing boards land in upstream MP, matching
+#: the exact string the board reports (visible via
 #: ``import sys; print(sys.implementation._machine)`` at the REPL).
 CYW43_MACHINES = (
     "Raspberry Pi Pico W with RP2040",
@@ -79,14 +79,14 @@ class MpWifiAdapter(WifiAdapter):
 
     Args:
         wlan: Optional WLAN substrate.  When ``None`` (default),
-            constructs ``network.WLAN(network.STA_IF)`` — only
+            constructs ``network.WLAN(network.STA_IF)``, only
             available under MicroPython on a board with a wifi
             chip.  Tests inject a fake matching the WLAN surface
             the adapter touches: ``active(state=None)``,
             ``connect(ssid, password)``, ``disconnect()``,
             ``isconnected()``, ``ifconfig()``,
             ``config(**kwargs)``.
-        stack: Optional stack identifier — ``"espidf"``,
+        stack: Optional stack identifier: ``"espidf"``,
             ``"cyw43"``, or ``None`` (auto-detect via
             ``import esp32``).  Tests pass this explicitly to
             exercise either branch on CPython.
@@ -140,7 +140,7 @@ class MpWifiAdapter(WifiAdapter):
         successful connect (it's read at re-association time, not
         activation), so the supervisor-off call moves into
         :meth:`connect` after the first link-up.  The CYW43 ``pm``
-        knob is stateless from the substrate's perspective —
+        knob is stateless from the substrate's perspective, so it is
         applied here at configure time so the first link is
         already in the user's preferred mode.
         """
@@ -150,28 +150,28 @@ class MpWifiAdapter(WifiAdapter):
                 self._wlan.config(dhcp_hostname=config.hostname)
             except (OSError, ValueError):
                 # Some MP builds reject hostname config when the
-                # interface is up; tolerate the failure rather than
+                # interface is up.  Tolerate the failure rather than
                 # blocking deploy.
                 pass
         if self._stack == "cyw43" and not config.power_save:
             try:
                 self._wlan.config(pm=CYW43_PM_DISABLE)
             except (OSError, ValueError):
-                # Older MP firmware may not expose the pm knob; we
+                # Older MP firmware may not expose the pm knob, so
                 # proceed without it.  Power-save stays at the
-                # firmware default — user code may notice idle
+                # firmware default, meaning user code may notice idle
                 # latency spikes but the connection still works.
                 pass
 
     def connect(self, config):
         """Begin / drive the association via ``wlan.connect``.
 
-        MP's ``connect`` is non-blocking — returns immediately
-        after dispatching the request; ``isconnected()`` flips to
+        MP's ``connect`` is non-blocking and returns immediately
+        after dispatching the request.  ``isconnected()`` flips to
         ``True`` once the AP responds.  The substrate's timeout
         behavior is governed by ESP-IDF (or CYW43) below the
-        Python binding; we don't budget here, leaving the timing
-        to ``WifiService``'s reconnect supervisor.
+        Python binding, so this adapter doesn't budget, leaving the
+        timing to ``WifiService``'s reconnect supervisor.
 
         On the ESP-IDF stack, after the first link-up, drops the
         firmware-level auto-reconnect supervisor so the library is
@@ -187,9 +187,9 @@ class MpWifiAdapter(WifiAdapter):
                 self._supervisor_disabled = True
             except (OSError, ValueError):
                 # Some MP builds (older firmware, non-ESP-IDF stacks)
-                # don't expose the reconnects knob; we proceed anyway
-                # — the library's reconnect supervisor still works,
-                # we just don't get the firmware-side guarantee.
+                # don't expose the reconnects knob.  Proceed anyway,
+                # because the library's reconnect supervisor still
+                # works without the firmware-side guarantee.
                 pass
         return True
 
@@ -204,8 +204,8 @@ class MpWifiAdapter(WifiAdapter):
     def ip(self):
         """Return the IPv4 string from ``ifconfig()``, or ``None``.
 
-        ``ifconfig`` returns a 4-tuple ``(ip, netmask, gateway, dns)``;
-        the first element is the address as a string.  Returns
+        ``ifconfig`` returns a 4-tuple ``(ip, netmask, gateway, dns)``,
+        whose first element is the address as a string.  Returns
         ``None`` when not linked, or when the substrate's IP is the
         unset sentinel ``"0.0.0.0"`` (post-association but pre-DHCP).
         """
