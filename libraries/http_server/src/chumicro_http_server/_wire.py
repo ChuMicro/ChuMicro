@@ -40,12 +40,12 @@ DEFAULT_SEND_BUDGET_PER_TICK = const(4096)
 #: at headers-complete time with a 413 response — no body allocation.
 DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
 
-#: Default steady-state body buffer size for :class:`RequestParser`.
-#: The Connection layer allocates one of these per accepted connection
-#: and passes it to the parser, so requests whose Content-Length fits
-#: parse with zero body allocation; larger requests get a one-shot
-#: ``bytearray(content_length)`` sized-to-fit, freed after the response
-#: drains.
+#: Suggested default size for callers that pre-allocate a steady-state
+#: body buffer to pass into :class:`RequestParser`.  The in-tree
+#: ``_Connection`` does not use this today: every response emits
+#: ``Connection: close``, so a per-connection body buffer would have
+#: a use-once lifetime that fragments worse than allocating
+#: sized-to-fit on demand.  Reserved for the future keep-alive path.
 DEFAULT_BODY_BUFFER_SIZE = const(1024)
 
 #: Default per-connection deadline.
@@ -264,36 +264,30 @@ class RequestParser:
     enough bytes arrive.  Callers check :attr:`state` to know whether
     to keep feeding (anything other than ``DONE``/``ERROR``) or stop.
 
-    Body framing — two active tiers + a steady-state tier reserved
-    for keep-alive (parallel to :class:`chumicro_requests._wire.
-    ResponseParser`'s shape):
+    Body framing — three tiers chosen by Content-Length against
+    the caps set at construction (parallel to
+    :class:`chumicro_requests._wire.ResponseParser`'s shape):
 
-    * **Sized rebind.**  ``Content-Length ≤ max_body_bytes`` but >
-      ``body_buffer`` capacity (default capacity is 0, since
-      ``body_buffer`` is unused by ``_Connection`` today).  The parser
-      allocates one ``bytearray(content_length)`` sized exactly to
-      fit at headers-complete time and slice-assigns body bytes
-      directly into it.  Single allocation per request, freed when
-      the parser is dereferenced.
+    * **Steady.**  ``Content-Length ≤ body_buffer`` capacity.  Body
+      writes land in the caller-supplied buffer with zero allocation.
+      Available only when the caller pre-allocated a buffer at
+      construction; the default ``body_buffer=None`` skips this tier.
+    * **Sized rebind.**  ``body_buffer`` capacity < ``Content-Length
+      ≤ max_body_bytes``.  The parser allocates one
+      ``bytearray(content_length)`` sized exactly to fit at
+      headers-complete time and slice-assigns body bytes directly
+      into it.  Single allocation per request, freed when the
+      parser is dereferenced.
     * **413 reject.**  ``Content-Length > max_body_bytes``.  No body
       allocation.  Parser raises :class:`ServerOversizedError` and
       the connection layer responds 413 Payload Too Large.
-    * **Steady (reserved).**  ``Content-Length ≤ body_buffer
-      capacity``.  Body writes land in the caller-supplied buffer
-      with zero allocation.  ``_Connection`` does not supply a
-      ``body_buffer`` today because every response emits
-      ``Connection: close`` — the buffer would have a use-once
-      lifetime that fragments worse than allocating sized-to-fit
-      on demand.  When keep-alive lands and connections live
-      across requests, the buffer becomes a steady-state tier
-      worth pre-allocating.
 
     Chunked request bodies are not supported, so Content-Length is
     always known when entering ``BODY`` state — sized-rebind happens
     at :meth:`_enter_body_state`, not lazily during body absorption.
-
-    No Content-Length and no chunked → assume zero-length body,
-    transition straight to ``DONE``.
+    When neither Content-Length nor Transfer-Encoding is present
+    the parser assumes a zero-length body and transitions straight
+    to ``DONE``.
     """
 
     def __init__(
@@ -306,7 +300,9 @@ class RequestParser:
         """Construct a one-shot parser.
 
         Args:
-            max_body_bytes: Hard cap on body size — exceeded ⇒ 413.
+            max_body_bytes: Hard cap on body size.  Bodies bigger than
+                this raise :class:`ServerOversizedError` (413 at the
+                connection layer).
             body_buffer: Optional caller-owned ``bytearray`` reused as
                 a steady-state body buffer across requests.  Requests
                 whose Content-Length fits land in it with zero
@@ -314,11 +310,10 @@ class RequestParser:
                 to a one-shot sized-to-fit buffer for that request only
                 and leave the caller's reference unchanged.  ``None``
                 (the default) means the parser starts empty and the
-                sized-rebind path allocates fresh for every body.
-                Pre-allocating a buffer that has a use-once lifetime
-                fragments worse than allocating sized-to-fit on demand;
-                only supply ``body_buffer`` when its lifetime truly
-                spans multiple requests.
+                sized-rebind path allocates fresh for every body.  Only
+                worth supplying when the buffer's lifetime truly spans
+                multiple requests; otherwise a use-once buffer fragments
+                worse than allocating sized-to-fit on demand.
             body_buffer_view: Pre-cached ``memoryview(body_buffer)``
                 supplied by the caller to avoid the parser constructing
                 one.  Optional even when ``body_buffer`` is provided
@@ -335,13 +330,11 @@ class RequestParser:
         self.target = ""
         self.http_version = ""
         self.headers = CaseInsensitiveDict()
-        # Body buffer: caller-supplied (``_Connection`` passes the
-        # long-lived per-connection buffer) or self-allocated (standalone
-        # use starts empty + rebinds on first request).  ``_body`` is
-        # the active buffer, ``_body_view`` the cached memoryview,
-        # ``_body_capacity`` the size of the active buffer.  Oversized
-        # but-allowed requests (capacity < Content-Length ≤ max_body_bytes)
-        # rebind ``_body`` in :meth:`_enter_body_state`.
+        # Body buffer state.  ``_body`` is the bytearray writes land
+        # in, ``_body_view`` its cached memoryview, ``_body_capacity``
+        # the current size.  Oversized-but-allowed requests
+        # (capacity < Content-Length ≤ max_body_bytes) rebind ``_body``
+        # in :meth:`_enter_body_state`.
         if body_buffer is not None:
             if body_buffer_view is None:
                 body_buffer_view = memoryview(body_buffer)

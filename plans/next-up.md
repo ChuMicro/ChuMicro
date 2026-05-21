@@ -22,3 +22,4 @@ _(nothing in flight)_
 - [ ] **`examples/helpers.py` cross-library drift.**  [workstreams/examples-helpers-cross-library-drift.md](workstreams/examples-helpers-cross-library-drift.md)
 - [ ] **`/audit-library libraries/timing` — `_sleep_ms` duplicated across `functional_tests/test_heartbeat.py` and `test_heartbeat_ticks.py` (latter uses tabs, former spaces).**
 - [ ] **`/audit-library libraries/ntp` — `functional_tests/test_real_ntp.py:120` `print("NTP_SKIP no creds")` is dead and mislabeled (runs after a successful run, post-finally, past the wifi-cfg-None guard).**
+- [ ] **`/audit-library libraries/http_server` — `DEFAULT_BODY_BUFFER_SIZE` is exported via `__init__.py` but has no in-tree consumer (only `test_http_server_e2e.py` uses it as a magnitude reference); reserved-for-keep-alive public API to confirm or retire.**
