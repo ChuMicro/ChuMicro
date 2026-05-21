@@ -36,14 +36,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-#: Directories under :mod:`chumicro_workspace`'s package tree where
-#: scaffolding templates live.  The workbench tree carries only the
-#: four ``docs/`` templates.  Every other scaffolded file is shared,
-#: so it lives under :data:`_LIBRARY_TEMPLATE_DIR` and workbench
-#: scaffolds pull from there too.
+#: Default template root.  Holds pyproject, README, mkdocs, src/,
+#: tests/, examples/, and the library-flavored docs/ templates.
+#: Every scaffold reads from here unless explicitly overridden.
 _LIBRARY_TEMPLATE_DIR = (
     Path(__file__).resolve().parent / "_payloads" / "library_template"
 )
+
+#: Override root for workbench-kind packages.  Carries only the
+#: four docs/ templates (index.md, guide.md, api.md, testing.md).
+#: Every other file in a workbench scaffold still loads from
+#: :data:`_LIBRARY_TEMPLATE_DIR`.
 _WORKBENCH_TEMPLATE_DIR = (
     Path(__file__).resolve().parent / "_payloads" / "workbench_template"
 )

@@ -125,7 +125,20 @@ class FakeSubprocessCall:
 
 
 class FakeSubprocessRunner:
-    """Recording stand-in for :func:`subprocess.run`.
+    """Callable stand-in for :func:`subprocess.run` that records every call.
+
+    Each invocation appends a :class:`FakeSubprocessCall` to
+    :attr:`calls` and returns a :class:`subprocess.CompletedProcess`
+    shaped by the constructor kwargs:
+
+    - *returncode*: single returncode for every call (default ``0``).
+    - *returncodes*: list of returncodes consumed in order.  The first
+      call returns ``returncodes[0]``, the second returns
+      ``returncodes[1]``, and so on.  Falls back to *returncode* once
+      the list runs out.  Use to script "ruff fails, then
+      chumicro-checks succeeds" sequences.
+    - *stdout* / *stderr*: canned strings copied into every
+      ``CompletedProcess``.
 
     Install via ``monkeypatch.setattr``::
 
@@ -134,19 +147,6 @@ class FakeSubprocessRunner:
         ...
         assert runner.calls[0].args == [sys.executable, "-m", "pytest"]
         assert runner.calls[0].cwd == workspace_root
-
-    Every call appends a :class:`FakeSubprocessCall` to :attr:`calls`
-    and returns a :class:`subprocess.CompletedProcess`.  Configure the
-    return shape via constructor kwargs:
-
-    - *returncode*: single returncode for every call (default ``0``).
-    - *returncodes*: list of returncodes consumed in order.  The first
-      call returns ``returncodes[0]``, the second returns
-      ``returncodes[1]``, etc.  Falls back to *returncode* once the
-      list runs out.  Use this to script "ruff fails, then
-      chumicro-checks succeeds" paths.
-    - *stdout* / *stderr*: canned strings copied into every
-      ``CompletedProcess``.
     """
 
     def __init__(

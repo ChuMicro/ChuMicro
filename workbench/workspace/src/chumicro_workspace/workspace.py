@@ -1,31 +1,33 @@
-"""Workspace path resolution + project-tree classification.
+"""Workspace path resolution and project-tree classification.
 
-Locates the workspace's named files (workspace.yml, devices.yml,
-``projects/<...>/``) given a starting directory.  The
-CLI walks up from the current working directory until it finds a
-``workspace.yml`` so users can invoke commands from anywhere inside
-the workspace tree.
-
-Projects may be nested arbitrarily deep under ``projects/`` —
-``projects/upstairs/bedroom_sensor/``, ``projects/garage/sensors/door_open/``,
-and so on.  A directory is classified by walking its contents:
-
-* **project** — leaf containing an entry-point file
-  (``app.py`` / ``code.py`` / ``main.py``).  Deployable.
-* **namespace** — recursively contains at least one project (or another
-  namespace).  Pure organizational structure; not deployed itself.
-* **supporting** — neither.  Silently ignored — lets users park
-  ``docs/``, design notes, etc. anywhere in the tree without flagging
-  them.
+:class:`WorkspaceLayout` resolves the paths under a workspace
+root (``workspace.yml``, ``secrets.toml``, ``devices.yml``,
+``projects/``, ``shared/``, ``libraries/``, ``packages/``).
+:meth:`WorkspaceLayout.from_dir` walks up from a starting
+directory until it finds a ``workspace.yml``, so users can
+invoke commands from anywhere inside the tree.
 
 Workspace layout::
 
     <root>/
         workspace.yml          # gitignored defaults + credentials
         devices.yml            # board entries (chumicro_deploy.config.default)
-        projects/<...>/<name>/ # one directory per "project", optionally nested
+        projects/<...>/<name>/ # one directory per project, optionally nested
         shared/                # shared library code
         packages/              # third-party packages (gitignored)
+
+Directories under ``projects/`` may nest arbitrarily deep
+(``projects/upstairs/bedroom_sensor/``,
+``projects/garage/sensors/door_open/``).  Each is walked and
+classified:
+
+* **project**: leaf containing an entry-point file (``app.py`` /
+  ``code.py`` / ``main.py``).  Deployable.
+* **namespace**: recursively contains at least one project or
+  another namespace.  Pure organizational structure, not deployed
+  itself.
+* **supporting**: neither.  Silently ignored, so ``docs/`` and
+  design notes can live anywhere in the tree without flagging.
 """
 
 from __future__ import annotations

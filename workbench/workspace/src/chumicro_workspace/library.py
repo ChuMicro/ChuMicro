@@ -1,20 +1,19 @@
-"""Snapshot-channel fetch backend for curated workspace libraries.
+"""Fetch curated chumicro libraries from a snapshot channel and
+place them under the workspace's ``libraries/<name>/``.
 
-Pull a chumicro library, along with its transitive chumicro deps, out
-of a published snapshot channel into the user's workspace
-``libraries/<name>/`` so the deploy walker treats it like any local
-library.  See :mod:`chumicro_workspace.library_channel` for the
-snapshot model.
+:func:`fetch_library` pulls one package; :func:`fetch_closure`
+pulls a root plus every chumicro library it transitively imports.
+Both place each library where the deploy walker treats it like
+any local checkout, and both raise :class:`LibraryFetchError`
+with a :class:`LibraryFetchFailureKind` value on every failure
+so callers can coach instead of dumping a traceback.
 
-The acquired tree is the user's source to read, run, and edit.  A
-re-fetch never silently clobbers it: the current tree is moved aside
-to ``_library-backups/<name>/<old-version>-<timestamp>/`` before the
-new one is written, so a user who adapted the library can lift their
-changes back.
+Placement preserves user work.  An existing tree is moved to
+``_library-backups/<name>/<old-version>-<timestamp>/`` before a
+re-fetch, and a tree carrying the ``.chumicro-local`` sentinel
+is left untouched entirely.
 
-This module owns the placement primitive.  Failures are classified
-into a closed set (:class:`LibraryFetchFailureKind`) so callers can
-coach instead of dumping a traceback.  The transport itself lives in
+The snapshot transport (HTTP, tarball, index parsing) lives in
 :mod:`chumicro_workspace.library_channel`.
 """
 

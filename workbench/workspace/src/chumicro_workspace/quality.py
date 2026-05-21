@@ -12,9 +12,9 @@ pass-through knobs:
         select: ["E", "F", "I"]
       coverage_threshold: 85
 
-This module reads the block, validates the shape, and surfaces a
-typed :class:`QualityConfig` the CLI consults.  Pure file read +
-shape validation; no execution side effects.
+Reads the block, validates its shape, and returns a typed
+:class:`QualityConfig`.  Validation only.  Lint and coverage are
+run elsewhere.
 
 * ``lint.enabled = false`` turns ``python run.py lint`` into a
   no-op with a hint (still discoverable; just doesn't run anything).

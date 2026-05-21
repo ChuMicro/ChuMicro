@@ -1,26 +1,20 @@
-"""Import-graph deploy source for the workspace.
+"""Build a deploy-ready FileSource for a workspace project by
+AST-walking imports from its entrypoint.
 
-``chumicro_deploy.ImportGraphSource`` already performs the AST walk
-(parses an entrypoint, follows ``import`` / ``from ... import``
-targets, recurses).  This module assembles the *workspace-shaped*
-search-path list: project directory, ``shared/`` (user-authored shared
-modules), ``packages/`` (third-party, gitignored), and optional
-``library_sources:`` overrides.  It then wraps the result with
-:class:`WithRuntimeConfig` so the merged runtime-config msgpack rides
-the deploy alongside the AST-resolved app code.
+:func:`project_import_graph_source` is the one-call factory.  It
+composes a workspace-shaped search path (project dir,
+``shared/``, each ``libraries/<name>/src/``, ``packages/``, and
+any ``library_sources:`` overrides from ``workspace.yml``), hands
+it to :class:`chumicro_deploy.ImportGraphSource` for the AST
+walk, and wraps the result with :class:`WithRuntimeConfig` so
+the merged runtime-config msgpack rides alongside the resolved
+app code.
 
-Two pieces:
-
-* :func:`read_library_sources` parses ``workspace.yml``'s
-  ``library_sources:`` map into ``{package_name: Path}``.  Each entry
-  is an explicit override for "use the local checkout instead of the
-  published copy", and the value is a search path tried first during
-  import resolution.
-* :func:`project_import_graph_source` builds the search-path list,
-  constructs an :class:`ImportGraphSource` for the project's
-  entrypoint, and wraps with :class:`WithRuntimeConfig`.  Programmatic
-  callers can compose the layers themselves for finer control (custom
-  search paths, extra modules, alternate entrypoint).
+:func:`read_library_sources` parses the ``library_sources:`` map
+on its own for callers that compose the layers manually (custom
+search paths, alternate entrypoint).  Each entry is an explicit
+override mapping an import name to a directory tried first
+during resolution.
 """
 
 from __future__ import annotations
