@@ -1,6 +1,6 @@
 ---
 name: audit-workspace
-description: Code-quality audit at the mono-repo / ecosystem level. Looks for cross-library duplication, library-shape candidates (merge / split / delete / promote), speculative public API across the workspace, dependency-graph health, decision-ADR drift, and patterns shared by 3+ libraries that should be hoisted to shared infrastructure. Use when the workspace has accumulated patterns nobody owns.
+description: Code-quality audit at the mono-repo / ecosystem level. Looks for cross-library duplication, library-shape candidates (merge / split / delete / promote), speculative public API, dependency-graph health, and decision-ADR drift. Use when the workspace has accumulated patterns nobody owns.
 ---
 
 # Workspace audit
@@ -11,7 +11,7 @@ Audit the entire mono-repo / ecosystem.  Where `/audit-library` looks inside one
 
 No argument needed (or pass `--focus <area>` for a targeted pass).  Default scope is the whole mono-repo: every `libraries/<name>/`, every `workbench/<name>/`, plus shared infrastructure under `scripts/`, `support/`, and `plans/`.
 
-This skill is the **biggest** of the three audit skills and produces the longest punch-list.  It's also the one whose findings are most likely to spawn follow-up workstreams rather than direct code edits.  Run it sparingly — once per major release cycle, or when the ecosystem feels off.
+This skill is the **biggest** of the three audit skills and produces the longest punch-list.  It's also the one whose findings are most likely to spawn follow-up workstreams rather than direct code edits.
 
 ## How this audit fits the wider sequence
 
