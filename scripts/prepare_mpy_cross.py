@@ -2,7 +2,7 @@
 
 Clones the pinned runtime source trees (versions from
 ``target-runtimes.toml``) into ``.tools/`` and compiles only the
-mpy-cross bytecode compilers — not the full unix-port binaries.  This is
+mpy-cross bytecode compilers, not the full unix-port binaries.  This is
 significantly faster than ``prepare-micropython`` /
 ``prepare-circuitpython`` and is all the release and promote workflows
 need for bundle staging.
@@ -43,8 +43,8 @@ def prepare_mpy_cross() -> int:
     """Build mpy-cross compilers for both CircuitPython and MicroPython.
 
     Skips each runtime's build if the mpy-cross binary already exists
-    (cache-friendly).  Does NOT build the full unix-port interpreters —
-    use ``prepare-micropython`` / ``prepare-circuitpython`` for that.
+    (cache-friendly).  Does NOT build the full unix-port interpreters.
+    Use ``prepare-micropython`` / ``prepare-circuitpython`` for that.
     """
     jobs = f"-j{build_jobs()}"
     environment = macos_build_environment()

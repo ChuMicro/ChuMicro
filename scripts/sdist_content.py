@@ -3,7 +3,7 @@
 A curated workspace pulls chumicro libraries from their PyPI sdists into
 the user's ``libraries/<name>/`` folder, then runs the deploy walker over
 them.  For that to work the sdist has to carry what a curated consumer
-needs — not just ``src/``.  Each library's ``pyproject.toml`` therefore
+needs, not just ``src/``.  Each library's ``pyproject.toml`` therefore
 ships ``tests/``, ``examples/``, and ``docs/`` in the sdist, and declares
 a ``[test]`` extra so the consumer can ``pip install chumicro-<lib>[test]``
 and actually run the shipped tests.
@@ -30,7 +30,7 @@ def _sdist_distribution_name(pyproject: dict) -> str:
     """Return the normalized sdist filename stem for a project.
 
     A built sdist is named ``<name>-<version>.tar.gz`` with ``name``
-    normalized per PEP 503/625 — runs of ``-``/``_``/``.`` collapsed to
+    normalized per PEP 503/625: runs of ``-``/``_``/``.`` collapsed to
     a single ``_``.  ``chumicro-http-server`` -> ``chumicro_http_server``.
     """
     raw = pyproject["project"]["name"]

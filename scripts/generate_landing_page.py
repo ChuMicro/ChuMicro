@@ -9,7 +9,7 @@ Libraries (device-side, cross-runtime) and workbench tools (host-only)
 render as separate sections so readers can tell at a glance which
 packages run on a device versus which run on the host.  Install
 instructions and the bundle / release-channels block are scoped to
-their relevant section — circup / mip and the CircuitPython bundle
+their relevant section: circup / mip and the CircuitPython bundle
 only appear next to the library cards, since workbench packages ship
 to PyPI only and are never bundled.
 
@@ -52,7 +52,7 @@ def _package_metadata(package_dir: Path) -> dict:
 def _discover_packages() -> tuple[list[dict], list[dict]]:
     """Return ``(libraries, workbench)`` metadata dict lists.
 
-    Categorization is by parent directory name — ``libraries/`` for
+    Categorization is by parent directory name: ``libraries/`` for
     device libraries, ``workbench/`` for host-only tools.  Any other
     parent (notably ``support/``) is skipped: support packages are
     not published and don't belong on the public landing page.
@@ -72,7 +72,7 @@ def _discover_packages() -> tuple[list[dict], list[dict]]:
 def _library_card(library: dict) -> str:
     """Return the HTML for a single package card.
 
-    Links are ordered: Guide → API → Testing (if present) → Experimental → Source.
+    Links are ordered: Guide, API, Testing (if present), Experimental, Source.
     The testing link is only shown for packages whose ``mkdocs.yml``
     references a ``testing.md`` page.
     """
@@ -123,7 +123,7 @@ def _render_library_install(first_library: dict) -> str:
     """Return the library-scoped Install block.
 
     Libraries are the only packages distributed via the CircuitPython
-    bundle (circup) and mip — workbench packages ship to PyPI only —
+    bundle (circup) and mip.  Workbench packages ship to PyPI only,
     so this block only appears under the Libraries section.
     """
     package = first_library["package"]
@@ -196,8 +196,8 @@ def _render_release_channels() -> str:
 def _render_workbench_install(first_workbench: dict) -> str:
     """Return the workbench-scoped Install block.
 
-    Workbench packages are host-only CPython tools — pip is the only
-    install path; bundle / circup / mip do not apply.
+    Workbench packages are host-only CPython tools: pip is the only
+    install path.  Bundle / circup / mip do not apply.
     """
     package = first_workbench["package"]
     description = (

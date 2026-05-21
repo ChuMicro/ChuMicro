@@ -55,7 +55,7 @@ def prepare_micropython() -> int:
         release=release,
         init_submodules=_UNIX_PORT_SUBMODULES,
         build_steps=(
-            # mpy-cross is the bytecode compiler — required before the port build.
+            # mpy-cross is the bytecode compiler.  It must be built before the port build.
             RuntimePrepStep(
                 ["make", "-C", source_dir / "mpy-cross", jobs],
                 environment=environment,

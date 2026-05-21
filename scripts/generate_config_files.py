@@ -4,20 +4,20 @@ When the listed files do not exist, this module writes them with
 sensible placeholder content so the contributor can fill in their
 values immediately.  Existing files are never overwritten.
 
-``materialize_workspace_templates`` fills in canonical first-write text
+``materialize_workspace_templates`` fills in initial template text
 for ``devices.yml`` / ``workspace.yml`` / ``secrets.toml`` from the
 readers in :mod:`chumicro_workspace.templates` (``devices.yml`` ships
 from ``chumicro_deploy`` since it owns the schema).
 
 Files generated:
 
-* ``devices.yml`` — board registry used by the functional-test
-  runner.  Schema and canonical empty-registry content both owned by
+* ``devices.yml``: board registry used by the functional-test
+  runner.  Schema and empty-registry template both owned by
   ``chumicro-deploy``.
-* ``workspace.yml`` — gitignored workspace machinery
+* ``workspace.yml``: gitignored workspace machinery
   (``library_sources``, ``deploy_targets``, ``quality``).  Host-only;
   never reaches a device.
-* ``secrets.toml`` — gitignored workspace-wide credentials + device
+* ``secrets.toml``: gitignored workspace-wide credentials + device
   defaults.  Flows through ``compose_runtime_config`` into
   ``runtime_config.msgpack`` at deploy time.
 """

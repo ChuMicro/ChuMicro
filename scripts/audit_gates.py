@@ -2,10 +2,9 @@
 
 Builds deliberately-bad inputs against each gate and confirms the gate
 fires.  Catches the class of regression where a gate silently passes
-when it shouldn't — e.g. the griffe absolute-``--search`` no-op that
-went undetected for the entire life of ``check_api`` before commit
-``5578026``.  Mocked unit tests can't see this class of bug because
-the subprocess (or its exit code) is replaced.
+when it shouldn't, e.g. a flag that drops to a no-op against a bad input
+without an error exit.  Mocked unit tests can't see this class of bug
+because the subprocess (or its exit code) is replaced.
 
 Run on demand::
 
@@ -13,7 +12,7 @@ Run on demand::
 
 Exit code 0 if every scenario behaved as expected; 1 otherwise.
 
-Not wired into CI or the unit-test suite — temp-repo construction +
+Not wired into CI or the unit-test suite: temp-repo construction plus
 real subprocess calls add 5–10 s, which would dominate the otherwise
 fast ``test-scripts`` suite.  Run this before structural changes to
 ``scripts/`` that touch any gate, and after upgrading griffe / ruff /
@@ -536,9 +535,8 @@ def audit_check_api_libraries_breakage_patch_fails() -> Result:
 
 
 KNOWN_GAPS: list[str] = []
-"""AGENTS.md rules with no static pre-merge gate.  Empty for now —
-ruff TID252 was added to cover the libraries/* + support/test_harness/
-absolute-imports rule (commit 04074c2's follow-up)."""
+"""AGENTS.md rules with no static pre-merge gate.  Empty: ruff TID252
+covers the libraries/* + support/test_harness/ absolute-imports rule."""
 
 
 # ---------------------------------------------------------------------------

@@ -45,7 +45,7 @@ def mpy_format_folders() -> tuple[str, ...]:
 
     Returns a single-element tuple today.  When the workspace gains
     multi-mpy-version support (see plans/open-questions.md), this is
-    where the list expands — every consumer iterates over this tuple
+    where the list expands.  Every consumer iterates over this tuple
     instead of referencing :data:`MPY_FORMAT_FOLDER` directly.
     """
     return (MPY_FORMAT_FOLDER,)

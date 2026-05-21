@@ -1,4 +1,4 @@
-"""Shared infrastructure helpers — subprocess wrappers, package installation,
+"""Shared infrastructure helpers: subprocess wrappers, package installation,
 runtime preparation, and binary resolution.
 
 This module provides:
@@ -77,8 +77,8 @@ def stream_subprocess(
     callers that need the full transcript get it for free.
 
     The child's stderr is merged into stdout (``stderr=subprocess.STDOUT``)
-    so a single line stream preserves the order the child emitted output —
-    important when a tool interleaves "running test_foo" on stdout with
+    so a single line stream preserves the order the child emitted output.
+    This matters when a tool interleaves "running test_foo" on stdout with
     "WARNING: …" on stderr.
 
     Args:
@@ -141,7 +141,7 @@ def install_editable(python: str | Path | None = None) -> int:
     Installs publishable libraries (under ``libraries/``) and support
     packages (under ``support/``) so that imports work in any tool
     (editors, debuggers, REPLs, scripts) without manual PYTHONPATH
-    setup.  Changes to source files are reflected immediately — no
+    setup.  Changes to source files are reflected immediately, with no
     reinstall needed.
 
     Args:
@@ -165,14 +165,14 @@ def install_editable(python: str | Path | None = None) -> int:
 def install_workspace(python: Path | None = None) -> int:
     """Install the full ChuMicro workspace into *python*.
 
-    This is the canonical "set up everything" routine that both
-    ``run.py setup`` and ``prepare_workspace.py`` delegate to.  Steps:
+    Both ``run.py setup`` and ``prepare_workspace.py`` delegate here.
+    Steps:
 
     1. Install ``requirements-dev.txt`` plus runtime-pinned type stubs
        (``circuitpython-stubs``, ``micropython-esp32-stubs``).
     2. Editable-install every publishable library and support package.
     3. Materialize ``devices.yml`` / ``workspace.yml`` / ``secrets.toml``
-       from canonical templates if they don't already exist.
+       from template files if they don't already exist.
     4. Regenerate IDE configs for PyCharm and VS Code.
 
     Each step short-circuits on a non-zero exit code.
@@ -202,7 +202,7 @@ def install_workspace(python: Path | None = None) -> int:
         return result
 
     # Editable installs drop `.pth` files into the target's site-packages,
-    # but those are normally consumed by site.py at interpreter startup —
+    # but those are normally consumed by site.py at interpreter startup,
     # not when they appear mid-process.  On a fresh-venv bootstrap that
     # means `chumicro_workspace` (and every other editable library) is
     # uninstallable into the running process's sys.path until we
@@ -218,7 +218,7 @@ def install_workspace(python: Path | None = None) -> int:
         for site_packages in site.getsitepackages():
             site.addsitedir(site_packages)
 
-    # Late imports — these modules are part of the workspace itself
+    # Late imports: these modules are part of the workspace itself
     # (not third-party deps), but deferring keeps shared.py importable
     # on a fresh clone before requirements-dev have been installed.
     print("== generate config files ==")
@@ -240,7 +240,7 @@ def install_workspace(python: Path | None = None) -> int:
 def runtime_versions() -> dict:
     """Read and cache pinned runtime versions from ``target-runtimes.toml``.
 
-    Lazy — importing :mod:`shared` no longer triggers a TOML read.
+    Lazy: importing :mod:`shared` does not trigger a TOML read.
     """
     return read_runtime_versions()
 
@@ -493,12 +493,12 @@ def _resolve_binary(
     """Resolve a binary path from CLI override, prepared tree, or PATH.
 
     Resolution order (first match wins):
-      1. *binary* — explicit override; raises :class:`SystemExit` if it does
+      1. *binary*: explicit override. Raises :class:`SystemExit` if it does
          not exist on disk.
-      2. *marker_name* — read from ``.tools/<marker>`` if set.
-      3. *prepared_path* — call to compute a candidate path under ``.tools/``
+      2. *marker_name*: read from ``.tools/<marker>`` if set.
+      3. *prepared_path*: call to compute a candidate path under ``.tools/``
          (used when the candidate depends on ``runtime_versions()``).
-      4. *path_lookup* — fall back to ``shutil.which(<name>)``.
+      4. *path_lookup*: fall back to ``shutil.which(<name>)``.
 
     Args:
         label: Human-readable name used in error messages (e.g.
@@ -564,7 +564,7 @@ def _mpy_cross_candidate(runtime_name: str) -> Path | None:
 def resolve_cp_mpy_cross(binary: str | None = None) -> str | None:
     """Resolve CircuitPython's mpy-cross from an explicit path or the prepared source tree.
 
-    No PATH fallback — CircuitPython's mpy-cross is not pip-installable.
+    No PATH fallback: CircuitPython's mpy-cross is not pip-installable.
     """
     return _resolve_binary(
         label="CircuitPython mpy-cross",

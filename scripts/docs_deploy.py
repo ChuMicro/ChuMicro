@@ -92,8 +92,8 @@ def inject_landing_page(branch: str) -> None:
 
     # Build an updated tree using a temporary index so nested paths
     # (assets/images/favicon.png) are handled automatically.  A temporary
-    # index file isolates these operations from the user's working tree
-    # — git commands that read GIT_INDEX_FILE operate on this file instead
+    # index file isolates these operations from the user's working tree:
+    # git commands that read GIT_INDEX_FILE operate on this file instead
     # of the default .git/index.
     file_descriptor, temp_index_file = tempfile.mkstemp(suffix=".idx")
     os.close(file_descriptor)
@@ -128,7 +128,7 @@ def inject_landing_page(branch: str) -> None:
     finally:
         Path(temp_index_file).unlink(missing_ok=True)
 
-    # Create a commit and fast-forward the branch — only if the tree changed.
+    # Create a commit and fast-forward the branch, only if the tree changed.
     parent_commit = subprocess.run(
         ["git", "rev-parse", branch],
         capture_output=True, cwd=ROOT, check=True,
@@ -165,8 +165,8 @@ def docs_deploy(
 
     *channel* is ``"experimental"`` or ``"stable"``:
 
-    - **experimental** → version ``dev``, alias ``experimental``.
-    - **stable** → version from each library's ``VERSION`` file,
+    - **experimental**: version ``dev``, alias ``experimental``.
+    - **stable**: version from each library's ``VERSION`` file,
       alias ``stable``.
 
     After deploying, injects the generated landing page into *branch*.

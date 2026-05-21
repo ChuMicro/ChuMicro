@@ -15,7 +15,7 @@ that ``resolve_circuitpython_binary()`` can find it without recompiling.
 
 Note: CircuitPython is an Adafruit fork of MicroPython.  The unix-port
 binary is named ``micropython`` (inherited from the upstream project),
-which is expected — see ``binary`` below.
+which is expected.  See ``binary`` below.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def prepare_circuitpython() -> int:
     """Prepare the pinned CircuitPython unix-port runtime inside the workspace."""
     release = runtime_versions()["circuitpython"]["version"]
     source_dir = TOOLS / f"circuitpython-{release}"
-    # The CircuitPython unix-port binary is named "micropython" — inherited
+    # The CircuitPython unix-port binary is named "micropython", inherited
     # from the MicroPython fork.  This is expected, not a misconfiguration.
     binary = source_dir / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
     jobs = f"-j{build_jobs()}"
@@ -61,7 +61,7 @@ def prepare_circuitpython() -> int:
             RuntimePrepStep(
                 [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross", "tests"],
             ),
-            # mpy-cross is the bytecode compiler — required before the port build.
+            # mpy-cross is the bytecode compiler.  It must be built before the port build.
             RuntimePrepStep(["make", "-C", source_dir / "mpy-cross", jobs]),
             # The actual unix-port binary.  Two non-default knobs:
             #

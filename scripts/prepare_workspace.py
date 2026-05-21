@@ -14,7 +14,7 @@ currently running inside, the script re-execs itself inside that
 interpreter before installing.  This lets a fresh clone bootstrap
 correctly from a system Python that lacks ``tomllib`` (3.9 / 3.10) or
 from any host that does not yet have ``chumicro_workspace`` on its
-import path — both are required by the install-workspace step.
+import path.  Both are required by the install-workspace step.
 
 After installing dependencies and editable libraries it runs lint and
 host tests to confirm the workspace is functional; use
@@ -22,7 +22,7 @@ host tests to confirm the workspace is functional; use
 
 If you already have a ready-to-use workspace (venv active, deps
 installed), ``python scripts/run.py setup`` is the everyday refresh
-entry point — ``prepare_workspace.py`` is the bootstrap that runs
+entry point.  ``prepare_workspace.py`` is the bootstrap that runs
 before any third-party packages exist.
 
 Usage::
@@ -31,7 +31,7 @@ Usage::
 
 This script imports ``workspace`` and ``shared`` for shared helpers
 (ROOT, editable-install logic).  Both modules are safe to import on a
-fresh clone — ``workspace`` lazy-loads ``tomllib`` so no third-party
+fresh clone: ``workspace`` lazy-loads ``tomllib`` so no third-party
 packages are needed at import time.  The code itself is compatible with
 Python 3.7+ so ``_check_python_version()`` can deliver a friendly error
 on older interpreters.
@@ -176,17 +176,17 @@ def resolve_python() -> Path:
     the script safe to run on a completely fresh clone without any
     flags.
     """
-    # Already inside a virtual environment or conda — use it.
+    # Already inside a virtual environment or conda, so use it.
     if _in_virtual_environment() or os.environ.get("CONDA_PREFIX"):
         print(f"Using {_describe_environment()}")
         return Path(sys.executable)
 
-    # Not activated, but .venv exists at the repository root — use it.
+    # Not activated, but .venv exists at the repository root, so use it.
     if _venv_python().exists():
         print(f"Found existing virtual environment: {VENV_DIR}")
         return _venv_python()
 
-    # No environment anywhere — create one automatically.
+    # No environment anywhere, so create one automatically.
     if _has_uv():
         minimum_version = ".".join(str(part) for part in MIN_PYTHON)
         _banner("Creating virtual environment (uv)")
@@ -197,8 +197,8 @@ def resolve_python() -> Path:
             cwd=ROOT, check=True,
         )
     else:
-        # stdlib venv inherits the running interpreter's version —
-        # check it first to avoid creating a useless venv.
+        # stdlib venv inherits the running interpreter's version.
+        # Check it first to avoid creating a useless venv.
         _check_python_version()
         _banner("Creating virtual environment")
         print(f"  {VENV_DIR}\n")
@@ -213,8 +213,8 @@ def _reexec_into_venv_if_needed(python: Path) -> None:
     and ``chumicro_workspace`` (via ``generate_config_files`` / IDE-sync)
     *in the current process*.  When the host is a system Python 3.9 / 3.10
     or any interpreter without ``chumicro_workspace`` on its path, those
-    imports fail — even though the venv we just created has everything
-    needed.
+    imports fail.  The venv we just created has everything needed, but
+    the running process cannot see it.
 
     Re-execing inside the venv interpreter resolves both problems: the
     new process re-enters :func:`main`, ``resolve_python`` short-circuits
@@ -239,12 +239,11 @@ def _reexec_into_venv_if_needed(python: Path) -> None:
 def install_dependencies(python: Path) -> None:
     """Install the full workspace into *python*.
 
-    Delegates to :func:`shared.install_workspace`, which is the single
-    source of truth shared with ``run.py setup``.  Installs
-    ``requirements-dev.txt`` + runtime-pinned type stubs + editable
-    libraries and support packages, then materializes
-    ``devices.yml`` / ``workspace.yml`` / ``secrets.toml`` from
-    canonical templates and refreshes IDE configs.
+    Delegates to :func:`shared.install_workspace`, which is also what
+    ``run.py setup`` runs.  Installs ``requirements-dev.txt`` +
+    runtime-pinned type stubs + editable libraries and support
+    packages, then materializes ``devices.yml`` / ``workspace.yml`` /
+    ``secrets.toml`` from template files and refreshes IDE configs.
 
     Args:
         python: Path to the Python interpreter to install into.
@@ -262,7 +261,7 @@ def verify_workspace(python: Path) -> None:
 
     Runs unconditionally at the end of :func:`main`.  Bootstrap only
     earns the "ready" banner once lint and host tests have actually
-    passed — otherwise a fresh clone could report success while the
+    passed.  Otherwise a fresh clone could report success while the
     interpreter cannot import the libraries.  Use
     ``python scripts/run.py preflight`` for the full CI mirror when
     preparing a PR.

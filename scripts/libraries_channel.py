@@ -18,9 +18,9 @@ tagged repo unwraps to, so the workspace downloader
       <name>/src|tests|examples|docs/...
       <name>/pyproject.toml | VERSION | README.md
 
-``CURATED_TREES`` / ``CURATED_FILES`` mirror the downloader's
-validation contract (kept in step deliberately — two repos, one
-agreed shape; a mismatch fails the workspace fetch loudly).
+``CURATED_TREES`` / ``CURATED_FILES`` match the downloader's
+validation contract (kept in step deliberately: two repos, one
+agreed shape).  A mismatch fails the workspace fetch loudly.
 """
 
 from __future__ import annotations
@@ -42,10 +42,10 @@ CURATED_TREES = ("src", "tests", "examples", "docs")
 #: Top-level files copied alongside the trees.
 CURATED_FILES = ("pyproject.toml", "VERSION", "README.md")
 
-#: Local build/test cruft a contributor's working tree accumulates —
+#: Local build/test cruft a contributor's working tree accumulates.
 #: ``shutil.copytree`` would otherwise haul it into the published
 #: channel.  CI runs on a fresh checkout where most of these are
-#: absent; the filter exists for hand-invoked runs and for the
+#: absent.  The filter exists for hand-invoked runs and for the
 #: ``.DS_Store``-style entries that survive any checkout.
 _COPY_IGNORE = shutil.ignore_patterns(
     "__pycache__",
@@ -71,7 +71,7 @@ def _iter_libraries(root_dir: Path):
     """Yield ``(name, library_dir)`` for each publishable library.
 
     A library qualifies when it has both ``VERSION`` and
-    ``pyproject.toml`` at its root — the same gate the release
+    ``pyproject.toml`` at its root: the same gate the release
     pipeline and ``check-version`` use.
     """
     libraries_dir = root_dir / "libraries"
