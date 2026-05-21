@@ -38,7 +38,7 @@ class FakeTicks:
         """Create a fake tick source starting at *start_ms*.
 
         Args:
-            start_ms: Initial tick value (masked to the tick period).
+            start_ms: Initial tick value.
         """
         self._current_ms = start_ms
 
