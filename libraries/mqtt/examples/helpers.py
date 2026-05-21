@@ -1,9 +1,9 @@
 """Standalone wifi-up helper for library examples that bring wifi up.
 
-Self-contained — relies only on runtime built-ins (CP `wifi`, MP
+Self-contained: relies only on runtime built-ins (CP `wifi`, MP
 `network`, `struct`).  Each network-using library copies this file
-into its `examples/` directory; the canonical source lives in the
-new-library scaffold so a fresh library starts with a working copy.
+into its `examples/` directory.  The new-library scaffold ships the
+original so a fresh library starts with a working copy.
 
 What it does:
 
@@ -47,9 +47,9 @@ MicroPython::
     wlan.active(True)
     # Pi Pico W (CYW43) only — disable aggressive idle power-save so
     # connects don't take 30+ seconds.  Whitelist by os.uname().machine
-    # (see _CYW43_MACHINES below).  Magic constant: see
-    # chumicro_wifi._adapters.mp.CYW43_PM_DISABLE for canonical home.
-    # Other boards skip the call — ESP32 rejects the kwarg with
+    # (see _CYW43_MACHINES below).  Constant 0xa11140 is defined as
+    # ``CYW43_PM_DISABLE`` in ``chumicro_wifi._adapters.mp``.  Other
+    # boards skip the call — ESP32 rejects the kwarg with
     # ESP_ERR_INVALID_ARG (raised as RuntimeError, not OSError /
     # ValueError) and has its own power-save defaults.
     if os.uname().machine in _CYW43_MACHINES:
@@ -221,12 +221,12 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         wlan.active(True)
         # CYW43 boards (Pi Pico W today, list in _CYW43_MACHINES above)
         # default to aggressive idle power-save which makes connects
-        # take 30+ seconds.  Disable it; magic constant lives at
-        # chumicro_wifi._adapters.mp.CYW43_PM_DISABLE (replicated here
-        # because example helpers can't import their non-deps).  Other
-        # boards skip the call — ESP32 rejects the kwarg with
-        # ESP_ERR_INVALID_ARG (raised as RuntimeError, not OSError /
-        # ValueError) and has its own power-save defaults.
+        # take 30+ seconds.  Disable it: 0xa11140 is defined as
+        # ``CYW43_PM_DISABLE`` in ``chumicro_wifi._adapters.mp`` and
+        # is replicated here because example helpers can't import
+        # their non-deps.  Other boards skip the call — ESP32 rejects
+        # the kwarg with ESP_ERR_INVALID_ARG (raised as RuntimeError,
+        # not OSError / ValueError) and has its own power-save defaults.
         if os.uname().machine in _CYW43_MACHINES:
             wlan.config(pm=0xA11140)
         wlan.connect(ssid, password)

@@ -15,7 +15,7 @@ The library's design promises three things this bench verifies live:
   allocates a one-shot buffer for the full payload and frees it after
   delivery;
 * a PUBLISH above ``max_message_bytes`` (and a topic above
-  ``rx_buffer_size``) drain via rolling discard — no payload-sized
+  ``rx_buffer_size``) drain via rolling discard, with no payload-sized
   allocation regardless of how big the inbound message is.
 
 This bench tunes ``max_message_bytes`` down to 2 KB so a 4 KB inbound
@@ -62,14 +62,14 @@ import time
 from chumicro_mqtt import MQTTClient, ProtocolState, WhenOversized
 from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
 
-# Edit these for a single-file deploy without runtime_config; otherwise
-# they're overridden by the deployed runtime_config.msgpack.
+# Edit these for a single-file deploy without runtime_config.  The
+# deployed runtime_config.msgpack overrides them when present.
 WIFI_SSID = "your-wifi-ssid"          # noqa: S105
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105
 BROKER_HOST = ""                       # e.g. "10.0.0.5" or "test.mosquitto.org"
 BROKER_PORT = 1883
 
-# Bench knobs — kept small so a 256 KB-RAM minimum-tier board still has
+# Bench knobs, kept small so a 256 KB-RAM minimum-tier board still has
 # headroom.  rx_buffer_size=256 + max_message_bytes=2048 means:
 #   tier 1: ≤ 256 B (steady inline parse)
 #   tier 2: 257 B – 2 KB (one-shot intact alloc)
@@ -118,7 +118,7 @@ mqtt = MQTTClient(
     when_oversized=WhenOversized.DROP_WITH_EVENT,
 )
 
-# Inbound state — every scenario zeros this and the matching helpers
+# Inbound state: every scenario zeros this and the matching helpers
 # wait for the expected count.
 inbound_topic_count = 0
 inbound_last_size = 0
@@ -182,7 +182,7 @@ drive_for(500)
 line(f"subscribed to {INBOUND_TOPIC} and {INBOUND_WILDCARD}")
 
 # ---------------------------------------------------------------------------
-# Scenarios — each captures heap before/after and a max tick latency.
+# Scenarios.  Each captures heap before/after and a max tick latency.
 # ---------------------------------------------------------------------------
 
 
@@ -352,7 +352,7 @@ def scenario_stress():
     for index in range(expected):
         mqtt.publish_raw(INBOUND_TOPIC, b"s%03d" % index, qos=0)
         scenario.tick()  # let outbound flush between sends
-    # Drain inbound — broker echoes every publish back to our subscription.
+    # Drain inbound: broker echoes every publish back to our subscription.
     deadline = ticks_add(ticks_ms(), 30_000)
     while inbound_topic_count < expected and ticks_diff(deadline, ticks_ms()) > 0:
         scenario.tick()

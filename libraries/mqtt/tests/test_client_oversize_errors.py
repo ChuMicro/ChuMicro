@@ -218,7 +218,7 @@ class TestErrorPaths:
         client.publish("x", b"y", qos=1)
         _drive(client, ticks, count=1)
         # No PUBACK ever arrives.  Two ack-timeouts: first triggers
-        # one retry; second exceeds publish_retry_max → FAILED.
+        # one retry; second exceeds publish_retry_max, marking FAILED.
         ticks.advance(10_000)
         _drive(client, ticks, count=1)
         ticks.advance(10_000)

@@ -36,7 +36,7 @@ class TestFromConfig:
         assert client._password == "pw"  # noqa: SLF001
 
     def test_defaults_apply_when_keys_absent(self) -> None:
-        """Empty config dict → every manifest key falls back to its default."""
+        """An empty config dict makes every manifest key fall back to its default."""
         sock = FakeSocket()
         client = MQTTClient.from_config(
             {}, socket_factory=self._injected_factory(sock),
@@ -114,11 +114,9 @@ class TestFromConfig:
         assert captured == {"host": "10.0.0.42", "port": 8883, "radio": "fake-radio"}
 
     def test_ssl_context_routes_through_tls_factory(self) -> None:
-        """``ssl_context=`` supplied → auto-built factory uses
+        """When ``ssl_context=`` is supplied, the auto-built factory uses
         :func:`chumicro_sockets.tls_client_socket` and threads the
-        context + radio through.  Matches the TLS shape every other
-        ``from_config`` in the workspace exposes (requests,
-        websockets, http_server)."""
+        context and radio through."""
         captured: dict = {}
 
         def fake_tls_client_socket(host, port, *, context=None, radio=None):
@@ -168,8 +166,8 @@ class TestFromConfig:
         assert client._socket is sock  # noqa: SLF001
 
     def test_default_factory_requires_broker_host(self) -> None:
-        """No broker host in config → ``from_config`` refuses to
-        construct.  The library does not silently dial a third-party
+        """When no broker host is configured, ``from_config`` refuses
+        to construct.  The library does not silently dial a third-party
         broker on the user's behalf."""
         from chumicro_config import MissingConfigKey  # noqa: PLC0415
 

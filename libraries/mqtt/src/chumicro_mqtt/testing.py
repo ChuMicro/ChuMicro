@@ -51,12 +51,7 @@ def canned_pingresp_bytes():
 
 
 def canned_publish_bytes(topic, payload, *, qos=0, retain=False, packet_id=None):
-    """Return a PUBLISH packet shaped like the broker would send.
-
-    Mirrors :func:`chumicro_mqtt.encode_publish` but takes the same
-    args downstream tests use.  Keep this in sync with the encoder
-    if you tweak the wire format.
-    """
+    """Return a PUBLISH packet shaped like the broker would send."""
     if isinstance(payload, str):
         payload = payload.encode("utf-8")
     if isinstance(topic, str):

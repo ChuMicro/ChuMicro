@@ -121,7 +121,7 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
 
     def remember(topic, payload):
         # MP/CP MQTT delivers topic as ``str`` and payload as
-        # ``bytes`` / ``bytearray``; coerce to canonical (str, bytes)
+        # ``bytes`` / ``bytearray``; coerce to uniform (str, bytes)
         # so assertions don't have to handle either form.
         topic_str = topic.decode() if isinstance(topic, (bytes, bytearray)) else topic
         payload_bytes = (
@@ -139,9 +139,9 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
 
     # Connect.  Emit a heartbeat print every ~1 s so the host's
     # idle-timeout doesn't fire during legitimate slow CONNACK waits
-    # on CP boards (where the wifi → TCP → MQTT CONNECT-CONNACK chain
-    # can spend several seconds in non-blocking recv polls before the
-    # broker's reply arrives).
+    # on CP boards (where the wifi, TCP, and MQTT CONNECT-CONNACK
+    # chain can spend several seconds in non-blocking recv polls
+    # before the broker's reply arrives).
     print("MQTT_CONNECTING")
     client.connect()
     deadline = _ticks_ms() + _DEADLINE_MS

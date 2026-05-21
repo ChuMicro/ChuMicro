@@ -40,7 +40,7 @@ from chumicro_workspace import compose_runtime_config
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _SECRETS_TOML = _REPO_ROOT / "secrets.toml"
-_LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
+_LIBRARY_CONFIG = _HERE / "config.toml"  # optional, absent leaves workspace defaults only
 
 
 def _merged_runtime_config_with_creds() -> dict | None:
@@ -148,7 +148,7 @@ _BROKER_PROCESS: subprocess.Popen[bytes] | None = None
 _BROKER_WORKDIR: Path | None = None
 
 
-#: Placeholder broker hostname shipped in the canonical
+#: Placeholder broker hostname shipped in the
 #: ``secrets.toml`` starter (``chumicro_workspace`` payload).
 #: Treated as "broker unset" — the pytest-device plugin then
 #: skips at collection time with a clear missing-keys message
