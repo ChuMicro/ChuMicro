@@ -151,7 +151,8 @@ class TestResponseParserLargeBodyNoLeak:
 
 
 # ---------------------------------------------------------------------------
-# Many headers — exercises slice-reassignment churn in _try_parse_headers
+# Many headers — exercises the read-cursor + periodic compaction
+# in _try_parse_headers
 # ---------------------------------------------------------------------------
 
 

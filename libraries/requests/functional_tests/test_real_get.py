@@ -21,8 +21,8 @@ in flight.  No async, no threads — the per-tick ``check`` /
 Endpoint: ``http://example.com/`` is the lowest-friction stable
 HTTP endpoint — no TLS, returns a known small body, IANA-reserved
 so it won't disappear.  Avoids HTTPS deliberately so this test
-runs on Pi Pico W CP (which has a post-handshake EPIPE issue
-mid-TLS — track via `git log -- libraries/sockets/src/`).
+runs on Pi Pico W CP, which has a post-handshake EPIPE issue
+mid-TLS.
 """
 
 import time

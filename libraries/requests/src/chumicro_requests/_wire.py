@@ -53,8 +53,7 @@ class HttpTimeoutError(HttpError):
 class HttpBusyError(HttpError):
     """Caller issued a request while another was still in flight.
 
-    Mirrors :class:`chumicro_mqtt.MQTTBackpressureError`.  v1 of
-    chumicro-requests is single-in-flight — the caller must wait
+    v1 of chumicro-requests is single-in-flight — the caller must wait
     for ``handle.done`` before issuing another.
     """
 
@@ -88,16 +87,14 @@ class HttpOversizedError(HttpError):
 #: 256 KB MCU RAM minimum board.
 DEFAULT_MAX_BODY_BYTES = const(65536)
 
-#: Default per-tick recv cap.  Mirrors :data:`chumicro_mqtt.MQTTClient`
-#: default; keeps tick latency LED-friendly.
+#: Default per-tick recv cap.  Keeps tick latency LED-friendly.
 DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 
 #: Default steady-state body buffer size for :class:`ResponseParser`.
 #: Sized to cover typical sensor + JSON-API response bodies (most
 #: small-board HTTP traffic) without per-request allocation.  Bodies
 #: bigger than this fall back to a one-shot ``bytearray(content_length)``
-#: that's released on the next :meth:`ResponseParser.reset`.  Matches
-#: :data:`chumicro_websockets._wire.DEFAULT_PAYLOAD_BUFFER_SIZE` in shape.
+#: released when the parser is dereferenced.
 DEFAULT_BODY_BUFFER_SIZE = const(1024)
 
 #: Default per-request timeout in ms.
@@ -179,10 +176,12 @@ def parse_url(url: str) -> tuple[str, str, int, str]:
 
     Args:
         url: HTTP or HTTPS URL.  Examples:
-            ``http://example.com/`` → ``("http", "example.com", 80, "/")``
-            ``http://example.com:8080/path?q=1`` →
-            ``("http", "example.com", 8080, "/path?q=1")``
-            ``https://example.com`` → ``("https", "example.com", 443, "/")``
+            ``parse_url("http://example.com/")`` returns
+            ``("http", "example.com", 80, "/")``.
+            ``parse_url("http://example.com:8080/path?q=1")`` returns
+            ``("http", "example.com", 8080, "/path?q=1")``.
+            ``parse_url("https://example.com")`` returns
+            ``("https", "example.com", 443, "/")``.
 
     Returns:
         4-tuple ``(scheme, host, port, path)``.  *path* always starts
@@ -516,9 +515,8 @@ class ResponseParser:
     Body framing:
 
     * ``Content-Length: N`` — read exactly N bytes.
-    * ``Transfer-Encoding: chunked`` — RFC 7230 §4.1 chunked decode
-      (slice 3f); chunk-extensions and trailers are accepted +
-      discarded.
+    * ``Transfer-Encoding: chunked`` — RFC 7230 §4.1 chunked decode.
+      Chunk-extensions and trailers are accepted and discarded.
     * Neither header — read until the peer closes (signaled by
       :meth:`feed_eof`).
 
@@ -556,9 +554,9 @@ class ResponseParser:
         self._max_body_bytes = max_body_bytes
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
-        # the cursor and only reallocates the bytearray when at least
-        # half of it has been consumed — amortizes the slice-reassign
-        # idiom that used to fragment the heap on ESP32-class allocators.
+        # the cursor and only compacts the bytearray when at least
+        # half of it has been consumed, amortizing the copy across
+        # many small reads.
         self._read_offset = 0
         self.state = ParseState.STATUS
         self.status_code = None
@@ -630,11 +628,6 @@ class ResponseParser:
         Compaction uses slice-assign-empty (``self._buffer[:offset] = b""``)
         — in-place memmove on CPython, MicroPython, and CircuitPython
         (``mp_seq_replace_slice_no_grow``).  No allocation, no realloc.
-        The earlier shape ``self._buffer = bytearray(self._buffer[offset:])``
-        allocated a fresh bytearray per compaction; benchmarks on Lolin S2
-        traced the 1024-byte-tier fragmentation it caused to that path.
-        Mirrors the in-place compact pattern in
-        ``chumicro_mqtt._wire.PacketDecoder._consume``.
         """
         self._read_offset += count
         if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
@@ -946,9 +939,9 @@ class ResponseParser:
             self.state = ParseState.CHUNK_TRAILER
             return True
         # No upfront body alloc needed — the steady-state buffer is
-        # already in place from :meth:`__init__` / :meth:`reset`.
-        # Chunks that fit write in place; chunks that overflow trigger
-        # a one-shot grow in :meth:`_try_consume_chunk_data`.
+        # already in place from :meth:`__init__`.  Chunks that fit
+        # write in place; chunks that overflow trigger a one-shot
+        # grow in :meth:`_try_consume_chunk_data`.
         self._chunk_remaining = chunk_size
         self.state = ParseState.CHUNK_DATA
         return True

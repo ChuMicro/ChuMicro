@@ -141,7 +141,7 @@ class TestHttpClientPost:
 
         handle = client.post("http://example.test/")
         drive_until_done(client, handle, ticks)
-        # No body → no Content-Length added by encode_request
+        # No body: encode_request omits Content-Length.
         assert b"Content-Length:" not in socket.sent
         assert socket.sent.startswith(b"POST / HTTP/1.1\r\n")
 

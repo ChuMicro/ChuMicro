@@ -30,7 +30,7 @@ functional device deploy, so it never lands on a shipped board (the
 on-device unit sweep is the one path that stages it).
 """
 
-#: Source bundle / sdist only -- never lands on a device.
+#: Ships in the source bundle and sdist; never lands on a device.
 __chumicro_test_support__ = True
 
 from chumicro_requests._wire import (

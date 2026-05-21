@@ -136,9 +136,9 @@ class TestFakeHttpClient:
 
 class TestFromConfig:
     """``HttpClient.from_config`` reads the manifest's optional keys with
-    sensible fall-back defaults.  Like ntp's from_config (and unlike
-    mqtt's), no key is ever required — host/port live on each request
-    URL, so the auto-built connection_factory reads zero config keys."""
+    sensible fall-back defaults.  No key is ever required — host/port
+    live on each request URL, so the auto-built connection_factory
+    reads zero config keys."""
 
     @staticmethod
     def _injected_factory():
@@ -169,12 +169,11 @@ class TestFromConfig:
         assert client._max_body_bytes == 4096  # noqa: SLF001
 
     def test_defaults_apply_when_keys_absent(self):
-        """Empty config dict → every manifest key falls back to its default.
+        """An empty config dict leaves every manifest key at its default.
 
-        Documents the asymmetry vs ``MQTTClient.from_config``: the
-        auto-built connection_factory reads zero config keys (host/port
-        live on each request URL), so an empty config is valid input
-        and no ``MissingConfigKey`` is ever raised.
+        The auto-built connection_factory reads zero config keys
+        (host/port live on each request URL), so an empty config is
+        valid input and no ``MissingConfigKey`` is ever raised.
         """
         from chumicro_requests._wire import (
             DEFAULT_MAX_BODY_BYTES,
@@ -258,10 +257,10 @@ class TestFromConfig:
         assert client._connection_factory is sentinel_factory  # noqa: SLF001
 
     def test_default_factory_does_not_raise_on_empty_config(self):
-        """Documents the asymmetry vs MQTTClient.from_config: the
-        requests default factory reads zero config keys (per-request
-        URL carries host/port), so empty config + no override is fine.
-        Unlike mqtt, no MissingConfigKey is ever raised."""
+        """The requests default factory reads zero config keys
+        (per-request URL carries host/port), so empty config plus no
+        override is fine.  No MissingConfigKey is ever raised.
+        """
         import chumicro_requests.sockets_factory as sockets_factory_mod  # noqa: PLC0415
 
         sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
