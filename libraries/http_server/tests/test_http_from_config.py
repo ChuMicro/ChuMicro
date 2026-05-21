@@ -39,7 +39,7 @@ class TestFromConfig:
         assert server._max_request_body_bytes == 64_000  # noqa: SLF001
 
     def test_defaults_apply_when_keys_absent(self) -> None:
-        """Empty config dict → every manifest key falls back to its default.
+        """Empty config dict makes every manifest key fall back to its default.
 
         Documents the asymmetry vs ``MQTTClient.from_config``: empty
         config is valid input — the auto-built listener factory binds
@@ -100,7 +100,7 @@ class TestFromConfig:
         assert server._listener_factory is custom_factory  # noqa: SLF001
 
     def test_default_factory_routes_plain_tcp_when_no_tls_config(self) -> None:
-        """Empty config → factory calls ``tcp_listening_socket`` with
+        """Empty config makes the factory call ``tcp_listening_socket`` with
         the library defaults (``0.0.0.0:8080``)."""
         import chumicro_sockets as sockets_mod
 
@@ -126,8 +126,8 @@ class TestFromConfig:
         assert captured["radio"] == "fake-radio"
 
     def test_default_factory_routes_tls_when_both_paths_set(self) -> None:
-        """Both ``tls.cert_path`` + ``tls.key_path`` set → factory
-        builds an SSLContext and routes through tls_listening_socket."""
+        """Setting both ``tls.cert_path`` and ``tls.key_path`` makes the
+        factory build an SSLContext and route through tls_listening_socket."""
         import chumicro_sockets as sockets_mod
 
         captured: dict = {}
@@ -193,7 +193,7 @@ class TestFromConfig:
 
     def test_half_tls_config_raises_missing_config_key(self) -> None:
         """``cert_path`` set but ``key_path`` missing (or vice versa)
-        → ``MissingConfigKey``.  Both-or-neither is the only valid
+        raises ``MissingConfigKey``.  Both-or-neither is the only valid
         TLS config shape."""
         from chumicro_config import MissingConfigKey
 

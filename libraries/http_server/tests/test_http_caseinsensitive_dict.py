@@ -92,8 +92,9 @@ class TestCaseInsensitiveDict:
 
     def test_equality_against_non_dict(self):
         headers = CaseInsensitiveDict()
-        # NotImplemented → Python falls back; against a plain dict
-        # both sides return NotImplemented and Python settles on False.
+        # Returning NotImplemented makes Python fall back; against a
+        # plain dict both sides return NotImplemented and Python settles
+        # on False.
         assert headers != {"a": 1}
 
     def test_repr_round_trip_keys(self):

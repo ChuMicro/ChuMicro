@@ -123,7 +123,8 @@ class TestRequestParser:
 
     def test_transfer_encoding_rejected(self):
         # Chunked request bodies are unsupported; framing as zero-length
-        # would let a smuggled body ride into the next request → 400.
+        # would let a smuggled body ride into the next request, so the
+        # parser rejects with 400.
         parser = RequestParser()
         parser.feed(
             b"POST / HTTP/1.1\r\n"

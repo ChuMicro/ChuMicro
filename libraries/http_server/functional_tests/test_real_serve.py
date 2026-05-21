@@ -9,9 +9,8 @@ Skipped at collection time when no credentials are configured —
 the conftest's ``set_runtime_config(..., required_keys=...)`` declares
 ``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
 applies ``pytest.mark.skip`` with a clear message before deploy.
-Credentials
-ship from the host conftest as ``/runtime_config.msgpack`` and are
-read here via ``chumicro_config.load_runtime_config()``.
+Credentials ship from the host conftest as
+``/runtime_config.msgpack``.
 
 Verifies the LED-blink invariant on a real board: an LED-style
 counter keeps incrementing on the same loop while the server is
