@@ -11,8 +11,7 @@ the floor isn't met; other commands needing the same check route
 through :func:`check_firmware_supported` + :func:`explain` so the
 policy lives in one place.
 
-Strictness is warn-not-block.  ``add-device`` proceeds on every
-status; the warning is informational.
+Checks are warn-only; callers proceed regardless.
 """
 
 from dataclasses import dataclass
@@ -24,10 +23,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 
 
 MIN_MICROPYTHON_VERSION: tuple[int, ...] = (1, 27, 0)
-"""Minimum MicroPython version the workspace tool tests against.
-
-Bumping this is a non-breaking workspace-tool change — the floor
-moves forward as the test matrix moves forward."""
+"""Minimum MicroPython version the workspace tool tests against."""
 
 MIN_CIRCUITPYTHON_VERSION: tuple[int, ...] = (10, 1, 0)
 """Minimum CircuitPython version the workspace tool tests against."""
@@ -43,10 +39,10 @@ class FirmwareSupportStatus(StrEnum):
     """Result of checking a probed runtime + version against the floor."""
 
     SUPPORTED = "supported"
-    """Probed runtime + version meet the floor — silent."""
+    """Probed runtime + version meet the floor."""
 
     OLD = "old"
-    """Probed runtime matches CP/MP, version below the floor — warn."""
+    """Probed runtime matches CP/MP, version below the floor."""
 
     UNKNOWN = "unknown"
     """Probed runtime name isn't ``circuitpython`` / ``micropython``."""
@@ -109,14 +105,9 @@ def parse_version_tuple(version: str) -> tuple[int, ...] | None:
         try:
             result.append(int(part))
         except ValueError:
-            # Stop at first non-int; covers trailing dot ("10.2.0.")
-            # and embedded suffixes ("10.2.0.rc.0").
             break
-    # Require at least major.minor — a single leading int (e.g.
-    # ``"1.alpha.0"``) is more likely malformed than a real
-    # one-component version, and tuple comparison against a
-    # floor would silently classify it as "below" rather than
-    # surfacing the parse failure.
+    # Require major.minor minimum so single-int parses don't silently
+    # sort below the floor.
     if len(result) < 2:
         return None
     return tuple(result)

@@ -1,16 +1,15 @@
 """Compose-time flattening for the runtime-config pipeline.
 
 Nested ``[wifi]`` / ``[mqtt.broker]`` TOML tables on disk are the
-beginner-readable shape; the device-side runtime works with a flat
+beginner-readable shape.  The device-side runtime works with a flat
 dotted-key dict (``"wifi.ssid"``, ``"mqtt.broker.host"``).  Flattening
 happens once at compose time so the on-disk format optimizes for
 human readability and the wire / device format optimizes for memory
-on a 256 KB-RAM target — single hash lookup per key, no recursion.
+on a 256 KB-RAM target: single hash lookup per key, no recursion.
 
-:func:`flatten_config` is the lone public function — pure, no I/O,
-deterministic.  ``compose_runtime_config`` calls it after the deep
-merge, so :class:`WithRuntimeConfig` writes the flat shape into
-``runtime_config.msgpack`` and on-device readers see it directly.
+:func:`flatten_config` is pure, has no I/O, and is deterministic.
+The flat shape is what writes into ``runtime_config.msgpack`` and
+what on-device readers see directly.
 """
 
 from __future__ import annotations
@@ -24,20 +23,19 @@ def flatten_config(nested: dict, *, _prefix: str = "") -> dict[str, Any]:
     Walks *nested* recursively; each non-dict leaf value lands at
     ``"<dotted.path>"`` in the result.  Empty dicts are dropped (no
     key is emitted for an inner table that has no leaf descendants).
-    Lists / tuples / scalars are taken verbatim — the per-key value
-    isn't recursed into, only nested dicts are.
+    Lists, tuples, and scalars are taken verbatim. The per-key
+    value isn't recursed into, only nested dicts are.
 
     Args:
-        nested: Source dict — typically the deep-merge of
-            ``secrets.toml`` defaults and per-project overrides.
+        nested: Source dict to flatten.
         _prefix: Internal; used during recursion to accumulate the
-            dotted-path key.  External callers always omit it.
+            dotted-path key.
 
     Returns:
         A new flat dict.  Original *nested* is not mutated.
 
     Raises:
-        ValueError: A nested key isn't a string — runtime config keys
+        ValueError: A nested key isn't a string. Runtime config keys
             must be string-typed for the dotted-path representation
             to be reversible.
     """

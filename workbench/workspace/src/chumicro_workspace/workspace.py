@@ -4,7 +4,7 @@ Locates the workspace's named files (workspace.yml, devices.yml,
 ``projects/<...>/``) given a starting directory.  The
 CLI walks up from the current working directory until it finds a
 ``workspace.yml`` so users can invoke commands from anywhere inside
-the workspace tree (typical Git / monorepo ergonomics).
+the workspace tree.
 
 Projects may be nested arbitrarily deep under ``projects/`` —
 ``projects/upstairs/bedroom_sensor/``, ``projects/garage/sensors/door_open/``,
@@ -18,7 +18,7 @@ and so on.  A directory is classified by walking its contents:
   ``docs/``, design notes, etc. anywhere in the tree without flagging
   them.
 
-The layout reified by ``ChuMicro/ChuMicro-Workspace-Template``::
+Workspace layout::
 
     <root>/
         workspace.yml          # gitignored defaults + credentials
@@ -40,9 +40,9 @@ WORKSPACE_MARKER: str = "workspace.yml"
 #: Default subdirectory that contains one directory per project.
 PROJECTS_DIRNAME: str = "projects"
 
-#: Filenames that mark a directory as a deployable "project".  Order
-#: is irrelevant — any single one is enough.  ``app.py`` is the
-#: workspace convention (the workspace boot shim looks for it);
+#: Filenames that mark a directory as a deployable "project".  Any
+#: single one is enough.  ``app.py`` is the
+#: workspace convention (the workspace boot shim looks for it).
 #: ``code.py`` / ``main.py`` are accepted so users with bare
 #: CircuitPython / MicroPython entry-points still see their project
 #: classified.
@@ -135,7 +135,7 @@ class WorkspaceLayout:
 
     @property
     def workspace_yaml(self) -> Path:
-        """Path to ``<root>/workspace.yml`` (always exists by construction)."""
+        """Path to ``<root>/workspace.yml``."""
         return self.root / WORKSPACE_MARKER
 
     @property
@@ -162,12 +162,11 @@ class WorkspaceLayout:
 
     @property
     def shared_dir(self) -> Path:
-        """Path to ``<root>/shared/`` — small shared modules dropped flat.
+        """Path to ``<root>/shared/`` for flat shared modules.
 
         The lighter-weight cousin of :attr:`libraries_dir`.  Files under
         ``shared/`` are imported by projects directly (``from shared.foo import
-        bar``) without any package scaffolding.  Use this for "I wrote a
-        50-line helper my projects need to share" — no tests, no version,
+        bar``) without any package scaffolding.  No tests, no version,
         no chumicro library shape.  See :attr:`libraries_dir` for the
         full-package alternative.
         """
@@ -175,14 +174,13 @@ class WorkspaceLayout:
 
     @property
     def libraries_dir(self) -> Path:
-        """Path to ``<root>/libraries/`` — full chumicro-style library trees.
+        """Path to ``<root>/libraries/`` for full chumicro-style library trees.
 
         The heavier-weight cousin of :attr:`shared_dir`.  Each entry is a
-        proper chumicro library package — ``src/<name>/``, ``tests/``,
+        proper chumicro library package with ``src/<name>/``, ``tests/``,
         optional ``docs/`` and ``examples/``, ``pyproject.toml``,
         ``VERSION``.  Created by ``chumicro-workspace new --library``.
-        Use this when the library is meant to be publishable — you
-        get the same scaffolding chumicro libraries themselves use.
+        Use this when the library is meant to be publishable.
 
         ``import_graph.build_search_paths`` includes
         ``libraries/<name>/src/`` for every entry so projects can ``import
@@ -246,7 +244,7 @@ class WorkspaceLayout:
     def from_dir(cls, start: Path | None = None) -> WorkspaceLayout:
         """Walk up from *start* until a ``workspace.yml`` is found.
 
-        Mirrors the way ``git`` discovers its repository root — users
+        Walks parents until ``workspace.yml`` is found, so users
         can run ``python run.py deploy ...`` from any directory inside
         the workspace and the right files get located.
 

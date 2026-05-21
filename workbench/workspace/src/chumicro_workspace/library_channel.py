@@ -1,12 +1,12 @@
 """Snapshot-channel download backend for curated workspace libraries.
 
 A curated library reaches the workspace by being read out of a
-published *snapshot channel* — a tag on a full-source-tree repo whose
-state at that tag is an internally-consistent set every library was
-built together in.  A tag is the whole set; pinning is to a snapshot,
-not a per-library version (the closure a library declares in its
-``pyproject.toml`` is definitionally whatever shipped in the same
-snapshot, because library pyprojects carry no version constraints).
+published *snapshot channel*.  A channel is a tag on a full-source-tree
+repo, and the state at that tag is an internally-consistent set every
+library was built together in.  A tag is the whole set, so pinning is
+to a snapshot, not a per-library version.  Library pyprojects carry no
+version constraints, so the closure a library declares in its
+``pyproject.toml`` is whatever shipped in the same snapshot.
 
 Two channels, one repo each::
 
@@ -24,8 +24,7 @@ releases-API call.
 Every network touch is a single injected ``http_get(url) -> bytes``,
 so the whole backend runs against a local fixture with no sockets.
 Failures raise the shared :class:`~chumicro_workspace.library.
-LibraryFetchError` with a closed-set kind, same contract the CLI's
-coaching loop already consumes.
+LibraryFetchError` with a closed-set kind.
 """
 
 from __future__ import annotations
@@ -44,9 +43,9 @@ from chumicro_workspace.library import (
     LibraryFetchFailureKind,
 )
 
-#: Channel -> source-tree repo.  The ``-Experimental`` suffix is the
-#: repo, not a package-name suffix — switching channel switches repo,
-#: imports never change (same model as circup bundle-add).
+#: Maps each channel to its source-tree repo.  The ``-Experimental``
+#: suffix is on the repo, not on the package name, so switching channel
+#: switches repo while imports stay the same.
 CHANNEL_REPOS = {
     "stable": "ChuMicro/ChuMicro-Libraries",
     "experimental": "ChuMicro/ChuMicro-Libraries-Experimental",
@@ -56,7 +55,7 @@ _DEFAULT_TIMEOUT_SECONDS = 30
 
 
 def _real_http_get(url: str) -> bytes:
-    """GET *url*, returning the body bytes.  Classifies transport faults."""
+    """GET *url*, returning the body bytes."""
     try:
         with urllib.request.urlopen(  # noqa: S310 — https GitHub URLs only
             url, timeout=_DEFAULT_TIMEOUT_SECONDS,
@@ -64,8 +63,8 @@ def _real_http_get(url: str) -> bytes:
             return response.read()
     except urllib.error.HTTPError as error:
         status_code = error.code
-        # HTTPError is a readable response — close it so its spooled
-        # body never leaks (a ResourceWarning in production too).
+        # HTTPError is a readable response, so close it to keep its
+        # spooled body from leaking.
         error.close()
         kind = (
             LibraryFetchFailureKind.PACKAGE_NOT_FOUND
@@ -106,7 +105,9 @@ class ChannelSnapshot:
 
 
 def channel_repo(channel: str) -> str:
-    """``"stable"`` -> ``"ChuMicro/ChuMicro-Libraries"``.
+    """Return the GitHub source-tree repo for *channel*.
+
+    For example, ``"stable"`` returns ``"ChuMicro/ChuMicro-Libraries"``.
 
     Raises:
         LibraryFetchError: ``UNKNOWN_CHANNEL`` kind for any other channel.
@@ -200,8 +201,8 @@ def resolve_snapshot(
     reference = tag if tag is not None else "main"
     snapshot = _parse_index(channel, http_get(index_url(repo, reference)))
     if tag is not None and snapshot.tag != tag:
-        # Pinned ref's own index must self-describe as that tag —
-        # otherwise the manifest and the tree would disagree.
+        # Pinned ref's own index must self-describe as that tag.
+        # Otherwise the manifest and the tree would disagree.
         raise LibraryFetchError(
             LibraryFetchFailureKind.INDEX_MALFORMED,
             f"{channel} index.json at {tag} reports tag "
@@ -214,7 +215,7 @@ def _safe_member_path(into: Path, name: str) -> Path:
     """Resolve archive member *name* under *into*, rejecting traversal.
 
     ``tarfile``'s ``data`` filter would cover this but only exists on
-    3.12+; this package supports 3.11.
+    3.12+.  This package supports 3.11.
     """
     target = (into / name).resolve()
     if not str(target).startswith(str(into.resolve())):
@@ -233,9 +234,9 @@ def extract_library(
     """Extract only *library_name*'s subtree from a snapshot *tarball*.
 
     A GitHub source tarball wraps everything in one ``<repo>-<tag>/``
-    directory; the library lives at ``<repo>-<tag>/<short>/`` where
+    directory.  The library lives at ``<repo>-<tag>/<short>/`` where
     ``<short>`` strips the ``chumicro_`` import prefix.  The wrapper
-    is stripped, so the tree lands at ``into/<short>/``; the rest of
+    is stripped, so the tree lands at ``into/<short>/``.  The rest of
     the snapshot is never written.
 
     Returns the extracted library root (``into/<short>``).
@@ -278,8 +279,7 @@ def fetch_snapshot_tarball(
     """GET *snapshot*'s source tarball once.
 
     A closure fetch calls this once and then :func:`extract_library`
-    per closure member — one network download for the whole
-    internally-consistent set.
+    per closure member, so one network download covers the whole set.
     """
     return http_get(tarball_url(channel_repo(channel), snapshot.tag))
 
@@ -293,7 +293,7 @@ def fetch_text_file(
 ) -> str:
     """GET a single UTF-8 text file from *channel* at *tag*.
 
-    Used for browse drill-in (a library's README or one example) —
+    Used for browse drill-in (a library's README or one example):
     one raw file, no tree clone.  Decodes leniently so a stray byte
     never aborts the browser.
     """

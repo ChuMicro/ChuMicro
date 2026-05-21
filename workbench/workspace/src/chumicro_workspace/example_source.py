@@ -6,8 +6,8 @@ The ``deploy-example`` front-door command ships
 ``chumicro_*`` module the example imports under ``/lib/`` and a
 ``runtime_config.msgpack`` baked from ``secrets.toml``.
 
-This module owns the shape of that source.  The CLI just asks for
-one and hands it to ``Deployer.deploy_diff()`` like any other
+Defines the FileSource shape for that deploy.  The CLI just asks
+for one and hands it to ``Deployer.deploy_diff()`` like any other
 ``FileSource``.
 
 The shape composes existing pieces:
@@ -22,7 +22,7 @@ The shape composes existing pieces:
   against each library's ``[tool.chumicro.config]`` manifest before
   writing.
 
-What this module adds:
+This module adds:
 
 * Resolves the example file under ``libraries/<lib>/examples/<name>.py``.
 * Picks the on-device entrypoint name from the *runtime* arg
@@ -47,12 +47,11 @@ from chumicro_workspace.deploy_source import (
 #: On-device entrypoint name keyed by runtime.  CircuitPython runs
 #: ``code.py`` at boot; MicroPython runs ``main.py``.  CPython has no
 #: device-level entrypoint convention — passed in here as ``"cpython"``
-#: only when a host-side test exercises the source machinery; the
-#: deploy CLI rejects ``cpython`` upstream.
+#: only when a host-side test exercises the source machinery.
 _ENTRYPOINT_BY_RUNTIME: dict[str, str] = {
     "circuitpython": "/code.py",
     "micropython": "/main.py",
-    "cpython": "/code.py",  # test-only; never deployed to a device
+    "cpython": "/code.py",
 }
 
 
@@ -104,20 +103,15 @@ def example_source(
     plus every reachable ``chumicro_*`` module under ``/lib/`` plus
     a ``/runtime_config.msgpack`` baked from ``secrets.toml``.
 
-    Examples have no per-example config — the runtime config they
+    Examples have no per-example config.  The runtime config they
     receive is just ``secrets.toml`` contents.  A library that needs
     example-specific values writes them inline in the example source.
-
-    Wrong-runtime files (``__chumicro_runtimes__`` marker mismatch)
-    drop out automatically — neither the example file nor any walked
-    module lands on the device unless its marker matches *runtime*.
 
     Manifest validation is automatic: each ``library_roots`` entry's
     ``[tool.chumicro.config]`` block is unioned by ``WithRuntimeConfig``
     and validated against the merged config before the msgpack is
     written.  A missing required key fails the deploy-time precheck
-    with a precise error instead of a cryptic ``MissingConfigKey``
-    on the board.
+    with a precise error.
 
     Args:
         library_root: Path to ``libraries/<lib>/`` — the library this

@@ -38,9 +38,9 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 
     from chumicro_workspace.workspace import WorkspaceLayout
 
-#: Canonical on-device path for the merged runtime-config msgpack.
-#: Every consumer library + the workspace template assumes this
-#: exact location; changing it is an ABI break.
+#: On-device path for the merged runtime-config msgpack.
+#: Every consumer library and the workspace template assumes this
+#: exact location.  Changing it is an ABI break.
 RUNTIME_CONFIG_DEVICE_PATH: str = "/runtime_config.msgpack"
 
 #: Default subdirectory under ``projects/<name>/`` where the generated
@@ -57,8 +57,7 @@ _SKIP_FILENAMES: frozenset[str] = frozenset({"project_config.toml"})
 def find_project_config(project_dir: Path) -> Path:
     """Return the per-project config path for *project_dir*.
 
-    The project-config filename is ``project_config.toml`` — the only
-    name the workspace accepts.
+    The project-config filename is ``project_config.toml``.
 
     Args:
         project_dir: Path to ``projects/<name>/``.
@@ -76,11 +75,9 @@ def find_project_config(project_dir: Path) -> Path:
 class WithRuntimeConfig:
     """``FileSource`` decorator that injects the merged runtime config.
 
-    Every call to :meth:`files` regenerates the msgpack (so the freshest
-    config rides every deploy without the caller having to call
-    :func:`build_runtime_config` manually first), then merges the inner
-    source's files with ``{device_path: msgpack_bytes}``.  The
-    entrypoint is forwarded from the inner source unchanged.
+    Every call to :meth:`files` regenerates the msgpack, then merges
+    the inner source's files with ``{device_path: msgpack_bytes}``.
+    The entrypoint is forwarded from the inner source unchanged.
 
     Args:
         inner: The base ``FileSource`` (typically the project's app code).
@@ -253,8 +250,7 @@ def wrap_with_runtime_config(
         output_path = project_dir / GENERATED_DIRNAME / "runtime_config.msgpack"
     library_roots: tuple[Path, ...] | None = None
     if search_paths is not None:
-        # Local import — see :meth:`WithRuntimeConfig._validate_against_manifests`
-        # for the no-validation-path rationale.
+        # Local import keeps the no-validation path's import cost flat.
         from chumicro_workspace.config_manifest import (  # noqa: PLC0415
             find_library_roots,
         )

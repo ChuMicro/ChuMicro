@@ -2,25 +2,25 @@
 
 Combines:
 
-* **Config merge** — gitignored ``secrets.toml`` (workspace-wide
-  credentials + device defaults) + per-project ``project_config.toml``
-  → ``/runtime_config.msgpack``.  Pure structural deep-merge; both
+* **Config merge**: gitignored ``secrets.toml`` (workspace-wide
+  credentials + device defaults) plus per-project ``project_config.toml``
+  produce ``/runtime_config.msgpack``.  Pure structural deep-merge; both
   layers are gitignored and share the section-namespaced shape.
-* **Deploy integration** — :class:`~chumicro_workspace.deploy_source.WithRuntimeConfig`
-  + the ``project_*_source`` helpers compose with ``chumicro-deploy``'s
+* **Deploy integration**: :class:`~chumicro_workspace.deploy_source.WithRuntimeConfig`
+  and the ``project_*_source`` helpers compose with ``chumicro-deploy``'s
   ``FileSource``\\ s so a single ``Deployer.deploy_diff(...)`` call ships
-  app code + the merged config + (optional) boot shim in one shot.
-* **``devices.yml`` round-trip** — three-zone writer (USER_OWNED /
+  app code, the merged config, and an optional boot shim in one shot.
+* **``devices.yml`` round-trip**: three-zone writer (USER_OWNED /
   HARDWARE_ONCE / PROBED_ALWAYS), owned by ``chumicro-deploy``.
-* **Onboarding** — board-state detection, firmware URL derivation
-  (CP S3 listing + MP curated machine→BOARD map).
-* **Init / update** — clone the workspace template repo and re-flow
+* **Onboarding**: board-state detection, firmware URL derivation
+  (CP S3 listing plus MP curated machine-to-BOARD map).
+* **Init / update**: clone the workspace template repo and re-flow
   tool-owned files.
-* **CLI dispatch** — :func:`chumicro_workspace.cli.main` powers the
+* **CLI dispatch**: :func:`chumicro_workspace.cli.main` powers the
   ``chumicro-workspace`` entry-point and the workspace ``run.py`` shim.
 
-Package-root surface (``__all__`` below) is intentionally narrow —
-just the central :class:`WorkspaceLayout` type and the few helpers
+Package-root surface (``__all__`` below) is intentionally narrow.
+It exposes the :class:`WorkspaceLayout` type and the few helpers
 sibling packages reach for through the root::
 
     from chumicro_workspace import (
@@ -37,9 +37,9 @@ Everything else lives in submodules (``chumicro_workspace.deploy_source``,
 :class:`ProjectClassification`, etc.) and stays reachable via explicit
 submodule imports.
 
-Workbench-only — runs on CPython only; never lands on a
+Workbench-only: runs on CPython, never lands on a
 microcontroller.  Workbench tools and the workspace's ``run.py``
-shim consume this package; the on-device counterpart is
+shim consume this package.  The on-device counterpart is
 ``chumicro-config``.
 """
 
@@ -55,10 +55,10 @@ from chumicro_workspace.workspace import (
     WorkspaceNotFoundError,
 )
 
-#: Narrow front-door surface — symbols sibling packages
+#: Narrow front-door surface: symbols sibling packages
 #: (``libraries/*/functional_tests/conftest.py``, ``scripts/*``) reach for
 #: via ``from chumicro_workspace import ...``.  Everything else is a
-#: submodule reach; ``from chumicro_workspace.deploy_source import
+#: submodule reach.  ``from chumicro_workspace.deploy_source import
 #: WithRuntimeConfig`` etc. still works.
 __all__ = [
     "ProjectClassification",

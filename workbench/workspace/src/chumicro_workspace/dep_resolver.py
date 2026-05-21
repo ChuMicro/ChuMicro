@@ -1,23 +1,21 @@
 """Transitive chumicro-dependency resolution for the library CLI.
 
 ``library add`` pulls a library and the chumicro libraries it depends
-on.  PyPI has no "give me the deps" call we use (the design fetches
-sdists, not the JSON metadata API), so the dependency graph is read
-from each fetched library's own ``pyproject.toml`` ``[project]
-.dependencies``.  Only runtime dependencies count — the ``[test]``
-extra's chumicro entries are test infrastructure, not what the board
-runs.
+on.  The dependency graph is read from each fetched library's own
+``pyproject.toml`` ``[project].dependencies``.  Only runtime
+dependencies count.  The ``[test]`` extra's chumicro entries are test
+infrastructure, not what the board runs.
 
 Two pieces, both pure:
 
-* :func:`chumicro_dependencies` — the direct chumicro deps of one
-  ``pyproject.toml``, as import names (``chumicro-mqtt`` ->
+* :func:`chumicro_dependencies` returns the direct chumicro deps of
+  one ``pyproject.toml``, as import names (``chumicro-mqtt`` becomes
   ``chumicro_mqtt``).
-* :func:`transitive_closure` — the full set reachable from some roots,
-  given an injected ``deps_of`` callback.  The CLI supplies a
-  ``deps_of`` that fetches-then-reads; tests supply a plain dict.  The
-  recursion is cycle-safe and order-deterministic so the user is
-  shown a stable tree.
+* :func:`transitive_closure` returns the full set reachable from some
+  roots, given an injected ``deps_of`` callback.  Production callers
+  pass a ``deps_of`` that fetches and reads pyproject files.  Tests
+  pass a plain dict.  The recursion is cycle-safe and
+  order-deterministic so the user sees a stable tree.
 """
 
 from __future__ import annotations
@@ -27,8 +25,8 @@ import tomllib
 from collections.abc import Callable
 from pathlib import Path
 
-#: Leading distribution-name token of a PEP 508 requirement string —
-#: stops at the first version specifier, extra, marker, or whitespace.
+#: Leading distribution-name token of a PEP 508 requirement string,
+#: stopping at the first version specifier, extra, marker, or whitespace.
 _REQUIREMENT_NAME = re.compile(r"\s*([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)")
 
 

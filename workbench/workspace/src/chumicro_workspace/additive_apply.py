@@ -7,9 +7,9 @@ place.  Existing values + surrounding comments are never touched.
 
 Two writers:
 
-* TOML — :mod:`tomlkit` provides comment-preserving round-trip.  The
+* TOML: :mod:`tomlkit` provides comment-preserving round-trip.  The
   stdlib :mod:`tomllib` reads but can't write.
-* YAML — ``ruamel.yaml`` (already a workbench dep) does the same for
+* YAML: ``ruamel.yaml`` (already a workbench dep) does the same for
   ``workspace.yml``.
 
 Driven by :func:`additive_reapply`.
@@ -29,8 +29,7 @@ from chumicro_workspace.template_drift import (
     collect_missing_template_paths,
 )
 
-#: Files the additive re-apply walks.  Order matches the user-visible
-#: progression in ``setup`` output.
+#: Files the additive re-apply walks, in the order they are reported.
 _REAPPLY_TARGETS: tuple[str, ...] = ("workspace.yml", "secrets.toml")
 
 
@@ -89,9 +88,8 @@ def _append_missing_toml(
     nested tables), then creates the corresponding path in the user
     document.  Intermediate tables are created via ``tomlkit.table()``
     when missing.  Comments on the appended value's source position in
-    the template are not propagated — only the value lands in the user
-    file (this keeps the implementation simple and avoids re-emitting
-    the template's didactic comments inside the user's file).
+    the template are not propagated.  Only the value lands in the user
+    file.
     """
     user_doc = tomlkit.parse(user_text)
     template_doc = tomlkit.parse(template_text)
@@ -125,7 +123,7 @@ def _set_nested(
 ) -> None:
     """Set ``doc[segments[0]][segments[1]]...[segments[-1]] = value``.
 
-    Missing intermediate tables are created via *table_factory* —
+    Missing intermediate tables are created via *table_factory*:
     ``tomlkit.table`` for TOML round-trip preservation, plain ``dict``
     for YAML (ruamel auto-promotes plain dicts to ``CommentedMap`` on
     dump).  Existing intermediates that aren't mapping-shaped get
@@ -152,8 +150,7 @@ def _append_missing_yaml(
     """YAML analog of :func:`_append_missing_toml`.
 
     Uses ruamel's round-trip parser so existing comments + key order
-    survive the rewrite.  Intermediate mappings are created as plain
-    dicts (ruamel auto-promotes them to ``CommentedMap`` on dump).
+    survive the rewrite.
     """
     yaml = YAML(typ="rt")
     yaml.preserve_quotes = True

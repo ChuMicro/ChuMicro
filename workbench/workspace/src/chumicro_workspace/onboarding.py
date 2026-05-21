@@ -2,33 +2,32 @@
 
 Boards arrive in one of four states from the workspace's point of view:
 
-* :attr:`BoardState.REPL_REACHABLE` — serial port opens, probe returns
-  a runtime + version.  This is the "I can run code on it" state;
+* :attr:`BoardState.REPL_REACHABLE`: serial port opens, probe returns
+  a runtime and version.  This is the "I can run code on it" state.
   ``add-device`` registers cleanly without flashing first.
-* :attr:`BoardState.UF2_BOOTLOADER` — a UF2 drive (a directory with
+* :attr:`BoardState.UF2_BOOTLOADER`: a UF2 drive (a directory with
   ``INFO_UF2.TXT`` at its root) is mounted.  Pi Pico / Pi Pico W /
   most SAMD51 / nRF52840 boards land here on a fresh power-up with
   the BOOTSEL button held.  The right next step is
   ``install-firmware --method uf2``.
-* :attr:`BoardState.NO_PROBE_RESPONSE` — serial opens but the probe
+* :attr:`BoardState.NO_PROBE_RESPONSE`: serial opens but the probe
   doesn't return.  Most often an ESP32 family chip in ROM bootloader
   with no Python firmware installed yet.  The right next step is
   ``install-firmware --method esptool``, with ``--erase`` for a
   fresh chip.
-* :attr:`BoardState.SERIAL_UNREACHABLE` — the serial port can't be
+* :attr:`BoardState.SERIAL_UNREACHABLE`: the serial port can't be
   opened.  Cable not plugged, wrong port path, permissions issue.
-  The right next step is ``discover`` / replug.
+  The right next step is ``discover`` or replug.
 
-This module is the host-side detective — every check is observable,
-testable, and uses :mod:`chumicro_deploy`'s probe + the local UF2
-mount scanner.  It does not push any state to the board; the
-recommendations it returns are human-readable strings the CLI
-prints, not commands it auto-runs.
+Every check is observable, testable, and uses :mod:`chumicro_deploy`'s
+probe plus the local UF2 mount scanner.  It does not push any state
+to the board.  The recommendations it returns are human-readable
+strings the CLI prints, not commands it auto-runs.
 
-The split — detection separate from action — keeps the contract
-honest: a user can run ``probe`` on a misbehaving board, see the
-diagnosis, and decide for themselves whether to flash.  The CLI
-never flashes a board the user didn't explicitly ask to flash.
+Detection is separate from action.  A user can run ``probe`` on a
+misbehaving board, see the diagnosis, and decide for themselves
+whether to flash.  The CLI never flashes a board the user didn't
+explicitly ask to flash.
 """
 
 from __future__ import annotations
@@ -40,12 +39,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover: type-only
     from chumicro_deploy import Device, DeviceInfo
 
 
 #: Default order for runtime inference probes.  MicroPython's raw
-#: REPL is the most universal serial control sequence — CircuitPython
+#: REPL is the most universal serial control sequence.  CircuitPython
 #: also speaks raw REPL (Ctrl-A) so an MP transport on a CP board
 #: typically still completes the probe.  Ordering exists in case
 #: timing differs on edge-case ports; both candidates are tried.
@@ -78,7 +77,7 @@ _UF2_MOUNT_SEARCH_PATHS: dict[str, list[Path]] = {
 
 @dataclass(frozen=True)
 class OnboardingDiagnosis:
-    """Result of :func:`detect_board_state` — the diagnosis + next steps.
+    """Result of :func:`detect_board_state`: the diagnosis and next steps.
 
     Attributes:
         state: Which :class:`BoardState` the board is in.
@@ -138,7 +137,7 @@ def find_uf2_drive(search_paths: list[Path] | None = None) -> Path | None:
 
 
 def _next_steps_for(state: BoardState, *, uf2_drive: Path | None = None) -> list[str]:
-    """Return the recommendation block for *state* — pure dispatch table."""
+    """Return the recommendation block for *state*."""
     if state is BoardState.REPL_REACHABLE:
         return [
             "Board is in REPL — register it with:",
@@ -222,7 +221,7 @@ def detect_board_state(
     probe_implementation_name: str | None = None
     try:
         info = probe_function(device)
-    except Exception as exception:  # noqa: BLE001 — diagnostic catches everything
+    except Exception as exception:  # noqa: BLE001: diagnostic catches everything
         probe_error_text = str(exception) or type(exception).__name__
     else:
         if info.implementation is not None:
@@ -261,7 +260,7 @@ class RuntimeInferenceResult:
         info: :class:`chumicro_deploy.DeviceInfo` from the first
             probe whose ``implementation`` field came back populated,
             or ``None`` when every candidate transport failed.
-        runtime: The runtime name reported by the probe — i.e.
+        runtime: The runtime name reported by the probe, i.e.
             ``info.implementation.name``.  ``None`` when no probe
             returned a marker.  This is the *truthful* runtime name
             from ``sys.implementation``, not necessarily the same
@@ -308,7 +307,7 @@ def probe_with_runtime_inference(
         probe_function: Inject a :func:`chumicro_deploy.probe_device`
             replacement.  Tests pass a fake to avoid hardware.
         device_factory: Inject a constructor for
-            :class:`chumicro_deploy.Device` — receives ``(transport,
+            :class:`chumicro_deploy.Device`.  Receives ``(transport,
             address)`` and returns a Device.  Tests pass a fake.
 
     Returns:
@@ -333,7 +332,7 @@ def probe_with_runtime_inference(
         device = device_factory(candidate, address)
         try:
             info = probe_function(device)
-        except Exception as exception:  # noqa: BLE001 — fall through to next candidate
+        except Exception as exception:  # noqa: BLE001: fall through to next candidate
             last_exception = exception
             continue
         if info.implementation is not None:
@@ -353,7 +352,7 @@ def _looks_like_serial_unreachable(error_text: str) -> bool:
 
     Pulls from the common idioms pyserial / mpremote / OS-level
     failures emit when the serial port itself is unreachable.  Not
-    a complete classifier — when in doubt the caller falls through
+    a complete classifier.  When in doubt, the result falls through
     to :attr:`~BoardState.NO_PROBE_RESPONSE`, which suggests
     flashing rather than replugging.
     """

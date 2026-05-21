@@ -1,9 +1,9 @@
 """The curated ``libraries:`` table in workspace.yml.
 
-CLI-managed sibling of ``library_sources:``.  Where ``library_sources:``
+A sibling of ``library_sources:``.  Where ``library_sources:``
 answers "where is the code on disk?" (read by the deploy walker), this
 table answers "where did each curated chumicro library come from, and
-at what version?".  The ``library`` subcommands are its sole writer.
+at what version?".
 
 Schema::
 
@@ -17,11 +17,11 @@ Schema::
         declined: true            # user declined at the transitive prompt
 
 ``version`` is always a quoted string (so YAML doesn't read ``0.10``
-as a float); the ``HEAD`` sentinel records a ``--floating`` entry that
-re-resolves to the channel's latest on every op.  ``declined`` is
-emitted only when true.  A missing ``libraries:`` key is the normal
-clean / legacy-workspace case and reads as ``{}`` — no schema version
-field, the table is purely additive.
+as a float).  The ``HEAD`` sentinel records a ``--floating`` entry
+that re-resolves to the channel's latest on every op.  ``declined``
+is emitted only when true.  A missing ``libraries:`` key is the
+normal clean-workspace case and reads as ``{}``.  There is no schema
+version field, the table is additive.
 """
 
 from __future__ import annotations
@@ -141,9 +141,9 @@ def write_curated_libraries(
 ) -> bool:
     """Write or replace the managed ``libraries:`` block.
 
-    Returns ``True`` when the file changed, ``False`` on an
-    idempotent re-run.  The CLI is the table's sole writer, so it
-    holds the full desired state and rewrites the whole block.
+    Returns ``True`` when the file changed, ``False`` on a re-run
+    that produces the same content.  Rewrites the whole block; the
+    caller holds the full desired state.
     """
     return sync_managed_block(
         workspace_yaml,

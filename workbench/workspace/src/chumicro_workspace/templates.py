@@ -1,17 +1,17 @@
-"""Workspace-template readers — first-write content shipped from the wheel.
+"""Workspace-template readers: first-write content shipped from the wheel.
 
 Three workspace-root files have their first-write content embedded
-inside a workbench wheel and materialized on first ``setup``:
-``devices.yml`` (board registry — schema owned by ``chumicro-deploy``,
-re-exported here for symmetry), ``workspace.yml`` (host-only workspace
-machinery), and ``secrets.toml`` (workspace-wide credentials + device
-defaults).
+inside a workbench wheel and materialized on first ``setup``.
+``devices.yml`` holds the board registry, re-exported from
+``chumicro-deploy``.  ``workspace.yml`` holds host-only workspace
+machinery.  ``secrets.toml`` holds workspace-wide credentials plus
+device defaults.
 
-Every reader returns the file's full text — callers decide where to
-write it.  The bytes travel with the wheel inside ``_payloads/``
-(``chumicro-workspace``'s for ``workspace.yml`` / ``secrets.toml``,
-``chumicro-deploy``'s for ``devices.yml``) so reads work in both
-editable installs and pip-installed wheels.
+Every reader returns the file's full text.  The bytes travel with
+the wheel inside ``_payloads/`` (``chumicro-workspace``'s for
+``workspace.yml`` / ``secrets.toml``, ``chumicro-deploy``'s for
+``devices.yml``) so reads work in both editable installs and
+pip-installed wheels.
 """
 
 from __future__ import annotations

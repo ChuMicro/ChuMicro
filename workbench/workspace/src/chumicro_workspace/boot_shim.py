@@ -3,22 +3,22 @@
 The boot shim layer is a tiny synthesized entrypoint written onto the
 device alongside the project's app code:
 
-* ``/code.py`` (CP) or ``/main.py`` (MP) — three-line bootstrapper
+* ``/code.py`` (CP) or ``/main.py`` (MP), a three-line bootstrapper
   that imports the project's ``app.run`` and calls it.
 
 The project's own files (``app.py``, helper modules) land at the
-device root.  ``app.py`` exports ``run()``; the synthesized shim
+device root.  ``app.py`` exports ``run()``, and the synthesized shim
 calls it.  No ``active.py``, no ``/lib/workspace_runtime/`` payload,
-no ``/lib/projects/<name>/`` namespace — chumicro is one-project-per-
+no ``/lib/projects/<name>/`` namespace.  Chumicro is one-project-per-
 board.  Switch to a different project by redeploying.
 
 Two pieces:
 
-* :func:`boot_shim_files` returns the synthesized shim file
-  (a single entry — the runtime-matching entrypoint).
+* :func:`boot_shim_files` returns the synthesized shim file,
+  a single entry for the runtime-matching entrypoint.
 * :func:`project_boot_source` produces a ``WithRuntimeConfig``-
-  wrapped source that bundles the shim + the project's files at
-  the device root + the merged runtime-config msgpack.
+  wrapped source that bundles the shim, the project's files at
+  the device root, and the merged runtime-config msgpack.
 
 The CLI ``deploy --boot-shim`` flag (and the auto-detected default
 when a project ships ``app.py`` with ``run()`` and no
@@ -53,24 +53,21 @@ SHIM_ENTRYPOINT_SOURCE = (
     "_run()\n"
 )
 
-#: Filename under ``projects/<name>/`` that is workspace-tooling
-#: input, not runtime payload — same exclusion
-#: :func:`project_directory_source` applies.
+#: Filenames under ``projects/<name>/`` that are workspace-tooling
+#: input, not runtime payload, and so are skipped on the device walk.
 _PROJECT_HOST_ONLY_NAMES: frozenset[str] = frozenset({"project_config.toml"})
 
 #: Filenames the synthesised shim owns at the device root.  Excluded
-#: from the project walk so a stray ``code.py`` / ``main.py`` in the
-#: project directory (left over from a prior plain-mode deploy, or
-#: the test fixture that seeds both) doesn't fight the shim for the
+#: from the project walk so a stray ``code.py`` / ``main.py`` left
+#: over from a prior plain-mode deploy doesn't fight the shim for the
 #: runtime entrypoint.  Plain-mode deploys (no shim) ship these
-#: through the flat-layout walker instead — see
+#: through the flat-layout walker instead, see
 #: :func:`project_directory_source`.
 _SHIM_OWNED_FILENAMES: frozenset[str] = frozenset({"code.py", "main.py"})
 
-#: Cache directory + workspace-tooling-reserved names skipped on
-#: the project walk.  Mirrors
-#: ``chumicro_deploy.DirectorySource.DEFAULT_EXCLUDED`` so the
-#: behavior matches what users see with the simpler source.
+#: Cache directory and workspace-tooling-reserved names skipped on
+#: the project walk.  Same exclusion set as the simpler
+#: ``DirectorySource`` so the behavior matches across sources.
 _DEFAULT_EXCLUDED_DIRS: frozenset[str] = frozenset(
     {"__pycache__", ".DS_Store", ".git", ".pytest_cache", ".mypy_cache",
      GENERATED_DIRNAME},
@@ -85,7 +82,7 @@ _DEFAULT_EXCLUDED_DIRS: frozenset[str] = frozenset(
 def _top_level_run_node(project_dir: Path) -> ast.AST | None:
     """Return the AST node of ``app.py``'s top-level ``run`` def, or ``None``.
 
-    AST-based — never imports the project, so a syntax error doesn't
+    AST-based: never imports the project, so a syntax error doesn't
     crash detection.  ``None`` when ``app.py`` is missing / unreadable
     / syntax-broken, or has no top-level ``run`` definition.  A ``run``
     defined inside a class is not top-level and doesn't count.
@@ -109,15 +106,14 @@ def project_app_exports_run(project_dir: Path) -> bool:
 
     Only a plain ``def run(...)`` qualifies.  The synthesized shim
     calls ``run()`` synchronously (``from app import run; run()``), so
-    an ``async def run`` is *not* a usable boot-shim entrypoint —
+    an ``async def run`` is *not* a usable boot-shim entrypoint.
     :func:`project_app_exports_async_run` detects that case and the
     deploy auto-detect rejects it with an actionable message rather
     than shipping a board that boots and silently does nothing.
 
-    Auto-detect rule for the CLI deploy command: when the project
-    ships ``app.py`` with a sync ``run()`` and no runtime-specific
-    entrypoint (``code.py`` / ``main.py``), boot-shim mode is the
-    right default.
+    Boot-shim mode is the right default when the project ships
+    ``app.py`` with a sync ``run()`` and no runtime-specific
+    entrypoint (``code.py`` / ``main.py``).
     """
     return isinstance(_top_level_run_node(project_dir), ast.FunctionDef)
 
@@ -127,9 +123,9 @@ def project_app_exports_async_run(project_dir: Path) -> bool:
 
     The boot shim calls ``run()`` synchronously, so an ``async def
     run`` would evaluate to a coroutine that is created and
-    immediately discarded — the board boots and does nothing, with no
-    traceback.  The deploy auto-detect uses this to surface that as a
-    clear failure instead of letting it through.
+    immediately discarded.  The board boots and does nothing, with no
+    traceback.  Detecting that case lets the deploy path surface it
+    as a clear failure instead of letting it through.
     """
     return isinstance(_top_level_run_node(project_dir), ast.AsyncFunctionDef)
 
@@ -147,18 +143,17 @@ def boot_shim_files(
 
     The shim is a three-line module that imports the project's
     ``app.run`` and calls it.  Lands at ``/<entrypoint_filename>``
-    on the device — ``/code.py`` for CircuitPython, ``/main.py``
-    for MicroPython.  Only the runtime-matching file is synthesized;
-    the deployer doesn't speculatively ship both.
+    on the device: ``/code.py`` for CircuitPython, ``/main.py``
+    for MicroPython.  Only the runtime-matching file is synthesized.
+    Both are never shipped speculatively.
 
     Args:
         entrypoint_filename: ``"code.py"`` for CircuitPython,
             ``"main.py"`` for MicroPython.
 
     Returns:
-        Path → bytes map ready to merge into a deploy file map.
-        A single entry — kept dict-shaped so the merge interface
-        stays uniform with the other source builders.
+        Path → bytes map ready to merge into a deploy file map,
+        a single entry kept dict-shaped to match the merge interface.
     """
     return {
         f"/{entrypoint_filename}": SHIM_ENTRYPOINT_SOURCE.encode("utf-8"),
@@ -178,9 +173,7 @@ def _walk_project_files(
     *extra_excluded* augments the skip set.
 
     Project files land at the device root (``app.py`` → ``/app.py``,
-    ``helpers.py`` → ``/helpers.py``).  Under one-project-per-board,
-    the device's namespace is the project's namespace; no
-    ``/lib/projects/<name>/`` prefix.
+    ``helpers.py`` → ``/helpers.py``).
 
     When *target_runtime* is set, ``.py`` files carrying a
     ``__chumicro_runtimes__`` marker for a different runtime are
@@ -197,8 +190,6 @@ def _walk_project_files(
             continue
         if relative.name in _PROJECT_HOST_ONLY_NAMES:
             continue
-        # The synthesised shim owns ``/code.py`` and ``/main.py`` at the
-        # device root — exclude any project-side copies from the walk.
         if len(parts) == 1 and relative.name in _SHIM_OWNED_FILENAMES:
             continue
         if source_path.suffix == ".py" and not file_targets_runtime(
@@ -214,10 +205,9 @@ def _walk_project_files(
 class _BootShimSource:
     """``FileSource``-shaped wrapper for the boot-shim deploy layout.
 
-    Internal — :func:`project_boot_source` returns the public
-    :class:`WithRuntimeConfig` wrapper around an instance.  Kept
-    private because the boot-shim layout is convention, and the
-    convention's externally-facing surface is the helper function.
+    Internal.  The public surface is the
+    :class:`WithRuntimeConfig`-wrapped instance returned by the
+    helper function.
     """
 
     def __init__(
@@ -310,8 +300,9 @@ def project_boot_source(
 class _BootShimWithImportGraphSource:
     """Combine the boot-shim file map with import-graph-discovered libraries.
 
-    Internal — :func:`project_boot_with_import_graph_source` returns
-    the public :class:`WithRuntimeConfig` wrapper around an instance.
+    Internal.  The public surface is the
+    :class:`WithRuntimeConfig`-wrapped instance returned by the
+    helper function.
 
     The boot-shim source ships the entrypoint shim and the project's
     own files at the device root.  The import-graph source walks the
@@ -393,13 +384,12 @@ def project_boot_with_import_graph_source(
     Use when a project authored for the boot-shim convention also
     needs library code (chumicro / shared / packages / library_sources
     overrides) shipped to the device.  Common case: dev mode with a
-    sibling ``chumicro/`` checkout configured via ``chumicro-dev.toml``
-    — without this composition, ``chumicro_*`` libraries the project
+    sibling ``chumicro/`` checkout configured via ``chumicro-dev.toml``.
+    Without this composition, ``chumicro_*`` libraries the project
     imports never reach the board.
 
-    Triggered from the CLI by ``deploy --boot-shim --import-graph``,
-    or by the auto-detected default when a project ships
-    ``app.py`` + ``run()`` and no ``code.py`` / ``main.py``.
+    Auto-detect picks this layout when a project ships ``app.py``
+    with ``run()`` and no ``code.py`` / ``main.py``.
 
     Args:
         project_dir: Project directory (same shape as for
@@ -473,7 +463,7 @@ def project_boot_with_import_graph_source(
         project_entrypoint_path,
         search_paths=search_paths,
         extra_modules=extra_modules,
-        # device_entrypoint of the graph walk; the boot-shim's shim at
+        # device_entrypoint of the graph walk.  The boot-shim's shim at
         # ``/<entrypoint_filename>`` overrides it in the merged file map.
         device_entrypoint=f"/{entrypoint_filename}",
         resource_prefix="/lib",

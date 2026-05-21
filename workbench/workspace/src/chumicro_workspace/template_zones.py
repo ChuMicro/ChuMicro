@@ -1,7 +1,7 @@
 """Two-zone classification for workspace files.
 
 Workspaces are created by cloning the template repo directly (there
-is no scaffolding CLI command); these zones govern only what
+is no scaffolding CLI command).  These zones govern only what
 `update` re-syncs into an existing workspace:
 
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,  <!-- noqa: CHU006 -->
@@ -14,8 +14,7 @@ is no scaffolding CLI command); these zones govern only what
   not explicitly tool-owned is left alone by `update`.  Covers
   `projects/<each-real-project>/`, `devices.yml`, `shared/`,
   `packages/`, `workspace.yml`, `secrets.toml`, and tracked-but-
-  user-editable files like `README.md` / `.gitignore` (the README
-  title is meant to be renamed; users add their own ignore lines).
+  user-editable files like `README.md` / `.gitignore`.
 
 The classification is computed against the *target* path (the path
 relative to the workspace root), not the template-payload path.
@@ -28,7 +27,7 @@ from pathlib import PurePosixPath
 
 
 class Zone(Enum):
-    """Two ownership zones; see module docstring."""
+    """Two ownership zones."""
 
     TOOL_OWNED = "tool-owned"
     USER_OWNED = "user-owned"
@@ -88,8 +87,4 @@ def classify(target_path: str) -> Zone:
         return Zone.TOOL_OWNED
     if any(posix.startswith(prefix) for prefix in TOOL_OWNED_PREFIXES):
         return Zone.TOOL_OWNED
-    # Default for unrecognized paths is user-owned — `projects/<my-project>/...`
-    # post-clone falls through here, and any custom files the user
-    # adds at the workspace root.  We err on the side of "don't
-    # touch" for `update`.
     return Zone.USER_OWNED

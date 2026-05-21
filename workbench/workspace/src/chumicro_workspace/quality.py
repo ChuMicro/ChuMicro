@@ -1,4 +1,4 @@
-"""Workspace quality knobs — `lint`, `coverage`.
+"""Workspace quality knobs: `lint`, `coverage`.
 
 Reads the ``quality:`` block on ``workspace.yml`` carrying these
 pass-through knobs:
@@ -16,16 +16,16 @@ This module reads the block, validates the shape, and surfaces a
 typed :class:`QualityConfig` the CLI consults.  Pure file read +
 shape validation; no execution side effects.
 
-* ``lint.enabled = false`` → ``python run.py lint`` becomes a
+* ``lint.enabled = false`` turns ``python run.py lint`` into a
   no-op with a hint (still discoverable; just doesn't run anything).
-* ``lint.tools`` → list selecting which tools to run.  Default runs
+* ``lint.tools`` selects which tools to run.  Default runs
   both ``ruff`` and ``chumicro-checks``; drop one to disable that
   tool without disabling the whole phase.  Empty list short-circuits
   to the same hint as ``enabled = false``.
-* ``lint.select`` → forwarded to ruff as ``--select <comma list>``
+* ``lint.select`` is forwarded to ruff as ``--select <comma list>``
   before any user-supplied passthrough args (so user `--` overrides
   win).
-* ``coverage_threshold`` → forwarded to pytest as
+* ``coverage_threshold`` is forwarded to pytest as
   ``--cov-fail-under=<n>``.
 
 Defaults match a "permissive workspace" stance: lint enabled, both
@@ -50,7 +50,7 @@ KNOWN_LINT_TOOLS: frozenset[str] = frozenset({"ruff", "chumicro-checks"})
 
 
 def _default_lint_tools() -> list[str]:
-    """Default ``tools`` list — both registered tools, fixed order."""
+    """Default ``tools`` list: both registered tools, fixed order."""
     return ["ruff", "chumicro-checks"]
 
 
@@ -159,7 +159,7 @@ def _coerce_lint(raw: Any, path: Path) -> LintConfig:
 def load_quality_config(workspace_yaml: Path) -> QualityConfig:
     """Load + validate the ``quality:`` block from a ``workspace.yml``.
 
-    Missing file or missing ``quality`` block → returns
+    A missing file or missing ``quality`` block returns a
     :class:`QualityConfig` with library-default values (lint
     enabled, no coverage gate).  Workspaces that haven't opted
     in get the no-op behavior.
@@ -186,7 +186,7 @@ def load_quality_config(workspace_yaml: Path) -> QualityConfig:
     elif isinstance(coverage_threshold_raw, bool) or not isinstance(
         coverage_threshold_raw, int,
     ):
-        # bool is a subclass of int — reject it explicitly so
+        # bool is a subclass of int, so reject it explicitly so
         # `coverage_threshold: true` doesn't silently become 1.
         raise WorkspaceConfigError(
             f"{workspace_yaml}: 'quality.coverage_threshold' must be "

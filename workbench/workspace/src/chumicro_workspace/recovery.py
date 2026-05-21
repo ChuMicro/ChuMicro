@@ -2,21 +2,13 @@
 
 When a project's own code fails on the device, the deploy command's
 captured traceback is the only signal the user gets.  Raw tracebacks
-are precise about *what* broke but offer no guidance on *why* — the
-common workspace-shaped causes (missing required config key,
-library not installed locally) all surface as terse stdlib errors
-that don't mention the workspace context that produced them.
+don't name the workspace-shaped cause.  Common ones (missing required
+config key, library not installed locally) all surface as terse stdlib
+errors that don't mention the workspace context that produced them.
 
 This module pattern-matches against the captured traceback and
 returns one or more :class:`AppErrorHint` rows the CLI can display
-under the traceback.  The hint table is intentionally small + easy
-to extend — each row is a regex + label + format-string template.
-
-Sibling to :mod:`chumicro_deploy.recovery` (which handles
-*transport* failures — wedged macOS FSKit mounts, no-REPL boards,
-etc.).  Different layer: ``chumicro-deploy``'s recovery is about
-"why didn't the deploy land"; this module is about "the deploy
-landed but the project crashed."
+under the traceback.
 """
 
 from __future__ import annotations
@@ -45,8 +37,7 @@ class AppErrorHint:
 #: so a ``{0}`` placeholder picks up group ``\1``.  Templates without
 #: placeholders ignore the groups silently.
 #:
-#: New patterns: append to the bottom (existing label semantics
-#: stay stable for downstream tooling that keys on the label).
+#: New patterns: append to the bottom.
 _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
     (
         re.compile(r"NameError: name '([^']+)' is not defined"),
@@ -97,12 +88,10 @@ def detect_hints(traceback_text: str) -> list[AppErrorHint]:
     """Return remediation hints matching patterns in *traceback_text*.
 
     Order matches the table — earlier patterns fire first.  Multiple
-    patterns can match the same traceback (e.g. an `ImportError`
-    that's triggered by a `NameError`-shaped chain); each independent
+    patterns can match the same traceback, and each independent
     match becomes its own hint.
 
-    Empty input or no match → empty list.  Callers that pass `None`
-    should guard upstream — this function doesn't.
+    Empty input or no match returns an empty list.
     """
     hints: list[AppErrorHint] = []
     if not traceback_text:
@@ -124,9 +113,9 @@ def detect_hints(traceback_text: str) -> list[AppErrorHint]:
 def format_hints(hints: list[AppErrorHint]) -> str:
     """Render *hints* as the block printed under a traceback.
 
-    Empty list → empty string (caller should skip the section
-    header entirely so an unmatched traceback doesn't get a
-    confusing "--- hints ---" with nothing under it).
+    Returns an empty string for an empty list, so an unmatched
+    traceback doesn't get a "--- hints ---" header with nothing
+    under it.
     """
     if not hints:
         return ""

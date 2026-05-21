@@ -8,10 +8,10 @@ Hardware examples — files declaring ``__chumicro_runtimes__`` listing
 a non-CPython runtime (CircuitPython or MicroPython) — verify only
 ``chumicro_*`` imports; platform built-ins (``board``, ``digitalio``,
 ``machine``, ``wifi``, ``network``) are skipped because they won't
-resolve on the host running the verifier.  The explicit marker is
-the contract — filename conventions (``circuitpython_*.py`` /
-``micropython_*.py``) are for human discoverability only and have
-no bearing on the verification path.
+resolve on the host.  The explicit marker is the contract.  Filename
+conventions (``circuitpython_*.py`` / ``micropython_*.py``) are for
+human discoverability only and have no bearing on the verification
+path.
 
 Examples may import sibling modules from their own ``examples/``
 directory (e.g. a per-library ``helpers.py``).  Each example's parent
@@ -30,7 +30,6 @@ _HARDWARE_RUNTIME_MARKERS = frozenset({"circuitpython", "micropython"})
 
 
 def _is_chumicro_module(name: str) -> bool:
-    """Return whether a module name belongs to the chumicro namespace."""
     return name.startswith("chumicro_")
 
 
@@ -136,8 +135,8 @@ def verify_examples(
     2. Detect whether it's hardware-only via the
        ``__chumicro_runtimes__`` marker.
     3. Walk imports — every ``chumicro_*`` import must resolve.
-       Non-``chumicro_`` imports must resolve only on non-hardware files;
-       hardware files skip them so platform built-ins don't fail on the host.
+       Non-``chumicro_`` imports must resolve only on non-hardware files.
+       Hardware files skip them so platform built-ins don't fail on the host.
 
     Args:
         package_dirs: Package directories whose ``examples/`` to verify.

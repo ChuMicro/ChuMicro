@@ -1,10 +1,10 @@
 """Snapshot-channel fetch backend for curated workspace libraries.
 
-Pull a chumicro library — and its transitive chumicro deps — out of
-a published snapshot channel into the user's workspace
+Pull a chumicro library, along with its transitive chumicro deps, out
+of a published snapshot channel into the user's workspace
 ``libraries/<name>/`` so the deploy walker treats it like any local
 library.  See :mod:`chumicro_workspace.library_channel` for the
-snapshot model and why a closure resolves to one tarball fetch.
+snapshot model.
 
 The acquired tree is the user's source to read, run, and edit.  A
 re-fetch never silently clobbers it: the current tree is moved aside
@@ -12,11 +12,9 @@ to ``_library-backups/<name>/<old-version>-<timestamp>/`` before the
 new one is written, so a user who adapted the library can lift their
 changes back.
 
-This module owns the placement primitive; the
-``chumicro-workspace library`` CLI surface and its coaching loop are
-built on top.  Failures are classified into a closed set
-(:class:`LibraryFetchFailureKind`) so the CLI coaches instead of
-dumping a traceback; the transport itself lives in
+This module owns the placement primitive.  Failures are classified
+into a closed set (:class:`LibraryFetchFailureKind`) so callers can
+coach instead of dumping a traceback.  The transport itself lives in
 :mod:`chumicro_workspace.library_channel`.
 """
 
@@ -34,9 +32,10 @@ from chumicro_workspace.dep_resolver import (
     transitive_closure,
 )
 
-#: Trees a curated copy carries — ``src/`` is what the deploy walker
-#: needs; ``tests/``/``examples/``/``docs/`` make it self-contained so
-#: a user can run and adapt the library without leaving the workspace.
+#: Trees a curated copy carries.  ``src/`` is what the deploy walker
+#: needs.  ``tests/``, ``examples/``, and ``docs/`` make the copy
+#: self-contained so a user can run and adapt the library without
+#: leaving the workspace.
 REQUIRED_TREES = ("src", "tests", "examples", "docs")
 
 #: Top-level files copied alongside the trees.
@@ -46,18 +45,15 @@ COPIED_FILES = ("pyproject.toml", "VERSION", "README.md")
 LIBRARY_BACKUPS_DIRNAME = "_library-backups"
 
 #: File the user drops into ``libraries/<name>/`` to claim the tree as
-#: their own — ``library add`` / ``update`` / ``switch-channel`` then
+#: their own.  ``library add`` / ``update`` / ``switch-channel`` then
 #: leave it untouched, even when a transitive walk would otherwise
 #: re-fetch it.  Dot-prefixed for parity with the deploy scope filter
 #: (skipped by both transports' on-device listings).  Delete the file
-#: to resume tracking the channel.  Same shape as the other
-#: artifact-level claims in this codebase (``__chumicro_test_support__``,
-#: ``__chumicro_runtimes__``): the marker lives with the artifact it
-#: governs, not in a side manifest.
+#: to resume tracking the channel.
 LOCAL_EDIT_SENTINEL = ".chumicro-local"
 
-#: Sentinel recorded in ``workspace.yml`` for ``--floating`` entries —
-#: "track the channel's latest snapshot" rather than a pinned tag.
+#: Sentinel recorded in ``workspace.yml`` for ``--floating`` entries.
+#: Means "track the channel's latest snapshot" rather than a pinned tag.
 HEAD = "HEAD"
 
 
@@ -121,8 +117,7 @@ def _backup_existing(destination: Path, workspace_root: Path) -> Path | None:
 
     Returns the backup directory, or ``None`` if there was nothing to
     back up.  The backup is keyed by the version that was on disk so a
-    user can tell which edits came from where; an untracked dir, never
-    committed (workspace ``.gitignore`` covers it).
+    user can tell which edits came from where.
     """
     if not destination.exists():
         return None
@@ -191,8 +186,8 @@ def _snapshot_and_tarball(channel: str, version: str, http_get):
     *version* is the :data:`HEAD` sentinel (latest snapshot) or a
     pinned snapshot tag.
     """
-    # Imported here so the transport stays a leaf the test fixtures
-    # can swap without importing this module's placement logic.
+    # Deferred so importing this module is cheap and test fixtures can
+    # swap the transport without pulling in placement logic.
     from chumicro_workspace.library_channel import (
         fetch_snapshot_tarball,
         resolve_snapshot,
@@ -209,7 +204,7 @@ def _snapshot_and_tarball(channel: str, version: str, http_get):
 
 
 def _real_http_get(url: str) -> bytes:
-    """Default transport — deferred so importing this module is cheap."""
+    """Default transport, deferred so importing this module is cheap."""
     from chumicro_workspace.library_channel import _real_http_get as backend
 
     return backend(url)
