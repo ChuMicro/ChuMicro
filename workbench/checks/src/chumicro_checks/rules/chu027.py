@@ -3,9 +3,9 @@
 The AGENTS.md "Code comments" non-negotiable forbids the same comment
 repeated across many sites. Flash is ~800 KB total on the target
 boards, and a comment pasted into ten files is ten copies of the same
-bytes in the shipped bundle.  Prose review missed it in the deploy
-2c audit (one ``mkfs / keep-set`` narrative landed in three files).
-This rule mechanizes the lexical half of the discipline.
+bytes in the shipped bundle. Prose review reliably misses lexical
+duplication across files, so this rule mechanizes the lexical half of
+the discipline.
 
 The engine: extract every comment block and module/class/function
 docstring under publishable trees, normalize to a tuple of lowercased
@@ -22,8 +22,8 @@ before tightening):
 * ``_INTRA_PACKAGE_THRESHOLD = 3`` — three matching blocks inside one
   package is the AGENTS.md "repeated across many sites" shape.
 * ``_CROSS_PACKAGE_THRESHOLD = 2`` — two matching blocks across two
-  packages is the canonical-home-missing shape (the ``the one path
-  that stages it`` testing.py docstring family is the worked case).
+  packages indicate one package should own the explanation and the
+  other should cross-reference, rather than restating the same fact.
 
 Scope: ``libraries/*/src/``, ``workbench/*/src/``,
 ``support/test_harness/``.  ``tests/`` and ``functional_tests/`` are
@@ -183,10 +183,10 @@ def _extract_docstring_blocks(
             continue
         if not isinstance(first.value.value, str):
             continue
-        # Check the def / class line (above the docstring) for noqa.
-        # For module-level docstrings the docstring itself is line 1 —
-        # there's no def line to suppress from; the rule's
-        # ``_is_self_suppressed`` fallback covers the line 1 case.
+        # Class and function docstrings are suppressible by placing
+        # a noqa marker for this rule on the def / class header line
+        # above them. Module-level docstrings have no such header
+        # line and are not suppressible through this check.
         suppressed = False
         if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
             def_line = node.lineno

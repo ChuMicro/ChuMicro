@@ -2,10 +2,10 @@
 
 Regression guard for the partial-supersession bloat pattern where a
 corrected principle ends up stated in full in *both* an older ADR's
-edited section AND the newer ADR that supersedes it.  The
-``0038§3 ↔ 0075`` pair was the worked case (one invariant stated
-twice across two records), manually collapsed in commit ``165c9331``;
-this rule keeps the bloat from re-introducing itself.
+edited section AND the newer ADR that supersedes it. When an in-place
+supersession edits only the older record, the newer one restates the
+same principle, and the reader hits the same paragraph twice across
+two files.
 
 Engine A applied to markdown paragraphs across
 ``plans/decisions/*.md`` (excluding ``README.md``):
