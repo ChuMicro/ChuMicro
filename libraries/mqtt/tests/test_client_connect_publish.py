@@ -1,5 +1,5 @@
 """mqtt client: socket blocking mode, connect, disconnect, QoS 0/1
-publish, subscribe. Sibling slices: other test_client_*.py."""
+publish, subscribe."""
 
 from chumicro_mqtt import (
     MQTTClient,
@@ -249,8 +249,7 @@ class TestPublishQos1:
         )
         _drive(client, ticks, count=1)  # Send both.
 
-        # Broker pubacks them out of order — the original client got
-        # confused here.
+        # Broker pubacks them out of order.
         sock.enqueue_recv(canned_puback_bytes(packet_id=2))
         sock.enqueue_recv(canned_puback_bytes(packet_id=1))
         _drive(client, ticks, count=1)

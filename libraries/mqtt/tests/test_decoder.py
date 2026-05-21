@@ -216,7 +216,8 @@ def _drive_until_done(decoder: PacketDecoder, packet: bytes, chunk_size: int = 3
 
 
 class TestIntactTier:
-    """Tier 2: PUBLISH > rx_buffer_size, ≤ max_message_bytes → ParsedPublish (intact)."""
+    """Tier 2: a PUBLISH between rx_buffer_size and max_message_bytes
+    delivers as ParsedPublish (intact)."""
 
     def test_publish_between_steady_and_cap_delivers_intact(self) -> None:
         """A 200-byte payload on a 64-byte rx + 8192 cap routes through tier 2."""
@@ -247,7 +248,7 @@ class TestIntactTier:
 
 
 class TestOversizedTier:
-    """Tier 3: PUBLISH > max_message_bytes → _OversizedMessage (payload dropped)."""
+    """Tier 3: a PUBLISH > max_message_bytes delivers as _OversizedMessage (payload dropped)."""
 
     def test_publish_above_cap_drains_and_reports_length(self) -> None:
         decoder = PacketDecoder(
@@ -266,7 +267,8 @@ class TestOversizedTier:
         assert oversized[0].reported_length == 205
 
     def test_oversize_topic_emits_none_topic(self) -> None:
-        """Topic alone exceeds rx_buffer_size → event with topic=None (deadlock fix)."""
+        """When the topic alone exceeds rx_buffer_size, the event
+        reports topic=None (deadlock fix)."""
         decoder = PacketDecoder(
             rx_buffer_size=16,        # tiny — even modest topics overflow
             max_message_bytes=32,

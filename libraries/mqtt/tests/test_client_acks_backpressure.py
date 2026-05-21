@@ -221,11 +221,11 @@ class TestSocketFactorySelfHeal:
 
         client.state = ProtocolState.FAILED
         _drive(client, ticks, count=5)
-        # No factory → no self-heal, stays FAILED.
+        # Without a factory there's no self-heal: client stays FAILED.
         assert client.state == ProtocolState.FAILED
 
     def test_factory_raise_keeps_client_failed(self) -> None:
-        """Wifi still down → factory raises → client stays FAILED, retries next tick."""
+        """Factory raises while wifi is down.  Client stays FAILED and retries next tick."""
         ticks = FakeTicks()
         initial_sock = FakeSocket()
         initial_sock.enqueue_recv(canned_connack_bytes(return_code=0))

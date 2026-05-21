@@ -119,7 +119,7 @@ class TestTopicMatches:
             )
 
     def test_hash_must_be_last(self) -> None:
-        # The original client returns False here per spec (#'s only
-        # legal as the LAST level).  Implementation: # in non-final
-        # position is treated as exact-match against literal "#".
+        # Per spec, # is only legal as the LAST topic level.  A # in
+        # non-final position is treated as exact-match against the
+        # literal "#" character.
         assert not topic_matches("a/b", "#/b")

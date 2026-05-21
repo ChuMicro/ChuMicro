@@ -28,7 +28,7 @@ class MQTTError(Exception):
 class MQTTProtocolError(MQTTError):
     """The broker sent something the spec doesn't allow.
 
-    Always a peer or network bug — the right response is usually
+    Always a peer or network bug, so the right response is usually
     disconnect + reconnect.
     """
 
@@ -45,23 +45,23 @@ class MQTTConnectError(MQTTError):
 
 
 class MQTTBackpressureError(MQTTError):
-    """The outbound queue is full; caller must back off.
+    """The outbound queue is full, so the caller must back off.
 
     Raised by :meth:`MQTTClient.publish` (and friends) when appending
-    another packet would exceed ``max_tx_queue_size``.  The client
-    is otherwise unaffected — drain by calling :meth:`MQTTClient.handle`
-    once and retry the publish.
+    another packet would exceed ``max_tx_queue_size``.  The client is
+    otherwise unaffected: call :meth:`MQTTClient.handle` once to drain,
+    then retry the publish.
     """
 
 
 class UnsupportedQoSError(MQTTError):
-    """User requested QoS 2.  Constants are reserved; handlers aren't wired."""
+    """User requested QoS 2.  Constants are reserved, but handlers aren't wired."""
 
 
 # ---------------------------------------------------------------------------
-# Packet types — first byte of the fixed header.  Most have flags zero'd;
-# PACKET_SUBSCRIBE (0x82) and PACKET_UNSUBSCRIBE (0xA2) carry the
-# spec-required 0x02 low-nibble flag bit.
+# Packet-type bytes used as the first byte of the fixed header.  Most
+# carry zeroed flag bits in the low nibble.  PACKET_SUBSCRIBE (0x82)
+# and PACKET_UNSUBSCRIBE (0xA2) require 0x02 in the low nibble per spec.
 # ---------------------------------------------------------------------------
 
 PACKET_CONNECT = const(0x10)
@@ -80,8 +80,8 @@ PACKET_PINGREQ = b"\xc0\x00"
 #: Pre-encoded DISCONNECT (no payload, two bytes total).
 PACKET_DISCONNECT = b"\xe0\x00"
 
-# Reserved for QoS 2 (not implemented; constants kept so future work
-# can wire handlers without an audit pass).
+# Reserved for QoS 2.  The constants are kept though QoS 2 handlers
+# are not implemented.
 PACKET_PUBREC = const(0x50)
 PACKET_PUBREL = const(0x62)
 PACKET_PUBCOMP = const(0x70)
@@ -145,10 +145,10 @@ def encode_string(value):
 
 
 # Internal append-via-pack_into helpers used by every encoder.  Cuts
-# per-pack allocation in half on MicroPython (bench: 128 → 64 B/call
-# on MP 1.26 unix-port) by extending the destination with a pre-built
-# zero literal and writing directly with ``struct.pack_into`` instead
-# of allocating a fresh ``bytes`` from ``struct.pack``.
+# per-pack allocation in half on MicroPython by extending the
+# destination with a pre-built zero literal and writing directly with
+# ``struct.pack_into`` instead of allocating a fresh ``bytes`` from
+# ``struct.pack``.
 _ZERO2 = b"\x00\x00"
 
 
@@ -169,11 +169,11 @@ def _append_string(buffer, value):
 def _topic_levels_match(topic_levels, pattern_levels):
     """Match pre-split topic / pattern level sequences.
 
-    Internal hot-path helper for ``MQTTClient._handle_inbound_publish`` —
-    the public :func:`topic_matches` splits both inputs every call; the
-    client caches the pattern split at registration time and the topic
-    split once per inbound message, then matches N stored patterns
-    against the one cached split.
+    The public :func:`topic_matches` splits both inputs every call.
+    A caller matching N patterns against one inbound topic caches
+    the pattern splits at registration time and the topic split once
+    per inbound message, then matches each stored pattern against
+    the cached topic split through this helper.
     """
     for index, pattern_level in enumerate(pattern_levels):
         if pattern_level == "#":
@@ -191,7 +191,7 @@ def _topic_levels_match(topic_levels, pattern_levels):
 def topic_matches(topic, pattern):
     """Return ``True`` when *topic* matches the wildcard *pattern*.
 
-    ``+`` matches one topic level; ``#`` matches any number of levels
+    ``+`` matches one topic level.  ``#`` matches any number of levels
     and must be the last character of the pattern.
     """
     return _topic_levels_match(topic.split("/"), pattern.split("/"))
@@ -305,7 +305,7 @@ def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
     if isinstance(payload, str):
         payload = payload.encode("utf-8")
 
-    # First byte: 0x30 | (qos << 1) | retain | (dup_flag << 3 — always 0 here).
+    # First byte: 0x30 | (qos << 1) | retain | (dup_flag << 3, always 0 here).
     fixed_byte_one = PACKET_PUBLISH | (qos << 1)
     if retain:
         fixed_byte_one |= 0x01
@@ -342,7 +342,7 @@ def encode_subscribe(*, packet_id, subscriptions):
         _append_string(body, topic)
         body.append(qos & 0x03)
 
-    # SUBSCRIBE first byte is 0x82 — the 0x02 low-nibble is required by spec.
+    # SUBSCRIBE first byte is 0x82.  The 0x02 low-nibble is required by spec.
     return _finalize_packet(PACKET_SUBSCRIBE, bytes(body))
 
 
@@ -364,7 +364,7 @@ def encode_unsubscribe(*, packet_id, topics):
     return _finalize_packet(PACKET_UNSUBSCRIBE, bytes(body))
 
 
-#: Fixed 2-byte PUBACK header — always ``PACKET_PUBACK`` followed by remaining-length 2.
+#: Fixed 2-byte PUBACK header: ``PACKET_PUBACK`` followed by remaining-length 2.
 _PUBACK_FIXED_HEADER = bytes((PACKET_PUBACK, 2))
 
 
@@ -380,18 +380,19 @@ def encode_puback(*, packet_id):
 # ---------------------------------------------------------------------------
 
 #: Default pre-allocated steady-state buffer size (bytes).  Inbound PUBLISHes
-#: that fit within this size parse inline without any allocation; larger
+#: that fit within this size parse inline without any allocation.  Larger
 #: messages either get a one-shot intact buffer (tier 2) or drain via
-#: rolling discard (tier 3) — see :class:`PacketDecoder`.
+#: rolling discard (tier 3).  See :class:`PacketDecoder`.
 DEFAULT_RX_BUFFER_SIZE = const(256)
 
 #: Default cap on intact-delivery for a single inbound PUBLISH.  Messages
 #: at or below this size are delivered to ``on_message`` with their full
 #: payload (allocated one-shot, freed after delivery).  Above this size
-#: the configured ``WhenOversized`` policy applies — payload is dropped
-#: via rolling discard, no heap allocation beyond the steady-state buffer.
-#: Default sized for typical embedded-board payloads on the 256 KB-RAM
-#: minimum-tier board; raise for legitimately larger inbound messages.
+#: the configured ``WhenOversized`` policy applies: the payload is dropped
+#: via rolling discard, with no heap allocation beyond the steady-state
+#: buffer.  Default sized for typical embedded-board payloads on the
+#: 256 KB-RAM minimum-tier board.  Raise for legitimately larger inbound
+#: messages.
 DEFAULT_MAX_MESSAGE_BYTES = const(8 * 1024)
 
 
@@ -431,12 +432,12 @@ class ParsedAck:
 class _OversizedMessage:
     """Signal that an inbound PUBLISH exceeded ``max_message_bytes``.
 
-    The payload itself is gone — the decoder drained it through a
+    The payload itself is gone: the decoder drained it through a
     rolling steady-state sink without allocating a payload-sized
     buffer.  ``topic`` is ``None`` when the topic itself exceeded
     ``rx_buffer_size`` and couldn't be parsed.  ``reported_length`` is
     the MQTT remaining-length value (topic prelude + payload),
-    diagnostic only — no payload bytes are recoverable.
+    diagnostic only.  No payload bytes are recoverable.
     """
 
     def __init__(self, *, topic, reported_length, qos, packet_id):
@@ -448,7 +449,7 @@ class _OversizedMessage:
 
 # Drain modes used by PacketDecoder for an in-progress inbound PUBLISH
 # that exceeded ``rx_buffer_size``.  ``_DRAIN_INTACT`` fills a one-shot
-# payload-sized buffer (tier 2); ``_DRAIN_OVERSIZED`` rolls the payload
+# payload-sized buffer (tier 2).  ``_DRAIN_OVERSIZED`` rolls the payload
 # through the steady-state buffer without keeping any of it (tier 3).
 _DRAIN_NONE = const(0)
 _DRAIN_INTACT = const(1)
@@ -469,10 +470,10 @@ class PacketDecoder:
 
     Tier 3 (oversized): packets > ``max_message_bytes``.  No allocation
     beyond the steady-state buffer.  Payload drains via rolling
-    discard — each pass refills the steady-state buffer from the
+    discard: each pass refills the steady-state buffer from the
     socket, advances a "still to drain" counter, then resets for the
-    next pass.  Emits :class:`_OversizedMessage` once drained; the
-    payload bytes are gone.
+    next pass.  Emits :class:`_OversizedMessage` once drained, with
+    the payload bytes gone.
 
     Usage::
 
@@ -494,27 +495,25 @@ class PacketDecoder:
         max_message_bytes=DEFAULT_MAX_MESSAGE_BYTES,
     ):
         self._buffer = bytearray(rx_buffer_size)
-        # Cached memoryview into ``_buffer`` — the steady-state buffer
+        # Cached memoryview into ``_buffer``.  The steady-state buffer
         # is allocated once and never resized, so the view is stable
-        # for the parser's lifetime.  Cached to avoid constructing a
+        # for the parser's lifetime.  Caching avoids constructing a
         # fresh memoryview on every ``fill_buffer``/``read_next`` call
         # (per-packet hot path on a busy MQTT subscriber).
         self._buffer_view = memoryview(self._buffer)
         self._buffer_size = rx_buffer_size
-        # Read-cursor pattern (mirrors :class:`chumicro_requests._wire.
-        # ResponseParser`): ``_buffer_length`` is the write end, fed by
-        # ``advance()``; ``_read_offset`` is the consume start, advanced
+        # Read-cursor pattern: ``_buffer_length`` is the write end, fed by
+        # ``advance()``.  ``_read_offset`` is the consume start, advanced
         # by ``_consume()``.  Each parsed packet bumps the cursor
         # without memmove.  Compaction (in-place memmove of the live
         # tail to the buffer head) only triggers when the cursor passes
-        # the halfway mark, amortizing the per-packet allocation cost
-        # of the old "shift after every drain" shape.
+        # the halfway mark, amortizing the per-packet copy cost.
         self._buffer_length = 0
         self._read_offset = 0
         self._max_message_bytes = max_message_bytes
         # In-flight oversized-PUBLISH drain state.  ``_DRAIN_NONE`` while
-        # the steady-state parse path is active; ``_DRAIN_INTACT`` while
-        # filling a tier-2 payload buffer; ``_DRAIN_OVERSIZED`` while
+        # the steady-state parse path is active.  ``_DRAIN_INTACT`` while
+        # filling a tier-2 payload buffer.  ``_DRAIN_OVERSIZED`` while
         # rolling-discarding a tier-3 payload through the steady-state
         # buffer.
         self._drain_mode = _DRAIN_NONE
@@ -534,7 +533,7 @@ class PacketDecoder:
         if self._drain_mode == _DRAIN_INTACT:
             return self._drain_payload_view[self._drain_payload_filled:]
         # Oversized mode reuses the steady-state buffer as a rolling
-        # sink — bytes are written, counted, and discarded.  Steady
+        # sink: bytes are written, counted, and discarded.  Steady
         # mode appends to the cursor.
         return self._buffer_view[self._buffer_length:]
 
@@ -559,7 +558,7 @@ class PacketDecoder:
             return
         if self._drain_mode == _DRAIN_OVERSIZED:
             self._drain_remaining -= nbytes
-            # The bytes are being discarded — reset the rolling sink
+            # The bytes are being discarded, so reset the rolling sink
             # for the next pass.  We never read them back.
             self._buffer_length = 0
             return
@@ -614,12 +613,11 @@ class PacketDecoder:
         return packet
 
     def _consume(self, count):
-        """Advance the read cursor by *count*; compact when half-consumed.
+        """Advance the read cursor by *count*, compacting when half-consumed.
 
-        Mirrors the read-cursor pattern in :class:`chumicro_requests._wire.
-        ResponseParser._consume`: the per-packet cost is one integer
-        add; the in-place memmove that frees up tail capacity only fires
-        when the cursor passes the halfway mark.
+        The per-packet cost is one integer add.  The in-place memmove
+        that frees up tail capacity only fires when the cursor passes
+        the halfway mark.
         """
         self._read_offset += count
         if self._read_offset * 2 >= self._buffer_size:
@@ -648,23 +646,23 @@ class PacketDecoder:
         )
 
     def _parse_publish(self, fixed_byte, view, body_start, body_end):
-        # qos bits are bits 1-2 of the fixed-header byte; retain is bit 0.
+        # qos bits are bits 1-2 of the fixed-header byte.  retain is bit 0.
         qos = (fixed_byte >> 1) & 0x03
         retain = bool(fixed_byte & 0x01)
         # A PUBLISH shorter than its 2-byte topic-length prefix is
-        # malformed; without this the struct.unpack below raises a raw
-        # struct/ValueError the caller doesn't classify as protocol.
+        # malformed.  Without this check, the struct.unpack below
+        # raises a raw struct/ValueError the caller doesn't classify
+        # as protocol.
         if body_end - body_start < 2:
             raise MQTTProtocolError("PUBLISH missing 2-byte topic-length prefix")
-        # ``struct.unpack`` accepts memoryview directly — no ``bytes()``
-        # wrap needed, which would otherwise copy 2 bytes per integer
-        # field (4-6 wasted allocs per PUBLISH).
+        # ``struct.unpack`` accepts memoryview directly, sparing the
+        # ``bytes()`` wrap that would copy 2 bytes per integer field.
         topic_length = struct.unpack(">H", view[body_start:body_start + 2])[0]
         topic_start = body_start + 2
         topic_end = topic_start + topic_length
         if topic_end > body_end:
             raise MQTTProtocolError("PUBLISH topic length exceeds remaining bytes")
-        # 3-arg str() accepts a memoryview directly — skips the
+        # 3-arg str() accepts a memoryview directly, skipping the
         # bytes() copy that ``bytes(view[a:b]).decode()`` would do.
         topic = str(view[topic_start:topic_end], "utf-8")
         cursor = topic_end
@@ -676,8 +674,8 @@ class PacketDecoder:
                 )
             packet_id = struct.unpack(">H", view[cursor:cursor + 2])[0]
             cursor += 2
-        # Payload is returned to the caller as ``bytes`` (immutable +
-        # decoupled from the parser's reusable buffer); one copy.
+        # Payload is returned to the caller as ``bytes`` (immutable,
+        # decoupled from the parser's reusable buffer).
         payload = bytes(view[cursor:body_end])
         return ParsedPublish(
             topic=topic,
@@ -719,12 +717,12 @@ class PacketDecoder:
 
         For a PUBLISH, the fixed header + varlen + topic-prelude
         (length-prefix + topic + optional packet_id) generally fits in
-        the steady-state buffer; the payload doesn't.  Parse the
+        the steady-state buffer, but the payload doesn't.  Parse the
         prelude, then route into tier 2 (intact delivery, one-shot
         payload-sized buffer) or tier 3 (rolling discard, no extra
         allocation) based on ``total_length`` vs ``max_message_bytes``.
 
-        Non-PUBLISH oversize is a protocol error — broker shouldn't be
+        Non-PUBLISH oversize is a protocol error: a broker shouldn't be
         sending a 300-byte SUBACK.
 
         Topic-too-long case: when the prelude itself doesn't fit in
@@ -802,8 +800,8 @@ class PacketDecoder:
             )
             return self._maybe_finish_intact()
 
-        # Tier 3: oversized.  Discard the payload via rolling drain;
-        # no extra allocation beyond the steady-state buffer.
+        # Tier 3: oversized.  Discard the payload via rolling drain
+        # with no extra allocation beyond the steady-state buffer.
         self._enter_oversized_drain(
             bytes_still_on_wire=total_length - live,
             topic=topic,
@@ -818,7 +816,7 @@ class PacketDecoder:
         payload_length, payload_already_in_steady, payload_start_in_buffer, view,
     ):
         """Allocate the tier-2 buffer and seed it with bytes already in steady."""
-        # ``bytearray(0)`` is valid — empty-payload PUBLISH on a
+        # ``bytearray(0)`` is valid: an empty-payload PUBLISH on a
         # too-small buffer enters tier 2 with payload_length=0 and
         # finishes immediately.
         self._drain_payload_buffer = bytearray(payload_length)
@@ -833,7 +831,7 @@ class PacketDecoder:
         self._drain_qos = qos
         self._drain_retain = retain
         self._drain_packet_id = packet_id
-        # Reset steady-state buffer — prelude + carried-over payload
+        # Reset steady-state buffer.  Prelude and carried-over payload
         # bytes have been consumed.
         self._buffer_length = 0
         self._read_offset = 0
@@ -848,9 +846,8 @@ class PacketDecoder:
         self._drain_qos = qos
         self._drain_packet_id = packet_id
         self._drain_message_length = message_length
-        # Discard anything still in the steady-state buffer — we've
-        # extracted everything we need (prelude already parsed; tier-3
-        # payload bytes aren't kept).
+        # Discard anything still in the steady-state buffer: prelude
+        # already parsed, tier-3 payload bytes aren't kept.
         self._buffer_length = 0
         self._read_offset = 0
         self._drain_mode = _DRAIN_OVERSIZED

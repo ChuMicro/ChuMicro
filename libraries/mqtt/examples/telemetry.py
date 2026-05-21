@@ -3,11 +3,11 @@
 Brings wifi up via the local ``helpers`` module, connects to a
 configured MQTT broker, publishes a synthetic reading to ``<topic>``
 every ``PUBLISH_INTERVAL_S`` seconds with QoS 1.  Subscribes to a
-control topic alongside so the device receives commands inbound —
+control topic alongside so the device receives commands inbound as
 round-trip proof, not publish-only fire-and-forget.
 
 Demonstrates the runner-shaped client driving real MQTT traffic
-while a simple LED-style counter keeps incrementing — proof that
+while a simple LED-style counter keeps incrementing as proof that
 the in-flight publish never block-calls the loop while waiting
 for PUBACK.
 
@@ -28,7 +28,7 @@ deploy pipeline) via the flat-key API:
 
 When ``runtime_config.msgpack`` isn't present (raw single-file
 deploys), wifi creds fall back to the placeholder constants below
-— edit them first.  The MQTT broker has no fallback: set
+(edit them first).  The MQTT broker has no fallback: set
 ``BROKER_HOST`` and ``BROKER_PORT`` (raw deploy) or
 ``mqtt.broker.host`` / ``mqtt.broker.port`` in your
 ``runtime_config.msgpack`` (workspace deploy) before running.  The
@@ -81,7 +81,7 @@ topic = config.get("telemetry.topic", TOPIC)
 command_topic = config.get("telemetry.command_topic", COMMAND_TOPIC)
 sensor_id = config.get("telemetry.sensor_id", SENSOR_ID)
 
-# Resolve broker host/port from config first, then example constants —
+# Resolve broker host/port from config first, then example constants.
 # MQTTClient.from_config refuses to construct without them, so the
 # dial-target is loud, not implicit.
 if "mqtt.broker.host" not in config:
@@ -126,7 +126,7 @@ print(f"Subscribed to {command_topic}")
 
 
 def _synthetic_reading(elapsed_seconds: float) -> float:
-    """Synthetic sine-wave reading; replace with your real sensor."""
+    """Synthetic sine-wave reading.  Replace with your real sensor."""
     return round(20.0 + 5.0 * math.sin(elapsed_seconds / 30.0), 2)
 
 

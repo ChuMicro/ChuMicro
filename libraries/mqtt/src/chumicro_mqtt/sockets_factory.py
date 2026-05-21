@@ -1,6 +1,6 @@
 """Default :mod:`chumicro_sockets` wiring for :class:`MQTTClient`.
 
-Opt-in submodule — the package's ``__init__.py`` does not import it,
+Opt-in: the package's ``__init__.py`` does not import this submodule,
 so users who pass their own ``socket`` or ``socket_factory`` never
 pull :mod:`chumicro_sockets` into the deploy graph.
 """
@@ -11,9 +11,9 @@ from chumicro_config import MissingConfigKey
 def chumicro_sockets_factory(config, *, radio=None, ssl_context=None):
     """Build a ``() -> TCPClientSocket`` factory from *config*.
 
-    Reads ``mqtt.broker.host`` / ``mqtt.broker.port`` — both required;
-    the library refuses to silently dial a third-party broker.  Routes
-    through :func:`chumicro_sockets.tls_client_socket` when
+    Reads ``mqtt.broker.host`` / ``mqtt.broker.port``.  Both are
+    required so the library never silently dials a third-party broker.
+    Routes through :func:`chumicro_sockets.tls_client_socket` when
     *ssl_context* is supplied, otherwise plain TCP.  Missing keys raise
     :class:`chumicro_config.MissingConfigKey`.
     """
