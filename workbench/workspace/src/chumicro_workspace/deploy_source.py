@@ -1,10 +1,10 @@
 """``FileSource`` composition that injects the merged runtime config.
 
-Each deploy ships the project's app code together with the merged
+Each deploy ships the project's app code alongside the merged
 ``/runtime_config.msgpack`` so users don't have to regenerate the
-config before deploying.  This module's pieces compose with the
-``FileSource`` producers in ``chumicro-deploy`` to do that in one
-:meth:`Deployer.deploy` call.
+config before deploying.  The classes here compose with the
+``FileSource`` producers in ``chumicro-deploy`` so a single
+``Deployer.deploy_diff(source)`` call ships both.
 
 * :class:`WithRuntimeConfig` decorates any inner ``FileSource``
   (``DirectorySource``, ``FileMapSource``, ``ImportGraphSource``,
@@ -13,7 +13,7 @@ config before deploying.  This module's pieces compose with the
 * :func:`project_directory_source` builds a ``DirectorySource``
   from ``projects/<name>/`` (skipping ``project_config.toml``, the
   ``_generated/`` output directory, and the usual cache
-  artifacts) and wraps it with :class:`WithRuntimeConfig``.
+  artifacts) and wraps it with :class:`WithRuntimeConfig`.
   Covers the self-contained project-directory case.
 
 Projects that pull in shared libraries elsewhere in the workspace
