@@ -1,7 +1,7 @@
 """Sensor threshold alert: gate-based check/handle pattern.
 
 ``check()`` reads the sensor and returns whether the handler should
-fire.  The runner calls ``check()`` on schedule; when it returns
+fire.  The runner calls ``check()`` on schedule.  When it returns
 True, ``handle()`` fires.
 
 On a real board, ``read_temperature()`` would be a fast I2C or ADC
@@ -90,8 +90,8 @@ runner = Runner()
 sensor = TemperatureSensor(threshold=30.0)
 
 # Register the sensor as an object-based task.  The runner
-# calls sensor.check(now_ms) on each tick (gated by period_ms);
-# when check() returns True, sensor.handle(now_ms) fires.
+# calls sensor.check(now_ms) on each tick (gated by period_ms).
+# When check() returns True, sensor.handle(now_ms) fires.
 runner.add(sensor, period_ms=1000)
 
 print("Monitoring temperature...\n")

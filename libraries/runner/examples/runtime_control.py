@@ -61,8 +61,8 @@ runner = Runner()
 log_handle = runner.add_periodic(log_data, period_ms=1000)
 wifi_handle = runner.add_periodic(check_wifi, period_ms=2000)
 
-# A Heartbeat used independently — not managed by the runner.
-# Useful for timing decisions that don't fit the task pattern,
+# Heartbeat used standalone, not registered with the runner.
+# Use it for timing decisions outside the runner's task model,
 # like switching operating modes after a duration.
 mode_timer = Heartbeat(period_ms=10000)
 

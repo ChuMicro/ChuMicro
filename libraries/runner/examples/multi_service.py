@@ -111,13 +111,13 @@ class LightSensor:
 
 runner = Runner()
 
-# 1. Periodic health check — fires every 2 seconds.
+# 1. Periodic health check, fires every 2 seconds.
 runner.add_periodic(
     lambda now_ms: print(f"  [{now_ms} ms] health: OK"),
     period_ms=2000,
 )
 
-# 2. Object-based motion detector — checked every tick.
+# 2. Object-based motion detector, checked every tick.
 runner.add(MotionDetector())
 
 # 3. Callable check + handler (light sensor).
