@@ -26,9 +26,9 @@ heartbeat = Heartbeat(period_ms=1000)
 print("Running heartbeat blink...\n")
 
 while True:
-    # Capture the current time once and pass it to all timing checks.
-    # This ensures consistent behavior even if the checks take time
-    # to execute.
+    # Capture the current time once per loop.  Passing the same now
+    # value to every timing check means they all see the same moment,
+    # with no drift between back-to-back calls.
     now = ticks_ms()
 
     # poll() returns True once per period and advances the timer.

@@ -38,7 +38,6 @@ while True:
 
         # Reset to "now".  This is simple but can drift slightly
         # because the sleep granularity adds a few ms each cycle.
-        # Heartbeat avoids this by advancing by the period instead.
         last_fire = now
 
     # In a real project, the rest of your main loop goes here.
