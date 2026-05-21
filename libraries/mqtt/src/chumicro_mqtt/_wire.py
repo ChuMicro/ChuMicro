@@ -440,10 +440,8 @@ class _OversizedMessage:
         self.packet_id = packet_id
 
 
-# Drain modes used by PacketDecoder for an in-progress inbound PUBLISH
-# that exceeded ``rx_buffer_size``.  ``_DRAIN_INTACT`` fills a one-shot
-# payload-sized buffer (tier 2).  ``_DRAIN_OVERSIZED`` rolls the payload
-# through the steady-state buffer without keeping any of it (tier 3).
+# Drain modes for ``PacketDecoder._drain_mode``.  See the class
+# docstring below for the tier model.
 _DRAIN_NONE = const(0)
 _DRAIN_INTACT = const(1)
 _DRAIN_OVERSIZED = const(2)
@@ -505,8 +503,8 @@ class PacketDecoder:
         self._read_offset = 0
         self._max_message_bytes = max_message_bytes
         # Drain state for an in-progress inbound PUBLISH that
-        # overflowed ``rx_buffer_size``.  See the ``_DRAIN_*`` constants
-        # above for what each value means.
+        # overflowed ``rx_buffer_size``.  See the class docstring above
+        # for the tier model.
         self._drain_mode = _DRAIN_NONE
         self._drain_payload_buffer = None
         self._drain_payload_view = None
