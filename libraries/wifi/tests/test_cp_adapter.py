@@ -11,8 +11,8 @@ Hardware-side coverage (real ``wifi.radio`` against a real AP)
 lives under ``functional_tests/``.
 """
 
-#: Host-lane only — exercises a runtime-specific adapter through host
-#: fakes and asserts off-target behaviour; never staged to a device.
+#: Host-lane only: exercises a runtime-specific adapter through host
+#: fakes and asserts off-target behaviour.  Never staged to a device.
 __chumicro_host_only__ = True
 
 from chumicro_test_harness import raises
@@ -114,7 +114,7 @@ def test_connect_returns_false_on_oserror() -> None:
 
     CircuitPython raises both ``TimeoutError`` and
     ``ConnectionError`` on the failure paths the adapter cares
-    about; both are subclasses of ``OSError``.  The adapter catches
+    about.  Both are subclasses of ``OSError``.  The adapter catches
     the parent because MicroPython doesn't expose the targeted
     subclasses as builtins, and the source has to load on every
     runtime.
@@ -190,7 +190,7 @@ def test_ip_returns_none_if_radio_reports_no_address_even_when_linked() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Integration via WifiService — auto-detect path lazy-imports CpWifiAdapter
+# Integration via WifiService: auto-detect path lazy-imports CpWifiAdapter
 # ---------------------------------------------------------------------------
 
 

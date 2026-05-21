@@ -1,4 +1,4 @@
-"""WifiService — connect to a real AP, print state transitions.
+"""WifiService: connect to a real AP, print state transitions.
 
 Reads `wifi.ssid` / `wifi.password` from `runtime_config.msgpack`
 (deployed from `secrets.toml` by `chumicro-workspace`).

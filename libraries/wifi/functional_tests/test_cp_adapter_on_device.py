@@ -5,7 +5,7 @@ Runs only on CircuitPython boards.  The module-level
 skip the wrong-runtime parametrization, so MP boards don't even try
 to import the file.
 
-These tests do **not** attempt to associate with a real AP — they
+These tests do **not** attempt to associate with a real AP.  They
 target the contract between the adapter and the substrate (configure
 / connect / is_linked / disconnect / ip), using a deliberate
 non-existent SSID so the connect call returns ``False`` within the
@@ -63,7 +63,7 @@ def test_connect_to_nonexistent_ssid_returns_false_within_timeout() -> None:
     """Substrate timeout/refusal maps to a clean ``False``.
 
     Exercises the substrate's failure path with a deliberate non-
-    existent SSID + short timeout — answers "how long does CP's
+    existent SSID + short timeout.  Answers "how long does CP's
     blocking connect stall on a routable-but-unresponsive AP?" on
     real hardware without needing live wifi.  Wraps the call in
     ``stop_station`` cleanup so the next test starts fresh.

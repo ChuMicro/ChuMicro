@@ -1,4 +1,4 @@
-"""``WifiService`` — state machine + reconnect supervisor.
+"""``WifiService``: state machine + reconnect supervisor.
 
 Drives the substrate adapter through connect, monitor, and
 reconnect, and tracks state in the runner's tick loop.
@@ -15,7 +15,7 @@ State machine (``WifiState`` constants)::
 
 Runner contract: ``check(now_ms)`` returns ``True`` when the next
 event is due (initial connect, reconnect attempt, link-down
-detection); ``handle(now_ms)`` does one tick of substrate work.
+detection).  ``handle(now_ms)`` does one tick of substrate work.
 """
 
 import sys
@@ -28,9 +28,9 @@ from chumicro_wifi.config import WifiConfig
 class WifiState:
     """String-sentinel state names for :class:`WifiService`.
 
-    Plain strings — :mod:`enum` is unavailable on some MicroPython
-    boards.  Compare via ``state == WifiState.CONNECTED``.  Do not
-    instantiate.
+    Plain strings, because :mod:`enum` is unavailable on some
+    MicroPython boards.  Compare via ``state == WifiState.CONNECTED``.
+    Do not instantiate.
     """
 
     DISCONNECTED = "disconnected"
@@ -58,7 +58,7 @@ def _select_adapter():
     if runtime_name == "micropython":  # pragma: no cover - MP runtime path
         from chumicro_wifi._adapters.mp import MpWifiAdapter
         return MpWifiAdapter()
-    # CPython host fallback — testing.py owns the fake.
+    # CPython host fallback: testing.py owns the fake.
     from chumicro_wifi.testing import FakeWifiAdapter
     return FakeWifiAdapter()
 
@@ -74,10 +74,10 @@ class WifiService:
             runtime-appropriate one.  Tests inject a
             :class:`FakeWifiAdapter` to drive the state machine
             deterministically.
-        ticks: Optional tick source — any object exposing
+        ticks: Optional tick source: any object exposing
             ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches the
             ``chumicro_timing.ticks`` submodule shape).  Defaults to
-            that submodule (real clock); tests pass ``FakeTicks``
+            that submodule (real clock).  Tests pass ``FakeTicks``
             from ``chumicro_timing.testing``.
     """
 
@@ -99,7 +99,7 @@ class WifiService:
         self._reconnect_attempts = 0
         self._state_callbacks = []
 
-        # Apply hostname / power-save / static-IP once; the adapter
+        # Apply hostname / power-save / static-IP once.  The adapter
         # is responsible for the substrate-specific knobs.
         self.adapter.configure(self._config)
 
@@ -117,11 +117,11 @@ class WifiService:
         Allocates per access: CircuitPython stringifies its
         ``IPv4Address`` object, MicroPython's ``ifconfig()`` builds a
         fresh 4-tuple inside the substrate.  Read once after a
-        connect / on the ``CONNECTED`` callback and stash the result
-        — don't poll inside a ``runner.tick`` loop or repeat in a
+        connect / on the ``CONNECTED`` callback and stash the result.
+        Don't poll inside a ``runner.tick`` loop or repeat in a
         debug-log path.  The state never updates the IP in place, so
         re-reading after a transition (or after a DHCP renewal) is
-        correct; the allocation cost is the price of seeing changes.
+        correct.  The allocation cost is the price of seeing changes.
         """
         return self.adapter.ip() if self.connected else None
 
@@ -130,7 +130,7 @@ class WifiService:
 
         Args:
             callback: Called as ``callback(old_state, new_state)``.
-                Multiple callbacks may be registered; they fire in
+                Multiple callbacks may be registered.  They fire in
                 registration order.
         """
         self._state_callbacks.append(callback)
@@ -173,9 +173,9 @@ class WifiService:
         if self.state == WifiState.DISCONNECTED:
             self._transition(WifiState.CONNECTING)
 
-        # CONNECTING or RECONNECTING — attempt the substrate connect.
+        # CONNECTING or RECONNECTING: attempt the substrate connect.
         if self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) < 0:
-            return  # too early; checked once more next tick
+            return  # too early, checked once more next tick
 
         self._attempt_connect(now_ms)
 

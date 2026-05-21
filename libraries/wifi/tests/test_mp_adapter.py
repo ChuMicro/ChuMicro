@@ -4,8 +4,8 @@ Exercises the adapter's contract with the MicroPython
 ``network.WLAN(network.STA_IF)`` station handle without hardware,
 on both wifi stacks the adapter supports:
 
-* **ESP-IDF** (``stack="espidf"``) — ESP32, S2, S3, etc.
-* **CYW43** (``stack="cyw43"``) — Pi Pico W, etc.
+* **ESP-IDF** (``stack="espidf"``): ESP32, S2, S3, etc.
+* **CYW43** (``stack="cyw43"``): Pi Pico W, etc.
 
 The fake mirrors the subset of the WLAN shape the adapter touches:
 ``active(state=None)`` (getter / setter), ``connect(ssid, password)``
@@ -18,8 +18,8 @@ Hardware-side coverage (real WLAN against a real AP) lives under
 ``functional_tests/``.
 """
 
-#: Host-lane only — exercises a runtime-specific adapter through host
-#: fakes and asserts off-target behaviour; never staged to a device.
+#: Host-lane only: exercises a runtime-specific adapter through host
+#: fakes and asserts off-target behaviour.  Never staged to a device.
 __chumicro_host_only__ = True
 
 from chumicro_test_harness import raises
@@ -87,7 +87,7 @@ def test_default_stack_detection_on_host_is_espidf() -> None:
 
     On any host (CPython, MicroPython unix-port, CircuitPython unix-port)
     the reported machine string is not a Pi Pico W entry, so the
-    auto-detect path lands on ``espidf`` (the safe default — its
+    auto-detect path lands on ``espidf`` (the safe default, since its
     ESP-specific knob has its own try/except guard).
     """
     assert MpWifiAdapter._detect_stack() == "espidf"
@@ -145,7 +145,7 @@ def test_injected_wlan_accepted_on_cyw43() -> None:
 
 
 # ---------------------------------------------------------------------------
-# configure — radio activation, hostname (both stacks); PM knob (cyw43 only)
+# configure: radio activation, hostname (both stacks).  PM knob (cyw43 only)
 # ---------------------------------------------------------------------------
 
 
@@ -213,7 +213,7 @@ def test_configure_does_not_touch_pm_knob_on_espidf() -> None:
 
 
 def test_configure_tolerates_pm_oserror_on_cyw43() -> None:
-    """Older MP firmware may not expose the pm knob; tolerate the failure."""
+    """Older MP firmware may not expose the pm knob.  Tolerate the failure."""
     wlan = _FakeWlan()
     original_config = wlan.config
 
@@ -230,7 +230,7 @@ def test_configure_tolerates_pm_oserror_on_cyw43() -> None:
 
 
 def test_configure_tolerates_hostname_oserror_on_espidf() -> None:
-    """Some MP builds reject hostname mid-flight; deploy must continue."""
+    """Some MP builds reject hostname mid-flight.  Deploy must continue."""
     wlan = _FakeWlan()
     original_config = wlan.config
 
@@ -263,7 +263,7 @@ def test_configure_tolerates_hostname_oserror_on_cyw43() -> None:
 
 
 # ---------------------------------------------------------------------------
-# connect — non-blocking on both stacks; supervisor-off only on espidf
+# connect: non-blocking on both stacks.  Supervisor-off only on espidf
 # ---------------------------------------------------------------------------
 
 
@@ -282,7 +282,7 @@ def test_connect_dispatches_credentials_to_wlan_on_cyw43() -> None:
 
 
 def test_connect_returns_true_when_isconnected_after_dispatch() -> None:
-    """MP's connect is non-blocking; success means isconnected flipped to True."""
+    """MP's connect is non-blocking.  Success means isconnected flipped to True."""
     wlan = _FakeWlan()
     wlan.set_outcome(ok=True)
     adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
@@ -290,7 +290,7 @@ def test_connect_returns_true_when_isconnected_after_dispatch() -> None:
 
 
 def test_connect_returns_false_when_not_yet_connected() -> None:
-    """Not-yet-associated is the substrate's "in progress" state — return False."""
+    """Not-yet-associated is the substrate's "in progress" state, returns False."""
     wlan = _FakeWlan()
     wlan.set_outcome(ok=False)
     adapter = MpWifiAdapter(wlan=wlan, stack="espidf")
@@ -300,7 +300,7 @@ def test_connect_returns_false_when_not_yet_connected() -> None:
 def test_connect_disables_firmware_supervisor_on_first_success_on_espidf() -> None:
     """``wlan.config(reconnects=0)`` fires once, after the first link.
 
-    The library is the sole wifi supervisor on every runtime; the
+    The library is the sole wifi supervisor on every runtime.  The
     runtime's own auto-reconnect must be disabled at first link.
     """
     wlan = _FakeWlan()
@@ -314,7 +314,7 @@ def test_connect_does_not_disable_supervisor_on_failed_attempt_on_espidf() -> No
     """A failed connect leaves the substrate's auto-reconnect alone.
 
     The supervisor-off knob can only be set after a link is up
-    (per ESP-IDF — the config is read at re-association time).
+    (per ESP-IDF, the config is read at re-association time).
     Calling it before would silently no-op or raise.
     """
     wlan = _FakeWlan()
@@ -336,7 +336,7 @@ def test_supervisor_disable_only_fires_once_on_espidf() -> None:
 
 
 def test_connect_tolerates_supervisor_disable_oserror_on_espidf() -> None:
-    """Older MP firmware may not expose ``reconnects``; tolerate the failure."""
+    """Older MP firmware may not expose ``reconnects``.  Tolerate the failure."""
     wlan = _FakeWlan()
     wlan.set_outcome(ok=True)
     original_config = wlan.config
@@ -353,7 +353,7 @@ def test_connect_tolerates_supervisor_disable_oserror_on_espidf() -> None:
 
 
 def test_connect_does_not_issue_supervisor_off_call_on_cyw43() -> None:
-    """CYW43 has no firmware supervisor; no ``reconnects`` knob expected."""
+    """CYW43 has no firmware supervisor.  No ``reconnects`` knob expected."""
     wlan = _FakeWlan()
     wlan.set_outcome(ok=True)
     adapter = MpWifiAdapter(wlan=wlan, stack="cyw43")
@@ -376,7 +376,7 @@ def test_connect_propagates_unexpected_exceptions() -> None:
 
 
 # ---------------------------------------------------------------------------
-# disconnect / is_linked / ip — same shape on both stacks
+# disconnect / is_linked / ip: same shape on both stacks
 # ---------------------------------------------------------------------------
 
 
@@ -411,7 +411,7 @@ def test_ip_returns_first_element_of_ifconfig_when_linked() -> None:
 
 
 def test_ip_returns_none_for_zero_address_sentinel() -> None:
-    """``0.0.0.0`` is the post-association-pre-DHCP unset state — treat as None."""
+    """``0.0.0.0`` is the post-association-pre-DHCP unset state, treated as None."""
     wlan = _FakeWlan(ip="0.0.0.0")
     wlan._connected = True  # noqa: SLF001 - direct fake state setup
     adapter = MpWifiAdapter(wlan=wlan, stack="cyw43")
