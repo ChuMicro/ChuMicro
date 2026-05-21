@@ -1,9 +1,10 @@
 """Periodic heartbeat driven by cross-runtime tick helpers."""
 
-# Default tick source imported eagerly at module load.  Lazy import inside
-# ``Heartbeat.__init__`` would add ~1 s to the first test on MP mount-mode
-# (each fresh import becomes an mpremote RPC); eager import pushes the
-# cost to module-import time, before the harness starts its timer.
+# Default tick source imported eagerly at module load.  Lazy import
+# inside ``Heartbeat.__init__`` would make the first Heartbeat() call
+# on MicroPython mount-mode cost ~1 s, because each fresh import
+# becomes an mpremote RPC round-trip.  Eager import shifts the cost
+# to module-import time, paid once.
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 
