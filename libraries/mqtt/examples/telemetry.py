@@ -51,7 +51,7 @@ Example output::
     [rx]  chumicro-demo/cmd <- b'ping'
 """
 
-#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
+#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
 #: ``sys.implementation.name`` (CP / MP) and the MQTT client is
 #: pure-Python.  The marker tells :func:`scripts.verify_examples`
 #: + ``deploy-example`` to allow this file on either runtime.
@@ -64,9 +64,9 @@ import time
 from chumicro_mqtt import MQTTClient, ProtocolState
 from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
-BROKER_HOST = ""  # required for raw single-file deploys; e.g. "10.0.0.5"
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
+BROKER_HOST = ""  # required for raw single-file deploys, e.g. "10.0.0.5"
 BROKER_PORT = 1883
 TOPIC = "chumicro-demo/telemetry"
 COMMAND_TOPIC = "chumicro-demo/cmd"

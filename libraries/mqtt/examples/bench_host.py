@@ -1,6 +1,6 @@
 """Optional host-side companion to ``bench.py``.
 
-``bench.py`` is fully self-driving — it runs every scenario on-device,
+``bench.py`` is fully self-driving.  It runs every scenario on-device,
 prints a summary table to serial, and publishes a one-line verdict to
 ``<client_id>/bench-summary``.  Nothing here is required for the
 self-driving run.
@@ -28,7 +28,7 @@ Usage
 
 ::
 
-    # Default — just listen for the device's bench-summary verdict.
+    # Default: just listen for the device's bench-summary verdict.
     python bench_host.py --broker 172.16.1.15
 
     # Publish a 64 KB hostile payload first, then listen for the verdict.
@@ -47,7 +47,7 @@ import sys
 import time
 
 try:
-    import paho.mqtt.client as mqtt  # noqa: PLC0415 — host-side optional dep
+    import paho.mqtt.client as mqtt  # noqa: PLC0415 - host-side optional dep
 except ImportError:
     sys.stderr.write(
         "this example needs paho-mqtt; install with `pip install paho-mqtt`\n"

@@ -4,22 +4,22 @@ Two responsibilities:
 
 1. Register the merged runtime-config dict (secrets.toml +
    per-library overrides) with pytest-device so it stages at
-   ``/runtime_config.msgpack`` on the device — on-device tests read
+   ``/runtime_config.msgpack`` on the device.  On-device tests read
    wifi creds + the ``mqtt.broker`` host/port from there.
 2. Spawn a host-side Mosquitto broker on the LAN interface so
    ``test_real_broker.py`` has a counterparty.  We bring up our own
    broker because the LAN-bound listener gives us a deterministic,
-   CI-shaped fixture — no flakiness from the open internet.
+   CI-shaped fixture without flakiness from the open internet.
 
 The broker fixture mirrors the ``test_mosquitto_integration.py``
-``mosquitto_broker`` fixture from the host-side test suite — same
-macOS ``setrlimit(RLIMIT_NOFILE)`` workaround for Mosquitto 2.0 on
-Apple Silicon.
+``mosquitto_broker`` fixture from the host-side test suite, with the
+same macOS ``setrlimit(RLIMIT_NOFILE)`` workaround for Mosquitto 2.0
+on Apple Silicon.
 
 If ``mosquitto`` is not on ``PATH`` or the LAN IP can't be detected,
 the broker fixture stays down and the test runs against whatever
 ``mqtt.broker.host`` / ``mqtt.broker.port`` the user has put in
-``secrets.toml`` (or the per-library ``config.toml`` override) —
+``secrets.toml`` (or the per-library ``config.toml`` override).
 ``MQTTClient.from_config`` raises ``MissingConfigKey`` if neither
 source supplies them.
 """
@@ -47,7 +47,7 @@ def _merged_runtime_config_with_creds() -> dict | None:
     """Return the deep-merged + flattened runtime-config dict, or ``None``."""
     if not _SECRETS_TOML.is_file():
         return None
-    # Any exception from ``compose_runtime_config`` propagates — a
+    # Any exception from ``compose_runtime_config`` propagates.  A
     # malformed ``secrets.toml`` is a real bug to surface, not the
     # same shape as a fresh-clone "user hasn't filled it in yet."
     # The missing-file path above is the only silent-skip case.
@@ -106,7 +106,7 @@ def _start_mosquitto_broker(
     bind_host: str,
     workdir: Path,
 ) -> tuple[subprocess.Popen[bytes], int] | None:
-    """Spawn Mosquitto bound on *bind_host*; return ``(process, port)`` or ``None``."""
+    """Spawn Mosquitto bound on *bind_host*.  Return ``(process, port)`` or ``None``."""
     if shutil.which("mosquitto") is None:
         return None
 
@@ -123,7 +123,7 @@ def _start_mosquitto_broker(
     # "Error: Out of memory" when it inherits the default soft limit
     # for ``RLIMIT_NOFILE``.  Drop it in the child via preexec_fn so
     # mosquitto's setrlimit upgrade no-ops.
-    def _reduce_fd_limit() -> None:  # pragma: no cover — runs in spawned child
+    def _reduce_fd_limit() -> None:  # pragma: no cover - runs in spawned child
         import resource  # noqa: PLC0415
 
         resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
@@ -132,7 +132,7 @@ def _start_mosquitto_broker(
         ["mosquitto", "-c", str(config_path)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        preexec_fn=_reduce_fd_limit,  # noqa: PLW1509 — needed for macOS rlimit quirk
+        preexec_fn=_reduce_fd_limit,  # noqa: PLW1509 - needed for macOS rlimit quirk
     )
     if not _wait_until_listening(bind_host, port):
         process.terminate()
@@ -150,7 +150,7 @@ _BROKER_WORKDIR: Path | None = None
 
 #: Placeholder broker hostname shipped in the
 #: ``secrets.toml`` starter (``chumicro_workspace`` payload).
-#: Treated as "broker unset" — the pytest-device plugin then
+#: Treated as "broker unset".  The pytest-device plugin then
 #: skips at collection time with a clear missing-keys message
 #: instead of letting the test run against a hostname that
 #: won't resolve.
@@ -158,7 +158,7 @@ _BROKER_PLACEHOLDER = "replace-with-your-broker-host"
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Spin up the host Mosquitto broker; register the runtime-config payload."""
+    """Spin up the host Mosquitto broker.  Register the runtime-config payload."""
     global _BROKER_PROCESS, _BROKER_WORKDIR
 
     merged = _merged_runtime_config_with_creds()
@@ -177,7 +177,7 @@ def pytest_configure(config: pytest.Config) -> None:
                 shutil.rmtree(workdir, ignore_errors=True)
 
         # If the local mosquitto fixture didn't take over, honor the
-        # workspace-template placeholder by suppressing the payload —
+        # workspace-template placeholder by suppressing the payload.
         # ``required_keys`` then skips the session at collection time.
         # Mirrors the wifi-ssid placeholder handling above.
         if merged.get("mqtt.broker.host") == _BROKER_PLACEHOLDER:
@@ -195,7 +195,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001 — pytest hook
+def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001 - pytest hook
     """Tear down the Mosquitto broker."""
     global _BROKER_PROCESS, _BROKER_WORKDIR
     if _BROKER_PROCESS is not None:
