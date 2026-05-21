@@ -109,7 +109,7 @@ def check_secrets_toml(workspace: WorkspaceLayout) -> HealthFinding:
     """Verify ``secrets.toml`` exists and parses cleanly.
 
     ``secrets.toml`` is gitignored and materialized on first
-    ``setup`` — its absence on a fresh clone is a setup-not-yet-run
+    ``setup``.  Its absence on a fresh clone is a setup-not-yet-run
     state rather than a configuration error.
     """
     if not workspace.secrets_toml.is_file():

@@ -1,26 +1,25 @@
-"""Snapshot-channel download backend for curated workspace libraries.
+"""Download backend for curated workspace libraries.
 
-A curated library reaches the workspace by being read out of a
-published *snapshot channel*.  A channel is a tag on a full-source-tree
-repo, and the state at that tag is an internally-consistent set every
-library was built together in.  A tag is the whole set, so pinning is
-to a snapshot, not a per-library version.  Library pyprojects carry no
-version constraints, so the closure a library declares in its
-``pyproject.toml`` is whatever shipped in the same snapshot.
+A curated library ships through a *snapshot channel*: a git tag
+on a source-tree repo that holds every library in the channel,
+all built together as one self-consistent set.  Pinning is to
+the tag, not to per-library versions, so a library's
+``pyproject.toml`` deps resolve to whatever shipped in the same
+snapshot.
 
-Two channels, each backed by its own repo (see :data:`CHANNEL_REPOS`).
-Each repo carries one ``<name>/`` directory per library (the same
-``src/ tests/ examples/ docs/`` plus metadata shape it has upstream) and
-a root ``index.json`` that doubles as the per-snapshot manifest and the
-browse catalog: every library's version, one-line description, and
-README path as of that tag.  ``index.json`` on the default branch
-records the latest tag, so resolving "latest" is one GET, not a
+Each channel's repo (see :data:`CHANNEL_REPOS`) lays out one
+``<short-name>/`` directory per library matching the upstream
+``src/ tests/ examples/ docs/`` shape, plus a root ``index.json``
+that lists every library's version, description, and README path
+at that tag.  The default-branch ``index.json`` records the
+latest tag, so resolving "latest" is one GET rather than a
 releases-API call.
 
-Every network touch is a single injected ``http_get(url) -> bytes``,
-so the whole backend runs against a local fixture with no sockets.
-Failures raise the shared :class:`~chumicro_workspace.library.
-LibraryFetchError` with a closed-set kind.
+Every network read goes through a single injected
+``http_get(url) -> bytes`` so the whole backend can run against
+an in-memory fixture.  Failures raise the shared
+:class:`~chumicro_workspace.library.LibraryFetchError` with a
+closed-set kind.
 """
 
 from __future__ import annotations

@@ -33,8 +33,8 @@ from chumicro_workspace.managed_block import sync_managed_block
 CHUMICRO_DEV_FILENAME = "chumicro-dev.toml"
 
 #: Comment written immediately above the managed ``library_sources:``
-#: key.  The marker is descriptive only — there's no parse-side check
-#: that a user-edited block is "ours" (workspace.yml is user-owned).
+#: key.  The marker is descriptive only.  There is no parse-side check
+#: that a user-edited block is "ours"; ``workspace.yml`` stays user-owned.
 MANAGED_MARKER = (
     "managed by chumicro-workspace setup — chumicro-dev.toml mode"
 )

@@ -33,7 +33,7 @@ class Zone(Enum):
     USER_OWNED = "user-owned"
 
 
-#: Files / paths that are tool-owned.  ``update`` rewrites them.
+#: Tool-owned exact-match paths.
 TOOL_OWNED_PATHS: frozenset[str] = frozenset({
     "run.py",
     "AGENTS.md",  # noqa: CHU006  tool-owned template filename data
@@ -41,23 +41,21 @@ TOOL_OWNED_PATHS: frozenset[str] = frozenset({
     "pyproject.toml",
 })
 
-#: Directory prefixes whose contents are tool-owned.  Anything below
-#: a listed prefix is rewritten on ``update``.
+#: Tool-owned directory prefixes.
 TOOL_OWNED_PREFIXES: tuple[str, ...] = (
     "projects/_template/",
     ".github/skills/",
     "examples/",
 )
 
-#: Files / paths that are user-owned.  ``update`` never touches them.
+#: User-owned exact-match paths.
 USER_OWNED_PATHS: frozenset[str] = frozenset({
     "workspace.yml",
     "secrets.toml",
     "devices.yml",
 })
 
-#: Directory prefixes whose contents are user-owned.  Anything below
-#: is left alone on ``update``.
+#: User-owned directory prefixes.
 USER_OWNED_PREFIXES: tuple[str, ...] = (
     "shared/",
     "packages/",

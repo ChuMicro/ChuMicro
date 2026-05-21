@@ -19,15 +19,10 @@ Boards arrive in one of four states from the workspace's point of view:
   opened.  Cable not plugged, wrong port path, permissions issue.
   The right next step is ``discover`` or replug.
 
-Every check is observable, testable, and uses :mod:`chumicro_deploy`'s
-probe plus the local UF2 mount scanner.  It does not push any state
-to the board.  The recommendations it returns are human-readable
-strings the CLI prints, not commands it auto-runs.
-
-Detection is separate from action.  A user can run ``probe`` on a
-misbehaving board, see the diagnosis, and decide for themselves
-whether to flash.  The CLI never flashes a board the user didn't
-explicitly ask to flash.
+Diagnosis uses ``chumicro_deploy``'s probe and a UF2 mount scan.
+Neither writes to the board.  The returned ``next_steps`` are
+English strings the caller prints; nothing in this module shells
+out, flashes firmware, or reboots a device.
 """
 
 from __future__ import annotations

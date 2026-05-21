@@ -1,50 +1,35 @@
-"""Read + aggregate + validate library config manifests.
+"""Validate a project's runtime config against the keys its libraries declare.
 
-Each ChuMicro library that consumes ``runtime_config.msgpack``
-declares its required / optional flat dotted keys in its
+Each ChuMicro library that reads runtime config declares its required
+and optional flat dotted keys under ``[tool.chumicro.config]`` in its
 ``pyproject.toml``::
 
     [tool.chumicro.config]
     required_keys = ["wifi.ssid", "wifi.password"]
     optional_keys = ["wifi.hostname", "wifi.connect_timeout_ms"]
 
-The keys live in the same vocabulary the runtime accessor uses
-(``config["wifi.ssid"]``) so the validator's failure message names
-the exact key the library code will request.
+The vocabulary matches the on-device accessor (``config["wifi.ssid"]``),
+so a validator error names the exact key the library code will request.
 
-This module reads those manifests, unions them across the libraries
-imported by a project, and validates a merged-and-resolved **flat**
-config dict against the union. Errors that would otherwise land on
-device, fail at boot, and print a cryptic ``MissingConfigKey``
-become precise deploy-time failures.
+Workflow:
 
-Public surface:
+* :func:`read_manifest` parses one library's block.
+* :func:`find_library_roots` locates the pyproject files under a set
+  of import search paths.
+* :func:`aggregate_manifests` unions the per-library required and
+  optional sets.  A key required by any library is required overall;
+  the strictest declaration wins.
+* :func:`validate_runtime_config` raises :class:`ConfigManifestError`
+  when the merged flat config is missing any required key.
 
-* :class:`ConfigManifest` — one library's required / optional key sets.
-* :class:`ConfigManifestError` — raised when a config dict is missing
-  a required key.
-* :func:`read_manifest` — parse one library's ``pyproject.toml``.
-* :func:`aggregate_manifests` — union the required + optional sets
-  across multiple libraries.  A key declared optional by one library
-  and required by another is required overall: the strictest
-  declaration wins.
-* :func:`validate_runtime_config` — check a flat config dict against
-  an aggregated manifest; raise on missing required.
+A missing key would otherwise surface on device as a cryptic
+``MissingConfigKey`` at boot.  Running the validator at deploy time
+makes the failure precise and host-side.
 
-Three-line example::
-
-    from chumicro_workspace.config_manifest import (
-        aggregate_manifests, read_manifest, validate_runtime_config,
-    )
-
-    manifests = [read_manifest(library_root) for library_root in roots]
-    union = aggregate_manifests(m for m in manifests if m is not None)
-    validate_runtime_config(flat_merged_config_dict, union)
-
-Libraries without a manifest (``read_manifest`` returns ``None``)
-contribute nothing to the union — they don't read runtime config,
-so there's nothing to validate against.  Forward-compat: a config
-can carry keys no library currently requires without raising.
+Libraries without a ``[tool.chumicro.config]`` block contribute
+nothing to the union.  A config carrying keys no library currently
+requires is accepted, so a key may land in the config ahead of the
+library that reads it.
 """
 
 from __future__ import annotations
@@ -69,9 +54,7 @@ class ConfigManifest:
             time raises :class:`ConfigManifestError`.
         optional_keys: Flat dotted keys the library reads but
             tolerates missing. ``load_section``'s factory uses its
-            declared default when absent. Listed here so doc
-            tooling can render the full surface, and so the
-            aggregator can spot "optional in lib A, required in lib B".
+            declared default when absent.
         declared_by: Path(s) to the ``pyproject.toml`` that declared
             this manifest.  After :func:`aggregate_manifests` joins
             multiple libraries, this becomes a comma-separated list
