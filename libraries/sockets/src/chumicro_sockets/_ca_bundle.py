@@ -43,7 +43,7 @@ viable on a 256 KB board.
 
 __chumicro_runtimes__ = ("micropython",)
 
-#: Canonical flash-deploy location, used only if ``__file__`` is
+#: Fallback flash-deploy location, used only if ``__file__`` is
 #: unavailable on a given MP build.
 _FALLBACK_PATH = "/lib/chumicro_sockets/_ca_bundle.der"
 

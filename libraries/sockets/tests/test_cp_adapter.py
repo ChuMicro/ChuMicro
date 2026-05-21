@@ -313,7 +313,7 @@ class TestPoolFor:
         assert pool.radio is radio
 
     def test_memoizes_by_radio_identity(self) -> None:
-        """Same radio → same pool; different radio → different pool."""
+        """Reuses the pool for the same radio; a different radio gets a new pool."""
         from chumicro_sockets._adapters import cp as cp_adapter
         _clear_pool_cache()
         radio_a = object()
@@ -383,7 +383,7 @@ class TestConnectTls:
         assert wrapped.connected_to == ("broker.example.com", 8883)
 
     def test_default_context_built_via_ssl_module_when_none(self) -> None:
-        """``context=None`` → ``ssl.create_default_context()`` then wrap+connect."""
+        """``context=None`` builds via ``ssl.create_default_context()`` then wrap+connect."""
         from chumicro_sockets._adapters import cp as cp_adapter
         _clear_pool_cache()
         radio = object()

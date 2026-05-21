@@ -306,7 +306,7 @@ def ssl_context_with_cert_and_key(
 
     * **MicroPython** — works directly with PEM (or DER on rp2)
       bytes via MP's ``ssl.SSLContext.load_cert_chain``.
-    * **CPython** — works (writes to a temp file under the hood).
+    * **CPython** — works (writes to a temp file).
     * **CircuitPython** — *not supported* (CP's
       ``load_cert_chain`` requires filesystem paths, not bytes).
       Use :func:`ssl_context_with_cert_and_key_paths` instead.
@@ -347,10 +347,7 @@ def ssl_context_with_cert_and_key_paths(
     and routes through :func:`ssl_context_with_cert_and_key`.  On
     CircuitPython it loads via the path directly.
 
-    Live-verified on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0): 6 KB
-    context + 35 KB handshake heap cost, ~2 MB free heap
-    remaining; HTTPS GET round-trip from a host CPython client
-    succeeded.  CP-rp2 (Pi Pico W / Pi Pico 2 W) is unsupported —
+    Unsupported on CP-rp2 (Pi Pico W / Pi Pico 2 W) —
     :func:`tls_listening_socket` refuses up-front there.
 
     Args:

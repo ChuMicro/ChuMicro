@@ -79,7 +79,7 @@ class UDPSocket(Protocol):
         ...
 
     def close(self) -> None:
-        """Release the underlying socket handle.  Idempotent."""
+        """Release the underlying socket handle."""
         ...
 
     def setblocking(self, flag: bool) -> None:

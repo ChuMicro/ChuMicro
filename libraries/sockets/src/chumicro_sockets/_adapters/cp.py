@@ -208,8 +208,7 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
 def ssl_context_with_cert_and_key_paths(cert_path, key_path):
     """Build a CP server-side SSLContext from cert + key file paths.
 
-    Mirrors ``adafruit_httpserver``'s HTTPS path
-    (verified live on Lolin S2 ESP32-S2 / CP 10.2.0-rc.0):
+    The build sequence::
 
         ctx = ssl.create_default_context()
         ctx.load_verify_locations(cadata="")
@@ -231,11 +230,10 @@ def ssl_context_with_cert_and_key_paths(cert_path, key_path):
         key_path: On-device filesystem path to the private-key PEM
             file (e.g. ``"/lib/server_key.pem"``).
 
-    Live-verified on Lolin S2 ESP32-S2 with 6 KB context + 35 KB
-    handshake heap cost, ~2 MB free heap remaining.  CP-rp2 boards
-    (Pi Pico W / Pi Pico 2 W) are unsupported — :func:`listen_tls`
-    refuses up-front via ``UnsupportedSSLConfigError``; this helper
-    can still build the context but it'll have nowhere to go.
+    CP-rp2 boards (Pi Pico W / Pi Pico 2 W) are unsupported —
+    :func:`listen_tls` refuses up-front via
+    ``UnsupportedSSLConfigError``; this helper can still build the
+    context but it'll have nowhere to go.
     """
     import ssl  # noqa: PLC0415 — CP-only import
 
@@ -250,8 +248,6 @@ def listen_tls(host, port, *, context, backlog=4, radio):
 
     Wraps the LISTENING socket with ``server_side=True`` before
     bind/listen — every accepted client inherits the TLS wrap.
-    Mirrors adafruit_httpserver's `_create_server_socket`.  Verified
-    on Lolin S2 ESP32-S2 / CP 10.2.0-rc.0.
 
     Refused on CP-rp2 (Pi Pico W / Pi Pico 2 W) — raises
     :class:`UnsupportedSSLConfigError`.  CP-rp2 lacks the

@@ -63,7 +63,7 @@ class TestCPythonUDP:
             receiver.close()
 
     def test_recvfrom_into_truncates_oversized_datagram(self) -> None:
-        """Buffer smaller than datagram → unread tail discarded (UDP)."""
+        """An undersized buffer truncates the datagram (UDP)."""
         sender = udp_socket("127.0.0.1", 0)
         receiver = udp_socket("127.0.0.1", 0)
         try:

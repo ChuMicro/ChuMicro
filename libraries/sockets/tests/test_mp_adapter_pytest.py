@@ -196,10 +196,8 @@ class TestConnectTcp:
 
         The wrapper raises ``OSError(11)`` (EAGAIN) so callers see
         the same "no data this tick" contract as plain TCP.  Without
-        this, downstream protocols (chumicro-requests, chumicro-mqtt)
-        can't distinguish "no data yet" from "peer closed mid-response"
-        on MP TLS — surfaced live during chumicro-requests slice 3c
-        verification on Pi Pico W RP2.
+        this, a length-known TCP-style read on MP TLS cannot tell
+        "no data yet" from "peer closed mid-response".
         """
         import pytest  # noqa: PLC0415
 
@@ -290,11 +288,11 @@ class TestConnectTls:
         """``context=None`` builds (and caches) a default SSLContext
         from the shipped CA bundle.
 
-        Shape Y: the older MP idiom of calling the module-level
+        The adapter lazily builds an SSLContext from the shipped
+        ``_ca_bundle.read_der()`` DER and reuses it across every
+        default-context connection.  The older module-level
         ``ssl.wrap_socket`` (which left ``verify_mode = CERT_NONE``)
-        is gone — the adapter now lazily builds an SSLContext from the
-        shipped ``_ca_bundle.read_der()`` DER and reuses it across
-        every default-context connection.
+        is no longer called from this path.
         """
         wrapper = mp_adapter.connect_tls("broker.example.com", 8883)
         cached = mp_adapter._DEFAULT_CONTEXT_CACHE
@@ -306,7 +304,7 @@ class TestConnectTls:
         assert server_hostname == "broker.example.com"
         assert underlying.connected_to == ("broker.example.com", 8883)
         # Free-form ssl.wrap_socket must not be called — it leaves
-        # verify_mode=CERT_NONE on MP and is the bug Shape Y fixes.
+        # verify_mode=CERT_NONE on MP.
         assert sys.modules["ssl"]._free_wrap_calls == []  # type: ignore[attr-defined]
 
     def test_default_context_reused_across_calls(
@@ -433,7 +431,7 @@ class TestSslContextWithCa:
         conversion behavior.
         """
         # Real-shape PEM: header / body / footer with valid base64 body.
-        # ``b"\xde\xad\xbe\xef"`` → ``b"3q2+7w=="`` after base64.
+        # ``b"\xde\xad\xbe\xef"`` encodes to ``b"3q2+7w=="`` in base64.
         ca_pem = (
             b"-----BEGIN CERTIFICATE-----\n"
             b"3q2+7w==\n"

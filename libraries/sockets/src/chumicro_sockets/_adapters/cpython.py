@@ -75,11 +75,10 @@ def listen_tcp(host, port, *, backlog=4):
 def ssl_context_with_cert_and_key(cert_pem, key_pem):
     """Build a server-side SSLContext that presents *cert_pem* signed by *key_pem*.
 
-    Used by `tls_listening_socket` on the server side.  Mirrors the
-    client-side `ssl_context_with_ca` shape but loads a *cert chain*
-    + *private key* via `SSLContext.load_cert_chain` (rather than a
-    *trust store*).  The context is suitable for `wrap_socket(...,
-    server_side=True)` calls.
+    Mirrors the client-side `ssl_context_with_ca` shape but loads a
+    *cert chain* + *private key* via `SSLContext.load_cert_chain`
+    (rather than a *trust store*).  The context is suitable for
+    `wrap_socket(..., server_side=True)` calls.
 
     *cert_pem* and *key_pem* are PEM-encoded bytes / str.  CPython's
     `load_cert_chain` accepts file paths only (not in-memory bytes),

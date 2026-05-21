@@ -17,9 +17,9 @@ read here via ``chumicro_config.load_runtime_config()`` — the same
 API user code uses.
 
 Endpoint: plain HTTP on ``example.com:80`` so this test runs even
-on Pi Pico W CP (which has the post-handshake EPIPE issue
-documented as an open follow-up).  TLS is exercised separately
-via ``test_real_tls.py``.
+on Pi Pico W CP (which still hits a post-handshake EPIPE on the
+rp2-port mbedTLS build).  TLS is exercised separately via
+``test_real_tls.py``.
 
 Why a sockets-direct functional test when chumicro-requests +
 chumicro-mqtt + chumicro-http-server already exercise the layer

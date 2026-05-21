@@ -19,17 +19,12 @@ firmware bundle.  This keeps the test a *transport / recv-drain*
 smoke test rather than an accidental trust-coverage test (trust
 breadth is owned by ``test_real_tls_matrix.py``).  Body is ~4 KB
 — enough to exercise the multi-iteration recv loop, small enough
-to buffer on a 256 KB board.  (``example.com`` was the prior
-target; it moved behind Cloudflare and now chains to AAA
-Certificate Services / Sectigo, a root the curated MP bundle does
-not ship; ``letsencrypt.org`` chains correctly but its ~90 KB
-body exhausts the heap when fully accumulated.)
+to buffer on a 256 KB board.
 
 Known platform gap: Pi Pico W CircuitPython hits a
 post-handshake EPIPE on the rp2-port mbedTLS build.  This test
 will fail on that combination; the failure documents the issue
-rather than hiding it.  All other combinations in the four-board
-canonical matrix pass.
+rather than hiding it.
 """
 
 import time
@@ -80,11 +75,11 @@ def _send_all(socket: object, data: bytes) -> None:
 
 
 def _seed_rtc(now_utc_tuple: tuple) -> None:
-    """Set the device RTC so Shape Y cert validity-time checks pass.
+    """Set the device RTC so cert validity-time checks pass.
 
     Boot RTC on most ports is epoch / 2021; without seeding, mbedTLS
     rejects the target's valid cert with "validity starts in the
-    future" once the MP default context verifies (Shape Y).  Real
+    future" once the MP default context verifies.  Real
     deployments NTP-sync; conftest bakes the host clock so the test
     stays off the network for time.
     """

@@ -10,8 +10,8 @@ Two jobs:
 1. **Regression guard.**  A sudden jump in resident cost means a
    double-parse or a retained DER buffer crept in.
 2. **The numbers behind the curated-subset size.**  MicroPython's
-   ``ssl`` only exposes ``load_verify_locations`` →
-   ``mbedtls_x509_crt_parse(make_copy=1)``, which copies + parses
+   ``ssl`` only exposes ``load_verify_locations``, which calls
+   ``mbedtls_x509_crt_parse(make_copy=1)`` and copies + parses
    *every* root into heap for the context's lifetime (CP's firmware
    bundle uses a flash-resident verify callback instead — pure-Python
    MP cannot match it).  So the root count is bounded by this
@@ -21,8 +21,8 @@ Two jobs:
 CircuitPython uses its firmware ``x509-crt-bundle`` and never reads
 this file, so the test is MicroPython-scoped via the runtime marker.
 
-Transient peak is minimised by construction and not separately
-asserted: the bundle ships as DER (no ``_pem_to_der`` base64 decode
+Transient peak is minimised and not separately asserted: the
+bundle ships as DER (no ``_pem_to_der`` base64 decode
 on the default path) and ``read_der()``'s buffer is a function-scoped
 temporary freed before any long-lived TLS allocation.
 """
@@ -34,8 +34,8 @@ import gc
 from chumicro_sockets import _ca_bundle, ssl_context_with_ca
 
 #: Resident-cost ceiling for the shipped bundle.  Generous — this is
-#: a regression trip-wire (sudden ~2x ⇒ double-parse / retained
-#: buffer), not a tight fit.  Re-derive if the curated root set grows
+#: a regression trip-wire (a sudden ~2x rise means double-parse /
+#: retained buffer), not a tight fit.  Re-derive if the curated root set grows
 #: materially; the printed ``resident=`` is the real datum.
 _RESIDENT_CEILING_BYTES = 60_000
 

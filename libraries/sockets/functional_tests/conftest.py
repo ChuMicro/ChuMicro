@@ -26,7 +26,7 @@ from chumicro_workspace import compose_runtime_config
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _SECRETS_TOML = _REPO_ROOT / "secrets.toml"
-_LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
+_LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent means workspace defaults only
 
 #: Maximum datagram size the echo server accepts.  Generous for any
 #: chumicro library traffic (NTP is 48 bytes, mDNS/SSDP query
@@ -58,7 +58,7 @@ def _merged_runtime_config_with_creds() -> dict | None:
     if ssid == "replace-with-your-ap-ssid":
         return None
     # Bake the host's UTC clock so the TLS matrix test can seed the
-    # device RTC — Shape Y default validation rejects valid certs as
+    # device RTC — default validation rejects valid certs as
     # "validity starts in the future" when the board boots at epoch.
     # Real deployments NTP-sync; baking the host clock keeps the test
     # off the network for time.  Mirrors requests.now_utc_tuple.
@@ -75,7 +75,7 @@ def _detect_lan_ip() -> str | None:
     Trick: open a UDP socket and "connect" it to a public IP — no
     packet is sent, but the kernel selects the local address it would
     use to route there.  ``getsockname`` then exposes that address.
-    Robust across macOS / Linux multi-interface setups.
+    Works on macOS and Linux multi-interface setups.
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:

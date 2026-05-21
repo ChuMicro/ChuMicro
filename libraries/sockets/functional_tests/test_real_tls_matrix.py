@@ -1,14 +1,14 @@
-"""Shape Y TLS trust matrix — real network, four-board canonical matrix.
+"""TLS trust matrix — real network, four-board matrix.
 
 Three legs, one file, run on Lolin S2 + Pi Pico W × CP/MP:
 
 1. **no-verify** — ``ssl_context_no_verify()`` against an expired
    cert host *succeeds*: the explicit opt-out really disables
    validation on every runtime.
-2. **default → reject** — ``context=None`` against the same expired
-   host *raises*: Shape Y default validation rejects a bad chain
+2. **default rejects** — ``context=None`` against the same expired
+   host *raises*: default validation rejects a bad chain
    (CP firmware bundle / MP shipped bundle / CPython store).
-3. **default → accept** — ``context=None`` against a live
+3. **default accepts** — ``context=None`` against a live
    Let's-Encrypt-signed host *handshakes*: the trust set actually
    validates a real cert.  The endpoint
    (``valid-isrgrootx1.letsencrypt.org``) is purpose-built by Let's
@@ -19,7 +19,7 @@ Three legs, one file, run on Lolin S2 + Pi Pico W × CP/MP:
 All three seed the device RTC from the host clock first
 (``sockets.now_utc_tuple``, published by conftest).  Legs 1-2 don't
 strictly need it (no-check / reject-regardless-of-skew), but leg 3
-does — Shape Y default validation rejects a valid cert as "validity
+does, because default validation rejects a valid cert as "validity
 starts in the future" when the board boots at epoch.  Real
 deployments NTP-sync instead.
 
@@ -153,7 +153,7 @@ def test_default_context_rejects_expired_cert() -> None:
     assert rejected is not None, (
         f"default-context handshake to {_EXPIRED_HOST} unexpectedly "
         f"succeeded — validation disabled or trust set includes the "
-        f"expired signer.  Shape Y regression."
+        f"expired signer."
     )
 
 
