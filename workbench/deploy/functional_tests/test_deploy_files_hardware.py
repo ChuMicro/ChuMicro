@@ -34,7 +34,7 @@ def _build_device(entry: DeviceEntry, deploy_mode: str) -> Device:
 def test_micropython_ram_deploy_runs_entrypoint(
     micropython_device: DeviceEntry,
 ) -> None:
-    """MP mount-mode deploy — file writes, mount, exec, output round-trip."""
+    """MP mount-mode deploy.  File writes, mount, exec, output round-trip."""
     device = _build_device(micropython_device, deploy_mode="ram")
     deployer = Deployer(device)
     staged: list[str] = []
@@ -51,7 +51,7 @@ def test_micropython_ram_deploy_runs_entrypoint(
 def test_micropython_deploy_with_lib_module(
     micropython_device: DeviceEntry,
 ) -> None:
-    """Multi-file deploy — a /lib helper module imported by the entrypoint."""
+    """Multi-file deploy with a /lib helper module imported by the entrypoint."""
     device = _build_device(micropython_device, deploy_mode="ram")
     deployer = Deployer(device)
     source = FileMapSource(
@@ -74,7 +74,7 @@ def test_micropython_deploy_with_lib_module(
 def test_micropython_copy_deploy_runs_entrypoint(
     micropython_device: DeviceEntry,
 ) -> None:
-    """MP copy-mode deploy — files land in the device's real filesystem.
+    """MP copy-mode deploy: files land in the device's real filesystem.
 
     Exercises the ``mpremote fs cp -r`` path (as opposed to mount-mode
     tested above), so the deploy covers the persistent-write code path
@@ -94,7 +94,7 @@ def test_micropython_copy_deploy_runs_entrypoint(
 def test_circuitpython_ram_deploy_runs_entrypoint(
     circuitpython_device: DeviceEntry,
 ) -> None:
-    """CP RAM-mode deploy — inline exec via chunked raw REPL, no drive.
+    """CP RAM-mode deploy: inline exec via chunked raw REPL, no drive.
 
     RAM mode runs the files through
     :func:`build_circuitpython_deploy_scripts` which registers every
@@ -151,8 +151,8 @@ def test_deploy_with_directory_source(
     """End-to-end deploy sourced from a directory on disk.
 
     Unlike the :class:`FileMapSource`-based tests above, this exercises
-    :class:`DirectorySource`'s lazy-walk path — the walk happens once,
-    inside ``Deployer.deploy``'s ``source.files()`` call.
+    :class:`DirectorySource`'s lazy-walk path, where the walk happens
+    once, inside ``Deployer.deploy``'s ``source.files()`` call.
     """
     project = tmp_path / "proj"
     project.mkdir()
@@ -172,7 +172,7 @@ def test_deploy_with_directory_source(
 def test_circuitpython_flash_deploy_runs_entrypoint(
     circuitpython_flash_device: DeviceEntry,
 ) -> None:
-    """CP flash-mode deploy — write to CIRCUITPY drive + exec via raw REPL."""
+    """CP flash-mode deploy: write to CIRCUITPY drive + exec via raw REPL."""
     device = _build_device(circuitpython_flash_device, deploy_mode="flash")
     deployer = Deployer(device)
     source = FileMapSource(

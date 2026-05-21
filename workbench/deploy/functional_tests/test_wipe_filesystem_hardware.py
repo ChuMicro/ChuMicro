@@ -179,7 +179,7 @@ def test_circuitpython_wipe_reformats_circuitpy_drive(
     Plant-via-deploy is load-bearing: a host-side ``write_bytes``
     directly to the CIRCUITPY mount point puts the board into a
     transient state where the next raw-REPL
-    ``storage.erase_filesystem()`` call silently no-ops — the FAT is
+    ``storage.erase_filesystem()`` call silently no-ops.  The FAT is
     not reformatted, the volume UUID is unchanged, ``wipe_filesystem``
     returns "successfully" because USB-CDC and USB-MSC both stayed
     alive, and this assertion sees the sentinel still on disk.  The

@@ -1,22 +1,22 @@
 """Deploy only the files an entrypoint actually imports.
 
-Demonstrates :class:`~chumicro_deploy.ImportGraphSource` — AST-walks
-the entrypoint, collects every transitively-imported module that
-resolves against the configured search paths, and ships *only those*
-files.  Modules that aren't reached stay on disk.
+Demonstrates :class:`~chumicro_deploy.ImportGraphSource`, which
+AST-walks the entrypoint, collects every transitively-imported module
+that resolves against the configured search paths, and ships *only
+those* files.  Modules that aren't reached stay on disk.
 
 Useful when a project directory carries optional code paths or
 multi-board variants and you only want what a particular entrypoint
 needs.  ``chumicro-workspace deploy --import-graph`` is the same
-primitive applied to a workspace's `things/` tree; this example uses
-the bare API directly so the mechanism is visible.
+primitive applied to a workspace's `things/` tree.  This example
+uses the bare API directly so the mechanism is visible.
 
 Run from the repo root with a board plugged in::
 
     .venv/bin/python workbench/deploy/examples/import_graph_deploy.py
 
 The script materializes a small project where the entrypoint only
-imports half of the available modules; the deploy then ships exactly
+imports half of the available modules.  The deploy then ships exactly
 the imported half.  Logs which files made the cut, prints the execute
 output, exits zero on success.
 """

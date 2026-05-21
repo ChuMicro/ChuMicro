@@ -7,12 +7,12 @@ Verifies the multi-thing-staging-replacement primitives
 Two coverage paths, both exercised on CircuitPython and
 MicroPython:
 
-* **Flash mode** — full diff exercise: plant initial set, second
+* **Flash mode**: full diff exercise.  Plant initial set, second
   deploy with mixed new + stale files, confirm the stale subset
   was reported via ``on_file_deleted``.  Second deploy's
   entrypoint imports both kept + added libs so the successful
   exec is end-to-end evidence the new payload landed.
-* **RAM mode** — diff routine collapses to ``deploy_files`` since
+* **RAM mode**: diff routine collapses to ``deploy_files`` since
   RAM mode never wrote to flash.  Confirms the primitive doesn't
   regress the existing RAM-mode flow.
 
@@ -62,7 +62,7 @@ def _build_device(entry: DeviceEntry, deploy_mode: str) -> Device:
 def test_micropython_diff_deploy_round_trip(
     micropython_device: DeviceEntry,
 ) -> None:
-    """First deploy → second deploy with new + stale files → diff cleans correctly.
+    """First deploy, then a second deploy with new + stale files, the diff cleans correctly.
 
     Sequence:
 
@@ -91,7 +91,7 @@ def test_micropython_diff_deploy_round_trip(
     assert initial.success, initial.execute_output
     time.sleep(_BACK_TO_BACK_SETTLE_SECONDS)
 
-    # Step 2: second deploy — drop /lib/drop.py, add /lib/added.py,
+    # Step 2: second deploy drops /lib/drop.py, adds /lib/added.py,
     # replace /main.py + /lib/keep.py.  The new entrypoint imports
     # both kept + added libs so a successful exec is end-to-end
     # evidence the new payload arrived intact.
@@ -149,7 +149,7 @@ def test_micropython_diff_deploy_preserves_out_of_scope(
     time.sleep(_BACK_TO_BACK_SETTLE_SECONDS)
 
     # Second diff-deploy with a different entrypoint that reads back
-    # the user file — survives means the diff routine respected
+    # the user file.  Survives means the diff routine respected
     # scope.  Cleans up the user file at the end so subsequent runs
     # start fresh.
     check = deployer.deploy_diff(
@@ -179,7 +179,7 @@ def test_circuitpython_diff_deploy_round_trip(
 ) -> None:
     """CP flash diff-deploy: stale files dropped, new payload arrives intact.
 
-    Same shape as the MP round-trip — second deploy's entrypoint
+    Same shape as the MP round-trip.  Second deploy's entrypoint
     imports both kept + added libs so the successful exec is
     end-to-end evidence the new payload landed.
     """
@@ -198,7 +198,7 @@ def test_circuitpython_diff_deploy_round_trip(
     assert initial.success, initial.execute_output
     time.sleep(_BACK_TO_BACK_SETTLE_SECONDS)
 
-    # Step 2: second deploy — entrypoint imports both kept + added.
+    # Step 2: second deploy, entrypoint imports both kept + added.
     new_payload = {
         "/code.py": (
             b"from keep import VALUE_KEEP\n"
@@ -245,7 +245,7 @@ def test_micropython_ram_diff_deploy_collapses_to_plain(
     )
     assert result.success, result.execute_output
     assert "mp-ram-diff" in result.execute_output
-    # No deletions in RAM mode — list_files_in_scope returns [].
+    # No deletions in RAM mode, since list_files_in_scope returns [].
     assert deleted == []
 
 
@@ -280,7 +280,7 @@ def test_fake_transport_matches_real_contract() -> None:
 
     Lives in functional_tests/ so it runs alongside the hardware
     tests and confirms the fake stays in sync with the real
-    primitives — surface-level integration without needing boards.
+    primitives.  Surface-level integration without needing boards.
     """
     transport = FakeTransport(
         mode="copy",
