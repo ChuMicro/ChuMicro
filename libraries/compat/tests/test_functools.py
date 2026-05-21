@@ -13,7 +13,6 @@ from chumicro_test_harness import raises
 def test_partial_freezes_positional_args() -> None:
     """Frozen positional args should be prepended to call-time args."""
     def add(left: int, right: int) -> int:
-        """Return a + b."""
         return left + right
 
     add_five = partial(add, 5)
@@ -23,7 +22,6 @@ def test_partial_freezes_positional_args() -> None:
 def test_partial_freezes_keyword_args() -> None:
     """Frozen keyword args should be passed to the wrapped function."""
     def greet(name: str, greeting: str = "hello") -> str:
-        """Return a greeting string."""
         return f"{greeting} {name}"
 
     hi = partial(greet, greeting="hi")
@@ -33,7 +31,6 @@ def test_partial_freezes_keyword_args() -> None:
 def test_partial_call_time_kwargs_override_frozen() -> None:
     """Call-time keyword args should override frozen keyword args."""
     def greet(name: str, greeting: str = "hello") -> str:
-        """Return a greeting string."""
         return f"{greeting} {name}"
 
     hi = partial(greet, greeting="hi")
@@ -53,7 +50,6 @@ def test_partial_combines_positional_and_keyword() -> None:
 def test_partial_no_frozen_args() -> None:
     """Partial with no frozen args should behave like a plain call."""
     def identity(value: object) -> object:
-        """Return value."""
         return value
 
     wrapped = partial(identity)
@@ -63,7 +59,7 @@ def test_partial_no_frozen_args() -> None:
 def test_partial_func_attribute() -> None:
     """The .func attribute should be the original callable."""
     def original() -> None:
-        """Placeholder."""
+        pass
 
     wrapped = partial(original)
     assert wrapped.func is original
@@ -102,7 +98,6 @@ def test_partial_multiple_positional_args() -> None:
     results = []
 
     def collect(*args: object) -> None:
-        """Record all positional args."""
         results.extend(args)
 
     wrapped = partial(collect, 1, 2)
