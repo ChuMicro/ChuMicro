@@ -1,4 +1,4 @@
-"""Tests for CircuitpythonTransport — pyserial raw REPL transport."""
+"""Tests for CircuitpythonTransport, the pyserial raw REPL transport."""
 
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ from chumicro_deploy.testing import (
 #: Shorthand for the standard autoreload REPL acknowledgment.
 _OK_RESPONSE = b"OK\x04\x04>"
 
-#: Test-only board identity used by :func:`_plant_verifiable_circuitpy` —
-#: keeps the boot_out.txt content and the probe-response bytes in sync.
+#: Test-only board identity used by :func:`_plant_verifiable_circuitpy`.
+#: Keeps the boot_out.txt content and the probe-response bytes in sync.
 _TEST_BOOT_MACHINE = "TestBoard with rp2040"
 _TEST_BOOT_UID = "DEADBEEF"
 
@@ -48,8 +48,8 @@ def _isolate(monkeypatch: pytest.MonkeyPatch) -> None:
     :func:`chumicro_deploy.testing.isolate_from_host_filesystem`.
 
     Tests that need ``_circuitpy_volume_candidates`` to return a specific
-    path can still call ``monkeypatch.setattr`` with their own value —
-    function-scoped monkeypatches override earlier ones.
+    path can still call ``monkeypatch.setattr`` with their own value.
+    Function-scoped monkeypatches override earlier ones.
     """
     isolate_from_host_filesystem(monkeypatch)
 
@@ -75,7 +75,7 @@ def _plant_verifiable_circuitpy(
 
     Verify-specific tests (``TestDriveVerification``,
     ``TestListFilesInScopeAndDelete``'s auto-correct cases) bypass
-    this helper — they need the real probe roundtrip + their own
+    this helper.  They need the real probe roundtrip + their own
     boot_out.txt content to exercise the mismatch / auto-correct
     code paths.
     """
@@ -422,7 +422,7 @@ class TestExecute:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Single \x04 followed by ">" — valid but minimal response.
+        # Single \x04 followed by ">", valid but minimal response.
         port = FakeSerialPort(
             read_responses=[_RAW_REPL_PROMPT, b"OKhello\x04\x04>"],
         )
@@ -663,8 +663,8 @@ class TestProbeImplementation:
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
-                # Missing "OK" prefix — _send_repl_command will raise;
-                # probe must swallow it.
+                # Missing "OK" prefix.  _send_repl_command will raise,
+                # and probe must swallow it.
                 b"nope\x04\x04>",
             ],
         )
@@ -852,7 +852,7 @@ class TestFlashMode:
 
         ``circuitpy_drive_path`` is plumbed into the transport via the
         ``drive_scanner=`` constructor kwarg since the transport no
-        longer accepts a pinned drive path — drive resolution always
+        longer accepts a pinned drive path.  Drive resolution always
         goes through candidates + verify.  Also plants a
         ``boot_out.txt`` and patches ``probe_implementation`` so
         ``_verify_drive_for_board``'s cheap path fires without
@@ -887,7 +887,7 @@ class TestFlashMode:
         # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
         # stage's autoreload-off (OK).  Stage raises before any further
         # REPL traffic, and disconnect's _enter_raw_repl finds an empty
-        # response and bails silently in its own try/except — that's the
+        # response and bails silently in its own try/except.  That's the
         # established contract for "drive yanked between connect and
         # stage" scenarios.
         port = FakeSerialPort(
@@ -927,7 +927,7 @@ class TestFlashMode:
         # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
         # stage's autoreload-off (OK).  Stage raises before any further
         # REPL traffic, and disconnect's _enter_raw_repl finds an empty
-        # response and bails silently in its own try/except — that's the
+        # response and bails silently in its own try/except.  That's the
         # established contract for "drive yanked between connect and
         # stage" scenarios.
         port = FakeSerialPort(
@@ -964,9 +964,9 @@ class TestFlashMode:
         ``.chu-probe`` marker to detect stale/unwritable mounts up
         front.  That extra on-drive write was a wedge-risk vector
         on macOS FSKit (parallel direct writes during a live rsync
-        could hang in uninterruptible kernel I/O) and was dropped;
-        rsync's own write failure is now the writability signal —
-        its stderr surfaces the OS error and ``flash_drive.rsync``
+        could hang in uninterruptible kernel I/O) and was dropped.
+        rsync's own write failure is now the writability signal.
+        Its stderr surfaces the OS error and ``flash_drive.rsync``
         wraps it as :class:`FlashDriveError`.
 
         Simulated by mocking ``subprocess.run`` to raise
@@ -981,7 +981,7 @@ class TestFlashMode:
         # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
         # stage's autoreload-off (OK).  Stage raises before any further
         # REPL traffic, and disconnect's _enter_raw_repl finds an empty
-        # response and bails silently in its own try/except — that's the
+        # response and bails silently in its own try/except.  That's the
         # established contract for "drive yanked between connect and
         # stage" scenarios.
         port = FakeSerialPort(
@@ -998,7 +998,7 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Mock rsync to fail with permission denied; pass other
+        # Mock rsync to fail with permission denied.  Pass other
         # subprocess calls (xattr, mdutil, dot_clean, sync) through
         # cleanly so they don't masquerade as the failing call.
         original_run = _subprocess.run
@@ -1110,7 +1110,7 @@ class TestFlashMode:
         self, tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Functional stage() = the same clean-slate path, fork only named.
+        """Functional stage() is the same clean-slate path, fork only named.
 
         Single-staging-path rule: the functional-test stage issues the
         *identical* rsync invocation as a production clean deploy
@@ -1155,7 +1155,7 @@ class TestFlashMode:
         transport.stage([source_dir], [test_file], harness_dir)
 
         # Bytes-on-device path: stale entrypoint + competing wifi
-        # authority reconciled away; keep set survives; payload landed.
+        # authority reconciled away, keep set survives, payload landed.
         assert not (drive_path / "code.py").exists()
         assert not (drive_path / "settings.toml").exists()
         assert (drive_path / "boot_out.txt").exists()  # DEVICE_KEEP_SET
@@ -1223,13 +1223,13 @@ class TestFlashMode:
         With autoreload ON (the default), the board's filesystem
         watcher fires a soft-reboot on the first file change.  Each
         soft-reboot re-enumerates USB-CDC.  Multiple re-enumerations
-        in rapid succession can put the kernel-side write into D-state
-        — the wedged-rsync failure mode (rsync subprocess in D-state,
+        in rapid succession can put the kernel-side write into D-state,
+        the wedged-rsync failure mode (rsync subprocess in D-state,
         ``kill -9`` ineffective, only a board reboot clears it).
 
-        Post-cleanup: there is now only ONE host-side drive write —
+        Post-cleanup: there is now only ONE host-side drive write,
         the rsync itself.  Drive prep (sentinel plants) goes into
-        the local staging tree; the ``.chu-probe`` marker write was
+        the local staging tree.  The ``.chu-probe`` marker write was
         dropped from ``_resolve_circuitpy_drive`` in the default path.
         This test snapshots the order of:
 
@@ -1272,8 +1272,8 @@ class TestFlashMode:
         port.write = recording_write  # type: ignore[assignment]
 
         # Wrap subprocess.run to record when rsync is invoked.  Other
-        # subprocess calls (xattr, dot_clean, sync) come AFTER rsync —
-        # tracking rsync alone is sufficient for the order assertion.
+        # subprocess calls (xattr, dot_clean, sync) come AFTER rsync,
+        # so tracking rsync alone is sufficient for the order assertion.
         import subprocess as _subprocess
         original_run = _subprocess.run
 
@@ -1303,7 +1303,7 @@ class TestFlashMode:
         self, tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """disconnect() in flash mode emits Ctrl-B only — no Ctrl-C, no autoreload flip.
+        """disconnect() in flash mode emits Ctrl-B only, no Ctrl-C, no autoreload flip.
 
         Ctrl-C would interrupt the ``code.py`` that ``deploy_files``
         leaves running.  An autoreload-on flip can layer a second
@@ -1332,10 +1332,10 @@ class TestFlashMode:
         assert b"autoreload" not in written_data
 
     def test_ram_disconnect_does_not_send_autoreload(self) -> None:
-        """disconnect() in ram mode emits Ctrl-B only — same shape as flash.
+        """disconnect() in ram mode emits Ctrl-B only, same shape as flash.
 
         ram mode never disables autoreload, so there is nothing to
-        restore; the parity is asserted explicitly so the two paths
+        restore.  The parity is asserted explicitly so the two paths
         cannot drift.
         """
         port = FakeSerialPort(
@@ -1398,12 +1398,12 @@ class TestFlashMode:
         transport = self._make_flash_transport(port, str(drive_path), monkeypatch)
         transport.connect()
 
-        # First stage — libs + test_one.
+        # First stage: libs + test_one.
         transport.stage([source_dir], [test_file_one], harness_dir)
         assert (drive_path / "lib" / "chumicro_timing" / "__init__.py").exists()
         assert (drive_path / "test_one.py").exists()
 
-        # Second stage with test_two — rsync replaces root test files
+        # Second stage with test_two.  rsync replaces root test files
         # and keeps libs intact (checksum match = no rewrite).
         transport.stage([source_dir], [test_file_two], harness_dir)
         assert (drive_path / "test_two.py").exists()
@@ -1541,7 +1541,7 @@ class TestCircuitpyVolumeCandidates:
     """Tests for _circuitpy_volume_candidates auto-detection.
 
     The candidates helper is what `_resolve_circuitpy_drive` walks at
-    deploy time — it globs every mounted ``CIRCUITPY*`` directory on
+    deploy time.  It globs every mounted ``CIRCUITPY*`` directory on
     each base path so the verify layer can pick the UID-matching one
     on multi-board hosts.  These tests cover the base-path logic
     (macOS ``/Volumes`` and Linux ``/media/<user>`` / ``/run/media/<user>``)
@@ -1621,7 +1621,7 @@ class TestCircuitpyBasePaths:
     """Tests for _circuitpy_base_paths username-resolution behavior.
 
     Linux ``/media/<user>`` and ``/run/media/<user>`` mount bases need
-    a real username — slim containers without ``$USER`` exported still
+    a real username.  Slim containers without ``$USER`` exported still
     have to fall back through ``getpass.getuser`` to the OS password
     database, and degrade gracefully to ``/Volumes``-only when even
     that's unavailable rather than producing malformed ``/media//`` paths.
@@ -1661,7 +1661,7 @@ class TestCircuitpyBasePaths:
             boom,
         )
         bases = _circuitpy_base_paths()
-        # Linux media bases require a username; falling back to /Volumes
+        # Linux media bases require a username, so falling back to /Volumes
         # alone keeps us out of /media//CIRCUITPY territory.
         assert bases == [Path("/Volumes")]
 
@@ -1701,7 +1701,7 @@ class TestCircuitpyBasePaths:
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
 
-        # Should have used the auto-detected path — lib/ created there.
+        # Should have used the auto-detected path, lib/ created there.
         assert (fake_drive / "lib").is_dir()
 
         transport.disconnect()
@@ -1729,11 +1729,11 @@ class TestResetIntoBootloader:
             serial_port_factory=lambda **_kwargs: FakeSerialPort(),
             time=FakeTime(),
         )
-        # connect() was never called — _port stays None.
+        # connect() was never called, so _port stays None.
         assert transport.reset_into_bootloader() is False
 
     def test_send_exception_swallowed_returns_true(self) -> None:
-        # No _OK_RESPONSE supplied — _send_repl_command will raise when
+        # No _OK_RESPONSE supplied: _send_repl_command will raise when
         # it fails to parse.  That's the expected success signal (board
         # resets mid-command).
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
@@ -1749,7 +1749,7 @@ class TestResetIntoBootloader:
         self, capsys: pytest.CaptureFixture[str],
     ) -> None:
         """After reset_into_bootloader, disconnect() skips the restore
-        dance and emits no warnings — the USB link is gone on purpose.
+        dance and emits no warnings.  The USB link is gone on purpose.
         """
         # Read sequence: connect (prompt) + reset OK + (no more reads
         # because disconnect now skips _enter_raw_repl + autoreload).
@@ -1773,7 +1773,7 @@ class TestResetIntoBootloader:
         assert "WARNING" not in captured.out
         assert "WARNING" not in captured.err
         assert port.closed
-        # reset_into_bootloader nulled the port itself; disconnect
+        # reset_into_bootloader nulled the port itself.  Disconnect
         # had nothing left to restore or close and the transport is
         # reusable via a fresh connect() once the board is back.
         assert transport._port is None
@@ -2028,7 +2028,7 @@ class TestDeployFiles:
     ) -> None:
         """``tail_seconds=0`` must short-circuit the post-Ctrl-D capture.
 
-        Caller wants to leave the board running and not block — the
+        Caller wants to leave the board running and not block.  The
         Ctrl-D goes out, the read loop is skipped entirely, output is
         empty.  No serial-read response needs queuing in the fake.
         """
@@ -2087,7 +2087,7 @@ class TestDeployFiles:
         """deploy_files must raise before Ctrl-D when verify_rsync reports divergence.
 
         Soft-rebooting against an inconsistent FAT volume risks the
-        volume going read-only — typically recoverable only by
+        volume going read-only, typically recoverable only by
         reformatting (`chumicro-workspace reset-board --yes`),
         since RESET alone often does not clear it.  The error
         message must name the recovery path.
@@ -2222,7 +2222,7 @@ class TestDeployFiles:
         End-to-end check of the unified keep set: ``settings.toml`` is
         a competing wifi authority and is evicted by ``rsync
         --delete`` (it is not in ``DEVICE_KEEP_SET``), with a one-time
-        loud notice; ``boot_out.txt`` (planted by the verifiable-drive
+        loud notice.  ``boot_out.txt`` (planted by the verifiable-drive
         helper, in the keep set) survives.
         """
         drive = tmp_path / "CIRCUITPY"
@@ -2248,7 +2248,7 @@ class TestDeployFiles:
         assert not (drive / "settings.toml").exists()  # evicted
         assert (drive / "boot_out.txt").exists()  # keep set survives
         assert (drive / "code.py").read_bytes() == content
-        # Same clean-slate bytes path as the functional stage; the only
+        # Same clean-slate bytes path as the functional stage.  The only
         # sanctioned divergence is this named post-stage fork.
         assert transport._post_stage_step is PostStageStep.SOFT_REBOOT_AND_TAIL
 
@@ -2283,7 +2283,7 @@ class TestDeployFiles:
         """Pre-reboot stale output must not leak into the capture.
 
         Reproduces the Pi Pico W "one-cycle-delayed capture" failure
-        mode: host opens the port, drain doesn't fully clear CP's
+        mode.  Host opens the port, drain doesn't fully clear CP's
         USB-CDC buffer, and the buffer still holds a complete
         ``code.py output: ... Code done running.`` pair from the
         *previous* deploy.  The new ``_read_code_py_output`` sync on
@@ -2326,7 +2326,7 @@ class TestDeployFiles:
         """USB-MSC write visibility to CP is polled, not assumed.
 
         On a slow controller the first ``os.stat`` can still report
-        the previous file's size; the transport retries until the
+        the previous file's size, so the transport retries until the
         board sees the new length, guaranteeing that the soft-reboot
         runs the file we just wrote rather than a stale cached one.
         """
@@ -2435,7 +2435,7 @@ class TestDriveVerification:
         info and the probe can't supply one either, refuse to assume
         the drive belongs to the connected board.  Silently returning
         *drive_path* would land the deploy on whatever ``candidates[0]``
-        happened to be — on a multi-CP-board host that's often the
+        happened to be, and on a multi-CP-board host that's often the
         wrong board.
         """
         drive = tmp_path / "CIRCUITPY"
@@ -2515,7 +2515,7 @@ class TestDriveVerification:
 
         Auto-correction on success is silent (the warning was noise
         for the common two-board bench setup where macOS renames the
-        second CIRCUITPY mount); only the no-sibling-match path
+        second CIRCUITPY mount).  Only the no-sibling-match path
         raises.
         """
         wrong_drive = tmp_path / "CIRCUITPY"
@@ -2600,7 +2600,7 @@ class TestDriveVerification:
     def test_read_boot_out_identity_extracts_machine_suffix(
         self, tmp_path: Path,
     ) -> None:
-        """``on DATE; MACHINE`` suffix is returned; malformed files -> None."""
+        """``on DATE; MACHINE`` suffix is returned, malformed files -> None."""
         from chumicro_deploy.circuitpy_drive import (
             _read_boot_out_identity,
         )
@@ -2615,12 +2615,12 @@ class TestDriveVerification:
         _uid, machine = _read_boot_out_identity(drive)
         assert machine == "Foo Board with xyz"
 
-        # Missing file → both fields None.
+        # Missing file: both fields None.
         empty = tmp_path / "OTHER"
         empty.mkdir()
         assert _read_boot_out_identity(empty) == (None, None)
 
-        # Malformed first line (no semicolon) → machine is None.
+        # Malformed first line (no semicolon): machine is None.
         bad = tmp_path / "BAD"
         bad.mkdir()
         (bad / "boot_out.txt").write_text("weird line\n", encoding="utf-8")
@@ -2661,7 +2661,7 @@ class TestDriveVerification:
     def test_uid_match_preferred_over_machine_when_both_available(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Two identical-machine boards → UID disambiguates; machine alone can't.
+        """Two identical-machine boards: UID disambiguates, machine alone can't.
 
         Regression guard for the "two identical boards connected at
         once" case: both drives report the same ``_machine`` string,
@@ -2708,7 +2708,7 @@ class TestDriveVerification:
     def test_machine_fallback_when_probe_has_no_uid(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Old firmware → probe has no uid → machine-string fallback kicks in."""
+        """Old firmware leaves the probe with no uid, so the machine-string fallback kicks in."""
         wrong = tmp_path / "CIRCUITPY"
         wrong.mkdir()
         (wrong / "boot_out.txt").write_text(
@@ -2730,7 +2730,7 @@ class TestDriveVerification:
             drive_path=str(wrong),
             reads=[
                 _RAW_REPL_PROMPT,
-                # No uid in the probe response — machine fallback applies.
+                # No uid in the probe response, so machine fallback applies.
                 self._probe_response("S2Mini with ESP32S2-S2FN4R2"),
             ],
         )
@@ -2739,7 +2739,7 @@ class TestDriveVerification:
     def test_returns_unchanged_when_uid_matches(
         self, tmp_path: Path,
     ) -> None:
-        """UID on drive matches probe UID → no correction, no warning."""
+        """UID on drive matches probe UID, no correction, no warning."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
         (drive / "boot_out.txt").write_text(
@@ -2774,7 +2774,7 @@ class TestDriveVerification:
         uid, _machine = _read_boot_out_identity(drive)
         assert uid == "487F301F0224"
 
-        # File without UID line → uid is None even though machine parses.
+        # File without UID line: uid is None even though machine parses.
         bad = tmp_path / "BAD"
         bad.mkdir()
         (bad / "boot_out.txt").write_text(
@@ -2807,7 +2807,7 @@ class TestDriveVerification:
             encoding="utf-8",
         )
         # find_circuitpy_drive_for_uid is a module-level helper that
-        # scans circuitpy_drive._circuitpy_volume_candidates() directly;
+        # scans circuitpy_drive._circuitpy_volume_candidates() directly,
         # not transport-internal, so monkeypatch the module-level fn.
         monkeypatch.setattr(
             "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
@@ -2849,7 +2849,7 @@ class TestFormatProbeError:
     def test_unknown_errno_uses_legacy_wrapper(self) -> None:
         error = OSError(errno.EIO, "Input/output error")
         message = _format_probe_error(Path("/Volumes/CIRCUITPY"), error)
-        # EIO is not specifically translated; the underlying text still
+        # EIO is not specifically translated, the underlying text still
         # carries the signal the classifier needs ("input/output error"
         # is in _FLASH_DRIVE_STATE_PATTERNS).
         assert "not found or not writable" in message
@@ -2860,7 +2860,7 @@ class TestListFilesInScopeAndDelete:
     """CP transport's diff-deploy primitives (multi-project-staging replacement)."""
 
     def test_ram_mode_returns_empty(self) -> None:
-        """RAM-mode never wrote to flash → list_files_in_scope yields nothing."""
+        """RAM-mode never wrote to flash, so list_files_in_scope yields nothing."""
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="ram",
@@ -2894,7 +2894,7 @@ class TestListFilesInScopeAndDelete:
         (tmp_path / "data" / "log.txt").write_text("user data")  # out of scope
 
         # boot_out.txt is planted by the helper with valid identity so
-        # ``_verify_drive_for_board`` cheap-paths; it's still filtered
+        # ``_verify_drive_for_board`` cheap-paths.  It's still filtered
         # out of the scope listing because it's not a deploy-scope name.
         _plant_verifiable_circuitpy(tmp_path, monkeypatch)
         transport = CircuitpythonTransport(
@@ -2914,7 +2914,7 @@ class TestListFilesInScopeAndDelete:
     def test_flash_mode_lists_returns_empty_on_missing_drive(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Drive resolution failure → empty listing (no exception)."""
+        """Drive resolution failure leaves an empty listing (no exception)."""
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
@@ -2940,17 +2940,17 @@ class TestListFilesInScopeAndDelete:
             drive_scanner=lambda: [tmp_path],
         )
         transport.delete_files(["/lib/stale.py", "/lib/missing.py"])
-        # Stale removed; missing tolerated silently; keeper survives.
+        # Stale removed, missing tolerated silently, keeper survives.
         assert not target.exists()
         assert keeper.exists()
 
     def test_delete_reaps_emptied_package_dirs_not_lib_root(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """An emptied `/lib/<pkg>/` is pruned; live siblings + lib root stay.
+        """An emptied `/lib/<pkg>/` is pruned, live siblings + lib root stay.
 
         Regression: unlink removes files but not directories, so a
-        package whose every file was stale left an empty husk — a
+        package whose every file was stale left an empty husk.  A
         stale `import <pkg>` then failed mid-package instead of
         cleanly.  The diff path must reap the husk (rsync --delete
         would have).
@@ -2973,7 +2973,7 @@ class TestListFilesInScopeAndDelete:
             "/lib/pkg/__init__.py",
             "/lib/pkg/nested/deep.py",
         ])
-        # Husk + its nested empty dir reaped, deepest-first.
+        # Husk and its nested empty dir reaped, deepest-first.
         assert not (lib / "pkg" / "nested").exists()
         assert not (lib / "pkg").exists()
         # The scope root is never removed, and a package that still
@@ -2991,7 +2991,7 @@ class TestListFilesInScopeAndDelete:
         the husk after stale-file removal.  An empty root-level
         ``/<pkg>/`` resolves ``import <pkg>`` to a PEP 420 namespace
         package and shadows the populated ``/lib/<pkg>/`` underneath
-        in ``sys.path`` — exactly the failure that bit Lolin S2 MP.
+        in ``sys.path``, exactly the failure that bit Lolin S2 MP.
         Widening the reap to the whole drive scope closes the gap.
         """
         (tmp_path / "chumicro_timing").mkdir()
@@ -3010,7 +3010,7 @@ class TestListFilesInScopeAndDelete:
         )
         transport.delete_files(["/chumicro_timing/old.py"])
 
-        # Husk reaped — no more shadowing namespace package at root.
+        # Husk reaped, no more shadowing namespace package at root.
         assert not (tmp_path / "chumicro_timing").exists()
         # New payload survives (it has a live file).
         assert (tmp_path / "lib" / "chumicro_timing" / "__init__.py").is_file()
@@ -3020,7 +3020,7 @@ class TestListFilesInScopeAndDelete:
     ) -> None:
         """macOS noise (``.Spotlight-V100`` etc.) isn't reaped.
 
-        Mirrors ``_list_scope_on_drive``'s dot-prefix filter — these
+        Mirrors ``_list_scope_on_drive``'s dot-prefix filter.  These
         entries are managed by the host OS and outside the deploy's
         scope.  Reaping an empty one would be harmless functionally
         but would burn FAT writes on a class of files we deliberately
@@ -3045,7 +3045,7 @@ class TestListFilesInScopeAndDelete:
     def test_delete_keeps_dir_that_still_has_files(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """rmdir only removes empty dirs — a partially-cleared pkg stays."""
+        """rmdir only removes empty dirs, so a partially-cleared pkg stays."""
         lib = tmp_path / "lib"
         (lib / "pkg").mkdir(parents=True)
         (lib / "pkg" / "gone.py").write_text("# stale")
@@ -3082,7 +3082,7 @@ class TestClearEntrypoints:
     """CP transport's pre-soft-reset entrypoint clear (sweep race fix)."""
 
     def test_ram_mode_is_no_op(self) -> None:
-        """RAM mode never persists an entrypoint → nothing to clear."""
+        """RAM mode never persists an entrypoint, so nothing to clear."""
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0", mode="ram", time=FakeTime(),
         )
@@ -3112,7 +3112,7 @@ class TestClearEntrypoints:
     def test_flash_mode_absent_entrypoints_is_idempotent(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """No code.py/main.py present → clears cleanly, no raise."""
+        """No code.py/main.py present, clears cleanly, no raise."""
         _plant_verifiable_circuitpy(tmp_path, monkeypatch)
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
@@ -3123,7 +3123,7 @@ class TestClearEntrypoints:
         transport.clear_entrypoints()  # no raise
 
     def test_flash_mode_missing_drive_returns_quietly(self) -> None:
-        """Unresolvable drive → no-op (soft_reset path handles it)."""
+        """Unresolvable drive falls to a no-op (soft_reset path handles it)."""
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             mode="flash",
@@ -3136,7 +3136,7 @@ class TestClearEntrypoints:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """``circuitpy_drive_path`` pointing at the wrong board's drive
-        is silently auto-corrected — list returns the connected board's
+        is silently auto-corrected.  List returns the connected board's
         files, not the unrelated mount's.
 
         Multi-board macOS bench: a ``CIRCUITPY 1`` rename swap leaves
@@ -3170,7 +3170,7 @@ class TestClearEntrypoints:
 
         # The auto-correct path goes through circuitpy_drive's module-
         # level find_circuitpy_drive_for_uid helper, which uses the
-        # module-global _circuitpy_volume_candidates — not the
+        # module-global _circuitpy_volume_candidates, not the
         # transport's drive_scanner.  Patch both surfaces so the
         # auto-correct sees both candidates.
         monkeypatch.setattr(
@@ -3199,7 +3199,7 @@ class TestClearEntrypoints:
         )
         transport.connect()
         listed = sorted(transport.list_files_in_scope())
-        # Right-drive contents only; wrong-drive's `wrong_only.py` is absent.
+        # Right-drive contents only, wrong-drive's `wrong_only.py` is absent.
         assert listed == ["/code.py", "/lib/right_only.py"]
 
     def test_delete_files_auto_corrects_stale_drive_path(
@@ -3207,7 +3207,7 @@ class TestClearEntrypoints:
     ) -> None:
         """delete_files unlinks from the connected board's mount, not
         the stale ``circuitpy_drive_path``'s.  Same risk class as
-        list_files_in_scope, more dangerous because it's destructive."""
+        list_files_in_scope, more dangerous because it is destructive."""
         wrong_drive = tmp_path / "CIRCUITPY"
         wrong_drive.mkdir()
         (wrong_drive / "boot_out.txt").write_text(
@@ -3235,7 +3235,7 @@ class TestClearEntrypoints:
         right_target.write_text("# right board — should be deleted")
 
         # Same caveat as test_list_files_in_scope_auto_corrects_stale_drive_path
-        # above: the auto-correct uses the module-level candidates fn.
+        # above.  The auto-correct uses the module-level candidates fn.
         monkeypatch.setattr(
             "chumicro_deploy.circuitpy_drive._circuitpy_volume_candidates",
             lambda: [wrong_drive, right_drive],
@@ -3272,7 +3272,7 @@ class TestWipeFilesystem:
     """`wipe_filesystem()` drives `storage.erase_filesystem()` then re-connects."""
 
     def test_ram_mode_is_no_op(self) -> None:
-        """RAM mode never wrote to flash → wipe is a silent no-op."""
+        """RAM mode never wrote to flash, so wipe is a silent no-op."""
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0", mode="ram", time=FakeTime(),
         )
@@ -3292,7 +3292,7 @@ class TestWipeFilesystem:
     ) -> None:
         """Sends erase_filesystem, swallows the dropped REPL, re-opens port."""
         # First port: serves connect() then dies during the wipe REPL call
-        # (no further read responses → _send_repl_command raises, which we
+        # (no further read responses, so _send_repl_command raises, which we
         # swallow as expected behavior).  Second port: serves the post-wipe
         # reconnect.
         drive = tmp_path / "CIRCUITPY"
@@ -3318,7 +3318,7 @@ class TestWipeFilesystem:
         # The wipe script was issued on the first port.
         wipe_writes = b"".join(first_port.writes)
         assert b"storage.erase_filesystem" in wipe_writes
-        # First port closed; second port serves the re-connect.
+        # First port closed, second port serves the re-connect.
         assert first_port.closed
         assert ports == []  # both ports consumed by the factory
 
@@ -3346,7 +3346,7 @@ class TestWipeFilesystem:
             drive_scanner=lambda: [drive],
         )
         transport.connect()
-        transport.wipe_filesystem()  # close failure swallowed; re-connect runs
+        transport.wipe_filesystem()  # close failure swallowed, re-connect runs
         assert ports == []
 
     def test_flash_mode_waits_for_drive_already_mounted(
@@ -3410,7 +3410,7 @@ class TestWipeFilesystem:
         )
         transport.connect()
         transport.wipe_filesystem()
-        # Probed at least 3 times — first two masked, third returned True.
+        # Probed at least 3 times, first two masked, third returned True.
         assert probe_count["value"] >= 3
 
     def test_flash_mode_drive_never_remounts_raises(
@@ -3444,7 +3444,7 @@ class TestWipeFilesystem:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
         # First two probe writes hit EACCES (drive mounted but not yet
-        # writable post-remount); third succeeds.
+        # writable post-remount), third succeeds.
         original_write_bytes = Path.write_bytes
         write_attempts = {"value": 0}
 
@@ -3562,7 +3562,7 @@ class TestRuntimeFilteringRamMode:
         assert "chumicro_pkg.shared" in names
 
     def test_target_runtime_default_is_circuitpython(self) -> None:
-        """The transport's identity sets the filter — no kwarg needed."""
+        """The transport's identity sets the filter, no kwarg needed."""
         transport = CircuitpythonTransport(
             "/dev/null",
             serial_port_factory=lambda **_: FakeSerialPort(),
@@ -3580,7 +3580,7 @@ class TestRuntimeFilteringFlashStaging:
         _build_dual_runtime_pkg(source_root)
         harness = tmp_path / "harness"
         harness.mkdir()
-        # Empty harness — focus on the source dir filtering.
+        # Empty harness, focus on the source dir filtering.
         staging = tmp_path / "staging"
         staging.mkdir()
         transport = CircuitpythonTransport(

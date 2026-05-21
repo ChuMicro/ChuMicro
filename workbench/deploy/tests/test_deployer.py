@@ -95,10 +95,10 @@ class TestDeployerBasic:
         assert isinstance(deployer.device, Device)
 
     def test_clean_kwarg_propagates_to_transport(self):
-        """``deploy_diff`` is clean-slate by default; ``clean=False``
+        """``deploy_diff`` is clean-slate by default.  ``clean=False``
         is the additive ``--no-wipe`` opt-out.  The flag drives the
         in-scope listing: clean-slate lists the whole device minus the
-        closed keep set so stale board files reconcile away; additive
+        closed keep set so stale board files reconcile away.  Additive
         lists only the legacy deploy scope and leaves the rest.
         """
         deployer, fake = _make_deployer_with_fake()
@@ -128,7 +128,7 @@ class TestDeployerCallbacks:
         messages = [event[1] for event in progress_events]
         # deploy_diff's pre-stage hook owns the 0.1 "listing in-scope"
         # / 0.3 "staging" milestones (0.2 "cleaning stale" only fires
-        # when there is a stale set; the fake device starts empty).
+        # when there is a stale set, and the fake device starts empty).
         assert fractions == [0.0, 0.1, 0.3, 0.9, 1.0]
         assert "connecting" in messages[0]
         assert "done" in messages[-1]
@@ -154,7 +154,7 @@ class TestDeployerCallbacks:
     def test_callbacks_default_to_none_without_error(self):
         deployer, _ = _make_deployer_with_fake(execute_output="hi\n")
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
-        # No callbacks — should run without raising.
+        # No callbacks: should run without raising.
         result = deployer.deploy_diff(source)
         assert result.success is True
 
@@ -198,7 +198,7 @@ class TestFlashModeRsyncGuard:
 
         with pytest.raises(RsyncMissingError):
             deployer.deploy_diff(source)
-        # Transport must not have been opened — no connect/disconnect dance
+        # Transport must not have been opened, so no connect/disconnect dance
         # before the rsync gate fires.
         assert fake.calls == []
 
@@ -217,7 +217,7 @@ class TestFlashModeRsyncGuard:
         monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
 
-        # Must complete normally — RAM mode never touches rsync.
+        # Must complete normally.  RAM mode never touches rsync.
         result = deployer.deploy_diff(source)
         assert result.success is True
 
@@ -236,7 +236,7 @@ class TestFlashModeRsyncGuard:
         monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
         source = FileMapSource({"/main.py": "pass"}, entrypoint="/main.py")
 
-        # mpremote handles flash on MP — no rsync needed, no gate.
+        # mpremote handles flash on MP, no rsync needed, no gate.
         result = deployer.deploy_diff(source)
         assert result.success is True
 
@@ -247,7 +247,7 @@ class TestDeployerFollowKwargRouting:
     The MicroPython flash transport adopts CP's soft-reboot pattern
     only for that combination, where the entrypoint may be a
     ``while True`` body that never returns.  Other paths (CP, MP RAM,
-    MP flash with non-main.py entrypoints) keep transport defaults —
+    MP flash with non-main.py entrypoints) keep transport defaults.
     CP doesn't accept ``follow`` at all, and MP RAM/test-harness
     deploys want ``follow="exec"``.
     """
@@ -306,11 +306,11 @@ class TestDeployerFollowKwargRouting:
     def test_circuitpython_omits_follow_kwarg(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """CP transport doesn't accept ``follow`` — the Deployer must not pass it.
+        """CP transport doesn't accept ``follow``, so the Deployer must not pass it.
 
         Uses RAM mode to sidestep the CP-flash rsync gate (orthogonal
         to the kwarg-routing behavior under test).  The branch the
-        Deployer takes here is the same for CP RAM and CP flash —
+        Deployer takes here is the same for CP RAM and CP flash:
         ``follow`` is suppressed for any non-MP transport.
         """
         deployer, fake = self._make_deployer(
@@ -318,7 +318,7 @@ class TestDeployerFollowKwargRouting:
         )
         deployer.deploy_diff(FileMapSource({"/code.py": "pass"}, entrypoint="/code.py"))
         deploy_call = next(call for call in fake.calls if call[0] == "deploy_files")
-        # FakeTransport's default ``follow="exec"`` is recorded — i.e.
+        # FakeTransport's default ``follow="exec"`` is recorded, i.e.
         # the kwarg was not passed by the Deployer.  The discriminator
         # is the live MP transport, which would raise if a kwarg it
         # doesn't accept were splatted in.
@@ -458,7 +458,7 @@ class TestPreflightAutoSwitch:
         )
         deployer = Deployer(device)
         messages: list[str] = []
-        # Force RAM mode despite the flagged library — caller's choice.
+        # Force RAM mode despite the flagged library, caller's choice.
         result = deployer.deploy_diff(
             source,
             force_deploy_mode="ram",
@@ -499,9 +499,9 @@ class TestPreflightAutoSwitch:
 
 class TestPreflightDataFileAutoSwitch:
     """A RAM-mode deploy whose staged set contains any non-.py data
-    file auto-switches the *whole* deploy to flash — RAM-mode
+    file auto-switches the *whole* deploy to flash.  RAM-mode
     CircuitPython is a raw-REPL exec with no device filesystem, so the
-    asset would be silently dropped.  All-or-nothing; no hybrid.
+    asset would be silently dropped.  All-or-nothing, no hybrid.
     """
 
     def _ram_deployer(self) -> tuple[Deployer, FakeTransport]:
@@ -542,8 +542,8 @@ class TestPreflightDataFileAutoSwitch:
 
     def test_force_ram_bypasses_data_file_switch(self):
         """Explicit ``force_deploy_mode='ram'`` is the power-user escape
-        hatch — same contract as the requires_flash pre-flight.  The
-        data file will be missing on-device; caller's choice."""
+        hatch, same contract as the requires_flash pre-flight.  The
+        data file will be missing on-device, caller's choice."""
         deployer, _ = self._ram_deployer()
         source = FileMapSource(
             {"/code.py": "pass", "/data.bin": b"\x00\x01"},

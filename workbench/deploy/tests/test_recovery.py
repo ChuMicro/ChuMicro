@@ -17,7 +17,7 @@ from chumicro_deploy.recovery import (
 from chumicro_deploy.result import DeployResult
 
 # ---------------------------------------------------------------------------
-# classify_deploy_failure — message → kind mapping
+# classify_deploy_failure: message-to-kind mapping
 # ---------------------------------------------------------------------------
 
 
@@ -43,7 +43,7 @@ from chumicro_deploy.result import DeployResult
             "Failed to open serial port: device not configured",
             DeployFailureKind.PORT_UNAVAILABLE,
         ),
-        # mpremote's message for a missing-or-busy device — wraps
+        # mpremote's message for a missing-or-busy device wraps
         # both the generic "mpremote command failed" bootstrap-exec
         # substring AND the real cause ("failed to access ...").
         # The real cause must win so unplugged boards don't get
@@ -57,7 +57,7 @@ from chumicro_deploy.result import DeployResult
             "program)",
             DeployFailureKind.PORT_UNAVAILABLE,
         ),
-        # CIRCUITPY drive missing — distinct from port-level failure.
+        # CIRCUITPY drive missing, distinct from port-level failure.
         (
             "CIRCUITPY drive not found.  Connect the board's USB "
             "drive (or check that the host has it mounted).",
@@ -67,11 +67,11 @@ from chumicro_deploy.result import DeployResult
             "CIRCUITPY drive not mounted: /Volumes/CIRCUITPY",
             DeployFailureKind.CIRCUITPY_DRIVE_MISSING,
         ),
-        # Stale-mount case — /Volumes/CIRCUITPY exists but writes
-        # fail with EACCES (Finder eject leaves the placeholder; the
-        # FSKit wedge does too).  The nested "Permission denied" text
-        # collides with _PORT_UNAVAILABLE_PATTERNS, but the CIRCUITPY
-        # prefix is more specific and must win.
+        # Stale-mount case: /Volumes/CIRCUITPY exists but writes
+        # fail with EACCES.  Finder eject leaves the placeholder, and
+        # the FSKit wedge does too.  The nested "Permission denied"
+        # text collides with _PORT_UNAVAILABLE_PATTERNS, but the
+        # CIRCUITPY prefix is more specific and must win.
         (
             "CIRCUITPY drive not found or not writable: /Volumes/CIRCUITPY "
             "(PermissionError: [Errno 13] Permission denied: "
@@ -132,7 +132,7 @@ from chumicro_deploy.result import DeployResult
             "mpremote command failed (exit 1): fs cp reported error",
             DeployFailureKind.BOOTSTRAP_EXEC_FAILED,
         ),
-        # Configuration error — caller misuse, not a runtime.
+        # Configuration error: caller misuse, not a runtime.
         (
             "connect() must be called before execute()",
             DeployFailureKind.CONFIGURATION_ERROR,
@@ -146,7 +146,7 @@ from chumicro_deploy.result import DeployResult
             "deploy_mode='ram'",
             DeployFailureKind.CONFIGURATION_ERROR,
         ),
-        # No Python runtime — board responds but isn't running CP/MP.
+        # No Python runtime: board responds but isn't running CP/MP.
         # Distinct from RAW_REPL_UNRESPONSIVE (Python interpreter
         # present but hung) and PORT_UNAVAILABLE (port not reachable).
         # Drives the install-firmware coaching path.
@@ -173,7 +173,7 @@ from chumicro_deploy.result import DeployResult
             "Unknown firmware on /dev/cu.usbmodem211101",
             DeployFailureKind.NO_PYTHON_RUNTIME,
         ),
-        # Unknown bucket — any message with no hits.
+        # Unknown bucket: any message with no hits.
         (
             "An entirely novel failure message",
             DeployFailureKind.UNKNOWN,
@@ -209,7 +209,7 @@ def test_classify_is_case_insensitive() -> None:
 
 def test_classify_disk_full_wins_over_circuitpy_drive_wrap() -> None:
     # The transport's _resolve_circuitpy_drive used to wrap any probe
-    # OSError as "CIRCUITPY drive not found or not writable" — even
+    # OSError as "CIRCUITPY drive not found or not writable", even
     # ENOSPC, which means the drive was found and just full.  After
     # the disk-state-pattern reorder, a message that mentions both
     # the legacy CIRCUITPY wrapper and "no space left on device"
@@ -263,7 +263,7 @@ def test_classify_pure_circuitpy_missing_still_routes_to_drive_kind() -> None:
 def test_classify_eacces_stale_mount_still_routes_to_drive_kind() -> None:
     # EACCES from a Finder-eject stale mount is the original reason
     # CIRCUITPY_DRIVE_MISSING gets checked before PORT_UNAVAILABLE.
-    # Make sure that path is still intact — disk-state preemption
+    # Make sure that path is still intact.  Disk-state preemption
     # shouldn't catch "Permission denied" (EACCES is not in
     # _FLASH_DRIVE_STATE_PATTERNS).
     error = CircuitpythonTransportError(
@@ -278,7 +278,7 @@ def test_classify_eacces_stale_mount_still_routes_to_drive_kind() -> None:
 
 def test_classify_traceback_in_message_routes_to_traceback_returned() -> None:
     # CP RAM mode raises CircuitpythonTransportError with the board's
-    # stderr inline — including a Python traceback.  The classifier
+    # stderr inline, including a Python traceback.  The classifier
     # routes those to TRACEBACK_RETURNED (non-retryable, source-bug)
     # instead of BOOTSTRAP_EXEC_FAILED so the user gets the same
     # coaching as MP + CP flash paths for the same underlying cause.
@@ -296,9 +296,9 @@ def test_classify_traceback_in_message_routes_to_traceback_returned() -> None:
 
 
 def test_classify_traceback_routing_beats_bootstrap_substring() -> None:
-    # Message contains BOTH "inline bootstrap chunk" (→ BOOTSTRAP_EXEC)
-    # and a Python traceback.  Traceback wins — the user-visible issue
-    # is source code, not a transport hiccup.
+    # Message contains BOTH "inline bootstrap chunk" (routes to
+    # BOOTSTRAP_EXEC) and a Python traceback.  Traceback wins, because
+    # the user-visible issue is source code, not a transport hiccup.
     error = CircuitpythonTransportError(
         "CircuitPython inline bootstrap chunk 4/4 failed: "
         "Traceback (most recent call last):\n  ImportError: no mod"
@@ -311,7 +311,7 @@ def test_classify_traceback_routing_beats_bootstrap_substring() -> None:
 
 def test_classify_configuration_wins_over_drive_missing() -> None:
     # A config-style message that also says "CIRCUITPY drive not found"
-    # should still land in CONFIGURATION — configuration errors are
+    # should still land in CONFIGURATION.  Configuration errors are
     # checked first because they often contain sub-string matches for
     # other kinds.
     error = CircuitpythonTransportError(
@@ -325,7 +325,7 @@ def test_classify_configuration_wins_over_drive_missing() -> None:
 
 
 # ---------------------------------------------------------------------------
-# recovery_plan_for — every kind has a plan with non-empty fix_steps
+# recovery_plan_for: every kind has a plan with non-empty fix_steps
 # ---------------------------------------------------------------------------
 
 
@@ -355,7 +355,7 @@ def test_traceback_is_not_retryable() -> None:
 
 
 def test_no_python_runtime_is_not_retryable() -> None:
-    """Retrying a board with no Python runtime changes nothing — the
+    """Retrying a board with no Python runtime changes nothing.  The
     user must explicitly run install-firmware first.  Non-retryable
     is the right contract because flashing is destructive (overwrites
     whatever firmware is on the board) and must require explicit
@@ -374,7 +374,7 @@ def test_no_python_runtime_plan_points_at_install_firmware() -> None:
 
 def test_classify_no_python_wins_over_raw_repl_unresponsive() -> None:
     """A message that explicitly asserts "no python here" must NOT
-    classify as RAW_REPL_UNRESPONSIVE — they're different recoveries
+    classify as RAW_REPL_UNRESPONSIVE.  They're different recoveries
     (install-firmware vs. tap RESET) and the more specific kind wins.
     Guards against future pattern reordering that might silently
     re-route the no-Python case to the generic REPL bucket."""
@@ -406,14 +406,14 @@ def test_physical_failures_are_retryable(kind: DeployFailureKind) -> None:
 
 
 # ---------------------------------------------------------------------------
-# RecoveringDeployer (prompt= set) — retry loop + prompt behavior
+# RecoveringDeployer (prompt= set): retry loop + prompt behavior
 # ---------------------------------------------------------------------------
 
 
 class _FakeDeployer:
     """Minimal Deployer stand-in for recovery tests.
 
-    ``outcomes`` is consumed in order: each entry is either an
+    ``outcomes`` is consumed in order.  Each entry is either an
     :class:`Exception` to raise or a :class:`DeployResult` to
     return.  Attempts beyond the list raise :class:`AssertionError`
     so tests catch unbounded retries.
@@ -532,7 +532,7 @@ def test_retries_on_port_unavailable_then_succeeds() -> None:
 
 
 def test_retries_up_to_max_attempts_then_reraises() -> None:
-    # Three identical failures — interactive deployer is configured
+    # Three identical failures.  Interactive deployer is configured
     # with max_attempts=3, so the third failure re-raises without a
     # fourth prompt.
     fake = _FakeDeployer(
@@ -557,7 +557,7 @@ def test_retries_up_to_max_attempts_then_reraises() -> None:
 
     assert fake.calls == 3
     # Two prompts: after attempts 1 and 2.  No prompt after the
-    # final attempt — we just re-raise.
+    # final attempt, we just re-raise.
     assert len(prompt.prompts) == 2
 
 
@@ -656,7 +656,7 @@ def test_traceback_returns_result_but_prints_coaching() -> None:
 
     result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
-    # Source-level bug — RecoveringDeployer still returns the
+    # Source-level bug.  RecoveringDeployer still returns the
     # result (no retry) but prints the traceback-coaching block.
     assert result is failing
     assert fake.calls == 1
@@ -667,7 +667,7 @@ def test_traceback_returns_result_but_prints_coaching() -> None:
 
 def test_mpremote_transport_error_is_handled() -> None:
     # The retry loop catches MicropythonTransportError too, not just
-    # the CP variant — both runtimes get the same coaching.
+    # the CP variant.  Both runtimes get the same coaching.
     ok = DeployResult(success=True)
     fake = _FakeDeployer(
         [
@@ -753,7 +753,7 @@ def test_deployer_property_exposes_wrapped_instance() -> None:
 
 
 # ---------------------------------------------------------------------------
-# RecoveringDeployer.deploy_diff — mirror of .deploy with wipe + on_file_deleted
+# RecoveringDeployer.deploy_diff: mirror of .deploy with wipe + on_file_deleted
 # ---------------------------------------------------------------------------
 
 
@@ -836,13 +836,13 @@ def test_deploy_diff_traceback_returns_result_but_prints_coaching() -> None:
 
 
 # ---------------------------------------------------------------------------
-# macOS FSKit / DiskArbitration wedge — plan + RecoveringDeployer promotion
+# macOS FSKit / DiskArbitration wedge: plan + RecoveringDeployer promotion
 # ---------------------------------------------------------------------------
 
 
 def test_macos_fskit_wedged_plan_contains_recovery_command() -> None:
     # The pasted sudo command is the contract between the coaching
-    # output and the user — guard against accidental edits that drop
+    # output and the user.  Guard against accidental edits that drop
     # or typo it.
     from chumicro_deploy.macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND
     plan = recovery_plan_for(DeployFailureKind.MACOS_FSKIT_WEDGED)
@@ -884,14 +884,14 @@ def test_stale_mount_eaccess_message_promotes_to_fskit_wedged() -> None:
     joined = "\n".join(lines)
     assert "macos_fskit_wedged" in joined
     assert MACOS_FSKIT_RECOVERY_COMMAND in joined
-    # Must NOT land in port_unavailable — that's the exact regression
+    # Must NOT land in port_unavailable.  That's the exact regression
     # we're guarding against.
     assert "port_unavailable" not in joined
 
 
 def test_drive_missing_is_promoted_to_fskit_wedged_when_detector_trips() -> None:
     # Quit on the first prompt so the test stays focused on the
-    # classification → plan promotion path.  The assertion is that
+    # classification-to-plan promotion path.  The assertion is that
     # the coaching output shows the wedged plan, not the generic
     # tap-RESET plan.
     from chumicro_deploy.macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND
@@ -913,7 +913,7 @@ def test_drive_missing_is_promoted_to_fskit_wedged_when_detector_trips() -> None
     joined = "\n".join(lines)
     assert "macos_fskit_wedged" in joined
     assert MACOS_FSKIT_RECOVERY_COMMAND in joined
-    # The generic drive-missing coaching should NOT appear — if both
+    # The generic drive-missing coaching should NOT appear.  If both
     # plans leaked into the output the user would see conflicting
     # instructions.
     assert "tap RESET once so CircuitPython re-exposes" not in joined
@@ -925,7 +925,7 @@ def test_wipe_filesystem_remount_timeout_promotes_to_fskit_wedged() -> None:
     # mid-wipe": serial USB-CDC reconnects fine, but the FAT volume
     # never remounts.  The transport's timeout message is phrased to
     # contain "CIRCUITPY drive not mounted" so it classifies to
-    # CIRCUITPY_DRIVE_MISSING — which the recovery layer then promotes
+    # CIRCUITPY_DRIVE_MISSING, which the recovery layer then promotes
     # to MACOS_FSKIT_WEDGED when the detector reports True.  Without
     # that wiring the user would see a generic "didn't become usable"
     # timeout instead of the actionable killall recovery command.
@@ -959,7 +959,7 @@ def test_wipe_filesystem_remount_timeout_promotes_to_fskit_wedged() -> None:
 
 def test_drive_missing_stays_generic_when_detector_says_healthy() -> None:
     # The detector returning False keeps the existing
-    # CIRCUITPY_DRIVE_MISSING coaching — no false-positive promotion
+    # CIRCUITPY_DRIVE_MISSING coaching, no false-positive promotion
     # to the wedged plan.
     fake = _FakeDeployer(
         [CircuitpythonTransportError("CIRCUITPY drive not found.")],
@@ -982,7 +982,7 @@ def test_drive_missing_stays_generic_when_detector_says_healthy() -> None:
 
 
 def test_detector_not_called_for_unrelated_failure_kinds() -> None:
-    # We only run the detector on CIRCUITPY_DRIVE_MISSING — other
+    # We only run the detector on CIRCUITPY_DRIVE_MISSING.  Other
     # kinds should skip it so a laggy subprocess call does not
     # creep into the port-unavailable / raw-REPL retry paths.
     detector_calls = 0
@@ -1095,7 +1095,7 @@ class TestFakeSerialPortScriptedDisconnects:
         port = FakeSerialPort(read_responses=[b"hello", OSError("gone")])
         assert port.in_waiting == len(b"hello")
         assert port.read(1) == b"hello"
-        # Next entry is an exception — in_waiting reports 1 so polling
+        # Next entry is an exception.  in_waiting reports 1 so polling
         # loops actually call read() instead of skipping past the
         # scripted disconnect.
         assert port.in_waiting == 1
@@ -1191,7 +1191,7 @@ class TestDiagnosePortHolders:
         ) == []
 
     def test_returns_empty_when_lsof_returns_nothing(self) -> None:
-        """Free port → lsof exits non-zero with empty stdout."""
+        """Free port: lsof exits non-zero with empty stdout."""
         from chumicro_deploy import recovery  # noqa: PLC0415
 
         def fake_run(args, **_kwargs):
@@ -1227,7 +1227,7 @@ class TestDiagnosePortHolders:
         )
         assert len(holders) == 1
         assert holders[0].pid == 11421
-        # ps fallout — full command line preferred over lsof's short ``c``.
+        # ps fallout: full command line preferred over lsof's short ``c``.
         assert "run.py deploy" in holders[0].command  # noqa: CHU006 — assertion against the workspace shim command name as data
 
     def test_parses_multiple_holders(self) -> None:
@@ -1382,7 +1382,7 @@ class TestReportFailureWithPortHolders:
     def test_port_unavailable_with_external_holder_no_kill_hint(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """External app holding the port → list it but don't suggest
+        """External app holding the port: list it but don't suggest
         ``kill`` (user might be deliberately running Mu / Thonny).
         """
         from chumicro_deploy import recovery  # noqa: PLC0415
@@ -1426,7 +1426,7 @@ class TestReportFailureWithPortHolders:
     def test_port_unavailable_with_no_holders_falls_through(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """No holders detected (e.g., USB unplug) → no diagnosis
+        """No holders detected (e.g., USB unplug): no diagnosis
         section, just the default recovery steps.
         """
         from chumicro_deploy import recovery  # noqa: PLC0415
@@ -1453,14 +1453,14 @@ class TestReportFailureWithPortHolders:
             interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
-        # No diagnosis section; default recovery hints still present.
+        # No diagnosis section, default recovery hints still present.
         assert "is currently held by" not in joined
         assert "Close any app" in joined
 
     def test_diagnosis_silent_on_subprocess_failure(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Best-effort: if diagnose_port_holders raises, swallow it
+        """Best-effort.  If diagnose_port_holders raises, swallow it
         and fall through to the default recovery steps.
         """
         from chumicro_deploy import recovery  # noqa: PLC0415
@@ -1488,13 +1488,13 @@ class TestReportFailureWithPortHolders:
             interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
-        # No diagnosis section emitted; default hints still present.
+        # No diagnosis section emitted, default hints still present.
         assert "is currently held by" not in joined
         assert "Close any app" in joined
 
 
 # ---------------------------------------------------------------------------
-# RecoveringDeployer (prompt=None) — single attempt, no retry loop.
+# RecoveringDeployer (prompt=None): single attempt, no retry loop.
 # CI / scripted flows.
 # ---------------------------------------------------------------------------
 
@@ -1505,7 +1505,7 @@ class TestRecoveringDeployer:
 
     Same coached output as the prompt-driven mode (classify + lsof
     diagnosis when applicable + fix steps), but no retry loop and
-    no stdin probe — for CI / scripted flows where stdin has nowhere
+    no stdin probe, for CI / scripted flows where stdin has nowhere
     to go.
     """
 
@@ -1528,7 +1528,7 @@ class TestRecoveringDeployer:
         assert lines == []
 
     def test_reports_and_reraises_on_transport_failure(self) -> None:
-        """Single transport failure → one coached report, then re-raise."""
+        """Single transport failure: one coached report, then re-raise."""
         from chumicro_deploy.recovery import RecoveringDeployer  # noqa: PLC0415
 
         fake = _FakeDeployer(
@@ -1548,7 +1548,7 @@ class TestRecoveringDeployer:
         with pytest.raises(MicropythonTransportError):
             runner.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
-        # Underlying deployer was called exactly once — no retry.
+        # Underlying deployer was called exactly once, no retry.
         assert fake.calls == 1
         joined = "\n".join(lines)
         # The "1/1" header makes the no-retry contract explicit in
@@ -1582,7 +1582,7 @@ class TestRecoveringDeployer:
         assert fake.last_clean is False  # forwarded through the wrapper
 
     def test_diff_clean_defaults_true(self) -> None:
-        """clean-slate is the default — the wrapper forwards clean=True."""
+        """clean-slate is the default.  The wrapper forwards clean=True."""
         from chumicro_deploy.recovery import RecoveringDeployer  # noqa: PLC0415
 
         fake = _FakeDeployer([DeployResult(success=True)])
@@ -1632,7 +1632,7 @@ class TestRecoveringDeployer:
 
     def test_traceback_result_is_reported(self) -> None:
         """A ``DeployResult`` with ``success=False`` + ``traceback``
-        gets reported (not raised) — same contract as RecoveringDeployer.
+        gets reported (not raised), same contract as RecoveringDeployer.
         """
         from chumicro_deploy.recovery import RecoveringDeployer  # noqa: PLC0415
 

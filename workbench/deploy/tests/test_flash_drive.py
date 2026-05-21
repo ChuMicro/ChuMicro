@@ -1,4 +1,4 @@
-"""Tests for flash_drive — CircuitPython flash-mode USB helpers."""
+"""Tests for flash_drive, the CircuitPython flash-mode USB helpers."""
 
 from __future__ import annotations
 
@@ -171,7 +171,7 @@ class TestRsync:
 
         Regression guard: without the timeout, a hung USB write on
         CIRCUITPY puts the rsync subprocess into uninterruptible
-        kernel I/O wait — ``kill -9`` is impossible until the board
+        kernel I/O wait, and ``kill -9`` is impossible until the board
         is power-cycled.  The error message must point at the
         recovery procedure (board reboot) and reference the learnings
         entry.
@@ -200,7 +200,7 @@ class TestRsync:
         For an empty staging tree, the auto-computed timeout matches
         :data:`RSYNC_TIMEOUT_MIN_SECONDS` (the floor).  Catches a
         regression where someone refactors the call and drops the
-        timeout — leading right back to the wedged-D-state bug.
+        timeout, leading right back to the wedged-D-state bug.
         """
         source = tmp_path / "source"
         source.mkdir()
@@ -219,7 +219,7 @@ class TestRsync:
         ):
             flash_drive.rsync(source, destination)
 
-        # Empty staging → floor.
+        # Empty staging falls to the floor.
         assert (
             captured_kwargs.get("timeout") == flash_drive.RSYNC_TIMEOUT_MIN_SECONDS
         )
@@ -254,7 +254,7 @@ class TestRsync:
         aborting with ``unlinkat: Operation not permitted`` when the
         kernel locks ``.Trashes/<UID>/`` read-only on a FAT volume.
         User-config filenames (``boot.py``, ``code.py``, etc.) are
-        **not** in the base set — they're caller-supplied via
+        **not** in the base set.  They're caller-supplied via
         ``additional_excludes`` so the production deploy path can
         write a deploy's ``code.py`` entrypoint without hitting an
         exclude rule (see ``test_additional_excludes_flow_through``).
@@ -291,7 +291,7 @@ class TestRsync:
             "--exclude=.Spotlight-V100",
             "--exclude=.TemporaryItems",
             "--exclude=.DocumentRevisions-V100",
-            # macOS skip sentinels (we plant; rsync must not delete).
+            # macOS skip sentinels (we plant, rsync must not delete).
             "--exclude=.fseventsd",
             "--exclude=.metadata_never_index",
         ):
@@ -325,19 +325,19 @@ class TestRsync:
 
         assert captured
         assert "--delete" not in captured[0]
-        # Base excludes still in place — the only divergence is --delete.
+        # Base excludes still in place.  The only divergence is --delete.
         assert "--exclude=__pycache__" in captured[0]
         assert "--exclude=.Trashes" in captured[0]
 
     def test_additional_excludes_flow_through(self, tmp_path: Path) -> None:
         """``additional_excludes`` are passed through verbatim.
 
-        Clean callers — production deploy *and* functional-test stage —
-        both pass the same closed ``DEVICE_KEEP_SET``; ``--delete``
+        Clean callers (production deploy and functional-test stage)
+        both pass the same closed ``DEVICE_KEEP_SET``, and ``--delete``
         spares exactly that set.  ``code.py`` is **not** excluded, so
         a stale board ``code.py`` is reconciled away on the functional
-        path too.  ``settings.toml`` is likewise absent — evicted on
-        every path (competing wifi authority).
+        path too.  ``settings.toml`` is likewise absent.  It is evicted
+        on every path (competing wifi authority).
         """
         source = tmp_path / "source"
         source.mkdir()
@@ -369,7 +369,7 @@ class TestRsync:
         # No per-context code.py exclude: a stale board code.py is
         # reconciled away, not preserved.
         assert "--exclude=code.py" not in captured[0]
-        # Evicted on every path — never preserved.
+        # Evicted on every path, never preserved.
         assert "--exclude=settings.toml" not in captured[0]
 
 
@@ -377,7 +377,7 @@ class TestVerifyRsync:
     """Tests for flash_drive.verify_rsync."""
 
     def test_returns_empty_on_clean_match(self, tmp_path: Path) -> None:
-        """Identical source + destination → empty needs-update list."""
+        """Identical source + destination produces an empty needs-update list."""
         source = tmp_path / "source"
         source.mkdir()
         (source / "code.py").write_bytes(b"print('hi')\n")
@@ -389,7 +389,7 @@ class TestVerifyRsync:
         assert divergent == []
 
     def test_returns_paths_on_content_divergence(self, tmp_path: Path) -> None:
-        """Content mismatch → path appears in the needs-update list."""
+        """Content mismatch puts the path in the needs-update list."""
         source = tmp_path / "source"
         source.mkdir()
         (source / "code.py").write_bytes(b"print('hi')\n")
@@ -403,7 +403,7 @@ class TestVerifyRsync:
     def test_returns_paths_on_missing_destination_file(
         self, tmp_path: Path,
     ) -> None:
-        """File present in source, absent from destination → flagged."""
+        """File present in source, absent from destination, gets flagged."""
         source = tmp_path / "source"
         source.mkdir()
         (source / "code.py").write_bytes(b"x")
@@ -564,16 +564,16 @@ class TestPlantMacosSentinelsInStaging:
 
     The new shape (post-wedge cleanup): sentinels go into a local
     staging tree so rsync ships them in the same pass as the deploy
-    payload — no host-side write to the live CIRCUITPY drive before
-    rsync starts.  Direct writes to a live CIRCUITPY drive while a
-    parallel rsync is mid-flight could leave rsync hung in
+    payload, with no host-side write to the live CIRCUITPY drive
+    before rsync starts.  Direct writes to a live CIRCUITPY drive
+    while a parallel rsync is mid-flight could leave rsync hung in
     uninterruptible kernel I/O on macOS FSKit.
     """
 
     def test_no_op_off_darwin(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Linux / Windows runs are a no-op — the sentinels target
+        """Linux / Windows runs are a no-op.  The sentinels target
         macOS-specific daemons.
         """
         monkeypatch.setattr(
@@ -621,7 +621,7 @@ class TestCleanupMacosNoiseDirsPostRsync:
     ) -> None:
         """``.Spotlight-V100`` / ``.TemporaryItems`` / ``.DocumentRevisions-V100``
         get rmtree'd.  ``.Trashes`` is intentionally NOT in the rmtree
-        set — once macOS created ``.Trashes/<UID>/`` the kernel sets it
+        set.  Once macOS created ``.Trashes/<UID>/`` the kernel sets it
         read-only and even ``shutil.rmtree`` cannot remove it.
         Prevention via the file sentinel
         (:func:`plant_macos_sentinels_in_staging`) is the only working
@@ -733,7 +733,7 @@ class TestFlushVolume:
 
 class TestMetadataHelpersHaveTimeouts:
     """Regression: every CIRCUITPY-touching subprocess call passes a
-    ``timeout=`` kwarg.  Sister of TestRsync.test_passes_timeout — these
+    ``timeout=`` kwarg.  Sister of TestRsync.test_passes_timeout: these
     are smaller helpers but a wedged USB stack hangs them too.
     """
 
@@ -826,7 +826,7 @@ class TestComputeRsyncTimeoutSeconds:
         """Size where (base + per-MB * size) < floor -> floor.
 
         With base=60s and per-MB=120s, 250 KB gives 60+30 = 90s,
-        exactly the 90s floor — anything smaller stays at the floor.
+        exactly the 90s floor.  Anything smaller stays at the floor.
         """
         # 100 KB -> 60 + 0.1 * 120 = 72s, capped at 90s.
         result = flash_drive.compute_rsync_timeout_seconds(100 * 1024)

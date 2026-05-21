@@ -71,7 +71,7 @@ class TestLoadDevicesYml:
         assert device.address == "/dev/ttyACM0"
         # defaults.deploy_mode is applied when entry omits it.
         assert device.deploy_mode == "flash"
-        # serial_baudrate → baudrate.
+        # serial_baudrate maps to baudrate.
         assert device.baudrate == 460800
 
     def test_ambiguous_defaults_raise(self, tmp_path: Path) -> None:
@@ -197,7 +197,7 @@ class TestLoadRawEntries:
         """Permissive primitive: missing key = empty list, not an error.
 
         Strictness lives at the consumer (e.g. ``load_devices_yml`` raises
-        on no entries; the workspace dispatcher likewise enforces a
+        on no entries, and the workspace dispatcher likewise enforces a
         non-empty registry before deploying)."""
         yaml_path = _write(tmp_path, "defaults:\n  micropython: nope\n")
         entries, defaults = load_raw_entries(yaml_path)

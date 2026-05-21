@@ -6,19 +6,19 @@ keyword.  Three concrete transports + the host-side
 
 * CircuitPython RAM mode: raises :class:`UnsupportedExtraFilesError`
   when ``extra_files`` is non-empty (RAM mode bypasses the device
-  filesystem; there's nowhere to land bytes).
+  filesystem, so there's nowhere to land bytes).
 * CircuitPython flash mode: writes each ``(device_path, bytes)``
   pair into the local staging tree at the matching relative path,
   ready for rsync to push to the CIRCUITPY drive.
 * MicroPython copy / mount mode: writes each pair into the staging
   tree (copy mode rsyncs it to flash, mount mode mounts the dir as
-  the device filesystem — both end states give the device a file
+  the device filesystem.  Both end states give the device a file
   at the requested path).
 * :class:`FakeTransport`: stores the bytes in
   ``staged_extra_files`` for assert-on by tests.
 
 The on-device consumers stage ``runtime_config.msgpack`` and read
-it via ``chumicro_config.load_runtime_config`` — see
+it via ``chumicro_config.load_runtime_config``.  See
 ``chumicro_pytest_device.runtime_config.set_runtime_config`` for
 the conftest-side staging hook.
 """
@@ -38,7 +38,7 @@ from chumicro_deploy.micropython_transport import (
 from chumicro_deploy.testing import FakeTime
 
 # ---------------------------------------------------------------------------
-# FakeTransport — host-side stub used by every other transport's tests.
+# FakeTransport: host-side stub used by every other transport's tests.
 # ---------------------------------------------------------------------------
 
 
@@ -91,7 +91,7 @@ class TestFakeTransportExtraFiles:
         self, tmp_path: Path,
     ) -> None:
         # Bare RAM-mode stage call (the common case before extra_files
-        # existed) must not regress — only non-empty extra_files raises.
+        # existed) must not regress.  Only non-empty extra_files raises.
         fake = FakeTransport(mode="ram")
         fake.stage(
             source_dirs=[],
@@ -110,7 +110,7 @@ class TestFakeTransportExtraFiles:
             harness_source=tmp_path,
             extra_files={"/runtime_config.msgpack": b"\x80"},
         )
-        # The full positional + keyword tuple landed in calls — tests
+        # The full positional + keyword tuple landed in calls.  Tests
         # that assert on the recorded interaction can see extra_files
         # without poking the dedicated attribute.
         assert len(fake.calls) == 1
@@ -122,7 +122,7 @@ class TestFakeTransportExtraFiles:
 
 
 # ---------------------------------------------------------------------------
-# CircuitPython transport — RAM mode raises, flash mode lays the file out
+# CircuitPython transport: RAM mode raises, flash mode lays the file out
 # in the staging tree.
 # ---------------------------------------------------------------------------
 
@@ -150,7 +150,7 @@ class TestCircuitpythonRamModeRaises:
         transport = CircuitpythonTransport(
             address="/dev/null", mode="ram",
         )
-        # Empty dict is the same as None — no extra files, no raise.
+        # Empty dict is the same as None: no extra files, no raise.
         transport.stage(
             source_dirs=[],
             test_files=[],
@@ -214,7 +214,7 @@ class TestCircuitpythonFlashModeStagingTree:
         )
         staging = tmp_path / "staging"
         staging.mkdir()
-        # Just a leading slash with nothing after — caller bug.
+        # Just a leading slash with nothing after: caller bug.
         with pytest.raises(
             Exception, match="no path component",
         ):
@@ -240,13 +240,13 @@ class TestCircuitpythonFlashModeStagingTree:
             test_files=[],
             harness_source=staging,
         )
-        # Just the lib/ subdir merge_packages creates; no stray files.
+        # Just the lib/ subdir merge_packages creates, no stray files.
         children = sorted(child.name for child in staging.iterdir())
         assert children == ["lib"]
 
 
 # ---------------------------------------------------------------------------
-# MicroPython transport — both copy and mount modes accept extra_files.
+# MicroPython transport: both copy and mount modes accept extra_files.
 # ---------------------------------------------------------------------------
 
 
@@ -261,7 +261,7 @@ def mp_copy_transport():
     Forcing cleanup in the fixture's teardown phase is deterministic.
     """
     # FakeTime so the first copy-mode stage's mkfs-wipe settle is
-    # instant — otherwise every copy-mode staging test eats a real
+    # instant.  Otherwise every copy-mode staging test eats a real
     # multi-second sleep.
     transport = MicropythonTransport(
         address="/dev/null", mode="copy", time=FakeTime(),
@@ -286,7 +286,7 @@ class TestMicropythonStagingTreeExtraFiles:
     def test_copy_mode_lands_extra_files_in_staging(
         self, mp_copy_transport: MicropythonTransport, tmp_path: Path,
     ) -> None:
-        # Patch out the mpremote subprocess call — we only care about
+        # Patch out the mpremote subprocess call, we only care about
         # the staging tree.
         with patch.object(mp_copy_transport, "_run_mpremote") as run:
             mp_copy_transport.stage(
@@ -308,7 +308,7 @@ class TestMicropythonStagingTreeExtraFiles:
         self, mp_mount_transport: MicropythonTransport, tmp_path: Path,
     ) -> None:
         # Mount mode opens a persistent serial connection + calls
-        # `mount_local`; both are heavy.  Patch `_ensure_serial` to
+        # `mount_local`, both are heavy.  Patch `_ensure_serial` to
         # supply a stubbed serial that records the mount call.
         class _SerialStub:
             def __init__(self) -> None:

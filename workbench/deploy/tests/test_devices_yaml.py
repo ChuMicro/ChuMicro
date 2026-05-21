@@ -58,7 +58,7 @@ class TestLoadDevices:
 
 
 # ---------------------------------------------------------------------------
-# Round-trip preservation — the headline property
+# Round-trip preservation: the headline property
 # ---------------------------------------------------------------------------
 
 
@@ -111,7 +111,7 @@ class TestRoundTrip:
 
 
 # ---------------------------------------------------------------------------
-# dump_devices — atomic write
+# dump_devices: atomic write
 # ---------------------------------------------------------------------------
 
 
@@ -247,7 +247,7 @@ class TestAddDevice:
     def test_seeds_default_when_runtime_key_present_but_null(
         self, tmp_path: Path,
     ) -> None:
-        """Gap #6 — present-but-null default slot is treated as "no default set".
+        """Gap #6: present-but-null default slot is treated as "no default set".
 
         The materialized devices.yml.template ships with::
 
@@ -257,7 +257,7 @@ class TestAddDevice:
 
         Both keys exist with null values.  Pre-fix, ``add_device``'s
         existence check (``runtime not in defaults``) saw the keys
-        present and skipped seeding — so the slot stayed null after
+        present and skipped seeding, so the slot stayed null after
         the first add.  Post-fix, ``defaults.get(runtime) is None``
         treats null as "unset" and the slot gets filled.
         """
@@ -292,7 +292,7 @@ class TestAddDevice:
 
 
 # ---------------------------------------------------------------------------
-# update_device_address — probed-always (silent)
+# update_device_address: probed-always (silent)
 # ---------------------------------------------------------------------------
 
 
@@ -315,7 +315,7 @@ class TestUpdateAddress:
 
 
 # ---------------------------------------------------------------------------
-# update_device_firmware_version — probed-always (silent)
+# update_device_firmware_version: probed-always (silent)
 # ---------------------------------------------------------------------------
 
 
@@ -364,7 +364,7 @@ class TestAddDeviceFirmwareVersion:
 
 
 # ---------------------------------------------------------------------------
-# update_device_hardware — hardware-once (prompts on overwrite)
+# update_device_hardware: hardware-once (prompts on overwrite)
 # ---------------------------------------------------------------------------
 
 
@@ -517,7 +517,7 @@ class TestRemoveDevice:
         dump_devices(data, path)
         reloaded = load_devices(path)
         assert list_device_ids(reloaded) == ["one", "three"]
-        # Default referenced the removed id — must be nulled, not dangling.
+        # Default referenced the removed id, so it must be nulled, not dangling.
         assert reloaded["defaults"]["micropython"] is None
         assert "# Workspace devices file." in path.read_text()
 
@@ -589,7 +589,7 @@ class TestMalformedInput:
 
 
 # ---------------------------------------------------------------------------
-# Integration: add → dump → reload → assert
+# Integration: add, dump, reload, assert
 # ---------------------------------------------------------------------------
 
 
@@ -625,5 +625,5 @@ class TestEndToEnd:
         # New entry is in the file.
         assert "pico-2" in reloaded
         assert "FFFF" in reloaded
-        # Original entry is still there + intact.
+        # Original entry is still there and intact.
         assert "/dev/cu.first" in reloaded

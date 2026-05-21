@@ -195,7 +195,7 @@ class TestDevicesFileWiring:
                 ),
             )
 
-        # No --device flag — defaults.micropython is the sole default.
+        # No --device flag.  defaults.micropython is the sole default.
         exit_code = main(
             ["probe", "--devices-file", str(yaml_path)],
             env=CliEnv(probe_device_fn=fake_probe),
@@ -253,7 +253,7 @@ class TestCommandFlashFirmware:
         assert captured["erase_flash"] is False
 
     def test_method_auto_inferred_from_url(self) -> None:
-        # No --method passed; flash_firmware() does the inference
+        # No --method passed.  flash_firmware() does the inference
         # internally.  The CLI just forwards reflash_method=None.
         captured: dict[str, Any] = {}
 
@@ -385,7 +385,7 @@ class TestCommandDeploy:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         # With --non-interactive, the CLI's RecoveringDeployer prints
-        # coaching once and re-raises — main()'s friendly-error wrapper
+        # coaching once and re-raises.  main()'s friendly-error wrapper
         # catches the transport error and users see "error: <message>"
         # instead of a Python traceback.
         from chumicro_deploy.circuitpython_transport import (
@@ -579,7 +579,7 @@ class TestFriendlyErrors:
     def test_unresolved_firmware_url(
         self, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        # MicroPython needs --version like 1.28.0-YYYYMMDD; bare
+        # MicroPython needs --version like 1.28.0-YYYYMMDD.  Bare
         # 1.28.0 fails UrlResolution.
         exit_code = main([
             "resolve-firmware-url",

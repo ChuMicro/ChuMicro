@@ -35,7 +35,7 @@ class TestIsInDeployScope:
     @pytest.mark.parametrize(
         "path",
         [
-            "/settings.toml",        # CP user-config — out of scope
+            "/settings.toml",        # CP user-config, out of scope
             "/boot.py",              # user-managed boot hook
             "/.fseventsd/...",       # macOS metadata on CIRCUITPY
             "/photo.jpg",            # user-uploaded asset
@@ -47,7 +47,7 @@ class TestIsInDeployScope:
         assert not is_in_deploy_scope(path)
 
     def test_scope_prefixes_documented(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Sanity — the prefix list is what the test cases above assume."""
+        """Sanity check that the prefix list is what the test cases above assume."""
         assert DEPLOY_SCOPE_PREFIXES == ("/lib/",)
 
 
@@ -79,7 +79,7 @@ class TestFakeTransportPrimitives:
             "/lib/keep.py": b"c",
         })
         transport.delete_files(["/lib/old.py", "/missing.py"])
-        # Missing path tolerated silently; rest survive.
+        # Missing path tolerated silently, rest survive.
         assert "/code.py" in transport.device_files
         assert "/lib/keep.py" in transport.device_files
         assert "/lib/old.py" not in transport.device_files
@@ -114,7 +114,7 @@ def _build_device(
 
 class TestDeployerDeployDiff:
     def test_deletes_stale_in_scope_files(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """File on device + not in new payload → deleted; new payload written."""
+        """File on device + not in new payload gets deleted, new payload written."""
         transport = FakeTransport(
             mode="copy",
             device_files={
@@ -148,7 +148,7 @@ class TestDeployerDeployDiff:
         """The default clean-slate diff removes everything but payload + keep set.
 
         A board ``settings.toml`` (competing wifi authority), stray
-        photos, and old logs are reconciled away; only the new payload
+        photos, and old logs are reconciled away.  Only the new payload
         and the closed keep set (``boot_out.txt``) remain.
         """
         transport = FakeTransport(
@@ -159,7 +159,7 @@ class TestDeployerDeployDiff:
                 "/photo.jpg": b"<jpeg>",
                 "/data/log.txt": b"old log",
                 "/lib/foo.py": b"old foo",
-                "/boot_out.txt": b"identity",  # keep set — must survive
+                "/boot_out.txt": b"identity",  # keep set, must survive
             },
         )
         deployer = Deployer(_build_device(transport))
@@ -170,7 +170,7 @@ class TestDeployerDeployDiff:
         assert "/photo.jpg" not in transport.device_files
         assert "/data/log.txt" not in transport.device_files
         assert "/lib/foo.py" not in transport.device_files
-        # Keep-set file preserved; payload written.
+        # Keep-set file preserved, payload written.
         assert transport.device_files["/boot_out.txt"] == b"identity"
         assert transport.device_files["/code.py"] == b"# new"
 
@@ -201,7 +201,7 @@ class TestDeployerDeployDiff:
         assert "/lib/foo.py" not in transport.device_files
 
     def test_no_stale_files_skips_delete_call(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Empty stale set → delete_files not called (no transport round-trip)."""
+        """Empty stale set leaves delete_files uncalled (no transport round-trip)."""
         transport = FakeTransport(
             mode="copy",
             device_files={"/code.py": b"# v1"},
@@ -216,14 +216,14 @@ class TestDeployerDeployDiff:
                 entrypoint="/code.py",
             ),
         )
-        # delete_files NOT in the call log — there was nothing stale.
+        # delete_files NOT in the call log, there was nothing stale.
         delete_calls = [
             call for call in transport.calls if call[0] == "delete_files"
         ]
         assert delete_calls == []
 
     def test_first_deploy_to_empty_device(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """No prior deploy → no stale files, normal write flow."""
+        """No prior deploy means no stale files, normal write flow."""
         transport = FakeTransport(mode="copy", device_files={})
         deployer = Deployer(_build_device(transport))
         result = deployer.deploy_diff(
@@ -236,10 +236,10 @@ class TestDeployerDeployDiff:
         assert transport.device_files == {"/code.py": b"# first deploy"}
 
     def test_ram_mode_collapses_to_plain_deploy(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """RAM-mode FakeTransport.list_files_in_scope returns [] — no diff cleanup.
+        """RAM-mode FakeTransport.list_files_in_scope returns [], no diff cleanup.
 
         Tests with the FakeTransport whose `device_files` populates from
-        prior deploys but starts empty here — the equivalent of "RAM
+        prior deploys but starts empty here, the equivalent of "RAM
         mode never wrote anything to flash."
         """
         transport = FakeTransport(mode="ram", device_files={})
@@ -251,7 +251,7 @@ class TestDeployerDeployDiff:
             ),
         )
         assert result.success
-        # No deletions attempted; deploy_files was called.
+        # No deletions attempted, deploy_files was called.
         delete_calls = [
             call for call in transport.calls if call[0] == "delete_files"
         ]
@@ -326,7 +326,7 @@ class TestDeployerDeployDiff:
 
 
 class TestDeployerWipeFlag:
-    """`Deployer.deploy_diff(..., wipe=True)` — destructive clean-slate path."""
+    """`Deployer.deploy_diff(..., wipe=True)`: destructive clean-slate path."""
 
     def test_wipe_clears_everything_and_skips_diff(
         self, monkeypatch: pytest.MonkeyPatch,
@@ -352,11 +352,11 @@ class TestDeployerWipeFlag:
             on_file_deleted=deleted.append,
         )
         assert result.success
-        # Wipe ran; out-of-scope files are GONE (this is the whole point).
+        # Wipe ran, out-of-scope files are GONE (this is the whole point).
         assert "wipe_filesystem" in [call[0] for call in transport.calls]
         assert "/settings.toml" not in transport.device_files
         assert "/photo.jpg" not in transport.device_files
-        # Diff-cleanup primitives were skipped — wipe makes them redundant.
+        # Diff-cleanup primitives were skipped, wipe makes them redundant.
         labels = [call[0] for call in transport.calls]
         assert "list_files_in_scope" not in labels
         assert "delete_files" not in labels
@@ -386,7 +386,7 @@ class TestDeployerWipeFlag:
             message for _, message in progress if "wiping" in message
         ]
         assert wipe_messages, progress
-        # Listing/cleaning stages should NOT show up — we wiped instead.
+        # Listing/cleaning stages should NOT show up, we wiped instead.
         cleaning_messages = [
             message for _, message in progress if "cleaning" in message
         ]
@@ -407,7 +407,7 @@ class TestDeployerWipeFlag:
             wipe=True,
         )
         assert result.success
-        # wipe_filesystem still got called — the no-op happens inside the
+        # wipe_filesystem still got called, the no-op happens inside the
         # transport, callers don't have to gate on mode.
         assert "wipe_filesystem" in [call[0] for call in transport.calls]
 
@@ -427,7 +427,7 @@ class TestFakeTransportWipe:
     def test_wipe_ram_mode_is_no_op(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """RAM/mount transports leave device_files alone — nothing in flash."""
+        """RAM/mount transports leave device_files alone, nothing in flash."""
         transport = FakeTransport(
             mode="ram",
             device_files={"/lib/foo.py": b"x"},

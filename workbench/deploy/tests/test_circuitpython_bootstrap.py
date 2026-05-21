@@ -14,7 +14,7 @@ from chumicro_deploy.circuitpython_bootstrap import (
     build_circuitpython_deploy_scripts,
 )
 
-# Tests below assert against the *combined* bootstrap text — convenient
+# Tests below assert against the *combined* bootstrap text, convenient
 # for substring checks like "_register_module" / "run_module".  In
 # production, the transport executes the chunks one by one
 # (`execute_scripts`), but for unit-test substring assertions an
@@ -29,9 +29,9 @@ def _combined_bootstrap_text(
     *,
     name_filter: str | None = None,
 ) -> str:
-    """Test helper — call `_scripts` with a huge budget and join the result.
+    """Test helper.  Call `_scripts` with a huge budget and join the result.
 
-    Production code never combines the chunks; the transport executes
+    Production code never combines the chunks.  The transport executes
     them one by one via ``execute_scripts``.  But unit-test substring
     assertions are easier against the combined text, so this helper
     asks for an effectively-unbounded single chunk.
@@ -326,7 +326,7 @@ class TestBuildCircuitpythonBootstrap:
 
 
 class TestBuildCircuitpythonDeployScripts:
-    """Tests for build_circuitpython_deploy_scripts — RAM-mode deploy."""
+    """Tests for build_circuitpython_deploy_scripts, the RAM-mode deploy path."""
 
     def test_single_file_entrypoint(self) -> None:
         """A one-file deploy produces helpers + empty stubs + final exec."""
@@ -334,7 +334,7 @@ class TestBuildCircuitpythonDeployScripts:
             {"/code.py": b"print('hi')\n"},
             entrypoint="/code.py",
         )
-        # Helpers are always the first chunk; entrypoint is always last.
+        # Helpers are always the first chunk.  Entrypoint is always last.
         assert "def _register_stub(" in scripts[0]
         assert "_retry_deferred()" in scripts[-1]
         assert "'__main__'" in scripts[-1]
@@ -362,7 +362,7 @@ class TestBuildCircuitpythonDeployScripts:
         assert "_register_stub('code')" not in joined
 
     def test_non_python_files_are_skipped(self) -> None:
-        """Assets (.toml, .json) are not importable — silently skipped."""
+        """Assets (.toml, .json) are not importable, so they're silently skipped."""
         scripts = build_circuitpython_deploy_scripts(
             {
                 "/code.py": b"print('ok')\n",

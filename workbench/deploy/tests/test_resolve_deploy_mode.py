@@ -2,10 +2,10 @@
 
 This is the one shared deploy-mode policy.  The
 :class:`~chumicro_deploy.Deployer` integration contract is covered by
-``test_deployer.py``'s ``TestPreflight*`` classes; here we drive the
-pure function directly so every branch — including the ones the
-Deployer caller never reaches (a non-RAM-capable board, a named
-resolution unit) — is pinned.
+``test_deployer.py``'s ``TestPreflight*`` classes.  Here we drive the
+pure function directly so every branch is pinned, including the ones
+the Deployer caller never reaches (a non-RAM-capable board, a named
+resolution unit).
 """
 
 from chumicro_deploy import DeviceCaps, resolve_deploy_mode
@@ -52,7 +52,7 @@ class TestForceEscapeHatch:
 
 
 class TestNonRamConfiguredStaysPut:
-    """A flash preference never triggers a switch; the RAM-only
+    """A flash preference never triggers a switch.  The RAM-only
     triggers are not even evaluated.
     """
 
@@ -92,7 +92,7 @@ class TestDeviceCapability:
 
 class TestRequiresFlashClosure:
     """A ``requires_flash`` library anywhere in the transitive
-    closure forces flash; the recommendation is keyed off
+    closure forces flash.  The recommendation is keyed off
     *resolution_unit*.
     """
 

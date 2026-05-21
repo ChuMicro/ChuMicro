@@ -1,9 +1,9 @@
-"""my_template — example third-party package using chumicro-deploy.
+"""Example third-party package using chumicro-deploy.
 
 Ships a custom :class:`FileSource` that reads a nonstandard project
 layout (``project/source/*.py`` + ``project/helpers/*.py`` + a
 manifest at ``project/deploy.json``).  The only chumicro dependency
-is :mod:`chumicro_deploy` — no other chumicro packages or
+is :mod:`chumicro_deploy`.  No other chumicro packages or
 workspace-internal modules are imported, demonstrating that the
 public API is sufficient on its own.
 """
@@ -27,9 +27,8 @@ class CustomLayoutFileSource:
             }
         }
 
-    Keys are on-device paths; values are file paths relative to
-    the template root.  Non-chumicro layout on purpose — the
-    important project is that
+    Keys are on-device paths, values are file paths relative to
+    the template root.  Non-chumicro layout on purpose, because
     :class:`chumicro_deploy.sources.FileSource` is structural and
     accepts any ``files()`` + ``entrypoint()`` duck type.
     """

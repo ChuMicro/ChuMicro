@@ -1,4 +1,4 @@
-"""Tests for MicropythonTransport — persistent serial + subprocess fallbacks."""
+"""Tests for MicropythonTransport, with persistent serial + subprocess fallbacks."""
 
 from __future__ import annotations
 
@@ -68,11 +68,11 @@ class FakeSerialTransport:
     address: str
     baudrate: int = 115200
     # Real mpremote returns ``(stdout_bytes, stderr_bytes)`` from ``exec_raw``.
-    # Tests may pass either a tuple or a bare bytes value for convenience;
-    # bare bytes are wrapped into ``(bytes, b"")`` to mirror hardware.
+    # Tests may pass either a tuple or a bare bytes value for convenience.
+    # Bare bytes are wrapped into ``(bytes, b"")`` to mirror hardware.
     exec_outputs: list[tuple[bytes, bytes] | bytes] = field(default_factory=list)
     # Successive ``read_until`` return values, in call order.  Bare bytes
-    # only — the real ``read_until`` returns bytes; tests pass the full
+    # only.  The real ``read_until`` returns bytes, and tests pass the full
     # captured-output payload for each soft-reboot read.
     read_until_outputs: list[bytes] = field(default_factory=list)
     raise_on_execute: Exception | None = None
@@ -139,7 +139,7 @@ class TestConnect:
 
         assert len(runner.calls) == 1
         command = runner.calls[0][0]
-        # command[0] is a resolved path (e.g. .venv/bin/mpremote) — just
+        # command[0] is a resolved path (e.g. .venv/bin/mpremote).  Just
         # confirm it points at an mpremote binary, then check the rest.
         assert command[0].endswith("mpremote") or command[0].endswith("mpremote.exe")
         assert command[1:] == ["connect", "/dev/ttyUSB0", "exec", "print('ok')"]
@@ -208,7 +208,7 @@ class TestStage:
         ``stage()`` once per test file on the *same* transport.  Without
         this, mpremote's on-device mount hook raises
         ``OSError: [Errno 1] EPERM`` on the second ``mount_local``
-        because the first mount is still live — breaking every
+        because the first mount is still live, breaking every
         multi-file IDE session on MicroPython.
         """
         source_a = tmp_path / "src_a"
@@ -237,7 +237,7 @@ class TestStage:
         assert not first_staging_path.exists()
         assert second_staging_path.exists()
 
-        # Lifecycle: mount → umount → mount, with the second mount
+        # Lifecycle: mount, umount, mount, with the second mount
         # targeting the new staging path.
         lifecycle = [name for name, _ in serial.calls]
         first_mount_index = lifecycle.index("mount_local")
@@ -339,8 +339,8 @@ class TestStage:
         # Second stage: a tracked-tuple rm script naming the first
         # stage's roots, issued before that stage's fs cp.  The first
         # stage's exec is the whole-device clean-slate (walks
-        # `os.listdir('/')` against `_keep`); the second-stage cleanup
-        # is the explicit prior-roots tuple (`for _n in (...)`) — filter
+        # `os.listdir('/')` against `_keep`).  The second-stage cleanup
+        # is the explicit prior-roots tuple (`for _n in (...)`), so filter
         # on that so the clean-slate isn't mistaken for it.
         commands = [call[0] for call in runner.calls]
         rm_index = next(
@@ -357,14 +357,14 @@ class TestStage:
             assert repr(name) in rm_script
         assert "os.remove" in rm_script and "os.rmdir" in rm_script
         # Exactly one whole-device clean-slate (stage 1, keep-set
-        # preserving); stage 2 uses the incremental tracked-tuple rm.
+        # preserving).  Stage 2 uses the incremental tracked-tuple rm.
         assert sum(
             1 for command in commands
             if "exec" in command
             and "os.listdir('/')" in command[-1] and "_keep" in command[-1]
         ) == 1
         assert not any("mkfs" in command[-1] for command in commands)
-        # New roots recorded; chumicro_a is no longer tracked.
+        # New roots recorded, chumicro_a is no longer tracked.
         assert "chumicro_b" in transport._staged_device_entries
         assert "chumicro_a" not in transport._staged_device_entries
 
@@ -599,7 +599,7 @@ class TestExecute:
         on the on-device fragmentation tests on Lolin S2 MP (2 MB heap),
         surfacing as ``TransportError: timeout waiting for first EOF
         reception``.  mpremote's ``exec_raw(timeout=N)`` is an
-        idle-between-bytes timeout, not wall-clock — so the value needs
+        idle-between-bytes timeout, not wall-clock, so the value needs
         to cover the longest stretch of pure on-device silence (the
         histogram tier probe's tight allocation loop plus surrounding
         ``gc.collect()`` calls).
@@ -847,7 +847,7 @@ class TestRecover:
         ]
         assert len(reset_calls) == 2
         # Settle after the failed attempt + settle after the successful
-        # reset — no exception, so no cascade.
+        # reset.  No exception, so no cascade.
         assert recorder.sleeps == [
             _RESET_RETRY_SETTLE_SECONDS,
             _RESET_RETRY_SETTLE_SECONDS,
@@ -878,7 +878,7 @@ class TestRecover:
             call for call in runner.calls if call[0][-1] == "reset"
         ]
         assert len(reset_calls) == _RESET_RETRY_ATTEMPTS
-        # One settle per failed attempt; none after (all failed).
+        # One settle per failed attempt, none after (all failed).
         assert recorder.sleeps == [
             _RESET_RETRY_SETTLE_SECONDS,
         ] * _RESET_RETRY_ATTEMPTS
@@ -984,7 +984,7 @@ class TestProbeImplementation:
             machine="Raspberry Pi Pico W with RP2040",
         )
         # Probe opens the persistent serial lazily but does NOT require
-        # stage() — the probe script only touches sys.implementation.
+        # stage().  The probe script only touches sys.implementation.
         exec_calls = [args for name, args in serial.calls if name == "exec_raw"]
         assert len(exec_calls) == 1
 
@@ -1076,7 +1076,7 @@ class TestResolveMpremoteBinary:
     def test_final_fallback_keeps_bare_name(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path
     ) -> None:
-        """Neither venv-local nor PATH hit → command stays as bare ``mpremote``."""
+        """Neither venv-local nor PATH hit, command stays as bare ``mpremote``."""
         from chumicro_deploy import micropython_transport as module
 
         empty_bin = tmp_path / "bin"
@@ -1120,7 +1120,7 @@ class TestResetIntoBootloader:
             transport_factory=_factory_for(serial),
             runner=FakeRunner(),
         )
-        # exec_raw raising is the EXPECTED success signal — the board
+        # exec_raw raising is the EXPECTED success signal.  The board
         # resets mid-exec and the serial link drops before a clean
         # response comes back.  Helper returns True so the caller
         # polls for the new port.
@@ -1215,7 +1215,7 @@ class TestDeployFiles:
         """``clean=False`` (the default) leaves ``:/lib`` untouched.
 
         Mirrors the CP transport's additive-by-default contract that
-        ``chumicro-workspace deploy`` relies on — users who hand-install
+        ``chumicro-workspace deploy`` relies on.  Users who hand-install
         deps via ``mpremote mip install`` keep them across deploys.
         """
         transport, _, runner = self._prepare_transport(mode="copy")
@@ -1238,7 +1238,7 @@ class TestDeployFiles:
         MP analog of CP's ``rsync --delete`` + ``DEVICE_KEEP_SET``: a
         device-side script removes every root entry except the keep
         set, then ``fs cp -r`` repopulates the payload.  Ordering
-        matters — clearing AFTER the push would clobber it.
+        matters, since clearing AFTER the push would clobber it.
         """
         transport, _, runner = self._prepare_transport(mode="copy")
         try:
@@ -1248,7 +1248,7 @@ class TestDeployFiles:
                 clean=True,
             )
             # Clean-slate runs as an mpremote `exec` subprocess (not
-            # the persistent serial — that would hold the port the
+            # the persistent serial, that would hold the port the
             # following `fs cp` subprocess needs).
             clean_index = next(
                 (
@@ -1286,7 +1286,7 @@ class TestDeployFiles:
 
         The clean-slate device script is best-effort per entry, so an
         empty / freshly-formatted root is a no-op and the deploy still
-        pushes the staging tree — no error before payload reaches
+        pushes the staging tree, no error before payload reaches
         flash.
         """
         transport, _, runner = self._prepare_transport(mode="copy")
@@ -1310,7 +1310,7 @@ class TestDeployFiles:
     def test_mount_mode_clean_kwarg_is_no_op(self) -> None:
         """Mount mode never writes to device flash, so ``clean`` is a no-op.
 
-        ``mpremote mount_local`` is transient — the staging tree is
+        ``mpremote mount_local`` is transient.  The staging tree is
         host-side and unmounts cleanly on disconnect.  There's no
         accumulation to wipe and no ``mpremote fs rm`` call should
         fire.
@@ -1385,7 +1385,7 @@ class TestDeployFiles:
     def test_deploy_files_uses_long_idle_timeout(self) -> None:
         """``deploy_files`` execs the entrypoint with ``_EXECUTE_IDLE_TIMEOUT``.
 
-        Same regression as ``test_execute_uses_long_idle_timeout`` — the
+        Same regression as ``test_execute_uses_long_idle_timeout``.  The
         on-device fragmentation tests run their entrypoint via
         ``deploy_files``, so this path also has to give the histogram
         bisection enough idle headroom.
