@@ -43,7 +43,7 @@ Patterns that appear in 3+ libraries are infrastructure candidates.  Look for:
 * **Repeated state-machine shapes.**  E.g., wifi, mqtt, and requests all have "connecting / connected / failed / reconnecting" state machines.  If the *pattern* is the same, consider a shared base in a small infrastructure library (or a documented contract that they all implement).
 * **Repeated configuration patterns.**  Multiple libraries with `<X>Config.from_dict()`.  Already addressed by `chumicro-config` per Decision 0036; verify every library follows that decision.
 * **Repeated test-fixture shapes.**  If every networking library's `functional_tests/conftest.py` is structurally identical except for which library is being tested, the conftest is infrastructure.
-* **Repeated boilerplate** in scaffolders / generators / config readers.  Check `scripts/` and `workbench/workspace/scaffold` for ownership of this kind of work.
+* **Repeated boilerplate** in scaffolders / generators / config readers.  Check `scripts/new_library_scaffold.py` and adjacent generator scripts under `scripts/` for ownership of this kind of work.
 
 ### 3. Library-shape candidates
 
@@ -127,13 +127,25 @@ When proposing a workstream candidate (merge / split / promote / cross-cutting r
    * **Medium + small scope** — pattern-promotion candidates that don't break public API.  Sign-off then execute.
    * **Any confidence + large scope** — merge / split / delete / promote candidates, infrastructure proposals.  These are **workstream proposals**, not edits.  Add to `plans/next-up.md` as a new entry; don't execute.
 7. **Present the punch-list to the user.**  Heavily group by scope (small fixes first, big proposals last).
-8. **Execute small-scope items.**  Each commits separately if they're unrelated.  After each batch, run `python scripts/run.py preflight --coverage-threshold 94` to confirm the full sweep still passes.  Read the `git-commit` skill before each commit.  If preflight surfaces a failure that looks unrelated to the current edit, `git stash` + re-run + `git stash pop` to confirm it pre-existed, then flag in the punch-list — don't silently fold an unrelated fix into a workspace-audit commit.
+8. **Execute small-scope items.**  Each commits separately if they're unrelated.  Hand the end-of-batch off to the `task-checkpoint` skill (preflight, plans-doc update, commit, push).  If preflight surfaces a failure unrelated to the current edit, isolate it and flag in the punch-list rather than silently folding the fix into a workspace-audit commit — workspace-audit blast radius is large enough that unrelated fixes obscure the audit's intent.
 
    For **proposal items** (merge / split / delete / promote candidates), don't execute — add an entry to `plans/next-up.md` with:
    * The proposal headline.
    * The evidence (consumer counts, code-at-boundary ratios, zero-caller greps).
    * An estimated workstream size (small / medium / large).
    * A pointer to the audit run that surfaced it.
+
+## After the audit
+
+The audit is done when:
+
+* Small-scope items have a commit each or an explicit user skip.
+* Workstream proposals are added to `plans/next-up.md` with the proposal template (headline, evidence, estimated workstream size).
+* `python scripts/run.py preflight --coverage-threshold 94` passes on the final state.
+
+After the after-action sweep, invoke the `task-checkpoint` skill — it owns preflight, plans-doc update, commit, and push.  Don't stop without invoking it.
+
+If the audit surfaces a workstream too big to scope here, file an entry pointing at `plans/workstreams/<name>.md` and move on.  Out-of-scope expansion mid-audit is the leading cause of bloated workspace-audit commits.
 
 ## Anti-patterns
 
