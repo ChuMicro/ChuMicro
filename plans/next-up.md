@@ -19,3 +19,4 @@ _(nothing in flight)_
 - [ ] **Deploy walker fails on unresolved imports.**  [workstreams/walker-unresolved-import-failure.md](workstreams/walker-unresolved-import-failure.md)
 - [ ] **Concurrent-agent commit scrambling — process / skill note.**  [workstreams/concurrent-agent-commit-scrambling.md](workstreams/concurrent-agent-commit-scrambling.md)
 - [ ] **`/audit-library libraries/requests` — dedup test helpers (`make_factory` / `canned_response` / `drive_until_done` / `make_client` repeated near-verbatim across 4 `test_client_*.py` files).**
+- [ ] **`/audit-workspace` — `libraries/*/examples/helpers.py` cross-library duplication.** 340-LOC file verbatim in `http_server` / `ntp` / `sockets` / `websockets` (md5 identical) plus drifted copies in `mqtt` / `requests`. Promotion candidate for `support/example_helpers` or scaffold-driven sync.
