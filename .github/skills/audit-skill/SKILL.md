@@ -128,7 +128,11 @@ The end-of-work bookend (`task-checkpoint`) and the commit step (`git-commit`) a
 
 Run the **AI-tic grep from [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex)** — that section is the source of truth.  Treat hits per [§ Phrase bans](../../../docs/contributing/agent-style-guide.md#phrase-bans) (drop / replace / case-by-case).  Same rules apply to skill bodies as to user-facing docs.
 
-**Degraded passages get rewritten, not re-trimmed.**  SKILL.md bodies rot exactly the way code comments and READMEs do.  These skills are long and have been trimmed pass after pass, each removing a word, none asking *what should this say?*  An `ai-tic` or `shape` finding whose passage has rotted that far (illegible, says nothing, would lose nothing it doesn't already lack if deleted) is not fixed by removing another word.  Discard it and rewrite from a fresh read of *what this skill does and when it fires*, applying the cold-loader / cold-triggering-agent test (Audit philosophy).  Tag it `rewrite` and show the proposed replacement text inline.  MEDIUM by default, since the rebuilt prose is a judgment call.  This is [`agent-style-guide.md` § Degraded prose is rewritten, not trimmed again](../../../docs/contributing/agent-style-guide.md#degraded-prose-is-rewritten-not-trimmed-again) applied to SKILL.md bodies.  `/audit-comments` and `/audit-docs` make the same move for their scopes.  Re-trimming the wreckage manufactures the residue the rule exists to stop.
+**Degraded passages get rewritten, not re-trimmed.**  SKILL.md bodies rot exactly the way code comments and READMEs do.  These skills are long and have been trimmed pass after pass, each removing a word, none asking *what should this say?*  An `ai-tic` or `shape` finding whose passage has rotted that far (illegible, says nothing, would lose nothing it doesn't already lack if deleted) is not fixed by removing another word.  Discard it and rewrite from a fresh read of *what this skill does and when it fires*, applying the cold-loader / cold-triggering-agent test (Audit philosophy).  Tag it `rewrite` and show the proposed replacement text inline.  MEDIUM by default, since the rebuilt prose is a judgment call.
+
+*Testable criterion.*  If the proposed edit changes ≤1 sentence and leaves the surrounding paragraph structure intact, it is a strip (`ai-tic` / `shape`), not a `rewrite` — even if the word *"rewrite"* came up while drafting.  A rewrite reconsiders the passage from **source** (the dim 4 three-agent personae: what the loader needs from the description, what the triggering agent needs from the body, what a sibling-skill author needs from the scope), not from the existing prose.  Drafting with the original in view biases toward minimal edits — read source, look away, draft fresh, *then* compare.  If you cannot draft from source alone, that itself is a finding (the prose carried knowledge the skill's scope doesn't make obvious — revisit dim 2 or dim 3).
+
+This is [`agent-style-guide.md` § Degraded prose is rewritten, not trimmed again](../../../docs/contributing/agent-style-guide.md#degraded-prose-is-rewritten-not-trimmed-again) applied to SKILL.md bodies.  `/audit-comments` and `/audit-docs` make the same move for their scopes.  Re-trimming the wreckage manufactures the residue the rule exists to stop.
 
 Skill-specific anti-patterns on top of the standard list:
 
@@ -161,36 +165,48 @@ Rules without an incident behind them are hard for the agent to weigh against co
 
 ## Procedure
 
-Walk these in order:
+**Two passes, in order.**  Pass 1 makes the subtractive edits — AI-tic strips, anti-self-assertion strips, dated-phrasing strips, voodoo-constant flags, frontmatter normalization, reference-rot fixes, drift one-line citation swaps, composability strip-to-citation moves, and description vague-stem fixes where the swap is mechanical.  Pass 2 re-reads the post-Pass-1 state cold against the three personae (loader, triggering agent, sibling-skill author): with the tic noise and dead citations cleared, the structural and judgment-level failures that survive are legible as failures.  Pass 2 surfaces body-shape moves, cold-agent loadability gaps, cross-skill overlap (in multi-skill mode), rule-justification rewrites, and the `rewrite` findings where a fresh-read replacement is the right fix.  **Run Pass 1 to a commit before starting Pass 2** — strips routinely reveal that the surrounding prose, not the tic, was the actual defect, and reading the original state biases Pass 2 toward minimal edits and degraded prose perpetuates.  This is the same boundary `/audit-docs` and `/audit-comments` enforce, for the same reason.
 
-1. **Frontmatter + discoverability pass** (dims 1, 2) — read the YAML, run the description through *what* + *when* check, flag jargon / vagueness.
-2. **Body shape + loadability pass** (dims 3, 4) — `wc -l`, section grep (`grep -nE '^## ' <file>`), check for explicit when-to-use + exit-condition clauses.  Then walk the body as a cold agent against one representative invocation (mental simulation), and probe 2–3 adversarial inputs (missing arg, malformed path, contradictory request).
-3. **Reference rot pass** (dim 5) — extract every `Decision NNNN`, `scripts/run.py`, `CHU0NN`, sibling-skill name, file path, intra-doc anchor link, and embedded grep / awk snippet.  Resolve / dry-run each.
-4. **Drift pass** (dim 6) — for each restated AGENTS.md / ADR rule, diff against the source.
-5. **Composability pass** (dim 7) — does the skill defer to `task-checkpoint` / `git-commit` / siblings where it should?
-6. **AI-tic + anti-pattern grep** (dim 8) — run the `audit-docs` regex; add the skill-specific patterns from this dim.
-7. **Cross-skill pass** (dim 9) — only if multi-skill mode.  Trigger overlap, directive extraction, redundancy.
-8. **Justification pass** (dim 10) — for each absolute rule in the body, locate the why.
+**Clause-paced reading in Pass 2.**  Pass 1's strips leave paragraphs that read fine at paragraph scale while a mid-paragraph parenthetical, a buried clause, or a single item in a long bulleted dimension list still encodes the defect.  Pass 2 reads clauses individually inside each paragraph, not paragraphs as units.  Paragraph-paced reads leave residue; clause-paced reads catch it.
 
-### Punch-list
+**Cross-section sweep before per-passage rewrites.**  In Pass 2, read related parts of the body together — frontmatter `description` + opening Scope + the first procedural step often state the same trigger.  Name a home (usually the description, since the loader sees only that) and collapse the others to one cohesive statement.  Per-section review misses this because each site reads fine alone.
 
-Group findings by confidence and tag by dimension (see Output format).
+### Pass 1 — subtractive sweep
 
-### Execute the HIGH-confidence batch
+1. **AI-tic + anti-pattern grep** (dim 8).  Run the standing regex from [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex), plus the skill-specific patterns in dim 8 (anti-self-assertions, dated phrasing, voodoo constants, first-person plural).  Hard-ban hits and anti-self-assertions almost always need a strip; soft hits are case-by-case.
+2. **Frontmatter normalization** (dim 1).  Mechanical shape fixes: `name` matches directory, `description` exists and carries *what* + *when*, conditional fields satisfy their constraints.  Description rewrites that need new prose (subjective wording) defer to Pass 2.
+3. **Reference-rot fix** (dim 5).  Extract every `Decision NNNN`, `scripts/run.py <cmd>`, `CHU0NN`, sibling-skill name, file path, intra-doc anchor, embedded grep / awk snippet.  Resolve or dry-run each.  Dead citations get a one-line fix (corrected number, current command name) or removal where the surrounding sentence still holds.  Anchor renames get the new slug.
+4. **Drift one-line citation swap** (dim 6).  For each restated AGENTS.md / ADR rule that has diverged from source, replace the restatement with a one-line citation (*"Per AGENTS.md → Testing, test skips must be loud (see [Decision 0058](...))."*).  Restatements that have *not* diverged but still re-implement source content also get cited rather than mirrored, per dim 6.
+5. **Composability strip-to-citation** (dim 7).  Replace duplicated `task-checkpoint` / `git-commit` paragraphs with one-line citations.  Same for sibling-skill content that's restated rather than referenced.
+6. **Description vague-stem fix** (dim 2 — mechanical subset).  Vague openers (*"Tools for…"*, *"Helps with…"*, *"Utilities for…"*) get swapped to concrete-action openers when the swap is mechanical (the rest of the description already names the action; only the stem was vague).  Vague descriptions that need new content defer to Pass 2.
 
-After the user gives the go-ahead, execute the HIGH-confidence fixes as a single edit pass.  MEDIUM items wait for user confirmation; LOW items wait for user answers.
+**Pass 1 punch-list and execution.**  Group by confidence.  HIGH: AI-tic hits, anti-self-assertions, dated phrasing, dead citations, anchor fixes, one-line drift citations, composability strip-to-citation moves, mechanical vague-stem swaps.  MEDIUM: drift cases where one sentence of the local restatement should survive the citation swap, frontmatter rewrites that need a judgment call.  Execute HIGH as one cohesive commit; MEDIUM as separate commits if accepted.
+
+### Pass 2 — reconstructive sweep
+
+The three-persona walk runs against the cleaned state.  Pass 1's strips remove tic noise and dead citations, so the structural failures that survive are legible rather than camouflaged.
+
+7. **Cold-agent loadability walk** (dim 4).  Walk the body as a cold loader, then a cold triggering agent, then a sibling-skill author against one representative invocation (mental simulation), and probe 2–3 adversarial inputs (missing arg, malformed path, contradictory request, input from outside the skill's intended domain).  Flag divergence points (steps where two Claude instances would meaningfully diverge), stuck points (steps needing info not yet gathered), and dead ends (workflow stops short of the user's goal).  Apply the clause-paced rule.
+8. **Body shape evaluation** (dim 3).  `wc -l`, section grep (`grep -nE '^## ' <file>`).  Procedure-first vs narrative, section ordering against the recommended arc (Scope → Philosophy → Dimensions → Procedure → Output → Don'ts → Defer), heading depth, rule-first vs example-first, reference-file table-of-contents on files >100 lines.  Length thresholds are more legible after Pass 1 since the padding that masked them is gone.
+9. **Description reconstructive rewrite** (dim 2).  Descriptions that survived Pass 1 but still fail the triggerability test (no *when*, jargon-heavy, no obvious user phrasing match) get rewritten.  Draft from source per the discipline below — what the skill does, when it fires, who calls it — *before* re-reading the existing description.
+10. **Cross-skill overlap** (dim 9 — multi-skill mode only).  Trigger phrase overlap, directive extraction + conflict detection, redundancy diff, coverage gap.  Rewrites here are MEDIUM (which skill owns the contested phrase is a judgment call); pure deletions of duplicated paragraphs are HIGH.
+11. **Rule justification rewrites** (dim 10).  For each absolute rule without an incident trail: trace to an ADR / `feedback_*` memory and add the pointer, soften to a guideline, or remove.  Drafting the pointer prose follows the source-first discipline (read the ADR or memory; draft the cited sentence fresh; compare).
+12. **Reconstructive rewrites** (dim 8 — `rewrite` findings).  For each passage flagged as degraded in Pass 1's grep but where stripping further would leave the prose opaque or ambiguous, draft replacement text from a fresh read of *what this skill does and when it fires* (the dim 4 three-persona test) — *before* re-reading the original.  Order is load-bearing: read the skill's scope from its own dimensions and procedure, look away, draft fresh, *then* compare against the original.  Drafting with the original in view biases toward minimal edits and degraded prose perpetuates.  Apply the cold-loader / cold-triggering-agent test to your proposed text, not just the original.
+
+**Pass 2 punch-list and execution.**  Group by confidence.  HIGH: structural moves with clear cold-agent benefit, mechanical loadability gaps (missing exit-condition clause, missing arguments section).  MEDIUM: `rewrite` findings with proposed replacement text (judgment call about which scope-framing is load-bearing); description rewrites; rule-justification rewrites where the soften-vs-trace call needs sign-off.  LOW: stumbles where the agent-persona is unclear.  Execute HIGH as one cohesive commit; MEDIUM as separate commits, one per rewrite — small reversible edits; if one rewrite reads worse on a second look, the rest stand.
 
 ### After-action sweep + exit condition
 
-Re-run the dim 8 AI-tic grep on the changed file(s).  Re-run dim 5 reference checks on any citations that were edited.  The audit is done when:
+Re-run the dim 8 AI-tic grep on the changed file(s).  Re-run dim 5 reference checks on any citations that were edited.  Rewrites pull in new tics, so the second grep catches what fresh prose introduced.  The audit is done when:
 
 * AI-tic grep returns no unjustified hits.
 * Every accepted punch-list item has a corresponding edit (or a deferred-to-`plans/next-up.md` entry if the fix is bigger than the audit).
 * In multi-skill mode, dim 9 finds no remaining overlap that the user hasn't explicitly accepted.
+* A cold re-walk of the changed sections against the three personae does not surface a new stumble.
 
 If new stumbles surface after the edit pass, file as a follow-up rather than expanding the current one.
 
-End-of-work (preflight, plans-doc update, commit, push) is `task-checkpoint`'s job — defer to it rather than re-implementing.
+After the after-action sweep, invoke the `task-checkpoint` skill — it owns preflight, plans-doc update, commit, and push.  Don't stop without invoking it.
 
 ## Output format
 
@@ -276,7 +292,7 @@ LOW-CONFIDENCE (questions for the user):
 * `drift` — restated rule diverged from source of truth (dim 6)
 * `composability` — sibling-skill duplication or missing deferral (dim 7)
 * `ai-tic` — vocabulary or phrasing flagged by [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex) (dim 8)
-* `rewrite` — passage degraded by prior subtractive passes; discard and rebuild from a fresh read of what the skill does (dim 8, per [`agent-style-guide.md` § Degraded prose is rewritten, not trimmed again](../../../docs/contributing/agent-style-guide.md#degraded-prose-is-rewritten-not-trimmed-again)). Replacement shown inline; MEDIUM by default — rebuilt prose is a judgment call.
+* `rewrite` — passage degraded by prior subtractive passes; discard and rebuild from a fresh read of what the skill does (dim 8, per [`agent-style-guide.md` § Degraded prose is rewritten, not trimmed again](../../../docs/contributing/agent-style-guide.md#degraded-prose-is-rewritten-not-trimmed-again)).  *Testable criterion:* if the proposed edit changes ≤1 sentence and leaves the surrounding paragraph intact, it is a strip (`ai-tic` / `shape`), not a `rewrite` — tag accordingly.  Replacement shown inline; MEDIUM by default — rebuilt prose is a judgment call.
 * `overlap` — cross-skill trigger / directive overlap (dim 9)
 * `redundant` — line-overlap merge candidate (dim 9)
 * `conflict` — cross-skill directive contradiction (dim 9)
@@ -315,7 +331,7 @@ LOW-CONFIDENCE (questions for the user):
 
 * **Don't auto-commit.**  Skill edits are governance; user reviews before commit.  Surface as punch-list first; execute HIGH-confidence batch only after explicit go-ahead.
 * **Don't expand scope mid-pass.**  If a reference rot finding surfaces an outdated AGENTS.md paragraph, file as a follow-up — don't fold it into the current edit batch.
-* **Don't run `task-checkpoint` inline.**  This skill ends at the edit batch + after-action sweep.  Preflight, plans-doc update, commit, push are the next agent step (the `task-checkpoint` skill), not part of this one.
+* **Don't inline `task-checkpoint`'s steps.**  Preflight, plans-doc update, commit, push aren't part of this skill's procedure — but invoking the `task-checkpoint` skill *is* the required next agent step once this skill's exit condition is met.  "Don't re-implement" never means "skip the invocation".
 
 ## Defer / out of scope
 
