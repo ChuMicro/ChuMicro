@@ -48,11 +48,7 @@ def test_map_too_long_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wire-compatibility contract — chumicro_msgpack.packb(obj) must produce
-# bytes byte-for-byte identical to msgpack.packb(obj, use_single_float=True)
-# for any subset-conforming input.  This is what lets the workbench's
-# host-side writer use PyPI msgpack while the device-side reader uses
-# chumicro_msgpack — they share a wire format with zero conversion.
+# Wire-compatibility contract — see module docstring.
 # ---------------------------------------------------------------------------
 
 def _payloads() -> list[object]:
