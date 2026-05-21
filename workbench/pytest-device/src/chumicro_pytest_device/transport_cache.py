@@ -37,29 +37,28 @@ class _TransportCache:
         self._last_staged: dict[str, tuple[str, str]] = {}
         #: Library currently staged on each device (flash/copy modes).
         #: Bulk staging is scoped to ONE library at a time so the
-        #: drive working-set stays bounded — a 491 KB Pi Pico W
-        #: CIRCUITPY drive can't hold every library's source +
+        #: drive working-set stays bounded: a 491 KB Pi Pico W
+        #: CIRCUITPY drive can't hold every library's source plus
         #: every library's test files at once.  When a test for a
         #: different library runs, the next stage rsync uses
         #: ``--delete`` to clean the prior library off the drive.
         self._staged_library: dict[str, str] = {}
-        #: Batch keys that have already had their ``--per-file`` soft
-        #: reset issued.  ``prepare()`` runs twice per file batch
-        #: (DevicePrepareItem then DeviceRunFileItem); without this the
-        #: per-file reset would fire twice.  Mirrors how
-        #: ``_staged_library`` makes the per-library reset idempotent.
+        #: Batch keys whose ``--per-file`` soft reset has already
+        #: fired.  ``prepare()`` runs twice per file batch (once for
+        #: ``DevicePrepareItem``, once for ``DeviceRunFileItem``), and
+        #: only the first call should reset.
         self._per_file_reset_done: set[tuple[str, str, str]] = set()
         #: Cached batch results keyed by (device_id, library, file).
         #: Value is (parsed_result_or_None, raw_output_or_error).
         self._batch_results: dict[
             tuple[str, str, str], tuple[RunResult | None, str]
         ] = {}
-        #: Deploy mode resolved once per device (session-scoped — the
+        #: Deploy mode resolved once per device (session-scoped: the
         #: transport is cached per device, so the mode cannot change
         #: mid-session).  The first resolution for a device computes it
         #: from the full closure of every test targeting that device
-        #: and memoizes here; later calls reuse it, which also makes
-        #: any RAM→flash override message print exactly once.
+        #: and memoizes here.  Later calls reuse it, which also makes
+        #: any RAM-to-flash override message print exactly once.
         self._resolved_deploy_mode: dict[str, str] = {}
 
     def get_transport(
@@ -175,11 +174,11 @@ class _TransportCache:
         """Return the library currently bulk-staged on a device.
 
         In flash/copy modes, staging is scoped to ONE library at a
-        time — the rsync payload (library src + that library's test
+        time: the rsync payload (library src plus that library's test
         files) plus boot files must fit on the drive.  Pi Pico W
-        CIRCUITPY drives are 491 KB; staging every library at once
+        CIRCUITPY drives are 491 KB, and staging every library at once
         overflows.  Per-library staging keeps the drive working-set
-        bounded; rsync ``--delete`` cleans the prior library when
+        bounded, and rsync ``--delete`` cleans the prior library when
         switching.
 
         Args:
@@ -206,7 +205,7 @@ class _TransportCache:
         """Return whether this file batch still needs its ``--per-file`` reset.
 
         ``prepare()`` runs twice per file batch (DevicePrepareItem then
-        DeviceRunFileItem); only the first should soft-reset.
+        DeviceRunFileItem), and only the first should soft-reset.
 
         Args:
             batch_key: ``(device_id, library_name, test_file_name)``.
@@ -250,7 +249,7 @@ class _TransportCache:
     def disconnect_all(self) -> None:
         """Disconnect all cached transports.
 
-        ``disconnect()`` is pure teardown — exits raw REPL (Ctrl-B)
+        ``disconnect()`` is pure teardown: it exits raw REPL (Ctrl-B)
         and closes the serial port.  It deliberately does NOT touch
         ``supervisor.runtime.autoreload`` or fire an explicit Ctrl-D
         soft-reboot: those caused a double-reboot wedge on ESP32-S2
@@ -260,7 +259,7 @@ class _TransportCache:
         Net effect at session end: each board is left in friendly
         REPL with the serial port closed.  On the ``deploy_files``
         path autoreload is already back to default-on (the deploy
-        soft-reboot reset it); on the functional-test path autoreload
+        soft-reboot reset it). On the functional-test path autoreload
         stays off until the user resets / power-cycles the board,
         which is acceptable because tests drive the raw REPL directly
         and never depend on ``code.py``-style reload-on-edit.

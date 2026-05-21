@@ -1,7 +1,7 @@
 """Per-board feature gating for functional tests.
 
 Some functional tests need a runtime feature finer-grained than the
-``__chumicro_runtimes__`` marker can express — e.g. "MicroPython on
+``__chumicro_runtimes__`` marker can express, e.g. "MicroPython on
 an ESP32-family chip" (because ``import esp32`` only succeeds there).
 A test file declares its requirements::
 
@@ -10,7 +10,7 @@ A test file declares its requirements::
 
 The plugin reads both markers via AST (no execution) at collection
 time and filters target devices.  Devices missing a required feature
-get nothing collected for that file — same shape as the runtime
+get nothing collected for that file, the same shape as the runtime
 filter, just driven by probe data rather than the device's declared
 runtime.
 
@@ -27,7 +27,7 @@ Feature semantics:
   a new feature requires extending this set, the probe script, and
   :func:`parse_feature_probe_output`.
 
-Why probe rather than maintaining a board → features table?  Boards
+Why probe rather than maintaining a board-to-features table?  Boards
 and their firmware change faster than a hand-maintained table can
 keep up with.  Asking the device directly is authoritative and
 costs one short ``transport.execute`` per target device per session.
@@ -46,7 +46,7 @@ from pathlib import Path
 #: * extending :func:`parse_feature_probe_output` to recognize it.
 #:
 #: Every feature in this set must be detectable by an ``import``
-#: probe — the MicroPython REPL on the target board can do
+#: probe.  The MicroPython REPL on the target board can do
 #: ``try: import X`` cheaply.  Don't add features that need a
 #: side-effecting probe (USB enumeration, hardware-register read).
 KNOWN_FEATURES: frozenset[str] = frozenset({"esp32"})
@@ -77,13 +77,12 @@ FEATURE_PROBE_SCRIPT = (
 def read_features_marker(python_file: Path) -> frozenset[str] | None:
     """Return the ``__chumicro_features__`` set declared in *python_file*.
 
-    Mirrors :func:`chumicro_deploy.runtime_marker.read_runtime_marker`
-    — the same AST-only approach so feature-marked files can import
+    Uses an AST-only read so feature-marked files can import
     device-only modules at top level without breaking host-side
     parsing.
 
     Returns ``None`` when the marker is absent (file makes no
-    feature claim — runs on every target the runtime filter
+    feature claim, runs on every target the runtime filter
     accepted).  Returns a (possibly empty) frozenset when present.
 
     Args:
@@ -92,7 +91,7 @@ def read_features_marker(python_file: Path) -> frozenset[str] | None:
     try:
         tree = ast.parse(python_file.read_text(), filename=str(python_file))
     except (SyntaxError, OSError):
-        return None  # Treat unreadable files as universal — fail-safe.
+        return None  # Treat unreadable files as universal, fail-safe.
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
@@ -119,7 +118,7 @@ def parse_feature_probe_output(output: str) -> frozenset[str]:
     sentinels (boot banners, ``print`` debug from other code) are
     ignored.
 
-    Unknown feature strings between the sentinels are dropped — the
+    Unknown feature strings between the sentinels are dropped.  The
     probe and the parser are kept in lockstep via
     :data:`KNOWN_FEATURES`, and treating an unknown name as a
     silently-acquired feature would let a typo in the probe script
@@ -140,7 +139,7 @@ def parse_feature_probe_output(output: str) -> frozenset[str]:
             return frozenset(features)
         if in_section and line in KNOWN_FEATURES:
             features.append(line)
-    # No END sentinel — probe output truncated.  Return whatever we
+    # No END sentinel: probe output truncated.  Return whatever we
     # accumulated so partial probes still skip-rather-than-include
     # feature-marked tests.
     return frozenset(features)

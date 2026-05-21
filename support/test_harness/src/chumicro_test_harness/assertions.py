@@ -1,4 +1,4 @@
-"""Cross-runtime assertion helpers for the lightweight test harness.
+"""Cross-runtime assertion helpers for the test harness.
 
 These helpers provide pytest-like assertion APIs that work on CPython,
 MicroPython, and CircuitPython.  Unit tests that need to run across

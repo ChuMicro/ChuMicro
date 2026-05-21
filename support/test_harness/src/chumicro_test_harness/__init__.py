@@ -1,4 +1,4 @@
-"""Public exports for the lightweight test harness."""
+"""Public exports for the test harness package."""
 
 from chumicro_test_harness.assertions import raises
 from chumicro_test_harness.discovery import discover_source_roots, run_one_file

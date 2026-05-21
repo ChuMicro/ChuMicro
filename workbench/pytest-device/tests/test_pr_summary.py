@@ -1,4 +1,4 @@
-"""Tests for pr_summary — markdown rendering for the Device testing PR block."""
+"""Tests for pr_summary: markdown rendering for the Device testing PR block."""
 
 from __future__ import annotations
 
@@ -33,10 +33,10 @@ def _make_device_result(
 
 
 class TestFormatPrSummaryBlock:
-    """Tests for _format_pr_summary_block — paste-ready PR markdown."""
+    """Tests for _format_pr_summary_block: paste-ready PR markdown."""
 
     def test_empty_results_still_renders_command_and_zero_total(self) -> None:
-        """No devices run → block shows just the command and a bold zero total."""
+        """No devices run, block shows just the command and a bold zero total."""
         block = pr_summary.format_pr_summary_block(
             command="pytest libraries/timing/functional_tests",
             per_device_results=[],
@@ -169,7 +169,7 @@ class TestFormatPrSummaryBlock:
             line for line in block.splitlines()
             if line.startswith("| `cp`")
         )
-        # Exactly 8 data columns + 2 outer borders → 9 pipes.
+        # Exactly 8 data columns + 2 outer borders yields 9 pipes.
         assert data_row.count("|") == 9
 
     def test_deploy_mode_surfaces_even_without_probe(self) -> None:
@@ -213,7 +213,7 @@ class TestFormatPrSummaryBlock:
         assert " flash " in cp_row
 
     def test_single_file_run_renders_per_test_table(self) -> None:
-        """One file → per-test detail table with status + duration per method."""
+        """One file yields a per-test detail table with status + duration per method."""
         from chumicro_pytest_device.result_parser import TestResult
 
         files = [pr_summary.FileRunResult(
@@ -261,7 +261,7 @@ class TestFormatPrSummaryBlock:
         assert "per-file breakdown" not in block
 
     def test_multi_file_run_renders_per_file_table(self) -> None:
-        """Multiple files → per-file detail table with counts + duration."""
+        """Multiple files yield a per-file detail table with counts + duration."""
         files = [
             pr_summary.FileRunResult(
                 library="timing", file_name="test_heartbeat.py",
@@ -311,10 +311,10 @@ class TestFormatMarkdownTable:
             rows=[["alpha", "1"], ["bravo", "22"]],
         )
         lines = table.splitlines()
-        # Header row and two data rows, all the same width → padded.
+        # Header row and two data rows, all the same width when padded.
         row_widths = [len(line) for line in lines]
         assert len(set(row_widths)) == 1
-        # Separator is ``|  ---- |`` style — all dashes, no colons.
+        # Separator is ``|  ---- |`` style: all dashes, no colons.
         separator = lines[1]
         assert ":" not in separator
 

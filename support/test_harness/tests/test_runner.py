@@ -1,4 +1,4 @@
-"""Tests for the lightweight test runner."""
+"""Tests for the test runner."""
 
 from __future__ import annotations
 

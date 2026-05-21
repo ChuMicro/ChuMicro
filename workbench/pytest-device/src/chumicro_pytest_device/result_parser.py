@@ -1,7 +1,7 @@
 """Parse structured output from the lightweight test harness.
 
-The test harness emits one line per event — ``PASS``, ``FAIL``, ``SKIP``,
-``SUMMARY``, and ``HEAP`` — with a fixed format.  This module turns raw
+The test harness emits one line per event (``PASS``, ``FAIL``, ``SKIP``,
+``SUMMARY``, and ``HEAP``) with a fixed format.  This module turns raw
 captured output into typed result objects that the device orchestration
 layer can inspect programmatically.
 
@@ -69,8 +69,8 @@ _HEAP_PATTERN = re.compile(
 def parse_output(raw_output: str) -> RunResult:
     """Parse raw harness output into a structured ``RunResult``.
 
-    Lines that do not match any known pattern are silently ignored —
-    device output often includes boot messages, print-debugging, or
+    Lines that do not match any known pattern are silently ignored.
+    Device output often includes boot messages, print-debugging, or
     other noise that should not break parsing.
 
     Args:

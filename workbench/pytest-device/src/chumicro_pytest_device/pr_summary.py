@@ -5,7 +5,7 @@ plugin consumes per-test reports and feeds
 :func:`format_pr_summary_block` a :class:`DeviceRunResult` list
 to render the final Markdown block users paste into PRs.
 
-Keep the output stable — it lands in PR bodies and reviewers skim
+Keep the output stable: it lands in PR bodies and reviewers skim
 it at-a-glance.  Any behavior change here should be paired with a
 baseline update on the ``test-libraries-functional`` smoke runs.
 """
@@ -35,7 +35,7 @@ class FileRunResult:
         passed: ``summary.total - summary.failed`` from the harness.
         failed: ``summary.failed`` from the harness.
         errors: 1 if the harness produced no summary line, else 0.
-        tests: Per-test results emitted by the harness — available so
+        tests: Per-test results emitted by the harness, available so
             single-file runs can show method-level pass/fail.
         duration_seconds: Wall-clock time spent running this file.
     """
@@ -109,7 +109,7 @@ def _format_markdown_table(
     """Render a padded markdown table.
 
     Pads each cell with trailing (or leading, for right-aligned
-    columns) spaces so columns align in monospace CLI output; the
+    columns) spaces so columns align in monospace CLI output, and the
     result still parses as a valid GitHub-flavored markdown table.
     The separator row gets a trailing ``:`` for right-aligned
     columns and a leading-plus-trailing ``:`` for centered ones, so
@@ -204,16 +204,16 @@ def format_pr_summary_block(
 
         **Total: P passed, F failed, E errors**
 
-        #### `<device>` — per-file breakdown (`<address>`)
+        #### `<device>`: per-file breakdown (`<address>`)
         | File | Passed | Failed | Errors | Duration |
         | ... one row per file ...                    |
 
     Table rows are padded so the block is equally readable in a
     terminal (monospace) and on GitHub (rendered markdown).  A device
-    with exactly one file gets a per-test table instead of per-file —
-    the PASS / FAIL / SKIP status and duration of each method show so
+    with exactly one file gets a per-test table instead of per-file.
+    The PASS / FAIL / SKIP status and duration of each method show so
     single-file runs surface method-level detail.  A device that
-    crashed before running anything gets no detail section; its
+    crashed before running anything gets no detail section, its
     summary row is enough.
 
     Args:
@@ -221,7 +221,7 @@ def format_pr_summary_block(
         per_device_results: Per-device :class:`DeviceRunResult`
             instances in the order they ran.
         total_duration_seconds: Total wall-clock time for the whole
-            invocation.  ``None`` omits the ``Duration:`` line — used
+            invocation.  ``None`` omits the ``Duration:`` line, used
             by tests that render blocks without timing.
 
     Returns:
@@ -284,12 +284,12 @@ def _format_device_detail_section(device: DeviceRunResult) -> str:
 
     Layout rule:
 
-    - 0 files → no detail (device failed before running anything).
-    - 1 file with test detail → per-test table.
+    - 0 files yields no detail (device failed before running anything).
+    - 1 file with test detail yields a per-test table.
     - 1 file without test detail (bulk-stage failure, unparsable
-      output) → per-file table with the single row so readers see a
+      output) yields a per-file table with the single row so readers see a
       placeholder instead of a missing section.
-    - 2+ files → per-file table.
+    - 2+ files yields a per-file table.
     """
     if not device.files:
         return ""
@@ -319,7 +319,7 @@ def _detail_section_heading(device: DeviceRunResult) -> str:
     subject = "per-test breakdown" if (
         len(device.files) == 1 and device.files[0].tests
     ) else "per-file breakdown"
-    return f"#### `{entry.identifier}` — {subject} (`{entry.address}`)"
+    return f"#### `{entry.identifier}`: {subject} (`{entry.address}`)"
 
 
 def _file_row(file_result: FileRunResult) -> list[str]:

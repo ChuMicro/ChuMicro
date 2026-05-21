@@ -7,7 +7,7 @@ its own test module.
 
 ``TestResolveLibrarySourceDirs`` exercises dependency resolution
 against a synthetic multi-library workspace materialized under
-``tmp_path`` via the ``_make_synthetic_library`` helper — no test
+``tmp_path`` via the ``_make_synthetic_library`` helper. No test
 reads the real on-disk state of any real chumicro library.  The
 prior version pinned ``libraries/runner`` / ``libraries/timing`` /
 ``libraries/msgpack`` and silently changed behavior whenever any of
@@ -93,7 +93,7 @@ class TestBuildBootstrap:
         assert "name_filter=None" in script
 
     def test_chunk_boundaries_none_by_default(self) -> None:
-        """No boundaries ⇒ the device keeps the single whole-file exec."""
+        """No boundaries: the device keeps the single whole-file exec."""
         script = device_testing.build_bootstrap("test_x.py")
         assert "chunk_boundaries=None" in script
 
@@ -126,7 +126,7 @@ class TestChunkBoundariesFor:
         assert device_testing.chunk_boundaries_for(path) == [1, 3, 6]
 
     def test_future_import_disables_chunking(self, tmp_path: Path) -> None:
-        """A __future__ import ⇒ None (each chunk compiles alone)."""
+        """A __future__ import yields None (each chunk compiles alone)."""
         path = tmp_path / "m.py"
         path.write_text(
             "from __future__ import annotations\n\n"
@@ -135,7 +135,7 @@ class TestChunkBoundariesFor:
         assert device_testing.chunk_boundaries_for(path) is None
 
     def test_single_statement_returns_none(self, tmp_path: Path) -> None:
-        """Fewer than two top-level statements ⇒ nothing to split."""
+        """Fewer than two top-level statements: nothing to split."""
         path = tmp_path / "m.py"
         path.write_text("class TestOnly:\n    def test_a(self):\n        pass\n")
         assert device_testing.chunk_boundaries_for(path) is None
@@ -190,7 +190,7 @@ class TestCreateTransport:
             device_testing.build_transport_for_entry(entry)
 
     def test_default_deploy_mode_is_flash(self) -> None:
-        """Default deploy mode (from device entry) should be flash → copy.
+        """Default deploy mode (from device entry) should be flash, then copy.
 
         Flash is the production-shaped default; RAM mode stays
         available as opt-in via per-device or CLI override.
@@ -515,7 +515,7 @@ class TestExecuteDeviceBootstrap:
 
 
 class TestResolveEffectiveDeployMode:
-    """Tests for resolve_effective_deploy_mode — deploy-mode precedence."""
+    """Tests for resolve_effective_deploy_mode: deploy-mode precedence."""
 
     def test_cli_override_wins(self) -> None:
         """CLI ``--deploy-mode`` takes precedence over the device entry."""

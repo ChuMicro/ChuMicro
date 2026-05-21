@@ -105,7 +105,7 @@ class TestParseTestFunctions:
     def test_skips_non_test_classes_and_helper_classes(
         self, tmp_path: Path
     ) -> None:
-        """Only ``class Test*`` contributes; helpers and fakes do not.
+        """Only ``class Test*`` contributes, helpers and fakes do not.
 
         Mirrors the runner's ``name.startswith("Test")`` gate so an
         underscore-prefixed fake (``_FakeModule``) or a non-Test class
@@ -213,7 +213,7 @@ class TestFilterTargetsByMarker:
         ]
 
     def test_unmarked_file_keeps_every_target(self, tmp_path: Path) -> None:
-        """No marker → every configured target survives the filter."""
+        """Without a marker, every configured target survives the filter."""
         test_file = tmp_path / "test_universal.py"
         test_file.write_text("def test_alpha():\n    pass\n")
         targets = self._two_runtime_targets()
@@ -260,7 +260,7 @@ class TestFilterTargetsByMarker:
         """``("micropython_esp32",)`` matches generic ``micropython`` targets.
 
         Folds the same way :func:`chumicro_deploy.runtime_marker.file_targets_runtime`
-        does — both MP variants share one bundle today.
+        does. Both MP variants share one bundle today.
         """
         test_file = tmp_path / "test_mp_esp32_only.py"
         test_file.write_text(
@@ -277,7 +277,10 @@ class TestFilterTargetsByMarker:
     def test_marker_excluding_every_target_returns_empty_list(
         self, tmp_path: Path,
     ) -> None:
-        """All targets dropped → empty list (collect() yields nothing)."""
+        """When the marker drops every target, the filter returns an empty list.
+
+        ``collect()`` then yields nothing for that file.
+        """
         test_file = tmp_path / "test_cpython_only.py"
         test_file.write_text(
             '__chumicro_runtimes__ = ("cpython",)\n'
@@ -291,7 +294,7 @@ class TestFilterTargetsByMarker:
         assert result == []
 
     def test_none_targets_passthrough(self, tmp_path: Path) -> None:
-        """No devices.yml → ``None`` flows through unchanged."""
+        """No devices.yml, so ``None`` flows through unchanged."""
         test_file = tmp_path / "test_anything.py"
         test_file.write_text("def test_alpha():\n    pass\n")
 
@@ -718,7 +721,7 @@ class TestShouldSoftResetBeforeStage:
 
         Persistent-serial ``mpremote`` keeps one VM across files, so
         ``sys.modules`` accumulates until a soft reset evicts it.  The
-        reset is Ctrl-D via raw REPL — no USB re-enumeration.
+        reset is Ctrl-D via raw REPL, no USB re-enumeration.
         """
         from chumicro_deploy.testing import FakeTransport
 
@@ -738,7 +741,7 @@ class TestShouldSoftResetBeforeStage:
         assert should_reset is True
 
     def test_false_for_micropython_copy_mode(self) -> None:
-        """Copy mode stages to flash and imports fresh per call — no per-file reset needed."""
+        """Copy mode stages to flash and imports fresh per call, no per-file reset needed."""
         from chumicro_deploy.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
@@ -806,10 +809,10 @@ class TestIsLibraryUnitTest:
         ) is True
 
     def test_pytest_suffix_is_not_structurally_excluded(self) -> None:
-        """The filename no longer decides the lane — the marker does.
+        """The filename no longer decides the lane. The marker does.
 
         A legacy ``_pytest.py`` name is still structurally a library
-        unit test; whether it runs on a given lane is decided by its
+        unit test, and whether it runs on a given lane is decided by its
         ``__chumicro_runtimes__`` / ``__chumicro_host_only__`` marker
         downstream (``_filter_targets_by_marker`` / the collect hooks),
         not by this path-shape check.
@@ -1004,7 +1007,7 @@ class TestEnsurePrepared:
     def test_flash_mode_bulk_stages_once_per_library(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
-        """Flash mode bulk-stages on first use per library; same-library re-entry is a no-op."""
+        """Flash mode bulk-stages on first use per library, and same-library re-entry is a no-op."""
         device = hot_path_device()
         transport = FakeTransport(mode="flash")
         prime_transport_cache(hot_path_cache, device, transport)
@@ -1047,8 +1050,8 @@ class TestEnsurePrepared:
 
         alpha_item._ensure_prepared(device)
         beta_item._ensure_prepared(device)
-        beta_item._ensure_prepared(device)  # same library — no extra stage.
-        alpha_item._ensure_prepared(device)  # back to alpha — restage.
+        beta_item._ensure_prepared(device)  # same library, no extra stage.
+        alpha_item._ensure_prepared(device)  # back to alpha, restage.
 
         library_sequence = [call[2] for call in bulk_calls]
         assert library_sequence == ["alpha", "beta", "alpha"]
@@ -1057,7 +1060,7 @@ class TestEnsurePrepared:
     def test_ram_mode_stages_per_file(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
-        """RAM mode stages per (device, library, file); changing file triggers re-stage."""
+        """RAM mode stages per (device, library, file), and changing file triggers re-stage."""
         device = hot_path_device()
         transport = FakeTransport(mode="ram")
         prime_transport_cache(hot_path_cache, device, transport)
@@ -1072,10 +1075,10 @@ class TestEnsurePrepared:
 
         item_a = make_prepare_item(hot_path_session, device, test_file_a)
         item_a._ensure_prepared(device)
-        item_a._ensure_prepared(device)  # same file — no re-stage.
+        item_a._ensure_prepared(device)  # same file, no re-stage.
 
         item_b = make_prepare_item(hot_path_session, device, test_file_b)
-        item_b._ensure_prepared(device)  # different file — re-stages.
+        item_b._ensure_prepared(device)  # different file, re-stages.
 
         stage_calls = [call for call in transport.calls if call[0] == "stage"]
         assert len(stage_calls) == 2
@@ -1157,8 +1160,8 @@ class TestPerFileReset:
     ) -> None:
         """``--per-file`` flash: each file is staged on its own (this
         file + src + harness, never the whole suite) onto a fresh-VM
-        interpreter, idempotently across the two prepare() calls per
-        batch, and never via the bulk-stage-whole-suite path."""
+        interpreter. The two prepare() calls per batch fire stage once,
+        and never via the bulk-stage-whole-suite path."""
         self._enable_per_file(hot_path_session)
         device = hot_path_device()
         transport = FakeTransport(mode="flash")
@@ -1183,13 +1186,13 @@ class TestPerFileReset:
         resets = [call for call in transport.calls if call[0] == "soft_reset"]
         clears = [call for call in transport.calls if call[0] == "clear_entrypoints"]
         stages = [call for call in transport.calls if call[0] == "stage"]
-        # One fresh-VM reset per file (2 files); idempotent — not 4
-        # despite the double prepare() of the second file.
+        # One fresh-VM reset per file (2 files), not 4, even though
+        # the second file's prepare() runs twice (only the first fires).
         assert len(resets) == 2
         # Entrypoint cleared exactly once for the device (first file).
         assert len(clears) == 1
         # The bulk-stage-whole-suite path is never taken under
-        # ``--per-file`` — that path is what overflows a 491 KB drive.
+        # ``--per-file``. That path is what overflows a 491 KB drive.
         assert len(bulk_calls) == 0
         # Exactly one stage per file, each staging *only* that file.
         assert len(stages) == 2
@@ -1253,7 +1256,7 @@ class TestEnsureBatchResult:
         item = make_run_file_item(hot_path_session, device, test_file)
         item._ensure_batch_result(device)
 
-        # Transport had one outputs entry — second call must NOT pop again.
+        # Transport had one outputs entry. Second call must NOT pop again.
         result, raw = item._ensure_batch_result(device)
         assert raw == _PASS_OUTPUT
         # Only one execute/execute_scripts ever happened.
@@ -1388,12 +1391,12 @@ class TestDeviceRunFileItemRuntest:
 
 
 class TestDeviceTestItemRuntest:
-    """Tests for DeviceTestItem.runtest — per-test result lookup."""
+    """Tests for DeviceTestItem.runtest. Per-test result lookup."""
 
     def test_passes_when_individual_test_passed(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
-        """test_one in a passing batch → item passes."""
+        """test_one in a passing batch yields a passing item."""
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_PASS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
@@ -1411,7 +1414,7 @@ class TestDeviceTestItemRuntest:
     def test_fails_when_individual_test_failed(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
-        """test_two failed in the harness output → item fails with the raw output."""
+        """test_two failed in the harness output, so the item fails with the raw output."""
         device = hot_path_device()
         transport = FakeTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         prime_transport_cache(hot_path_cache, device, transport)
@@ -1494,7 +1497,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         """Return a Mock satisfying ``isinstance(item, DeviceRuntimeItem)``.
 
         The deselect-sweep guard reads ``item.nodeid`` as a string, so
-        we set it explicitly — leaving it as a Mock raises TypeError
+        we set it explicitly. Leaving it as a Mock raises TypeError
         on ``"functional_tests" in item.nodeid``.
         """
         from unittest.mock import Mock  # noqa: PLC0415
@@ -1536,7 +1539,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         return config
 
     def test_no_required_keys_no_skip(self) -> None:
-        """Default behavior — no required_keys means no validation."""
+        """Default behavior. No required_keys means no validation."""
         config = self._stub_config(payload={"wifi.ssid": "x"})
         device_item = self._make_device_item_mock()
         items = [device_item]
@@ -1544,7 +1547,7 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         device_item.add_marker.assert_not_called()
 
     def test_complete_payload_no_skip(self) -> None:
-        """Required keys all present in payload → no skip marker."""
+        """When every required key is present in the payload, no skip marker is added."""
         config = self._stub_config(
             payload={"wifi.ssid": "x", "wifi.password": "p"},
             required_keys=("wifi.ssid", "wifi.password"),
@@ -1588,8 +1591,8 @@ class TestPytestCollectionModifyItemsRequiredKeys:
         assert "wifi.password" in skip_marker.kwargs["reason"]
 
     def test_non_device_items_not_marked(self) -> None:
-        """Skip marker applies only to ``DeviceRuntimeItem`` instances —
-        a plain pytest.Item that survived the deselect sweep is left
+        """Skip marker applies only to ``DeviceRuntimeItem`` instances.
+        A plain pytest.Item that survived the deselect sweep is left
         alone (the missing-keys check is functional-tests-specific)."""
         config = self._stub_config(
             payload=None, required_keys=("wifi.ssid",),
@@ -1638,7 +1641,7 @@ class TestPytestCollectionModifyItemsFeatures:
         """Return a session stub with a transport cache that returns
         ``transport_features`` from ``execute()``.
 
-        Each entry maps device identifier → either the probe-output
+        Each entry maps device identifier to either the probe-output
         string the transport's ``execute`` should produce, or an
         Exception instance to raise (simulating an offline device).
         """
@@ -1667,7 +1670,7 @@ class TestPytestCollectionModifyItemsFeatures:
         session.config = MagicMock()
         # The default getoption ('--deploy-mode') returns ``None``.
         session.config.getoption = lambda *_args, **_kwargs: None
-        # No collected items ⇒ the deploy-mode closure walk is a no-op
+        # No collected items, so the deploy-mode closure walk is a no-op
         # and the configured mode passes straight through.
         session.items = []
         session._device_transport_cache = _StubTransportCache(transport_features)
@@ -1716,7 +1719,7 @@ class TestPytestCollectionModifyItemsFeatures:
                 return default
 
         config = _Stub()
-        # No required_keys — keep the unrelated check inert in these tests.
+        # No required_keys, keep the unrelated check inert in these tests.
         set_runtime_config(config, payload=None, required_keys=())
         return config
 
@@ -1735,7 +1738,7 @@ class TestPytestCollectionModifyItemsFeatures:
         assert config.deselected == []
 
     def test_item_kept_when_device_has_required_feature(self, tmp_path: Path) -> None:
-        """Probe reports the required feature → item runs on that device."""
+        """Probe reports the required feature, so the item runs on that device."""
         test_file = self._write_feature_test_file(
             tmp_path, marker_tuple='("esp32",)',
         )
@@ -1760,7 +1763,7 @@ class TestPytestCollectionModifyItemsFeatures:
     def test_item_deselected_when_device_lacks_required_feature(
         self, tmp_path: Path,
     ) -> None:
-        """Probe reports an empty feature set → ESP32-required item drops."""
+        """Probe reports an empty feature set, so the ESP32-required item drops."""
         test_file = self._write_feature_test_file(
             tmp_path, marker_tuple='("esp32",)',
         )
@@ -1783,7 +1786,7 @@ class TestPytestCollectionModifyItemsFeatures:
     def test_probe_failure_emits_warning_and_deselects(
         self, tmp_path: Path, recwarn: pytest.WarningsRecorder,
     ) -> None:
-        """An unreachable device → warning + deselect, never crash."""
+        """An unreachable device yields warning plus deselect, never a crash."""
         test_file = self._write_feature_test_file(
             tmp_path, marker_tuple='("esp32",)',
         )
@@ -1839,7 +1842,7 @@ class TestPytestCollectionModifyItemsFeatures:
         session = MagicMock(spec=pytest.Session)
         session.config = MagicMock()
         session.config.getoption = lambda *_args, **_kwargs: None
-        # No collected items ⇒ the deploy-mode closure walk is a no-op.
+        # No collected items, so the deploy-mode closure walk is a no-op.
         session.items = []
         session._device_transport_cache = _CountingTransportCache()
         del session._device_features_cache  # type: ignore[attr-defined]
@@ -1895,7 +1898,7 @@ class TestDeviceClosureSourceDirs:
         device = DeviceEntry(
             identifier="d1", runtime="micropython", address="/dev/x",
         )
-        # FakeSession has no ``items`` — the getattr guard must not raise.
+        # FakeSession has no ``items``. The getattr guard must not raise.
         assert collection._device_closure_source_dirs(session, device) == []
 
 
@@ -1972,7 +1975,7 @@ class TestSessionEffectiveDeployMode:
     def test_devices_yml_supports_ram_mode_false_forces_flash(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        # A pure-.py closure would otherwise stay RAM; the per-device
+        # A pure-.py closure would otherwise stay RAM, but the per-device
         # capability from devices.yml must still force flash loudly.
         lib = tmp_path / "light-src"
         lib.mkdir()
@@ -1994,8 +1997,8 @@ class TestSessionEffectiveDeployMode:
 
 
 class TestUnitSweepScoping:
-    """Caller-scoped staged_files: unit sweep = own-src; functional =
-    full closure; ``requires_flash`` is always the full transitive
+    """Caller-scoped staged_files: unit sweep = own-src, functional =
+    full closure, and ``requires_flash`` is always the full transitive
     closure regardless.
     """
 
@@ -2068,9 +2071,9 @@ class TestUnitSweepScoping:
     def test_unit_sweep_dependency_data_file_does_not_poison(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        # Full closure carries sockets' _ca_bundle.der; ntp's own src
+        # Full closure carries sockets' _ca_bundle.der, but ntp's own src
         # is pure .py.  Under unit scoping the data file must NOT flip
-        # ntp to flash — the non-poisoning acceptance.
+        # ntp to flash. The non-poisoning acceptance.
         dep = tmp_path / "sockets-src"
         dep.mkdir()
         (dep / "_ca_bundle.der").write_bytes(b"\x30\x82")
@@ -2094,7 +2097,7 @@ class TestUnitSweepScoping:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Own src is clean .py, but a flash-only library sits in the
-        # transitive closure — requires_flash is always closure-scoped,
+        # transitive closure. requires_flash is always closure-scoped,
         # so the suite still flips to flash even under unit scoping.
         heavy = tmp_path / "libraries" / "requests"
         heavy_source = heavy / "src"

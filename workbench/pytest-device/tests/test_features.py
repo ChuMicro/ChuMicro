@@ -76,7 +76,7 @@ def test_read_features_marker_does_not_execute_module(tmp_path: Path) -> None:
     """The reader uses AST only, so device-only imports at top level
     don't break parsing on the host."""
     target = tmp_path / "test_features_device_imports.py"
-    # ``import esp32`` would explode on CPython at import time — the
+    # ``import esp32`` would explode on CPython at import time. The
     # AST reader must skip past it.
     target.write_text(
         "__chumicro_features__ = ('esp32',)\n"
@@ -123,7 +123,7 @@ def test_read_features_marker_ignores_non_tuple_value(tmp_path: Path) -> None:
 
 
 def test_parse_feature_probe_output_finds_esp32() -> None:
-    """The canonical ESP32 path: BEGIN sentinel, ``esp32``, END sentinel."""
+    """The standard ESP32 path: BEGIN sentinel, ``esp32``, END sentinel."""
     output = (
         "boot noise line\n"
         "CHUMICRO_FEATURES_BEGIN\n"
@@ -159,10 +159,10 @@ def test_parse_feature_probe_output_drops_unknown_names() -> None:
 def test_parse_feature_probe_output_ignores_lines_outside_sentinels() -> None:
     """Print noise outside the section is ignored even if it names a known feature."""
     output = (
-        "esp32\n"  # before BEGIN — ignored
+        "esp32\n"  # before BEGIN, ignored
         "CHUMICRO_FEATURES_BEGIN\n"
         "CHUMICRO_FEATURES_END\n"
-        "esp32\n"  # after END — also ignored
+        "esp32\n"  # after END, also ignored
     )
 
     assert parse_feature_probe_output(output) == frozenset()
@@ -173,7 +173,7 @@ def test_parse_feature_probe_output_handles_truncated_probe() -> None:
     output = (
         "CHUMICRO_FEATURES_BEGIN\n"
         "esp32\n"
-        # No END sentinel — connection dropped or device reset.
+        # No END sentinel: connection dropped or device reset.
     )
 
     assert parse_feature_probe_output(output) == frozenset({"esp32"})
@@ -214,7 +214,7 @@ def test_probe_script_emits_begin_and_end_sentinels() -> None:
 
 
 def test_probe_script_compiles_under_cpython() -> None:
-    """The probe script must be a valid Python program — caught here so a
+    """The probe script must be a valid Python program, caught here so a
     syntax error doesn't surface as a confusing device-side failure."""
     compile(FEATURE_PROBE_SCRIPT, "<feature-probe>", "exec")
 
