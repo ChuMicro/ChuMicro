@@ -1,4 +1,4 @@
-"""End-to-end demo of ``chumicro-config`` — both library-author and user-app patterns.
+"""End-to-end demo of ``chumicro-config``: both library-author and user-app patterns.
 
 Runs on CPython, MicroPython, and CircuitPython.  Self-contained:
 constructs an in-memory flat-key config, exercises the section
@@ -20,7 +20,7 @@ from chumicro_config import (
     load_section,
 )
 
-# Library-author pattern — every consumer library defines a typed
+# Library-author pattern. Every consumer library defines a typed
 # Config class with a `from_config` classmethod that calls
 # `load_section` against the deployer's flat-key RuntimeConfig.
 
@@ -64,8 +64,8 @@ class MqttConfig:
         )
 
 
-# A typical merged runtime config — what the deployer writes to
-# /runtime_config.msgpack at deploy time.  Flat dotted keys are the
+# A typical merged runtime config. The deployer writes one of these
+# to /runtime_config.msgpack at deploy time. Flat dotted keys are the
 # wire shape every consumer library reads from.  In production:
 #
 #     from chumicro_config import load_runtime_config
@@ -96,14 +96,14 @@ app_sample_period_ms = config["app.sample_period_ms"]
 print("User-app pattern: 3 sections wired (wifi, mqtt, app)")
 
 
-# 3. Missing required key → MissingConfigKey (subclass of ConfigError).
+# 3. Missing required key raises MissingConfigKey (subclass of ConfigError).
 try:
     WifiConfig.from_config({"wifi.ssid": "incomplete"})  # missing wifi.password
 except MissingConfigKey as error:
     print(f"Missing-key error caught: {error}")
 
 
-# 4. Config of the wrong type → InvalidConfigType.
+# 4. Config of the wrong type raises InvalidConfigType.
 try:
     WifiConfig.from_config(42)  # not a RuntimeConfig / dict
 except InvalidConfigType as error:

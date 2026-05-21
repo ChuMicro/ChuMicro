@@ -1,4 +1,4 @@
-"""Tests for ``chumicro_config`` — flat-key runtime config + section loader.
+"""Tests for ``chumicro_config``: flat-key runtime config + section loader.
 
 Cross-runtime: runs on CPython pytest, and under MicroPython +
 CircuitPython unix-ports via ``pytest libraries/config/tests --target
@@ -30,7 +30,7 @@ from chumicro_test_harness import raises
 _IS_CPYTHON = sys.implementation.name == "cpython"
 
 
-# A minimal target class shared across most tests — mirrors the
+# A minimal target class shared across most tests. Mirrors the
 # shape every consumer library will use.
 class _ExampleConfig:
     """Stand-in for a library's typed config dataclass."""
@@ -49,7 +49,7 @@ class _ExampleConfig:
 
 
 # ---------------------------------------------------------------------------
-# RuntimeConfig — flat-key dict-like wrapper
+# RuntimeConfig: flat-key dict-like wrapper
 # ---------------------------------------------------------------------------
 
 
@@ -59,7 +59,7 @@ def test_runtime_config_get_returns_value_when_key_present() -> None:
 
 
 def test_runtime_config_get_returns_none_on_miss() -> None:
-    """Standard ``.get`` semantics — missing key → None."""
+    """Standard ``.get`` semantics. Missing key returns ``None``."""
     config = RuntimeConfig({"wifi.ssid": "HomeNet"})
     assert config.get("wifi.password") is None
 
@@ -74,7 +74,7 @@ def test_runtime_config_getitem_raises_missing_config_key_on_miss() -> None:
     """``config[key]`` raises ``MissingConfigKey`` (not ``KeyError``).
 
     Single-inheritance constraint on MicroPython rules out
-    multi-parenting from ``KeyError`` — see ``MissingConfigKey``
+    multi-parenting from ``KeyError``. See ``MissingConfigKey``
     docstring.  Catch via ``ConfigError`` for cross-runtime portability.
     """
     config = RuntimeConfig({"wifi.ssid": "HomeNet"})
@@ -106,7 +106,7 @@ def test_runtime_config_contains_checks_membership() -> None:
 
 
 def test_runtime_config_none_data_yields_empty() -> None:
-    """``RuntimeConfig(None)`` is valid — yields an empty config."""
+    """``RuntimeConfig(None)`` is valid. Yields an empty config."""
     config = RuntimeConfig(None)
     assert config.get("anything") is None
     assert "anything" not in config
@@ -119,7 +119,7 @@ def test_missing_config_key_subclasses_config_error() -> None:
 
 
 # ---------------------------------------------------------------------------
-# load_section — required keys with a shared prefix
+# load_section: required keys with a shared prefix
 # ---------------------------------------------------------------------------
 
 
@@ -136,7 +136,7 @@ def test_load_section_required_keys_extracted_into_kwargs() -> None:
 
 
 def test_load_section_works_against_runtime_config_wrapper() -> None:
-    """Reads through ``RuntimeConfig`` too — same code path."""
+    """Reads through ``RuntimeConfig`` too. Same code path."""
     runtime = RuntimeConfig({"wifi.ssid": "HomeNet", "wifi.password": "secret"})
     result = load_section(
         _ExampleConfig,
@@ -175,7 +175,7 @@ def test_load_section_optional_key_present_overrides_default() -> None:
 
 
 def test_load_section_optional_key_absent_uses_default() -> None:
-    """Missing optional key → declared default carries through."""
+    """Missing optional key applies the declared default."""
     result = load_section(
         _ExampleConfig,
         {"wifi.ssid": "x", "wifi.password": "y"},
@@ -211,7 +211,7 @@ def test_load_section_unknown_keys_are_ignored() -> None:
 
 
 def test_load_section_no_type_coercion() -> None:
-    """``load_section`` doesn't coerce types — caller's __init__ is the gate."""
+    """``load_section`` doesn't coerce types. The caller's ``__init__`` is the gate."""
     result = load_section(
         _ExampleConfig,
         {
@@ -227,7 +227,7 @@ def test_load_section_no_type_coercion() -> None:
 
 
 def test_load_section_none_config_raises_invalid_type() -> None:
-    """``config=None`` is wrong-shape — soft path lives in ``try_load_section``."""
+    """``config=None`` is wrong-shape. The soft path lives in ``try_load_section``."""
     with raises(InvalidConfigType):
         load_section(
             _ExampleConfig,
@@ -288,12 +288,12 @@ def test_load_section_library_pattern_round_trips() -> None:
 
 
 # ---------------------------------------------------------------------------
-# try_load_section — soft-load (returns None instead of raising)
+# try_load_section: soft-load (returns None instead of raising)
 # ---------------------------------------------------------------------------
 
 
 def test_try_load_section_returns_none_when_config_is_none() -> None:
-    """``config=None`` short-circuits — no creds deployed."""
+    """``config=None`` short-circuits. No creds deployed."""
     result = try_load_section(
         _ExampleConfig, None,
         prefix="wifi", required=("ssid", "password"),
@@ -311,7 +311,7 @@ def test_try_load_section_returns_none_when_config_not_dict_like() -> None:
 
 
 def test_try_load_section_returns_none_when_required_key_missing() -> None:
-    """Missing required key → ``None``, not MissingConfigKey."""
+    """Missing required key returns ``None``, not ``MissingConfigKey``."""
     result = try_load_section(
         _ExampleConfig, {"wifi.ssid": "Net"},
         prefix="wifi", required=("ssid", "password"),
@@ -320,7 +320,7 @@ def test_try_load_section_returns_none_when_required_key_missing() -> None:
 
 
 def test_try_load_section_returns_instance_when_keys_present() -> None:
-    """All required subkeys present → built instance."""
+    """Returns a built instance when all required subkeys are present."""
     result = try_load_section(
         _ExampleConfig,
         {"wifi.ssid": "Net", "wifi.password": "pw"},
@@ -358,17 +358,17 @@ def test_try_load_section_works_with_runtime_config_wrapper() -> None:
 
 
 # ---------------------------------------------------------------------------
-# load_runtime_config — file IO
+# load_runtime_config: file IO
 # ---------------------------------------------------------------------------
 
 
 def test_default_path_constant_is_root_runtime_config_msgpack() -> None:
-    """Canonical on-device location.  Changing this is an ABI break."""
+    """Default on-device location.  Changing this is an ABI break."""
     assert DEFAULT_RUNTIME_CONFIG_PATH == "/runtime_config.msgpack"
 
 
 if _IS_CPYTHON:
-    # Pytest-fixture-using tests — only collected under CPython where
+    # Pytest-fixture-using tests. Only collected under CPython where
     # the harness supports `tmp_path` / `monkeypatch`.
 
     def test_load_runtime_config_round_trips_a_flat_payload(tmp_path) -> None:
@@ -405,7 +405,7 @@ if _IS_CPYTHON:
     def test_load_runtime_config_truncated_payload_raises_invalid_type(tmp_path) -> None:
         """A power-loss-truncated file fails as ``InvalidConfigType``, not a raw decode error.
 
-        ``unpackb`` rejects malformed framing with ``ValueError``;
+        ``unpackb`` rejects malformed framing with ``ValueError``.
         ``load_runtime_config`` maps that onto its documented surface so
         callers (and the boot path) see one corrupt-config exception.
         """
@@ -428,7 +428,7 @@ if _IS_CPYTHON:
         assert loaded.get("app.key") == "value"
 
     # -----------------------------------------------------------------
-    # Module-level ``config`` attribute — PEP 562 lazy load + cache.
+    # Module-level ``config`` attribute: PEP 562 lazy load + cache.
     # -----------------------------------------------------------------
 
     def _reset_config_cache(monkeypatch) -> None:
@@ -496,7 +496,7 @@ if _IS_CPYTHON:
             from chumicro_config import config  # noqa: F401
 
     def test_unknown_attribute_raises_attribute_error() -> None:
-        """``__getattr__`` only handles ``config``; everything else raises."""
+        """``__getattr__`` only handles ``config``. Everything else raises."""
         import chumicro_config
         with raises(AttributeError):
             chumicro_config.does_not_exist  # noqa: B018

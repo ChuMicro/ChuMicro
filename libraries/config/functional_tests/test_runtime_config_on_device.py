@@ -1,13 +1,13 @@
 """On-device test for ``load_runtime_config``.
 
-The codec + dict-shape logic is covered host-side; the unique
-device behavior is "open() works against the canonical
+The codec + dict-shape logic is covered host-side. The unique
+device behavior is "open() works against the
 `/runtime_config.msgpack` path on real flash."  This suite stages a
-real msgpack file at the canonical location, reads it back via the
+real msgpack file at the standard location, reads it back via the
 library's reader, asserts the round-trip, and cleans up.
 
 Runs on MicroPython only.  CircuitPython with USB MSC active mounts
-``/`` read-only by default — the on-device write would fail with
+``/`` read-only by default. The on-device write would fail with
 ``OSError`` before the assertion fires.  The
 ``__chumicro_runtimes__ = ("micropython",)`` marker keeps CP targets
 out at collection time so the wrong-runtime parametrization never
@@ -32,14 +32,14 @@ def _wipe_runtime_config() -> None:
     try:
         os.remove(DEFAULT_RUNTIME_CONFIG_PATH)
     except OSError:
-        pass  # Already absent — fine.
+        pass  # Already absent.
 
 
 def test_round_trip_via_default_path() -> None:
-    """Write a real msgpack file at the canonical path, read it back.
+    """Write a real msgpack file at the standard path, read it back.
 
     Uses the flat dotted-key shape every consumer library actually
-    reads — the same shape ``chumicro_workspace.compose_runtime_config``
+    reads. This is the same shape ``chumicro_workspace.compose_runtime_config``
     writes at deploy time.  A nested payload would deserialize without
     error here (the reader only requires the outer value to be a dict)
     but would mislead readers of the test about the on-wire contract.

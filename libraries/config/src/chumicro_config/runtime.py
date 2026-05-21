@@ -5,7 +5,7 @@ from chumicro_msgpack import unpackb
 from chumicro_config.section import InvalidConfigType, RuntimeConfig
 
 DEFAULT_RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
-"""Canonical on-device location — changing this is an ABI break."""
+"""Default on-device location. Changing this is an ABI break."""
 
 
 def load_runtime_config(path: str | None = None) -> RuntimeConfig:
@@ -13,7 +13,7 @@ def load_runtime_config(path: str | None = None) -> RuntimeConfig:
 
     Raises ``OSError`` if the file is missing, :class:`InvalidConfigType`
     if the payload isn't a dict or is malformed msgpack (e.g. a
-    power-loss-truncated file — ``unpackb`` rejects bad framing).
+    power-loss-truncated file, which ``unpackb`` rejects as bad framing).
     *path* defaults to :data:`DEFAULT_RUNTIME_CONFIG_PATH` at call time
     (resolved late so tests can monkey-patch the constant).
     """
@@ -50,7 +50,7 @@ def _ensure_config_loaded() -> RuntimeConfig | None:
 
 def __getattr__(name: str):
     # `InvalidConfigType` (file present but malformed) is intentionally
-    # not caught here — corruption is a hard deploy failure, surfaced
+    # not caught here. Corruption is a hard deploy failure, surfaced
     # loudly rather than silently masked as `config = None`.
     if name == "config":
         return _ensure_config_loaded()
