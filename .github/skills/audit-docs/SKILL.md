@@ -5,7 +5,7 @@ description: Audit a user-facing markdown doc (README, INSTALL, library guides) 
 
 # Docs audit
 
-Audit one human-curated markdown doc (`README.md`, `libraries/<name>/docs/guide.md`, `INSTALL.md`, or a similar shape) for the things that make a doc unreadable to a cold reader.  Output a prioritized punch-list.  After the user gives the go-ahead, execute the high-confidence batch.  Surface medium-confidence and low-confidence items as questions so the user can answer them instead of guessing.
+Audit one human-curated markdown doc (`README.md`, `libraries/<name>/docs/guide.md`, `INSTALL.md`, or a similar shape) for things that make a doc unreadable to a cold reader.  Output a prioritized punch-list.  After the user gives the go-ahead, execute the high-confidence batch.  Surface medium-confidence and low-confidence items as questions so the user can answer them instead of guessing.
 
 > **About this skill's own prose.**  This SKILL.md lives in `.github/skills/`, which makes it internal documentation.  Internal docs are out of scope for the audit itself (see "Defer / out of scope" at the bottom), so this body cites `Decision NNNN`, `CHU0NN`, and `plans/` paths freely.  The tone rules in [`docs/contributing/agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md) still apply, including the em-dash ban, the AI-tic phrase list, the per-noun `the X` forward-reference test, and the degraded-passage rewrite discipline.  The body below is written to demonstrate those rules in practice.
 
@@ -24,17 +24,19 @@ Argument: a file path, defaulting to `README.md`.  Examples: `/audit-docs README
 
 Three readers land on the same paragraph wanting different things.  The skill's job is to find prose that loses any one of them.
 
-* **Cold reader.**  Landed from a search result.  Does not know the project's vocabulary.  Does not have the workspace cloned.  Has roughly 60 seconds of patience.  Bails when a paragraph fails to tell them what this is or why they would want it.
+* **Cold reader.**  Landed from a search result.  Does not know the project's vocabulary.  Does not have a workspace cloned.  Has roughly 60 seconds of patience.  Bails when a paragraph fails to tell them what this is or why they would want it.
 * **Advanced reader.**  Already knows the field.  Bails when the doc reads like a tutorial for content they have seen 50 times.  *"First, install Python…"* burns them.
 * **Beginner reader.**  Earlier on the curve than the cold reader.  Bails when the doc assumes context they do not have, names tools they have not seen, or skips the *"why would I want this?"*.
 
 **Degraded passages get rewritten, not re-trimmed.**  The dimensions below are operationally subtractive (drop a tic word, cut a history note, shrink a ratio).  Run a subtractive pass enough times on the same paragraph and each pass removes a word while none asks *what should this say?*  The result is a README sentence as illegible as the worst code comment.  When a passage has rotted that far, discard it and rewrite from a fresh read of what the thing actually is and why a reader would want it (the cold-reader test).  Trimming the wreckage again only makes it shorter and no clearer.  This is the prescriptive counterpart to *"don't golf"* in the "What NOT to do" section: that rule stops over-cutting a good passage, while this one says what to do with an already-degraded one.
 
+*Testable criterion.*  If the proposed edit changes ≤1 sentence and leaves the surrounding paragraph structure intact, it is a strip, not a rewrite — even if the word *"rewrite"* came up while drafting.  A rewrite reconsiders the passage from **source** (the code, API, or capability the doc points at), not from the existing prose.  Tagging a minimal phrase-swap as `rewrite` is the failure mode the trim-only audit history produced — name the work honestly.  `/audit-comments` enforces the same criterion for comments and docstrings.
+
 Most doc problems fall into the following families.
 
 * **Jargon leak.**  Internal vocabulary used before defining it.
 * **Implementation-detail leak.**  Internal metrics in user-facing prose, such as coverage percentages, specific test-board names, lint codes, or `plans/` references.
-* **AI-tic filler and grammar tics.**  Words and phrases that read non-human or dilute meaning.  Includes the redundant definite articles flagged by the `the X` forward-reference test.
+* **AI-tic filler and grammar tics.**  Words and phrases that read non-human or dilute meaning.  Includes redundant definite articles flagged by the `the X` forward-reference test.
 * **Unverified technical claims.**  Sweeping default-behavior claims that have not been bench-tested.
 * **Historical rationale.**  `<!-- removed in 0.x -->`, *"previously this…"*, and dated migration notes that document what is not there.
 * **Explanation-to-content ratio off.**  Paragraphs of rationale wrapping a 2-line `return a + b`.
@@ -69,7 +71,7 @@ Read top-to-bottom three times, one per reader (see philosophy above for who bai
 * **Assumed tooling.**  *"Run `mip install …` from your REPL"* fails a beginner who doesn't know what `mip` is, what a REPL is in this context, or how to access either.  Either define inline or link to a single onramp doc.
 * **Audience-split mentions of mono-repo-only tooling.**  Library and workbench READMEs serve two audiences: PyPI / circup / mip consumers who just want to use the package, and mono-repo contributors who have the workspace cloned.  Mentions like *"register a board with `chumicro-workspace add-device`"* are useful to the second audience but confusing to the first.  Flag every reference to mono-repo-only CLIs (`chumicro-workspace`, `python scripts/run.py`, `chumicro-deploy`) in a published library or workbench README and ask: *"can a PyPI installer act on this?  If not, prefix with 'In the [mono-repo](url)…' or move to the dev-contributing section."*
 * **Pitch missing the "why".**  A beginner reads the install instructions, runs the example, and asks *"what would I use this for?"*.  The differentiators section needs at least one concrete production scenario, not just feature bullets.
-* **Feature bullets that lead with implementation instead of use.**  *"Constructor-injected duck-typed I/O dependencies"* fails the consumer reader.  Name what the user can DO instead, such as *"Bring your own socket, your own clock"*.  Avoid type-system jargon (`duck-typed`, `Protocol`, `structural typing`), inline method-name lists, *"valid producer"*-style abstractions, and test-fake framing.  Lead with concrete library class names, stdlib alternatives, and production scenarios.  Acknowledge defaults before swap-outs.  See [style-guide § Documentation tone](../../../docs/contributing/style-guide.md#documentation-tone).
+* **Feature bullets that lead with implementation instead of use.**  *"Constructor-injected duck-typed I/O dependencies"* fails consumer readers.  Name what the user can DO instead, such as *"Bring your own socket, your own clock"*.  Avoid type-system jargon (`duck-typed`, `Protocol`, `structural typing`), inline method-name lists, *"valid producer"*-style abstractions, and test-fake framing.  Lead with concrete library class names, stdlib alternatives, and production scenarios.  Acknowledge defaults before swap-outs.  See [style-guide § Documentation tone](../../../docs/contributing/style-guide.md#documentation-tone).
 
 ### 2. Vocabulary and grammar tics
 
@@ -138,7 +140,7 @@ A simpler arc.  The tagline carries the differentiator, so a separate "What make
 
 1. **What is this?**  Hero (title, short tagline, one or two sentences of description).
 2. **How do I install it?**  Install section.  This is the first thing a PyPI, circup, or mip reader looks for.
-3. **What does it look like?**  Quick example that runs as-is on the relevant runtimes.
+3. **What does it look like?**  Quick example that runs as-is on relevant runtimes.
 4. **What is available?**  API inventory (Tick functions, Heartbeat, Testing tables, or whatever the public surface is).
 5. **Related libraries.**  *"If you need X, also see Y"* pointers.
 6. **Reference.**  Platform support tables, runnable-examples table, links to hosted docs and to PyPI or bundle.
@@ -153,7 +155,7 @@ A different audience than the README.  Readers came in via the docs site and are
 2. **How do I use it?**  Task-shaped walkthroughs (deploy, configure, integrate).
 3. **Reference.**  Public API surface, configuration knobs, error classes.
 4. **Related.**  Adjacent libraries, upstream docs.
-5. **Troubleshooting / FAQ** if the question volume warrants it.
+5. **Troubleshooting / FAQ** if question volume warrants it.
 
 Common reorderings worth checking.
 
@@ -162,7 +164,7 @@ Common reorderings worth checking.
 * **Project-template too early.**  Readers have not seen what real use looks like yet.  Defer until after libraries and workflow sections.
 * **Status section mixing two concerns.**  *"## Status & contributing"* with one paragraph about development status and another about how to contribute usually wants to be split, or the status content removed entirely if it just reads as a hedge.
 * **Library README missing License footer.**  The rendered README on PyPI is often the only license artefact a user sees from the package.  At minimum a one-line `## License — [MIT](https://github.com/.../LICENSE)` pointer.
-* **Library README's contributing section assumes mono-repo context.**  Mentioning `chumicro-workspace add-device` without telling the PyPI reader they need the mono-repo cloned creates a context cliff.  Prefix the section or split the audience.
+* **Library README's contributing section assumes mono-repo context.**  Mentioning `chumicro-workspace add-device` without telling PyPI readers they need the mono-repo cloned creates a context cliff.  Prefix the section or split the audience.
 
 ### 6. Visual layout, markup, and hero/nav
 
@@ -248,28 +250,54 @@ Flash cost matters here too.  Every byte in `docs/guide.md` that gets mirrored i
 
 ## Procedure
 
-Walk these passes in order.  Each dimension's body has the specific check (regex, grep, awk) inline.
+**Two passes, in order.**  Pass 1 makes the subtractive edits — AI-tic strips, per-noun `the X` fixes, history strips, impl-leak strips, mechanical visual fixes, example-block label drops, claims contradicted on inspection.  Pass 2 re-reads the post-Pass-1 state cold: with the noise cleared, the passages that still fail the cold-reader test become legible as failures rather than camouflaged by tics.  Pass 2 surfaces structural moves, claim verifications, ratio rewrites, and the `rewrite` findings where a fresh-read replacement is the right fix.  **Run Pass 1 to a commit before starting Pass 2** — strips routinely reveal that the surrounding prose, not the tic, was the actual defect, and reading the original state biases Pass 2 toward minimal edits and degraded prose perpetuates.  This is the same boundary `/audit-comments` enforces, for the same reason.
 
-1. **Stumble-walk** (dim 1).  Three reads end-to-end.  Take notes as you go for dims 3, 7, and 8 since they surface during the read.
-2. **AI-tic and grammar grep** (dim 2).  Run the standing regex from [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex).  Hard-ban hits almost always need rewriting.  Soft hits are case-by-case.
-3. **Structure map** (dim 5).  `grep -nE '^## ' <file>`, then compare against the question arc for the doc's type.
-4. **Visual passes** (dim 6).  Anchor check with `grep -nE '\(#[a-z0-9-]+\)' <file>`, plus the comment-column awk on any block that has trailing `#` annotations.
-5. **Load-bearing claims** (dim 4).  List every claim a reader might rely on for security, correctness, or compatibility.  For each, bench-verify or soften.
-6. **History and trivia sweep** (dims 9 and 10).  Grep `previously`, `used to`, `as of `, `<!-- removed`, `## Update`.  Read for explanation-to-content ratio on long sections.
+**Clause-paced reading in Pass 2.**  Pass 1's strips leave paragraphs that read fine at paragraph scale while a mid-paragraph parenthetical, a buried clause, or a single item in a long bulleted list still encodes the defect.  Pass 2 reads clauses individually inside each paragraph, not paragraphs as units.  Paragraph-paced reads leave residue; clause-paced reads catch it.
 
-### Punch-list
+**Cross-section sweep before per-passage rewrites.**  In Pass 2, read related sections together — pitch + Quickstart + the per-API section often state the same fact.  Name a *home* (usually the broadest scope where the fact is most discoverable) and collapse the others to a cross-reference or drop.  Per-section review misses this because each site reads fine alone.
 
-Group findings by confidence.  Tag by dimension (see Output format).
+### Pass 1 — subtractive sweep
 
-### Execute the HIGH-confidence batch
+1. **AI-tic and grammar grep** (dim 2).  Run the standing regex from [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex).  Hard-ban hits almost always need a strip; soft hits are case-by-case.
+2. **Per-noun `the X` pass** (dim 2 continued, the forward-reference test from [`agent-style-guide.md` § The `the X` forward-reference test](../../../docs/contributing/agent-style-guide.md#the-the-x-forward-reference-test)).  Enumerate every `the` in the file:
 
-After the user gives the go-ahead, execute the HIGH-confidence fixes as a single edit pass.  MEDIUM items wait for user confirmation.  LOW items wait for user answers.
+   ```
+   grep -nE '\bthe \b' <file>
+   ```
+
+   Apply the three-way test to **every** hit, not just the ones that jump out.  Inherited `the`s compound across passes, so the obvious-looking ones are exactly where drift hides:
+
+   * **`the` stays** if X is an established singular referent the reader already has (`the LED` after one is introduced, `the workbench` after the workbench section, `the same X` where `same` anchors it, parallel pairs like `on the laptop and on the board`).
+   * **`a` / `an`, or a possessive (`your X`)** if X is a forward reference or a generic category (`the caller decides` becomes `you decide` or `callers decide`; `the board` for a board the reader has not met becomes `your board` or `a board`; `the long-term home` becomes `a long-term home`).
+   * **Bare X** if `the` decorates a brand name (`the ChuMicro-Workspace-Template` becomes `ChuMicro-Workspace-Template`; `the Pi Pico W` becomes `Pi Pico W`).
+
+   Tag findings as `definite` (see taxonomy below).  A first audit typically surfaces 5–15 hits in a healthy doc and 30+ in a drifted one.
+3. **Implementation-detail and history strip** (dims 3 and 9).  Grep `previously`, `used to`, `as of `, `<!-- removed`, `## Update`, coverage percentages, `CHU0\d+`, `Decision \d+`, `plans/` paths.  Drop pure history; replace impl-leaks with capability-shaped wording or remove.
+4. **Visual mechanicals** (dim 6).  Anchor check with `grep -nE '\(#[a-z0-9-]+\)' <file>`, plus the comment-column awk on any block that has trailing `#` annotations.  Render-then-flag for alignment intent that only the rendered view exposes.
+5. **Example-block label strip** (dim 8 — labels only).  Drop *"# start a request"*-shape labels in markdown code blocks.  Narrating comments stay; rewriting weak narration to better narration is Pass 2.
+6. **Claim strip** (dim 4 — subset).  Claims contradicted in the same file (the example doesn't actually auto-reconnect; the previous sentence already softened the claim) or by a quick source read (a one-grep API-shape check) are HIGH strips.  Claims that need a bench probe defer to Pass 2.
+
+**Pass 1 punch-list and execution.**  Group by confidence.  HIGH: AI-tic hits, brand-name `the` strips, dead anchors, mechanical history strips, example-block labels, in-file-contradicted claims.  MEDIUM: definite-article calls where the article is plausibly anchored, history strips where one sentence of current why might survive, claims where one grep gives the answer but the rephrasing is a judgment call.  Execute HIGH as one cohesive commit; MEDIUM as separate commits if accepted.
+
+### Pass 2 — reconstructive sweep
+
+The three-reader stumble walks run against the cleaned state — Pass 1's strips remove tic noise, so the structural and prose-level failures that survive are legible as failures rather than camouflaged.  Pass 2 is where the stumble walks pay off.
+
+7. **Three-reader stumble walk** (dim 1).  Read top-to-bottom three times: cold reader, advanced reader, beginner reader.  Flag stumbles that survive Pass 1 — jargon used before defined, assumed context, tutorial framing in the wrong place, pitch missing the why.  Apply the clause-paced rule above.
+8. **Structure map** (dim 5).  `grep -nE '^## ' <file>`, then compare against the question arc for the doc's type.  Structural mismatches (Install too low, pitch buried) are more legible after Pass 1 because the padding that masked them is gone.
+9. **Cross-section consolidation.**  Apply the cross-section sweep above before per-passage rewrites — a passage about to be rewritten might be the one that should collapse to a cross-reference instead.
+10. **Load-bearing claim pass** (dim 4).  For each surviving claim a reader might rely on (security, default behavior, cross-runtime parity), bench-verify or soften.  When softened replacement prose is needed, draft per the discipline below.
+11. **Reconstructive rewrites** (dim 1 + dim 10).  For each passage that fails the cold-reader test, draft replacement prose from a fresh read of the underlying code, API, or capability — *before* re-reading the original.  Order is load-bearing: read source, look away, draft fresh, *then* compare against the original.  Drafting with the original in view biases toward minimal edits and degraded prose perpetuates.  If you cannot draft from source alone, that itself is a finding — the prose was carrying knowledge the code doesn't make obvious; route to `/audit-comments` if the API's own docstrings are the gap, or to `/audit-library` if the code shape is.  Apply the cold-reader test to your proposed text, not just the original — minimal-edit drafts that strip a tic often leave the surrounding prose opaque or ambiguous and the audit ships a different defect than the one it found.
+12. **Explanation-to-content ratio** (dim 10).  Long framing wrapping a short example; same idea explained three times; section headers that promise more than they deliver.  Rewrite when the framing is salvageable; cut when it isn't.
+
+**Pass 2 punch-list and execution.**  Group by confidence.  HIGH: structural moves with clear cold-reader benefit, mechanical claim softening (API-shape claims that grep-verified false), label-to-narration rewrites with one obvious replacement.  MEDIUM: `rewrite` findings with proposed replacement text (a judgment call about which why is load-bearing); claim verifications that needed bench work and the replacement prose is a draft.  LOW: stumbles where the reader-class is unclear.  Execute HIGH as one cohesive commit; MEDIUM as separate commits, one per rewrite — small reversible edits; if one rewrite reads worse on a second look, the rest stand.
 
 ### After-action sweep and exit condition
 
-Re-run the dim 2 grep and the dim 6 anchor check on the changed file.  The audit is done when:
+Re-run the dim 2 grep, the per-noun `the X` pass, and the dim 6 anchor check on the changed file.  Rewrites pull in new `the`s, so the second per-noun pass catches what fresh prose introduced.  The audit is done when:
 
 * AI-tic grep returns no unjustified hits (legitimate technical-term uses are fine).
+* The per-noun `the X` pass returns only anchored uses.
 * Every accepted punch-list item has a corresponding edit, or a deferred entry in `plans/next-up.md` if the fix is bigger than the audit.
 * The three-reader reread (cold, advanced, beginner) does not surface a new stumble.
 
@@ -317,6 +345,9 @@ Docs audit: libraries/widget/README.md
 HIGH-CONFIDENCE (safe to fix):
 
   ai-tic       L14 — "comprehensive API" — drop or list what's covered
+  definite     L22 — "the ChuMicro-Widget" — `the` before brand name; drop
+  definite     L31 — "the caller decides" — generic forward reference;
+                     "you decide" or "callers decide"
   jargon       L9  — "runner-shaped" used before defining the term
   impl-leak    L43 — "96 % coverage" in user-facing prose
   history      L27 — "Previously this used X..." — git log carries this
@@ -341,6 +372,7 @@ Tag taxonomy.
 
 * `jargon`.  Internal vocabulary used before defining (dim 1).
 * `ai-tic`.  Vocabulary or grammar tic from dim 2.
+* `definite`.  `the X` that fails the per-noun three-way test (dim 2 continued, procedure step 3).  HIGH for brand-name hits and generic forward references; MEDIUM for judgement-call swaps like `the board` → `your board` where the reader could plausibly have inferred the referent.
 * `impl-leak`.  Internal metric, lint code, or `plans/` reference in user-facing prose (dim 3).
 * `claim`.  Load-bearing technical claim, verify or soften (dim 4).
 * `structure`.  Section ordering, splitting, renaming (dim 5).
@@ -349,7 +381,7 @@ Tag taxonomy.
 * `comment`.  Inline-comment label vs narration (dim 8).
 * `history`.  Historical rationale that should be in `git log` (dim 9).
 * `trivia`.  Explanation-to-content ratio off (dim 10).
-* `rewrite`.  Passage degraded by prior subtractive passes.  Discard and rebuild from a fresh read (see Audit philosophy).  Replacement text shown inline.  MEDIUM by default, since the rebuilt prose is a judgment call needing sign-off.
+* `rewrite`.  Passage degraded by prior subtractive passes.  Discard and rebuild from a fresh read of source — the code, API, or capability the doc points at (see Audit philosophy + Pass 2 step 11).  *Testable criterion:* if the proposed edit changes ≤1 sentence and leaves the surrounding paragraph intact, it is a strip, not a `rewrite` — tag accordingly.  Replacement text shown inline.  MEDIUM by default, since the rebuilt prose is a judgment call needing sign-off.
 
 ## Surface questions instead of guessing
 
@@ -367,6 +399,8 @@ When the same patterns recur across audits, ask rather than acting.
 | Two unrelated concerns in one section | *"`## Status & contributing` has a status paragraph and a contributing paragraph — they target different audiences.  Split or drop the status part?"* |
 | Inline comments not pulling weight | *"The trailing `# comment`s here label operations rather than narrating.  Want me to rewrite them to describe what each tick does?"* |
 | Historical rationale | *"This paragraph explains what the API used to do — `git log` covers that.  Drop it?"* |
+| `the` before a brand name | *"`the ChuMicro-Workspace-Template` reads as `the` decorating a brand.  Drop the article, or keep for parallelism with a nearby clause?"* |
+| Generic `the X` in user-facing prose | *"`the board` / `the caller` / `the device` here aren't anchored to a specific referent the reader has yet.  Swap to `your X` (matches the doc's existing second-person voice), `a X`, or drop the article?"* |
 | Section much longer than what it covers | *"This 4-paragraph rationale wraps a 2-line example.  Cut the framing or expand the example?"* |
 
 ## What NOT to do
