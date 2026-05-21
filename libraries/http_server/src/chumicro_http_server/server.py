@@ -64,10 +64,9 @@ _REASONS = {
 def _force_non_blocking(socket):
     """Best-effort ``setblocking(False)`` on a socket.
 
-    Same shape as the equivalent helper in chumicro-requests and
-    chumicro-mqtt — every accepted connection is flipped to non-
-    blocking up front so the per-connection state machine never
-    stalls on a read or write.
+    Every accepted connection is flipped to non-blocking up front
+    so the per-connection state machine never stalls on a read or
+    write.
     """
     setblocking = getattr(socket, "setblocking", None)
     if setblocking is None:  # pragma: no cover - defensive (every supported sock has it)
@@ -139,7 +138,7 @@ class Response:
     Attributes:
         status_code: Integer HTTP status (e.g. ``200``).
         reason: Reason phrase (sourced from a small table; falls back
-            to ``"Unknown"`` for non-canonical codes).
+            to ``"Unknown"`` for codes outside the table).
         headers: :class:`CaseInsensitiveDict` to send with the response.
             ``Content-Length`` and ``Connection: close`` are added
             automatically by the writer.
@@ -213,24 +212,20 @@ class _Connection:
         # No per-connection steady-state body buffer: every response
         # emits ``Connection: close`` so each :class:`_Connection`
         # serves exactly one request before being destroyed.  A
-        # pre-allocated buffer here would have a use-once lifetime —
-        # the same shape as the standalone case where
-        # ``chumicro_requests``'s on-device fragmentation tests
-        # measured a default-sized body buffer as a regression.  The
-        # parser starts empty and the sized-rebind path in
+        # pre-allocated buffer here would have a use-once lifetime
+        # that fragments worse than allocating sized-to-fit on demand.
+        # The parser starts empty and the sized-rebind path in
         # :meth:`RequestParser._enter_body_state` does one allocation
         # of ``bytearray(content_length)`` for the request.  When
         # keep-alive lands and ``_Connection`` lives across requests,
         # revisit and pass a long-lived buffer in here.
         self._parser = RequestParser(max_body_bytes=max_request_body_bytes)
-        # Pre-allocated recv scratch reused by every :meth:`_drive_recv` call
-        # — mirrors :class:`chumicro_mqtt._wire.PacketDecoder` and
-        # ``chumicro_websockets._session.WebSocketSession``.  A 4-conn
-        # server with the default 1024-byte budget pins ~2 KB of steady-
-        # state heap (4 × min(1024, 512)) instead of churning a fresh
-        # bytearray per tick per connection.  Capped at 512 so a server
-        # configured with a large recv_budget doesn't pin big buffers
-        # per connection.
+        # Pre-allocated recv scratch reused by every :meth:`_drive_recv`
+        # call.  A 4-conn server with the default 1024-byte budget pins
+        # ~2 KB of steady-state heap (4 × min(1024, 512)) instead of
+        # churning a fresh bytearray per tick per connection.  Capped
+        # at 512 so a server configured with a large recv_budget doesn't
+        # pin big buffers per connection.
         recv_scratch_size = recv_budget if recv_budget <= 512 else 512
         self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
@@ -424,8 +419,8 @@ def _build_error_response(status_code: int, message: str) -> Response:
 
     Used for handler exceptions + handler-returned-non-Response + 404
     fallthrough — all surface through the same path.  Kept module-level
-    so callers + tests can mint canonical errors without going through
-    HttpServer.
+    so callers and tests can build error responses without an HttpServer
+    instance.
     """
     body = message.encode("utf-8")
     headers = CaseInsensitiveDict()
@@ -629,7 +624,7 @@ class HttpServer:
           segment populates ``request.path_params["id"]``.
 
         Multi-parameter routes (``"/users/<uid>/posts/<pid>"``) are
-        not supported — file an issue if you hit the limit.
+        not supported.
 
         Args:
             path: Route path, optionally containing a single ``<name>``
@@ -784,8 +779,7 @@ class HttpServer:
     def check(self, now_ms):  # noqa: ARG002 — runner contract
         """Always ``True``: the accept loop must run on every tick.
 
-        Mirrors :class:`chumicro_websockets.WebSocketServer.check` —
-        cheap to advance even with no in-flight connections, and the
+        Cheap to advance even with no in-flight connections, and the
         listener may have a pending accept at any moment.
         """
         return True

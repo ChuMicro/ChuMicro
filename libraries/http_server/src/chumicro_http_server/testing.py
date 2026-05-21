@@ -9,9 +9,6 @@ pre-baked HTTP/1.1 request bytes:
   queue is empty so the server's EAGAIN path runs unchanged.
 - :func:`request_bytes` — build a raw HTTP/1.1 request byte string
   (start line + optional ``Content-Length`` + extra headers + body).
-
-Mirrors the structure of :mod:`chumicro_deploy.testing` and
-:mod:`chumicro_workspace.testing`.
 """
 
 __chumicro_test_support__ = True

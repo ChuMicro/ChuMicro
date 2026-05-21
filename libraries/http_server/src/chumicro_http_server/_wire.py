@@ -9,7 +9,7 @@ The shared HTTP/1.1 primitives needed by both client and server —
 :class:`CaseInsensitiveDict` (case-insensitive header dict, RFC 7230
 §3.2) and :func:`parse_charset` (Content-Type charset, RFC 7231
 §3.1.1.5) — are inlined here rather than imported from
-:mod:`chumicro_requests`: pulling the full client (~1.8K lines)
+:mod:`chumicro_requests`: pulling the full client (~2K lines)
 onto server-only boards for ~125 lines of shared code roughly
 doubles the flash footprint of a server-only deploy.  The RFCs
 are stable, so the duplication has near-zero drift cost.
@@ -45,7 +45,7 @@ DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
 #: and passes it to the parser, so requests whose Content-Length fits
 #: parse with zero body allocation; larger requests get a one-shot
 #: ``bytearray(content_length)`` sized-to-fit, freed after the response
-#: drains.  Matches :data:`chumicro_requests._wire.DEFAULT_BODY_BUFFER_SIZE`.
+#: drains.
 DEFAULT_BODY_BUFFER_SIZE = const(1024)
 
 #: Default per-connection deadline.
@@ -117,10 +117,6 @@ class CaseInsensitiveDict:
     ``__len__`` / ``__iter__`` / ``get`` / ``items`` — enough for the
     request/response API surface.  Not a full :class:`MutableMapping`
     to keep the embedded footprint small.
-
-    Inlined from chumicro-requests to keep the server self-contained;
-    behavior matches :class:`chumicro_requests.CaseInsensitiveDict`
-    byte-for-byte.
     """
 
     def __init__(self):
@@ -205,7 +201,7 @@ class CaseInsensitiveDict:
 # ---------------------------------------------------------------------------
 
 
-def parse_charset(content_type: str | None) -> str:
+def parse_charset(content_type: str | None) -> str:  # noqa: CHU027  docstring shared with chumicro-requests _wire.parse_charset — candidate for shared http-wire library
     """Extract the ``charset=...`` parameter from a Content-Type header.
 
     Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
@@ -219,10 +215,6 @@ def parse_charset(content_type: str | None) -> str:
     Defaulting to UTF-8 matches RFC 8259 §8.1 for ``application/json``
     and aligns with current web practice for ``text/*`` even though
     historical RFC 2616 defaulted text to ISO-8859-1.
-
-    Inlined from chumicro-requests to keep the server self-contained;
-    behavior matches :func:`chumicro_requests.parse_charset`
-    byte-for-byte.
 
     Args:
         content_type: Raw ``Content-Type`` header value, or ``None``.
@@ -274,7 +266,7 @@ class RequestParser:
 
     Body framing — two active tiers + a steady-state tier reserved
     for keep-alive (parallel to :class:`chumicro_requests._wire.
-    HttpResponseParser`'s shape):
+    ResponseParser`'s shape):
 
     * **Sized rebind.**  ``Content-Length ≤ max_body_bytes`` but >
       ``body_buffer`` capacity (default capacity is 0, since
@@ -291,10 +283,10 @@ class RequestParser:
       with zero allocation.  ``_Connection`` does not supply a
       ``body_buffer`` today because every response emits
       ``Connection: close`` — the buffer would have a use-once
-      lifetime, which the on-device fragmentation tests in
-      ``chumicro_requests`` measured as a regression.  When
-      keep-alive lands and connections live across requests, the
-      buffer becomes a steady-state tier worth pre-allocating.
+      lifetime that fragments worse than allocating sized-to-fit
+      on demand.  When keep-alive lands and connections live
+      across requests, the buffer becomes a steady-state tier
+      worth pre-allocating.
 
     Chunked request bodies are not supported, so Content-Length is
     always known when entering ``BODY`` state — sized-rebind happens
@@ -321,14 +313,12 @@ class RequestParser:
                 allocation; bigger-but-allowed requests rebind ``_body``
                 to a one-shot sized-to-fit buffer for that request only
                 and leave the caller's reference unchanged.  ``None``
-                (the default, and what ``_Connection`` passes today)
-                means the parser starts empty and the sized-rebind
-                path allocates fresh for every body.  Pre-allocating
-                a buffer that has a use-once lifetime fragments worse
-                than allocating sized-to-fit on demand (measured by
-                the on-device fragmentation tests in
-                ``chumicro_requests``); only supply ``body_buffer``
-                when its lifetime truly spans multiple requests.
+                (the default) means the parser starts empty and the
+                sized-rebind path allocates fresh for every body.
+                Pre-allocating a buffer that has a use-once lifetime
+                fragments worse than allocating sized-to-fit on demand;
+                only supply ``body_buffer`` when its lifetime truly
+                spans multiple requests.
             body_buffer_view: Pre-cached ``memoryview(body_buffer)``
                 supplied by the caller to avoid the parser constructing
                 one.  Optional even when ``body_buffer`` is provided
@@ -338,8 +328,7 @@ class RequestParser:
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
         # the cursor and only realloates the bytearray when at least
-        # half of it has been consumed — mirrors the read-cursor pattern
-        # in :class:`chumicro_requests._wire.HttpResponseParser`.
+        # half of it has been consumed.
         self._read_offset = 0
         self.state = RequestParseState.REQUEST_LINE
         self.method = ""
@@ -394,9 +383,7 @@ class RequestParser:
 
         Slice-assign-empty (``self._buffer[:offset] = b""``) does an
         in-place memmove on CPython / MicroPython / CircuitPython — no
-        allocation.  See :meth:`chumicro_requests._wire.ResponseParser._consume`
-        for the fragmentation rationale and the original allocating shape
-        this replaces.
+        allocation.
         """
         self._read_offset += count
         if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):

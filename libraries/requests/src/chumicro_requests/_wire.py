@@ -131,7 +131,7 @@ NO_BODY_STATUS_CODES = frozenset({204, 304})
 # ---------------------------------------------------------------------------
 
 
-def parse_charset(content_type: str | None) -> str:
+def parse_charset(content_type: str | None) -> str:  # noqa: CHU027  docstring shared with chumicro-http-server _wire.parse_charset — candidate for shared http-wire library
     """Extract the ``charset=...`` parameter from a Content-Type header.
 
     Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
