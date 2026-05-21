@@ -1,8 +1,9 @@
 """Shared OPEN/CLOSING/CLOSED machinery for WebSocketClient + Connection.
 
-The opening-handshake half differs between client and server (request
-direction, mask direction).  Everything *after* OPEN is identical
-modulo two policies:
+Everything after the opening handshake — frame dispatch, oversize
+policy, control-frame handling, close handshake, send queue, pong
+watchdog — lives in :class:`_BaseSession`.  The two halves diverge
+only on:
 
 * Outbound mask — clients MUST mask, servers MUST NOT (RFC 6455 §5.1).
   Subclasses implement :meth:`_outbound_mask`.
