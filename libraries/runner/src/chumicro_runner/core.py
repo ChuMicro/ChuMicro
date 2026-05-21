@@ -1,15 +1,19 @@
-"""Core tick-runner abstractions for the ChuMicro ecosystem.
+"""Tick-based scheduler for the ChuMicro libraries.
 
-Provides two ways to register work with a ``Runner``:
+Register work with a ``Runner``, then call ``tick()`` in a loop.
+Each ``tick()`` captures the current time once, checks every
+registered task, and fires the handlers whose gates have passed.
 
-1. **Gate-based** — a check function decides whether a handler fires.
-   Register with ``add(check_function, handler=function)`` (both callables) or
-   ``add(obj)`` where *obj* has ``.check(now_ms) -> bool`` and
-   ``.handle(now_ms)`` methods.
-2. **Periodic** — ``add_periodic(handler, period_ms)``: the handler fires
-   every *period_ms* milliseconds with no check.
+Three registration shapes are accepted: object-based (``.check`` +
+``.handle`` methods), callable-based (check function + handler),
+and handler-only (fires every tick, or per period if one is set).
+See ``Runner.add`` for signatures.  ``add_periodic`` is the periodic
+shortcut.
 
-All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
+``TaskHandle`` (returned from registration) carries runtime state
+and supports ``set_period`` / ``remove``.
+
+Cross-runtime: CPython, MicroPython, CircuitPython.
 """
 
 # Default tick source imported eagerly at module load.  Lazy import inside

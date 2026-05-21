@@ -1,8 +1,10 @@
-"""Device-facing integration test: Runner + Timing + Msgpack together.
+"""Device-facing test that Runner + Timing + Msgpack work together
+on real hardware.
 
-This exercises the CircuitPython bootstrap's ability to load multiple
-interdependent libraries and run them in concert — the most demanding
-scenario for the class-as-module injection layer.
+Three integration paths: a runner handler collects records that
+round-trip through msgpack, a periodic runner task scheduled on the
+real clock round-trips through msgpack, and a raw tick timestamp
+survives the same round-trip.
 """
 
 import time
