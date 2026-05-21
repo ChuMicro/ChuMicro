@@ -20,3 +20,4 @@ _(nothing in flight)_
 - [ ] **Concurrent-agent commit scrambling — process / skill note.**  [workstreams/concurrent-agent-commit-scrambling.md](workstreams/concurrent-agent-commit-scrambling.md)
 - [ ] **`/audit-library libraries/requests` — dedup test helpers (`make_factory` / `canned_response` / `drive_until_done` / `make_client` repeated near-verbatim across 4 `test_client_*.py` files).**
 - [ ] **`examples/helpers.py` cross-library drift.**  [workstreams/examples-helpers-cross-library-drift.md](workstreams/examples-helpers-cross-library-drift.md)
+- [ ] **`/audit-library libraries/timing` — `_sleep_ms` duplicated across `functional_tests/test_heartbeat.py` and `test_heartbeat_ticks.py` (latter uses tabs, former spaces).**
