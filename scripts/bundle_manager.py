@@ -7,9 +7,9 @@ CircuitPython and MicroPython use different mpy-cross compilers that produce
 incompatible .mpy files (different magic bytes: 'C' vs 'M').  The bundle
 stages separate directories for each runtime:
 
-- ``circuitpython-10.x-mpy/`` — compiled with CircuitPython mpy-cross,
+- ``circuitpython-10.x-mpy/``: compiled with CircuitPython mpy-cross,
   consumed by circup via zip bundles.
-- ``mpy6/`` — compiled with MicroPython mpy-cross, consumed by mip via
+- ``mpy6/``: compiled with MicroPython mpy-cross, consumed by mip via
   ``package.json`` manifests.
 
 The two-repo bundle strategy (stable vs. experimental) is defined in
@@ -87,9 +87,9 @@ def _find_bundle_modules(
             ``__chumicro_runtimes__`` marker (Decisions 0037 + 0044).
             ``"circuitpython"`` / ``"micropython"`` for per-runtime mpy
             bundles.  :data:`DEVICE_RUNTIMES` (frozenset of both MCU
-            runtimes) for the universal source bundle — drops files
+            runtimes) for the universal source bundle, which drops files
             marked exclusively for ``cpython`` so they land only in the
-            PyPI sdist / wheel.  ``None`` is "no filter" (legacy).
+            PyPI sdist / wheel.  ``None`` skips filtering.
             Files without a marker always ship (default-safe).
 
     Returns:
@@ -229,7 +229,7 @@ def build_bundle(
     #
     # mip reads package.json to know which files to download and where to
     # place them on-device.  Each entry in "urls" is [target_path, source_url].
-    # The root manifest lists .py source files — the safe universal path
+    # The root manifest lists .py source files: the safe universal path
     # that works on all runtimes without version matching.
     urls = []
     for source_file in python_files:
@@ -261,7 +261,7 @@ def build_bundle(
     # These go into circuitpython-10.x-mpy/ following Adafruit's naming
     # convention where "10.x" is the CircuitPython version range.  circup
     # consumes these via zip bundles named with the same pattern.
-    # No package.json needed — circup uses zip naming, not mip manifests.
+    # No package.json needed: circup uses zip naming, not mip manifests.
     #
     # Decision 0037: filter out files marked for other runtimes
     # (e.g. mp_esp32.py, cpython.py) so the CP bundle only ships what
@@ -416,7 +416,7 @@ def build_circup_zips(
     source_bundle_name = f"{bundle_id}-py-{date_tag}"
     # "10.x" refers to CircuitPython 10.x's mpy bytecode format (v6).
     # circup parses this pattern to match bundles to the running firmware
-    # version on the board — the naming convention is a circup contract.
+    # version on the board.  The naming convention is a circup contract.
     bytecode_bundle_name = f"{bundle_id}-10.x-mpy-{date_tag}"
 
     source_zip_path = output_dir / f"{source_bundle_name}.zip"

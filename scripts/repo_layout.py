@@ -1,10 +1,8 @@
 """Workspace discovery, scope parsing, and change detection.
 
 Provides the shared helpers that other ``scripts/`` modules use to
-locate packages, source roots, and changed files.  This is the
-foundational module — nearly every other script imports from here.
-
-Previously named ``discovery.py``.
+locate packages, source roots, and changed files.  Nearly every other
+script imports from here.
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ ALL_PLATFORMS = ("cpython", "micropython", "circuitpython")
 GITHUB_ORG = "ChuMicro"
 
 #: PEP 508 version specifiers, environment markers, and extras.
-#: Splits a dependency string so ``"chumicro-timing>=0.1"`` → ``"chumicro-timing"``.
+#: Splits a dependency string so ``"chumicro-timing>=0.1"`` becomes ``"chumicro-timing"``.
 _DEPENDENCY_VERSION_SPLITTER = re.compile(r"[><=!;~\[]")
 
 
@@ -72,7 +70,7 @@ def library_name_from_pip_dependency(dependency: str) -> str | None:
 def library_name_from_module(module_name: str) -> str | None:
     """Return the workspace library name for a ``chumicro_*`` Python module.
 
-    Handles dotted paths — ``chumicro_timing.ticks`` still resolves to
+    Handles dotted paths: ``chumicro_timing.ticks`` still resolves to
     ``timing``.  Returns ``None`` for modules that are not part of a
     ChuMicro library.
 
@@ -130,8 +128,8 @@ def read_runtime_versions() -> dict[str, Any]:
 def read_platforms(package_dir: Path) -> tuple[str, ...]:
     """Read ``[tool.chumicro].platforms`` from a package's ``pyproject.toml``.
 
-    Returns :data:`ALL_PLATFORMS` when the key or section is absent —
-    libraries default to targeting all three runtimes.
+    Returns :data:`ALL_PLATFORMS` when the key or section is absent.
+    Libraries default to targeting all three runtimes.
 
     See ``plans/decisions/0011-platform-targeting.md``.
 
@@ -219,10 +217,10 @@ def discover_library_dirs() -> list[Path]:
     """Return package directories that live under ``libraries/``.
 
     Convenience wrapper around :func:`discover_package_dirs` that filters
-    to device-library directories only — excludes ``support/`` packages
+    to device-library directories only.  Excludes ``support/`` packages
     (internal, not published) and ``workbench/`` packages (host-only
     publishable tools; Decision 0032).  Used by bundle staging,
-    cross-runtime tests, and docs — all CircuitPython / MicroPython
+    cross-runtime tests, and docs: all CircuitPython / MicroPython
     concerns that don't apply to host-only packages.
     """
     return [
@@ -237,7 +235,7 @@ def discover_workbench_dirs() -> list[Path]:
     Counterpart to :func:`discover_library_dirs` for host-only
     publishable tools.  Used by the ``test-workbench-functional`` task to drive
     pytest at every workbench package's ``functional_tests/``
-    directory.  Device-side routing is not relevant — workbench
+    directory.  Device-side routing is not relevant: workbench
     packages are CPython-only and reach hardware through the public
     ``chumicro_deploy`` API (or through their own subprocess shells)
     rather than the test-harness plugin.
@@ -431,12 +429,12 @@ def detect_changed_packages() -> list[Path] | None:
             if result.returncode == 0 and result.stdout.strip():
                 changed.update(result.stdout.strip().splitlines())
     except (FileNotFoundError, OSError):
-        # git unavailable (e.g. no .git dir) — caller treats None as
+        # git unavailable (e.g. no .git dir).  Caller treats None as
         # "run everything" to be safe.
         return None
 
     if not changed:
-        # No changes at all — also means "run everything" so the default
+        # No changes at all.  Also means "run everything" so the default
         # invocation always does useful work.
         return None
 
@@ -599,7 +597,7 @@ def release_tags(library_name: str) -> list[str]:
     """Return release tags for a publishable package, sorted newest first.
 
     Tags are emitted by ``release.yml`` as ``chumicro-<name>-v<version>``
-    (with an optional ``-experimental`` suffix); the glob here matches that
+    (with an optional ``-experimental`` suffix).  The glob here matches that
     canonical format for both ``libraries/`` and ``workbench/`` packages.
 
     Args:
@@ -640,7 +638,7 @@ def pythonpath_environment() -> dict[str, str]:
 RELEASE_RELEVANT = {"src", "pyproject.toml"}
 
 #: Workspace directories that hold publishable packages.  Both feed the
-#: same VERSION + check-api gate (Decision 0032 — workbench packages
+#: same VERSION + check-api gate (Decision 0032: workbench packages
 #: follow the same release lifecycle as libraries minus bundle staging).
 PUBLISHABLE_ROOTS = ("libraries", "workbench")
 
@@ -668,7 +666,7 @@ def changed_publishable_packages(base_reference: str) -> set[tuple[str, str]]:
     package).  Returning the parent directory alongside the name lets
     callers construct paths and messages without a second lookup.
 
-    parts[2] is checked against :data:`RELEASE_RELEVANT` —
+    parts[2] is checked against :data:`RELEASE_RELEVANT`:
     ``"src"`` acts as a directory prefix (any file under ``src/``
     qualifies) while ``"pyproject.toml"`` is an exact match
     (``len(parts) == 3`` at the package root).

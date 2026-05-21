@@ -2,7 +2,7 @@
 
 Used by promote.yml to replay the experimental source onto main's
 working tree before building the stable package.  The archive carries
-``src/``, ``pyproject.toml``, ``VERSION``, and ``README.md`` — every
+``src/``, ``pyproject.toml``, ``VERSION``, and ``README.md``: every
 file the build needs.
 
 Usage::

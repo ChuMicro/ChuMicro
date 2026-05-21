@@ -1,4 +1,4 @@
-"""Library scaffolding — thin wrapper over `chumicro_workspace.scaffold`.
+"""Library scaffolding: thin wrapper over `chumicro_workspace.scaffold`.
 
 `python scripts/run.py new-library <name>` calls
 :func:`new_library` here, which composes the workbench
@@ -8,8 +8,8 @@ of the new package + IDE config sync.
 External users developing their own chumicro-style libraries
 get the same scaffolder via
 ``python run.py new --library <name>`` (the workspace CLI's
-library mode); they don't need this script's editable-install
-+ IDE sync because their workspace's `setup` already handles
+library mode).  They don't need this script's editable-install
+plus IDE sync because their workspace's `setup` already handles
 those.
 """
 
@@ -31,7 +31,7 @@ def _scaffold_library(name: str, *, workbench: bool = False) -> int:
     A device library lands under the mono-repo's ``libraries/`` parent;
     *workbench=True* scaffolds a host-only CPython tool under
     ``workbench/`` instead (workbench-flavored pyproject + docs, no
-    Runner pattern) — same parent/kind split the workspace CLI's
+    Runner pattern).  Same parent/kind split the workspace CLI's
     ``new --library`` / ``new --workbench`` uses.  Returns 0 on
     success, 1 when the target already exists.
     """

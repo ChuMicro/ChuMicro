@@ -225,7 +225,7 @@ def _validate_single(
 
         # Retry loop to handle CDN propagation delay after bundle push.
         # `result` is initialized to None so pyright can prove it's bound on
-        # every code path the post-loop branches read it on — _MAX_RETRIES
+        # every code path the post-loop branches read it on.  _MAX_RETRIES
         # being a positive constant is a runtime invariant pyright can't see.
         installed = False
         result: subprocess.CompletedProcess | None = None
@@ -246,7 +246,7 @@ def _validate_single(
                     print(f"    {last_line}")
                 time.sleep(_RETRY_DELAY)
 
-        assert result is not None  # _MAX_RETRIES >= 1 — loop always ran.
+        assert result is not None  # _MAX_RETRIES >= 1, so loop always ran.
         if not installed:
             print(f"    FAIL: mip install failed after {_MAX_RETRIES} attempts")
             if result.stdout:
@@ -306,7 +306,7 @@ def validate_mip_install(
 
     # Topologically sort so each library's intra-workspace deps run
     # first.  This ensures dependency resolution against the bundle
-    # repo is exercised in the right order — runner sees a satisfiable
+    # repo is exercised in the right order, so runner sees a satisfiable
     # `chumicro-timing` import because timing was installed first.
     sorted_names = order_libraries_by_dependency(library_names, _intra_workspace_deps)
 

@@ -4,10 +4,9 @@ Regenerates source-root configurations, run/task configurations, and Pyright
 paths so libraries are importable in the IDE alongside editable installs.
 See ``plans/decisions/0012-ide-type-stubs.md``.
 
-This module is idempotent — running it multiple times produces the same
-output.  It preserves user settings (e.g. PyCharm SDK selection,
-VS Code settings outside ``extraPaths``) while overwriting only the
-managed sections.
+Running this module multiple times produces the same output.  It
+preserves user settings (e.g. PyCharm SDK selection, VS Code settings
+outside ``extraPaths``) while overwriting only the managed sections.
 
 Called via ``python scripts/run.py sync-ide`` or automatically after
 ``python scripts/run.py setup`` and ``python scripts/run.py new-library``.
@@ -22,7 +21,7 @@ from repo_layout import ROOT, discover_package_dirs, discover_source_roots
 from shared import load_template
 
 # ---------------------------------------------------------------------------
-# Managed task definitions — shared between PyCharm and VS Code
+# Managed task definitions: shared between PyCharm and VS Code
 # ---------------------------------------------------------------------------
 # Each entry: (display_name, script_path, parameters, vscode_group).
 # script_path is relative to the project root.  sync-ide overwrites
@@ -88,8 +87,8 @@ def _sync_run_configurations() -> None:
         )
         (run_config_dir / filename).write_text(content)
 
-    # Remove stale configurations that were previously managed but dropped
-    # from the list.  Only delete files whose name matches the managed
+    # Remove stale configurations that were managed but no longer appear
+    # in the list.  Only delete files whose name matches the managed
     # naming pattern.  The heuristic: a file is "managed" if every
     # underscore-separated part of its stem starts with an uppercase letter
     # (e.g. ``CircuitPython_Compatibility.xml``).  User-created configs

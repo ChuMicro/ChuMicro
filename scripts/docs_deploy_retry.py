@@ -1,9 +1,9 @@
 """Deploy docs and push to gh-pages, retrying on conflict.
 
-Used by promote.yml's docs job — it shares the ``documentation-deploy``
-concurrency group with push-triggered experimental deploys.  When a
-concurrent deploy lands between fetch and push, retry with the new
-gh-pages head so mike's commit lands on top.
+Shares the ``documentation-deploy`` concurrency group with
+push-triggered experimental deploys.  When a concurrent deploy lands
+between fetch and push, retry with the new gh-pages head so mike's
+commit lands on top.
 
 Usage::
 

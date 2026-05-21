@@ -20,16 +20,16 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Hot-path imports — touched by lint, run_command, ROOT-derived path
+# Hot-path imports, touched by lint, run_command, and ROOT-derived path
 # discovery on every invocation.  Heavier imports (check_api,
 # docs_deploy, prepare_*, validate_mip_install, verify_examples,
 # new_library_scaffold, ide_sync, render_dep_graph,
 # shared.install_workspace) are deferred into the task wrappers that
-# need them (Bucket 4 #5).  Each of those modules pulls in tomllib /
-# yaml / ast walkers / griffe / mike / etc.; eager-loading them
-# meant every phase that subprocess-re-invokes ``python scripts/run.py``
-# (Decision 0048) paid the full import-time tax even when running a
-# task that didn't touch them.
+# need them.  Each of those modules pulls in tomllib, yaml, ast walkers,
+# griffe, mike, and so on.  Eager-loading them meant every phase that
+# subprocess-re-invokes ``python scripts/run.py`` (Decision 0048) paid
+# the full import-time tax even when running a task that didn't touch
+# them.
 from repo_layout import (
     ROOT,
     coverage_args_for,
@@ -54,16 +54,15 @@ def _default_workers() -> tuple[int, int]:
 
     Preflight is mostly I/O-bound (pytest startup, subprocess spawning,
     file reads), not CPU-bound, so mild oversubscription is a win.
-    Earlier sqrt-based sizing came from when the test phase was 73 s
-    and genuinely CPU-contended; the unit-test phases are seconds-scale
-    today.  After the per-library fan-out reached test-micropython /
-    test-circuitpython (each now ~2.5 s standalone, ~6 s under preflight
-    contention with concurrent test-cpython + build + docs), the wall-
-    time floor is dominated by whichever single phase loses most to
-    cross-phase resource contention — typically ``test (python <ver>)``.
+    The unit-test phases are seconds-scale today.  After the per-library
+    fan-out reached test-micropython / test-circuitpython (each ~2.5 s
+    standalone, ~6 s under preflight contention with concurrent
+    test-cpython + build + docs), the wall-time floor is dominated by
+    whichever single phase loses most to cross-phase resource
+    contention, typically ``test (python <ver>)``.
 
     Sizing rule: run every preflight phase concurrently when cores
-    allow (cap at 11 — the total phase count), and let the
+    allow (cap at 11, the total phase count), and let the
     per-package test fan-out hit its diminishing-returns ceiling
     around 8 packages wide.
 
@@ -109,7 +108,7 @@ _DEFAULT_PACKAGE_PARALLEL_WORKERS = _DEFAULT_PACKAGE_WORKERS
 
 #: Default slow-test threshold for host CPython tests (seconds).
 #: Tests crossing this duration are surfaced as warn-only "SLOW"
-#: notices in the rolled-up phase summary — see
+#: notices in the rolled-up phase summary; see
 #: :func:`_format_pytest_phase_summary`.  Override via
 #: ``--slow-test-threshold-cpython``.
 _DEFAULT_SLOW_TEST_THRESHOLD_CPYTHON = 1.0
@@ -133,7 +132,7 @@ _RAW_OUTPUT_ENV_VAR = "CHUMICRO_RAW_OUTPUT"
 
 #: Explicit user override for the output mode.  When set, takes
 #: precedence over TTY / IDE auto-detection (but not over
-#: ``CHUMICRO_RAW_OUTPUT`` — that's an internal subprocess signal).
+#: ``CHUMICRO_RAW_OUTPUT``, which is an internal subprocess signal).
 #: Useful in IDE Run-config environments where ``isatty()`` is False
 #: but the user is reading the output live in an interactive console.
 #: Accepted values: ``status``, ``interleave``, ``quiet``.
@@ -168,7 +167,7 @@ _OUTPUT_MODE_ENV_VAR = "CHUMICRO_OUTPUT_MODE"
 
 
 class _Sink:
-    """Per-phase output sink — passed into a phase callable.
+    """Per-phase output sink, passed into a phase callable.
 
     Each phase callable receives a sink and emits lines through it via
     ``sink.line(text)``.  The sink records every line into a local
@@ -203,10 +202,10 @@ class _Sink:
 class _Dispatcher:
     """Coordinates output from multiple parallel phases.
 
-    Lifecycle: ``start(labels)`` → many ``phase_started`` /
+    Lifecycle: ``start(labels)``, then many ``phase_started`` /
     ``phase_line`` / ``phase_done`` calls (concurrent, from worker
-    threads) → ``finish()``.  Implementations must serialize their own
-    output (e.g. with a lock) — phase callbacks fire from worker
+    threads), then ``finish()``.  Implementations must serialize their
+    own output (e.g. with a lock): phase callbacks fire from worker
     threads.
     """
 
@@ -265,8 +264,8 @@ class _QuietDispatcher(_Dispatcher):
         first_failure: str | None = None
         for label in self._labels:
             exit_code, captured = self._results.get(label, (0, ""))
-            # When any phase failed, suppress passing-phase transcripts —
-            # otherwise the user has to scroll past N successful phases
+            # When any phase failed, suppress passing-phase transcripts.
+            # Otherwise the user has to scroll past N successful phases
             # to find the actual error.  Header-only line keeps the
             # phase visible in the log without burying the failure.
             if has_failure and exit_code == 0:
@@ -312,7 +311,7 @@ class _InterleaveDispatcher(_Dispatcher):
 
 
 class _StatusDispatcher(_Dispatcher):
-    """Live phase events with elapsed time; failure logs dumped at end.
+    """Live phase events with elapsed time.  Failure logs dumped at end.
 
     Default for TTY contexts.  Suppresses per-line output while phases
     run (just shows ``->`` / ``OK`` / ``FAIL`` events), then dumps the
@@ -369,7 +368,7 @@ class _RawDispatcher(_Dispatcher):
     """Used inside a child of a subprocess re-invocation.
 
     The parent ran us via ``Popen`` with ``CHUMICRO_RAW_OUTPUT=1`` set
-    in the env.  We're one phase of the parent's run; the parent will
+    in the env.  We're one phase of the parent's run.  The parent will
     read our stdout line-by-line and re-frame each line under the right
     phase header.  Emit raw lines, no phase events.
     """
@@ -390,7 +389,7 @@ def _is_interactive_console() -> bool:
 
     `sys.stdout.isatty()` is the obvious signal, but IDEs (PyCharm,
     IntelliJ) capture stdout through a pipe to render it in their own
-    Run console pane — `isatty()` returns False even though the user is
+    Run console pane.  `isatty()` returns False even though the user is
     watching live.  Detect those by env var so the IDE Run button shows
     the same status output the user gets in a real terminal.
     """
@@ -407,14 +406,14 @@ def _pick_dispatcher(*, quiet: bool) -> _Dispatcher:
     """Construct the right dispatcher for this invocation context.
 
     Resolution order:
-      1. ``CHUMICRO_RAW_OUTPUT`` env var → raw (we're a child of a
-         parent dispatcher; never user-set).
-      2. ``--quiet`` flag → quiet.
-      3. ``CHUMICRO_OUTPUT_MODE`` env var → the named dispatcher.
+      1. ``CHUMICRO_RAW_OUTPUT`` env var: raw (we're a child of a
+         parent dispatcher, never user-set).
+      2. ``--quiet`` flag: quiet.
+      3. ``CHUMICRO_OUTPUT_MODE`` env var: the named dispatcher.
          Lets IDEs and CI configs pin a mode without changing the
          CLI invocation.
-      4. interactive console (TTY or PyCharm Run pane) → status.
-      5. otherwise → interleave (non-interactive CI / log capture).
+      4. interactive console (TTY or PyCharm Run pane): status.
+      5. otherwise: interleave (non-interactive CI / log capture).
     """
     if os.environ.get(_RAW_OUTPUT_ENV_VAR):
         return _RawDispatcher()
@@ -546,9 +545,9 @@ def _resolve_filter_and_scope(
 
     Handles both filter forms:
 
-    - **Bare** (``heartbeat``) — standard pytest ``-k``.  ``package_dirs``
+    - **Bare** (``heartbeat``): standard pytest ``-k``.  ``package_dirs``
       is untouched; every selected library runs with this expression.
-    - **Library-scoped** (``timing/test_heartbeat``) — the named
+    - **Library-scoped** (``timing/test_heartbeat``): the named
       libraries replace whatever scope was selected by ``--all`` /
       ``--libraries`` / change detection.
 
@@ -567,13 +566,13 @@ def _resolve_filter_and_scope(
 
     entries = [entry.strip() for entry in filter_expression.split(",") if entry.strip()]
     if entries and all("/" not in entry for entry in entries):
-        # Bare pytest-style filter — leave package_dirs alone.
+        # Bare pytest-style filter, leave package_dirs alone.
         return package_dirs, {
             package_dir.name: [(None, filter_expression)]
             for package_dir in package_dirs
         }
 
-    # Library-scoped — library names override package_dirs.
+    # Library-scoped: library names override package_dirs.
     parsed = _parse_library_filters(filter_expression)
     by_name = {package_dir.name: package_dir for package_dir in discover_package_dirs()}
     resolved: list[Path] = []
@@ -617,9 +616,9 @@ def _plan_test_runs_for_library(
 
     Filter entries split into two categories:
 
-    - **Global** (no file specified) — combined with ``or`` into a single
+    - **Global** (no file specified): combined with ``or`` into a single
       pytest invocation across the whole ``tests/`` directory.
-    - **File-scoped** (``library/file/expression``) — each gets its own
+    - **File-scoped** (``library/file/expression``): each gets its own
       pytest invocation targeting a specific test file so coverage data
       stays attributable.
 
@@ -674,7 +673,7 @@ def _combine_and_report_coverage(
     The per-library ``--cov-fail-under`` gates enforced inside the main
     loop are the primary mechanism.  The combined report additionally
     applies the override when every library was held to the same
-    threshold (no ``elevated_packages`` scoping) — when it *is* scoped,
+    threshold (no ``elevated_packages`` scoping).  When it *is* scoped,
     the combined report uses the ``pyproject.toml`` default because
     the unchanged libraries shouldn't be held to the higher bar.
     """
@@ -723,7 +722,7 @@ def test_cpython(
     *filter_expression* is set (filtering naturally reduces coverage) or *no_cov*
     skips coverage entirely.
 
-    The default threshold comes from ``pyproject.toml`` (85 % — the human
+    The default threshold comes from ``pyproject.toml`` (85 %, the human
     baseline).  Pass *coverage_threshold* to override it; agents use 94 %
     (Decision 0025).
 
@@ -735,7 +734,7 @@ def test_cpython(
 
     *filter_expression* accepts two forms::
 
-        heartbeat                             # bare pytest -k — applied to all selected libraries
+        heartbeat                             # bare pytest -k, applied to all selected libraries
         timing/test_heartbeat                 # library-scoped: by name in one library
         timing/test_ticks/ticks_add           # library-scoped: by file and name
         timing/ticks_diff,runner/task_handle  # comma-separated library-scoped entries
@@ -811,7 +810,7 @@ def test_cpython(
             # under ``functional_tests/``, so it adds nothing for the
             # ``tests/`` sweep here.  But its ``pytest11`` entry point
             # would otherwise import the plugin's modules (which pull
-            # in ``chumicro_deploy``) at session start — *before*
+            # in ``chumicro_deploy``) at session start, *before*
             # pytest-cov begins instrumenting, missing import-time
             # coverage (dataclass definitions, regex compiles) on
             # both the plugin's tree and ``chumicro_deploy.config.default``.
@@ -821,7 +820,7 @@ def test_cpython(
             disable_plugin_args = ["-p", "no:chumicro_pytest_device"]
 
             # Unique coverage file per run keeps data attributable
-            # under parallel fan-out — every concurrent pytest writes
+            # under parallel fan-out: every concurrent pytest writes
             # to its own ``.coverage.<package>.<run>`` file before
             # ``coverage combine`` merges them.
             coverage_name = f".coverage.{package_dir.name}.{run_counter}"
@@ -885,7 +884,7 @@ def _run_pytest_capturing(
     parallel test_cpython fan-out delivers lines to the dispatcher as
     they arrive (rather than buffering until the subprocess exits).
 
-    Pytest exit code 5 ("no tests collected" — typically when a
+    Pytest exit code 5 ("no tests collected", typically when a
     ``-k`` filter matches nothing in a given library) is normalized
     to 0 so it doesn't fail the whole sweep.  The "no tests ran" line
     still flows through the sink for log visibility.
@@ -1019,8 +1018,8 @@ class _PytestOutputFilter:
     per-library summary lines (``=== N passed in Xs ===``) and the
     ``slowest durations`` block, parsing them into structured fields
     that the parent fan-out reads via :meth:`_PytestRunResult.build`.
-    Returns ``True`` from :meth:`consume` when a line was absorbed —
-    the wrapping sink then suppresses forwarding to the dispatcher.
+    Returns ``True`` from :meth:`consume` when a line was absorbed.
+    The wrapping sink then suppresses forwarding to the dispatcher.
 
     Lines that don't match a known summary form (test progress dots,
     failure tracebacks, "+ pytest ..." command echo, etc.) pass
@@ -1042,7 +1041,7 @@ class _PytestOutputFilter:
         if self._in_slow_block:
             row = _PYTEST_SLOW_ROW.match(stripped)
             if row is not None:
-                # Only count ``call`` durations — setup / teardown
+                # Only count ``call`` durations.  Setup and teardown
                 # often dominate fast tests via fixture cost but
                 # aren't what the user means by "this test is slow".
                 if row.group("phase") == "call":
@@ -1111,7 +1110,7 @@ def _format_pytest_phase_summary(
     omits it.
 
     Slow notices list every test whose ``call`` duration crossed
-    *slow_threshold_s*.  Warn-only — the caller's exit code is
+    *slow_threshold_s*.  Warn-only: the caller's exit code is
     unaffected.
     """
     passed = sum(result.passed for result in results)
@@ -1148,7 +1147,7 @@ def test_scripts(
     exit_first: bool = False,
     verbose: bool = False,
 ) -> int:
-    """Run pytest on scripts/tests/ — infrastructure test suite.
+    """Run pytest on scripts/tests/, the infrastructure test suite.
 
     Scripts tests run without a per-library coverage gate since scripts
     are subprocess-heavy orchestration code with a different coverage
@@ -1204,7 +1203,7 @@ def build(
     This is safe because the development environment already has
     ``hatchling`` installed via ``requirements-dev.txt``.
 
-    Builds are fanned out across *package_workers* threads — each
+    Builds are fanned out across *package_workers* threads.  Each
     ``python -m build`` is an independent subprocess with its own
     per-package ``dist/`` output, no shared state.
     """
@@ -1315,7 +1314,7 @@ def _build_one_library_docs_factory(
     The closure streams every line of zensical output through the
     sink, then post-processes the captured transcript to fail on
     griffe warnings (Decision 0021).  Streaming means the dispatcher
-    sees output the moment zensical emits it — no buffer-and-replay
+    sees output the moment zensical emits it, with no buffer-and-replay
     delay even on slow library builds.
     """
     def build_one(sink: _Sink) -> int:
@@ -1323,7 +1322,7 @@ def _build_one_library_docs_factory(
         site_dir = library_dir / "site"
         # mkdocstrings + griffe cache parsed-AST results in
         # ``<library>/.cache/``.  When cached entries are reused, griffe
-        # does not re-emit warnings on stdout — and the warning-scan
+        # does not re-emit warnings on stdout, and the warning-scan
         # below would silently pass.  Always wipe the cache so each
         # docs build re-parses every source file from scratch.
         cache_dir = library_dir / ".cache"
@@ -1423,14 +1422,14 @@ def docs_preview(package_dirs: list[Path]) -> int:
         print(f"Seeded {preview_branch} from {source_branch}.")
 
     # Per-library deploys are sequential because every ``mike deploy``
-    # commits to the same ``_docs-preview`` git branch — running them
+    # commits to the same ``_docs-preview`` git branch.  Running them
     # concurrently would race on the git index lock.  Unlike ``docs``
     # (which fans out per library because each writes to its own
-    # ``site/`` directory), the ``mike`` workflow is a serialized git-
-    # plumbing pipeline by construction.  Worktree-per-library would
-    # let us parallelize, but the wall time of an interactive
-    # ``docs-preview`` is dominated by ``mike serve`` afterwards, so
-    # the speedup wouldn't be visible to the user.
+    # ``site/`` directory), the ``mike`` workflow serializes onto one
+    # git index.  Worktree-per-library would let us parallelize, but
+    # the wall time of an interactive ``docs-preview`` is dominated by
+    # ``mike serve`` afterwards, so the speedup wouldn't be visible to
+    # the user.
     for library_dir in doc_dirs:
         relative_path = library_dir.relative_to(ROOT)
         library_name = library_dir.name
@@ -1487,8 +1486,8 @@ def preflight(
     api-check, MicroPython and CircuitPython cross-runtime unit tests.
 
     The 11 unit-test phases run **in parallel** as independent
-    subprocess re-invocations of ``python scripts/run.py <subcommand>``;
-    output is captured per phase and replayed in submission order so
+    subprocess re-invocations of ``python scripts/run.py <subcommand>``.
+    Output is captured per phase and replayed in submission order so
     the on-screen log reads as if the loop ran serially.  See
     Decision 0048 for the design.  The ``--with-functional`` tail
     stays serial because both phases drive the same physical hardware.
@@ -1500,12 +1499,12 @@ def preflight(
     3.12, and 3.13 separately).  Version-check and api-check require
     ``origin/main`` to be reachable; they skip gracefully if it is not.
 
-    Functional tests on real hardware are skipped by default — they
+    Functional tests on real hardware are skipped by default: they
     require a connected board.  Pass *with_functional* to append
     ``test-libraries-functional`` and ``test-workbench-functional``
     (running with ``devices.yml`` defaults) to the end of the sweep.
     Pass *with_device_unit* to also append ``test-unit-on-device``
-    (the cross-runtime unit suite on connected boards) after that —
+    (the cross-runtime unit suite on connected boards) after that,
     likewise serial, since it drives the same hardware.
     """
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
@@ -1522,14 +1521,14 @@ def preflight(
                 package_dir.name for package_dir in changed
             )
         # When changed is None (infrastructure change or no diff), all
-        # packages are considered "changed" — leave elevated_package_names
+        # packages are considered "changed".  Leave elevated_package_names
         # as None so the threshold applies everywhere.
 
     # version-check and api-check need a base ref to diff against.
     # If origin/main isn't reachable (detached HEAD, no remote, etc.),
     # skip them with a warning rather than crashing preflight.  We
     # decide reachability here in the parent so the parallel block
-    # never sees an unreachable phase — the skip line prints in the
+    # never sees an unreachable phase.  The skip line prints in the
     # per-phase ordering below.
     base_reference = "origin/main"
     can_diff = is_ref_reachable(base_reference)
@@ -1624,7 +1623,7 @@ def preflight(
         return parallel_result
 
     # Functional tests on real hardware run **after** the parallel
-    # block and **serially** between themselves — both phases drive
+    # block and **serially** between themselves: both phases drive
     # the same boards via devices.yml defaults, so concurrent access
     # would deadlock.  See Decision 0048.
     if with_functional:
@@ -1640,7 +1639,7 @@ def preflight(
                 return result
 
     # The on-device unit sweep also drives the boards, so it runs
-    # serially here too — after functional, never concurrently.
+    # serially here too, after functional, never concurrently.
     if with_device_unit:
         print("== test-unit-on-device ==")
         result = test_unit_on_device()
@@ -1651,11 +1650,11 @@ def preflight(
     total_tests = _tally_pytest_counts(dispatcher.captured_outputs())
     if total_tests > 0:
         print(
-            f"Preflight passed — required CI checks should pass.  "
+            f"Preflight passed.  Required CI checks should pass.  "
             f"{total_tests} tests ran across all phases.",
         )
     else:
-        print("Preflight passed — required CI checks should pass.")
+        print("Preflight passed.  Required CI checks should pass.")
     return 0
 
 
@@ -1718,7 +1717,7 @@ def _ensure_unix_port_binary(
     """Resolve or build the unix-port binary, returning a shell exit code.
 
     Mirrors the auto-prepare-on-first-use behavior the old
-    ``_test_runtime_compat`` helper provided — the plugin can't build
+    ``_test_runtime_compat`` helper provided: the plugin can't build
     binaries itself, so the CLI wrapper does it before delegating.
     Returns 0 on success, non-zero when preparation failed.
     """
@@ -1833,7 +1832,7 @@ def test_circuitpython(
 ) -> int:
     """Run unix-port unit tests under the CircuitPython binary.
 
-    Thin wrapper — see :func:`test_micropython` for the shape.
+    Thin wrapper: see :func:`test_micropython` for the shape.
     """
     from prepare_circuitpython import prepare_circuitpython
     from shared import resolve_circuitpython_binary
@@ -1908,15 +1907,15 @@ def _run_parallel_phases(
 ) -> tuple[int, str | None]:
     """Run *phases* concurrently, routing output through *dispatcher*.
 
-    Each phase callable receives a per-phase :class:`_Sink`; the sink
+    Each phase callable receives a per-phase :class:`_Sink`.  The sink
     forwards every line to the dispatcher (which decides what to do
-    with it — buffer, prefix-and-print, or render in a status block)
+    with it: buffer, prefix-and-print, or render in a status block)
     and also accumulates the full transcript on the sink object so the
     runner can hand it back to the dispatcher on phase completion.
 
     The dispatcher's lifecycle methods (``start`` / ``phase_started``
-    / ``phase_done`` / ``finish``) are invoked from worker threads;
-    implementations are expected to serialize their own output with a
+    / ``phase_done`` / ``finish``) are invoked from worker threads.
+    Implementations are expected to serialize their own output with a
     lock.
 
     Args:
@@ -1924,11 +1923,11 @@ def _run_parallel_phases(
             :class:`_Sink` and returns the phase's exit code.
         dispatcher: Routes phase events + lines to the user.
         max_workers: Cap on concurrent phases.  ``None`` (default) is
-            ``len(phases)`` — every phase runs at once.  Pass an
+            ``len(phases)``, so every phase runs at once.  Pass an
             integer to throttle for CPU / subprocess oversubscription.
 
     Returns:
-        ``(exit_code, failing_label)`` — first non-zero exit code in
+        ``(exit_code, failing_label)``: first non-zero exit code in
         submission order paired with its phase label, or ``(0, None)``
         when every phase succeeded.  The label lets callers print
         ``Preflight failed at: <label>``-style summaries that survive
@@ -1977,7 +1976,7 @@ def _subcommand_phase_factory(
     """Build a phase that subprocess-runs ``python scripts/run.py <args>``.
 
     The child runs with ``CHUMICRO_RAW_OUTPUT=1`` in its environment so
-    its own dispatcher resolves to :class:`_RawDispatcher` — the child
+    its own dispatcher resolves to :class:`_RawDispatcher`.  The child
     prints raw lines to its stdout, and our ``stream_subprocess`` reads
     them line-by-line and routes them through this phase's sink, where
     the parent's dispatcher decides how to render them (buffer, prefix,
@@ -1985,16 +1984,14 @@ def _subcommand_phase_factory(
 
     Subprocess re-invocation (rather than an in-process call) keeps
     each phase's resource footprint isolated and lets us cleanly
-    capture *all* of the phase's output at the fd level — the
+    capture *all* of the phase's output at the fd level.  The
     in-process alternative would have to thread sinks through every
-    helper that prints.  Decision 0048 chose the same shape (then for
-    output-isolation reasons that this refactor solves differently);
-    the design persists because per-phase isolation still has value.
+    helper that prints.
 
     Args:
         label: Phase header (used in failure banners).
         subcommand_args: Arguments to append after ``[python,
-            "scripts/run.py"]`` — e.g. ``["lint"]`` or ``["test",
+            "scripts/run.py"]``, e.g. ``["lint"]`` or ``["test",
             "--all", "--coverage-threshold", "94"]``.
     """
     command = [PYTHON, "scripts/run.py", *subcommand_args]
@@ -2033,8 +2030,8 @@ def _tally_pytest_counts(captured_outputs: dict[str, str]) -> int:
     ``test-scripts``) and the rolled-up phase summary that
     :func:`_format_pytest_phase_summary` emits (``<phase>: N passed
     across M libraries in Xs``).  Counts every match so the end-of-run
-    total reflects all tests actually executed — host CPython +
-    MicroPython unix-port + CircuitPython unix-port.
+    total reflects all tests actually executed: host CPython plus
+    MicroPython unix-port plus CircuitPython unix-port.
 
     Returns ``0`` when no pytest result lines are found (e.g. the
     dispatcher doesn't buffer output, like the live interleave mode).
@@ -2078,7 +2075,7 @@ def test_functional(
     Composes :func:`test_libraries_functional` (library code on
     connected MCUs) and :func:`test_workbench_functional` (host-side
     CPython tests that drive a board).  Both phases use ``devices.yml``
-    defaults — for narrower runs, call the individual commands directly.
+    defaults.  For narrower runs, call the individual commands directly.
     """
     steps: list[tuple[str, Callable[[], int]]] = [
         ("test-libraries-functional", test_libraries_functional),
@@ -2114,7 +2111,7 @@ def test_libraries_functional(
     Thin wrapper that invokes ``pytest libraries/<name>/functional_tests/``
     with the ``--chumicro-*`` flags the ``chumicro-pytest-device``
     plugin exposes.  The plugin owns collection, routing, transport
-    caching, and the PR-summary block — the IDE play-button path
+    caching, and the PR-summary block.  The IDE play-button path
     uses exactly the same hooks, so CLI and IDE runs are byte-for-byte
     equivalent in behavior (device selection, mode overrides,
     reporting).
@@ -2134,7 +2131,7 @@ def test_libraries_functional(
             defaults when omitted.
 
     Returns:
-        The pytest exit code — ``0`` on all-pass, ``1`` on failures,
+        The pytest exit code: ``0`` on all-pass, ``1`` on failures,
         ``2`` for configuration problems (unknown library, collection
         errors).
     """
@@ -2225,11 +2222,11 @@ def _library_has_cross_runtime_unit_suite(library_dir: Path) -> bool:
     markers put it in the device lane: not CPython-only
     (``__chumicro_runtimes__ = ("cpython",)``) and not host-only
     (``__chumicro_host_only__ = True``).  The lane is read via the
-    shared ``chumicro_deploy`` marker predicate — the same one the
-    pytest-device collector uses — so this orchestration pre-filter
+    shared ``chumicro_deploy`` marker predicate, the same one the
+    pytest-device collector uses, so this orchestration pre-filter
     and the collector never disagree (no duplicated filename rule).
     """
-    from chumicro_deploy import (  # noqa: PLC0415 — deferred heavy import
+    from chumicro_deploy import (  # noqa: PLC0415 - deferred heavy import
         is_host_only_test,
         read_runtime_marker,
     )
@@ -2245,7 +2242,7 @@ def _library_has_cross_runtime_unit_suite(library_dir: Path) -> bool:
             name == "circuitpython" or name.startswith("micropython")
             for name in marker
         ):
-            # CPython-only (no device runtime in the marker) — not swept.
+            # CPython-only (no device runtime in the marker), not swept.
             continue
         return True
     return False
@@ -2255,10 +2252,10 @@ def _library_pip_name(library_dir: Path) -> str:
     """Return the library's ``[project].name`` (the requires_flash key).
 
     Falls back to the ``chumicro-<dir>`` convention if the pyproject is
-    unreadable — only used to decide whether the resolution unit is
+    unreadable.  Only used to decide whether the resolution unit is
     itself in the flagged set, so the convention is a safe default.
     """
-    import tomllib  # noqa: PLC0415 — deferred; this task is rarely run
+    import tomllib  # noqa: PLC0415 - deferred; this task is rarely run
 
     pyproject = library_dir / "pyproject.toml"
     try:
@@ -2282,19 +2279,19 @@ def test_unit_on_device(
     For each library, resolves the deploy mode through the one shared
     policy with **own-src** ``staged_files`` scoping (a dependency's
     data file must not poison a light dependent's suite) and the full
-    transitive ``requires_flash`` closure; then groups libraries by
+    transitive ``requires_flash`` closure, then groups libraries by
     resolved mode and runs each group as one single-mode
     ``--target device-unit`` pytest session per runtime.  A light
-    library stays in the fast RAM session; a ``requires_flash`` or
-    data-file library lands in a flash session — only that library's
-    suite switches, not the whole sweep.
+    library stays in the fast RAM session.  A ``requires_flash`` or
+    data-file library lands in a flash session, where only that
+    library's suite switches, not the whole sweep.
 
     The sweep's last-resort mode preference is **RAM** (its purpose is
     RAM-capable on-device validation; Decision 0047's flash-default
     footgun does not apply to a deliberate dev sweep).  ``--deploy-mode``
-    overrides that preference; unlike the functional path the sweep
+    overrides that preference.  Unlike the functional path the sweep
     does not inherit ``devices.yml``'s ``deploy_mode`` (that is tuned
-    for app-shaped functional deploys).  Behavioral pass/fail only —
+    for app-shaped functional deploys).  Behavioral pass/fail only,
     no coverage gating (``coverage.py`` cannot trace MP / CP bytecode).
 
     Args:
@@ -2303,11 +2300,11 @@ def test_unit_on_device(
         micropython_device: Override the MicroPython target device ID.
         circuitpython_device: Override the CircuitPython target ID.
         deploy_mode: Override the RAM preference for every library
-            (``ram`` / ``flash``); the per-library rule still applies.
+            (``ram`` / ``flash``).  The per-library rule still applies.
         library: Limit the sweep to one library's unit suite.
         per_file: Soft-reset before each test *file* (not just each
             library) in flash/copy sessions, so a large class-organized
-            module runs on a fresh interpreter.  Opt-in — slower; for
+            module runs on a fresh interpreter.  Opt-in, slower, for
             large suites on a 256 KB board.  No-op for RAM sessions
             (they already reset per file).
 
@@ -2316,7 +2313,7 @@ def test_unit_on_device(
         problems.  Cleanly returns ``0`` when no board is configured
         for a target runtime (matches the functional path).
     """
-    from chumicro_deploy import (  # noqa: PLC0415 — deferred heavy import
+    from chumicro_deploy import (  # noqa: PLC0415 - deferred heavy import
         DeviceCaps,
         DeviceConfigError,
         find_libraries_requiring_flash,
@@ -2457,8 +2454,8 @@ def test_workbench_functional(
     Counterpart to :func:`test_libraries_functional` for workbench packages.  Each
     ``workbench/<name>/functional_tests/`` directory is a plain
     host-side pytest suite that drives a connected board through the
-    public ``chumicro_deploy`` API (or each workbench's own entrypoint)
-    — no test-harness plugin routes these, since workbench code is
+    public ``chumicro_deploy`` API (or each workbench's own entrypoint).
+    No test-harness plugin routes these, since workbench code is
     CPython-only and talks to hardware itself.
 
     Device selection happens inside each suite's ``conftest.py``
@@ -2520,10 +2517,10 @@ def test_workbench_functional(
     if keyword_parts:
         extra_args.extend(["-k", " and ".join(keyword_parts)])
 
-    # Unlike host-only ``test``, this task does not pass ``-W error``
-    # — hardware-interacting tests routinely surface warnings from
+    # Unlike host-only ``test``, this task does not pass ``-W error``.
+    # Hardware-interacting tests routinely surface warnings from
     # upstream libraries (mpremote's mount/unmount leaves a file
-    # finalizer; pyserial's cleanup) that are out of our control.
+    # finalizer, pyserial's cleanup) that are out of our control.
     # Matches ``test-libraries-functional``'s behavior for the same reason.
     first_failure = 0
     environment = pythonpath_environment()
@@ -2681,7 +2678,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("sync-ide", help="regenerate IDE configuration files")
     subparsers.add_parser("lint", help="run Ruff across the workspace")
     # ``add-device`` is a pass-through shim around ``chumicro-workspace
-    # add-device`` — keeps the mono-repo's ``run.py`` as the single
+    # add-device``.  Keeps the mono-repo's ``run.py`` as the single
     # entry-point contributors learn while reusing the workspace
     # package's hardware-probe + three-zone-aware writer.
     # ``parse_known_args`` semantics: every argv after ``add-device``
