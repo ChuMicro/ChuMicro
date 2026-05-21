@@ -57,7 +57,7 @@ Patterns that appear in 3+ libraries are infrastructure candidates.  Look for:
 * **Repeated configuration patterns.**  Multiple libraries with `<X>Config.from_dict()`.  Already addressed by `chumicro-config` per Decision 0036; verify every library follows that decision.
 * **Repeated test-fixture shapes.**  If every networking library's `functional_tests/conftest.py` is structurally identical except for which library is being tested, the conftest is infrastructure.
 * **Repeated boilerplate** in scaffolders / generators / config readers.  Check `scripts/new_library_scaffold.py` and adjacent generator scripts under `scripts/` for ownership of this kind of work.
-* **Scaffold-emitted files that drift after copy.**  `scripts/new_library_scaffold.py` (and similar generators) emit files into each new library at creation time.  Once copied, the destinations drift independently — the scaffold loses its "canonical source" claim the moment two leaves disagree.  Detect with `find libraries -path '*/<subpath>' -exec md5 -q {} \;` (or equivalent): bytes-identical across N libraries + drifted in M others is the canonical scaffold-drift fingerprint.  Concrete example surfaced by `/audit-comments` routing: `libraries/{sockets,http_server,websockets,ntp}/examples/helpers.py` are byte-identical; `mqtt` and `requests` already drifted.  The fix is a workspace-level decision — see "Decision space for cross-library consolidation findings" below.
+* **Scaffold-emitted files that drift after copy.**  `scripts/new_library_scaffold.py` (and similar generators) emit files into each new library at creation time.  Once copied, the destinations drift independently — the scaffold loses its "canonical source" claim the moment two leaves disagree.  Detect with `find libraries -path '*/<subpath>' -exec md5 -q {} \;` (or equivalent): bytes-identical across N libraries + drifted in M others is the scaffold-drift fingerprint.  Concrete example surfaced by `/audit-comments` routing: `libraries/{sockets,http_server,websockets,ntp}/examples/helpers.py` are byte-identical; `mqtt` and `requests` already drifted.  The fix is a workspace-level decision — see "Decision space for cross-library consolidation findings" below.
 
 ### 3. Library-shape candidates
 
@@ -73,7 +73,7 @@ These are the highest-impact and lowest-frequency findings.  When you see one, c
 When a routed finding (cross-library duplication, scaffold-emitted drift, promote candidate, sibling-cohesion divergence) lands here, the proposal must lay out the user's actual choices.  A "promote to `<where>`" hand-wave is underspecified — the four real options are:
 
 * **(a) shared package** — extract the pattern into a `support/<name>/` package (or a new `libraries/<name>/` if it earns library status); each callsite imports rather than copies.  Best when the pattern has stable internal shape and 3+ consumers.
-* **(b) scaffold + sync** — keep a copy per library, but make the scaffold the canonical source and add a drift check (preflight lint or pre-commit hook) that fails when the leaves disagree with the canonical.  Best when each leaf legitimately needs a local copy (examples, READMEs that ship with the package) and a shared import would couple too hard.
+* **(b) scaffold + sync** — keep a copy per library, but make the scaffold the source of truth and add a drift check (preflight lint or pre-commit hook) that fails when the leaves diverge.  Best when each leaf legitimately needs a local copy (examples, READMEs that ship with the package) and a shared import would couple too hard.
 * **(c) documented contract** — let each library implement independently, but document the contract (an ADR or a `plans/patterns.md` entry) that all implementations must satisfy.  Best when the *shape* matters more than the implementation (state-machine names, return types, error taxonomies).
 * **(d) accept the drift** — the duplication is small, the consequences of divergence are minimal, the cost of consolidation exceeds the cost of carrying N copies.  Record the rationale so future audits don't re-litigate the question.
 
@@ -217,7 +217,7 @@ PROPOSALS (workstream candidates — for plans/next-up.md):
   promote /  <pattern> appears in libraries/{wifi,mqtt,requests}/.  Decision space
   consolidate (from §"Decision space for cross-library consolidation findings"):
                (a) shared support package — extract to support/<name>/
-               (b) scaffold + sync       — canonical in scripts/new_library_scaffold.py
+               (b) scaffold + sync       — source of truth in scripts/new_library_scaffold.py
                                            + drift check (preflight or pre-commit)
                (c) documented contract   — each library implements; ADR documents shape
                (d) accept                — record rationale; carry the duplication
@@ -227,7 +227,7 @@ PROPOSALS (workstream candidates — for plans/next-up.md):
                (a) /new-library covers libraries/<name>/; support/<name>/ is hand-rolled
                    (no skill currently scaffolds support packages) + cross-library import
                    edits as a focused agent task.
-               (b) edit scripts/new_library_scaffold.py to be the canonical source +
+               (b) edit scripts/new_library_scaffold.py to be the source of truth +
                    add a drift check (workbench/checks/ rule or pre-commit hook).
                    No skill currently fits; focused agent task.
                (c) /new-decision to author the ADR + per-library docstring or impl
