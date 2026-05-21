@@ -76,14 +76,10 @@ _RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
 def _resolve_ticks_ms():
     """Pick the best raw ms tick source available on this runtime.
 
-    Resolution order matches ``chumicro_timing.ticks._resolve_ticks_ms``:
-    ``supervisor.ticks_ms`` (CP 7+) > ``time.ticks_ms`` (MP) >
-    ``time.monotonic_ns`` > ``time.monotonic`` (final fallback).
-    Reimplemented inline so example helpers don't depend on
-    ``chumicro_timing`` (examples can only import their owning
-    library + its declared deps).  Not every library declares
-    ``chumicro_timing`` (``chumicro-sockets`` doesn't, and its
-    ``udp_echo_client.py`` example still needs ``ticks_ms``).
+    Resolution order: ``supervisor.ticks_ms`` (CP 7+) >
+    ``time.ticks_ms`` (MP) > ``time.monotonic_ns`` >
+    ``time.monotonic`` (final fallback).  Matches
+    ``chumicro_timing.ticks._resolve_ticks_ms``.
     """
     try:
         import supervisor  # type: ignore[import-not-found]
