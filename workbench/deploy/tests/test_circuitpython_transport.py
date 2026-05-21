@@ -2256,7 +2256,7 @@ class TestDeployFiles:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """clean=False (legacy additive) leaves settings.toml + stays quiet."""
+        """clean=False (additive scope) leaves settings.toml + stays quiet."""
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
         (drive / "settings.toml").write_text("WIFI_SSID = 'board-owned'\n")
@@ -2839,7 +2839,7 @@ class TestFormatProbeError:
 
     def test_eacces_keeps_legacy_not_found_or_not_writable(self) -> None:
         # Stale Finder-eject mounts surface as EACCES on the probe.
-        # The classifier needs the legacy phrase to route them to
+        # The classifier needs the wrap phrase to route them to
         # CIRCUITPY_DRIVE_MISSING (not FLASH_COPY_FAILED).
         error = PermissionError(errno.EACCES, "Permission denied")
         message = _format_probe_error(Path("/Volumes/CIRCUITPY"), error)

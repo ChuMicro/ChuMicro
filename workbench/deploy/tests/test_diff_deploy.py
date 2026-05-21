@@ -135,7 +135,7 @@ class TestDeployerDeployDiff:
             on_file_deleted=deleted.append,
         )
         assert result.success
-        # Stale file deleted; shared file replaced; new file added.
+        # Stale file deleted, shared file replaced, new file added.
         assert deleted == ["/lib/old_project.py"]
         assert transport.device_files["/code.py"] == b"# new deploy"
         assert transport.device_files["/lib/shared.py"] == b"shared v2"

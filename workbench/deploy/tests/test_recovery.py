@@ -250,7 +250,7 @@ def test_classify_io_error_wins_over_circuitpy_drive_wrap() -> None:
 def test_classify_pure_circuitpy_missing_still_routes_to_drive_kind() -> None:
     # A message with no flash-state signal should still classify as
     # CIRCUITPY_DRIVE_MISSING.  Locks in the "drive-state wins, but
-    # the legacy wrap path is unaffected" contract.
+    # the wrap path is unaffected" contract.
     error = CircuitpythonTransportError(
         "CIRCUITPY drive not found: /Volumes/CIRCUITPY"
     )
@@ -1427,7 +1427,7 @@ class TestReportFailureWithPortHolders:
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """No holders detected (e.g., USB unplug) → no diagnosis
-        section, just the canonical recovery steps.
+        section, just the default recovery steps.
         """
         from chumicro_deploy import recovery  # noqa: PLC0415
 
@@ -1453,7 +1453,7 @@ class TestReportFailureWithPortHolders:
             interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
-        # No diagnosis section; canonical recovery hints still present.
+        # No diagnosis section; default recovery hints still present.
         assert "is currently held by" not in joined
         assert "Close any app" in joined
 
@@ -1461,7 +1461,7 @@ class TestReportFailureWithPortHolders:
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Best-effort: if diagnose_port_holders raises, swallow it
-        and fall through to the canonical recovery steps.
+        and fall through to the default recovery steps.
         """
         from chumicro_deploy import recovery  # noqa: PLC0415
 
@@ -1488,7 +1488,7 @@ class TestReportFailureWithPortHolders:
             interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
         joined = "\n".join(lines)
-        # No diagnosis section emitted; canonical hints still present.
+        # No diagnosis section emitted; default hints still present.
         assert "is currently held by" not in joined
         assert "Close any app" in joined
 
