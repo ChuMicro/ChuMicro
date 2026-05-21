@@ -15,14 +15,12 @@ Example::
     fake_wifi.tick()
     assert fake_wifi.state == "connected"
 
-This module hosts both the test fakes (``FakeWifi``,
-``FakeWifiAdapter``) and the CPython-default adapter the production
-``WifiService`` falls back to when no real runtime adapter applies.
-The ``__chumicro_test_support__`` marker below keeps the file out of
-every bundle and every product / app / functional device deploy, so
-the fakes and the CPython-default adapter stay host-side — exactly
-where they're needed (the on-device unit sweep is the one path that
-stages it; CPython is a host-test seam, not a deploy target).
+This module hosts the test fakes (``FakeWifi``,
+``FakeWifiAdapter``) plus the CPython-default adapter that
+``WifiService`` falls back to when no runtime-specific adapter
+applies.  The ``__chumicro_test_support__`` marker below keeps the
+file off device deploys, except for the on-device unit sweep that
+stages it to exercise the fakes on real hardware.
 """
 
 #: Source bundle / sdist only -- never lands on a device.

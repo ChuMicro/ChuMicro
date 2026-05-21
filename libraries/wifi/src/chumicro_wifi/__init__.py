@@ -1,6 +1,6 @@
 """Unified wifi supervisor across CircuitPython, MicroPython, and CPython.
 
-Library is the sole wifi supervisor on every runtime — no
+The library is the sole wifi supervisor on every runtime.  No
 ``CIRCUITPY_WIFI_*`` keys, no firmware-level auto-reconnect.
 
 Public API::
@@ -24,11 +24,12 @@ For tests + downstream library tests::
 
     from chumicro_wifi.testing import FakeWifi
 
-The package-level surface is eager (3 imports); per-runtime adapter
-selection happens lazily inside :func:`service._select_adapter` via
-named ``from X import Y`` — the only form that works under
-CircuitPython's RAM-mode class-as-module stub (PEP 562 module-level
-``__getattr__`` is silently bypassed by that stub).
+The three names above import eagerly.  Per-runtime adapter
+selection is deferred to :func:`service._select_adapter`, which
+lazy-imports the substrate-specific module with a named
+``from X import Y`` inside the function body.  Module-level PEP 562
+``__getattr__`` lazy attrs do not work here: CircuitPython's
+RAM-mode class-as-module stub silently bypasses them.
 """
 
 from chumicro_wifi.config import WifiConfig
