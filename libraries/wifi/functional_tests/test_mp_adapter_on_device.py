@@ -118,11 +118,5 @@ def test_disconnect_after_configure_is_safe() -> None:
 
 
 def test_pm_constant_value_matches_cyw43_disable_magic() -> None:
-    """``CYW43_PM_DISABLE`` is the published magic value for power-save off.
-
-    Confirms drift hasn't crept into the constant.  Value comes
-    from CYW43 vendor docs; community measurements confirm the
-    responsiveness improvement.  Runs on every board (the constant
-    isn't stack-gated; the assertion is cheap to keep portable).
-    """
+    """Pin ``CYW43_PM_DISABLE`` against accidental drift."""
     assert CYW43_PM_DISABLE == 0xA11140

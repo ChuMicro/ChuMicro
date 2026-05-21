@@ -1,9 +1,7 @@
 """``WifiService`` — state machine + reconnect supervisor.
 
-Library is the sole supervisor on every runtime — no
-``CIRCUITPY_WIFI_*`` keys, no firmware-level auto-reconnect.  This
-class drives the substrate adapter and tracks state in the runner's
-tick loop.
+Drives the substrate adapter through connect, monitor, and
+reconnect, and tracks state in the runner's tick loop.
 
 State machine (``WifiState`` constants)::
 
@@ -45,13 +43,13 @@ class WifiState:
 def _select_adapter():
     """Pick the runtime-appropriate adapter.
 
-    CP / MP branches lazy-import the substrate-specific module so the
-    board only parses the adapter it actually uses.  ``MpWifiAdapter``
-    auto-detects ESP-IDF vs CYW43 internally, so the dispatch here
-    is a clean three-way (CP / MP / fake).  CPython falls back to
-    ``FakeWifiAdapter`` from :mod:`chumicro_wifi.testing` — testing.py
-    is host-only, but the CPython branch is the only place the
-    fallback fires.
+    CP and MP branches lazy-import the substrate-specific module so
+    a board only parses the adapter it actually uses.
+    ``MpWifiAdapter`` auto-detects ESP-IDF vs CYW43 internally, so
+    the dispatch here is a clean three-way (CP / MP / fake).
+    CPython falls back to ``FakeWifiAdapter`` from the host-only
+    :mod:`chumicro_wifi.testing` module, which is fine because the
+    fallback only fires on the host.
     """
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path

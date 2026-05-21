@@ -1,38 +1,29 @@
-"""MicroPython ``network.WLAN`` adapter — covers both ESP-IDF and CYW43 stacks.
+"""MicroPython ``network.WLAN`` adapter for ESP-IDF and CYW43 wifi stacks.
 
-Wraps ``network.WLAN(network.STA_IF)`` on either MicroPython wifi
-stack.  The substrate API itself is identical between the two; the
-two stack-specific knobs the adapter applies are:
+Wraps ``network.WLAN(network.STA_IF)`` on either stack.  The
+substrate API is identical between the two, so one class covers
+both.  Two stack-specific knobs are applied conditionally:
 
-* **ESP-IDF stack** (ESP32, S2, S3, C3, C6, …): after the first
-  successful association, calls ``wlan.config(reconnects=0)`` to
-  disable the firmware-level auto-reconnect supervisor, leaving
-  ``WifiService`` as the sole reconnect driver.
-* **CYW43 stack** (Pi Pico W, …): when ``WifiConfig.power_save``
-  is ``False`` (default), calls ``wlan.config(pm=0xa11140)`` at
-  configure time to disable CYW43 idle power-save (eliminates
-  ~30-100 ms tick spikes on chip wake-up).  CYW43 has no firmware
-  reconnect supervisor, so no ``reconnects`` knob is issued.
+* **ESP-IDF** (ESP32, S2, S3, C3, C6, …): after the first
+  successful connect, ``wlan.config(reconnects=0)`` disables the
+  firmware-level auto-reconnect supervisor so ``WifiService``
+  drives retries.
+* **CYW43** (Pi Pico W, …): at configure time, when
+  ``WifiConfig.power_save`` is ``False`` (default),
+  ``wlan.config(pm=0xa11140)`` disables CYW43 idle power-save
+  (eliminates ~30-100 ms tick spikes on chip wake-up).  CYW43
+  has no firmware reconnect supervisor, so no ``reconnects``
+  knob is issued.
 
-Stack detection at construction time matches the runtime's machine
-identifier against :data:`CYW43_MACHINES` — a positive whitelist of
-known-CYW43 board identifiers.  The identifier comes from
-``sys.implementation._machine`` (present on MicroPython and
-CircuitPython, including unix-port host builds), falling back to
-``os.uname().machine`` on CPython where ``_machine`` is absent.
-Anything outside the whitelist (today's ESP boards + future
-unknowns) falls through to ``"espidf"``, where the ESP-side knob
-has its own try/except guard so it no-ops cleanly on chips that
-don't expose it.  New CYW43-bearing boards extend
-:data:`CYW43_MACHINES` rather than relying on the exception path.
-
+Stack detection lives in :meth:`MpWifiAdapter._detect_stack`.
 Tests inject the stack explicitly via ``stack="espidf"`` /
-``stack="cyw43"`` to exercise both branches on CPython.
+``stack="cyw43"`` to exercise both branches on CPython without
+hardware.
 
-``wlan`` defaults to a fresh ``network.WLAN(network.STA_IF)``;
-tests inject a fake to exercise the adapter contract without
-hardware.  ``name`` is ``"mp_esp32"`` for ESP-IDF or ``"mp_rp2"``
-for CYW43 — the strings users read via ``wifi.adapter.name``.
+``wlan`` defaults to a fresh ``network.WLAN(network.STA_IF)``.
+Tests inject a fake matching the substrate's surface.  ``name``
+is ``"mp_esp32"`` on ESP-IDF or ``"mp_rp2"`` on CYW43, the
+value users read via ``wifi.adapter.name``.
 """
 
 __chumicro_runtimes__ = ("micropython",)
@@ -68,14 +59,12 @@ CYW43_MACHINES = (
 def _get_machine_name():
     """Return the runtime's machine identifier, or ``""`` when unavailable.
 
-    Prefers ``sys.implementation._machine`` — present on MicroPython and
-    CircuitPython on both real boards and unix-port hosts.  On a Pi Pico W
-    MP firmware this matches what ``os.uname().machine`` returns; on
-    unix-port hosts it's the host build string (which won't match any
-    entry in :data:`CYW43_MACHINES`).  Falls back to ``os.uname().machine``
-    on CPython hosts where ``sys.implementation._machine`` is absent.
-    Returns ``""`` when neither source works, which falls through to
-    ``"espidf"`` in :meth:`MpWifiAdapter._detect_stack` (the safe default).
+    Prefers ``sys.implementation._machine``, which is present on
+    MicroPython and CircuitPython for both real boards and
+    unix-port hosts.  Falls back to ``os.uname().machine`` on
+    CPython hosts where ``_machine`` is absent.  Returns ``""``
+    when neither source works, which routes
+    :meth:`MpWifiAdapter._detect_stack` to its ``"espidf"`` default.
     """
     machine = getattr(sys.implementation, "_machine", None)
     if machine is not None:
@@ -119,15 +108,14 @@ class MpWifiAdapter(WifiAdapter):
 
     @staticmethod
     def _detect_stack():
-        """Return ``"cyw43"`` if the runtime reports a known CYW43 board.
+        """Return ``"cyw43"`` for known CYW43 boards, ``"espidf"`` otherwise.
 
-        Reads the machine identifier via :func:`_get_machine_name` and
-        falls through to ``"espidf"`` for everything outside
-        :data:`CYW43_MACHINES` — ESP-side handling has its own
-        try/except guards so a misclassified non-ESP board still
-        operates safely (the ESP-specific knob no-ops cleanly on
-        chips that don't expose it).  Extend :data:`CYW43_MACHINES`
-        when a new CYW43-bearing board appears.
+        Matches the runtime's machine identifier (via
+        :func:`_get_machine_name`) against :data:`CYW43_MACHINES`.
+        Misclassification toward ``"espidf"`` is safe because the
+        ESP-specific config knob no-ops on chips that don't expose
+        it.  Extend :data:`CYW43_MACHINES` when a new CYW43-bearing
+        board appears.
         """
         if _get_machine_name() in CYW43_MACHINES:
             return "cyw43"

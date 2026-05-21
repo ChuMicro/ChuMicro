@@ -1,12 +1,12 @@
 """CircuitPython ``wifi.radio`` adapter.
 
-Wraps the native ``wifi.radio`` singleton.  The library is the sole
-supervisor — the workspace template's ``settings.toml`` omits
-``CIRCUITPY_WIFI_*`` keys so CP's firmware auto-connect path never
-fires; this adapter drives the connect itself.
+Wraps the native ``wifi.radio`` singleton.  The workspace template
+omits ``CIRCUITPY_WIFI_*`` keys from ``settings.toml``, so CP's
+firmware auto-connect never fires and this adapter drives the
+connect path itself.
 
-``radio`` defaults to the live ``wifi.radio`` singleton; tests inject
-a fake to exercise the adapter contract without hardware.
+``radio`` defaults to the live ``wifi.radio`` singleton.  Tests
+inject a fake to exercise the adapter contract without hardware.
 """
 
 __chumicro_runtimes__ = ("circuitpython",)
