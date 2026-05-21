@@ -832,15 +832,10 @@ class FrameParser:
         self.had_mask = False
         self._payload_length = 0
         self._mask_key = b""
-        # Steady-state payload buffer reused across frames.  Frames whose
-        # payload fits in ``payload_buffer_size`` reuse the buffer
-        # (zero alloc per frame).  Tier-2 frames fall back to a
-        # one-shot ``bytearray(payload_length)`` that gets dropped on
-        # the next :meth:`reset`.  Tier-3 frames stay in the steady
-        # buffer and discard.  ``_payload_view`` is the cached
-        # memoryview so per-write slice indexing doesn't construct a
-        # fresh view object every call; refreshed only when ``_payload``
-        # rebinds to a one-shot oversized buffer.
+        # Cache the memoryview slice over the steady-state buffer so
+        # per-write indexing doesn't construct a fresh view object every
+        # call.  Refreshed only when ``_payload`` rebinds to a one-shot
+        # tier-2 buffer.
         self._payload_buffer = bytearray(payload_buffer_size)
         self._payload_buffer_view = memoryview(self._payload_buffer)
         self._payload_capacity = payload_buffer_size
