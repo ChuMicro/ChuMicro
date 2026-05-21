@@ -51,10 +51,7 @@ Deploy with ``chumicro-workspace``::
     chumicro-workspace deploy-example websockets client --device <id>
 """
 
-#: Cross-runtime — wifi-up via :mod:`helpers` dispatches per
-#: ``sys.implementation.name`` (CP / MP) and the websocket client
-#: is pure-Python.  The marker tells :func:`scripts.verify_examples`
-#: + ``deploy-example`` to allow this file on either runtime.
+#: Tooling reads this marker to allow the example on either runtime.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
 from chumicro_websockets import WebSocketClient, WebSocketState
