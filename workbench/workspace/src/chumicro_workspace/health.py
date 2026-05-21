@@ -263,8 +263,9 @@ def check_python_version() -> HealthFinding:
 def _project_app_path(workspace: WorkspaceLayout, project_name: str) -> Path | None:
     """Return the project's ``app.py`` path when present, else ``None``.
 
-    Projects using the legacy ``code.py`` / ``main.py`` entry-point
-    convention skip the ``run()`` check — they're not boot-shim shaped.
+    Projects using the ``code.py`` / ``main.py`` entry-point
+    convention skip the ``run()`` check.  They are not boot-shim
+    shaped, so there is no ``app.py`` to AST-walk.
     """
     app_path = workspace.project_dir(project_name) / "app.py"
     return app_path if app_path.is_file() else None
@@ -290,10 +291,10 @@ def _ast_defines_top_level_run(source: str) -> bool:
 def check_project_run_functions(workspace: WorkspaceLayout) -> HealthFinding:
     """Verify each boot-shim-shaped project's ``app.py`` defines ``run()``.
 
-    Projects without an ``app.py`` (legacy ``code.py`` / ``main.py``
-    layouts) are skipped — the run() contract only binds the
+    Projects without an ``app.py`` (the ``code.py`` / ``main.py``
+    layouts) are skipped.  The ``run()`` contract only binds the
     workspace-runtime boot shim.  Projects with a syntax error are
-    counted as missing run() so the user sees the failure here
+    counted as missing ``run()`` so the user sees the failure here
     rather than at deploy-time.
     """
     projects = workspace.list_projects()

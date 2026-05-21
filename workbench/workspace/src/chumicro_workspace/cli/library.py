@@ -422,11 +422,11 @@ def _apply_selected(
 ) -> int:
     """Fetch each chosen root's closure and record it; the browser's tail.
 
-    Mirrors ``library add`` minus the pin/floating/decline flags — the
-    browser already gave the user library-level selection control, so
-    the closure is pulled wholesale.  A fetch failure persists the
-    libraries recorded so far (caller decides whether to retry) and
-    returns 1.
+    Pulls the full transitive closure for each root without the
+    pin/floating/decline prompts: the browser already gave the user
+    library-level selection control, so the closure is pulled
+    wholesale.  A fetch failure persists the libraries recorded so
+    far (caller decides whether to retry) and returns 1.
     """
     table = read_curated_libraries(workspace.workspace_yaml)
     closures: list[tuple[str, list[str]]] = []
