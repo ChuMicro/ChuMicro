@@ -21,6 +21,14 @@ No code recovery needed.
 
 New data point: the scrambling can scoop in-flight working-tree edits between one agent's Pass 1 commit and its Pass 2 commit, not just files the second agent staged itself. The window is `Pass-1-commit → Pass-2-staging`.
 
+## Third incident (2026-05-20, evening)
+
+`/audit-comments workbench/deploy` Pass 1 HIGH collided with a concurrent `/audit-comments workbench/checks` Pass 2.  The checks-Pass-2 commit (`e302b5d9 audit-comments checks Pass 2 — REWRITE 5 degraded comments + 1 ## Next`) carries the deploy-Pass-1-HIGH working-tree edits as a silent rider: `tests/test_recovery.py`, `tests/test_circuitpython_transport.py`, `tests/test_firmware_url.py`, `tests/test_diff_deploy.py`, `tests/test_macos_fskit.py` — five files, ten line-pair edits dropping "legacy"/"canonical" tics and a history paragraph.  Commit subject and body describe only the checks REWRITEs.  `git log -p e302b5d9 -- workbench/deploy/tests/` shows the absorbed deploy edits.
+
+Window confirmation: the staging-add and the failing-commit on the deploy side were separated by an arrow-pair of `git restore --staged` calls (to drop unrelated pre-staged files: `plans/next-up.md`, `scripts/*`, `workbench/checks/*` that the deploy agent had inherited in its index).  Between the deploy agent's `git restore --staged` and its `git commit`, the checks agent's `git add -A` + `git commit` ran.  The deploy agent's `git commit` then ran with an empty index ("no changes added to commit") because the checks commit had already swept the deploy staged files into its own commit.
+
+Diagnostic signal: a deploy `git commit` failing with "no changes added" when `git diff` of the intended files shows the edits are still on disk (modified-but-unstaged) is the signature.  Compare against the most recent commit's `-- <your-files>` to confirm whether the work landed elsewhere.
+
 ## Infra opportunities
 
 1. **Require explicit pathspecs in the `git-commit` skill body when other Claude processes are detectable on the same checkout.**  `git add -p` or a list of files by name closes the door on accidentally folding another agent's staged delta into your commit.
