@@ -4,14 +4,13 @@ from io import BytesIO
 
 from chumicro_msgpack import pack, packb, unpack, unpackb
 
-# Tests that pin the *pure-subset* contract — exact wire bytes,
-# overflow rejection, out-of-subset decode rejection — assert against
-# ``_pure`` directly.  On a CircuitPython board the public ``packb`` /
+# Tests that pin the pure-subset contract (exact wire bytes, overflow
+# rejection, out-of-subset decode rejection) assert against ``_pure``
+# directly.  On a CircuitPython board the public ``packb`` /
 # ``unpackb`` resolve to the firmware's native ``msgpack`` C module,
-# which is full msgpack (not subset-constrained) by design (see
-# ``chumicro_msgpack.__init__``); ``_pure`` is the implementation that
-# owns the subset contract and behaves identically on every runtime,
-# so these checks stay meaningful on real hardware too.
+# which implements the full spec (not subset-constrained) by design.
+# ``_pure`` owns the subset contract and behaves identically on every
+# runtime, so these checks stay meaningful on real hardware too.
 from chumicro_msgpack._pure import packb as _pure_packb
 from chumicro_msgpack._pure import unpackb as _pure_unpackb
 from chumicro_test_harness import raises
@@ -583,13 +582,13 @@ def test_nesting_too_deep_raises() -> None:
     exhausts pystack (17 nested), so the guard fires first on every
     supported board.
     """
-    # 9 nested single-element arrays — one past _MAX_DEPTH (8).
+    # 9 nested single-element arrays, one past _MAX_DEPTH (8).
     with raises(ValueError):
         _pure_unpackb(b"\x91" * 9 + b"\x00")
 
 
 def test_moderate_nesting_still_roundtrips() -> None:
-    """The depth bound is above realistic nesting — 4 deep roundtrips fine."""
+    """The depth bound is above realistic nesting. 4 levels deep roundtrips fine."""
     value = 0
     for _ in range(4):
         value = [value]
