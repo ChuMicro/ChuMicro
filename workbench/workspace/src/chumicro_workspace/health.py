@@ -379,12 +379,11 @@ def check_serial_ports_held(workspace: WorkspaceLayout) -> HealthFinding:
 
     Walks ``devices.yml`` addresses and runs :func:`diagnose_port_holders`
     on each.  When a port has at least one holder, surfaces as a WARN
-    finding listing the PIDs + commands — typically a serial-terminal
-    app (Mu, Thonny, screen, minicom, CoolTerm, PyCharm or VS Code
-    serial console, another mpremote) the user has open against the
-    board.  A held port doesn't imply something is broken — the user
-    may be debugging — but if the next action is a deploy, the deploy
-    will fail with ``Resource busy`` until the holder is closed.
+    finding listing the PIDs and commands of the holders, typically a
+    serial-terminal app the user has open against the board.  A held
+    port doesn't imply something is broken (the user may be debugging),
+    but if the next action is a deploy, the deploy will fail with
+    ``Resource busy`` until the holder is closed.
 
     Doctor-only.
 

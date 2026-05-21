@@ -1,36 +1,9 @@
 """Build a deploy-ready FileSource for a single library example.
 
-The ``deploy-example`` front-door command ships
-``libraries/<lib>/examples/<name>.py`` to a board as ``code.py``
-(CircuitPython) or ``main.py`` (MicroPython), bringing along every
-``chumicro_*`` module the example imports under ``/lib/`` and a
-``runtime_config.msgpack`` baked from ``secrets.toml``.
-
-Defines the FileSource shape for that deploy.  The CLI just asks
-for one and hands it to ``Deployer.deploy_diff()`` like any other
-``FileSource``.
-
-The shape composes existing pieces:
-
-* ``ImportGraphSource`` walks the example's ``import`` graph and
-  resolves each module against the union of every
-  ``libraries/<name>/src`` directory.  Wrong-runtime files
-  (``__chumicro_runtimes__`` marker mismatch) drop out automatically.
-* ``WithRuntimeConfig`` writes ``secrets.toml``'s contents into
-  ``/runtime_config.msgpack`` (no per-example overrides — examples
-  read the workspace defaults verbatim) and validates the result
-  against each library's ``[tool.chumicro.config]`` manifest before
-  writing.
-
-This module adds:
-
-* Resolves the example file under ``libraries/<lib>/examples/<name>.py``.
-* Picks the on-device entrypoint name from the *runtime* arg
-  (``code.py`` for CircuitPython, ``main.py`` for MicroPython).
-* Sensible default ``output_path`` for the generated msgpack —
-  ``libraries/<lib>/examples/_generated/example_runtime_config_<lib>_<name>.msgpack``
-  using the same gitignored ``_generated/`` build-artifact convention
-  as project deploys, so it isn't committed beside the example source.
+Composes :class:`ImportGraphSource` and :class:`WithRuntimeConfig` into
+a ``FileSource`` the ``deploy-example`` CLI hands straight to
+``Deployer.deploy_diff()``.  See :func:`example_source` for the
+contract.
 """
 
 from __future__ import annotations

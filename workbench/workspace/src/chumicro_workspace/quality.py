@@ -27,10 +27,6 @@ shape validation; no execution side effects.
   win).
 * ``coverage_threshold`` is forwarded to pytest as
   ``--cov-fail-under=<n>``.
-
-Defaults match a "permissive workspace" stance: lint enabled, both
-tools active, no explicit select (use ruff's pyproject.toml config),
-no coverage gate.
 """
 
 from __future__ import annotations

@@ -106,13 +106,10 @@ def _walk_classified(
             out.append((slash_path, ProjectClassification.PROJECT))
             has_project_or_namespace = True
             continue
-        # Not a project — see if its subtree contains one.  Recurse first
-        # (collects descendants), then decide whether to label *child*
-        # itself as a namespace.
         marker = len(out)
         if _walk_classified(child, child_prefix, out):
-            # Insert the namespace entry at the marker so namespaces
-            # come before their descendants in the result.
+            # Insert the namespace entry at the marker so it sorts
+            # before its descendants in the result.
             out.insert(marker, (slash_path, ProjectClassification.NAMESPACE))
             has_project_or_namespace = True
     return has_project_or_namespace
@@ -164,11 +161,9 @@ class WorkspaceLayout:
     def shared_dir(self) -> Path:
         """Path to ``<root>/shared/`` for flat shared modules.
 
-        The lighter-weight cousin of :attr:`libraries_dir`.  Files under
-        ``shared/`` are imported by projects directly (``from shared.foo import
-        bar``) without any package scaffolding.  No tests, no version,
-        no chumicro library shape.  See :attr:`libraries_dir` for the
-        full-package alternative.
+        Files under ``shared/`` are imported by projects directly
+        (``from shared.foo import bar``) without any package scaffolding.
+        No tests, no version, no chumicro library shape.
         """
         return self.root / "shared"
 
@@ -176,11 +171,11 @@ class WorkspaceLayout:
     def libraries_dir(self) -> Path:
         """Path to ``<root>/libraries/`` for full chumicro-style library trees.
 
-        The heavier-weight cousin of :attr:`shared_dir`.  Each entry is a
-        proper chumicro library package with ``src/<name>/``, ``tests/``,
-        optional ``docs/`` and ``examples/``, ``pyproject.toml``,
-        ``VERSION``.  Created by ``chumicro-workspace new --library``.
-        Use this when the library is meant to be publishable.
+        Each entry is a proper chumicro library package with
+        ``src/<name>/``, ``tests/``, optional ``docs/`` and ``examples/``,
+        ``pyproject.toml``, ``VERSION``.  Created by
+        ``chumicro-workspace new --library``.  Use this when the library
+        is meant to be publishable.
 
         ``import_graph.build_search_paths`` includes
         ``libraries/<name>/src/`` for every entry so projects can ``import
