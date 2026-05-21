@@ -59,10 +59,9 @@ class FakeConfig:
     """Minimal ``pytest.Config`` stand-in.
 
     Carries the three surfaces the plugin reads: ``rootpath``,
-    ``stash``, and ``getoption``.  ``rootpath`` is always required:
-    pinning a default to a hard-coded workspace root silently couples
-    tests to live filesystem state.  ``getoption`` returns its
-    ``default`` for every name.
+    ``stash``, and ``getoption``.  ``rootpath`` is constructor-required
+    so tests don't accidentally couple to a real filesystem layout.
+    ``getoption`` returns its ``default`` for every name.
     """
 
     def __init__(self, rootpath: Path) -> None:

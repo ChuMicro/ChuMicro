@@ -40,12 +40,9 @@ if TYPE_CHECKING:
     from .collection import DeviceRuntimeItem
 
 
-#: Transport modes that hold a persistent interpreter across test files.
-#: Both CircuitPython ``"ram"`` (inline bootstrap) and MicroPython
-#: ``"mount"`` (mpremote ``mount_local``) reuse the same live VM from
-#: one file to the next, so ``sys.modules`` accumulates until a soft
-#: reset clears it.  Other modes copy files to flash and import fresh
-#: per call, so they don't need the inter-file reset.
+#: Transport modes that hold a persistent interpreter across test files
+#: (CircuitPython inline RAM bootstrap, MicroPython mpremote ``mount_local``).
+#: See :func:`_should_soft_reset_before_stage` for the soft-reset policy.
 _IN_MEMORY_MODES = ("ram", "mount")
 
 
@@ -184,32 +181,23 @@ class DeviceBackend:
                 f"Transport connection failed: {error}",
             ) from error
 
-        # Flash/copy modes persist files on the device filesystem.
-        # Default (no ``--per-file``): bulk-stage one library's whole
-        # test suite + src per rsync. That uses the fewest rsyncs and
-        # fits the ample flash of PSRAM boards.  ``--per-file``: stage
-        # one test file at a time, because a heavy library's *entire*
-        # suite + src + harness overflows a 491 KB Pi Pico W drive.
-        # Either way per-library/per-file scope keeps the working-set
-        # bounded and rsync ``--delete`` cleans the prior library/file
-        # off.  RAM mode embeds source inline, so it re-stages per file.
+        # Three branches by transport mode:
+        # - bulk flash/copy (default): rsync one library's full test
+        #   suite + src in a single payload. Fewest rsyncs, fits the
+        #   ample flash of PSRAM boards.
+        # - ``--per-file`` flash/copy: rsync one test file at a time
+        #   with a fresh-VM reset between files. Exists for boards
+        #   that can't fit a library's full closure on the drive (491
+        #   KB Pi Pico W CIRCUITPY is the constrained case).
+        # - RAM/mount (else branch): re-stage per file. The
+        #   persistent-interpreter soft-reset policy lives in
+        #   :func:`_should_soft_reset_before_stage`.
+        # rsync ``--delete`` cleans the prior payload off when scope
+        # changes, so the working-set stays bounded.
         is_filesystem_mode = transport.mode not in ("ram", "mount")
         if is_filesystem_mode and _session_per_file(item.session):
-            # ``--per-file`` flash: stage exactly *one* test file at a
-            # time (this file + the library src + the harness), with a
-            # fresh-VM soft reset before each file.  The bulk path
-            # below stages a library's *entire* test suite in one
-            # rsync, and a heavy library's full suite + src + harness
-            # exceeds a 491 KB Pi Pico W CIRCUITPY drive (rsync then
-            # fails ``No space left on device`` before any test runs).
-            # rsync ``--delete`` keeps the drive at src + harness +
-            # this one file (bounded, fits 491 KB) and cleans the
-            # prior file (and the prior library) off.  Re-pushing
-            # src + harness per file is the deliberate cost: ``--per-
-            # file`` exists for the constrained board, where fitting
-            # the drive matters more than rsync count.  ``prepare()``
-            # runs twice per file batch (DevicePrepareItem then
-            # DeviceRunFileItem), and the pending check fires the
+            # ``prepare()`` runs twice per file batch (DevicePrepareItem
+            # then DeviceRunFileItem), and the pending check fires the
             # reset+stage exactly once.
             batch_key = item.batch_key(device_entry)
             if cache.per_file_reset_pending(batch_key):
@@ -293,10 +281,7 @@ class DeviceBackend:
         try:
             return execute_device_bootstrap(transport, bootstrap)
         except Exception as error:
-            # Try to recover the board so the next file can run
-            # independently of this failure. If recovery itself
-            # fails, evict the transport so the next item reconnects
-            # from scratch.  Without this, every subsequent file
+            # Without recover-then-evict here, every subsequent file
             # cascade-fails because the cached transport is stuck
             # mid-raw-REPL or mid-mpremote.
             error_message = f"Device execution failed: {error}"

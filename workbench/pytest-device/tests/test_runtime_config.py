@@ -1,23 +1,16 @@
-"""Tests for ``set_runtime_config`` + the plugin's ``extra_files`` wiring.
+"""Tests for the runtime-config registration API and its msgpack encoding.
 
-Two slices:
+Two slices are covered. The ``set_runtime_config`` /
+``get_runtime_config`` round-trip on a ``pytest.Config.stash`` stand-in
+verifies that the value a conftest writes is the value the plugin
+later reads back, including the required-keys metadata. The
+``_encode_runtime_config_extra_files`` slice verifies that a ``None``
+payload yields no staged file, that a registered payload yields a
+single ``/runtime_config.msgpack`` entry whose bytes round-trip
+through the standard decoder, and that repeated calls reuse a cached
+encoding until the payload identity changes.
 
-1. ``set_runtime_config`` / ``get_runtime_config`` round-trip on a
-   ``pytest.Config.stash`` stand-in.  Confirms the conftest-side API
-   contract: the value the conftest passes is the value the plugin
-   later reads back.
-2. The plugin's ``_encode_runtime_config_extra_files`` helper.
-   ``None`` payload yields ``None`` extra_files (no staging), and a
-   registered payload yields a one-entry dict at the standard
-   ``/runtime_config.msgpack`` path with a msgpack-encoded body that
-   round-trips through the standard decoder.
-
-Hardware-side wiring (``transport.stage(extra_files=...)`` carrying
-the encoded bytes onto a real CP / MP board) is out of scope here,
-covered by ``test_extra_files_staging.py`` in
-``workbench/deploy/tests`` for the transport contract, and by the
-networking-library functional tests for end-to-end hardware
-validation.
+Hardware-side staging is out of scope here.
 """
 
 from __future__ import annotations
@@ -51,8 +44,11 @@ class TestSetRuntimeConfig:
         assert get_runtime_config(config) is None
 
     def test_overwrites_previous_payload(self) -> None:
-        """Late-binding: a fixture overwriting an earlier ``pytest_configure``
-        registration must win.  The plugin reads lazily at stage time."""
+        """A second ``set_runtime_config`` call replaces the first one.
+
+        A fixture that re-registers a payload after ``pytest_configure``
+        must win, because the plugin reads lazily at stage time.
+        """
         config = _StashConfigStub()
         set_runtime_config(config, {"wifi.ssid": "first"})
         set_runtime_config(config, {"wifi.ssid": "second"})
@@ -76,8 +72,7 @@ class TestRequiredKeys:
         assert missing_required_keys(config) == ()
 
     def test_unset_returns_empty_tuple(self) -> None:
-        """No ``set_runtime_config`` call ever made: neither payload
-        nor required-keys are stashed."""
+        """With no ``set_runtime_config`` call made, both accessors return ``()``."""
         config = _StashConfigStub()
         assert get_required_keys(config) == ()
         assert missing_required_keys(config) == ()
@@ -102,8 +97,11 @@ class TestRequiredKeys:
         assert missing_required_keys(config) == ()
 
     def test_partial_payload_returns_missing_subset_in_order(self) -> None:
-        """Declared order is preserved so the user-facing skip message
-        reads naturally."""
+        """Missing keys come back in the order they were declared.
+
+        Preserving declared order keeps the user-facing skip message
+        readable.
+        """
         config = _StashConfigStub()
         set_runtime_config(
             config,
@@ -113,8 +111,11 @@ class TestRequiredKeys:
         assert missing_required_keys(config) == ("wifi.ssid", "mqtt.broker.host")
 
     def test_none_payload_with_required_keys_means_all_missing(self) -> None:
-        """Unconfigured-creds path: ``payload=None`` plus required keys
-        means every key is "missing" because nothing's staged."""
+        """A ``None`` payload with required keys reports every key as missing.
+
+        This is the unconfigured-credentials path: nothing is staged,
+        so every required key counts as absent.
+        """
         config = _StashConfigStub()
         set_runtime_config(
             config, None, required_keys=("wifi.ssid", "wifi.password"),
@@ -122,8 +123,11 @@ class TestRequiredKeys:
         assert missing_required_keys(config) == ("wifi.ssid", "wifi.password")
 
     def test_overwriting_resets_required_keys(self) -> None:
-        """Two ``set_runtime_config`` calls: second wins, including
-        clearing required-keys back to the default ``()``."""
+        """A second call without ``required_keys`` clears the previous list.
+
+        The second registration fully replaces the first, including
+        resetting required-keys back to the ``()`` default.
+        """
         config = _StashConfigStub()
         set_runtime_config(
             config, {"wifi.ssid": "x"}, required_keys=("wifi.ssid",),
@@ -148,15 +152,17 @@ class TestEncodeRuntimeConfigExtraFiles:
         extra_files = _encode_runtime_config_extra_files(config)
         assert extra_files is not None
         assert list(extra_files.keys()) == ["/runtime_config.msgpack"]
-        # The bytes round-trip through the standard decoder, matching
-        # what ``chumicro_config.load_runtime_config()`` will read on
-        # the device.
+        # The encoded bytes round-trip through the standard decoder,
+        # matching what the device-side loader reads back.
         decoded = unpackb(extra_files["/runtime_config.msgpack"], raw=False)
         assert decoded == payload
 
     def test_explicit_none_returns_none(self) -> None:
-        """A conftest that registers ``None`` (e.g. silent-skip path on missing
-        creds) gets no extra_files staged."""
+        """An explicit ``None`` registration stages no extra files.
+
+        Conftests use this for the silent-skip path when credentials
+        are missing.
+        """
         config = _StashConfigStub()
         set_runtime_config(config, None)
         assert _encode_runtime_config_extra_files(config) is None
@@ -164,10 +170,12 @@ class TestEncodeRuntimeConfigExtraFiles:
     def test_repeated_calls_reuse_cached_bytes(
         self, monkeypatch: object,
     ) -> None:
-        """A steady payload pays one ``packb`` per pytest invocation,
-        not per stage call.  Every device sweep stages once per file
-        batch, and re-encoding the same dotted-key dict 50+ times across
-        a run is wasted work."""
+        """A steady payload encodes exactly once across many encode calls.
+
+        Each device sweep stages the file once per file batch, so
+        without caching the same dict would re-encode 50+ times per
+        run.
+        """
         from chumicro_pytest_device import session
 
         call_count = 0
@@ -190,8 +198,11 @@ class TestEncodeRuntimeConfigExtraFiles:
     def test_overwriting_payload_invalidates_cache(
         self, monkeypatch: object,
     ) -> None:
-        """A fixture overwriting the stashed dict flips ``id()`` and
-        the next call re-encodes."""
+        """Re-registering a different dict triggers a fresh encode.
+
+        The cache keys on payload identity, so a new dict object
+        forces ``packb`` to run again.
+        """
         from chumicro_pytest_device import session
 
         call_count = 0

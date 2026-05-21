@@ -33,7 +33,7 @@ def _make_device_result(
 
 
 class TestFormatPrSummaryBlock:
-    """Tests for _format_pr_summary_block: paste-ready PR markdown."""
+    """Tests for ``format_pr_summary_block``: paste-ready PR markdown."""
 
     def test_empty_results_still_renders_command_and_zero_total(self) -> None:
         """No devices run, block shows just the command and a bold zero total."""
@@ -67,13 +67,10 @@ class TestFormatPrSummaryBlock:
             command="pytest libraries/timing/functional_tests --runtime micropython",
             per_device_results=[result],
         )
-        # Header + separator + data row present.
         assert "| Device" in block
         assert "| Runtime" in block
         assert "| Duration" in block
         assert "---" in block
-        # The data row contains the identifier, runtime, mode, counts,
-        # and duration.
         data_rows = [
             line for line in block.splitlines()
             if line.startswith("| `pico-w`")
@@ -84,7 +81,7 @@ class TestFormatPrSummaryBlock:
         assert "ram" in data_row
         assert " 5 " in data_row
         assert "1.50s" in data_row
-        # Total follows the table, not embedded in it.
+        # Total renders below the table, not as a row.
         assert "**Total: 5 passed, 0 failed, 0 errors**" in block
 
     def test_multiple_devices_sum_into_bold_total(self) -> None:
@@ -101,7 +98,6 @@ class TestFormatPrSummaryBlock:
             command="pytest libraries/timing/functional_tests --runtime both",
             per_device_results=[mp_result, cp_result],
         )
-        # Both devices appear as table rows.
         data_rows = [
             line for line in block.splitlines()
             if line.startswith("| `") and ("pico-w" in line or "s2-mini" in line)
@@ -122,7 +118,7 @@ class TestFormatPrSummaryBlock:
         )
         assert "MicroPython" in block
         assert "CircuitPython" in block
-        # Internal identifiers should NOT leak into the rendered block.
+        # The internal lowercase identifiers must not leak through.
         assert "| micropython " not in block
         assert "| circuitpython " not in block
 
@@ -142,7 +138,6 @@ class TestFormatPrSummaryBlock:
             command="pytest libraries/timing/functional_tests",
             per_device_results=[result],
         )
-        # Version lives in the Runtime column, machine in the Board column.
         assert "MicroPython 1.26.0" in block
         assert "Raspberry Pi Pico W with RP2040" in block
 
@@ -164,12 +159,12 @@ class TestFormatPrSummaryBlock:
             per_device_results=[result],
         )
         assert "CircuitPython 10.1.4" in block
-        # Still a well-formed table row: | `cp` | CircuitPython 10.1.4 |  | ...
         data_row = next(
             line for line in block.splitlines()
             if line.startswith("| `cp`")
         )
-        # Exactly 8 data columns + 2 outer borders yields 9 pipes.
+        # 8 data columns plus 2 outer borders yields 9 pipes, even when
+        # the Board cell is blank.
         assert data_row.count("|") == 9
 
     def test_deploy_mode_surfaces_even_without_probe(self) -> None:
@@ -256,8 +251,7 @@ class TestFormatPrSummaryBlock:
         assert "PASS" in block
         assert "FAIL" in block
         assert "12ms" in block
-        # Per-file table should NOT appear when only one file ran
-        # (the device row + per-test table are enough).
+        # With one file, the per-test table replaces the per-file table.
         assert "per-file breakdown" not in block
 
     def test_multi_file_run_renders_per_file_table(self) -> None:
@@ -285,7 +279,7 @@ class TestFormatPrSummaryBlock:
         assert "`timing/test_ticks.py`" in block
         assert "120ms" in block
         assert "80ms" in block
-        # Test-level detail must be suppressed when multiple files run.
+        # With multiple files, the per-file table replaces per-test detail.
         assert "per-test breakdown" not in block
 
     def test_device_without_files_has_no_detail_section(self) -> None:
@@ -297,7 +291,7 @@ class TestFormatPrSummaryBlock:
         )
         assert "per-file breakdown" not in block
         assert "per-test breakdown" not in block
-        # Summary row still there.
+        # The device summary row still appears.
         assert "| `mp-one`" in block
 
 
@@ -311,10 +305,10 @@ class TestFormatMarkdownTable:
             rows=[["alpha", "1"], ["bravo", "22"]],
         )
         lines = table.splitlines()
-        # Header row and two data rows, all the same width when padded.
+        # Left-alignment pads every row to the same total width.
         row_widths = [len(line) for line in lines]
         assert len(set(row_widths)) == 1
-        # Separator is ``|  ---- |`` style: all dashes, no colons.
+        # Left-alignment renders the separator as plain dashes, no colons.
         separator = lines[1]
         assert ":" not in separator
 
@@ -325,10 +319,10 @@ class TestFormatMarkdownTable:
             rows=[["1"], ["10"]],
             alignments=["right"],
         )
-        # With the 3-char minimum column width, the separator is ``--:``.
+        # The 3-character minimum column width gives a ``--:`` separator.
         separator = table.splitlines()[1]
         assert " --: " in separator
-        # Right-aligned data rows pad on the left (numbers right-justified).
+        # Right-aligned columns pad on the left so numbers right-justify.
         data_rows = table.splitlines()[2:]
         assert "|   1 |" in data_rows[0]
         assert "|  10 |" in data_rows[1]
@@ -341,7 +335,7 @@ class TestFormatMarkdownTable:
             alignments=["center"],
         )
         separator = table.splitlines()[1]
-        # Strip the outer "| " / " |" then check the payload.
+        # Inspect the payload between the outer ``| `` and `` |`` borders.
         inner = separator[2:-2]
         assert inner.startswith(":")
         assert inner.endswith(":")
@@ -352,7 +346,7 @@ class TestFormatMarkdownTable:
             headers=["Short", "Wider header"],
             rows=[["loooooong value", "x"]],
         )
-        # Long data cell in column 0 forces the header to pad:
-        # ``| Short           | Wider header |``
+        # A wide data cell in column 0 forces the ``Short`` header to
+        # pad out to match: ``| Short           | Wider header |``.
         header_row = table.splitlines()[0]
         assert "Short           " in header_row

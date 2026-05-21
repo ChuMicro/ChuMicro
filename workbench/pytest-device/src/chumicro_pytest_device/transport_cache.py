@@ -35,18 +35,11 @@ class _TransportCache:
     def __init__(self) -> None:
         self._transports: dict[str, TransportProtocol] = {}
         self._last_staged: dict[str, tuple[str, str]] = {}
-        #: Library currently staged on each device (flash/copy modes).
-        #: Bulk staging is scoped to ONE library at a time so the
-        #: drive working-set stays bounded: a 491 KB Pi Pico W
-        #: CIRCUITPY drive can't hold every library's source plus
-        #: every library's test files at once.  When a test for a
-        #: different library runs, the next stage rsync uses
-        #: ``--delete`` to clean the prior library off the drive.
+        #: Library currently bulk-staged on each device (flash/copy modes).
+        #: See :meth:`current_staged_library` for the per-library-scope why.
         self._staged_library: dict[str, str] = {}
-        #: Batch keys whose ``--per-file`` soft reset has already
-        #: fired.  ``prepare()`` runs twice per file batch (once for
-        #: ``DevicePrepareItem``, once for ``DeviceRunFileItem``), and
-        #: only the first call should reset.
+        #: Batch keys whose ``--per-file`` soft reset has already fired.
+        #: See :meth:`per_file_reset_pending` for the prepare-runs-twice why.
         self._per_file_reset_done: set[tuple[str, str, str]] = set()
         #: Cached batch results keyed by (device_id, library, file).
         #: Value is (parsed_result_or_None, raw_output_or_error).

@@ -1903,7 +1903,13 @@ class TestDeviceClosureSourceDirs:
 
 
 class TestSessionEffectiveDeployMode:
-    """Phase-2 delegation: the closure feeds the shared resolver, once."""
+    """Tests for ``_session_effective_deploy_mode``.
+
+    Verifies that the per-device closure walk gets fed into the shared
+    ``resolve_deploy_mode`` policy, the result is memoized on the
+    session, and policy-driven mode changes (data files, flash-only
+    deps, ``supports_ram_mode=False``) surface as warnings.
+    """
 
     @staticmethod
     def _ram_device() -> DeviceEntry:
@@ -1975,8 +1981,12 @@ class TestSessionEffectiveDeployMode:
     def test_devices_yml_supports_ram_mode_false_forces_flash(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        # A pure-.py closure would otherwise stay RAM, but the per-device
-        # capability from devices.yml must still force flash loudly.
+        """A device with ``supports_ram_mode=False`` is forced to flash with a warning.
+
+        Closure is pure ``.py`` and would otherwise stay in RAM, but
+        the per-device capability from ``devices.yml`` overrides that
+        and the warning surfaces the override.
+        """
         lib = tmp_path / "light-src"
         lib.mkdir()
         (lib / "__init__.py").write_text("X = 1\n")
@@ -1997,9 +2007,13 @@ class TestSessionEffectiveDeployMode:
 
 
 class TestUnitSweepScoping:
-    """Caller-scoped staged_files: unit sweep = own-src, functional =
-    full closure, and ``requires_flash`` is always the full transitive
-    closure regardless.
+    """Tests that ``_session_effective_deploy_mode`` scopes its inputs by sweep type.
+
+    A unit sweep checks only each library's own ``src`` for staged
+    files, so a sibling library's data file does not flip the suite
+    to flash. A functional sweep checks the full transitive closure.
+    The ``requires_flash`` capability is always closure-scoped, since
+    a flash-only dependency OOMs on import regardless of sweep type.
     """
 
     @staticmethod
@@ -2071,9 +2085,12 @@ class TestUnitSweepScoping:
     def test_unit_sweep_dependency_data_file_does_not_poison(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        # Full closure carries sockets' _ca_bundle.der, but ntp's own src
-        # is pure .py.  Under unit scoping the data file must NOT flip
-        # ntp to flash. The non-poisoning acceptance.
+        """A sibling library's data file in the closure does not flip a unit sweep to flash.
+
+        The full closure carries sockets' ``_ca_bundle.der``, but ntp's
+        own src is pure ``.py``. Under unit scoping the resolver looks
+        only at own-src, so ntp stays in RAM mode.
+        """
         dep = tmp_path / "sockets-src"
         dep.mkdir()
         (dep / "_ca_bundle.der").write_bytes(b"\x30\x82")
@@ -2096,9 +2113,13 @@ class TestUnitSweepScoping:
     def test_unit_sweep_requires_flash_in_closure_still_flips(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        # Own src is clean .py, but a flash-only library sits in the
-        # transitive closure. requires_flash is always closure-scoped,
-        # so the suite still flips to flash even under unit scoping.
+        """A flash-only dep in the closure flips the suite to flash even on a unit sweep.
+
+        Own src is clean ``.py``, but a library with
+        ``requires_flash = true`` sits in the transitive closure.
+        ``requires_flash`` is closure-scoped regardless of sweep type,
+        so the resolver picks flash and warns.
+        """
         heavy = tmp_path / "libraries" / "requests"
         heavy_source = heavy / "src"
         heavy_source.mkdir(parents=True)

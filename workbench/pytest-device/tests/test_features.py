@@ -73,11 +73,12 @@ def test_read_features_marker_returns_empty_frozenset_when_explicitly_empty(
 
 
 def test_read_features_marker_does_not_execute_module(tmp_path: Path) -> None:
-    """The reader uses AST only, so device-only imports at top level
-    don't break parsing on the host."""
+    """A file with a device-only top-level import still parses on the host.
+
+    ``import esp32`` would crash on CPython if executed, so the reader
+    must walk the AST without running module code.
+    """
     target = tmp_path / "test_features_device_imports.py"
-    # ``import esp32`` would explode on CPython at import time. The
-    # AST reader must skip past it.
     target.write_text(
         "__chumicro_features__ = ('esp32',)\n"
         "import esp32  # type: ignore[import-not-found]\n"
@@ -159,10 +160,10 @@ def test_parse_feature_probe_output_drops_unknown_names() -> None:
 def test_parse_feature_probe_output_ignores_lines_outside_sentinels() -> None:
     """Print noise outside the section is ignored even if it names a known feature."""
     output = (
-        "esp32\n"  # before BEGIN, ignored
+        "esp32\n"  # before BEGIN sentinel
         "CHUMICRO_FEATURES_BEGIN\n"
         "CHUMICRO_FEATURES_END\n"
-        "esp32\n"  # after END, also ignored
+        "esp32\n"  # after END sentinel
     )
 
     assert parse_feature_probe_output(output) == frozenset()
@@ -173,7 +174,7 @@ def test_parse_feature_probe_output_handles_truncated_probe() -> None:
     output = (
         "CHUMICRO_FEATURES_BEGIN\n"
         "esp32\n"
-        # No END sentinel: connection dropped or device reset.
+        # No END sentinel, the probe stream cut off.
     )
 
     assert parse_feature_probe_output(output) == frozenset({"esp32"})
@@ -192,12 +193,10 @@ def test_parse_feature_probe_output_handles_no_sentinels_at_all() -> None:
 
 
 def test_probe_script_includes_known_feature_imports() -> None:
-    """Every entry in ``KNOWN_FEATURES`` must be probed by the script.
+    """Every entry in ``KNOWN_FEATURES`` is mentioned in the probe script.
 
-    Catches the case where someone adds a feature name to ``KNOWN_FEATURES``
-    without extending the probe script.  Without this gate, a typo
-    in the script would silently report the new feature as absent on
-    every device.
+    A ``KNOWN_FEATURES`` entry that the probe script never imports would
+    be silently reported as absent on every device.
     """
     for feature_name in KNOWN_FEATURES:
         assert feature_name in FEATURE_PROBE_SCRIPT, (
@@ -214,8 +213,11 @@ def test_probe_script_emits_begin_and_end_sentinels() -> None:
 
 
 def test_probe_script_compiles_under_cpython() -> None:
-    """The probe script must be a valid Python program, caught here so a
-    syntax error doesn't surface as a confusing device-side failure."""
+    """The probe script is a syntactically valid Python program.
+
+    Catching syntax errors host-side avoids surfacing them as a
+    confusing device-side failure during a real probe.
+    """
     compile(FEATURE_PROBE_SCRIPT, "<feature-probe>", "exec")
 
 

@@ -1,18 +1,13 @@
 """Tests for the plugin's internal device-test primitives.
 
-Coverage focuses on the helpers the plugin relies on: bootstrap
-generation, transport construction, intra-workspace source
-resolution, and deploy-mode precedence.  PR-summary rendering has
-its own test module.
+Covers the helpers the plugin relies on: bootstrap generation,
+transport construction, intra-workspace source resolution, and
+deploy-mode precedence. PR-summary rendering has its own test module.
 
 ``TestResolveLibrarySourceDirs`` exercises dependency resolution
 against a synthetic multi-library workspace materialized under
-``tmp_path`` via the ``_make_synthetic_library`` helper. No test
-reads the real on-disk state of any real chumicro library.  The
-prior version pinned ``libraries/runner`` / ``libraries/timing`` /
-``libraries/msgpack`` and silently changed behavior whenever any of
-those packages was renamed, restructured, or had its dependency
-list edited.
+``tmp_path`` via the ``_make_synthetic_library`` helper, so it stays
+independent of the on-disk layout of any real chumicro library.
 """
 
 from __future__ import annotations
@@ -184,16 +179,17 @@ class TestCreateTransport:
     def test_unsupported_runtime_raises(self) -> None:
         """Unsupported runtime should raise ValueError."""
         entry = self._make_device_entry(runtime="unknown")
-        # Override runtime since DeviceEntry doesn't validate.
+        # ``DeviceEntry.__init__`` does not validate ``runtime``, but
+        # set the field explicitly to make the intent obvious here.
         entry.runtime = "unknown"
         with pytest.raises(ValueError, match="Unsupported transport"):
             device_testing.build_transport_for_entry(entry)
 
     def test_default_deploy_mode_is_flash(self) -> None:
-        """Default deploy mode (from device entry) should be flash, then copy.
+        """An unspecified deploy mode defaults to flash, which maps to copy.
 
-        Flash is the production-shaped default; RAM mode stays
-        available as opt-in via per-device or CLI override.
+        Flash is the production-shaped default. RAM mode stays
+        available as an opt-in via per-device or CLI override.
         """
         entry = self._make_device_entry(runtime="micropython")
         transport = device_testing.build_transport_for_entry(entry)
@@ -251,7 +247,8 @@ class TestBuildDeviceBootstrap:
             entry, FakeTransport(), test_file, None,
         )
         assert isinstance(bootstrap, list)
-        # Inline bootstrap uses _populate_module in one of the chunked scripts.
+        # The inline RAM bootstrap relies on ``_populate_module`` to
+        # install staged sources into ``sys.modules`` without files.
         assert any("_populate_module" in script for script in bootstrap)
 
     def test_circuitpython_ram_uses_live_chunk_budget_for_inline_bootstrap(
@@ -327,7 +324,8 @@ class TestBuildDeviceBootstrap:
         bootstrap = device_testing.build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
-        # Standard bootstrap uses import, not _populate_module.
+        # Flash-mode bootstrap imports normally rather than populating
+        # ``sys.modules`` from staged source strings.
         assert "_populate_module" not in bootstrap
         assert "run_module" in bootstrap
 
@@ -355,8 +353,8 @@ class TestBuildDeviceBootstrap:
 
 
 class TestResolveLibrarySourceDirs:
-    """Tests for ``resolve_library_source_dirs`` against a synthetic
-    libraries/ tree built per-test under ``tmp_path``."""
+    """Tests for ``resolve_library_source_dirs`` against per-test
+    synthetic ``libraries/`` trees under ``tmp_path``."""
 
     def test_resolves_chumicro_imports_from_test_files(
         self, tmp_path: Path,
@@ -534,9 +532,7 @@ class TestResolveEffectiveDeployMode:
         assert device_testing.resolve_effective_deploy_mode(device, None) == "flash"
 
     def test_defaults_to_flash_when_device_entry_field_empty(self) -> None:
-        """Belt-and-braces: an empty ``deploy_mode`` falls back to flash
-        (the production-shaped default).
-        """
+        """An explicitly empty ``deploy_mode`` field still resolves to flash."""
         device = DeviceEntry(
             identifier="d", runtime="micropython", address="/dev/a",
         )

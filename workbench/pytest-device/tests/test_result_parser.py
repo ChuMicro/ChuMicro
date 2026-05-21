@@ -31,7 +31,7 @@ class TestParsePassFail:
         assert result.tests[0].heap_delta == 128
 
     def test_fail_with_negative_heap_delta(self) -> None:
-        """A FAIL line with negative heap delta should parse correctly."""
+        """A FAIL line with a negative heap delta preserves the sign."""
         result = parse_output("FAIL test_leak (0.010s, heap -256)")
         assert result.tests[0].heap_delta == -256
 
@@ -68,7 +68,7 @@ class TestParseSummary:
         assert result.summary == result_parser.SummaryResult(total=5, failed=1, duration=0.123)
 
     def test_summary_all_pass(self) -> None:
-        """A SUMMARY with zero failures should parse correctly."""
+        """``failed=0`` parses as a real zero, not as a missing field."""
         result = parse_output("SUMMARY total=3 failed=0 time=0.042s")
         assert result.summary is not None
         assert result.summary.failed == 0
@@ -78,12 +78,12 @@ class TestParseHeap:
     """Tests for HEAP line parsing."""
 
     def test_heap_line_positive_delta(self) -> None:
-        """A HEAP line with positive delta should parse correctly."""
+        """A HEAP line populates both bytes-free and delta on the result."""
         result = parse_output("HEAP 50000 bytes free (delta +0 bytes)")
         assert result.heap == result_parser.HeapResult(bytes_free=50000, delta=0)
 
     def test_heap_line_negative_delta(self) -> None:
-        """A HEAP line with negative delta should parse correctly."""
+        """A negative ``delta`` value carries its sign through parsing."""
         result = parse_output("HEAP 48000 bytes free (delta -2000 bytes)")
         assert result.heap == result_parser.HeapResult(bytes_free=48000, delta=-2000)
 
