@@ -281,7 +281,7 @@ class TestMicropythonBoardForMachine:
         assert micropython_board_for_machine("") is None
 
     def test_curated_map_covers_common_boards(self) -> None:
-        """Sanity check the canonical entries didn't drift."""
+        """Sanity check the standard entries didn't drift."""
         for machine in (
             "Raspberry Pi Pico W with rp2040",
             "Raspberry Pi Pico with rp2040",
@@ -310,7 +310,7 @@ def _mp_download_html(
     *version* string is appended verbatim, so callers exercising the
     new-shape preview format can pass version =
     ``"v1.29.0-preview.69.gSHA"`` and the helper builds the right
-    filename (no `unstable-` prefix).  Filenames take the canonical
+    filename (no `unstable-` prefix).  Filenames take the standard
     ``<BOARD>-<DATE>-[unstable-]<VERSION>[-<commit>]?.<ext>`` shape.
     Extra anchors get included verbatim — useful for testing that
     unrelated links don't pollute the parse.

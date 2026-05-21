@@ -177,10 +177,6 @@ def test_detect_true_with_leading_whitespace_state() -> None:
 def test_recovery_command_mentions_expected_daemons() -> None:
     # Smoke check — the pasted command is the contract between this
     # module and the recovery coaching, so catch silent drift.
-    # DiskArbitrationAgent is killed directly via killall -9 — an
-    # earlier version used `launchctl kickstart -k gui/$(id -u)/...`
-    # which is SIP-blocked on modern macOS; killall works because the
-    # per-user launchd respawns the agent on the next XPC client load.
     assert "sudo killall -9" in MACOS_FSKIT_RECOVERY_COMMAND
     assert "com.apple.fskit.msdos" in MACOS_FSKIT_RECOVERY_COMMAND
     assert "fskit_helper" in MACOS_FSKIT_RECOVERY_COMMAND
