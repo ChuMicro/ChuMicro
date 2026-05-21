@@ -9,10 +9,11 @@ Per-connection state machine::
 
     WANT_REQUEST_LINE
       -> WANT_HEADERS
-        -> DISPATCHING        (handler runs synchronously here)
-          -> WANT_SEND_HEADERS
-            -> WANT_SEND_BODY
-              -> DONE / CLOSING
+        -> WANT_BODY            (skipped when Content-Length absent/0)
+          -> DISPATCHING        (handler runs synchronously here)
+            -> WANT_SEND_HEADERS
+              -> WANT_SEND_BODY
+                -> DONE
                            \\-> ERROR (any state)
 
 The handler is called once, after the full request (headers + any
@@ -572,7 +573,8 @@ class HttpServer:
                 drained in one tick when possible.
             max_request_body_bytes: Cap on a single buffered request
                 body.  Default 16 KB.  Bigger bodies are rejected
-                with 400.
+                with 413 Payload Too Large at headers-complete time,
+                before any body bytes are allocated.
             ticks: Optional tick source — any object exposing
                 ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
                 the ``chumicro_timing.ticks`` submodule shape).
@@ -594,8 +596,7 @@ class HttpServer:
         self._listener = None
         self._connections = []
 
-        # Routing tables — two-dict router lifted from tinyweb's
-        # pattern.
+        # Two-dict router.
         # _explicit_routes: (method, path) -> handler.  No path
         # parameters.  O(1) lookup.
         # _pattern_routes: list of (method, prefix, param_name, handler)
