@@ -1,4 +1,4 @@
-"""Periodic LED blink — simplest runner example.
+"""Periodic LED blink: simplest runner example.
 
 Toggles a simulated LED every 500 ms.  On a real board, replace
 the ``print`` with a pin toggle (``led.value = not led.value``).

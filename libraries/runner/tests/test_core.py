@@ -1,7 +1,7 @@
 """Tests for the core runner-pattern abstractions.
 
 Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
-(via the lightweight test harness).
+(via chumicro_test_harness).
 """
 
 from chumicro_runner import Runner, TaskHandle
@@ -590,7 +590,7 @@ def test_set_period_at_runtime() -> None:
     runner.tick()
     assert svc.check_count == 1
 
-    # Add a period — should stop calling until period elapses.
+    # Add a period.  The task stops firing until the period elapses.
     handle.set_period(200)
     runner.tick()
     assert svc.check_count == 1
@@ -740,7 +740,7 @@ def test_run_count_with_period() -> None:
     runner.tick()
     assert len(received) == 2
 
-    # Period 3 — should not fire.
+    # Period 3: should not fire.
     fake.advance(100)
     runner.tick()
     assert len(received) == 2

@@ -32,7 +32,7 @@ def test_runner_add_periodic_fires() -> None:
     runner = Runner()
     runner.add_periodic(handler, period_ms=30)
 
-    # Tick before period — should not fire.
+    # Tick before period: should not fire.
     runner.tick()
     assert len(log) == 0
 

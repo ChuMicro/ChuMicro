@@ -1,4 +1,4 @@
-"""Sensor threshold alert — gate-based check/handle pattern.
+"""Sensor threshold alert: gate-based check/handle pattern.
 
 ``check()`` reads the sensor and returns whether the handler should
 fire.  The runner calls ``check()`` on schedule; when it returns
@@ -31,10 +31,10 @@ _READINGS = [22.0, 25.0, 28.0, 31.0, 35.0, 29.0, 24.0, 20.0]
 class TemperatureSensor:
     """Alert when temperature exceeds a threshold.
 
-    ``check()`` calls ``read_temperature()`` — a fast, non-blocking
-    sensor read — and returns True when the threshold is exceeded.
-    ``handle()`` reacts (print here; fan or network alert on a real
-    board).
+    ``check()`` calls ``read_temperature()``, a fast non-blocking
+    sensor read, and returns True when the threshold is exceeded.
+    ``handle()`` reacts (print here, or a fan / network alert on a
+    real board).
     """
 
     def __init__(self, threshold: float = 30.0) -> None:

@@ -1,6 +1,6 @@
 """Test helpers for libraries that use chumicro-runner.
 
-Provides ``CallRecorder`` — a callable that records handler
+Provides ``CallRecorder``, a callable that records handler
 invocations for assertion in host-side tests.
 
 Example:

@@ -1,4 +1,4 @@
-"""Runtime task control — advanced ecosystem patterns.
+"""Runtime task control: advanced ecosystem patterns.
 
 Demonstrates how the runner and timing libraries work together:
 
@@ -8,7 +8,7 @@ Demonstrates how the runner and timing libraries work together:
   logic that lives outside the runner
 - Using the runner's ``now_ms`` return value for external decisions
 
-After 10 seconds, the example switches to "fast mode" — logging
+After 10 seconds, the example switches to "fast mode": logging
 speeds up and the Wi-Fi check is removed.
 
 Example output::

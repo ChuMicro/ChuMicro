@@ -14,7 +14,7 @@ All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
 
 # Default tick source imported eagerly at module load.  Lazy import inside
 # ``Runner.__init__`` would add ~1 s to the first test on MP mount-mode
-# (each fresh import becomes an mpremote RPC); eager import pushes the
+# (each fresh import becomes an mpremote RPC).  Eager import pushes the
 # cost to module-import time, before the harness starts its timer.
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
@@ -22,9 +22,8 @@ from chumicro_timing import ticks as _DEFAULT_TICKS
 class TaskHandle:
     """Handle returned by ``Runner.add()`` or ``add_periodic()``.
 
-    Inspect the task's state via the ``period_ms``, ``run_count``,
-    and ``active`` attributes; mutate via ``set_period()`` or
-    ``remove()``.
+    Inspect state via the ``period_ms``, ``run_count``, and ``active``
+    attributes.  Mutate via ``set_period()`` or ``remove()``.
     """
 
     def __init__(self, check_function: object | None,
@@ -121,8 +120,8 @@ class Runner:
             handler: Optional callable ``handler(now_ms)``.
             period_ms: Optional interval in milliseconds.
             start_after_ms: Optional initial delay before the task
-                becomes eligible.  Overrides the first period;
-                subsequent fires use *period_ms* if set.
+                becomes eligible.  Overrides the first period.
+                Subsequent fires use *period_ms* if set.
             run_count: Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
         """
@@ -184,10 +183,10 @@ class Runner:
     def tick(self) -> int:
         """Capture time, check tasks, then batch-fire handlers.
 
-        1. Check each entry (period gate -> check gate).
+        1. Check each entry (period gate, then check gate).
            Collect entries whose handlers should fire.
         2. Batch-fire all collected handlers.
-        3. Decrement run counts; auto-remove exhausted entries.
+        3. Decrement run counts and auto-remove exhausted entries.
 
         Returns:
             The tick timestamp used this cycle.
@@ -212,7 +211,7 @@ class Runner:
                 if entry.next_due_ms is not None:
                     if ticks_diff(now_ms, entry.next_due_ms) < 0:
                         continue
-                    # Advance: periodic → next period; one-shot → clear.
+                    # Advance: periodic tasks reschedule, one-shot tasks clear.
                     if entry.period_ms is not None:
                         entry.next_due_ms = ticks_add(now_ms, entry.period_ms)
                     else:
@@ -239,7 +238,7 @@ class Runner:
 
     def _initial_next_due_ms(self, start_after_ms: int | None,
                              period_ms: int | None) -> int | None:
-        """Return the initial ``next_due_ms``; ``start_after_ms`` wins over ``period_ms``."""
+        """Return the initial ``next_due_ms``.  ``start_after_ms`` wins over ``period_ms``."""
         delay_ms = start_after_ms if start_after_ms is not None else period_ms
         if delay_ms is None:
             return None
@@ -247,7 +246,7 @@ class Runner:
         return self._ticks.ticks_add(now_ms, delay_ms)
 
     def _remove(self, handle: TaskHandle) -> None:
-        """Remove *handle* from the runner (called by ``TaskHandle``)."""
+        """Remove *handle* from the runner."""
         handle.active = False
         try:
             self._entries.remove(handle)
