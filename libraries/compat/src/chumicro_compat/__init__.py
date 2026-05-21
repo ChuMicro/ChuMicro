@@ -7,5 +7,5 @@ modules you do not need on constrained boards::
 
 Available modules
 -----------------
-- ``chumicro_compat.functools`` — ``partial``
+- ``chumicro_compat.functools``: ``partial``
 """

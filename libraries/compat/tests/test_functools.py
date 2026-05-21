@@ -2,8 +2,8 @@
 
 On CPython, ``chumicro_compat.functools.partial`` re-exports the real
 ``functools.partial``.  These tests exercise ``_PurePythonPartial``
-directly — that is the code that will run on MicroPython and
-CircuitPython where the C implementation is absent.
+directly.  That is the code that runs on MicroPython and CircuitPython,
+where the C implementation is absent.
 """
 
 from chumicro_compat.functools import _PurePythonPartial as partial
