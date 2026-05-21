@@ -15,6 +15,12 @@ Every intended file change landed somewhere, but commit-message-vs-diff is unrel
 
 No code recovery needed.
 
+## Second incident (2026-05-20)
+
+`/audit-comments libraries/config` Pass 2 collided with a concurrent `/audit-comments libraries/mqtt` Pass 1. The mqtt-Pass-1 commit (`5f9b0d41 audit-comments mqtt Pass 1 — subtractive sweep across 3 src/ files`) carries the config-Pass-2 working-tree edits as a silent rider: `libraries/config/VERSION`, `libraries/config/src/chumicro_config/section.py` (the `is_config_like` rewrite), and `libraries/config/tests/test_config.py` (the `test_default_path_constant_is_root_runtime_config_msgpack` docstring rewrite) all landed inside the mqtt commit. Commit message describes only mqtt; the config diff has no commit subject of its own. Same shape as the prior incident: every change landed, the message-vs-content mapping is wrong, `git log -p` is authoritative.
+
+New data point: the scrambling can scoop in-flight working-tree edits between one agent's Pass 1 commit and its Pass 2 commit, not just files the second agent staged itself. The window is `Pass-1-commit → Pass-2-staging`.
+
 ## Infra opportunities
 
 1. **Require explicit pathspecs in the `git-commit` skill body when other Claude processes are detectable on the same checkout.**  `git add -p` or a list of files by name closes the door on accidentally folding another agent's staged delta into your commit.
