@@ -2,8 +2,8 @@
 
 These tests run on CPython using :mod:`tracemalloc` to profile per-
 operation allocations and :mod:`gc` to force a clean baseline before
-each measurement.  They catch Python-level leaks in the client itself
-— leaks that survive cycles of publish/subscribe/recv without the
+each measurement.  They catch Python-level leaks in the client itself,
+the kind that survive cycles of publish/subscribe/recv without the
 client tearing down.
 
 These don't replicate device-level fragmentation (CP / MP allocators
@@ -12,7 +12,7 @@ client maintains converge: any growing list / dict / accumulating
 closure surfaces here as monotonically rising allocation counts.
 """
 
-#: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
+#: CPython-only lane (pytest fixtures / host stdlib).  Not cross-runtime.
 __chumicro_runtimes__ = ("cpython",)
 
 import gc
@@ -56,7 +56,7 @@ def _measure_growth(operation, *, warmup_iterations=50, sample_iterations=500):
     the sample period measures only steady-state per-iteration cost.
 
     A clean implementation of *operation* should produce growth_bytes
-    near zero — every transient allocation gets reaped.  Significant
+    near zero (every transient allocation gets reaped).  Significant
     positive growth indicates a leak.
     """
     # Force a GC pass + start from a stable baseline.
@@ -79,7 +79,7 @@ def _measure_growth(operation, *, warmup_iterations=50, sample_iterations=500):
 
 
 # ---------------------------------------------------------------------------
-# QoS 0 publish — the hottest path on a typical sensor
+# QoS 0 publish: the hottest path on a typical sensor
 # ---------------------------------------------------------------------------
 
 
@@ -105,7 +105,7 @@ class TestPublishQos0NoLeak:
         growth_bytes, _current_kib, _peak_kib = _measure_growth(
             operation, warmup_iterations=50, sample_iterations=500,
         )
-        # Allow some slack for tracemalloc bookkeeping itself; <2 KiB
+        # Allow some slack for tracemalloc bookkeeping itself.  <2 KiB
         # over 500 iterations is well within the noise floor on
         # Python 3.14.
         assert growth_bytes < 2048, (
@@ -114,7 +114,7 @@ class TestPublishQos0NoLeak:
 
 
 # ---------------------------------------------------------------------------
-# QoS 1 publish — exercises in-flight table churn
+# QoS 1 publish: exercises in-flight table churn
 # ---------------------------------------------------------------------------
 
 
@@ -131,8 +131,8 @@ class TestPublishQos1NoLeak:
         _connect_client(client, sock, ticks)
 
         # We pre-allocate one packet-id per iteration's expected
-        # PUBACK.  After each publish, the client allocated 1 id;
-        # after the matching PUBACK, the id is freed.  Steady-state.
+        # PUBACK.  After each publish, the client allocated 1 id.
+        # After the matching PUBACK, the id is freed.  Steady-state.
 
         def operation() -> None:
             sock.sent.clear()
@@ -156,7 +156,7 @@ class TestPublishQos1NoLeak:
 
 
 # ---------------------------------------------------------------------------
-# Inbound publish receipt — exercises decoder buffer reuse
+# Inbound publish receipt: exercises decoder buffer reuse
 # ---------------------------------------------------------------------------
 
 
@@ -173,7 +173,7 @@ class TestInboundReceiveNoLeak:
         client = _new_client(sock, ticks)
         _connect_client(client, sock, ticks)
         # Drop the message-handler reference cycle by using a
-        # function that doesn't capture a list — drains the bytes
+        # function that doesn't capture a list.  Drains the bytes
         # but doesn't accumulate.
         client.on_message = lambda topic, payload: None
 
@@ -205,7 +205,7 @@ class TestSubscribeUnsubscribeNoLeak:
         from chumicro_mqtt.testing import canned_unsuback_bytes  # noqa: PLC0415
 
         def operation() -> None:
-            sock.sent.clear()  # FakeSocket accumulates sent bytes; not the client's leak
+            sock.sent.clear()  # FakeSocket accumulates sent bytes, not the client's leak
             client.subscribe("topic/x", qos=0)
             sub_id = client._pending_responses[-1].packet_id
             client.handle(ticks.ticks_ms())
@@ -236,7 +236,7 @@ class TestRxBufferReuse:
     def test_decoder_buffer_capacity_constant(self) -> None:
         """The decoder's steady-state buffer is allocated once + reused.
 
-        Pulls 100 small inbound packets through; the underlying
+        Pulls 100 small inbound packets through.  The underlying
         bytearray's id() must be stable.
         """
         sock = FakeSocket()
@@ -245,7 +245,7 @@ class TestRxBufferReuse:
         _connect_client(client, sock, ticks)
         client.on_message = lambda topic, payload: None
 
-        # The decoder lives at client._decoder; its internal buffer
+        # The decoder lives at client._decoder.  Its internal buffer
         # is _buffer (private but stable across the lifetime).
         buffer_ids = set()
         for _ in range(100):

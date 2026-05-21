@@ -324,7 +324,7 @@ class TestKeepalive:
         _drive(client, ticks, count=2)
         sock.sent = bytearray()  # MP bytearray lacks .clear()
 
-        # Just past the 15-second mark — half of keepalive.
+        # Just past the 15-second mark (half of keepalive).
         ticks.advance(15_500)
         _drive(client, ticks, count=1)
         assert b"\xc0\x00" in bytes(sock.sent)  # PINGREQ wire bytes

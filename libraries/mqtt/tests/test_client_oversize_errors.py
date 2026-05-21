@@ -60,7 +60,7 @@ class TestWhenOversized:
         _drive(client, ticks, count=10)
         assert len(captured) == 1
         assert captured[0][1] == "log"
-        # Still CONNECTED — DROP_WITH_EVENT drops the payload and
+        # Still CONNECTED.  DROP_WITH_EVENT drops the payload and
         # stays connected.
         assert client.state == ProtocolState.CONNECTED
 
@@ -163,7 +163,7 @@ class TestErrorPaths:
         sock = FakeSocket()
         ticks = FakeTicks()
         client = _new_client(sock, ticks)
-        # No connect — state is DISCONNECTED.
+        # No connect.  State is DISCONNECTED.
         # handle() should be a no-op (no recv attempt, no send).
         assert sock.sent == bytearray()
         client.handle(ticks.ticks_ms())
@@ -201,7 +201,7 @@ class TestErrorPaths:
         client = _new_client(sock, ticks, keep_alive_seconds=30)
         client.connect()
         _drive(client, ticks, count=2)
-        # Skip past keepalive — PINGREQ goes out, no PINGRESP arrives.
+        # Skip past keepalive.  PINGREQ goes out, no PINGRESP arrives.
         ticks.advance(15_500)
         _drive(client, ticks, count=1)  # Sends PINGREQ, registers pending.
         ticks.advance(10_000)  # Past ack_timeout (5 s).
@@ -218,7 +218,7 @@ class TestErrorPaths:
         client.publish("x", b"y", qos=1)
         _drive(client, ticks, count=1)
         # No PUBACK ever arrives.  Two ack-timeouts: first triggers
-        # one retry; second exceeds publish_retry_max, marking FAILED.
+        # one retry, second exceeds publish_retry_max, marking FAILED.
         ticks.advance(10_000)
         _drive(client, ticks, count=1)
         ticks.advance(10_000)
@@ -271,7 +271,7 @@ class TestDecoderEdgeCases:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        # Tiny rx buffer so a normal-length topic blows the prelude;
+        # Tiny rx buffer so a normal-length topic blows the prelude.
         # max_message_bytes low so the rest also routes through tier 3.
         client = _new_client(
             sock, ticks,
@@ -288,7 +288,7 @@ class TestDecoderEdgeCases:
             captured.append((reported_length, topic))
 
         client.on_oversized = _record
-        # 50-byte topic — much bigger than the 16-byte rx buffer.
+        # 50-byte topic: much bigger than the 16-byte rx buffer.
         long_topic = "a" * 50
         sock.enqueue_recv(canned_publish_bytes(long_topic, b"small", qos=0))
         _drive(client, ticks, count=20)
