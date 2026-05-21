@@ -19,7 +19,8 @@ from chumicro_kvstore import KVStore, KVStoreCorrupt, KVStoreFull
 from chumicro_kvstore._backends.cp_nvm import CpNvmBackend
 from chumicro_test_harness import raises
 
-# SAMD21 is the canonical small-NVM target — 256 B total ⇒ 246 B payload.
+# SAMD21 is the small-NVM target: 256 B total minus the 10-byte header
+# leaves 246 B payload.
 SAMD21_SIZE = 256
 
 # ESP32-class NVM is the large-NVM target — 8 KB.  Tests use a
@@ -197,7 +198,9 @@ def test_load_zero_length_with_zero_crc_succeeds() -> None:
 
 
 def test_kvstore_with_cp_nvm_backend_round_trips_through_reload() -> None:
-    """Full vertical: KVStore → CpNvmBackend → bytearray → reload."""
+    """Full vertical: KVStore through CpNvmBackend, a bytearray
+    substrate, and back via reload.
+    """
     nvm = bytearray(b"\xff" * SAMD21_SIZE)
     backend = CpNvmBackend(nvm=nvm)
     store = KVStore(backend=backend)

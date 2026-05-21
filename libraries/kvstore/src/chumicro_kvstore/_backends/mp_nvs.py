@@ -20,12 +20,12 @@ from chumicro_kvstore.core import Backend, KVStoreFull
 class MpNvsBackend(Backend):
     """MP ESP32 NVS backend.
 
-    ``nvs`` defaults to ``esp32.NVS("chu_kv")``; tests inject a fake
+    ``nvs`` defaults to ``esp32.NVS("chu_kv")``.  Tests inject a fake
     exposing the same ``set_blob`` / ``get_blob(key, buffer) -> length``
-    / ``erase_key`` / ``commit`` shape.  ``capacity`` defaults to 512 B
-    — sized for small-key state (boot counters, timestamps, short
-    tokens) and doubling as the size of the transient read buffer
-    allocated at ``load`` time.
+    / ``erase_key`` / ``commit`` shape.  ``capacity`` defaults to 512 B,
+    sized for small-key state (boot counters, timestamps, short tokens)
+    and doubling as the size of the transient read buffer allocated at
+    ``load`` time.
     """
 
     NAMESPACE = "chu_kv"

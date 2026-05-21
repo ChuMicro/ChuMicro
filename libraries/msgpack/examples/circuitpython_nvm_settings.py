@@ -1,7 +1,7 @@
 # requires: hardware
 """Store and retrieve device settings in non-volatile memory (NVM).
 
-CircuitPython provides ``microcontroller.nvm`` — a small byte array
+CircuitPython provides ``microcontroller.nvm``, a small byte array
 (typically 256–8192 bytes depending on the board) that persists across
 reboots and power cycles.  It behaves like a ``bytearray``: you read
 and write individual bytes or slices.
@@ -9,7 +9,7 @@ and write individual bytes or slices.
 This example uses ``packb`` to convert a Python dict into compact
 msgpack bytes, writes those bytes into NVM with a 2-byte length
 header, and reads them back with ``unpackb``.  The length header is
-needed because NVM is a fixed-size buffer — without it, you would not
+needed because NVM is a fixed-size buffer.  Without it, you would not
 know where the meaningful data ends and the unused bytes begin.
 
 **NVM layout used by this example:**
@@ -38,8 +38,8 @@ Setup:
 3. Save as ``code.py`` on the CIRCUITPY drive.
 """
 
-#: CircuitPython-only — uses ``microcontroller.nvm`` (CP-specific
-#: API; MicroPython has no equivalent module).  The marker tells
+#: CircuitPython-only.  Uses ``microcontroller.nvm``, a CP-specific
+#: API with no MicroPython equivalent.  The marker tells
 #: ``deploy-example`` to refuse this file on MP boards instead of
 #: silently AttributeError'ing at import.
 __chumicro_runtimes__ = ("circuitpython",)
@@ -73,7 +73,7 @@ length = len(data)
 
 # Get a reference to the NVM byte array.  Its size varies by board
 # (e.g., 256 bytes on ESP32-S2, 8192 on some RP2040 boards).
-# Not all boards have NVM — check before using it.
+# Not all boards have NVM. Check before using it.
 nvm = microcontroller.nvm
 if nvm is None:
     print("This board does not have NVM.")

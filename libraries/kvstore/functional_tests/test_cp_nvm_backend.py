@@ -5,8 +5,8 @@ These tests run only on CircuitPython boards.  The module-level
 skip the wrong-runtime parametrization, so MP boards don't even try
 to import the file.
 
-Each test resets NVM to ``0xFF`` (the canonical erased-flash state)
-before running so prior session state does not leak between tests.
+Each test resets NVM to ``0xFF`` (the erased-flash state) before
+running so prior session state does not leak between tests.
 """
 
 __chumicro_runtimes__ = ("circuitpython",)
@@ -89,7 +89,7 @@ def test_kvstore_construction_handles_corruption_silently() -> None:
 
 
 def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
-    """The canonical use case: counter survives a fresh KVStore.
+    """Boot-counter pattern: counter survives a fresh KVStore.
 
     A future hard-reset suite will exercise across an actual reboot;
     this test proves the substrate works across re-construction (the
@@ -105,7 +105,7 @@ def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
 
 
 def test_commit_if_changed_skips_unchanged_writes_on_real_flash() -> None:
-    """Wear defense: identical state ⇒ no flash write.
+    """Wear defense: identical state means no flash write.
 
     Side-effect test: the slab bytes after the second call are
     identical to the bytes after the first.  If an actual write

@@ -1,7 +1,7 @@
 """On-device tests for ``MpLittlefsBackend`` against real LittleFS.
 
 Runs anywhere a writable filesystem is mounted — Pi Pico W MP is
-the canonical target (no NVS partition, only LittleFS) but ESP32 MP
+the primary target (no NVS partition, only LittleFS) but ESP32 MP
 boards work too if a user explicitly picks
 ``backend="littlefs"`` instead of the NVS default.
 
@@ -72,7 +72,7 @@ def test_kvstore_round_trips_through_real_filesystem() -> None:
 
 
 def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
-    """Canonical use case: counter persists across re-construction."""
+    """Boot-counter pattern: counter persists across re-construction."""
     _wipe_payload_file()
     for expected in (1, 2, 3, 4):
         store = KVStore(backend=MpLittlefsBackend())
@@ -82,7 +82,7 @@ def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
 
 
 def test_commit_if_changed_skips_unchanged_writes() -> None:
-    """Wear defense — identical state ⇒ no rename / sync."""
+    """Wear defense: identical state means no rename or sync."""
     _wipe_payload_file()
     store = KVStore(backend=MpLittlefsBackend())
     store["alpha"] = 1

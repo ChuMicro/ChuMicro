@@ -59,11 +59,6 @@ def test_concrete_backend_instance_accepted() -> None:
     assert store.capacity == 512
 
 
-# The string-resolver host-context checks (nvm/nvs/littlefs without the
-# backing hardware) moved to test_kvstore_host.py — they assert
-# off-target behaviour and are excluded from the on-device sweep.
-
-
 # ---------------------------------------------------------------------------
 # Mapping-shaped API
 # ---------------------------------------------------------------------------

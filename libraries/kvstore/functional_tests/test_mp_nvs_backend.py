@@ -65,7 +65,7 @@ def test_kvstore_round_trips_through_real_nvs() -> None:
 
 
 def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
-    """Canonical use case: counter persists across re-construction."""
+    """Boot-counter pattern: counter persists across re-construction."""
     _wipe_nvs()
     for expected in (1, 2, 3, 4):
         store = KVStore(backend=MpNvsBackend())
@@ -75,7 +75,7 @@ def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
 
 
 def test_commit_if_changed_skips_unchanged_writes() -> None:
-    """Wear defense at the substrate level — no NVS commit on no-op."""
+    """Wear defense at the substrate level: no NVS commit on a no-op."""
     _wipe_nvs()
     store = KVStore(backend=MpNvsBackend())
     store["alpha"] = 1
