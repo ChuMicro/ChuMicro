@@ -1,15 +1,14 @@
 """MQTT 3.1.1 client built on chumicro-sockets + chumicro-timing.
 
-:class:`MQTTClient` is the entry point.  Runner-shaped —
-:meth:`check(now_ms) -> bool` reports whether work is pending;
+:class:`MQTTClient` is the entry point.  Runner-shaped:
+:meth:`check(now_ms) -> bool` reports whether work is pending,
 :meth:`handle(now_ms)` performs one tick of progress.  No threads,
-no async — cooperative dispatch in the caller's tick loop.
+no async: cooperative dispatch in the caller's tick loop.
 
-The connection model lives here too (:class:`ProtocolState`,
+The connection-state classes (:class:`ProtocolState`,
 :class:`Awaiting`, :class:`InFlightTable`, :class:`PendingResponse`,
-:class:`InFlightPublish`) so the device-side bundle is two files
-(plus ``__init__``) instead of seven; the wire-format primitives
-sit in :mod:`chumicro_mqtt._wire`.
+:class:`InFlightPublish`) and :class:`MQTTPublisher` live here.  The
+wire-format primitives live in :mod:`chumicro_mqtt._wire`.
 """
 
 from collections import deque
@@ -1279,15 +1278,12 @@ class MQTTClient:
         self._next_ping_due_ticks = self._deadline(self._ping_interval_ms, now_ms=now_ms)
 
     def _deadline(self, offset_ms, *, now_ms=None):
-        """Return a tick value that's *offset_ms* in the future.
+        """Return a tick value *offset_ms* in the future.
 
-        When called from inside a ``handle()`` path, pass the runner-
-        supplied *now_ms* so the deadline is armed against the same
-        tick the surrounding code is comparing against — one ``ticks_ms``
-        per tick, shared across every deadline computed that tick.
-        User-entry callers (``connect``, ``publish``, ``subscribe``,
-        ``unsubscribe``) run outside the tick loop and pass nothing,
-        so a fresh ``ticks_ms()`` is captured.
+        Pass *now_ms* when computing a deadline inside the tick loop so
+        every deadline armed during that tick shares one ``ticks_ms()``
+        reading.  Omit *now_ms* from user-entry paths that run outside
+        the tick loop, where a fresh ``ticks_ms()`` is captured.
         """
         if now_ms is None:
             now_ms = self._ticks.ticks_ms()

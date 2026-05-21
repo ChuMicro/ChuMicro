@@ -267,8 +267,8 @@ class TestOversizedTier:
         assert oversized[0].reported_length == 205
 
     def test_oversize_topic_emits_none_topic(self) -> None:
-        """When the topic alone exceeds rx_buffer_size, the event
-        reports topic=None (deadlock fix)."""
+        """When the topic alone exceeds rx_buffer_size, the oversized
+        event reports topic=None (the topic can't be parsed)."""
         decoder = PacketDecoder(
             rx_buffer_size=16,        # tiny — even modest topics overflow
             max_message_bytes=32,

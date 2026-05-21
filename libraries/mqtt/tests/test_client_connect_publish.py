@@ -39,14 +39,14 @@ def _drive(client: MQTTClient, ticks: FakeTicks, count: int = 1) -> None:
 
 class TestSocketBlockingMode:
     def test_init_forces_socket_non_blocking(self) -> None:
-        """The MQTT client owns its socket's blocking mode.
+        """``MQTTClient.__init__`` flips its socket to non-blocking.
 
-        On a Pi Pico W MP the socket adapter constructs sockets in
-        blocking mode (stdlib default); the client's first tick then
-        called recv on a blocking socket — never returned, never saw
-        CONNACK, ack-timeout fired after 5s, infinite reconnect loop.
-        ``MQTTClient`` enforces non-blocking on construction so the
-        contract belongs to the client, not every consumer.
+        The tick-based recv path requires EAGAIN-on-no-data.  A socket
+        in blocking mode would hang the first ``handle()`` call waiting
+        for CONNACK so the client would never converge.  The MP socket
+        adapter on Pi Pico W constructs blocking sockets by default
+        (matching stdlib), so the contract belongs to the client, not
+        every consumer.
         """
         sock = FakeSocket()
         sock.setblocking(True)  # default-blocking before MQTTClient sees it
@@ -177,12 +177,11 @@ class TestPublishQos0:
         assert captured == [("temp", b"42")]
 
     def test_qos0_fires_global_on_publish_without_per_call_callback(self) -> None:
-        """`client.on_publish = ...` must fire for QoS 0 too.
+        """Global ``client.on_publish`` fires for QoS 0 sends.
 
-        Pre-fix: the per-call ``on_publish=`` kwarg was the only path
-        that enqueued the post-send callback marker, so a user who set
-        the global ``client.on_publish`` (the way the QoS 1 path
-        already worked) saw QoS 1 events but not QoS 0 events.
+        Matches the QoS 1 behavior so a user who sets the global
+        callback once (rather than passing ``on_publish=`` on every
+        call) sees every send.
         """
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))

@@ -262,14 +262,13 @@ class TestRxBufferReuse:
 
 class TestRecvLoopBoundedWork:
     def test_handle_returns_promptly_with_no_data(self) -> None:
-        """handle() with no inbound data should NOT spin.
+        """``handle()`` exits promptly when the socket has no data.
 
-        Pre-fix: the recv loop's "smaller than capacity = done"
-        heuristic broke concurrent QoS 1.  The new implementation
-        loops until recv_into returns 0, which on FakeSocket is
-        immediate when the queue is empty.  This test asserts that
-        a handle() with empty queues doesn't churn (i.e., the inner
-        loop's exit condition fires).
+        The recv loop's exit condition is ``recv_into`` returning 0,
+        not "got < capacity" (the latter would short-circuit before
+        TCP fragmentation finished feeding a multi-packet burst, which
+        breaks concurrent QoS 1).  This test asserts the empty-queue
+        case exits after a single ``recv_into`` rather than spinning.
         """
         sock = FakeSocket()
         ticks = FakeTicks()
