@@ -82,9 +82,8 @@ def _cmd_status(args: argparse.Namespace) -> int:
     """Print a one-line-per-check workspace health snapshot.
 
     Runs the three fast static checks (workspace.yml validity,
-    devices.yml count, projects tree summary).  ``doctor`` is the
-    stricter sibling that adds Python version checking and per-project
-    AST scans for ``run()``.
+    devices.yml count, projects tree summary).  See :func:`_cmd_doctor`
+    for the stricter variant.
     """
     workspace = _resolve_workspace(args)
     return _print_health_findings(workspace, collect_health_findings(workspace))

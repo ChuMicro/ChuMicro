@@ -64,12 +64,8 @@ def _cmd_demo(args: argparse.Namespace) -> int:
 
     Gives a user with a freshly-registered board something to ship
     on day one without having to write code, configure wifi, or pick
-    a project.  Runs synchronously: deploys the payload, captures
-    execute output, prints it.  Total wall-clock ~5 seconds.
-
-    The payload is a runtime-agnostic print loop (no ``board`` /
-    ``machine`` imports) so the demo works on any supported runtime
-    + board.
+    a project.  Runs synchronously: deploys :data:`DEMO_PAYLOAD`,
+    captures execute output, prints it.  Total wall-clock ~5 seconds.
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)

@@ -181,7 +181,7 @@ class BrowserModel:
 
 
 def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no cover
-    """Full-screen prompt_toolkit shell; returns the chosen roots or None.
+    """Full-screen prompt_toolkit shell.  Returns the chosen roots or None.
 
     Pure I/O wiring: needs a real terminal, so it carries no test
     coverage (the device-adapter convention).  Every binding delegates

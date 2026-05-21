@@ -114,8 +114,7 @@ def _resolve_workspace(args: argparse.Namespace) -> WorkspaceLayout:
     """Locate the workspace root for *args*.
 
     Wraps :class:`WorkspaceLayout.from_dir` so missing workspaces
-    surface as a uniform ``SystemExit`` with a helpful message
-    instead of a stack trace.
+    surface as a ``SystemExit`` instead of a stack trace.
     """
     try:
         return WorkspaceLayout.from_dir(args.workspace_dir)
@@ -208,18 +207,18 @@ def _emit_probe_failure(
 ) -> None:
     """Emit the standard probe-failure block for *command_name* to stderr.
 
-    Header line states the cause.  The diagnosis from
-    :func:`~chumicro_workspace.onboarding.detect_board_state` follows
-    as indented next-step hints.  Pass exactly one of
-    *auto_detect_inference* / *probe_exception*.  The former drives
-    the "auto-detect failed (TypeName: msg)." / "no runtime returned
-    a probe marker." text.  The latter drives the
-    "probe failed (TypeName: msg)." text.
+    Writes a header line stating the cause, followed by indented
+    next-step hints from
+    :func:`~chumicro_workspace.onboarding.detect_board_state`.
+
+    Pass exactly one of *auto_detect_inference* or *probe_exception*.
+    Their text differs (``auto-detect failed`` vs ``probe failed``)
+    but the diagnosis appended below is the same.
 
     The diagnostic probe runs under *transport* (defaults to
-    ``"micropython"``).  On a probe-already-failed path the transport
-    choice rarely matters, since :func:`detect_board_state` falls back
-    to UF2 + error-string heuristics, but the chosen runtime is honored.
+    ``"micropython"``).  The transport choice rarely matters on the
+    probe-already-failed path because :func:`detect_board_state`
+    falls back to UF2 and error-string heuristics regardless.
     """
     diagnosis = detect_board_state(
         Device(transport=transport, address=address),
@@ -407,10 +406,10 @@ def _resolve_serial_port(
 ) -> str | None:
     """Pick the serial port to operate on.
 
-    * ``explicit_port`` set → use it verbatim.
-    * No ports detected → print a hint to stderr, return ``None``.
-    * Exactly one port → use it without prompting.
-    * Multiple ports → list them, prompt for a number.
+    * ``explicit_port`` set: use it verbatim.
+    * No ports detected: print a hint to stderr, return ``None``.
+    * Exactly one port: use it without prompting.
+    * Multiple ports: list them, prompt for a number.
 
     Args:
         explicit_port: ``--address`` / ``--port`` flag value, or

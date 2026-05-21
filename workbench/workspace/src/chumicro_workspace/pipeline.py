@@ -1,18 +1,15 @@
 """End-to-end pipeline that wires the loader, merger, flatten, and writer modules.
 
 ``build_runtime_config`` is the convenience the deployer calls per
-deploy: read ``secrets.toml`` + per-project config, deep-merge in
-precedence order, **flatten to dotted keys**, write msgpack.  Each
-underlying step is also a public function so callers can compose
-them directly.
+deploy: read ``secrets.toml`` plus per-project config, deep-merge in
+precedence order, flatten nested tables to dotted keys, write msgpack.
+``compose_runtime_config`` is the same flow without the msgpack write,
+for callers that need the resolved dict in memory rather than on disk.
 
-``compose_runtime_config`` is the same flow without the msgpack
-write, for callers that need the resolved flat dict but not the
-on-disk artifact.
-
-Both functions return the **flat** dotted-key dict. Nested tables
-on disk become ``"wifi.ssid"`` / ``"mqtt.broker.host"`` keys at
-compose time.  See :func:`chumicro_workspace.flatten.flatten_config`.
+Each underlying step is also a public function so callers can
+compose them directly.  See
+:func:`chumicro_workspace.flatten.flatten_config` for the dotted-key
+shape (``[wifi] ssid = "x"`` becomes ``"wifi.ssid"``).
 """
 
 from __future__ import annotations
@@ -41,8 +38,7 @@ def compose_runtime_config(
     :mod:`chumicro_workspace.merge` for precedence rules.
 
     Args:
-        secrets_toml: Path to ``secrets.toml`` (workspace-wide
-            credentials + device defaults).
+        secrets_toml: Path to ``secrets.toml``.
         project_config: Per-project / per-library config file.
             ``None`` or a missing path means no overrides: the
             secrets-toml defaults pass through verbatim.
@@ -70,8 +66,7 @@ def build_runtime_config(
     """Read all sources, deep-merge, flatten, write msgpack.
 
     Args:
-        secrets_toml: Path to ``secrets.toml`` (workspace-wide
-            credentials + device defaults).
+        secrets_toml: Path to ``secrets.toml``.
         project_config: Path to ``projects/<name>/project_config.toml``,
             or ``None`` when no per-project overrides apply.
         output_path: Where to write the msgpack file on the host.
