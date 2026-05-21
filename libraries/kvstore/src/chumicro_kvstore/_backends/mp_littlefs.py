@@ -22,12 +22,13 @@ from chumicro_kvstore.core import Backend, KVStoreFull
 
 
 class _RuntimeFs:
-    """Default filesystem shim — wraps ``builtins.open`` + ``os.{rename,remove,sync}``.
+    """Wrap ``builtins.open`` and ``os.{rename,remove,sync}`` as the
+    default filesystem substrate.
 
     Defined at module scope so the class object is allocated once at
     import rather than once per default-arg backend construction.
     ``getattr(os, "sync", lambda: None)`` keeps the rp2 MP port (no
-    ``os.sync``) working — the rename itself is atomic on LittleFS.
+    ``os.sync``) working: the rename itself is atomic on LittleFS.
     """
 
     open = staticmethod(builtins.open)
