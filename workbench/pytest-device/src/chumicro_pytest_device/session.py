@@ -1,19 +1,14 @@
 """Session-state accessors shared by plugin / device_backend / collection.
 
-A small leaf module of ``getattr``-style helpers over the dynamic
-attributes that :func:`chumicro_pytest_device.plugin.pytest_sessionstart`
-stashes on the pytest ``Session``.  Lives here so the device-backend
-module and the collection module can read session state without
-importing plugin.py (the cycle break for the full plugin split).
+``getattr``-style readers over the dynamic attributes that
+:func:`chumicro_pytest_device.plugin.pytest_sessionstart` stashes on
+the pytest ``Session`` (transport cache, target list, backend,
+PR-summary collector).  Also exports the test-file path predicates,
+the ``--target`` flag readers, and the runtime-config encode-plus-cache
+helper used at stage time.
 
-Also carries the path predicates (``_is_library_functional_test`` /
-``_is_library_unit_test``), the ``--target``-flag readers, and the
-runtime-config encode + cache helper.
-
-The ``_device_*`` walkers iterate over ``session.items``, and they
-import the ``DeviceTestItem`` type lazily inside the function body
-because those items live in :mod:`collection`, which depends on this
-module.
+This is a leaf module: it must not import :mod:`plugin` or
+:mod:`collection`, so they can both depend on it.
 """
 
 from __future__ import annotations
@@ -170,17 +165,10 @@ def _is_library_functional_test(file_path: Path) -> bool:
 def _is_library_unit_test(file_path: Path) -> bool:
     """Return ``True`` for ``libraries/<name>/tests/test_*.py`` paths.
 
-    Structural only.  Lane filtering layers on top of this and is
-    driven by in-file markers, not the filename.  A CPython-only file
-    declares ``__chumicro_runtimes__ = ("cpython",)`` and is excluded
-    from the unix-port / device-unit lanes by
-    :func:`_filter_targets_by_marker` (it still runs under plain
-    CPython pytest).  A host-only file declares
-    ``__chumicro_host_only__ = True`` and is excluded from the
-    on-device unit sweep by :func:`pytest_collect_file` /
-    :func:`pytest_pycollect_makemodule` (it still runs on the
-    unix-ports and CPython).  The marker is the contract, and the
-    filename is never inspected for lane.
+    Path-shape check only.  Lane membership (CPython-only,
+    host-only, on-device) is decided downstream by in-file markers
+    (``__chumicro_runtimes__``, ``__chumicro_host_only__``), never by
+    the filename.
     """
     if not (
         file_path.suffix == ".py"

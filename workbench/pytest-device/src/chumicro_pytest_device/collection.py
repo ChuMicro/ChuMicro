@@ -1,19 +1,15 @@
-"""Collection-time machinery: AST-based test discovery + pytest items.
+"""Collection-time machinery: AST-based test discovery and pytest items.
 
-Pytest sees test files under ``libraries/<name>/functional_tests/``
-and (under ``--target unix-port`` / ``--target device-unit``)
-``libraries/<name>/tests/`` via :func:`pytest_collect_file`, which
-returns a :class:`DeviceTestFile` instead of letting pytest's default
-``Module`` factory import the file on the host (device-only imports
-would fail).  The collector parses test names via AST and yields a
-:class:`DeviceTestItem` per ``(test_function, target_runtime)`` pair,
-plus the synthetic :class:`DevicePrepareItem` / :class:`DeviceRunFileItem`
-that own the file-batch connect / stage / execute cost.
-
-Item attributes are public (no underscores): ``library_name``,
-``function_name``, ``batch_key()``, ``reported_duration``, and
-``reported_test_total_duration`` are read by helpers in :mod:`plugin`
-and :mod:`device_backend` without ``# noqa: SLF001`` noise.
+The pytest hooks here intercept files under
+``libraries/<name>/functional_tests/`` (always) and
+``libraries/<name>/tests/`` (under ``--target unix-port`` /
+``--target device-unit``), returning a :class:`DeviceTestFile` so
+the host never imports a file that top-level imports a device-only
+module.  :class:`DeviceTestFile` parses test names via AST and
+yields one :class:`DeviceTestItem` per ``(test_function,
+target_runtime)`` pair, plus synthetic
+:class:`DevicePrepareItem` and :class:`DeviceRunFileItem` items
+that own the once-per-file-batch connect / stage / execute cost.
 """
 
 from __future__ import annotations
@@ -274,20 +270,23 @@ def _staged_file_names(source_dirs: list[Path]) -> list[str]:
 def _session_effective_deploy_mode(
     session: pytest.Session, device_entry: DeviceEntry,
 ) -> str:
-    """Resolve the device's deploy mode through the shared policy, once.
+    """Return the deploy mode (``flash`` / ``ram`` / ...) for one device.
 
-    Combines the precedence resolution (CLI then per-device then global
-    then flash) with the shared :func:`resolve_deploy_mode`.  Two inputs
-    have opposite scoping: ``requires_flash_libs``
-    is *always* the full transitive closure (a flash-only dependency
-    OOMs on import regardless of test shape), while ``staged_files`` is
-    caller-scoped: the full closure for a functional run (it really
-    uses a dependency's data file) but the libraries' own ``src`` for
-    the unit sweep (a pure unit test can't reach a dependency's data
-    file, so ``sockets``'s ``_ca_bundle.der`` must not poison every
-    sockets-dependent suite).  Memoized per device: the transport is
-    cached per device so the mode is fixed for the session, and the
-    explanation prints exactly once.
+    Reads the CLI override and the device entry to get the configured
+    starting point, then asks :func:`resolve_deploy_mode` to apply
+    policy: a flash-only dependency forces flash, a data-file
+    dependency may force flash, and so on.  The result is memoized on
+    the session cache and any policy-driven mode change is surfaced
+    via ``warnings.warn`` exactly once per device.
+
+    Policy inputs scope differently.  ``requires_flash_libs`` always
+    walks the full transitive closure: a flash-only dependency OOMs
+    on import no matter what shape the test takes.  ``staged_files``
+    is caller-scoped: the full closure for a functional run that
+    really exercises a dependency's data file, but each library's own
+    ``src`` only for the unit sweep, so ``sockets``'s
+    ``_ca_bundle.der`` does not flip every sockets-dependent suite
+    into flash.
     """
     cache = _session_cache(session)
     device_id = device_entry.identifier

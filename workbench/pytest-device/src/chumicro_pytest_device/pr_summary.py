@@ -1,13 +1,14 @@
 """Markdown PR-summary rendering for device test runs.
 
-The ``--pr-summary`` hook of the chumicro-pytest-device
-plugin consumes per-test reports and feeds
-:func:`format_pr_summary_block` a :class:`DeviceRunResult` list
-to render the final Markdown block users paste into PRs.
+Renders a single Markdown block summarising a device-test invocation
+for pasting into a PR description.  The plugin's ``--pr-summary`` hook
+collects per-device, per-file, and per-test results into
+:class:`DeviceRunResult` and hands the list to
+:func:`format_pr_summary_block` to produce the final text.
 
-Keep the output stable: it lands in PR bodies and reviewers skim
-it at-a-glance.  Any behavior change here should be paired with a
-baseline update on the ``test-libraries-functional`` smoke runs.
+Output is intentionally readable both as raw text (monospace tables)
+and as rendered Markdown on GitHub.  Layout changes need a paired
+baseline refresh on the ``test-libraries-functional`` smoke runs.
 """
 
 from __future__ import annotations

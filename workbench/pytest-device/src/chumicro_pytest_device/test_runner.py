@@ -1,13 +1,9 @@
 """Plugin-internal device-test helpers.
 
 Owns the primitives that actually touch device hardware: bootstrap
-generation, transport construction, and the workspace-source
+script generation, transport construction, and the workspace-source
 discovery that staging depends on.  Orchestration (test selection,
 per-device loops, PR-summary rendering) lives in :mod:`plugin`.
-
-:func:`resolve_library_source_dirs` accepts a ``libraries_root``
-parameter so any pytest invocation can supply its own workspace
-layout via ``pytest.Config.rootpath``.
 """
 
 from __future__ import annotations
@@ -31,7 +27,10 @@ _DEPENDENCY_VERSION_SPLITTER = re.compile(r"[><=!;~\[]")
 
 
 def _strip_pip_dependency_version(dependency: str) -> str:
-    """``"chumicro-timing>=0.1"`` -> ``"chumicro-timing"``."""
+    """Strip version, extras, and environment markers from a pip dependency string.
+
+    ``"chumicro-timing>=0.1"`` returns ``"chumicro-timing"``.
+    """
     return _DEPENDENCY_VERSION_SPLITTER.split(dependency, maxsplit=1)[0].strip()
 
 
@@ -260,13 +259,12 @@ def build_device_bootstrap(
     test_file: Path,
     function_filter: str | None,
 ) -> str | list[str]:
-    """Build the bootstrap script(s) for the given device + test file.
+    """Build the bootstrap script(s) that drive *test_file* on the device.
 
-    MicroPython uses the standard import-based bootstrap.
-    CircuitPython in RAM mode uses an inline bootstrap with module
-    injection (returns a list of chunked raw-REPL scripts).
-    CircuitPython in flash mode uses the standard import-based path
-    since files are on the device.
+    Returns a single script string for MicroPython and CircuitPython-
+    flash (files live on-device and import normally), or a list of
+    chunked raw-REPL scripts for CircuitPython-RAM (sources have to
+    be injected inline because there's no writable filesystem).
     """
     if device_entry.runtime == "circuitpython" and transport.mode == "ram":
         from chumicro_deploy import build_circuitpython_bootstrap_scripts

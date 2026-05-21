@@ -1,39 +1,27 @@
 """Conftest-side hook for staging ``/runtime_config.msgpack`` onto the device.
 
 A library's ``functional_tests/conftest.py`` calls
-:func:`set_runtime_config` from its ``pytest_configure`` hook to hand
-the plugin a flat dotted-key dict (typically the result of
+:func:`set_runtime_config` from its ``pytest_configure`` hook with a
+flat dotted-key dict (typically built from
 ``chumicro_workspace.compose_runtime_config()`` plus any dynamic
 overrides like a randomised mosquitto-broker port).  The plugin
-msgpack-encodes the dict once and stages it at
-``/runtime_config.msgpack`` via ``transport.stage(extra_files=...)``
-on every test invocation, so on-device test code can read it via the
-same ``chumicro_config.load_runtime_config()`` API user code uses.
+msgpack-encodes the dict and stages it at
+``/runtime_config.msgpack`` via ``transport.stage(extra_files=...)``,
+so on-device test code can read it through the same
+``chumicro_config.load_runtime_config()`` API used by user code.
 
-Design notes:
+Two ways a test session sees "no config":
 
-* Storage is :attr:`pytest.Config.stash`.  Stash is mutable, so a
-  session-scoped fixture can overwrite the registered dict after
-  ``pytest_configure`` if a future consumer needs late-binding.  No
-  current consumer does.  Every dynamic value is resolved
-  synchronously inside ``pytest_configure``.
-* Passing ``None`` (or omitting the call entirely) suppresses staging.
-  Without ``required_keys`` declared, the on-device test then sees
-  ``OSError`` from ``load_runtime_config()`` and skips silently, the
-  same path that fires on a fresh clone with no credentials.
-* The optional ``required_keys`` argument lets a conftest declare
-  which flat dotted keys its functional tests *need* in the staged
-  payload.  When those keys aren't all present (None payload OR a
-  non-None payload that's missing one or more), the plugin skips
-  every ``DeviceTestItem`` at collection time with an explicit
-  "missing required runtime-config keys: …" message.  Beats the
-  cryptic on-device ``MissingConfigKey`` boot crash that the silent-
-  skip path produces.
-* The plugin caches the encoded bytes keyed by ``id(payload)``, so a
-  steady payload pays one ``msgpack.packb`` per pytest invocation, not
-  per stage call.  Overwriting the stashed dict (e.g. from a session
-  fixture) flips the id and invalidates the cache automatically.
-
+* ``payload`` is ``None`` (or :func:`set_runtime_config` is never
+  called).  Nothing is staged. On-device tests get ``OSError`` from
+  ``load_runtime_config()`` and skip silently, the same path a fresh
+  clone with no credentials hits.
+* ``required_keys`` is non-empty and one or more keys are missing
+  from the payload.  The plugin skips every ``DeviceTestItem`` at
+  collection time with an explicit ``"missing required runtime-config
+  keys: ..."`` message, which is preferable to the cryptic
+  ``MissingConfigKey`` boot crash the silent-skip path produces when
+  a test actually needs the value.
 """
 
 from __future__ import annotations
@@ -94,9 +82,9 @@ def get_runtime_config(config: pytest.Config) -> dict | None:
 
 
 def get_required_keys(config: pytest.Config) -> tuple[str, ...]:
-    """Return the required-keys tuple registered by the latest
-    :func:`set_runtime_config` call, or ``()`` when no validation was
-    requested."""
+    """Return the required-keys tuple from the latest :func:`set_runtime_config`
+    call, or ``()`` when no validation was requested.
+    """
     return config.stash.get(_REQUIRED_KEYS_KEY, ())
 
 
