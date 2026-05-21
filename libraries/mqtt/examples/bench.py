@@ -1,7 +1,7 @@
 """Self-driving on-device bench for :mod:`chumicro_mqtt`.
 
 Walks every inbound-handling tier (steady / intact / oversized) plus
-QoS-1 round-trip, keepalive, and a sustained burst — all against a
+QoS-1 round-trip, keepalive, and a sustained burst, all against a
 real broker, all from the device alone.  Subscribes to a private
 topic and publishes-to-itself for every inbound test, so no host
 script is required.  Watch the serial output for the per-scenario
@@ -10,10 +10,10 @@ progress lines and the final summary table.
 The library's design promises three things this bench verifies live:
 
 * a steady-state inbound PUBLISH ≤ ``rx_buffer_size`` parses inline
-  with no heap allocation;
+  with no heap allocation,
 * a PUBLISH between ``rx_buffer_size + 1`` and ``max_message_bytes``
   allocates a one-shot buffer for the full payload and frees it after
-  delivery;
+  delivery,
 * a PUBLISH above ``max_message_bytes`` (and a topic above
   ``rx_buffer_size``) drain via rolling discard, with no payload-sized
   allocation regardless of how big the inbound message is.
@@ -29,7 +29,7 @@ Read from the deployed ``runtime_config.msgpack``:
 
 * WiFi: ``wifi.ssid`` / ``wifi.password`` (read by ``helpers.wifi_up``).
 * MQTT: ``mqtt.broker.host`` / ``mqtt.broker.port`` (set by
-  ``secrets.toml`` ``[mqtt.broker]``) — or override with the
+  ``secrets.toml`` ``[mqtt.broker]``).  Override with the
   ``BROKER_HOST`` / ``BROKER_PORT`` constants below for ad-hoc runs.
 
 Deploying
@@ -39,8 +39,8 @@ Deploying
 
     chumicro-workspace deploy-example mqtt bench --device <id>
 
-Then watch serial output (``chumicro-repl --device <id>``) — the
-device drives every scenario itself; no host script needed.
+Then watch serial output (``chumicro-repl --device <id>``).  The
+device drives every scenario itself.  No host script needed.
 
 What you should see
 ===================
@@ -88,7 +88,7 @@ def line(text):
 
 
 # ---------------------------------------------------------------------------
-# Boot — wifi, broker, subscriptions.
+# Boot: wifi, broker, subscriptions.
 # ---------------------------------------------------------------------------
 
 config = runtime_config()
@@ -171,7 +171,7 @@ line(f"CONNECTED state={mqtt.state}")
 # Subscribe to two topics:
 #   * One we publish small/medium/large payloads to.
 #   * A wildcard for the oversize-topic test (a 300-char topic blows
-#     rx_buffer_size; the wildcard lets the broker deliver it back).
+#     rx_buffer_size, the wildcard lets the broker deliver it back).
 INBOUND_TOPIC = f"{CLIENT_ID}/inbound"
 INBOUND_WILDCARD = f"{CLIENT_ID}/inbound/+"
 SUMMARY_TOPIC = f"{CLIENT_ID}/bench-summary"

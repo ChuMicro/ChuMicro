@@ -10,7 +10,7 @@ What it does:
 * `runtime_config()` reads `/runtime_config.msgpack` (a flat-key
   config dict baked onto the device by whichever deploy pipeline
   put it there) and returns it as a Python dict.  Uses the inline
-  decoder below — works on every runtime including Pi Pico W
+  decoder below.  Works on every runtime including Pi Pico W
   MicroPython, whose firmware doesn't ship `msgpack`.
 * `wifi_up()` brings the link up via the runtime's built-in wifi
   primitives and returns ``(radio, ip)``.
@@ -55,12 +55,12 @@ MicroPython::
     while not wlan.isconnected():
         time.sleep(0.1)
     ip = wlan.ifconfig()[0]
-    # MP has no per-radio socket pool — `import socket` operates
+    # MP has no per-radio socket pool: `import socket` operates
     # against the global active interface, so there's nothing equivalent
     # to thread around.  `wifi_up` returns `None` for the radio slot.
 """
 
-#: Helper imports CP `wifi` and MP `network` — runtime built-ins, not
+#: Helper imports CP `wifi` and MP `network`: runtime built-ins, not
 #: importable on the host.  The marker tells `verify_examples.py` to
 #: skip platform-import checks here.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
@@ -81,8 +81,8 @@ def _resolve_ticks_ms():
     ``time.monotonic_ns`` > ``time.monotonic`` (final fallback).
     Reimplemented inline so example helpers don't depend on
     ``chumicro_timing`` (examples can only import their owning
-    library + its declared deps; not every library declares
-    ``chumicro_timing`` — ``chumicro-sockets`` doesn't, and its
+    library + its declared deps).  Not every library declares
+    ``chumicro_timing`` (``chumicro-sockets`` doesn't, and its
     ``udp_echo_client.py`` example still needs ``ticks_ms``).
     """
     try:
@@ -125,7 +125,7 @@ def ticks_ms():
 def ticks_add(ticks, delta):
     """Add *delta* milliseconds to a wrapping tick value.
 
-    Mirrors :func:`chumicro_timing.ticks_add` — wraps at ``2**29``;
+    Mirrors :func:`chumicro_timing.ticks_add`.  Wraps at ``2**29``,
     *delta* must be in ``(-2**28, +2**28)``.
     """
     if -_TICKS_HALFPERIOD < delta < _TICKS_HALFPERIOD:
@@ -136,7 +136,7 @@ def ticks_add(ticks, delta):
 def ticks_diff(end, start):
     """Signed millisecond difference *end* minus *start* with wraparound.
 
-    Mirrors :func:`chumicro_timing.ticks_diff` — correct as long as
+    Mirrors :func:`chumicro_timing.ticks_diff`.  Correct as long as
     the two values are within ``2**28`` ms (~3.1 days) of each other.
     """
     diff = (end - start) & _TICKS_MAX
@@ -159,7 +159,7 @@ _CYW43_MACHINES = (
 def runtime_config():
     """Return ``/runtime_config.msgpack`` decoded as a dict, or ``{}``.
 
-    Uses the inline msgpack decoder below — no on-device `msgpack`
+    Uses the inline msgpack decoder below.  No on-device `msgpack`
     module needed.  Returns ``{}`` if the file is absent (raw
     single-file deploys, or any deploy that didn't bake one).
     """
@@ -175,13 +175,13 @@ def runtime_config():
 
 
 def wifi_up(default_ssid, default_password, *, timeout_s=15):
-    """Bring wifi up; return ``(radio, ip)``.
+    """Bring wifi up.  Return ``(radio, ip)``.
 
     Reads `wifi.ssid` / `wifi.password` from `/runtime_config.msgpack`
-    when present; otherwise uses the supplied defaults.  Blocks until
+    when present, otherwise uses the supplied defaults.  Blocks until
     the link is connected or *timeout_s* elapses.
 
-    On CircuitPython the returned radio is `wifi.radio` — pass it
+    On CircuitPython the returned radio is `wifi.radio`: pass it
     through wherever a socket pool is built (``socketpool.SocketPool(radio)``).
     On MicroPython the returned radio is ``None``: there's no per-radio
     socket pool to thread, the global `socket` module reads from
@@ -205,7 +205,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
 
     name = sys.implementation.name
     if name == "circuitpython":
-        import wifi  # noqa: PLC0415 — CP-only
+        import wifi  # noqa: PLC0415 - CP-only
         wifi.radio.connect(ssid, password)
         deadline = time.time() + timeout_s
         while not wifi.radio.connected:
@@ -215,7 +215,7 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         return wifi.radio, str(wifi.radio.ipv4_address)
 
     if name == "micropython":
-        import network  # noqa: PLC0415 — MP-only
+        import network  # noqa: PLC0415 - MP-only
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
         # Whitelisted CYW43 boards need ``wlan.config(pm=...)`` to skip
@@ -239,14 +239,14 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
 
 
 # ---------------------------------------------------------------------------
-# Tiny msgpack decoder — handles every type used by runtime_config.msgpack:
+# Tiny msgpack decoder.  Handles every type used by runtime_config.msgpack:
 # nil / bool / int (every width) / float 32+64 / str / bin / array / map.
 # No ext / timestamp.  Spec: github.com/msgpack/msgpack/blob/master/spec.md
 # ---------------------------------------------------------------------------
 
 
 def _msgpack_unpack(data, pos):
-    """Decode one msgpack value starting at *pos*; return ``(value, new_pos)``."""
+    """Decode one msgpack value starting at *pos*.  Return ``(value, new_pos)``."""
     tag = data[pos]
     pos += 1
     if tag < 0x80:                      # positive fixint

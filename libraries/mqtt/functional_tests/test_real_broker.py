@@ -4,8 +4,8 @@ End-to-end: bring wifi up on the device, connect to a configured
 MQTT broker, publish + subscribe to a unique topic, verify the
 inbound PUBLISH round-trips back via QoS 1.
 
-Skipped at collection time when no credentials are configured —
-the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+Skipped at collection time when no credentials are configured.
+The conftest's ``set_runtime_config(..., required_keys=...)`` declares
 ``wifi.ssid`` / ``wifi.password`` / ``mqtt.broker.host`` /
 ``mqtt.broker.port`` as required, so the host plugin applies
 ``pytest.mark.skip`` with a clear message before deploy.  Credentials +
@@ -21,14 +21,14 @@ Broker
 ======
 
 The conftest spawns a host-side Mosquitto broker on the LAN when
-``mosquitto`` is on ``PATH``; otherwise the test uses whatever
+``mosquitto`` is on ``PATH``.  Otherwise the test uses whatever
 ``mqtt.broker.host`` / ``mqtt.broker.port`` the user has set in
 ``secrets.toml`` / per-library ``config.toml``.  Topics are
 namespaced ``chumicro-test/<unique>/...`` so we don't collide with
 anyone else's experiments.
 
 If the broker is unreachable from the device's network, the test
-fails with a clear timeout — that's a real network issue, not a
+fails with a clear timeout.  That's a real network issue, not a
 test bug.
 """
 
@@ -55,8 +55,8 @@ def _sleep_ms(duration_ms: int) -> None:
 #: Use chumicro-timing's ``ticks_ms`` rather than a per-test-file
 #: shim so the value we feed into ``MQTTClient.handle(now_ms)`` is in
 #: the same time domain as the deadlines the client computes
-#: internally.  On CircuitPython, ``time.ticks_ms`` does not exist —
-#: a naive ``time.monotonic() * 1000`` shim returns an unwrapped
+#: internally.  On CircuitPython, ``time.ticks_ms`` does not exist.
+#: A naive ``time.monotonic() * 1000`` shim returns an unwrapped
 #: float-derived ms count, while ``chumicro-timing`` resolves to
 #: ``supervisor.ticks_ms`` which is 29-bit-wrapped (the portable
 #: tick contract ``chumicro-timing`` exposes).  Mixing the two on CP makes
@@ -121,7 +121,7 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
 
     def remember(topic, payload):
         # MP/CP MQTT delivers topic as ``str`` and payload as
-        # ``bytes`` / ``bytearray``; coerce to uniform (str, bytes)
+        # ``bytes`` / ``bytearray``.  Coerce to uniform (str, bytes)
         # so assertions don't have to handle either form.
         topic_str = topic.decode() if isinstance(topic, (bytes, bytearray)) else topic
         payload_bytes = (
