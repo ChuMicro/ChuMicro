@@ -145,11 +145,9 @@ def encode_string(value):
     return struct.pack(">H", len(value)) + value
 
 
-# Internal append-via-pack_into helpers used by every encoder.  Cuts
-# per-pack allocation in half on MicroPython by extending the
-# destination with a pre-built zero literal and writing directly with
-# ``struct.pack_into`` instead of allocating a fresh ``bytes`` from
-# ``struct.pack``.
+# Append-into helpers used by the encoders.  Use ``struct.pack_into``
+# against a pre-extended destination instead of ``struct.pack``,
+# avoiding the per-pack ``bytes`` allocation.
 _ZERO2 = b"\x00\x00"
 
 
