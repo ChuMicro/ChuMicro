@@ -75,9 +75,7 @@ runner.add_periodic(heartbeat, period_ms=2000)
 print("Running...\n")
 
 while True:
-    # tick() captures time once, checks all tasks, and fires
-    # any that are due.  Every-tick handlers run on every call.
-    # Periodic handlers run only when their interval has elapsed.
+    # tick() captures the current time once and fires every due handler.
     runner.tick()
 
     # In a real project, the rest of your main loop goes here.
