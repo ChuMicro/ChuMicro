@@ -21,3 +21,4 @@ _(nothing in flight)_
 - [ ] **`/audit-library libraries/requests` — dedup test helpers (`make_factory` / `canned_response` / `drive_until_done` / `make_client` repeated near-verbatim across 4 `test_client_*.py` files).**
 - [ ] **`examples/helpers.py` cross-library drift.**  [workstreams/examples-helpers-cross-library-drift.md](workstreams/examples-helpers-cross-library-drift.md)
 - [ ] **`/audit-library libraries/timing` — `_sleep_ms` duplicated across `functional_tests/test_heartbeat.py` and `test_heartbeat_ticks.py` (latter uses tabs, former spaces).**
+- [ ] **`/audit-library libraries/ntp` — `functional_tests/test_real_ntp.py:120` `print("NTP_SKIP no creds")` is dead and mislabeled (runs after a successful run, post-finally, past the wifi-cfg-None guard).**

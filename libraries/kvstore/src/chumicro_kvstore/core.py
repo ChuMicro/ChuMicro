@@ -45,7 +45,7 @@ class Backend:
 
     ``load()`` returns the persisted bytes (``b""`` for a blank
     substrate) and raises ``KVStoreCorrupt`` on integrity-check failure
-    (CP NVM's CRC mismatch is the canonical case).  ``save(payload)``
+    (CP NVM raises this on CRC mismatch, for example).  ``save(payload)``
     overwrites the persisted state and raises ``KVStoreFull`` if the
     substrate can't accept that many bytes.
 
@@ -157,10 +157,10 @@ class KVStore:
         try:
             loaded = unpackb(payload)
         except ValueError:
-            # Malformed framing (truncated / over-length / trailing /
-            # too-deep) — unpackb is a trusting decoder and now rejects
-            # these loudly.  Same outcome as a non-dict payload: report
-            # corruption, behave empty, never raise at construction.
+            # unpackb raises ValueError on malformed framing (truncated,
+            # over-length, trailing, too-deep).  Treat that the same as a
+            # non-dict payload: report corruption, behave empty, never
+            # raise at construction.
             loaded = None
         if not isinstance(loaded, dict):
             self._data = {}

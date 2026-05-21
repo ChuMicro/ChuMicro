@@ -131,7 +131,7 @@ def test_save_then_load_round_trips() -> None:
 
 
 def test_save_writes_to_canonical_path() -> None:
-    """Verify the bytes land at /_chu_kv.msgpack — guard the wire shape."""
+    """Verify the bytes land at ``/_chu_kv.msgpack``."""
     fake = _FakeFs()
     backend = MpLittlefsBackend(filesystem=fake)
     backend.save(b"hello")
@@ -139,7 +139,7 @@ def test_save_writes_to_canonical_path() -> None:
 
 
 def test_save_uses_tmp_then_rename() -> None:
-    """Atomic-write protocol: write tmp → sync → rename → cleanup tmp."""
+    """Atomic-write protocol: write tmp, sync, rename, cleanup tmp."""
     fake = _FakeFs()
     backend = MpLittlefsBackend(filesystem=fake)
     backend.save(b"payload bytes")
@@ -189,7 +189,9 @@ def test_save_at_exact_capacity_succeeds() -> None:
 
 
 def test_kvstore_with_mp_littlefs_backend_round_trips_through_reload() -> None:
-    """Full vertical: KVStore → MpLittlefsBackend → fake fs → reload."""
+    """Full vertical: KVStore through MpLittlefsBackend, a fake fs, and
+    back via reload.
+    """
     fake = _FakeFs()
     backend = MpLittlefsBackend(filesystem=fake)
     store = KVStore(backend=backend)
@@ -210,7 +212,7 @@ def test_kvstore_with_mp_littlefs_backend_construction_handles_blank_fs() -> Non
 
 
 def test_kvstore_commit_if_changed_skips_unchanged() -> None:
-    """Wear defense — identical state ⇒ no rename / sync."""
+    """Wear defense: identical state means no rename or sync."""
     fake = _FakeFs()
     backend = MpLittlefsBackend(filesystem=fake)
     store = KVStore(backend=backend)

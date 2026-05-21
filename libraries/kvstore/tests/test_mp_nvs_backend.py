@@ -72,7 +72,7 @@ def test_runtime_acquisition_raises_on_cpython() -> None:
 
 
 def test_namespace_and_payload_key_constants_match_adr() -> None:
-    """The NVS namespace + key are fixed values — guard against drift."""
+    """The NVS namespace and key are fixed values."""
     assert MpNvsBackend.NAMESPACE == "chu_kv"
     assert MpNvsBackend.PAYLOAD_KEY == "payload"
 
@@ -97,7 +97,7 @@ def test_save_then_load_round_trips() -> None:
 
 
 def test_save_writes_to_canonical_namespace_and_key() -> None:
-    """The payload lands at namespace=chu_kv, key=payload — guard the wire."""
+    """The payload lands at namespace=chu_kv, key=payload."""
     fake = _FakeNvs()
     backend = MpNvsBackend(nvs=fake)
     backend.save(b"hello")
@@ -148,7 +148,9 @@ def test_save_at_exact_capacity_succeeds() -> None:
 
 
 def test_kvstore_with_mp_nvs_backend_round_trips_through_reload() -> None:
-    """Full vertical: KVStore → MpNvsBackend → fake NVS → reload."""
+    """Full vertical: KVStore through MpNvsBackend, a fake NVS, and
+    back via reload.
+    """
     fake = _FakeNvs()
     backend = MpNvsBackend(nvs=fake)
     store = KVStore(backend=backend)
@@ -171,7 +173,7 @@ def test_kvstore_with_mp_nvs_backend_construction_handles_blank_nvs() -> None:
 
 
 def test_kvstore_commit_if_changed_skips_unchanged() -> None:
-    """Wear defense — identical state ⇒ no NVS commit."""
+    """Wear defense: identical state means no NVS commit."""
     fake = _FakeNvs()
     backend = MpNvsBackend(nvs=fake)
     store = KVStore(backend=backend)

@@ -67,7 +67,7 @@ class MpLittlefsBackend(Backend):
         """Return the file contents, or ``b""`` if the file does not exist.
 
         Missing file is treated as a blank substrate, no corruption
-        event — the canonical first-boot answer.
+        event.
         """
         try:
             handle = self._fs.open(self._path, "rb")

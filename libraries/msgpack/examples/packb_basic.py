@@ -24,7 +24,7 @@ settings = {
     4: True,
 }
 
-# packb returns bytes — ready to write to NVM, send over the network, etc.
+# packb returns bytes ready to write to NVM, send over the network, etc.
 data = packb(settings)
 print(f"packed {len(data)} bytes")
 

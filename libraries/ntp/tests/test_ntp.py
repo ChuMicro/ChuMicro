@@ -365,10 +365,10 @@ def test_cancel_in_flight_marks_failed() -> None:
 
 class TestFromConfig:
     """``NTPClient.from_config`` reads the manifest's optional keys with
-    sensible fall-back defaults.  Unlike ``MQTTClient.from_config``, no
-    key is ever required — the public NTP pool is the documented
-    fallback for ``ntp.server`` and the auto-built socket factory reads
-    zero config keys."""
+    sensible fall-back defaults.  Every key is optional — the public NTP
+    pool is the documented fallback for ``ntp.server`` and the auto-built
+    socket factory reads zero config keys, so an empty config is valid
+    input."""
 
     @staticmethod
     def _injected_factory(sock: FakeUDPSocket):
@@ -536,9 +536,5 @@ class TestFromConfig:
                 sys.modules["chumicro_ntp.sockets_factory"] = original
 
 
-# sockets_factory submodule lives in test_ntp_pytest.py — those tests
-# poke CPython-internal stdlib socket state and the CP unix-port factory
-# can't construct without a hardware ``radio=``.  The cross-runtime
-# contract (factory returns a working UDP socket bound to ephemeral
-# port, with sendto/recvfrom_into/getsockname) is exercised on real
-# hardware in functional_tests/test_real_ntp.py.
+# sockets_factory submodule lives in test_ntp_pytest.py
+# (CPython-only; see that file's docstring for why).

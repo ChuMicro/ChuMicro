@@ -9,8 +9,8 @@ with magic header + CRC32 for power-loss-corruption detection::
     offset 10: LEN bytes — MSGPACK payload
 
 A blank slab (all ``0xFF`` from raw flash erase, or all ``0x00`` on
-some chips) is treated as "no state yet" and reports ``is_corrupt =
-False, bytes_used = 0``.  Bad magic raises ``KVStoreCorrupt``.
+some chips) is treated as "no state yet" and loads as empty.  Bad
+magic raises ``KVStoreCorrupt``.
 
 Tests inject a ``bytearray`` ``nvm`` substrate to exercise the full
 framing without a CircuitPython runtime.
@@ -71,9 +71,9 @@ class CpNvmBackend(Backend):
         Raises:
             KVStoreCorrupt: Magic, length, or CRC failed validation.
         """
-        # Blank slab — raw flash typically erases to 0xFF and some chips
-        # init to 0x00; either pattern in the magic position means "never
-        # written" rather than corrupted.
+        # Treat all-0xFF and all-0x00 magic bytes as a blank slab.  Raw
+        # flash typically erases to 0xFF, and some chips power up to
+        # 0x00.  Neither pattern indicates corruption.
         magic = bytes(self._nvm[0 : len(self.HEADER_MAGIC)])
         if magic in (b"\xff\xff\xff\xff", b"\x00\x00\x00\x00"):
             return b""
@@ -112,8 +112,10 @@ class CpNvmBackend(Backend):
             + len(payload).to_bytes(2, "little")
             + crc.to_bytes(4, "little")
         )
-        # Write header + payload as a single contiguous span.  CP's
-        # ByteArray slice-assignment commits to NVM atomically per slice;
-        # on raw bytearray (host tests) it's a plain memory write.
+        # Write header + payload as a single contiguous span.  On
+        # CircuitPython the slab is ``microcontroller.nvm``, whose
+        # slice-assignment commits to flash atomically per slice.  On
+        # host tests the slab is a plain bytearray, so the assignment is
+        # just a memory write.
         self._nvm[0 : self.HEADER_SIZE] = header
         self._nvm[self.HEADER_SIZE : self.HEADER_SIZE + len(payload)] = payload

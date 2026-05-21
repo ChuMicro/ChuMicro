@@ -6,8 +6,8 @@ single backend's suite:
 * ``KVStore(backend="auto")`` picks the substrate-appropriate backend
   for each runtime + board.
 * Every ``chumicro-msgpack``-supported value type round-trips through
-  the persistence layer (int, bool, float, str, bytes, list, tuple →
-  list, dict, None).
+  the persistence layer (int, bool, float, str, bytes, list, tuple
+  (decodes to list), dict, None).
 * The boot-counter pattern works on the auto-selected backend
   without the test having to know which one was picked.
 
@@ -111,7 +111,7 @@ def test_auto_backend_round_trips_all_msgpack_value_types() -> None:
 
 
 def test_auto_backend_boot_counter_pattern() -> None:
-    """The canonical use case works on whichever backend auto picked."""
+    """Boot-counter pattern works on whichever backend auto picked."""
     _wipe_substrates()
     for expected in (1, 2, 3):
         store = KVStore(backend="auto")
@@ -157,7 +157,7 @@ def test_corrupt_substrate_lets_app_keep_running() -> None:
     app can log + reset, and continues with an empty store.
     """
     if _IS_CIRCUITPYTHON:
-        # Tamper with NVM magic — easiest cross-board way to fake corruption.
+        # Tamper with NVM magic: easiest cross-board way to fake corruption.
         microcontroller.nvm[:] = b"\xff" * len(microcontroller.nvm)
         microcontroller.nvm[0:4] = b"XXXX"
         store = KVStore(backend="auto")
