@@ -56,6 +56,6 @@ class _PurePythonPartial:
 
 
 try:
-    from functools import partial  # noqa: F401 — CPython; re-exported.
-except ImportError:  # pragma: no cover — MicroPython/CircuitPython fallback
+    from functools import partial  # noqa: F401 - CPython re-export
+except ImportError:  # pragma: no cover - MicroPython/CircuitPython fallback
     partial = _PurePythonPartial

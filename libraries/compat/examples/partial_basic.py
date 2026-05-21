@@ -24,7 +24,7 @@ def set_led(pin: int, brightness: int) -> None:
     print(f"pin {pin} → {brightness}%")
 
 
-# Freeze the pin number — set_status_led only needs brightness.
+# Freeze the pin number, so set_status_led only needs brightness.
 set_status_led = partial(set_led, 13)
 
 set_status_led(50)
