@@ -44,6 +44,7 @@ Patterns that appear in 3+ libraries are infrastructure candidates.  Look for:
 * **Repeated configuration patterns.**  Multiple libraries with `<X>Config.from_dict()`.  Already addressed by `chumicro-config` per Decision 0036; verify every library follows that decision.
 * **Repeated test-fixture shapes.**  If every networking library's `functional_tests/conftest.py` is structurally identical except for which library is being tested, the conftest is infrastructure.
 * **Repeated boilerplate** in scaffolders / generators / config readers.  Check `scripts/new_library_scaffold.py` and adjacent generator scripts under `scripts/` for ownership of this kind of work.
+* **Scaffold-emitted files that drift after copy.**  `scripts/new_library_scaffold.py` (and similar generators) emit files into each new library at creation time.  Once copied, the destinations drift independently — the scaffold loses its "canonical source" claim the moment two leaves disagree.  Detect with `find libraries -path '*/<subpath>' -exec md5 -q {} \;` (or equivalent): bytes-identical across N libraries + drifted in M others is the canonical scaffold-drift fingerprint.  Concrete example surfaced by `/audit-comments` routing: `libraries/{sockets,http_server,websockets,ntp}/examples/helpers.py` are byte-identical; `mqtt` and `requests` already drifted.  The fix is a workspace-level decision — see "Decision space for cross-library consolidation findings" below.
 
 ### 3. Library-shape candidates
 
@@ -53,6 +54,17 @@ These are the highest-impact and lowest-frequency findings.  When you see one, c
 * **Split candidates.**  One library doing two unrelated jobs.  Evidence: does the library have two clusters of files that don't touch each other?  Two test-file clusters?  Two distinct sets of consumers?
 * **Delete candidates.**  Speculative libraries with zero consumers in the mono-repo + workspace-template.  Evidence: grep `from chumicro_<name>` and `import chumicro_<name>` across both repos.  Zero hits → propose deletion.
 * **Promote candidates.**  Helpers in `support/` or `scripts/` used by 3+ libraries that should become a real library.  Evidence: cross-library imports of internal helpers.
+
+### Decision space for cross-library consolidation findings
+
+When a routed finding (cross-library duplication, scaffold-emitted drift, promote candidate, sibling-cohesion divergence) lands here, the proposal must lay out the user's actual choices.  A "promote to `<where>`" hand-wave is underspecified — the four real options are:
+
+* **(a) shared package** — extract the pattern into a `support/<name>/` package (or a new `libraries/<name>/` if it earns library status); each callsite imports rather than copies.  Best when the pattern has stable internal shape and 3+ consumers.
+* **(b) scaffold + sync** — keep a copy per library, but make the scaffold the canonical source and add a drift check (preflight lint or pre-commit hook) that fails when the leaves disagree with the canonical.  Best when each leaf legitimately needs a local copy (examples, READMEs that ship with the package) and a shared import would couple too hard.
+* **(c) documented contract** — let each library implement independently, but document the contract (an ADR or a `plans/patterns.md` entry) that all implementations must satisfy.  Best when the *shape* matters more than the implementation (state-machine names, return types, error taxonomies).
+* **(d) accept the drift** — the duplication is small, the consequences of divergence are minimal, the cost of consolidation exceeds the cost of carrying N copies.  Record the rationale so future audits don't re-litigate the question.
+
+Each option has a different **executing pathway** that the proposal must name (see Output format — PROPOSALS template).  Without the pathway, the workstream entry in `plans/next-up.md` is incomplete and the next auditor / agent / user has to re-analyse from scratch.
 
 ### 4. Decision-ADR drift
 
@@ -117,6 +129,13 @@ When proposing a workstream candidate (merge / split / promote / cross-cutting r
 
 ## Process
 
+**Entry modes.**  Two ways to invoke this audit:
+
+* **Full sweep** (default) — walk the whole mono-repo per the steps below.  Produces inventory + workstream candidates.  Run once per release cycle or when the ecosystem feels off.
+* **Routed finding** — a sibling audit ([`audit-library`](../audit-library/SKILL.md), [`audit-comments`](../audit-comments/SKILL.md), [`audit-integration`](../audit-integration/SKILL.md), [`audit-publishable-isolation`](../audit-publishable-isolation/SKILL.md)) surfaced a workspace-scope finding and routed it here with evidence pre-loaded.  Skip the full inventory; jump to the relevant dim — cross-library duplication / scaffold drift / sibling-cohesion → dim 2 + the "Decision space" block; merge / split / delete / promote → dim 3 + the "Decision space" block; ADR drift → dim 4; cross-cutting infra → dim 7 — and produce a single workstream proposal.  Repo-wide `/audit-comments` roll-out specifically lands here per that skill's scope note: schedule per-library passes via `plans/next-up.md` rather than running the comment audit across every library in one workspace-level pass.
+
+The full sweep follows steps 1–8 below.  Routed-finding mode skips to step 4 with the sibling's evidence as the starting point and goes straight to step 5 (capture evidence) + step 7 (present punch-list) for the single finding.
+
 1. **Read `plans/next-up.md`, run `git --no-pager log -30 --oneline` for recent landings, and skim `plans/workstreams/`** first.  The audit's purpose is to find work that *isn't* already tracked; knowing what's tracked saves you from re-finding it.
 2. **Walk every library's README + `pyproject.toml`.**  Don't read the source yet — at workspace scope, the source is too much information.  README + pyproject is the contract.
 3. **Build the dependency graph.**  Either via `support/docs/dependency-graph.svg` (if up-to-date) or by grep through `pyproject.toml` files + `import` statements.  Look for cycles, sideways deps, libraries with too many or too few dependencies.
@@ -170,17 +189,48 @@ PUNCH-LIST (small fixes — safe to execute):
 
 PROPOSALS (workstream candidates — for plans/next-up.md):
 
+  Every proposal includes evidence, estimated workstream size, and an
+  *executing pathway* — the skill, script, or focused agent task that
+  closes the loop.  audit-workspace produces the proposal; it does not
+  execute large refactors.  Without the executing pathway named, the
+  workstream entry is incomplete and the next agent / user has to
+  re-analyse from scratch.
+
   merge      <lib_a> + <lib_b> — evidence: <count> consumers overlap, <ratio> of <lib_a>
              is at the boundary.  Estimated workstream: <small / medium / large>.
+             Executing pathway: focused agent task (no single skill covers cross-
+             library merges); land library-by-library so each step is rollback-able.
 
-  promote    <pattern> appears in libraries/{wifi,mqtt,requests}/.  Promote to <where>.
+  promote /  <pattern> appears in libraries/{wifi,mqtt,requests}/.  Decision space
+  consolidate (from §"Decision space for cross-library consolidation findings"):
+               (a) shared support package — extract to support/<name>/
+               (b) scaffold + sync       — canonical in scripts/new_library_scaffold.py
+                                           + drift check (preflight or pre-commit)
+               (c) documented contract   — each library implements; ADR documents shape
+               (d) accept                — record rationale; carry the duplication
+             Recommended: <option> because <one-line reason>.
              Estimated workstream: <small / medium / large>.
+             Executing pathway per option:
+               (a) /new-library covers libraries/<name>/; support/<name>/ is hand-rolled
+                   (no skill currently scaffolds support packages) + cross-library import
+                   edits as a focused agent task.
+               (b) edit scripts/new_library_scaffold.py to be the canonical source +
+                   add a drift check (workbench/checks/ rule or pre-commit hook).
+                   No skill currently fits; focused agent task.
+               (c) /new-decision to author the ADR + per-library docstring or impl
+                   edits as drift surfaces in later audits.
+               (d) Append the rationale to a plans/workstreams/<name>.md note or
+                   the originating ADR.  Nothing to execute beyond that.
 
   split      <lib> handles <X> and <Y> independently — separate consumer sets.
              Estimated workstream: <small / medium / large>.
+             Executing pathway: focused agent task per the split-library workstream
+             pattern (extract X into its own libraries/<x>/, update consumers).
 
   delete     <lib> has zero consumers in mono-repo + workspace-template.
              Estimated workstream: small.
+             Executing pathway: direct edit (rm -rf libraries/<lib>/, update
+             libraries/README.md, run preflight).
 
 DECISION DRIFT:
 
