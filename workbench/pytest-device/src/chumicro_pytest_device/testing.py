@@ -4,29 +4,26 @@ Host-side helpers for tests that exercise the plugin without spinning
 up a real ``pytest.Session`` or building items through pytest's collect
 machinery.
 
-- :class:`FakeConfig` — minimal ``pytest.Config`` stand-in with
+- :class:`FakeConfig`: minimal ``pytest.Config`` stand-in with
   ``rootpath`` + ``stash`` + ``getoption``.
-- :class:`FakeSession` — minimal ``pytest.Session`` stand-in carrying
+- :class:`FakeSession`: minimal ``pytest.Session`` stand-in carrying
   a private ``_TransportCache``, a ``DeviceBackend``, and a
   :class:`FakeConfig`.
-- :func:`hot_path_device` — :class:`DeviceEntry` builder with a
+- :func:`hot_path_device`: :class:`DeviceEntry` builder with a
   reasonable default address per runtime.
-- :func:`prime_transport_cache` — install a transport in the
+- :func:`prime_transport_cache`: install a transport in the
   session-scoped cache without going through
   ``build_transport_for_entry``.
 - :func:`make_prepare_item` / :func:`make_run_file_item` /
-  :func:`make_test_item` — build :class:`DevicePrepareItem` /
+  :func:`make_test_item`: build :class:`DevicePrepareItem` /
   :class:`DeviceRunFileItem` / :class:`DeviceTestItem` without
   pytest's collect machinery (uses ``__new__`` + attribute assignment
   the way the production ``__init__`` does).
 
-The transport fake itself lives in :mod:`chumicro_deploy.testing` —
+The transport fake itself lives in :mod:`chumicro_deploy.testing`.
 :class:`~chumicro_deploy.testing.FakeTransport` carries the full
 ``TransportProtocol`` surface plus the per-call ``outputs`` queue and
 per-method ``*_raises`` hooks the plugin tests script.
-
-Mirrors the structure of :mod:`chumicro_deploy.testing` and
-:mod:`chumicro_workspace.testing`.
 """
 
 from __future__ import annotations
@@ -62,7 +59,7 @@ class FakeConfig:
     """Minimal ``pytest.Config`` stand-in.
 
     Carries the three surfaces the plugin reads: ``rootpath``,
-    ``stash``, and ``getoption``.  ``rootpath`` is always required —
+    ``stash``, and ``getoption``.  ``rootpath`` is always required:
     pinning a default to a hard-coded workspace root silently couples
     tests to live filesystem state.  ``getoption`` returns its
     ``default`` for every name.
@@ -135,8 +132,8 @@ def _init_runtime_item(
     """Set the attributes :class:`DeviceRuntimeItem.__init__` sets.
 
     The production ``__init__`` runs ``pytest.Item.__init__``, which
-    needs a parent — brittle to wire up in unit tests.  This sets the
-    attributes the rest of the codepath reads directly.
+    needs a parent and is brittle to wire up in unit tests.  This sets
+    the attributes the rest of the codepath reads directly.
     """
     item.session = session
     item.test_file = test_file

@@ -1,7 +1,7 @@
-"""DeviceBackend — runs tests on a real board via a chumicro-deploy transport.
+"""DeviceBackend: runs tests on a real board via a chumicro-deploy transport.
 
-Owns the connect → stage → execute → recover flow for the device
-target.  Stateless — all per-device state lives in the session-
+Owns the connect, stage, execute, recover flow for the device
+target.  Stateless: all per-device state lives in the session-
 scoped :class:`chumicro_pytest_device.transport_cache._TransportCache`.
 
 Companion module to :mod:`backends` (the protocol + the unix-port
@@ -61,12 +61,12 @@ def _should_soft_reset_before_stage(
     Both CircuitPython RAM mode and MicroPython mount mode keep the same
     interpreter across test files (raw REPL or persistent serial via
     mpremote).  Without a soft reset between files the previous file's
-    modules stay in ``sys.modules`` and consume heap; on Tier-2 boards
+    modules stay in ``sys.modules`` and consume heap. On Tier-2 boards
     (RP2040 class, 264 KB SRAM) that can exhaust RAM after a handful
     of libraries and fail the next bootstrap with ``MemoryError`` before
     execution even begins.
 
-    The soft reset is a VM-level Ctrl-D via raw REPL — it does not
+    The soft reset is a VM-level Ctrl-D via raw REPL. It does not
     toggle USB or re-enumerate the CDC, so it is safe to run between
     every file.
 
@@ -159,7 +159,7 @@ def _stage_one_item(
 class DeviceBackend:
     """Backend that runs tests on a real board via a ``chumicro-deploy`` transport.
 
-    Owns the connect → stage → execute → recover flow.  Stateless — all
+    Owns the connect, stage, execute, recover flow.  Stateless: all
     per-device state lives in the session-scoped
     :class:`chumicro_pytest_device.transport_cache._TransportCache`.
     """
@@ -172,8 +172,7 @@ class DeviceBackend:
         """Connect the transport and stage source files if needed.
 
         Raises :class:`BackendPrepareError` on transport-connection
-        failure; lets staging exceptions propagate as plain exceptions
-        (matching the original behavior for that path).
+        failure. Staging exceptions propagate as plain exceptions.
         """
         cache = _session_cache(item.session)
         deploy_mode = _session_effective_deploy_mode(item.session, device_entry)
@@ -187,30 +186,30 @@ class DeviceBackend:
 
         # Flash/copy modes persist files on the device filesystem.
         # Default (no ``--per-file``): bulk-stage one library's whole
-        # test suite + src per rsync (fewest rsyncs; fits the ample
-        # flash of PSRAM boards).  ``--per-file``: stage one test file
-        # at a time, because a heavy library's *entire* suite + src +
-        # harness overflows a 491 KB Pi Pico W drive.  Either way
-        # per-library/per-file scope keeps the working-set bounded and
-        # rsync ``--delete`` cleans the prior library/file off.  RAM
-        # mode embeds source inline, so it re-stages per file.
+        # test suite + src per rsync. That uses the fewest rsyncs and
+        # fits the ample flash of PSRAM boards.  ``--per-file``: stage
+        # one test file at a time, because a heavy library's *entire*
+        # suite + src + harness overflows a 491 KB Pi Pico W drive.
+        # Either way per-library/per-file scope keeps the working-set
+        # bounded and rsync ``--delete`` cleans the prior library/file
+        # off.  RAM mode embeds source inline, so it re-stages per file.
         is_filesystem_mode = transport.mode not in ("ram", "mount")
         if is_filesystem_mode and _session_per_file(item.session):
             # ``--per-file`` flash: stage exactly *one* test file at a
             # time (this file + the library src + the harness), with a
             # fresh-VM soft reset before each file.  The bulk path
             # below stages a library's *entire* test suite in one
-            # rsync; a heavy library's full suite + src + harness
+            # rsync, and a heavy library's full suite + src + harness
             # exceeds a 491 KB Pi Pico W CIRCUITPY drive (rsync then
             # fails ``No space left on device`` before any test runs).
             # rsync ``--delete`` keeps the drive at src + harness +
-            # this one file (~bounded, fits 491 KB) and cleans the
-            # prior file — and the prior library — off.  Re-pushing
+            # this one file (bounded, fits 491 KB) and cleans the
+            # prior file (and the prior library) off.  Re-pushing
             # src + harness per file is the deliberate cost: ``--per-
             # file`` exists for the constrained board, where fitting
-            # the drive matters more than rsync count.  Idempotent:
-            # prepare() runs twice per file batch (DevicePrepareItem
-            # then DeviceRunFileItem) — the pending check fires the
+            # the drive matters more than rsync count.  ``prepare()``
+            # runs twice per file batch (DevicePrepareItem then
+            # DeviceRunFileItem), and the pending check fires the
             # reset+stage exactly once.
             batch_key = item.batch_key(device_entry)
             if cache.per_file_reset_pending(batch_key):
@@ -240,7 +239,7 @@ class DeviceBackend:
                 # live modules exhaust a 264 KB board and larger test
                 # modules fail to exec (MemoryError).  With the
                 # entrypoint cleared above, the reboot drops straight
-                # to a clean raw REPL — the same fresh-interpreter
+                # to a clean raw REPL, the same fresh-interpreter
                 # guarantee mount/RAM mode already gets per file.
                 # Reset before the first library too, so the run never
                 # inherits whatever VM state the board booted with.
@@ -276,10 +275,10 @@ class DeviceBackend:
         """Run every test in ``item.test_file`` on the device.
 
         On execution failure, attempts ``transport.recover()`` so the
-        next file can run independently; if recovery itself fails,
+        next file can run independently. If recovery itself fails,
         evicts the transport from the cache so the next item reconnects
-        from scratch.  Always raises :class:`BackendExecuteError` —
-        the caller turns that into a single ``pytest.fail``.
+        from scratch.  Always raises :class:`BackendExecuteError`. The
+        caller turns that into a single ``pytest.fail``.
         """
         cache = _session_cache(item.session)
         transport = cache.get_transport(
@@ -295,10 +294,10 @@ class DeviceBackend:
             return execute_device_bootstrap(transport, bootstrap)
         except Exception as error:
             # Try to recover the board so the next file can run
-            # independently of this failure; if recovery itself
+            # independently of this failure. If recovery itself
             # fails, evict the transport so the next item reconnects
             # from scratch.  Without this, every subsequent file
-            # cascade-failed because the cached transport was stuck
+            # cascade-fails because the cached transport is stuck
             # mid-raw-REPL or mid-mpremote.
             error_message = f"Device execution failed: {error}"
             recovery_failed = False

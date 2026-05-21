@@ -71,7 +71,7 @@ def _parse_test_functions(filepath: Path) -> list[str]:
     Mirrors the on-device runner's discovery rules
     (:func:`chumicro_test_harness.runner._iter_test_functions`):
     module-level ``def test_*`` functions, plus ``test_*`` methods on
-    ``class Test*`` classes reported as ``ClassName.test_method`` — the
+    ``class Test*`` classes reported as ``ClassName.test_method``. That is the
     exact qualified-name format the runner produces, so single-test
     name filters and per-item reporting line up between collection and
     execution.
@@ -127,7 +127,7 @@ def _filter_targets_by_marker(
 
     Without this filter, the plugin parametrizes every test in the
     file with both runtimes when ``defaults.ide_runtime: both`` is
-    set in ``devices.yml`` — and the wrong-runtime parametrization
+    set in ``devices.yml``, and the wrong-runtime parametrization
     fails at import time because the per-runtime source module
     (e.g. ``chumicro_kvstore._backends.cp_nvm``) was never staged on
     the wrong-runtime device.
@@ -137,7 +137,7 @@ def _filter_targets_by_marker(
     ``micropython_esp32`` fold into their base (``micropython``),
     matching :func:`chumicro_deploy.runtime_marker.file_targets_runtime`.
 
-    Files without a marker keep every target — the default-safe path
+    Files without a marker keep every target: the default-safe path
     for runtime-agnostic tests.
     """
     if targets is None:
@@ -180,14 +180,14 @@ def _device_closure_source_dirs(
     (:func:`resolve_library_source_dirs`) for every ``DeviceTestItem``
     targeting *device_entry*, deduplicated.  Deploy mode is
     session-scoped (one cached transport per device), so the resolver
-    must see the whole device's closure up front — a functional test
+    must see the whole device's closure up front. A functional test
     that pulls a dependency's data file has to force the session to
     flash *before* a RAM-mode transport gets cached.
     """
     closure: list[Path] = []
     # ``getattr`` guard mirrors the feature pass: test stubs (FakeSession)
-    # don't populate ``items``; no items ⇒ empty closure ⇒ the resolver
-    # returns the configured mode unchanged.
+    # don't populate ``items``, so an empty closure falls through and the
+    # resolver returns the configured mode unchanged.
     for item in getattr(session, "items", ()):
         if not isinstance(item, DeviceTestItem):
             continue
@@ -217,7 +217,7 @@ def _device_is_unit_sweep(
     only (a pure unit test cannot reach a dependency's data file by the
     runtime-boundary contract, so a dependency's data file must not
     poison every dependent suite into flash).  A run is unit-scoped
-    only when *all* of the device's items are unit tests; any
+    only when *all* of the device's items are unit tests. Any
     functional item makes it closure-scoped (the safe direction).
     """
     items = [
@@ -238,7 +238,7 @@ def _device_own_source_dirs(
     """Each tested library's *own* ``src`` dir (no dependency closure).
 
     The unit-sweep ``staged_files`` scope: only ``chumicro_sockets``'s
-    own suite sees its ``_ca_bundle.der``; a light sockets *user*
+    own suite sees its ``_ca_bundle.der``. A light sockets *user*
     (``ntp``) does not, so the data file does not flip it to flash.
     """
     own: list[Path] = []
@@ -259,8 +259,8 @@ def _staged_file_names(source_dirs: list[Path]) -> list[str]:
 
     ``transport.stage`` copies whole ``src`` trees, so the resolver's
     "any non-``.py`` data file" check must see them all.
-    ``__pycache__`` is build cruft the staging rsync never carries —
-    excluding it stops a stray ``.pyc`` being misread as a shipped
+    ``__pycache__`` is build cruft the staging rsync never carries.
+    Excluding it stops a stray ``.pyc`` being misread as a shipped
     asset and wrongly forcing flash.
     """
     names: list[str] = []
@@ -276,12 +276,12 @@ def _session_effective_deploy_mode(
 ) -> str:
     """Resolve the device's deploy mode through the shared policy, once.
 
-    Combines the precedence resolution (CLI → per-device → global →
-    flash) with the one shared :func:`resolve_deploy_mode`.  Two inputs
+    Combines the precedence resolution (CLI then per-device then global
+    then flash) with the shared :func:`resolve_deploy_mode`.  Two inputs
     have opposite scoping: ``requires_flash_libs``
     is *always* the full transitive closure (a flash-only dependency
     OOMs on import regardless of test shape), while ``staged_files`` is
-    caller-scoped — the full closure for a functional run (it really
+    caller-scoped: the full closure for a functional run (it really
     uses a dependency's data file) but the libraries' own ``src`` for
     the unit sweep (a pure unit test can't reach a dependency's data
     file, so ``sockets``'s ``_ca_bundle.der`` must not poison every
@@ -319,7 +319,7 @@ def _session_effective_deploy_mode(
         force=None,
     )
     if message is not None:
-        import warnings  # noqa: PLC0415 — only used on the override path
+        import warnings  # noqa: PLC0415, only used on the override path
 
         warnings.warn(f"Device {device_id!r}: {message}", stacklevel=2)
     cache.set_resolved_deploy_mode(device_id, mode)
@@ -330,7 +330,7 @@ class DeviceTestFile(pytest.File):
     """Collector that discovers ``test_*`` functions via AST parsing.
 
     When ``ide_runtime`` is ``both`` in the ``defaults:`` section,
-    each test function is collected twice — once per runtime — so
+    each test function is collected twice (once per runtime) so
     pytest shows separate results for each board.
     """
 
@@ -372,19 +372,20 @@ class DeviceTestFile(pytest.File):
                     "file is not allowed."
                 )
             # Functional-test files (the other DeviceTestFile user)
-            # keep the prior no-op behaviour — out of scope here.
+            # keep the prior no-op behaviour, out of scope here.
             return
 
-        # Preserve the original "session has both runtimes ⇒ suffix names"
-        # convention even when the marker filters down to a single target.
-        # That keeps the IDE display consistent across runtime-agnostic and
-        # runtime-restricted files when ``defaults.ide_runtime: both``.
+        # Preserve the suffix-name convention even when the marker filters
+        # down to a single target: when the session has both runtimes, test
+        # names carry a per-runtime suffix.  That keeps the IDE display
+        # consistent across runtime-agnostic and runtime-restricted files
+        # when ``defaults.ide_runtime: both``.
         session_has_both_runtimes = (
             raw_targets is not None and len(raw_targets) > 1
         )
 
         if targets is None or (len(targets) <= 1 and not session_has_both_runtimes):
-            # No config, single target, or no devices — one item per function.
+            # No config, single target, or no devices: one item per function.
             device = targets[0] if targets else None
             if device is not None:
                 yield DevicePrepareItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
@@ -408,7 +409,7 @@ class DeviceTestFile(pytest.File):
                     target_device=device,
                 )
         else:
-            # Multiple targets (both mode) — parametrize by runtime.
+            # Multiple targets (both mode): parametrize by runtime.
             for device in targets:
                 yield DevicePrepareItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
                     self,
@@ -423,7 +424,7 @@ class DeviceTestFile(pytest.File):
                     target_device=device,
                 )
             # Function-then-runtime order keeps the two runtime variants
-            # of each base function adjacent in the item stream — some IDE
+            # of each base function adjacent in the item stream. Some IDE
             # test explorers build parameterized groups from incoming
             # order and produce duplicate parent nodes when variants are
             # split apart.
@@ -443,9 +444,10 @@ class DeviceRuntimeItem(pytest.Item):
     """Base class for synthetic and per-test device pytest items.
 
     All leaf items for a ``functional_tests/`` file share the same device
-    preparation and batch-execution helpers.  Those helpers are idempotent,
-    so synthetic control items can perform the expensive work during full-file
-    runs while direct single-test targeting still works.
+    preparation and batch-execution helpers.  Those helpers fire once per
+    file batch (subsequent calls are no-ops), so synthetic control items
+    can perform the expensive work during full-file runs while direct
+    single-test targeting still works.
     """
 
     def __init__(
@@ -486,7 +488,7 @@ class DeviceRuntimeItem(pytest.Item):
         not found on unix-port) raise :class:`BackendPrepareError`,
         which we cache as a batch failure so subsequent items for the
         same file fail fast without re-attempting.  Other prepare
-        failures (staging exceptions) propagate naturally — they
+        failures (staging exceptions) propagate naturally: they
         either match the previous "uncaught exception during prepare"
         behavior or get caught by ``_ensure_batch_result`` when
         prepare runs as part of execute.
@@ -515,7 +517,7 @@ class DeviceRuntimeItem(pytest.Item):
         batch = cache.get_batch_result(batch_key)
 
         if batch is None:
-            # First item for this (device, file) — run all tests.
+            # First item for this (device, file): run all tests.
             self._ensure_prepared(device_entry)
             backend = _session_backend(self.session)
             try:
@@ -611,7 +613,7 @@ class DeviceTestItem(DeviceRuntimeItem):
                     pytest.skip(test_result.message or "Skipped on device")
                 return
 
-        # Test name not found in output — may have been filtered or
+        # Test name not found in output. May have been filtered or
         # errored before reaching the harness.
         pytest.fail(
             f"Test {self.function_name!r} not found in device output:\n{raw_output}"
@@ -622,13 +624,13 @@ def _load_fallback_device(session: pytest.Session) -> DeviceEntry:
     """Fallback device loading for items created without a target.
 
     Called when ``devices.yml`` was unavailable at collection time
-    but may exist at run time.  Not duplicate handling of
-    :func:`chumicro_pytest_device.plugin.pytest_sessionstart`'s
-    ``DeviceConfigError`` swallowing: sessionstart silently sets
-    ``_device_targets = None`` so collection finishes (IDE
+    but may exist at run time.  Distinct from the silent
+    ``DeviceConfigError`` handling in
+    :func:`chumicro_pytest_device.plugin.pytest_sessionstart`, which
+    sets ``_device_targets = None`` so collection finishes (IDE
     play-button flows on ``__chumicro_runtimes__=("cpython",)``-
-    filtered files depend on it); this fallback surfaces the same
-    error verbosely at runtest with setup instructions.
+    filtered files depend on that). This fallback surfaces the same
+    error loudly at runtest with setup instructions.
 
     Returns:
         A ``DeviceEntry`` from the device registry.
@@ -670,7 +672,7 @@ class _NoImportModule(pytest.Module):
     ``libraries/<name>/functional_tests/`` so the host never tries to
     import device-only modules at collection time.  The
     :class:`DeviceTestFile` collector returned by
-    :func:`pytest_collect_file` handles those files via AST — no import.
+    :func:`pytest_collect_file` handles those files via AST, no import.
     """
 
     def collect(self) -> Iterator[pytest.Item]:
@@ -683,7 +685,7 @@ def pytest_pycollect_makemodule(
 ) -> pytest.Module | None:
     """Suppress default Module collection for plugin-owned paths.
 
-    Always claims ``libraries/<name>/functional_tests/`` files — the
+    Always claims ``libraries/<name>/functional_tests/`` files. The
     default Module factory would import them on the host, which fails
     for runtime-restricted files that ``import microcontroller`` /
     ``import wifi`` at top level.
@@ -691,7 +693,7 @@ def pytest_pycollect_makemodule(
     Under ``--target unix-port`` *or* ``--target device-unit`` we also
     claim ``libraries/<name>/tests/`` files so the harness backend
     (unix-port subprocess, or the device transport for the on-device
-    unit sweep) gets them — without this, pytest's default Module
+    unit sweep) gets them. Without this, pytest's default Module
     factory runs them as plain CPython tests, the lane bare ``pytest``
     already covers.  Plain ``--target device`` leaves them there.
 
@@ -700,9 +702,9 @@ def pytest_pycollect_makemodule(
 
     A ``__chumicro_host_only__`` file under ``--target device-unit``
     is still claimed here (returns the empty :class:`_NoImportModule`,
-    so it yields nothing and is never imported on the host) — the
+    so it yields nothing and is never imported on the host). The
     device-unit exclusion is enforced by :func:`pytest_collect_file`
-    returning ``None`` for it; the net effect is zero items for that
+    returning ``None`` for it. The net effect is zero items for that
     file on the sweep.
     """
     if _is_library_functional_test(module_path):
@@ -726,16 +728,16 @@ def pytest_collect_file(
 
     Two activation paths:
 
-    - ``libraries/<name>/functional_tests/test_*.py`` — always claimed,
+    - ``libraries/<name>/functional_tests/test_*.py``: always claimed,
       runs through the device-transport backend.
-    - ``libraries/<name>/tests/test_*.py`` — claimed under
+    - ``libraries/<name>/tests/test_*.py``: claimed under
       ``--target unix-port`` (unix-port subprocess backend) and
       ``--target device-unit`` (device transport backend, the
       on-device unit sweep).  Under the default ``--target device``
       these files stay in the plain-pytest CPython lane.  A file
       marked ``__chumicro_host_only__ = True`` is excluded from the
       device-unit sweep here (it drives runtime-specific source
-      through host fakes and would ``ImportError`` on a board); it
+      through host fakes and would ``ImportError`` on a board). It
       still runs on the unix-ports and CPython.  A file marked
       ``__chumicro_runtimes__ = ("cpython",)`` is collected but
       yields nothing on the device/unix-port lanes via
@@ -743,7 +745,7 @@ def pytest_collect_file(
 
     Workbench packages also keep hardware-gated tests under a
     ``functional_tests/`` directory, but those are plain host-side
-    pytest that call ``chumicro_deploy`` against a real board; they
+    pytest that call ``chumicro_deploy`` against a real board. They
     must not be routed through the library test harness and are left
     to run as ordinary pytest collection.
     """
@@ -773,15 +775,15 @@ def pytest_collection_modifyitems(
        files under ``libraries/<name>/functional_tests/``, so duplicate
        items should never be produced in practice.  This sweep exists
        as a safety net in case another plugin re-introduces a
-       non-:class:`DeviceRuntimeItem` for one of these paths — the
+       non-:class:`DeviceRuntimeItem` for one of these paths. The
        device transport remains the sole execution surface.
     2. Deselect every :class:`DeviceRuntimeItem` whose test file
        declares :data:`__chumicro_features__` requirements that the
        target device doesn't satisfy.  Lazy-probes each device only
-       when at least one feature-marked item targets it; warns rather
+       when at least one feature-marked item targets it. Warns rather
        than failing if the probe can't reach the device, so an offline
        board doesn't poison the whole session.  Items are
-       *deselected*, not skipped — feature mismatches mean the test
+       *deselected*, not skipped. Feature mismatches mean the test
        genuinely shouldn't run on that device, not that it's pending.
     3. Apply a session-wide skip marker to every
        :class:`DeviceRuntimeItem` when the conftest declared required
@@ -843,7 +845,7 @@ def _read_library_platforms(library_dir: Path) -> tuple[str, ...] | None:
     ``None`` means "no explicit declaration, library targets every
     runtime" (the same default the workspace-wide
     :mod:`scripts.repo_layout` enforces).  An explicit empty tuple
-    means "no runtimes" — never seen in practice but valid input.
+    means "no runtimes", never seen in practice but valid input.
     """
     pyproject = library_dir / "pyproject.toml"
     if not pyproject.exists():
@@ -863,9 +865,8 @@ def _deselect_items_for_non_targeting_libraries(
 ) -> list[pytest.Item]:
     """Drop items whose library doesn't target the item's runtime.
 
-    Mirrors :func:`scripts.repo_layout.filter_by_platform` but operates
-    on collected items: for each :class:`DeviceRuntimeItem`, read its
-    library's ``[tool.chumicro].platforms``; if present and the target
+    For each :class:`DeviceRuntimeItem`, read its library's
+    ``[tool.chumicro].platforms``. If present and the target
     runtime isn't in the list, the item is deselected.  Libraries
     without an explicit ``platforms`` key target all three runtimes
     and are always kept.
@@ -901,13 +902,13 @@ def _deselect_items_missing_required_features(
     result on the session's ``_device_features_cache``.
 
     A probe failure (offline device, transport error) is *not* a hard
-    failure — a warning is emitted and the device's feature set is
+    failure: a warning is emitted and the device's feature set is
     treated as empty for this session.  Tests requiring the missing
     feature get deselected for that device, the rest still run.
 
     Args:
         items: The current item list.  Items reach back to their
-            session via ``item.session`` — we use that to share the
+            session via ``item.session``, which we use to share the
             transport cache and stash the feature cache.
     """
     feature_targets: list[tuple[pytest.Item, DeviceEntry, frozenset[str]]] = []
@@ -915,7 +916,7 @@ def _deselect_items_missing_required_features(
     for item in items:
         if not isinstance(item, DeviceRuntimeItem):
             continue
-        # Defensive ``getattr`` for both fields — test stubs that mock
+        # Defensive ``getattr`` for both fields. Test stubs that mock
         # ``DeviceRuntimeItem`` via ``spec=`` won't expose attributes
         # set in ``__init__``.  Skip gracefully so the feature pass
         # never breaks an unrelated test.
@@ -953,8 +954,8 @@ def _deselect_items_missing_required_features(
                     _session_effective_deploy_mode(session, device_entry),
                 )
                 output = transport.run_script(FEATURE_PROBE_SCRIPT)
-            except Exception as error:  # noqa: BLE001 — graceful per-device fallback
-                import warnings  # noqa: PLC0415 — only used on the failure path
+            except Exception as error:  # noqa: BLE001, graceful per-device fallback
+                import warnings  # noqa: PLC0415, only used on the failure path
 
                 warnings.warn(
                     f"Feature probe failed for device {device_id!r}: "
@@ -985,11 +986,11 @@ def _bulk_stage_for_device(
     In flash/copy modes, files persist on the device filesystem so
     we deploy a library's full source + every test file for that
     library in one rsync (or ``mpremote fs cp``).  This reduces
-    invocations from N-per-file to 1-per-library — and per-library
+    invocations from N-per-file to 1-per-library, and per-library
     scope keeps the drive working-set bounded, since a 491 KB Pi
     Pico W CIRCUITPY drive can't hold every library's source + every
     library's test files at once.  Switching libraries triggers a
-    fresh stage; rsync ``--delete`` cleans the prior library off.
+    fresh stage. Rsync ``--delete`` cleans the prior library off.
 
     Collects all :class:`DeviceTestItem` instances targeting the
     given device + library from the session's collected items,
@@ -1002,7 +1003,7 @@ def _bulk_stage_for_device(
         transport: A connected transport instance.
         library_filter: When set, only items whose ``library_dir.name``
             matches are included.  Required in practice for
-            filesystem-mode staging — ``None`` collects every library
+            filesystem-mode staging. ``None`` collects every library
             in the session, which only fits on devices with ample
             spare flash.
     """

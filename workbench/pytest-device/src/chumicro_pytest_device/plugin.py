@@ -16,20 +16,20 @@ report pass/fail to pytest.
    defaults:
      micropython: my-mp-board
      circuitpython: my-cp-board
-     deploy_mode: flash      # ram | flash; flash is the default
+     deploy_mode: flash      # ram | flash (flash is the default)
      ide_runtime: both       # or micropython, or circuitpython
 
 When ``ide_runtime`` is ``both``, each test function is collected
-twice — once per runtime — so the IDE shows separate pass/fail
+twice, once per runtime, so the IDE shows separate pass/fail
 results for MicroPython and CircuitPython.
 
 This enables IDE play buttons (PyCharm, VS Code) to run device
-tests at file and function granularity — just click play.
+tests at file and function granularity. Just click play.
 
 Functional test files that exercise a single-runtime backend can
 opt out of the wrong-runtime parametrization with a module-level
-``__chumicro_runtimes__`` marker — same convention the bundle and
-deploy pipelines use for source files::
+``__chumicro_runtimes__`` marker, the same convention the bundle
+and deploy pipelines use for source files::
 
     __chumicro_runtimes__ = ("circuitpython",)
 """
@@ -60,9 +60,9 @@ from .collection import (
     DeviceRuntimeItem,
     DeviceTestItem,
     _session_effective_deploy_mode,
-    pytest_collect_file,  # noqa: F401 — re-export for pytest11 entry-point discovery
-    pytest_collection_modifyitems,  # noqa: F401 — same
-    pytest_pycollect_makemodule,  # noqa: F401 — same
+    pytest_collect_file,  # noqa: F401, re-export for pytest11 entry-point discovery
+    pytest_collection_modifyitems,  # noqa: F401, same
+    pytest_pycollect_makemodule,  # noqa: F401, same
 )
 from .device_backend import DeviceBackend
 from .pr_summary import (
@@ -85,26 +85,24 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     """Register ChuMicro command-line options on the pytest CLI.
 
     Each option overrides the corresponding ``defaults:`` entry in
-    ``devices.yml`` when supplied; when omitted, ``devices.yml``
+    ``devices.yml`` when supplied. When omitted, ``devices.yml``
     defaults still drive selection so IDE play-button runs keep
     working with zero configuration.
 
     Options:
 
-    - ``--runtime`` (``micropython`` / ``circuitpython`` / ``both``)
-      — overrides ``defaults.ide_runtime``.
-    - ``--micropython-device`` / ``--circuitpython-device`` —
+    - ``--runtime`` (``micropython`` / ``circuitpython`` / ``both``):
+      overrides ``defaults.ide_runtime``.
+    - ``--micropython-device`` / ``--circuitpython-device``:
       per-runtime device-ID overrides.
-    - ``--deploy-mode`` (``ram`` / ``flash``) — overrides the
+    - ``--deploy-mode`` (``ram`` / ``flash``): overrides the
       per-device ``deploy_mode`` and ``defaults.deploy_mode``.
-    - ``--pr-summary`` — when set, prints a Markdown device-testing
-      block at session end (the same block the
-      ``test-libraries-functional`` task used to print directly).
-      Opt-in so IDE play-button runs stay quiet.
-    - ``--pr-summary-command`` — literal command string to render in
+    - ``--pr-summary``: when set, prints a Markdown device-testing
+      block at session end. Opt-in so IDE play-button runs stay quiet.
+    - ``--pr-summary-command``: literal command string to render in
       the ``- Command:`` line of the PR block.  The
       ``test-libraries-functional`` wrapper passes the reconstructed
-      invocation; direct pytest runs can omit it and get the raw
+      invocation. Direct pytest runs can omit it and get the raw
       ``pytest ...``.
     """
     group = parser.getgroup("chumicro", "ChuMicro device-test plugin")
@@ -115,7 +113,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help=(
             "execution backend: 'device' (functional_tests on a board "
             "via the chumicro-deploy transport), 'device-unit' (the "
-            "cross-runtime libraries/<name>/tests suite on a board — "
+            "cross-runtime libraries/<name>/tests suite on a board, "
             "the on-device unit sweep), or 'unix-port' (that same unit "
             "suite in a MicroPython / CircuitPython unix-port "
             "subprocess)"
@@ -177,9 +175,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help=(
             "flash/copy device-unit only: soft-reset before each test "
             "*file* (not just each library), so a large class-organized "
-            "module runs on a fresh interpreter.  Opt-in — the default "
+            "module runs on a fresh interpreter.  Opt-in: the default "
             "per-library reset is faster and enough for PSRAM boards / "
-            "small libraries; use this for large suites on a 256 KB board"
+            "small libraries. Use this for large suites on a 256 KB board"
         ),
     )
 
@@ -191,8 +189,8 @@ class _PRSummaryCollector:
     ``pytest_runtest_makereport``) and rolls the results up into the
     :class:`DeviceRunResult` shape ``pr_summary.format_pr_summary_block``
     expects.  Empty containers are populated on first encounter and
-    the overall order — device declaration order, then file
-    declaration order — matches the ``test-libraries-functional`` orchestrator's
+    the overall order (device declaration order, then file declaration
+    order) matches the ``test-libraries-functional`` orchestrator's
     output so the Markdown is stable across the two code paths.
     """
 
@@ -234,18 +232,18 @@ class _PRSummaryCollector:
                     self._implementations[device_id] = (
                         transport.probe_implementation()
                     )
-                except Exception:  # pragma: no cover — hardware-only
+                except Exception:  # pragma: no cover, hardware-only
                     self._implementations[device_id] = None
 
         if isinstance(item, DevicePrepareItem):
-            # A failing prepare step means bulk-stage / connect failed;
-            # no per-test items will produce results for this file.
+            # A failing prepare step means bulk-stage / connect failed.
+            # No per-test items will produce results for this file.
             if report.failed:
                 self._bulk_stage_errors[device_id] += 1
             return
 
         if isinstance(item, DeviceRunFileItem):
-            # A failing run-file means the batch exec failed; count one
+            # A failing run-file means the batch exec failed. Count one
             # error per file and keep going.
             if report.failed:
                 file_result = self._ensure_file_result(
@@ -379,7 +377,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     - ``--target unix-port``: install :class:`UnixPortBackend`,
       synthesize one or two ``DeviceEntry`` records driven by
       ``--runtime`` (defaults to ``both``).  ``devices.yml`` is not
-      consulted; the unix-port subprocess needs no per-device config.
+      consulted, since the unix-port subprocess needs no per-device config.
     """
     session._device_transport_cache = _TransportCache()  # type: ignore[attr-defined]
 
@@ -448,7 +446,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 def _synthesize_unix_port_targets(runtime_selection: str) -> list[DeviceEntry]:
     """Build synthetic ``DeviceEntry`` records for the unix-port path.
 
-    Unix-port runs don't have a real device registry — the "target"
+    Unix-port runs don't have a real device registry: the "target"
     is the (runtime, binary path) pair.  We reuse :class:`DeviceEntry`
     so collection / parametrization / PR-summary code stays uniform;
     ``address="unix-port"`` is the sentinel that flags a synthetic
@@ -471,7 +469,7 @@ def _synthesize_unix_port_targets(runtime_selection: str) -> list[DeviceEntry]:
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Disconnect transports at session end; emit the PR block when requested."""
+    """Disconnect transports at session end, and emit the PR block when requested."""
     cache = getattr(session, "_device_transport_cache", None)
     if cache is not None:
         cast("_TransportCache", cache).disconnect_all()

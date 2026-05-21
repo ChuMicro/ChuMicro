@@ -1,23 +1,14 @@
-"""Cross-runtime test discovery: worker-side helpers.
+"""Load and execute a cross-runtime test file in the current process.
 
-Used by :mod:`support.test_harness.run_cross_runtime` (the worker
-entry point) and by :mod:`chumicro_pytest_device.plugin` (the host
-side that spawns the workers).  Manager-mode discovery — walking
-``libraries/*/tests/`` and orchestrating one subprocess per file —
-moved into the pytest plugin's collection layer; the only thing
-this module owns now is single-file execution.
+Exposes :func:`run_one_file` plus the sys.path bootstrap
+(:func:`discover_source_roots`, :func:`setup_source_paths`) and the
+``exec``-based module loader the worker path needs. Imported by the
+``run_cross_runtime.py`` worker script and by the
+``chumicro_pytest_device`` plugin's collection layer.
 
-Avoids ``os.path`` (unavailable on some CircuitPython builds) and
-keeps the import footprint minimal so :func:`run_one_file` can
-execute under CPython, MicroPython unix-port, and CircuitPython
-unix-port.
-
-A file that fails to import is a hard FAIL, not a silent SKIP —
-files that pull in pytest / unittest / tracemalloc must either be
-converted to cross-runtime or declare ``__chumicro_runtimes__ =
-("cpython",)`` (CPython-only lane).  A file that drives
-runtime-specific source through host fakes declares
-``__chumicro_host_only__ = True`` instead.
+Avoids ``os.path`` because some CircuitPython builds omit it. Keeps the
+import footprint minimal so :func:`run_one_file` works under CPython,
+MicroPython unix-port, CircuitPython unix-port, and on real devices.
 """
 
 import os
@@ -33,9 +24,6 @@ except ImportError:  # pragma: no cover - gc may be absent on some CPython confi
 
 def _is_dir(path):
     """Return True if *path* is an existing directory.
-
-    Uses ``os.listdir`` instead of ``os.path.isdir`` because ``os.path``
-    is not available on all CircuitPython builds.
 
     Args:
         path: Filesystem path to check.

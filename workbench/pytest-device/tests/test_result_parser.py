@@ -1,4 +1,4 @@
-"""Tests for result_parser — structured harness output parsing."""
+"""Tests for result_parser: structured harness output parsing."""
 
 from __future__ import annotations
 

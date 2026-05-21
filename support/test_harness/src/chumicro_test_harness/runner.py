@@ -117,29 +117,21 @@ def _print_exception(exception):
 def run_module(module, name_filter=None):
 	"""Run all ``test_*`` callables on a module-like object.
 
-	Prints per-test duration and PASS/FAIL status.  When ``gc.mem_free``
+	Prints per-test duration and PASS/FAIL/SKIP status. When ``gc.mem_free``
 	is available (MicroPython / CircuitPython boards), per-test heap
-	deltas and a module-level summary are emitted.  Auto-GC is **left
-	enabled** during tests so the workload sees the same heap-management
-	behavior as production code.
+	deltas and a module-level HEAP summary are also emitted.
 
-	Why not disable auto-GC for "deterministic deltas"?  An earlier
-	version of this runner did exactly that, on the theory that disabling
-	auto-GC during a test makes each test's heap delta a clean
-	"bytes retained by this test" measurement.  In practice it gives
-	misleading answers for any test whose workload allocates transient
-	garbage: with auto-GC off, that garbage piles up until the explicit
-	``gc.collect()`` runs, and a single round of bisection-based heap
-	probing (the fragmentation tests' histogram metric, ~7,500 greedy
-	``bytearray`` allocs at the 256-byte tier) perturbs the allocator's
-	``mem_free`` reporting by hundreds of KB on ESP32-class hardware.
-	Real boards run with auto-GC on; the runner should mirror that.
+	Auto-GC stays enabled during tests so each test workload sees the
+	same heap-management behavior as production code. The per-test heap
+	delta brackets ``function()`` itself with explicit collects on either
+	side. Those collects stay outside the timed region so a slow
+	PSRAM-backed collect cannot inflate a fast test's duration.
 
 	Args:
 		module: Module-like object containing ``test_*`` callables.
-		name_filter: Optional substring filter.  When set, only
-			``test_*`` functions whose name contains this string
-			are executed.  Enables single-test runs from the IDE.
+		name_filter: Optional substring filter. When set, only ``test_*``
+			functions whose name contains this string are executed.
+			Enables single-test runs from the IDE.
 
 	Returns:
 		Shell-style exit code: 0 for all-pass, 1 for any failure.

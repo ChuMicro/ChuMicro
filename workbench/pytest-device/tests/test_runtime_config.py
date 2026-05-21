@@ -4,16 +4,16 @@ Two slices:
 
 1. ``set_runtime_config`` / ``get_runtime_config`` round-trip on a
    ``pytest.Config.stash`` stand-in.  Confirms the conftest-side API
-   contract — the value the conftest passes is the value the plugin
+   contract: the value the conftest passes is the value the plugin
    later reads back.
-2. The plugin's ``_encode_runtime_config_extra_files`` helper —
-   ``None`` payload → ``None`` extra_files (no staging); a registered
-   payload → a one-entry dict at the canonical
+2. The plugin's ``_encode_runtime_config_extra_files`` helper.
+   ``None`` payload yields ``None`` extra_files (no staging), and a
+   registered payload yields a one-entry dict at the standard
    ``/runtime_config.msgpack`` path with a msgpack-encoded body that
    round-trips through the standard decoder.
 
 Hardware-side wiring (``transport.stage(extra_files=...)`` carrying
-the encoded bytes onto a real CP / MP board) is out of scope here —
+the encoded bytes onto a real CP / MP board) is out of scope here,
 covered by ``test_extra_files_staging.py`` in
 ``workbench/deploy/tests`` for the transport contract, and by the
 networking-library functional tests for end-to-end hardware
@@ -76,14 +76,14 @@ class TestRequiredKeys:
         assert missing_required_keys(config) == ()
 
     def test_unset_returns_empty_tuple(self) -> None:
-        """No ``set_runtime_config`` call ever made — neither payload
+        """No ``set_runtime_config`` call ever made: neither payload
         nor required-keys are stashed."""
         config = _StashConfigStub()
         assert get_required_keys(config) == ()
         assert missing_required_keys(config) == ()
 
     def test_iterable_input_normalized_to_tuple(self) -> None:
-        """``required_keys`` accepts any iterable; storage is a tuple."""
+        """``required_keys`` accepts any iterable, and storage is a tuple."""
         config = _StashConfigStub()
         set_runtime_config(
             config,
@@ -122,7 +122,7 @@ class TestRequiredKeys:
         assert missing_required_keys(config) == ("wifi.ssid", "wifi.password")
 
     def test_overwriting_resets_required_keys(self) -> None:
-        """Two ``set_runtime_config`` calls — second wins, including
+        """Two ``set_runtime_config`` calls: second wins, including
         clearing required-keys back to the default ``()``."""
         config = _StashConfigStub()
         set_runtime_config(
@@ -166,7 +166,7 @@ class TestEncodeRuntimeConfigExtraFiles:
     ) -> None:
         """A steady payload pays one ``packb`` per pytest invocation,
         not per stage call.  Every device sweep stages once per file
-        batch; re-encoding the same dotted-key dict 50+ times across
+        batch, and re-encoding the same dotted-key dict 50+ times across
         a run is wasted work."""
         from chumicro_pytest_device import session
 

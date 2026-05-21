@@ -4,18 +4,18 @@ A :class:`Backend` is the pluggable bit that knows *how* to run a
 single ``functional_tests/`` or ``tests/`` file: where to send the
 source, what to spawn, what to read back.  The caller (the pytest
 items in :mod:`chumicro_pytest_device.plugin`) owns everything that
-isn't backend-specific — batch-result caching, harness output
+isn't backend-specific: batch-result caching, harness output
 parsing, ``pytest.fail`` orchestration, PR-summary collection.
 
 Two backends are defined:
 
-- :class:`DeviceBackend` — runs the file on a real board via the
+- :class:`DeviceBackend`: runs the file on a real board via the
   ``chumicro-deploy`` transport.  Owns connect, stage, soft-reset,
   recover semantics.  Lives in :mod:`chumicro_pytest_device.plugin`
   itself because it depends on private helpers there.
-- :class:`UnixPortBackend` — runs the file in a MicroPython /
-  CircuitPython unix-port subprocess.  No transport, no staging;
-  resolves the runtime binary and spawns
+- :class:`UnixPortBackend`: runs the file in a MicroPython /
+  CircuitPython unix-port subprocess.  No transport, no staging.
+  Resolves the runtime binary and spawns
   ``<binary> support/test_harness/run_cross_runtime.py --worker``.
   Lives here because it depends on nothing in :mod:`plugin`.
 
@@ -26,7 +26,7 @@ uniformly.
 Note on the ``TYPE_CHECKING`` import: backends call back into the
 plugin module to read session-scoped helpers like the transport cache
 and library/harness paths.  At runtime that's a normal import (the
-plugin module is already loaded when items are running); at type-check
+plugin module is already loaded when items are running). At type-check
 time we defer it so static analysis doesn't see the cycle.
 """
 
@@ -46,7 +46,7 @@ class BackendPrepareError(Exception):
     """Raised by ``Backend.prepare`` when setup fails.
 
     The caller turns this into a ``pytest.fail`` with the message
-    preserved; the file-level batch result is cached as a failure so
+    preserved. The file-level batch result is cached as a failure so
     every per-test item from that file also fails fast.
     """
 
@@ -75,8 +75,8 @@ class Backend(Protocol):
             item: The pytest item being prepared (gives access to
                 ``test_file``, ``library_dir``, ``session``).
             target: The selected device entry for this item.  For
-                ``DeviceBackend`` this is a real board; for
-                ``UnixPortBackend`` it's a synthetic entry whose
+                ``DeviceBackend`` the entry names a real board. For
+                ``UnixPortBackend`` it is a synthetic entry whose
                 ``runtime`` field picks the binary.
 
         Raises:
@@ -133,13 +133,13 @@ def resolve_unix_port_binary(
 
     Resolution order (first match wins):
 
-    1. *override* — explicit path passed via ``--micropython-binary``
-       or ``--circuitpython-binary``.  Returned as-is; existence is
+    1. *override*: explicit path passed via ``--micropython-binary``
+       or ``--circuitpython-binary``.  Returned as-is. Existence is
        checked at execute time.
     2. ``<workspace>/.tools/<runtime>.path`` marker written by the
        ``prepare-*`` tasks.
-    3. ``shutil.which("micropython")`` / ``shutil.which("circuitpython")``
-       — last-resort PATH lookup.
+    3. ``shutil.which("micropython")`` / ``shutil.which("circuitpython")``:
+       last-resort PATH lookup.
 
     Args:
         workspace_root: Workspace root (``session.config.rootpath``).
@@ -157,7 +157,7 @@ def resolve_unix_port_binary(
 class UnixPortBackend:
     """Backend that runs tests in a MicroPython / CircuitPython unix-port subprocess.
 
-    No transport, no staging — the worker entry point in
+    No transport, no staging. The worker entry point in
     ``support/test_harness/run_cross_runtime.py`` sets ``sys.path``
     inside the spawned process so library sources resolve.  Each
     ``test_*.py`` file is one ``--worker`` subprocess so the heap
@@ -211,7 +211,7 @@ class UnixPortBackend:
     ) -> None:
         """Resolve the runtime binary and verify the harness script exists.
 
-        The actual subprocess spawn happens in :meth:`execute`; prepare
+        The actual subprocess spawn happens in :meth:`execute`. ``prepare``
         just front-loads the failures that should fail the file fast
         without trying every test individually.
         """
@@ -236,11 +236,11 @@ class UnixPortBackend:
 
         The worker entry point sets ``sys.path`` to include every
         ``libraries/*/src/`` + ``support/*/src/`` under the workspace
-        and execs the file as a module.  Captures stdout — the
+        and execs the file as a module.  Captures stdout. The
         harness prints ``PASS`` / ``FAIL`` / ``SKIP`` / ``HEAP`` /
         ``SUMMARY`` lines that :func:`parse_output` reads.
 
-        On non-zero exit code we still return the captured output —
+        On non-zero exit code we still return the captured output:
         a single test FAIL produces exit 1 but the per-test lines are
         what we want to report.  Only a fully empty output with a
         non-zero exit gets surfaced as :class:`BackendExecuteError`.
@@ -254,7 +254,7 @@ class UnixPortBackend:
             str(item.test_file),
         ]
         try:
-            completed = subprocess.run(  # noqa: S603 — args fully controlled
+            completed = subprocess.run(  # noqa: S603, args fully controlled
                 command,
                 cwd=self._workspace_root,
                 capture_output=True,

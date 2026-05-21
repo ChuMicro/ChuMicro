@@ -1,6 +1,6 @@
 """Plugin-internal device-test helpers.
 
-Owns the primitives that actually touch device hardware — bootstrap
+Owns the primitives that actually touch device hardware: bootstrap
 generation, transport construction, and the workspace-source
 discovery that staging depends on.  Orchestration (test selection,
 per-device loops, PR-summary rendering) lives in :mod:`plugin`.
@@ -53,13 +53,13 @@ def _library_name_from_module(module_name: str) -> str | None:
 def chunk_boundaries_for(source_path: Path) -> list[int] | None:
     """Return 1-based top-level statement start lines, or ``None``.
 
-    Computed host-side (CPython has ``ast``; the boards do not) so the
+    Computed host-side (CPython has ``ast`` and the boards do not) so the
     device can exec a large test module in per-statement chunks and
     keep its compile transient bounded.  Decorator-aware: a decorated
     class/def starts at its first decorator, so the decorator and the
     statement it decorates land in the same chunk.
 
-    Returns ``None`` — keep the single whole-file ``exec`` — when
+    Returns ``None`` (keep the single whole-file ``exec``) when
     chunking would be unsafe or pointless: a ``from __future__`` import
     (each chunk compiles independently, so a future statement cannot
     govern later chunks) or fewer than two top-level statements
@@ -94,7 +94,7 @@ def build_bootstrap(
         test_filename: Name of the test file (e.g.
             ``test_heartbeat_ticks.py``).
         name_filter: Optional name filter to pass to ``run_module``.
-        chunk_boundaries: Optional top-level statement start lines; when
+        chunk_boundaries: Optional top-level statement start lines.  When
             set, the device exec's the file in chunks (RAM-constrained
             boards).  ``None`` keeps the single whole-file exec.
 
@@ -151,14 +151,14 @@ def resolve_library_source_dirs(
     file is sent inline through the serial REPL.
 
     Functional tests may also import additional ChuMicro libraries
-    directly without making them install-time dependencies; when
+    directly without making them install-time dependencies.  When
     *test_files* is provided, those imports are resolved and staged
     too.
 
     Args:
         library_dir: Root directory of the library (e.g.
             ``libraries/runner``).
-        libraries_root: The workspace's libraries directory — typically
+        libraries_root: The workspace's libraries directory, typically
             ``pytest.Config.rootpath / "libraries"`` inside the chumicro
             mono-repo, or any equivalent layout.
         test_files: Optional functional test files whose ChuMicro
@@ -225,8 +225,8 @@ def resolve_effective_deploy_mode(
     1. CLI ``--deploy-mode`` override (highest precedence).
     2. Per-device ``deploy_mode`` from ``devices.yml``.
     3. Global ``defaults.deploy_mode`` (folded into the entry by the loader).
-    4. ``DEFAULT_DEPLOY_MODE`` as the last-resort default — flash is
-       the production-shaped path; RAM mode is opt-in for unit-style
+    4. ``DEFAULT_DEPLOY_MODE`` as the last-resort default.  Flash is
+       the production-shaped path, and RAM mode is opt-in for unit-style
        tests.
     """
     return deploy_mode_override or device_entry.deploy_mode or DEFAULT_DEPLOY_MODE
@@ -239,9 +239,9 @@ def build_transport_for_entry(
     """Build a transport instance for a device entry.
 
     Thin wrapper around :meth:`chumicro_deploy.Device.create_transport`
-    — translates the registry-shaped ``DeviceEntry`` into a
+    that translates the registry-shaped ``DeviceEntry`` into a
     ``Device`` and delegates runtime branching.  Named to disambiguate
-    from ``Device.create_transport`` itself; this one takes the
+    from ``Device.create_transport`` itself: this one takes the
     registry record, that one takes the constructed Device.
     """
     effective_mode = resolve_effective_deploy_mode(device_entry, deploy_mode)

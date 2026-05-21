@@ -10,9 +10,10 @@ Also carries the path predicates (``_is_library_functional_test`` /
 ``_is_library_unit_test``), the ``--target``-flag readers, and the
 runtime-config encode + cache helper.
 
-The ``_device_*`` walkers iterate over ``session.items``; they import
-the ``DeviceTestItem`` type lazily inside the function body because
-those items live in :mod:`collection`, which depends on this module.
+The ``_device_*`` walkers iterate over ``session.items``, and they
+import the ``DeviceTestItem`` type lazily inside the function body
+because those items live in :mod:`collection`, which depends on this
+module.
 """
 
 from __future__ import annotations
@@ -29,11 +30,11 @@ from .transport_cache import _TransportCache
 
 if TYPE_CHECKING:
     from .backends import Backend
-    from .pr_summary import DeviceRunResult  # noqa: F401 — kept for type hints downstream
+    from .pr_summary import DeviceRunResult  # noqa: F401, kept for type hints downstream
 
 
-#: Canonical on-device path for the staged runtime-config payload —
-#: matches :data:`chumicro_config.runtime.DEFAULT_RUNTIME_CONFIG_PATH`.
+#: On-device path for the staged runtime-config payload.  Matches
+#: :data:`chumicro_config.runtime.DEFAULT_RUNTIME_CONFIG_PATH`.
 #: Hard-coded here rather than imported because workbench packages
 #: don't import device libraries (they ship to host-side users via
 #: PyPI, libraries ship to boards via circup / mip).
@@ -61,9 +62,8 @@ def _encode_runtime_config_extra_files(
 
     Encoding uses ``use_single_float=True`` so float values round-trip
     through CircuitPython's native ``msgpack`` decoder (CP doesn't
-    support float64).  Mirrors :func:`chumicro_workspace.writer.write_runtime_config`'s
-    encoding contract.  The encoded bytes are cached on the config
-    stash keyed by ``id(payload)`` — every device sweep stages once
+    support float64).  The encoded bytes are cached on the config
+    stash keyed by ``id(payload)``: every device sweep stages once
     per file batch, and re-encoding the same dotted-key dict 50+ times
     is wasted work.
     """
@@ -106,8 +106,8 @@ def _libraries_root(session: pytest.Session) -> Path:
 def _session_cache(session: pytest.Session) -> _TransportCache:
     """Return the session-scoped ``_TransportCache``, asserting it exists.
 
-    ``pytest_sessionstart`` populates the dynamic attribute; any code
-    path that uses the cache runs strictly after that hook.  The cast
+    ``pytest_sessionstart`` populates the dynamic attribute, and any
+    code path that uses the cache runs strictly after that hook.  The cast
     keeps the rest of the module free of ``# type: ignore`` noise from
     pytest's dynamic ``session`` attributes.
     """
@@ -140,7 +140,7 @@ def _session_backend(session: pytest.Session) -> Backend:
     ``pytest_sessionstart`` installs a single :class:`DeviceBackend`
     (or the unix-port equivalent once ``--target`` is wired up).
     Items dispatch through this getter so the device-vs-unix-port
-    branch lives in one place — the rest of the plugin is shape-agnostic.
+    branch lives in one place, and the rest of the plugin is shape-agnostic.
     """
     backend = getattr(session, "_backend", None)
     assert backend is not None, "pytest_sessionstart must run before backend access"
@@ -170,7 +170,7 @@ def _is_library_functional_test(file_path: Path) -> bool:
 def _is_library_unit_test(file_path: Path) -> bool:
     """Return ``True`` for ``libraries/<name>/tests/test_*.py`` paths.
 
-    Structural only — lane filtering layers on top of this and is
+    Structural only.  Lane filtering layers on top of this and is
     driven by in-file markers, not the filename.  A CPython-only file
     declares ``__chumicro_runtimes__ = ("cpython",)`` and is excluded
     from the unix-port / device-unit lanes by
@@ -179,8 +179,8 @@ def _is_library_unit_test(file_path: Path) -> bool:
     ``__chumicro_host_only__ = True`` and is excluded from the
     on-device unit sweep by :func:`pytest_collect_file` /
     :func:`pytest_pycollect_makemodule` (it still runs on the
-    unix-ports and CPython).  The marker is the contract; the filename
-    is never inspected for lane.
+    unix-ports and CPython).  The marker is the contract, and the
+    filename is never inspected for lane.
     """
     if not (
         file_path.suffix == ".py"
@@ -209,7 +209,7 @@ def _target_is_device_unit(config: pytest.Config) -> bool:
     The on-device unit sweep: the cross-runtime
     ``libraries/<name>/tests`` suite routed to the device transport
     backend instead of the unix-port subprocess.  ``--target device``
-    stays functional-only; this is opt-in so existing functional runs
+    stays functional-only, and this is opt-in so existing functional runs
     and IDE play buttons are unaffected.
     """
     return cast(
