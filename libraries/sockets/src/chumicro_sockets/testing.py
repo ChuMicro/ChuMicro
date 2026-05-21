@@ -34,7 +34,8 @@ __chumicro_test_support__ = True
 from collections import deque
 
 # Errno 11 (EAGAIN) is the cross-runtime "would block" code.  Spelled
-# out as a constant so callers don't have to remember the magic.
+# out as a constant so callers can ``except OSError`` and check
+# ``error.errno == EAGAIN`` rather than testing against a literal ``11``.
 EAGAIN = 11
 
 # Upper bound on enqueued bytes / datagrams a test can script before
@@ -135,7 +136,7 @@ class FakeSocket:
         return consumed
 
     def close(self) -> None:
-        """Mark the socket closed.  Idempotent."""
+        """Mark the socket closed."""
         self._closed = True
 
     def setblocking(self, flag: bool) -> None:
@@ -293,7 +294,7 @@ class FakeUDPSocket:
         return consumed, address
 
     def close(self) -> None:
-        """Mark the socket closed.  Idempotent."""
+        """Mark the socket closed."""
         self._closed = True
 
     def setblocking(self, flag: bool) -> None:

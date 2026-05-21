@@ -79,31 +79,26 @@ class _MpSocketWrapper:
         """Polyfill ``recv_into`` via MP's ``recv``.
 
         ``recv(nbytes)`` returns up to *nbytes* bytes; we copy the
-        result into *buffer* and return the count.  Empty-bytes
-        return (``b""``) on a clean peer close → returns 0, same
-        contract as stdlib.
+        result into *buffer* and return the count.  ``recv`` returns
+        ``b""`` on a clean peer close, and the polyfill translates
+        that to ``0`` — the stdlib contract.
 
-        MP-specific contract divergence (verified live on Pi Pico W
-        RP2 + Lolin S2 ESP32-S2 with MP 1.28.0):
+        MP-specific contract divergence:
 
-        * Plain TCP non-blocking ``recv`` with no data → raises
+        * Plain TCP non-blocking ``recv`` with no data raises
           ``OSError(11)`` (EAGAIN).
         * mbedTLS ``SSLSocket`` non-blocking ``recv`` with no data
-          → returns ``None`` (mbedTLS ``WANT_READ`` /``WANT_WRITE``
-          maps to ``MP_EWOULDBLOCK`` internally, but the Python-level
-          surface for SSLSocket returns ``None`` rather than raising).
+          returns ``None`` instead (mbedTLS ``WANT_READ`` /
+          ``WANT_WRITE`` maps to ``MP_EWOULDBLOCK`` internally, but
+          the Python-level surface for SSLSocket returns ``None``
+          rather than raising).
 
         We **raise** ``OSError(11)`` on ``None`` so the protocol
         contract — "EAGAIN on no data, 0 on clean peer close" —
-        holds across plain TCP and TLS uniformly.  Callers like
-        ``chumicro-requests`` that need to distinguish "no data
-        this tick" from "peer closed mid-response" depend on this:
-        without it the HTTP parser fails length-known responses
-        on MP TLS the moment a recv races ahead of the peer's
-        send.  See `chumicro-requests` slice 3c for the surfacing
-        bug.  ``chumicro-mqtt``'s RX loop already handled both
-        EAGAIN and 0 with a ``break``, so it sees no behavior
-        change here.
+        holds across plain TCP and TLS uniformly.  Without it, a
+        length-known TCP-style read on MP TLS cannot tell "no data
+        this tick" apart from "peer closed mid-response" the moment
+        a recv races ahead of the peer's send.
         """
         size = nbytes if nbytes > 0 else len(buffer)
         data = self._sock.recv(size)
@@ -146,11 +141,10 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
     named so a code reviewer can grep for it.
 
     Non-blocking note: callers that need a non-blocking TLS socket
-    (e.g. ``chumicro-mqtt``) call ``setblocking(False)`` on the
-    returned wrapper *after* the synchronous handshake completes
-    inside ``wrap_socket``.  Verified live on MP 1.28.0: both the
-    Pi Pico W RP2 and Lolin S2 ESP32-S2 mbedTLS SSLSocket honor
-    ``setblocking``.  The wrapper's ``recv_into`` polyfill handles
+    call ``setblocking(False)`` on the returned wrapper *after* the
+    synchronous handshake completes inside ``wrap_socket``.  Both
+    the MP rp2 and ESP32 mbedTLS SSLSocket honor ``setblocking``
+    post-handshake.  The wrapper's ``recv_into`` polyfill handles
     the MP-TLS-specific contract divergence where non-blocking
     ``recv`` returns ``None`` (rather than raising EAGAIN like
     plain TCP); see :class:`_MpSocketWrapper.recv_into`.
@@ -292,7 +286,7 @@ class _MpListeningSocketWrapper:  # pragma: no cover - device only
 
     def accept(self):
         """Accept a pending connection.  Raises ``OSError(EAGAIN)`` when
-        none is queued (matches the cross-runtime contract)."""
+        none is queued."""
         new_sock, address = self._sock.accept()
         return _MpSocketWrapper(new_sock), address
 
@@ -354,9 +348,9 @@ class _MpTLSListenerWrapper:  # pragma: no cover - device only
         except Exception:
             underlying.close()
             raise
-        # SSLSocket on MP supports setblocking on rp2 + esp32 (verified
-        # MP 1.28.0); falls back to no-op on older ports via the
-        # existing _MpSocketWrapper.
+        # SSLSocket on the supported MP ports (rp2 + esp32) honors
+        # setblocking; older ports fall through to the no-op stub
+        # in _MpSocketWrapper.
         return _MpSocketWrapper(tls_sock), address
 
     def close(self):
@@ -507,7 +501,7 @@ def _default_context():  # pragma: no cover - device only
     an unbound temporary and no reference is kept here, so it is
     collectable the moment ``load_verify_locations`` has copied it
     into mbedTLS — freed before the socket / handshake working set
-    allocates (tight lifetime → minimal fragmentation; see
+    allocates (tight lifetime keeps fragmentation minimal; see
     ``_ca_bundle`` docstring).  Caching means plain-TCP-only callers
     never pay the read+parse, and TLS callers pay it exactly once.
     """

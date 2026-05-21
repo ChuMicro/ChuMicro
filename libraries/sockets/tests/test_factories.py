@@ -551,7 +551,7 @@ class TestSslContextWithCa:
             result = ssl_context_with_ca(ca_pem)
 
         assert isinstance(result, _RecordingContext)
-        # PEM bytes → decoded to str for stdlib's cadata.
+        # PEM bytes are decoded to str for stdlib's cadata.
         assert isinstance(captured["cadata"], str)
         assert "fake-bytes" in captured["cadata"]
 
@@ -577,7 +577,7 @@ class TestSslContextWithCa:
         assert isinstance(captured["cadata"], bytes)
 
     def test_cpython_non_cert_input_raises(self) -> None:
-        """Neither PEM nor DER → clear ValueError, not a silent
+        """Neither PEM nor DER raises a clear ValueError, not a silent
         empty-trust context."""
         fake_ssl = _FakeModule()
         fake_ssl.create_default_context = lambda: object()

@@ -45,7 +45,7 @@ Substrate quirks observed on real boards:
   or use a CircuitPython board (CP sets the clock from cyw43 /
   firmware base sufficiently close to current).  This example is
   marked CircuitPython-only via ``__chumicro_runtimes__`` to
-  avoid the trap on the canonical sweep matrix.
+  avoid the trap on the sweep matrix.
 * **IP-only SAN certs** trip stricter mbedTLS builds.  Generate
   certs with at least one DNS SAN (mDNS ``hostname.local`` works
   on a LAN); set ``server_hostname=`` to that DNS name.
