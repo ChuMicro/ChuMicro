@@ -2,7 +2,7 @@
 
 Demonstrates the shared-timestamp pattern: capture ``ticks_ms()`` once
 per loop iteration and pass the same value to every heartbeat.  This
-ensures all components see the same moment in time — no drift between
+ensures all components see the same moment in time, with no drift between
 calls.
 
 On a real board, each heartbeat could drive a different LED or sensor
@@ -40,7 +40,7 @@ print("Running multiple heartbeats...\n")
 
 while True:
     # Capture time once and share it with all heartbeats.
-    # This is the "shared-timestamp pattern" — all components
+    # This is the "shared-timestamp pattern": all components
     # see the same moment, so two heartbeats that happen to
     # fire on the same tick will both see the same now value.
     now = ticks_ms()

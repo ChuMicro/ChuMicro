@@ -15,7 +15,7 @@ Example — tick-domain tests:
 
 ``FakeTicks`` models the full tick contract including the 2²⁹ ms
 wraparound period.  Values returned by ``ticks_ms()`` are always in
-``[0 .. 2**29 - 1]``, and ``ticks_diff`` uses ring arithmetic — so
+``[0 .. 2**29 - 1]``, and ``ticks_diff`` uses ring arithmetic, so
 tests will catch code that accidentally uses plain subtraction instead
 of ``ticks_diff``.
 """

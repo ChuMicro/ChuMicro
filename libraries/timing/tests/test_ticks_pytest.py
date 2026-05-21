@@ -1,8 +1,8 @@
 """CPython-only tests for tick resolution and runtime simulation.
 
 These tests use ``monkeypatch`` to simulate MicroPython/CircuitPython
-runtime environments on CPython.  They do NOT run on MP/CP — that would
-be pointless since those runtimes provide the real behavior.
+runtime environments on CPython.  They do NOT run on MP/CP, since those
+runtimes provide the real behavior.
 
 Cross-runtime arithmetic tests live in ``test_ticks.py``.
 """

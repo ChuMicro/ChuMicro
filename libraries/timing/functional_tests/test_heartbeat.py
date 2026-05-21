@@ -1,6 +1,6 @@
 """Device-facing tests for the Heartbeat scheduler on real hardware.
 
-Validates that Heartbeat works with the actual runtime clock — both
+Validates that Heartbeat works with the actual runtime clock: both
 the default (real ticks) and constructor-injected tick sources.
 """
 
