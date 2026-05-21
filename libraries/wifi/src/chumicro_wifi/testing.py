@@ -23,7 +23,7 @@ file off device deploys, except for the on-device unit sweep that
 stages it to exercise the fakes on real hardware.
 """
 
-#: Source bundle / sdist only -- never lands on a device.
+#: Source bundle / sdist only.  Never lands on a device.
 __chumicro_test_support__ = True
 
 from chumicro_wifi._adapters.base import WifiAdapter
@@ -43,8 +43,9 @@ class FakeWifiAdapter(WifiAdapter):
     * :meth:`drop_link`: simulates a link-down event.  The next
       :meth:`is_linked` returns ``False``, triggering the service's
       reconnect path.
-    * :meth:`record`: every adapter call appends to ``self.calls``
-      so tests can assert call ordering and arguments.
+    * ``self.calls``: every adapter call (``configure``, ``connect``,
+      ``disconnect``) appends a tuple so tests can assert call
+      ordering and arguments.
     """
 
     name = "fake"
