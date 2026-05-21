@@ -1,4 +1,4 @@
-"""CHU014 — workspace CLI command-table parity.
+"""CHU014: workspace CLI command-table parity.
 
 The ``chumicro-workspace`` README documents every subcommand in a
 ``| Group | Commands |`` table.  That table drifts every time a
@@ -13,7 +13,7 @@ Two surfaces, compared by top-level command name:
   calls under ``workbench/workspace/src/chumicro_workspace/cli/``.
   Only calls whose receiver is a function parameter typed
   ``argparse._SubParsersAction`` (by convention named ``subparsers``)
-  count — a nested ``verbs.add_parser("list")`` for ``library``'s
+  count. A nested ``verbs.add_parser("list")`` for ``library``'s
   sub-verbs is registered against a different object and is *not* a
   top-level command.
 * **Documented** — the leading command-shaped token of every
@@ -24,11 +24,11 @@ Two surfaces, compared by top-level command name:
 
 Findings:
 
-* documented but not registered → phantom command.
-* registered but not documented → hidden command.
+* documented but not registered: phantom command.
+* registered but not documented: hidden command.
 
 Scope: ``workbench/workspace/`` only.  Absent CLI dir or README (a
-downstream workspace, the workspace-template repo) → silent no-op.
+downstream workspace, the workspace-template repo), a silent no-op.
 
 Suppression: ``<!-- noqa: CHU014 -->`` on the offending README row
 (phantom) or on the table header row (hidden).
@@ -66,7 +66,7 @@ _BACKTICK_SPAN = re.compile(r"`([^`]+)`")
 
 #: A markdown table column separator: a ``|`` not escaped as ``\|``.
 #: GFM cells legitimately contain ``\|`` (e.g. a command spelled
-#: ``list\|add\|update``); a naive ``split("|")`` would shred them.
+#: ``list\|add\|update``). A naive ``split("|")`` would shred them.
 _UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
 
 
@@ -149,7 +149,7 @@ def _find_command_table(lines: list[str]) -> int | None:
 def _documented_commands(
     lines: list[str], header_index: int,
 ) -> dict[str, list[int]]:
-    """Map documented command name → 0-based README line numbers.
+    """Map documented command name to 0-based README line numbers.
 
     Walks body rows after the header + separator until the table
     ends (a non-pipe line).

@@ -1,4 +1,4 @@
-"""CHU006 — no mono-repo-internal references in publishable trees.
+"""CHU006: no mono-repo-internal references in publishable trees.
 
 Walks every text file under each ``libraries/<pkg>/`` and
 ``workbench/<pkg>/`` package directory plus
@@ -9,14 +9,14 @@ a PyPI / CircuitPython-bundle / MicroPython-bundle consumer who reads
 the shipped source, README, docs site, or tests.
 
 The walker covers ``src/``, ``docs/``, ``tests/``, ``functional_tests/``,
-``examples/``, ``README.md``, and ``pyproject.toml`` — wherever a
+``examples/``, ``README.md``, and ``pyproject.toml``. Wherever a
 published package surfaces text to consumers or contributors who
 installed without the mono-repo checked out.
 
 Self-scope: the rule resolves package directories under
 ``<repo_root>/libraries/`` and ``<repo_root>/workbench/`` plus
 ``<repo_root>/support/test_harness/``.  In a tree without those (a
-downstream user workspace), it returns no findings — silent no-op.
+downstream user workspace), it returns no findings, a silent no-op.
 
 Suppression: ``# noqa: CHU006`` on the offending line, or
 ``<!-- noqa: CHU006 -->`` for Markdown.
@@ -39,7 +39,7 @@ _RULE_CODE = "CHU006"
 def _under_subdir(filepath: Path, *, parent: str, child: str) -> bool:
     """True when *filepath* sits under ``<parent>/<child>/`` anywhere in its parts.
 
-    Path-segment match — never a substring match — so a stray
+    Path-segment match, never a substring match, so a stray
     ``checks-staging`` or ``my-workbench`` directory in the path
     can't accidentally satisfy the predicate.
     """
@@ -54,7 +54,7 @@ def _outside_chumicro_workspace(filepath: Path) -> bool:
     """Exempt the ``chumicro_workspace`` package from the workspace-shim rule.
 
     The workspace package owns the workspace-template's command-runner
-    shim — generating it, parsing it, and teaching users about it is
+    shim. Generating it, parsing it, and teaching users about it is
     its job.  Bare shim mentions throughout that package's tree are
     correct.
     """
@@ -75,7 +75,7 @@ def _outside_chumicro_checks(filepath: Path) -> bool:
 
 #: Top-level directories that signal a workspace cloned from the
 #: ChuMicro-Workspace-Template.  Files anywhere under these trees
-#: legitimately mention the workspace's own ``run.py`` shim — that
+#: legitimately mention the workspace's own ``run.py`` shim. That
 #: IS the command runner in a user workspace, not the chumicro-style
 #: anti-pattern the bare-``run.py`` rule is meant to catch.
 _TEMPLATE_PATH_SEGMENTS: frozenset[str] = frozenset({
@@ -86,8 +86,7 @@ _TEMPLATE_PATH_SEGMENTS: frozenset[str] = frozenset({
 def _outside_runpy_owners(filepath: Path) -> bool:
     """Combined predicate: outside trees where the workspace shim is legitimate.
 
-    Used by the bare-shim-mention pattern.  Three trees legitimately
-    name the workspace's command-runner script:
+    Three trees legitimately name the workspace's command-runner script:
 
     * ``workbench/workspace/`` — the chumicro_workspace package
       generates the shim (covered by :func:`_outside_chumicro_workspace`).
@@ -99,7 +98,7 @@ def _outside_runpy_owners(filepath: Path) -> bool:
       in a workspace cloned from the template, the shim IS the
       command runner.
 
-    The rule fires only outside all three sets — on PyPI-publishable
+    The rule fires only outside all three sets: on PyPI-publishable
     library or workbench code that shouldn't reference a host-only
     shim.
     """
@@ -114,7 +113,7 @@ def _publishable_package_dirs(repo_root: Path) -> list[Path]:
     """Return every tree the rule walks for forbidden references.
 
     Mono-repo shape: per-package directories under ``libraries/`` and
-    ``workbench/`` plus ``support/test_harness/`` — the trees that
+    ``workbench/`` plus ``support/test_harness/``: the trees that
     ship to PyPI / CircuitPython-bundle / MicroPython-bundle
     consumers.
 
@@ -122,8 +121,8 @@ def _publishable_package_dirs(repo_root: Path) -> list[Path]:
     ``packages/`` and ``projects/`` plus the flat user-content
     trees ``shared/``, ``examples/``, and root ``tests/``.  In a
     workspace cloned from the template, those trees ARE the
-    "publishable" surface — anything the user might commit and
-    share — so the same anti-leak rules apply.
+    "publishable" surface, anything the user might commit and
+    share, so the same anti-leak rules apply.
 
     Both shapes union; absent trees are silently skipped.
     """

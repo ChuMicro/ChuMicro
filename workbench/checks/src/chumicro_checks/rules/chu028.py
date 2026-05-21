@@ -1,4 +1,4 @@
-"""CHU028 — cross-ADR principle duplication.
+"""CHU028: cross-ADR principle duplication.
 
 Regression guard for the partial-supersession bloat pattern where a
 corrected principle ends up stated in full in *both* an older ADR's
@@ -11,21 +11,21 @@ Engine A applied to markdown paragraphs across
 ``plans/decisions/*.md`` (excluding ``README.md``):
 
 * Extract each ADR's non-scaffolding paragraphs (split on blank
-  lines; markdown headers, ``Status: / Date: / Related: /
+  lines. Markdown headers, ``Status: / Date: / Related: /
   Superseded by: / Archived:`` lines, and blockquote lines are
   treated as boundaries, not content).
 * Normalize to a tuple of lowercased alphanumeric word tokens
   (matching CHU027's normalizer so the engine has consistent shape).
-* Hash paragraphs at or above the minimum-token floor; flag
+* Hash paragraphs at or above the minimum-token floor, then flag
   fingerprints that span ≥2 ADR files (the partial-supersession
-  shape — one invariant, one home).
+  shape: one invariant, one home).
 
 Floor is set to 20 tokens, higher than CHU027's 12, because ADR
 prose runs longer and short paragraphs share idiomatic ADR phrasing
 ("This ADR doesn't pre-emptively edit X" / "Out of scope") without
 being principle-level duplication.
 
-Scope: ``plans/decisions/*.md``.  Absent → silent no-op.
+Scope: ``plans/decisions/*.md``.  Absent, a silent no-op.
 
 Suppression: ``<!-- noqa: CHU028 -->`` on the first line of the
 duplicated paragraph, paired with the one-line *why* AGENTS.md
@@ -49,7 +49,7 @@ _MIN_TOKENS = 20
 
 _TOKEN = re.compile(r"\b[a-z][a-z0-9]+\b")
 
-#: Line shapes that are not principle content — section scaffolding,
+#: Line shapes that are not principle content: section scaffolding,
 #: ADR metadata fields, blockquotes used for asides.
 _SCAFFOLDING_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^\s*#"),                       # markdown headers
@@ -86,8 +86,8 @@ def _extract_paragraphs(text: str, filepath: Path) -> list[_Paragraph]:
     A paragraph is a run of consecutive non-blank, non-scaffolding
     lines.  Any blank line, header, or metadata field acts as a
     paragraph boundary.  A line carrying ``noqa: CHU028`` marks the
-    enclosing paragraph as suppressed and does not contribute tokens —
-    so adding a suppression marker affects only whether the finding
+    enclosing paragraph as suppressed and does not contribute tokens.
+    Adding a suppression marker affects only whether the finding
     is reported, never which paragraphs hash together.
     """
     paragraphs: list[_Paragraph] = []

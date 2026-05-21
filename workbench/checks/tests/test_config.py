@@ -64,7 +64,7 @@ class TestLoadConfig:
 
     def test_non_list_ignore_treated_as_empty(self, tmp_path: Path) -> None:
         # Defensive: if a user typo-types `ignore = "CHU012"` (string
-        # instead of list), don't crash — just yield empty.
+        # instead of list), don't crash. Just yield empty.
         _write_pyproject(
             tmp_path,
             "[tool.chumicro-checks]\nignore = 'CHU012'\n",
@@ -122,13 +122,13 @@ class TestCLIIntegration:
                 "CHU999": _AlwaysFires("CHU999"),
             },
         )
-        # Config ignores 998; CLI ignores 999; combined ignores both.
+        # Config ignores 998 and CLI ignores 999, so both are ignored.
         assert main(["--root", str(tmp_path), "--ignore", "CHU999"]) == 0
 
     def test_no_config_runs_all_rules(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        # No pyproject.toml in tmp_path — empty config.
+        # No pyproject.toml in tmp_path. Config is empty.
         monkeypatch.setattr(
             "chumicro_checks.cli.registered_rules",
             lambda: {"CHU999": _AlwaysFires("CHU999")},

@@ -1,4 +1,4 @@
-"""Tests for CHU016 — example imports resolve per declared runtime."""
+"""Tests for CHU016: example imports resolve per declared runtime."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class TestSilentNoOp:
         assert CHU016.check(tmp_path) == []
 
     def test_example_without_runtime_marker(self, tmp_path: Path) -> None:
-        # No marker → verify_examples already resolves all imports;
+        # When no marker is present, verify_examples already resolves all imports.
         # CHU016 stays out of it.
         _stage(tmp_path, _EX, "import board\n")
         assert CHU016.check(tmp_path) == []

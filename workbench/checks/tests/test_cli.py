@@ -19,7 +19,7 @@ def test_help_exits_cleanly(capsys: pytest.CaptureFixture[str]) -> None:
 def test_no_rules_means_no_findings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # An empty registry → nothing fires → exit 0.
+    # An empty registry produces no findings, so exit 0.
     assert main(["--root", str(tmp_path)]) == 0
     assert capsys.readouterr().out == ""
 
@@ -93,7 +93,7 @@ def test_list_with_registered_rule(
 
 
 def test_find_repo_root_falls_back_when_no_marker(tmp_path: Path) -> None:
-    # tmp_path is under /private/var/folders/... — no .git or pyproject.toml
+    # tmp_path is under /private/var/folders/... No .git or pyproject.toml
     # exists between it and the filesystem root, so the fallback returns
     # the resolved start path itself.
     deep = tmp_path / "no" / "marker" / "here"

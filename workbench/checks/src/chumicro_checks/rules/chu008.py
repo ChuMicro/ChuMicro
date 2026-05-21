@@ -1,9 +1,9 @@
-"""CHU008 — no upstream-derivative framing in workspace-template trees.
+"""CHU008: no upstream-derivative framing in workspace-template trees.
 
 Targets the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template)
 starter repo and downstream user workspaces cloned from it.  Flags
 prose / config / docstrings that frame the user's workspace as a
-derivative of an upstream chumicro mono-repo — leftover ``Decision NNNN``
+derivative of an upstream chumicro mono-repo: leftover ``Decision NNNN``
 / ``ADR NNNN`` pointers, ``plans/...md`` paths, ``scripts/run.py``
 references, the "chumicro mono-repo" framing.  Those references are coherent inside
 the chumicro mono-repo (where ADRs are co-located) but meaningless in
@@ -16,9 +16,9 @@ ship in the template (``README.md``, ``AGENTS.md``, ``CONTRIBUTING.md``,
 ``chumicro-dev.toml``).
 
 Self-scope: the rule fires only when the repo has the
-template-workspace shape — detected by presence of ``packages/`` at
+template-workspace shape, detected by presence of ``packages/`` at
 the repo root.  In the chumicro mono-repo (which has ``libraries/``
-and ``workbench/`` instead), CHU008 returns no findings — silent
+and ``workbench/`` instead), CHU008 returns no findings, a silent
 no-op.
 
 Suppression: ``# noqa: CHU008`` on the offending line, or

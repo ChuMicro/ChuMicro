@@ -1,4 +1,4 @@
-"""Tests for CHU008 — no upstream-derivative framing in workspace-template trees."""
+"""Tests for CHU008: no upstream-derivative framing in workspace-template trees."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def _stage(repo_root: Path, relative: str, content: str) -> Path:
 
 class TestSilentNoOp:
     def test_mono_repo_shape_no_op(self, tmp_path: Path) -> None:
-        # Mono-repo has libraries/ but not packages/ — CHU008 self-no-ops.
+        # Mono-repo has libraries/ but not packages/. CHU008 self-no-ops.
         (tmp_path / "libraries").mkdir()
         _stage(tmp_path, "README.md", f"{_DECISION_REF} — see {_PLANS_PATH}\n")
         assert CHU008.check(tmp_path) == []
@@ -131,7 +131,7 @@ class TestSuppression:
 
 class TestScanRoots:
     def test_returns_empty_without_packages_dir(self, tmp_path: Path) -> None:
-        # Even with other template subdirs present, no `packages/` →
+        # Even with other template subdirs present, no `packages/` means
         # silent.
         (tmp_path / "projects").mkdir()
         (tmp_path / "examples").mkdir()
@@ -142,7 +142,7 @@ class TestScanRoots:
         (tmp_path / "projects").mkdir()
         roots = _template_repo_scan_roots(tmp_path)
         names = sorted(root.name for root in roots)
-        # `examples/`, `shared/`, `tests/` are absent — only present
+        # `examples/`, `shared/`, `tests/` are absent. Only present
         # subdirs come back.
         assert names == ["packages", "projects"]
 

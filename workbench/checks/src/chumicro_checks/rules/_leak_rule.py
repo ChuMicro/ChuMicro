@@ -1,10 +1,8 @@
-"""``LeakRule`` — pattern-based file walker for repo-isolation rules.
+"""``LeakRule``: pattern-based file walker for repo-isolation rules.
 
-Used by CHU006 (mono-repo references in publishable trees) and CHU008
-(upstream-derivative framing in workspace-template trees).  Both rules
-have the same shape — walk a per-repo set of scan roots, line-by-line
-match a tuple of ``(regex, message, scope_predicate)`` patterns, honor
-``# noqa: <code>`` suppression — only the scan roots and forbidden
+Two rule families share this shape: a per-repo set of scan roots,
+line-by-line matching of (regex, message, scope_predicate) tuples, and
+``# noqa: <code>`` suppression. Only the scan roots and forbidden
 patterns differ.
 
 Each ``LeakRule`` instance carries:

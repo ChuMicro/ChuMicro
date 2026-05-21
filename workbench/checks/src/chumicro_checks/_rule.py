@@ -17,7 +17,7 @@ class Rule(ABC):
     return a list of findings.
 
     A rule that finds none of its target paths under *repo_root*
-    returns an empty list — silent no-op rather than error.  This is
+    returns an empty list, a silent no-op rather than an error.  This is
     how repo-specific rules (CHU006, CHU008) coexist in one package.
     """
 

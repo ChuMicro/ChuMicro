@@ -8,11 +8,9 @@ table::
 
 Recognized keys:
 
-* ``ignore`` — list of CHU codes to skip in this repo.  Takes effect
-  by default; CLI ``--ignore`` adds to it; CLI ``--select`` overrides
-  by running only the listed codes.
+* ``ignore`` — list of CHU codes to skip in this repo.
 
-Unknown keys are tolerated silently — future versions may add config
+Unknown keys are tolerated silently. Future versions may add config
 keys that older installed packages should ignore rather than fail on.
 """
 
@@ -34,7 +32,7 @@ def load_config(repo_root: Path) -> Config:
     """Read ``[tool.chumicro-checks]`` from *repo_root*'s ``pyproject.toml``.
 
     Returns the default :class:`Config` when the file or section is
-    missing — no config is not an error.  A malformed TOML file
+    missing. No config is not an error.  A malformed TOML file
     raises ``tomllib.TOMLDecodeError`` so the user sees the parse
     error directly rather than getting an opaque empty config.
     """

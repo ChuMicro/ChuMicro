@@ -1,4 +1,4 @@
-"""CHU009 + CHU010 — no silent-pass / no-assertion patterns in test bodies.
+"""CHU009 + CHU010: no silent-pass / no-assertion patterns in test bodies.
 
 Two paired rules, both targeting library-side test files
 (``libraries/<name>/tests/test_*.py`` and
@@ -6,19 +6,19 @@ Two paired rules, both targeting library-side test files
 detection and AST walking but emit distinct findings under distinct
 codes.
 
-CHU009 — no ``return`` / ``pass`` that makes a test PASS without
+CHU009: no ``return`` / ``pass`` that makes a test PASS without
 asserting.  Two shapes are flagged::
 
     def test_thing() -> None:
         if not _PRECONDITION:
             log(...)
-            return            # last stmt of an if body — branch skips
+            return            # last stmt of an if body, branch skips
                               # every assertion below
         ...
 
     def test_other() -> None:
         setup()
-        return                # early bare return — orphans the
+        return                # early bare return, orphans the
         assert result()       # assertions after it
 
 The test_harness runner reports any test that returns without
@@ -26,11 +26,11 @@ raising as PASS, and pytest does the same.  Use
 ``chumicro_test_harness.skip(reason)`` (or ``raise AssertionError(...)``
 for "shouldn't have been reached" cases) instead.
 
-CHU010 — a test function must contain at least one assertion::
+CHU010: a test function must contain at least one assertion::
 
     def test_close_idempotent():
         sock.close()
-        sock.close()       # no assertion — passes regardless of behavior
+        sock.close()       # no assertion, passes regardless of behavior
 
 Without an explicit ``assert``, ``raise``, ``pytest.fail``,
 ``pytest.raises``, ``chumicro_test_harness.skip``, etc., the only
@@ -39,7 +39,7 @@ way the test fails is a crash inside the body.
 Self-scope: only files under ``libraries/<pkg>/tests/`` or
 ``libraries/<pkg>/functional_tests/`` matching ``test_*.py`` are
 checked.  In a tree without a ``libraries/`` directory, both rules
-return no findings — silent no-op.
+return no findings, a silent no-op.
 
 Suppression: ``# noqa: CHU009`` / ``# noqa: CHU010`` on the
 flagged line (or on the function header for CHU010).
@@ -91,7 +91,7 @@ def _is_in_scope(filepath: Path, repo_root: Path) -> bool:
 
 
 def _scan_libraries(repo_root: Path) -> list[Path]:
-    """Return the libraries/ tree if it exists; else empty list."""
+    """Return ``[libraries_dir]`` if it exists, else an empty list."""
     libraries_dir = repo_root / "libraries"
     if not libraries_dir.is_dir():
         return []
@@ -143,7 +143,7 @@ def _ifs_in_scope(func: ast.FunctionDef):
     """Yield ``ast.If`` nodes in *func*'s own control flow.
 
     Descends compound statements (if / for / while / with / try) but
-    stops at nested ``def`` / ``lambda`` / ``class`` — a ``return``
+    stops at nested ``def`` / ``lambda`` / ``class``. A ``return``
     inside a closure (a socket factory, a callback) is that callable's
     logic, not the test silently passing.
     """

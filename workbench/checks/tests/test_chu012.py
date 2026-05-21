@@ -1,4 +1,4 @@
-"""Tests for CHU012 — dated narration / workstream-phase pointers."""
+"""Tests for CHU012: dated narration / workstream-phase pointers."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class TestSilentNoOp:
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "foo.py").write_text("# Captured 2026-05-09 incident\n")
         # The rule scans `libraries/`, `workbench/`, `support/`, `scripts/`.
-        # Files outside those roots aren't checked — silent no-op.
+        # Files outside those roots aren't checked. The rule no-ops silently.
         assert CHU012.check(tmp_path) == []
 
 

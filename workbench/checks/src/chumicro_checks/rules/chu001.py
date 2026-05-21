@@ -1,11 +1,11 @@
-"""CHU001 — descriptive names; no single-letter or banned-abbreviation bindings.
+"""CHU001: descriptive names. No single-letter or banned-abbreviation bindings.
 
 Walks every ``.py`` file under the configured top-level directories
 and flags:
 
 * Single-letter variable names (except ``_``).  ``for``-loop targets
-  are exempt — ``for i in range(n):`` is allowed for human contributors;
-  agent-generated code is expected to use descriptive loop targets too,
+  are exempt. ``for i in range(n):`` is allowed for human contributors.
+  Agent-generated code is expected to use descriptive loop targets too,
   but the exception lives in the rule for compatibility.
 * Banned bare abbreviations: ``env``, ``buf``, ``src``, ``cmd``,
   ``msg``, ``err``, ``ref``, ``addr``, ``exc``, ``exec``.
@@ -14,7 +14,7 @@ and flags:
 
 Self-scope: scans top-level directories under the repo root.  In a
 tree without those (a downstream user workspace), the rule returns
-no findings — silent no-op.
+no findings, a silent no-op.
 
 Suppression: ``# noqa: CHU001`` on the offending line.
 """

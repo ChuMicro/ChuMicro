@@ -1,15 +1,15 @@
-"""CHU011 — plans-doc brevity.
+"""CHU011: plans-doc brevity.
 
 Two sub-checks against ``plans/next-up.md``:
 
 1. Every top-level ``- `` bullet contains at most ONE bullet marker
-   (the lead line itself).  Sub-bullets are forbidden — anything that
+   (the lead line itself).  Sub-bullets are forbidden. Anything that
    needs structure should be promoted to a workstream file under
    ``plans/workstreams/`` (open) or ``plans/workstreams/archive/``
    (shipped) and replaced here by a one-line pointer.
 
 2. No ``## Done`` heading (or ``## Done (recent)`` / similar).
-   Recent landings live in ``git log``; the file tracks status only.
+   Recent landings live in ``git log``. The file tracks status only.
 
 A bullet's extent runs from its top-level ``- `` line until the next
 top-level ``- ``, the next markdown heading, or end of file.
@@ -20,7 +20,7 @@ Done-section ban.
 
 Self-scope: the rule walks ``<repo_root>/plans/next-up.md``.  If
 that file doesn't exist (a downstream workspace, the
-workspace-template repo), the rule returns no findings — silent
+workspace-template repo), the rule returns no findings, a silent
 no-op rather than error.
 """
 

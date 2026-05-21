@@ -1,4 +1,4 @@
-"""Tests for CHU019 — archived-decision marker consistency."""
+"""Tests for CHU019: archived-decision marker consistency."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ class TestSupersededContract:
 
     def test_marker_without_superseded_status(self, tmp_path: Path) -> None:
         _adr(tmp_path, "0035-SUPERSEDED-BY-0036-old-shape.md", _LIVE)
-        # accepted-status + marker → status/marker disagreement.
+        # accepted-status with the marker disagrees on status.
         assert "CHU019" in _codes(tmp_path)
 
     def test_superseded_without_pointer_line(self, tmp_path: Path) -> None:

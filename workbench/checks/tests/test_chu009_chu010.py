@@ -1,4 +1,4 @@
-"""Tests for CHU009 + CHU010 — silent test skip rules."""
+"""Tests for CHU009 + CHU010: silent test skip rules."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ class TestSilentNoOp:
 
 class TestScope:
     def test_only_libraries_tests(self, tmp_path: Path) -> None:
-        # File outside libraries/ — out of scope.
+        # File outside libraries/. The rule is out of scope.
         target = tmp_path / "scripts" / "tests" / "test_x.py"
         target.parent.mkdir(parents=True)
         target.write_text("def test_thing():\n    pass\n")
@@ -222,13 +222,13 @@ class TestIsInScopeHelper:
 
     def test_path_outside_repo_root_rejected(self, tmp_path: Path) -> None:
         # ``Path.relative_to`` raises ValueError when the file isn't
-        # under repo_root; the helper should return False rather than
+        # under repo_root. The helper should return False rather than
         # propagating the exception.
         outside = Path("/elsewhere/libraries/wifi/tests/test_x.py")
         assert _is_in_scope(outside, tmp_path) is False
 
     def test_too_few_path_parts_rejected(self, tmp_path: Path) -> None:
-        # ``libraries/wifi/test_x.py`` has only 3 parts — the rule
+        # ``libraries/wifi/test_x.py`` has only 3 parts. The rule
         # needs ``libraries/<pkg>/<scope_dir>/test_*.py`` (4+ parts).
         target = tmp_path / "libraries" / "wifi" / "test_x.py"
         assert _is_in_scope(target, tmp_path) is False
@@ -242,8 +242,8 @@ class TestIterTestFunctionsHelper:
     """Direct tests for ``_iter_test_functions`` edge cases."""
 
     def test_test_class_with_non_test_methods(self) -> None:
-        # ``Test*`` class with a mix of test_ and helper methods —
-        # only the test_ methods come back.
+        # ``Test*`` class with a mix of test_ and helper methods.
+        # Only the test_ methods come back.
         tree = ast.parse(textwrap.dedent("""
             class TestStuff:
                 def helper(self):
@@ -278,7 +278,7 @@ class TestCallableTailName:
         assert _callable_tail_name(call.func) == "foo"
 
     def test_subscript_callable_returns_none(self) -> None:
-        # ``handlers[0]()`` — subscript callable.  The helper returns
+        # ``handlers[0]()`` is a subscript callable. The helper returns
         # None so the call is treated as not-an-assertion (conservative).
         call = ast.parse("handlers[0]()").body[0].value
         assert _callable_tail_name(call.func) is None
@@ -308,7 +308,7 @@ class TestSilentReturnEdgeCases:
     """Widened CHU009: any ``if``-body-final return/pass + bare early exit."""
 
     def test_multi_statement_if_body_last_return_flagged(self, tmp_path: Path) -> None:
-        # ``if cond:\n    log(); return`` — the guarded branch still
+        # ``if cond:\n    log(); return``. The guarded branch still
         # skips ``assert False`` below, so it is a silent skip.
         _stage_test(tmp_path, "foo", "tests", """
             def test_thing() -> None:

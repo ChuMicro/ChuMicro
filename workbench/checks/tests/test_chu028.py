@@ -1,4 +1,4 @@
-"""Tests for CHU028 — cross-ADR principle duplication."""
+"""Tests for CHU028: cross-ADR principle duplication."""
 
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ class TestSuppression:
     def test_noqa_on_paragraph_suppresses(self, tmp_path: Path) -> None:
         # The convention: the *why* AGENTS.md requires lives in
         # surrounding prose (separated by a blank line so it forms
-        # its own paragraph, below the floor); the noqa marker sits
+        # its own paragraph, below the floor). The noqa marker sits
         # on its own line at the top of the suppressed paragraph.
         suppressed_body = (
             "## Context\n\n"

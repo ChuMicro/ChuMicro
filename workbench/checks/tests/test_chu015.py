@@ -1,4 +1,4 @@
-"""Tests for CHU015 — module-docstring capability claims vs symbols."""
+"""Tests for CHU015: module-docstring capability claims vs symbols."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ class TestFalsePositiveGuards:
             _SRC,
             '"""Async support is future work."""\n\n\ndef get():\n    pass\n',
         )
-        # No symbol named in the not-yet clause → clean.
+        # No symbol named in the not-yet clause, so it is clean.
         assert CHU015.check(tmp_path) == []
 
 
@@ -126,7 +126,7 @@ class TestSuppression:
 class TestAgainstRealRepo:
     """Every library module docstring must match its shipped surface.
 
-    Guards the regression mechanically — a re-introduced "future
+    Guards the regression mechanically. A re-introduced "future
     work" claim for a shipped symbol fails this test, not just review.
     """
 

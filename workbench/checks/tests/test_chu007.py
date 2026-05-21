@@ -1,4 +1,4 @@
-"""Tests for CHU007 — workbench packages must not import library packages."""
+"""Tests for CHU007: workbench packages must not import library packages."""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ class TestSilentNoOp:
     def test_empty_libraries_yields_no_packages(self, tmp_path: Path) -> None:
         (tmp_path / "libraries").mkdir()
         _make_workbench_module(tmp_path, "tool", "x.py", "import chumicro_wifi\n")
-        # No library has a pyproject.toml, so the package set is empty —
-        # nothing to flag.
+        # No library has a pyproject.toml, so the package set is empty.
+        # Nothing to flag.
         assert CHU007.check(tmp_path) == []
 
 
@@ -97,13 +97,13 @@ class TestEdgeCases:
     def test_syntax_error_skipped(self, tmp_path: Path) -> None:
         _make_library(tmp_path, "wifi")
         _make_workbench_module(tmp_path, "tool", "x.py", "def broken(\n")
-        # Unparseable file → silent skip, no crash.
+        # Unparseable file: silent skip, no crash.
         assert CHU007.check(tmp_path) == []
 
     def test_relative_import_with_no_module(self, tmp_path: Path) -> None:
         _make_library(tmp_path, "wifi")
         _make_workbench_module(tmp_path, "tool", "x.py", "from . import sibling\n")
-        # `from . import` has node.module is None — no library check applies.
+        # `from . import` has node.module is None. No library check applies.
         assert CHU007.check(tmp_path) == []
 
 

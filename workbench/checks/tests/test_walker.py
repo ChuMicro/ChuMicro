@@ -53,7 +53,7 @@ def test_missing_root_yields_nothing(tmp_path: Path) -> None:
 
 
 def test_excluded_dir_set_is_frozenset() -> None:
-    # The export is part of the public surface; spot-check it's stable.
+    # The export is part of the public surface. Spot-check it's stable.
     assert "__pycache__" in EXCLUDED_DIRECTORY_NAMES
     assert ".venv" in EXCLUDED_DIRECTORY_NAMES
 

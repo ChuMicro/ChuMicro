@@ -1,4 +1,4 @@
-"""CHU002–CHU005 + CHU018 — newline and whitespace rules.
+"""CHU002–CHU005 + CHU018: newline and whitespace rules.
 
 The whitespace family.  Each rule walks the same set of text files
 (any ``.py``, ``.md``, ``.yml``,
@@ -8,7 +8,7 @@ The whitespace family.  Each rule walks the same set of text files
 
 Repo-root loose files are deliberately *not* scanned: the root mixes
 gitignored user-local files (``devices.yml``, ``secrets.toml``) with
-tracked ones, and the walker reads the filesystem, not git — scanning
+tracked ones, and the walker reads the filesystem, not git. Scanning
 root would false-positive on per-user files.
 
 * CHU002 — file does not end with exactly one newline.  Structural;
@@ -25,11 +25,11 @@ root would false-positive on per-user files.
   with ``# noqa: CHU005`` on the block-opener line (the blank line
   itself has no code to attach a comment to).  An exception fires
   for the idiomatic blank-line-before-nested-definition pattern
-  (import-fallback blocks, conditional definitions) — if the next
+  (import-fallback blocks, conditional definitions): if the next
   non-blank line is a ``def`` or ``class``, the blank stays clean.
 
 Self-scope: scans top-level directories under the repo root.  In a
-tree without those, every rule returns no findings — silent no-op.
+tree without those, every rule returns no findings, a silent no-op.
 """
 
 from __future__ import annotations
@@ -70,10 +70,8 @@ _SCAN_TOP_LEVELS: tuple[str, ...] = (
 )
 
 #: Per-package parent directories.  Inside each package directory, only
-#: the listed subdirs are scanned — pyproject.toml, mkdocs.yml, and
-#: other package-root metadata aren't part of the linter's scope.  This
-#: matches ``discover_ruff_paths`` (the previous lint pipeline used the
-#: same set).
+#: the listed subdirs are scanned. pyproject.toml, mkdocs.yml, and
+#: other package-root metadata aren't part of the linter's scope.
 _PACKAGE_PARENTS: tuple[str, ...] = ("libraries", "workbench", "support")
 _PACKAGE_SUBDIRS: tuple[str, ...] = (
     "src", "tests", "functional_tests", "examples",
@@ -210,12 +208,12 @@ def _check_chu004(filepath: Path, text: str) -> list[Finding]:
 
 
 def _check_chu018(filepath: Path, _text: str) -> list[Finding]:
-    """Files must use LF line endings — no CR or CRLF.
+    """Files must use LF line endings. No CR or CRLF.
 
     Reads raw bytes: the shared text reader opens in universal-newline
     mode, which silently translates ``\\r\\n`` to ``\\n`` before any
-    rule sees it — so a CR check has to bypass it.  One finding per
-    file (at the first offending line); a mixed-ending file is one
+    rule sees it. A CR check has to bypass it.  One finding per
+    file (at the first offending line). A mixed-ending file is one
     defect, not one per line.
     """
     try:

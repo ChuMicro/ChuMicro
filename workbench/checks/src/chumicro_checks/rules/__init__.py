@@ -2,7 +2,7 @@
 
 Each rule module exposes a single :class:`Rule` subclass instance
 named after the rule code (e.g. ``CHU011``).  :func:`registered_rules`
-returns the canonical mapping that the CLI iterates.
+returns the mapping the CLI iterates.
 """
 
 from __future__ import annotations

@@ -1,13 +1,13 @@
-"""CHU019 — archived-decision marker consistency.
+"""CHU019: archived-decision marker consistency.
 
-Session start scans the decision-record directory by ``ls`` — the
+Session start scans the decision-record directory by ``ls``. The
 filename is the index.  A dead decision must announce that in its
 filename so the reader skips it without opening it.  The status
 field, the filename marker, and the ``Archived:`` field each carry
-one bit of the same fact; if they disagree a future reader is misled
+one bit of the same fact. If they disagree a future reader is misled
 exactly where the convention was meant to help.  Prose discipline
-doesn't catch that — this rule does (a lintable contract must be
-mechanized, not left to doc review).
+doesn't catch that. This rule does, since a lintable contract must be
+mechanized rather than left to doc review.
 
 For every ``plans/decisions/NNNN*.md`` (``README.md`` excluded):
 
@@ -17,15 +17,15 @@ For every ``plans/decisions/NNNN*.md`` (``README.md`` excluded):
   with ``Status:`` left ``accepted`` (archiving is not a status).
 - no two records share a four-digit number prefix (a botched rename).
 
-The two markers are mutually exclusive by construction (each anchors
-its token right after the ``NNNN-`` prefix), so "both at once" is
-unreachable rather than a checked rule.
+The two markers are mutually exclusive: each anchors its token right
+after the ``NNNN-`` prefix, so "both at once" is unreachable rather
+than a checked rule.
 
-Number *gaps* are not flagged — an intentionally skipped number is
+Number *gaps* are not flagged. An intentionally skipped number is
 allowed.
 
 Self-scope: ``<repo_root>/plans/decisions``.  Absent (a downstream
-workspace, the workspace-template) → no findings, silent no-op.
+workspace, the workspace-template), no findings, a silent no-op.
 
 Suppression: ``<!-- noqa: CHU019 -->`` anywhere in the offending file.
 """
@@ -63,7 +63,7 @@ def _check_file(filepath: Path) -> list[Finding]:
 
     status_match = _STATUS.search(text)
     if status_match is None:
-        # No Status field → not a decision record; nothing to check.
+        # No Status field. Not a decision record, nothing to check.
         return []
     status = status_match.group(1).lower()
     status_line = _line_of(text, status_match.start())
@@ -85,7 +85,7 @@ def _check_file(filepath: Path) -> list[Finding]:
 
     # A filename cannot carry both markers: each regex anchors the
     # token immediately after the `NNNN-` prefix, so they are mutually
-    # exclusive by construction — no "both" check is reachable.
+    # exclusive: no "both" check is reachable.
 
     if status == "superseded" and superseded_marker is None:
         flag(status_line, "Status is `superseded` but the filename lacks "

@@ -1,4 +1,4 @@
-"""Tests for CHU025 — Superseded-by pointer integrity."""
+"""Tests for CHU025: Superseded-by pointer integrity."""
 
 from __future__ import annotations
 

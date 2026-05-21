@@ -1,10 +1,10 @@
-"""CHU017 — coverage-claim honesty.
+"""CHU017: coverage-claim honesty.
 
 The project's coverage gate is a *CPython-reachable, post-`# pragma:
-no cover`* figure with **no device-execution signal** — explicitly
+no cover`* figure with **no device-execution signal**, explicitly
 **not** "N % of shipped code".  An adversarial doc sweep found docs
 citing the number as a whole-codebase guarantee anyway.  Prose
-lockstep didn't catch it; this rule does.
+lockstep didn't catch it. This rule does.
 
 It flags an **affirmative** coverage-percentage claim whose scope is
 one of a closed set of codebase-extent overclaims (``shipped code``,
@@ -16,13 +16,13 @@ carries a negator (``not`` / ``never`` / ``rather than`` / ``n't``)
 or an honest-scope qualifier (``CPython-reachable``,
 ``post-exclusion``, ``post-pragma``, ``device-execution``,
 ``reachable``, ``aggregate``) is the *corrected* or *meta* statement
-of the contract, not drift — those are not flagged.  This is what
+of the contract, not drift. Those are not flagged.  This is what
 keeps the rule off the very ADR / AGENTS text that states the honest
 scope.
 
-Scope: ``AGENTS.md``, ``docs/``, ``plans/decisions/`` — where the
+Scope: ``AGENTS.md``, ``docs/``, ``plans/decisions/``. Where the
 coverage contract and its claims live.  The churny ``plans/next-up``
-ledger and workstreams are out of scope.  Absent → silent no-op.
+ledger and workstreams are out of scope.  Absent, a silent no-op.
 
 Suppression: ``<!-- noqa: CHU017 -->`` on the offending line.
 """
@@ -43,7 +43,7 @@ _RULE_CODE = "CHU017"
 _PERCENT = re.compile(r"\b\d{2,3}\s*%")
 
 #: Codebase-extent scope phrases the CPython-reachable figure does
-#: not support.  Closed set — affirmative overclaims only.
+#: not support.  Closed set: affirmative overclaims only.
 _OVERCLAIM = re.compile(
     r"shipped code"
     r"|the codebase|entire codebase|whole codebase"
@@ -55,7 +55,7 @@ _OVERCLAIM = re.compile(
 )
 
 #: Sentence carries the honest scope, a negation, or is the meta
-#: statement of the rule itself → not drift.
+#: statement of the rule itself, not drift.
 _EXEMPT = re.compile(
     r"\bnot\b|\bnever\b|rather than|n't\b|\bno\b"
     r"|CPython-reachable|post-exclusion|post-pragma|post-`# pragma"

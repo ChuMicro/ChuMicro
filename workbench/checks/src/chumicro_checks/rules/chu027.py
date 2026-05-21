@@ -1,11 +1,11 @@
-"""CHU027 — cross-site duplicate comment / docstring blocks.
+"""CHU027: cross-site duplicate comment / docstring blocks.
 
 The AGENTS.md "Code comments" non-negotiable forbids the same comment
-repeated across many sites — flash is ~800 KB total on the target
+repeated across many sites. Flash is ~800 KB total on the target
 boards, and a comment pasted into ten files is ten copies of the same
 bytes in the shipped bundle.  Prose review missed it in the deploy
-2c audit (one ``mkfs / keep-set`` narrative landed in three files);
-this rule mechanizes the lexical half of the discipline.
+2c audit (one ``mkfs / keep-set`` narrative landed in three files).
+This rule mechanizes the lexical half of the discipline.
 
 The engine: extract every comment block and module/class/function
 docstring under publishable trees, normalize to a tuple of lowercased
@@ -13,11 +13,11 @@ word tokens, hash blocks at or above the minimum-token floor, and
 flag fingerprints whose occurrences span enough sites that the
 duplication is a signal rather than coincidence.
 
-Calibration parameters (set conservative; bench against real corpus
+Calibration parameters (set conservative, bench against real corpus
 before tightening):
 
 * ``_MIN_TOKENS = 12`` — short blocks share idiom language (``Returns
-  the parsed result``) without being duplicative; the floor keeps the
+  the parsed result``) without being duplicative. The floor keeps the
   rule off that noise.
 * ``_INTRA_PACKAGE_THRESHOLD = 3`` — three matching blocks inside one
   package is the AGENTS.md "repeated across many sites" shape.
@@ -27,7 +27,7 @@ before tightening):
 
 Scope: ``libraries/*/src/``, ``workbench/*/src/``,
 ``support/test_harness/``.  ``tests/`` and ``functional_tests/`` are
-intentionally out of scope — test files commonly share fixture
+intentionally out of scope. Test files commonly share fixture
 boilerplate that is correct duplication.
 
 Suppression: ``# noqa: CHU027`` on the line carrying the first token
@@ -100,7 +100,7 @@ def _extract_comment_blocks(text: str, filepath: Path, package: str) -> list[_Bl
 
     A line carrying a ``# noqa: CHU027`` directive marks the whole
     block as suppressed AND is excluded from the content hashed for
-    dedup matching — the marker affects only whether the finding is
+    dedup matching. The marker affects only whether the finding is
     reported, not which blocks match.
     """
     blocks: list[_Block] = []
@@ -159,8 +159,8 @@ def _extract_docstring_blocks(
     """Yield one block per module / class / function docstring.
 
     A docstring is marked suppressed when its enclosing ``def`` /
-    ``class`` / module header line above carries ``# noqa: CHU027`` —
-    the docstring body itself is the user-facing API doc, so the
+    ``class`` / module header line above carries ``# noqa: CHU027``.
+    The docstring body itself is the user-facing API doc, so the
     natural home for the marker is the surrounding scaffolding.
     """
     try:

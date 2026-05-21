@@ -1,4 +1,4 @@
-"""Tests for CHU002–CHU005 + CHU018 — newline and whitespace rules."""
+"""Tests for CHU002–CHU005 + CHU018: newline and whitespace rules."""
 
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ class TestSilentNoOp:
             assert rule.check(tmp_path) == []
 
     def test_files_outside_scope_ignored(self, tmp_path: Path) -> None:
-        # libraries/<pkg>/pyproject.toml is OUT of scope — only
-        # src/tests/functional_tests/examples are scanned per package.
+        # libraries/<pkg>/pyproject.toml is OUT of scope.
+        # Only src/tests/functional_tests/examples are scanned per package.
         _stage(tmp_path, "libraries/foo/pyproject.toml", "# x\n\n")
         for rule in (CHU002, CHU003, CHU004, CHU005, CHU018):
             assert rule.check(tmp_path) == []
@@ -141,7 +141,7 @@ class TestPackageScope:
 
     def test_libraries_root_files_out_of_scope(self, tmp_path: Path) -> None:
         # Top-level package files like pyproject.toml or mkdocs.yml are
-        # NOT scanned — matches the prior `discover_ruff_paths` scope.
+        # NOT scanned.
         _stage(tmp_path, "libraries/foo/pyproject.toml", "x = 1\n\n")
         assert CHU002.check(tmp_path) == []
 
@@ -211,7 +211,7 @@ class TestCHU018:
 
 
 class TestScanScope:
-    """plans/ and docs/ are in scope; gitignored-prone repo root is not."""
+    """plans/ and docs/ are in scope. The gitignored-prone repo root is not."""
 
     def test_plans_markdown_in_scope(self, tmp_path: Path) -> None:
         _stage(tmp_path, "plans/next-up.md", "# x\n\n\n\n")
@@ -223,7 +223,7 @@ class TestScanScope:
 
     def test_repo_root_loose_file_not_scanned(self, tmp_path: Path) -> None:
         # Root mixes gitignored user-local files with tracked ones and
-        # the walker reads the filesystem, not git — root stays out of
+        # the walker reads the filesystem, not git. Root stays out of
         # scope so a per-user devices.yml can't false-positive.
         _stage(tmp_path, "devices.yml", "bad: 1\n\n\n")
         _stage(tmp_path, "README.md", "no final newline")

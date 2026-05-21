@@ -1,4 +1,4 @@
-"""Tests for CHU020 — closed AI-tic phrase set."""
+"""Tests for CHU020: closed AI-tic phrase set."""
 
 from __future__ import annotations
 
