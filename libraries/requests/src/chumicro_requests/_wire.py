@@ -540,13 +540,12 @@ class ResponseParser:
             body_buffer: Optional caller-owned ``bytearray`` to use as
                 the steady-state body buffer.  When provided (typically
                 by ``HttpClient`` so the buffer survives across requests),
-                the parser writes into it for any response that fits.
-                Oversized responses still allocate a one-shot
-                ``bytearray(content_length)`` that's freed when the
-                parser is garbage-collected.  When ``None``, the parser
-                allocates its own ``bytearray(DEFAULT_BODY_BUFFER_SIZE)``
-                — fine for one-shot users, but per-request churn for
-                long-lived clients.
+                the parser writes into it for any response that fits
+                and rebinds to an exact-size replacement when a write
+                would overflow.  When ``None``, the parser starts with
+                an empty bytearray and grows on demand — fine for
+                one-shot users, but per-request churn for long-lived
+                clients.
             body_buffer_view: Pre-cached ``memoryview(body_buffer)``
                 supplied by the caller to avoid the parser constructing
                 one.  Required when ``body_buffer`` is provided.
@@ -565,11 +564,11 @@ class ResponseParser:
         self.headers = CaseInsensitiveDict()
         # Body buffer: caller-supplied (HttpClient passes its long-
         # lived buffer for cross-request reuse) or self-allocated
-        # (standalone use).  Either way ``_body`` is the active buffer
-        # and ``_body_view`` the cached memoryview.  Oversized responses
-        # (Content-Length > capacity) rebind ``_body`` to a one-shot
-        # ``bytearray(content_length)`` that gets freed when the parser
-        # is dereferenced.
+        # (standalone use).  Either way ``_body`` is the active
+        # buffer and ``_body_view`` the cached memoryview.  When a
+        # write would exceed current capacity, _absorb_body_chunk
+        # rebinds ``_body`` to an exact-size one-shot replacement
+        # that gets freed when the parser is dereferenced.
         if body_buffer is not None:
             if body_buffer_view is None:
                 body_buffer_view = memoryview(body_buffer)
@@ -943,11 +942,6 @@ class ResponseParser:
         terminating CRLF parsed) so :meth:`_advance` keeps walking.
         Returns False when there's not enough buffered to make
         progress — caller waits for the next :meth:`feed`.
-
-        Body writes use slice-assign at ``_body_write_offset``: in-place
-        when the offset+take fits inside the pre-allocated buffer
-        (single-chunk hot path), implicit-resize when it doesn't (multi-
-        chunk grow path — ``bytearray[N:N] = data`` extends).
         """
         if self._chunk_remaining > 0:
             available = min(self._chunk_remaining, self._live_len())
@@ -1004,21 +998,10 @@ class ResponseParser:
     def _absorb_body_bytes(self, chunk):
         """Append body bytes; honor the length cap and oversize policy.
 
-        Two paths:
-
-        * **External buffer in use** (``_body_capacity > 0``): the
-          buffer is the shared steady-state (see ``__init__``);
-          slice-assign at ``_body_write_offset`` writes in place.
-          When the response exceeds capacity, allocate a one-shot
-          replacement (drops on parser GC).
-
-        * **Default (no external buffer, ``_body_capacity == 0``)**:
-          use ``bytearray.extend`` so the body grows through the
-          allocator's internal geometric tiers (16, 32, 64, …) rather
-          than landing each grow exactly on the round-number tiers
-          (256, 1024) that the on-device fragmentation tests measure.
-          The view cache is refreshed lazily because extend invalidates
-          the prior memoryview.
+        Dispatches on body framing: Content-Length-known clamps the
+        write to the remaining count and transitions to DONE when
+        filled, length-unknown enforces the max-body cap as bytes
+        arrive.  The actual write is delegated to _absorb_body_chunk.
         """
         if self._body_remaining == 0:
             return  # Already complete; ignore extra bytes (server bug).
@@ -1044,11 +1027,11 @@ class ResponseParser:
 
         Slice-assign when the write fits inside the current body
         capacity (the steady-state path when an external buffer was
-        supplied or after the body was pre-allocated to ``Content-
-        Length``), or one-shot replace when it doesn't (chunked /
-        length-unknown grow path).  Never uses ``bytearray.extend`` —
-        that's "alloc bigger + memcpy old + memcpy new + free old"
-        on CP / MP, three allocations per logical write.
+        supplied), or one-shot replace with an exact-size bytearray
+        when it doesn't (chunked / length-unknown grow path).
+        Never uses ``bytearray.extend`` — that's "alloc bigger +
+        memcpy old + memcpy new + free old" on CP / MP, three
+        allocations per logical write.
         """
         chunk_len = len(chunk)
         write_offset = self._body_write_offset
