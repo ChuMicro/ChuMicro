@@ -22,11 +22,9 @@ _ZERO4 = b"\x00\x00\x00\x00"
 def _append_packed(buffer: bytearray, fmt: str, value: object, zero: bytes) -> None:
     """Append ``struct.pack(fmt, value)`` to *buffer* without allocating intermediate bytes.
 
-    ``struct.pack`` returns a fresh ``bytes`` object per call; ``pack_into``
-    writes into a pre-extended slice instead.  Bench-validated to halve
-    per-call heap allocation on MicroPython 1.26 unix-port (64 vs 128 bytes
-    per pack).  *zero* is a module-level zero-byte literal of the right
-    size for *fmt*.
+    ``struct.pack`` returns a fresh ``bytes`` object per call. ``pack_into``
+    writes into a pre-extended slice instead. *zero* is a module-level
+    zero-byte literal of the right size for *fmt*.
     """
     offset = len(buffer)
     buffer.extend(zero)
@@ -399,9 +397,6 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
 # ---------------------------------------------------------------------------
 # Public API — stream-based
 # ---------------------------------------------------------------------------
-# On CircuitPython with the native ``msgpack`` C module, ``__init__.py``
-# imports ``pack`` / ``unpack`` from it directly and never reaches this
-# file — so the definitions below are always the pure-Python ones.
 
 def pack(obj: object, stream: object) -> None:
     """Pack *obj* to *stream* in msgpack format.
