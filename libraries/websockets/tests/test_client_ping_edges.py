@@ -100,11 +100,11 @@ class TestAutoPing:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         socket.read_outbound()
-        # Below the interval — no ping.
+        # Below the interval: no ping.
         clock.advance(500)
         client.handle(clock.ticks_ms())
         assert socket.peek_outbound() == b""
-        # Above the interval — ping enqueues this tick, drains the next.
+        # Above the interval: ping enqueues this tick, drains the next.
         clock.advance(700)
         client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
@@ -125,7 +125,7 @@ class TestAutoPing:
         clock.advance(1500)
         client.handle(clock.ticks_ms())
         socket.read_outbound()
-        # No pong — wait past pong_timeout.
+        # No pong; wait past pong_timeout.
         clock.advance(3000)
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
@@ -146,7 +146,7 @@ class TestRecvErrors:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
-        # No inbound bytes; recv_into raises EAGAIN.  Client stays OPEN.
+        # No inbound bytes.  recv_into raises EAGAIN; client stays OPEN.
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.OPEN
 
@@ -177,7 +177,7 @@ class TestClientEdges:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_text("hello world")
-        # First tick partially sends; client._tx_partial is now non-None.
+        # First tick partially sends.  client._tx_partial is now non-None.
         client.handle(clock.ticks_ms())
         assert client._tx_partial is not None
         assert client.check(clock.ticks_ms()) is True
@@ -224,8 +224,8 @@ class TestRequestShape:
         parser = HandshakeRequestParser()
         parser.feed(request_bytes)
         # Spec invariant: derive_accept_key == sha1(key + GUID) base64.
-        # We don't re-derive here — the handshake already verified
-        # the round-trip — but assert the key was a valid base64
+        # We don't re-derive here, since the handshake already verified
+        # the round-trip, but assert the key was a valid base64
         # nonce so future regressions surface here too.
         import binascii
         decoded = binascii.a2b_base64(parser.client_key.encode("ascii"))
@@ -281,7 +281,7 @@ class TestClientFromConfig:
         factory does not read it — URL is a per-connection arg."""
         sock = FakeSocket()
         factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
-        # Build with a connect_url present in config; from_config must
+        # Build with a connect_url present in config.  from_config must
         # not call connect or otherwise act on it.
         client = WebSocketClient.from_config(
             {"websockets.client.connect_url": "ws://ignored.test/"},

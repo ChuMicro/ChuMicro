@@ -5,11 +5,10 @@ End-to-end: bring wifi up on the device, point a
 ``websockets`` PyPI echo server (spawned by ``conftest.py`` on the
 Mac's LAN IP), exchange messages, close gracefully.
 
-This is the "real" two-device test the slice-6 single-device
-loopback couldn't be — bytes actually leave the chip + traverse the
-LAN + come back from a battle-tested third-party server (the
-``websockets`` PyPI package) that's never going to share bugs with
-:class:`WebSocketClient`.  Verifies:
+This is the "real" two-device test the single-device loopback can't
+be.  Bytes actually leave the chip, traverse the LAN, and come back
+from a third-party server (the ``websockets`` PyPI package) that
+shares no implementation with :class:`WebSocketClient`.  Verifies:
 
 * The client's opening handshake is bit-exact-interoperable with a
   reference server.
@@ -25,8 +24,8 @@ the conftest's ``set_runtime_config(..., required_keys=...)`` declares
 up the server without it), the test body calls
 ``chumicro_test_harness.skip`` so the run reports a visible SKIP.
 
-**Deploy mode:** Pi Pico W requires ``--deploy-mode flash`` —
-same multi-stack-too-heavy constraint as ``test_real_loopback.py``.
+**Deploy mode:** Pi Pico W requires ``--deploy-mode flash`` for the
+same multi-stack-too-heavy reason as ``test_real_loopback.py``.
 """
 
 import time

@@ -1,9 +1,9 @@
 """Runner-shaped WebSocket client built on chumicro-sockets + chumicro-timing.
 
-:class:`WebSocketClient` is the entry point.  Runner-shaped —
-:meth:`check(now_ms) -> bool` reports whether work is pending;
+:class:`WebSocketClient` is the entry point.  Runner-shaped:
+:meth:`check(now_ms) -> bool` reports whether work is pending, and
 :meth:`handle(now_ms)` performs one tick of progress.  No threads,
-no async — cooperative dispatch in the caller's tick loop, so an
+no async; cooperative dispatch in the caller's tick loop, so an
 LED can keep blinking on the same board through the opening
 handshake, frame I/O, and the close handshake.
 
@@ -54,7 +54,7 @@ __all__ = ["WebSocketClient"]
 
 
 class ConnectingPhase:
-    """Sub-states inside CONNECTING — send the upgrade request, then
+    """Sub-states inside CONNECTING: send the upgrade request, then
     receive + validate the 101.  Tells ``handle()`` whether to write
     or read.
     """
@@ -71,7 +71,7 @@ class ConnectingPhase:
 class WebSocketClient(_BaseSession):
     """Non-blocking RFC 6455 WebSocket client.
 
-    Construct with a *connection_factory* — a ``(host: str, port: int,
+    Construct with a *connection_factory*: a ``(host: str, port: int,
     use_tls: bool) -> socket`` callable that returns any object
     matching the four-method TCP contract (``recv_into`` / ``send`` /
     ``close`` / ``setblocking``; full shape documented on the
@@ -79,26 +79,26 @@ class WebSocketClient(_BaseSession):
     factories work; so does anything else of the same shape.  Configure
     callbacks, then call :meth:`connect`.  Drive via :meth:`check` / :meth:`handle`
     from a runner tick or hand-rolled loop.  Callbacks fire from
-    :meth:`handle` — never from a thread or interrupt.
+    :meth:`handle`, never from a thread or interrupt.
 
-    For config-driven construction, see :meth:`from_config` —
+    For config-driven construction, see :meth:`from_config`: a
     one-line factory that reads ``websockets.client.max_message_bytes``
     from ``runtime_config.msgpack``.
 
     Knobs (all default to the matching ``DEFAULT_*`` constant):
 
-    * ``max_message_bytes`` — cap on assembled inbound message size.
-    * ``recv_budget_per_tick`` / ``send_budget_per_tick`` — per-tick
-      I/O caps; keeps the LED blinking under big payloads.
-    * ``max_tx_queue_size`` — outbound queue bound; overflow raises
+    * ``max_message_bytes``: cap on assembled inbound message size.
+    * ``recv_budget_per_tick`` / ``send_budget_per_tick``: per-tick
+      I/O caps that keep the LED blinking under big payloads.
+    * ``max_tx_queue_size``: outbound queue bound; overflow raises
       :class:`WebSocketBackpressureError`.
-    * ``when_oversized`` — :class:`WhenOversized` policy for inbound
+    * ``when_oversized``: :class:`WhenOversized` policy for inbound
       payloads above ``max_message_bytes``.
-    * ``ping_interval_ms`` (``None`` = off — most servers drive their
+    * ``ping_interval_ms`` (``None`` = off; most servers drive their
       own keep-alive) + ``pong_timeout_ms``.
-    * ``handshake_timeout_ms`` / ``close_timeout_ms`` — per-phase
+    * ``handshake_timeout_ms`` / ``close_timeout_ms``: per-phase
       timeouts.
-    * ``ticks`` — optional tick source (any object exposing
+    * ``ticks``: optional tick source (any object exposing
       ``ticks_ms`` / ``ticks_diff`` / ``ticks_add``); defaults to the
       :mod:`chumicro_timing` ``ticks`` submodule.  Tests pass
       ``FakeTicks`` from :mod:`chumicro_timing.testing`.
@@ -166,7 +166,7 @@ class WebSocketClient(_BaseSession):
     ) -> None:
         if ticks is None:
             from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
-        # Init shared session state with a None socket — connect() fills it in.
+        # Init shared session state with a None socket.  connect() fills it in.
         self._init_session_state(
             socket=None,
             max_message_bytes=max_message_bytes,
@@ -183,8 +183,8 @@ class WebSocketClient(_BaseSession):
         self._connection_factory = connection_factory
         self._ping_interval_ms = ping_interval_ms
 
-        # Set on the first connect() call; before then state stays
-        # CONNECTING but with no socket / no parsers — `connect()` is
+        # Set on the first connect() call.  Before then state stays
+        # CONNECTING but with no socket / no parsers; `connect()` is
         # what actually kicks off any I/O.
         self._connect_called = False
         self._connecting_phase = None
@@ -210,15 +210,15 @@ class WebSocketClient(_BaseSession):
         """Initiate the opening handshake against *url*.
 
         Non-blocking modulo the *connection_factory* call (which may
-        block briefly through DNS + TCP + TLS — same contract as
+        block briefly through DNS + TCP + TLS, same contract as
         :func:`chumicro_sockets.tcp_client_socket`).  After
         :meth:`connect` returns, the client is in
-        :data:`WebSocketState.CONNECTING`; subsequent :meth:`handle`
+        :data:`WebSocketState.CONNECTING`.  Subsequent :meth:`handle`
         ticks finish the upgrade and transition to OPEN.
 
         *extra_headers* (iterable / ``dict`` / :class:`CaseInsensitiveDict`)
         is useful for ``Cookie`` / ``Authorization`` / ``Origin``.
-        Reconnection means a fresh client — calling :meth:`connect` a
+        Reconnection means a fresh client.  Calling :meth:`connect` a
         second time raises :class:`WebSocketStateError`.
         """
         if self._connect_called:
@@ -275,7 +275,7 @@ class WebSocketClient(_BaseSession):
         if self.state == WebSocketState.CLOSED or not self._connect_called:
             return
 
-        # Timeout checks first — even if there's other work to do,
+        # Timeout checks first.  Even if there's other work to do,
         # an expired handshake / close / pong-overdue overrides.
         if self._check_timeouts(now_ms):
             return
@@ -287,7 +287,7 @@ class WebSocketClient(_BaseSession):
                 self._receive_handshake_chunk(now_ms)
             return
 
-        # OPEN / CLOSING — drain inbound first (peer may have sent
+        # OPEN / CLOSING: drain inbound first (peer may have sent
         # CLOSE we need to acknowledge), then outbound, then auto-ping.
         self._drain_inbound(now_ms)
         self._drain_outbound()
@@ -343,7 +343,7 @@ class WebSocketClient(_BaseSession):
             self._arm_auto_ping(now_ms)
             self.on_open()
             # The peer may have piggybacked frame bytes after the
-            # handshake terminator — drain whatever the parser
+            # handshake terminator.  Drain whatever the parser
             # carried over before yielding the tick.
             if self._post_handshake_carry:
                 self._feed_frame_bytes(self._post_handshake_carry, now_ms)
@@ -356,7 +356,7 @@ class WebSocketClient(_BaseSession):
     def _arm_auto_ping(self, now_ms: int) -> None:
         """Schedule the next auto-ping (if enabled).
 
-        *now_ms* must be the runner-supplied tick value — every caller
+        *now_ms* must be the runner-supplied tick value.  Every caller
         is inside the ``handle()`` path, so we never refetch.
         """
         if self._ping_interval_ms is None:

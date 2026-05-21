@@ -57,8 +57,8 @@ __chumicro_runtimes__ = ("circuitpython", "micropython")
 from chumicro_websockets import WebSocketClient, WebSocketState
 from helpers import runtime_config, ticks_ms, wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 
 config = runtime_config()
 connect_url = config.get("websockets.client.connect_url")

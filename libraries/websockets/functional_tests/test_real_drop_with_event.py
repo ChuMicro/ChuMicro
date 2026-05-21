@@ -1,22 +1,22 @@
 """On-device bench validation for WhenOversized.DROP_WITH_EVENT.
 
-Audit-embedded question (2026-05-12): when an inbound multi-frame
-message exceeds ``max_message_bytes`` under ``DROP_WITH_EVENT``, does
-the device (a) drain every oversize-payload byte from the socket so
-the framing stream stays aligned, and (b) keep the websocket OPEN so
-the very next message arrives intact?
+When an inbound multi-frame message exceeds ``max_message_bytes``
+under ``DROP_WITH_EVENT``, the device must (a) drain every
+oversize-payload byte from the socket so the framing stream stays
+aligned, and (b) keep the websocket OPEN so the very next message
+arrives intact.
 
-Test shape mirrors ``test_real_loopback.py``: a ``WebSocketServer`` and
-a ``WebSocketClient`` on the same board exchange frames over real wifi
-loopback.  The server reaches into its own ``Connection._socket`` to
-push manually-encoded frame bytes — the standard ``send_text`` /
-``send_binary`` API always emits ``fin=True`` single frames, so a
-fragmented-oversize sequence has to bypass the public surface.  The
-client is configured with ``max_message_bytes=400`` + ``DROP_WITH_EVENT``
-and observes which callbacks fire.
+A ``WebSocketServer`` and a ``WebSocketClient`` on the same board
+exchange frames over real wifi loopback.  The server reaches into its
+own ``Connection._socket`` to push manually-encoded frame bytes.  The
+standard ``send_text`` / ``send_binary`` API always emits ``fin=True``
+single frames, so a fragmented-oversize sequence has to bypass the
+public surface.  The client is configured with
+``max_message_bytes=400`` + ``DROP_WITH_EVENT`` and observes which
+callbacks fire.
 
 Single-device loopback is unsupported on Pi Pico W (rp2 lwIP /
-CP USB-wedge cluster — same skip the existing loopback test applies).
+CP USB-wedge cluster, same skip the existing loopback test applies).
 Runs on the ESP32 family.
 """
 
@@ -213,8 +213,8 @@ def test_drop_with_event_drains_oversize_and_stays_open() -> None:
 
     # --- Real assertions -----------------------------------------------
     assert client_oversized, "on_oversized never fired"
-    # reported_length is the size we observed before halting the extend
-    # — somewhere ≤ max_message_bytes (parser stops appending at the cap)
+    # reported_length is the size we observed before halting the extend:
+    # somewhere ≤ max_message_bytes (parser stops appending at the cap)
     # and > 0 (at least the first frame landed in the buffer).
     assert all(0 < length <= _MAX_MESSAGE_BYTES for length in client_oversized), (
         f"reported_length out of expected (0, {_MAX_MESSAGE_BYTES}] range: "

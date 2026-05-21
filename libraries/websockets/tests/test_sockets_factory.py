@@ -5,10 +5,10 @@ Verifies the helper wiring: the factory lives in its own submodule,
 TLS / non-TLS to the right :mod:`chumicro_sockets` constructor with
 the right arguments.
 
-Cross-runtime: pure-Python.  The original suite used
-``unittest.mock.patch`` (CPython-only) to swap module-level symbols;
-this version does the same swap manually with ``setattr`` /
-``try`` / ``finally`` so the tests run on the MP / CP unix-ports too.
+Cross-runtime: pure-Python.  Module-level symbols are swapped manually
+via ``setattr`` / ``try`` / ``finally`` (instead of
+``unittest.mock.patch``, which is CPython-only) so the tests run on
+the MP / CP unix-ports too.
 """
 
 import chumicro_sockets

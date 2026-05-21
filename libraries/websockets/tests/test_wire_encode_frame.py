@@ -48,7 +48,7 @@ class TestEncodeFrame:
 
     def test_unmasked_64bit_length(self):
         # The 64-bit length prefix only triggers at payloads >= 65536
-        # bytes — 4x the library's 16 KB DEFAULT_MAX_MESSAGE_BYTES.  The
+        # bytes (4x the library's 16 KB DEFAULT_MAX_MESSAGE_BYTES).  The
         # ~64 KB payload plus its encoded copy exceeds a 264 KB board's
         # contiguous-allocation headroom.  This is an intrinsic single
         # allocation, not the resident co-residency a file split fixes,

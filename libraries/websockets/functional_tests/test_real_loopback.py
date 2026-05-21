@@ -147,8 +147,7 @@ def test_real_websocket_loopback_round_trip() -> None:
     )
     # One server tick + brief sleep so the listener's accept queue is
     # warm before the client (running on the same chip) tries to
-    # connect — mirrors the chumicro-http-server test_real_serve.py
-    # warmup pattern.
+    # connect.
     server.handle(_ticks_ms())
     _sleep_ms(50)
     print(f"SERVER_OK port={_LISTEN_PORT}")
@@ -231,7 +230,7 @@ def test_real_websocket_loopback_round_trip() -> None:
     # LED-blink invariant: the counter must have ticked several
     # times during the bidirectional exchange.  A blocking call
     # would have left it near zero.  Threshold matches chumicro-requests
-    # test_real_get's `> 5` — the loopback is fast on the ESP32 family
+    # test_real_get's `> 5`.  The loopback is fast on the ESP32 family
     # (~8 ticks end-to-end) and the assertion is detecting block-calling,
     # not measuring throughput.
     assert led_counter > 5, (

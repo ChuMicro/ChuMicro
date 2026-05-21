@@ -129,7 +129,7 @@ class TestHandshakeResponseParser:
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
         with raises(WebSocketHandshakeError):
             parser.feed(b"HTTP/1.1 500 Server Error\r\n\r\n")
-        # Already in ERROR — second feed must not raise again or advance.
+        # Already in ERROR.  Second feed must not raise again or advance.
         parser.feed(b"more")
         assert parser.state == HandshakeParseState.ERROR
 

@@ -1,11 +1,11 @@
 """Host-side WebSocket echo server for chumicro-websockets functional tests.
 
 Spawned as a subprocess by ``conftest.py`` (one process per pytest
-session); echoes every text + binary message it receives back to the
-sender prefixed with ``echo: ``.  Uses the `websockets` PyPI package
-— a battle-tested third-party server — so the device-side
-:class:`chumicro_websockets.WebSocketClient` is exercised against an
-implementation that's never going to share bugs with us.
+session).  Echoes every text + binary message it receives back to the
+sender prefixed with ``echo: ``.  Uses the `websockets` PyPI package,
+a third-party implementation independent of
+:class:`chumicro_websockets.WebSocketClient`, so client bugs surface
+as interoperability failures rather than shared mistakes.
 
 Invoked with two args: ``<bind_host> <bind_port>``.  Prints
 ``READY <bind_host>:<bind_port>`` to stdout once listening so the

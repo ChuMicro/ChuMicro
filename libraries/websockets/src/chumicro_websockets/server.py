@@ -7,7 +7,7 @@ the user's ``on_connection`` callback, and drives the per-connection
 state machines from its own :meth:`check` / :meth:`handle` runner
 contract.
 
-Standalone-port shape only in v1 — sharing a port with
+Standalone-port shape only in v1.  Sharing a port with
 :class:`chumicro_http_server.HttpServer` is a v2 ask (would require
 peek-then-route on the HTTP request line).  The optional
 *accept_path* knob lets a server filter inbound upgrades by URI
@@ -52,7 +52,7 @@ from chumicro_websockets._wire import (
 
 
 class ServerHandshakePhase:
-    """Sub-states inside CONNECTING — server-side, opposite order from
+    """Sub-states inside CONNECTING.  Server-side, opposite order from
     the client: read the request first, then write the 101 response.
     """
 
@@ -73,10 +73,10 @@ class Connection(_BaseSession):
     side outbound is never masked (RFC 6455 §5.1).
 
     Public surface: :meth:`send_text` / :meth:`send_binary` /
-    :meth:`send_ping` / :meth:`close`; :attr:`state`,
+    :meth:`send_ping` / :meth:`close`.  Attributes :attr:`state`,
     :attr:`last_close_code`, :attr:`last_close_reason`,
     :attr:`last_error`, :attr:`request_path`, :attr:`request_headers`
-    (set once OPEN); callbacks ``on_text`` / ``on_binary`` /
+    (set once OPEN).  Callbacks ``on_text`` / ``on_binary`` /
     ``on_ping`` / ``on_pong`` / ``on_close`` / ``on_oversized``.
     """
 
@@ -152,7 +152,7 @@ class Connection(_BaseSession):
                 self._send_handshake_chunk(now_ms)
             return
 
-        # OPEN / CLOSING — drain inbound first, then outbound.
+        # OPEN / CLOSING: drain inbound first, then outbound.
         self._drain_inbound(now_ms)
         self._drain_outbound()
 
@@ -169,7 +169,7 @@ class Connection(_BaseSession):
         self._handshake_deadline_ticks = None
 
     # ------------------------------------------------------------------
-    # Internal: handshake — server reads first, then sends 101
+    # Internal: handshake.  Server reads first, then sends 101.
     # ------------------------------------------------------------------
 
     def _receive_handshake_chunk(self, now_ms: int) -> None:  # noqa: ARG002 - now_ms reserved for handshake-deadline parity
@@ -190,7 +190,7 @@ class Connection(_BaseSession):
             return
         if self._handshake_request_parser.state != HandshakeParseState.DONE:
             return
-        # Path filter — reject anything that doesn't match.
+        # Path filter: reject anything that doesn't match.
         if (
             self._accept_path is not None
             and self._handshake_request_parser.path != self._accept_path
@@ -222,7 +222,7 @@ class Connection(_BaseSession):
         self.state = WebSocketState.OPEN
         # Hand the connection to the user so they can wire callbacks.
         # Errors from the user callback transition us to CLOSED with
-        # CLOSE_INTERNAL_ERROR — the connection isn't viable without
+        # CLOSE_INTERNAL_ERROR.  The connection isn't viable without
         # the callbacks the user was supposed to install.
         try:
             self._on_connection_callback(self)
@@ -233,8 +233,8 @@ class Connection(_BaseSession):
                 ),
             )
             return
-        # Drain any leftover bytes the request parser carried over —
-        # the client may have piggybacked frame bytes after the
+        # Drain any leftover bytes the request parser carried over.
+        # The client may have piggybacked frame bytes after the
         # request terminator.
         if self._post_handshake_carry:
             self._feed_frame_bytes(self._post_handshake_carry, now_ms)
@@ -284,10 +284,10 @@ class WebSocketServer:
     fires once per inbound connection at handshake completion; it
     wires ``connection.on_text`` / ``on_binary`` / ``on_close`` etc.
     before any frames arrive.  Raising from the callback rejects with
-    :data:`CLOSE_INTERNAL_ERROR`.  Standalone-port shape only in v1;
+    :data:`CLOSE_INTERNAL_ERROR`.  Standalone-port shape only in v1.
     ``accept_path`` filters by URI path with 404 on mismatch.
 
-    For config-driven construction, see :meth:`from_config` —
+    For config-driven construction, see :meth:`from_config`: a
     one-line factory that builds the listener from
     ``websockets.server.host`` / ``port`` and reads
     ``websockets.server.max_message_bytes`` from
@@ -431,8 +431,8 @@ class WebSocketServer:
         """Return ``True`` if there's work to do this tick."""
         if self.closed:
             return False
-        # Always True — accept loop must run, and any active connection
-        # may need attention.  Conservative; cheap enough.
+        # Always True.  Accept loop must run, and any active connection
+        # may need attention.  Conservative, cheap enough.
         return True
 
     def handle(self, now_ms: int) -> None:
@@ -464,8 +464,8 @@ class WebSocketServer:
             except Exception as accept_error:  # noqa: BLE001 - narrow below
                 if _is_eagain(accept_error):
                     return
-                # Listener errors are fatal-ish; record + close.
-                # Caller decides whether to rebuild the listener.
+                # Listener errors are fatal-ish.  Caller decides
+                # whether to rebuild the listener.
                 return
             if accepted is None:
                 return

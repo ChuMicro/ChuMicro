@@ -113,7 +113,7 @@ class TestEncodeClientHandshake:
             "dGhlIHNhbXBsZSBub25jZQ==",
             extra_headers={"Upgrade": "h2c"},
         )
-        # Mandatory header wins — we don't ship "Upgrade: h2c".
+        # Mandatory header wins; we don't ship "Upgrade: h2c".
         assert b"Upgrade: websocket\r\n" in encoded
         assert b"Upgrade: h2c\r\n" not in encoded
 

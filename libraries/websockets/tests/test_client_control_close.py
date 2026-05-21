@@ -189,7 +189,7 @@ class TestCloseHandshake:
             ),
         )
         client.handle(clock.ticks_ms())
-        # Echo close was queued; one more handle drains it.
+        # Echo close was queued.  One more handle drains it.
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert client.last_close_code == CLOSE_GOING_AWAY
@@ -230,7 +230,7 @@ class TestCloseHandshake:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
-        # CLOSE_ABNORMAL (1006) is reserved — encode_close_payload raises.
+        # CLOSE_ABNORMAL (1006) is reserved, so encode_close_payload raises.
         # The client falls back to empty body so the close still proceeds.
         client.close(CLOSE_ABNORMAL, "")
         client.handle(clock.ticks_ms())
@@ -319,7 +319,7 @@ class TestOversize:
             encode_frame(OPCODE_TEXT, b"AAAAA", fin=False, mask=None)
             + encode_frame(OPCODE_CONTINUATION, b"BBBBB", fin=False, mask=None)
             + encode_frame(OPCODE_CONTINUATION, b"CCCCC", fin=True, mask=None)
-            # Next message — should arrive intact if drain + framing held.
+            # Next message: should arrive intact if drain + framing held.
             + encode_frame(OPCODE_TEXT, b"hello", fin=True, mask=None),
         )
         for _index in range(6):
@@ -352,7 +352,7 @@ class TestOversize:
         _drive_handshake(client, socket, clock)
         # 3 × 200 B fragmented payload = 600 B assembled (> 400 B cap),
         # plus a 50 B normal message.  Wire bytes total > 660 B which
-        # exceeds the 512 B recv buffer → split across ≥ 2 recvs.
+        # exceeds the 512 B recv buffer, so the bytes split across ≥ 2 recvs.
         socket.feed_inbound(
             encode_frame(OPCODE_TEXT, b"A" * 200, fin=False, mask=None)
             + encode_frame(OPCODE_CONTINUATION, b"B" * 200, fin=False, mask=None)
@@ -389,13 +389,10 @@ class TestOversize:
 
 
 class TestFrameLevelOversize:
-    """A single inbound frame whose declared length exceeds the cap
-    used to terminate the connection with ``CLOSE_PROTOCOL_ERROR``;
-    now it drains at the frame layer (tier 3 in :class:`FrameParser`)
-    and the session applies its ``WhenOversized`` policy.  Matches
-    the shared cross-library oversize contract — ``DROP_WITH_EVENT``
-    drops the payload and stays connected for the next message, like
-    ``chumicro-mqtt`` and ``chumicro-requests``.
+    """Frames whose declared length exceeds ``max_message_bytes``
+    drain at the frame layer (tier 3 in :class:`FrameParser`).  The
+    session applies its ``WhenOversized`` policy on the resulting
+    empty frame.
     """
 
     def test_drop_silent_drains_frame_and_stays_open(self):
@@ -407,7 +404,7 @@ class TestFrameLevelOversize:
         client.on_oversized = lambda reported_length: oversized.append(reported_length)
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
-        # Single frame, 500 bytes — well over max_message_bytes=100.
+        # Single frame, 500 bytes: well over max_message_bytes=100.
         socket.feed_inbound(encode_frame(OPCODE_TEXT, b"X" * 500, fin=True, mask=None))
         for _index in range(6):
             client.handle(clock.ticks_ms())
@@ -441,7 +438,7 @@ class TestFrameLevelOversize:
             client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
         # The session-initiated close stamps the local close code on
-        # the session before queuing the CLOSE frame; the outbound
+        # the session before queuing the CLOSE frame.  The outbound
         # frame is masked so the bytes-on-the-wire status field isn't
         # readable without unmasking.
         assert client.last_close_code == CLOSE_TOO_BIG

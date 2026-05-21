@@ -1,6 +1,5 @@
 """WebSocket server tests (chumicro_websockets.server): constructor,
-accept, handshake, handshake rejection. Sibling slices: the
-other test_server_*.py files; wire-level in test_wire_*.py."""
+accept, handshake, handshake rejection."""
 
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
@@ -81,7 +80,7 @@ class TestServerConstructor:
 
     def test_check_returns_true_when_idle(self):
         server, _listener, clock = _make_server()
-        # Conservative — always True until close().
+        # Conservative: always True until close().
         assert server.check(clock.ticks_ms()) is True
 
     def test_check_after_close_returns_false(self):
@@ -211,7 +210,7 @@ class TestHandshakeRejection:
         server.handle(clock.ticks_ms())
         clock.advance(1500)
         server.handle(clock.ticks_ms())
-        # Connection finalized; removed from the active list.
+        # Connection finalized.  Removed from the active list.
         assert server.connection_count == 0
         assert peer.closed is True
 
