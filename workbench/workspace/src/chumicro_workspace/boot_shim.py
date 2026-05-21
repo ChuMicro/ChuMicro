@@ -166,17 +166,21 @@ def _walk_project_files(
     extra_excluded: Iterable[str] = (),
     target_runtime: str | None = None,
 ) -> dict[str, bytes]:
-    """Walk *project_dir* and return ``/<relative>`` → bytes at device root.
-
-    Skips ``config.{toml,yml,yaml}`` (host-only), ``_generated/``
-    (deploy artifacts), and the usual cache / dotfile noise.
-    *extra_excluded* augments the skip set.
+    """Walk *project_dir* and return ``{/<relative>: bytes}`` for the device root.
 
     Project files land at the device root (``app.py`` → ``/app.py``,
     ``helpers.py`` → ``/helpers.py``).
 
-    When *target_runtime* is set, ``.py`` files carrying a
-    ``__chumicro_runtimes__`` marker for a different runtime are
+    Skipped: ``project_config.toml`` (workspace-tooling input, not
+    runtime payload), ``_generated/`` (host-side deploy artifacts),
+    cache and dotfile noise (``__pycache__``, ``.DS_Store``,
+    ``.git``, ``.pytest_cache``, ``.mypy_cache``), and a top-level
+    ``code.py`` / ``main.py`` if present (the synthesised shim owns
+    those filenames at the device root).  *extra_excluded* augments
+    the directory skip set.
+
+    When *target_runtime* is set, ``.py`` files whose
+    ``__chumicro_runtimes__`` marker excludes that runtime are
     dropped before they reach the device.
     """
     excluded = _DEFAULT_EXCLUDED_DIRS | set(extra_excluded)

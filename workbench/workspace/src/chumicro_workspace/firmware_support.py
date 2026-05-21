@@ -53,10 +53,10 @@ class FirmwareSupportStatus(StrEnum):
 
 @dataclass(frozen=True)
 class FirmwareSupportResult:
-    """Status + the parsed floor + the parsed running version.
+    """Classification result returned by :func:`check_firmware_supported`.
 
-    Returned by :func:`check_firmware_supported` so callers can
-    format their own messages without re-doing the parse.
+    Carries the status plus the parsed running version and floor so
+    callers can format their own messages without re-doing the parse.
 
     Attributes:
         status: The classification.

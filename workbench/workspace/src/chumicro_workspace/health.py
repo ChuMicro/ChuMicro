@@ -1,13 +1,14 @@
-"""Workspace health checks for ``status`` / ``doctor`` commands.
+"""Workspace health checks for the ``status`` and ``doctor`` CLI commands.
 
-Lightweight inspections that don't talk to devices — pure local
-filesystem / YAML / counting operations.  Each check returns a
-:class:`HealthFinding` describing what was inspected, what state
-it found, and (when relevant) a hint the user can act on.
+Each check runs locally (filesystem read, YAML parse, AST scan,
+platform probe) and returns a :class:`HealthFinding` capturing
+what was inspected, the severity, a one-line summary, and an
+optional remediation hint.  No check talks to a device.
 
-The ``status`` and ``doctor`` CLI commands both route through these
-checks.  ``status`` prints a one-liner per finding, and ``doctor``
-adds stricter checks.
+:func:`collect_health_findings` returns the small set ``status``
+displays.  :func:`collect_doctor_findings` extends it with
+stricter checks: Python version, project ``run()`` defs, macOS
+FSKit wedge, held serial ports.
 """
 
 from __future__ import annotations
@@ -337,16 +338,16 @@ def check_project_run_functions(workspace: WorkspaceLayout) -> HealthFinding:
 
 
 def check_macos_fskit_wedge() -> HealthFinding:
-    """Flag the macOS FSKit wedge that turns CIRCUITPY mounts unreachable.
+    """Flag the macOS FSKit wedge that makes CIRCUITPY mounts unreachable.
 
-    On non-macOS the wedge mode does not exist —
-    :func:`detect_fskit_wedge` returns ``False`` immediately, surfacing
-    here as a "not applicable" OK row that the doctor renderer keeps
-    out of the way.  On macOS the detector probes
-    ``ps -o state= -p $(pgrep diskarbitrationd)``.
+    On non-macOS the wedge cannot happen.  The check returns a "not
+    applicable" OK row without probing.  On macOS
+    :func:`detect_fskit_wedge` runs
+    ``ps -o state= -p $(pgrep diskarbitrationd)`` to detect a stuck
+    diskarbitrationd.  A wedged daemon surfaces as ERROR with the
+    recovery command in the hint.  A healthy daemon surfaces as OK.
 
-    Doctor-only; the subprocess probe is too heavy for the per-second
-    status loop.
+    Doctor-only.
     """
     if sys.platform != "darwin":
         return HealthFinding(

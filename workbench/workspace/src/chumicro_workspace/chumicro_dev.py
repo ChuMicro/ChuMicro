@@ -1,38 +1,25 @@
-"""``chumicro-dev.toml`` integration — sibling chumicro-checkout setup.
+"""Wires ``workspace.yml``'s ``library_sources:`` block to a sibling chumicro checkout.
 
-When a ``chumicro-dev.toml`` file sits next to ``workspace.yml``, the
-workspace is in **dev mode** — chumicro libraries the project imports
-come from a sibling Git checkout instead of the published PyPI /
-circup / mip channels.  The template's ``run.py`` already pip-installs
-the host packages from that checkout, so ``chumicro-deploy``,
-``chumicro-workspace`` and similar live-edit from disk.  The on-device
-side, the libraries the *board* runs (``chumicro_kvstore``,
-``chumicro_wifi``, etc.), needs a parallel wiring: the deploy-time
-import-graph walker has to know to resolve ``import chumicro_<name>``
-against the sibling checkout's ``libraries/<name>/src/`` instead of
-``packages/`` (which is empty in dev mode) or the user's own
-``shared/``.  The ``library_sources:`` block in ``workspace.yml``
-maps importable names to host search paths,
-and :func:`chumicro_workspace.import_graph.read_library_sources`
-plumbs them into :class:`chumicro_deploy.ImportGraphSource`.
+When a ``chumicro-dev.toml`` file sits next to ``workspace.yml``,
+the workspace runs in dev mode: chumicro libraries the project
+imports come from a sibling chumicro Git checkout instead of
+published packages.  This module keeps ``workspace.yml``'s
+``library_sources:`` block in sync with that checkout.
 
-This module owns the host-side **setup-time** machinery that keeps
-that block in sync with the dev-mode checkout:
-
-* :func:`read_chumicro_dev_path` parses the toml and resolves
-  ``chumicro_path`` against the workspace root.
+* :func:`read_chumicro_dev_path` parses ``chumicro-dev.toml`` and
+  resolves its ``chumicro_path`` against the workspace root.
 * :func:`discover_chumicro_libraries` walks
-  ``<chumicro_path>/libraries/`` and returns an
-  ``{import_name: src_path}`` mapping suitable for ``library_sources:``.
-* :func:`sync_library_sources` writes / replaces a managed block in
-  ``workspace.yml``.  Idempotent — re-running ``setup`` after pulling
-  new chumicro libraries refreshes the block to match the new set,
-  without disturbing other top-level keys (``defaults:`` etc.) or
-  their comments.
+  ``<chumicro_path>/libraries/`` and returns
+  ``{import_name: src_path}`` for every library exposing a
+  ``src/chumicro_<name>/__init__.py``.
+* :func:`sync_library_sources` writes or replaces the managed
+  ``library_sources:`` block in ``workspace.yml``.  Re-running
+  ``setup`` after pulling new libraries refreshes the block
+  without disturbing sibling keys or their comments.
 
-The CLI wires this into ``setup`` so the user gets the right
-``library_sources`` automatically every time they bootstrap a dev-mode
-workspace.
+The ``setup`` command runs all three, so a dev-mode workspace's
+``library_sources`` stays current with the sibling checkout's
+library set.
 """
 
 from __future__ import annotations

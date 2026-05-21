@@ -1,9 +1,10 @@
-"""The curated ``libraries:`` table in workspace.yml.
+"""Read and write the ``libraries:`` table in ``workspace.yml``.
 
-A sibling of ``library_sources:``.  Where ``library_sources:``
-answers "where is the code on disk?" (read by the deploy walker), this
-table answers "where did each curated chumicro library come from, and
-at what version?".
+Each row records a curated chumicro library installed in the
+workspace: which channel it tracks (``stable`` or
+``experimental``), the snapshot version it's pinned to, and an
+optional ``declined: true`` flag set when the user declined a
+transitive prompt.
 
 Schema::
 
@@ -14,14 +15,19 @@ Schema::
       chumicro_sockets:
         channel: experimental
         version: "0.4.1.dev3"
-        declined: true            # user declined at the transitive prompt
+        declined: true            # declined at transitive prompt
 
-``version`` is always a quoted string (so YAML doesn't read ``0.10``
-as a float).  The ``HEAD`` sentinel records a ``--floating`` entry
-that re-resolves to the channel's latest on every op.  ``declined``
-is emitted only when true.  A missing ``libraries:`` key is the
-normal clean-workspace case and reads as ``{}``.  There is no schema
-version field, the table is additive.
+``version`` is always a quoted string so YAML reads ``0.10.0`` as
+text rather than as a float.  The ``HEAD`` sentinel marks a
+``--floating`` entry that re-resolves to the channel's latest on
+every op.  ``declined`` is written only when true.  A missing
+``libraries:`` key reads as ``{}``; the clean-workspace case is
+normal, not an error.
+
+Sibling of ``library_sources:`` in the same file:
+``library_sources:`` answers "where is the code on disk?" for
+the deploy walker; this table answers "where did each curated
+library come from, and at what version?".
 """
 
 from __future__ import annotations

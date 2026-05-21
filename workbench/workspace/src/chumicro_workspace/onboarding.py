@@ -55,7 +55,7 @@ DEFAULT_RUNTIME_INFERENCE_ORDER: tuple[str, ...] = (
 
 
 class BoardState(StrEnum):
-    """The four onboarding-relevant states a board can be in."""
+    """States distinguished by :func:`detect_board_state`."""
 
     REPL_REACHABLE = "repl_reachable"
     UF2_BOOTLOADER = "uf2_bootloader"
@@ -221,7 +221,7 @@ def detect_board_state(
     probe_implementation_name: str | None = None
     try:
         info = probe_function(device)
-    except Exception as exception:  # noqa: BLE001: diagnostic catches everything
+    except Exception as exception:  # noqa: BLE001 (diagnostic catches everything)
         probe_error_text = str(exception) or type(exception).__name__
     else:
         if info.implementation is not None:
@@ -289,9 +289,8 @@ def probe_with_runtime_inference(
 
     Tries each candidate transport in :data:`DEFAULT_RUNTIME_INFERENCE_ORDER`
     until one returns an implementation marker.  Returns the
-    :class:`RuntimeInferenceResult` so the caller can register the
-    probed runtime + version without having forced the user to type
-    ``--runtime``.
+    :class:`RuntimeInferenceResult` so the caller can
+    record the probed runtime and version once a candidate succeeds.
 
     Both runtimes speak the same probe script (reads
     ``sys.implementation``), so the returned implementation name is
@@ -332,7 +331,7 @@ def probe_with_runtime_inference(
         device = device_factory(candidate, address)
         try:
             info = probe_function(device)
-        except Exception as exception:  # noqa: BLE001: fall through to next candidate
+        except Exception as exception:  # noqa: BLE001 (fall through to next candidate)
             last_exception = exception
             continue
         if info.implementation is not None:

@@ -44,7 +44,8 @@ class ApplyAction(StrEnum):
     REFRESHED = "refreshed"
     #: `update` write would have produced identical bytes — no-op.
     UNCHANGED = "unchanged"
-    #: Workbench-owned starter freshly created.
+    #: User-owned file written for the first time, seeded from the
+    #: shipped template.
     MATERIALIZED = "materialized"
 
 

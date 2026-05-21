@@ -92,6 +92,15 @@ class WithRuntimeConfig:
             to ``project_config.parent / _generated / runtime_config.msgpack``.
         device_path: On-device path for the msgpack.  Defaults to
             :data:`RUNTIME_CONFIG_DEVICE_PATH`.
+        library_roots: Library checkout paths (each a
+            ``libraries/<name>/`` with a ``pyproject.toml``) whose
+            ``[tool.chumicro.config]`` manifests should be unioned
+            and validated against the resolved config before the
+            msgpack is written.  Missing required keys surface as a
+            :class:`ConfigManifestError` here rather than as a
+            ``MissingConfigKey`` at device boot.  ``None`` or empty
+            skips validation (for callers that don't plumb the
+            import-graph library list through).
 
     Raises:
         ValueError: If *device_path* is already a key in the inner
@@ -126,17 +135,6 @@ class WithRuntimeConfig:
                 "project_config is None (no project file to anchor "
                 "the _generated/ default to)",
             )
-        # ``library_roots`` enables manifest validation: each path is
-        # a library checkout (``libraries/<name>/`` with a
-        # ``pyproject.toml``); ``files()`` reads each one's
-        # ``[tool.chumicro.config]`` block, unions the required /
-        # optional flat keys, and validates the merged + flattened
-        # config dict against the union before writing the msgpack.
-        # Missing required keys surface as a precise
-        # :class:`ConfigManifestError` instead of a cryptic
-        # ``MissingConfigKey`` at device boot.  ``None`` (the default)
-        # skips validation — for callers that don't yet plumb the
-        # import-graph library list through.
         self._library_roots: tuple[Path, ...] = (
             tuple(library_roots) if library_roots else ()
         )
