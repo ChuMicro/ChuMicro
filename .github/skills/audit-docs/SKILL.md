@@ -28,7 +28,7 @@ Three readers land on the same paragraph wanting different things.  The skill's 
 * **Advanced reader.**  Already knows the field.  Bails when the doc reads like a tutorial for content they have seen 50 times.  *"First, install Python…"* burns them.
 * **Beginner reader.**  Earlier on the curve than the cold reader.  Bails when the doc assumes context they do not have, names tools they have not seen, or skips the *"why would I want this?"*.
 
-**Degraded passages get rewritten, not re-trimmed.**  The dimensions below are operationally subtractive (drop a tic word, cut a history note, shrink a ratio).  Run a subtractive pass enough times on the same paragraph and each pass removes a word while none asks *what should this say?*  The result is a README sentence as illegible as the worst code comment.  When a passage has rotted that far, discard it and rewrite from a fresh read of what the thing actually is and why a reader would want it (the cold-reader test).  Trimming the wreckage again only makes it shorter and no clearer.  This is the prescriptive counterpart to *"don't golf"* in the "What NOT to do" section: that rule stops over-cutting a good passage, while this one says what to do with an already-degraded one.
+**Degraded passages get rewritten, not re-trimmed.**  The dimensions below are operationally subtractive (drop a tic word, cut a history note, shrink a ratio).  Run a subtractive pass enough times on the same paragraph and each pass removes a word while none asks *what should this say?*  The result is a README sentence as illegible as the worst code comment.  When a passage has rotted that far, discard it and rewrite from a fresh read of what the thing actually is and why a reader would want it (the cold-reader test).  Trimming the wreckage again only makes it shorter and no clearer.  This is the prescriptive counterpart to *"don't golf"* in the Anti-patterns section: that rule stops over-cutting a good passage, while this one says what to do with an already-degraded one.
 
 *Testable criterion.*  If the proposed edit changes ≤1 sentence and leaves the surrounding paragraph structure intact, it is a strip, not a rewrite — even if the word *"rewrite"* came up while drafting.  A rewrite reconsiders the passage from **source** (the code, API, or capability the doc points at), not from the existing prose.  Tagging a minimal phrase-swap as `rewrite` is the failure mode the trim-only audit history produced — name the work honestly.  `/audit-comments` enforces the same criterion for comments and docstrings.
 
@@ -403,7 +403,7 @@ When the same patterns recur across audits, ask rather than acting.
 | Generic `the X` in user-facing prose | *"`the board` / `the caller` / `the device` here aren't anchored to a specific referent the reader has yet.  Swap to `your X` (matches the doc's existing second-person voice), `a X`, or drop the article?"* |
 | Section much longer than what it covers | *"This 4-paragraph rationale wraps a 2-line example.  Cut the framing or expand the example?"* |
 
-## What NOT to do
+## Anti-patterns
 
 **Content don'ts** (what not to write into the punch-list).
 

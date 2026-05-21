@@ -313,7 +313,7 @@ LOW-CONFIDENCE (questions for the user):
 | Section heading promises more than the section delivers | *"`## <heading>` reads broader than what's in it (one paragraph).  Rename, fold up, or expand?"* |
 | Description in person/mood that differs from siblings | *"Project skills use imperative (`Audit a ...`); this one uses third-person (`Audits ...`).  Match the project pattern, or keep?"* |
 
-## What NOT to do
+## Anti-patterns
 
 **Content don'ts**
 

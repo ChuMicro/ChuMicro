@@ -176,7 +176,7 @@ Tag taxonomy:
 * `keep?` — reads fine, unsure it carries a needed why; ask before touching.
 * `shape` — code-quality finding surfaced incidentally; route to `/audit-library`, do not fix here.
 
-## What NOT to do
+## Anti-patterns
 
 * **Don't subtract a degraded comment further.**  The reflex this skill exists to break.  A comment that fails the cold-reader test gets *new prose*, not a shorter version of the broken prose.
 * **Don't golf good prose.**  Sometimes the clear comment is the longer one.  `/audit-docs` framing applies: *"you don't have to be so compact, these one-liners don't say much."*  Signal-to-noise is the target, not byte count.
