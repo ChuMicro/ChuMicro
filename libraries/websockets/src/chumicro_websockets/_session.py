@@ -83,10 +83,11 @@ def _no_callback(*_args, **_kwargs):
 
 
 def _new_tx_queue(maxlen):
-    """Return a fresh outbound ``deque`` sized at *maxlen*.
+    """Return a fresh outbound ``deque`` bounded by *maxlen*.
 
-    MicroPython / CircuitPython require ``flags=1`` to enable
-    ``appendleft``; CPython's deque needs no flag.
+    Hides the deque constructor-signature split: MicroPython /
+    CircuitPython take ``deque(iterable, maxlen, flags)`` while CPython
+    takes ``deque(iterable, maxlen)``.
     """
     try:
         return deque((), maxlen, 1)
