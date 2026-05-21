@@ -1,9 +1,7 @@
 """MQTT 3.1.1 client built on chumicro-sockets + chumicro-timing.
 
-:class:`MQTTClient` is the entry point.  Runner-shaped:
-:meth:`check(now_ms) -> bool` reports whether work is pending,
-:meth:`handle(now_ms)` performs one tick of progress.  No threads,
-no async: cooperative dispatch in the caller's tick loop.
+:class:`MQTTClient` is the entry point.  No threads, no async:
+cooperative dispatch in the caller's tick loop.
 
 The connection-state classes (:class:`ProtocolState`,
 :class:`Awaiting`, :class:`InFlightTable`, :class:`PendingResponse`,
