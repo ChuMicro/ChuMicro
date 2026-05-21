@@ -3,10 +3,11 @@
 Used in CI to enforce Decision 0002: PRs that change a publishable
 package's ``src/`` or ``pyproject.toml`` must also bump the package's
 ``VERSION`` file.  Covers both ``libraries/`` (device libraries) and
-``workbench/`` (host-only tools — Decision 0032 §workbench-release-lifecycle).
+``workbench/`` (host-only tools, per Decision 0032
+§workbench-release-lifecycle).
 
 Decision 0038 §6 carves out ``0.0.0`` as a pre-release floor: while
-a package's ``VERSION`` reads ``0.0.0``, this gate stays quiet — the
+a package's ``VERSION`` reads ``0.0.0``, this gate stays quiet.  The
 intent is to let pre-release packages absorb churn without nuisance
 "bump VERSION" failures.  The gate kicks in the moment VERSION crosses
 to anything non-zero.
@@ -54,7 +55,7 @@ def _check(base_reference: str) -> int:
         return 0
 
     # Group changed files by package.  Publishable packages live at
-    # libraries/<name>/... and workbench/<name>/... (Decision 0032 — the
+    # libraries/<name>/... and workbench/<name>/... (Decision 0032: the
     # workbench tree follows the same release lifecycle as libraries
     # minus bundle staging, so both roots get the same gate).
     packages_needing_bump: set[tuple[str, str]] = set()
@@ -83,7 +84,7 @@ def _check(base_reference: str) -> int:
             packages_needing_bump.add(package_id)
 
     # Decision 0038 §6: while a package's VERSION reads 0.0.0, the
-    # gate stays quiet — pre-release packages absorb churn without
+    # gate stays quiet.  Pre-release packages absorb churn without
     # nuisance "bump VERSION" failures.
     pre_release_packages: set[tuple[str, str]] = set()
     for parent_dir, package_name in packages_needing_bump:

@@ -111,7 +111,7 @@ def stage_libraries_channel(
     a pre-cloned channel checkout passes straight through to the
     ``bundle_push`` step) and rebuilt so a stale library never rides
     a release.  If ``LICENSE`` is present at *root_dir*, it's copied
-    in alongside the library trees — mirrors ``release.yml``'s
+    in alongside the library trees, matching ``release.yml``'s
     explicit LICENSE copy onto the bundle repo.  Returns the written
     ``index.json`` document (also a convenient summary for the caller
     to log).
@@ -165,7 +165,7 @@ def stage_libraries_channel(
 def main(argv: list[str] | None = None) -> int:
     """Stage the channel; optionally tag+push it (CI / hand-invocation).
 
-    Mirrors ``bundle_manager`` / ``bundle_push``'s entry shape — the
+    Mirrors ``bundle_manager`` / ``bundle_push``'s entry shape.  The
     release pipeline calls this; ``--push`` reuses the shared
     ``bundle_push`` primitive so tagging stays one mechanism.
     """

@@ -189,10 +189,10 @@ _package_dirs_cache: list[Path] | None = None
 def discover_package_dirs() -> list[Path]:
     """Find directories under support/, libraries/, and workbench/ that contain a pyproject.toml.
 
-    This is the primary discovery function — it defines which packages
-    exist in the workspace.  The task runner, IDE sync, and coverage
-    tools all derive their package lists from this function.  No
-    hard-coded package lists exist anywhere in the codebase.
+    Defines which packages exist in the workspace.  The task runner,
+    IDE sync, and coverage tools all derive their package lists from
+    this function.  No hard-coded package lists exist anywhere in the
+    codebase.
 
     See Decision 0032 for why ``workbench/`` exists alongside
     ``libraries/``.
@@ -318,7 +318,7 @@ def discover_doc_dirs(package_dirs: list[Path] | None = None) -> list[Path]:
 
     Args:
         package_dirs: Package directories to filter.  When ``None``,
-            uses :func:`discover_package_dirs` — covers both
+            uses :func:`discover_package_dirs`, which covers both
             ``libraries/`` and ``workbench/`` packages so docs-deploy
             and the landing page pick up host-only tools alongside
             device libraries.  Support packages are not published and
@@ -648,7 +648,7 @@ def changed_files(base_reference: str) -> list[str]:
     # Three-dot syntax finds changes since the merge-base, which is the
     # standard PR diff.  It fails in shallow clones (CI) where the
     # merge-base commit is not fetched.  The two-arg fallback gives a
-    # full diff between the two refs — a superset that may include extra
+    # full diff between the two refs: a superset that may include extra
     # files, but is safe (we'd rather over-test than under-test).
     result = run_git("diff", "--name-only", f"{base_reference}...HEAD")
     if result.returncode != 0:
@@ -661,7 +661,7 @@ def changed_files(base_reference: str) -> list[str]:
 def changed_publishable_packages(base_reference: str) -> set[tuple[str, str]]:
     """Return ``(parent, name)`` pairs for packages with release-relevant changes.
 
-    Covers both ``libraries/`` and ``workbench/`` (Decision 0032 — the
+    Covers both ``libraries/`` and ``workbench/`` (Decision 0032: the
     pre-merge VERSION + API gates apply uniformly to every publishable
     package).  Returning the parent directory alongside the name lets
     callers construct paths and messages without a second lookup.
