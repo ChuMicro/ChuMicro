@@ -129,7 +129,7 @@ class InFlightTable:
         )
 
     def add(self, entry):
-        """Insert *entry*; raises :class:`KeyError` on packet_id collision."""
+        """Insert *entry*.  Raises :class:`KeyError` on packet_id collision."""
         if entry.packet_id in self._entries:
             raise KeyError(f"packet_id {entry.packet_id} already in flight")
         self._entries[entry.packet_id] = entry
@@ -254,7 +254,7 @@ def _force_non_blocking(socket):
         return
     try:
         setblocking(False)
-    except (OSError, AttributeError):  # pragma: no cover — defensive
+    except (OSError, AttributeError):  # pragma: no cover - defensive
         pass
 
 
@@ -352,32 +352,32 @@ class MQTTClient:
 
         Args:
             socket: An already-connected, non-blocking object exposing
-                ``recv_into`` / ``send`` / ``close`` / ``setblocking``
-                — see the user guide's "Bring your own transport" table
+                ``recv_into`` / ``send`` / ``close`` / ``setblocking``.
+                See the user guide's "Bring your own transport" table
                 for the per-method contract.  The client takes
-                ownership; :meth:`disconnect` closes it.  May be
-                ``None`` when *socket_factory* is provided — the
+                ownership.  :meth:`disconnect` closes it.  May be
+                ``None`` when *socket_factory* is provided.  The
                 factory fires on :meth:`connect` and self-heal, never
                 from ``__init__``.
             socket_factory: Optional zero-arg callable returning an
                 object of the same shape as *socket*.  Used in two
                 paths: (1) when *socket* is ``None``, :meth:`connect`
-                invokes the factory to build the initial transport;
+                invokes the factory to build the initial transport.
                 (2) when the client transitions to ``FAILED`` after a
                 wifi-drop / socket-death, the next ``handle()`` rebuilds
                 the socket and re-issues ``connect()`` automatically.
                 Without a factory, the caller must supply *socket* and
                 manage reconnect themselves.  Construction is always
-                side-effect free — the factory only fires from
+                side-effect free: the factory only fires from
                 ``connect()`` / self-heal, never from ``__init__``.
-            client_id: MQTT client identifier — must be unique per broker.
+            client_id: MQTT client identifier.  Must be unique per broker.
                 Doubles as the per-device segment in the topic-prefix
                 scheme when *root_topic* is set.
             root_topic: Optional prefix applied automatically by
                 :meth:`publish` / :meth:`subscribe` / :meth:`unsubscribe`.
                 When set, every prefixed topic becomes
                 ``<root_topic>/<client_id>/<topic>``.  ``None`` (default)
-                disables prefixing — topics go on the wire as written.
+                disables prefixing.  Topics go on the wire as written.
                 Use :meth:`publish_raw` / :meth:`subscribe_raw` /
                 :meth:`unsubscribe_raw` to bypass prefixing on individual
                 calls (system topics, bridge topics, etc.).
@@ -391,8 +391,8 @@ class MQTTClient:
             password: Optional auth password.
             clean_session: ``False`` resumes persistent broker session
                 state for QoS 1+ retransmit-across-reconnects.
-            will_topic: Topic for the broker's last-will message —
-                published on uncleanly-dropped connection.  Resolves
+            will_topic: Topic for the broker's last-will message.
+                Published on uncleanly-dropped connection.  Resolves
                 through the ``root_topic`` / ``client_id`` prefix
                 scheme if set.  ``None`` disables the will.  Mutually
                 exclusive with *will_topic_raw*.
@@ -406,14 +406,14 @@ class MQTTClient:
             rx_buffer_size: Steady-state RX buffer size (default 256).
                 Inbound PUBLISHes ≤ this size parse inline with no
                 allocation.  Larger messages route through the tier-2
-                intact-delivery or tier-3 oversized paths — see
+                intact-delivery or tier-3 oversized paths.  See
                 ``max_message_bytes``.
             max_message_bytes: Cap on a single inbound PUBLISH for
                 intact delivery (default 8 KB).  Messages at or below
                 this size are delivered to :attr:`on_message` with
                 their full payload (one-shot allocation, freed after
                 delivery).  Above this size the configured
-                :class:`WhenOversized` policy applies — the payload is
+                :class:`WhenOversized` policy applies.  The payload is
                 discarded without a payload-sized heap allocation.
             when_oversized: Policy for inbound messages above
                 ``max_message_bytes``.  See :class:`WhenOversized`.
@@ -424,12 +424,12 @@ class MQTTClient:
                 CPU time.
             max_tx_queue_size: Maximum number of pending outbound
                 packets (default 20).  Appending past the cap raises
-                :class:`MQTTBackpressureError`; raise the cap for
+                :class:`MQTTBackpressureError`.  Raise the cap for
                 bursty publishers.
-            ticks: Optional tick source — any object exposing
+            ticks: Optional tick source.  Any object exposing
                 ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
                 the ``chumicro_timing.ticks`` submodule shape).
-                Defaults to that submodule (real clock); tests pass
+                Defaults to that submodule (real clock).  Tests pass
                 ``FakeTicks`` from ``chumicro_timing.testing``.
         """
         if socket is None and socket_factory is None:
@@ -517,10 +517,10 @@ class MQTTClient:
         """Open the TCP socket (if needed) and queue a CONNECT packet.
 
         When the client was constructed with only a ``socket_factory``,
-        the factory is invoked here — this is the first network I/O
+        the factory is invoked here.  This is the first network I/O
         the client does.  When the factory raises, the client
         transitions to ``FAILED`` (``last_error`` carries the underlying
-        ``OSError``) instead of letting the exception propagate; the
+        ``OSError``) instead of letting the exception propagate.  The
         runner contract is to introspect ``state`` / ``last_error``,
         not to wrap every ``connect()`` call in a try.
 
@@ -583,11 +583,11 @@ class MQTTClient:
         """
         try:
             self._send_raw(PACKET_DISCONNECT)
-        except Exception:  # noqa: BLE001 — disconnect is best-effort  # pragma: no cover - defensive
+        except Exception:  # noqa: BLE001 - disconnect is best-effort  # pragma: no cover - defensive
             pass
         try:
             self._socket.close()
-        except Exception:  # noqa: BLE001 — disconnect is best-effort  # pragma: no cover - defensive
+        except Exception:  # noqa: BLE001 - disconnect is best-effort  # pragma: no cover - defensive
             pass
         self.state = ProtocolState.DISCONNECTED
         self._user_wants_connected = False
@@ -619,14 +619,14 @@ class MQTTClient:
         """Queue a PUBLISH packet to a prefix-resolved topic.
 
         *topic* is resolved through ``root_topic`` / ``client_id``
-        before going on the wire — see :meth:`_prefixed_topic`.  Use
+        before going on the wire.  See :meth:`_prefixed_topic`.  Use
         :meth:`publish_raw` to bypass prefixing.
 
         QoS 0: queued and considered delivered once it reaches the wire
         (the optional *on_publish* fires from the next :meth:`handle`).
 
         QoS 1: in-flight entry is opened with the packet bytes + the
-        callback; PUBACK matches on packet_id and fires the callback
+        callback.  PUBACK matches on packet_id and fires the callback
         exactly once.  Retries up to *publish_retry_max* on ack timeout.
 
         Args:
@@ -654,7 +654,7 @@ class MQTTClient:
         retain: bool = False,
         on_publish: object | None = None,
     ) -> None:
-        """Queue a PUBLISH to *topic* verbatim — no ``root_topic`` prefix.
+        """Queue a PUBLISH to *topic* verbatim.  No ``root_topic`` prefix.
 
         See :meth:`publish` for QoS / callback semantics.
         """
@@ -749,7 +749,7 @@ class MQTTClient:
         *,
         on_subscribe: object | None = None,
     ) -> None:
-        """Queue a SUBSCRIBE for *topic* verbatim — no ``root_topic`` prefix."""
+        """Queue a SUBSCRIBE for *topic* verbatim.  No ``root_topic`` prefix."""
         if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"subscribe() requires CONNECTED state, was {self.state}",
@@ -777,7 +777,7 @@ class MQTTClient:
     def unsubscribe(self, topic, *, on_unsubscribe=None):
         """Queue an UNSUBSCRIBE for *topic*, prefix-resolved.
 
-        Mirror of :meth:`subscribe` — use :meth:`unsubscribe_raw` to
+        Mirror of :meth:`subscribe`.  Use :meth:`unsubscribe_raw` to
         bypass prefixing.
         """
         self.unsubscribe_raw(
@@ -785,7 +785,7 @@ class MQTTClient:
         )
 
     def unsubscribe_raw(self, topic, *, on_unsubscribe=None):
-        """Queue an UNSUBSCRIBE for *topic* verbatim — no ``root_topic`` prefix."""
+        """Queue an UNSUBSCRIBE for *topic* verbatim.  No ``root_topic`` prefix."""
         if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"unsubscribe() requires CONNECTED state, was {self.state}",
@@ -812,7 +812,7 @@ class MQTTClient:
         """Return an :class:`MQTTPublisher` bound to *topic* / *qos* / *retain*.
 
         The bound topic resolves through :meth:`_prefixed_topic` on
-        each publish — the same as :meth:`publish` itself.  For
+        each publish.  The same as :meth:`publish` itself.  For
         unprefixed publishing, call :meth:`publish_raw` directly.
         """
         return MQTTPublisher(self, topic, qos=qos, retain=retain)
@@ -823,7 +823,7 @@ class MQTTClient:
         Splits the pattern once at registration so the per-inbound-
         message dispatch only splits the topic, not the pattern.
 
-        Inbound topics are matched against patterns verbatim — patterns
+        Inbound topics are matched against patterns verbatim.  Patterns
         are **not** ``root_topic``-prefixed.  Pass the prefixed pattern
         directly if you want per-device-only routing.
         """
@@ -961,7 +961,7 @@ class MQTTClient:
         return True
 
     # ------------------------------------------------------------------
-    # Internal — TX path
+    # Internal: TX path
     # ------------------------------------------------------------------
 
     def _drain_tx_queue(self):
@@ -1002,7 +1002,7 @@ class MQTTClient:
             self._tx_queue.popleft()
 
     def _send_raw(self, payload):
-        """Send *payload*; return bytes sent (may be 0 on EAGAIN)."""
+        """Send *payload*.  Returns bytes sent (may be 0 on EAGAIN)."""
         try:
             return self._socket.send(payload)
         except OSError as error:
@@ -1029,7 +1029,7 @@ class MQTTClient:
         self._tx_queue.append(item)
 
     # ------------------------------------------------------------------
-    # Internal — RX path
+    # Internal: RX path
     # ------------------------------------------------------------------
 
     def _read_inbound(self, now_ms):
@@ -1054,7 +1054,7 @@ class MQTTClient:
             buffer_view = self._decoder.fill_buffer()
             capacity = self._decoder.fill_capacity()
             if capacity <= 0:
-                break  # pragma: no cover - decoder full; let the parser drain.
+                break  # pragma: no cover - decoder full, parser drains on next call.
             # Don't read past the per-tick budget.
             if capacity > budget - consumed:
                 capacity = budget - consumed
@@ -1219,7 +1219,7 @@ class MQTTClient:
         return False
 
     # ------------------------------------------------------------------
-    # Internal — deadlines + keepalive
+    # Internal: deadlines + keepalive
     # ------------------------------------------------------------------
 
     def _check_deadlines(self, now_ms):

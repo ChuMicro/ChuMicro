@@ -58,10 +58,9 @@ class RuntimeConfig:
 def is_config_like(value) -> bool:
     """Return ``True`` when *value* is a :class:`RuntimeConfig` or plain dict.
 
-    The input gate :func:`load_section` applies internally — call it
-    explicitly at the top of any consumer ``from_config`` that bypasses
-    ``load_section`` (the client-with-injection pattern in the user
-    guide), raising :class:`InvalidConfigType` on the failing branch.
+    Same type check :func:`load_section` applies internally. Useful
+    when a ``from_config`` builds its own instance instead of calling
+    :func:`load_section`.
     """
     return isinstance(value, (RuntimeConfig, dict))
 

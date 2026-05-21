@@ -363,7 +363,7 @@ def test_try_load_section_works_with_runtime_config_wrapper() -> None:
 
 
 def test_default_path_constant_is_root_runtime_config_msgpack() -> None:
-    """Default on-device location.  Changing this is an ABI break."""
+    """Guard the path against accidental drift. The on-device file ABI depends on it."""
     assert DEFAULT_RUNTIME_CONFIG_PATH == "/runtime_config.msgpack"
 
 
