@@ -35,13 +35,11 @@ def collect_missing_template_paths(
 
     Returns an empty list when:
 
-    * The user's file doesn't exist (still un-materialized — the
-      :func:`materialize_workspace_templates` call earlier in ``setup``
-      will land it on this run; nothing to drift against yet).
-    * Either parse fails — fail-soft so a bad file never breaks
-      ``setup``; the loader's error path surfaces parse problems
-      through other channels.
-    * Either parse yields a non-mapping top level — drift checking
+    * The user's file doesn't exist (still un-materialized, nothing
+      to drift against yet).
+    * Either parse fails.  Fail-soft so a bad file never breaks
+      ``setup``.
+    * Either parse yields a non-mapping top level.  Drift checking
       only makes sense between two mapping shapes.
 
     Args:
@@ -62,12 +60,7 @@ def collect_missing_template_paths(
 
 
 def _resolve_template_text(filename: str) -> str:
-    """Return the text of the shipped template for *filename*.
-
-    Looks up the reader by name on the module so tests can monkey-patch
-    ``read_workspace_yml_template`` / ``read_secrets_toml_template``
-    without per-test re-imports.
-    """
+    """Return the text of the shipped template for *filename*."""
     if filename == "secrets.toml":
         return read_secrets_toml_template()
     return read_workspace_yml_template()
@@ -76,9 +69,8 @@ def _resolve_template_text(filename: str) -> str:
 def _parse(text: str, filename: str) -> Any:
     """Parse *text* as YAML or TOML based on *filename* extension.
 
-    Empty / comment-only YAML returns ``{}``; empty TOML returns the
-    same.  Both align with :mod:`chumicro_workspace.loaders` so parser
-    semantics stay aligned.
+    Empty / comment-only YAML returns ``{}``.  Empty TOML returns the
+    same.
     """
     if filename.endswith(".toml"):
         return tomllib.loads(text)

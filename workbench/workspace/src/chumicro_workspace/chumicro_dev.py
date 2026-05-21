@@ -4,10 +4,10 @@ When a ``chumicro-dev.toml`` file sits next to ``workspace.yml``, the
 workspace is in **dev mode** — chumicro libraries the project imports
 come from a sibling Git checkout instead of the published PyPI /
 circup / mip channels.  The template's ``run.py`` already pip-installs
-the host packages from that checkout (so ``chumicro-deploy``,
-``chumicro-workspace`` etc. live-edit from disk), but the on-device
-side — the libraries the *board* runs (``chumicro_kvstore``,
-``chumicro_wifi``, etc.) — needs a parallel wiring: the deploy-time
+the host packages from that checkout, so ``chumicro-deploy``,
+``chumicro-workspace`` and similar live-edit from disk.  The on-device
+side, the libraries the *board* runs (``chumicro_kvstore``,
+``chumicro_wifi``, etc.), needs a parallel wiring: the deploy-time
 import-graph walker has to know to resolve ``import chumicro_<name>``
 against the sibling checkout's ``libraries/<name>/src/`` instead of
 ``packages/`` (which is empty in dev mode) or the user's own
@@ -42,16 +42,12 @@ from pathlib import Path
 
 from chumicro_workspace.managed_block import sync_managed_block
 
-#: Filename consulted in the workspace root.  Same name the template's
-#: ``run.py`` reads — keeps the user's mental model "one toml controls
-#: dev mode."
+#: Filename consulted in the workspace root.
 CHUMICRO_DEV_FILENAME = "chumicro-dev.toml"
 
 #: Comment written immediately above the managed ``library_sources:``
 #: key.  The marker is descriptive only — there's no parse-side check
-#: that a user-edited block is "ours" (workspace.yml is user-owned;
-#: the comment exists to make the provenance obvious to a human
-#: opening the file).
+#: that a user-edited block is "ours" (workspace.yml is user-owned).
 MANAGED_MARKER = (
     "managed by chumicro-workspace setup — chumicro-dev.toml mode"
 )
@@ -133,9 +129,7 @@ def _relative_to_or_absolute(path: Path, anchor: Path) -> str:
     try:
         return str(resolved.relative_to(anchor_resolved))
     except ValueError:
-        # Path is not under anchor — try walk-up form.
-        # On POSIX, os.path.relpath gives ``../chumicro/...`` which
-        # is what we want for a sibling checkout.
+        # Path is not under anchor; use walk-up form for sibling checkouts.
         import os  # noqa: PLC0415
         return os.path.relpath(resolved, anchor_resolved)
 
@@ -147,8 +141,7 @@ def sync_library_sources(
 
     Returns ``True`` when the file was modified, ``False`` on an
     idempotent re-run.  The block REPLACES any existing top-level
-    ``library_sources:`` (with or without our marker) — the contract
-    is "dev mode owns this key when ``chumicro-dev.toml`` is present."
+    ``library_sources:`` (with or without our marker).
     Every byte outside the block is preserved; see
     :mod:`chumicro_workspace.managed_block` for why this is raw-text
     surgery rather than a ruamel round-trip.

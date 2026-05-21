@@ -1,11 +1,12 @@
 """Deep per-key merge for the runtime-config pipeline.
 
-``secrets.toml`` defaults + per-project overrides combine **key-by-key
-within sections**, project winning on conflict.  Sections present only
-in ``secrets.toml`` carry through as workspace-wide defaults; sections
-present only in the project carry through as project-specific.
+``secrets.toml`` defaults + per-project overrides combine
+key-by-key within sections, project winning on conflict.  Sections
+present only in ``secrets.toml`` carry through as workspace-wide
+defaults. Sections present only in the project carry through as
+project-specific.
 
-Pure functions, fully deterministic — same inputs always yield the
+Pure functions, fully deterministic: same inputs always yield the
 same merged output.  No file IO; the loaders module handles that.
 """
 
@@ -19,13 +20,13 @@ def merge_configs(*sources: dict) -> dict:
 
     Later sources override earlier ones key-by-key.  Nested dicts
     merge recursively; non-dict leaf values are replaced wholesale.
-    Lists do **not** merge — a later source's list replaces the
+    Lists do **not** merge: a later source's list replaces the
     earlier source's list entirely.  Merge is key-level, not
     element-level.
 
     Args:
         *sources: Two or more dicts to merge.  The leftmost is the
-            base (lowest precedence); each subsequent source
+            base, with lowest precedence. Each subsequent source
             overrides the merged-so-far state.
 
     Returns:

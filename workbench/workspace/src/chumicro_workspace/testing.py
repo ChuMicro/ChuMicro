@@ -3,22 +3,19 @@
 Provides host-side helpers for tests that drive ``cli.main([...])``
 end-to-end against a temp directory:
 
-- :func:`seed_workspace` — write the minimal ``workspace.yml`` +
-  ``secrets.toml`` + ``devices.yml`` trio at *tmp_path*.
-- :func:`seed_project` — add ``projects/<name>/`` with a config TOML
+- :func:`seed_workspace`: write the minimal ``workspace.yml``,
+  ``secrets.toml``, and ``devices.yml`` trio at *tmp_path*.
+- :func:`seed_project`: add ``projects/<name>/`` with a config TOML
   and ``code.py`` / ``main.py`` entrypoints.
-- :class:`FakePort` — pyserial ``ListPortInfo`` shim with ``device``
+- :class:`FakePort`: pyserial ``ListPortInfo`` shim with ``device``
   and ``description`` fields, for ``list_ports.comports`` patches.
-- :class:`FakeSubprocessRunner` — callable that records every
+- :class:`FakeSubprocessRunner`: callable that records every
   ``subprocess.run`` invocation and returns canned
   :class:`subprocess.CompletedProcess` results.
-- :func:`fake_probe_info` — object matching the shape
+- :func:`fake_probe_info`: object matching the shape
   :func:`chumicro_deploy.probe_device` returns, with firmware-floor-
   passing defaults so tests that don't care about the floor don't
   trip the warning path.
-
-Mirrors the structure of :mod:`chumicro_deploy.testing` so contributors
-moving between the two packages see the same shapes.
 """
 
 from __future__ import annotations
@@ -88,7 +85,7 @@ def seed_project(workspace_root: Path, name: str = "back-porch") -> Path:
     entrypoint resolves cleanly regardless of the test fixture's chosen
     transport.
 
-    *name* may be slash-form (``"upstairs/bedroom_sensor"``) — the
+    *name* may be slash-form (``"upstairs/bedroom_sensor"``).  The
     intermediate parent directories are created automatically.
     """
     project_dir = workspace_root / "projects" / name
@@ -144,7 +141,7 @@ class FakeSubprocessRunner:
     return shape via constructor kwargs:
 
     - *returncode*: single returncode for every call (default ``0``).
-    - *returncodes*: list of returncodes consumed in order — the first
+    - *returncodes*: list of returncodes consumed in order.  The first
       call returns ``returncodes[0]``, the second returns
       ``returncodes[1]``, etc.  Falls back to *returncode* once the
       list runs out.  Use this to script "ruff fails, then
@@ -201,7 +198,7 @@ def fake_probe_info(
     lower or runtime-specific *version*.
 
     Pass ``with_implementation=False`` to simulate a board where the
-    probe couldn't read an implementation marker — the returned object
+    probe couldn't read an implementation marker.  The returned object
     has ``implementation=None`` and empty ``board_id`` / ``uid``,
     matching what production code returns in that branch.
     """

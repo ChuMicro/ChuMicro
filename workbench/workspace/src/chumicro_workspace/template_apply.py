@@ -1,8 +1,5 @@
 """Update / materialize-workspace-templates orchestration.
 
-Workspaces are *created* by cloning the template repo directly (see
-the template's README — ``git clone`` or GitHub "Use this template");
-there is deliberately no CLI command that scaffolds a new workspace.
 `update` fetches a fresh copy of the template upstream and re-flows
 tool-owned files (the zones defined in
 :mod:`chumicro_workspace.template_zones`) without touching
@@ -27,8 +24,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
     from collections.abc import Iterable
 
 
-#: Default upstream for ``update``.  Override via ``--from`` when
-#: working with a fork.
+#: Default upstream for ``update``.  Override when working with a fork.
 DEFAULT_TEMPLATE_URL = (
     "https://github.com/ChuMicro/ChuMicro-Workspace-Template"
 )
@@ -48,7 +44,7 @@ class ApplyAction(StrEnum):
     REFRESHED = "refreshed"
     #: `update` write would have produced identical bytes — no-op.
     UNCHANGED = "unchanged"
-    #: Workbench-owned starter freshly created (`materialize_workspace_templates`).
+    #: Workbench-owned starter freshly created.
     MATERIALIZED = "materialized"
 
 
@@ -126,15 +122,13 @@ def materialize_workspace_templates(workspace_root: Path) -> ApplyReport:
     """Materialize the first-write text for ``devices.yml`` /
     ``workspace.yml`` / ``secrets.toml`` into *workspace_root*.
 
-    Existing files are never overwritten.  Idempotent — re-running on
-    a populated workspace produces a report of ``UNCHANGED`` entries.
+    Existing files are never overwritten.  Re-running on a populated
+    workspace produces a report of ``UNCHANGED`` entries.
 
     Returns a report whose entries are ``MATERIALIZED`` for each
     newly created file and ``UNCHANGED`` for each that already
     existed.
     """
-    # Local import: ``templates`` pulls in ``chumicro_deploy`` for the
-    # devices.yml reader; deferring keeps module import cheap.
     from chumicro_workspace.templates import (  # noqa: PLC0415
         read_devices_yml_template,
         read_secrets_toml_template,

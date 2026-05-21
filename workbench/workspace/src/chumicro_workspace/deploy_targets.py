@@ -14,11 +14,7 @@ falling back to the ``devices.yml`` defaults block when the project
 isn't mapped.  ``deploy --all-projects`` walks the mapping and
 deploys each project to every device it lists, in declaration order.
 
-Sister of ``deploy --all-devices`` — that flag is the
-"loop-deploy one project to every board" half; this is the converse
-"deploy each project to its declared target(s)" half.
-
-Host-only — the on-device boot path knows nothing about which
+Host-only.  The on-device boot path knows nothing about which
 host-side device the bytes arrived from.
 """
 
@@ -35,21 +31,20 @@ def read_deploy_targets(workspace_yaml: Path) -> dict[str, list[str]]:
     """Parse ``deploy_targets:`` out of *workspace_yaml*.
 
     Returns ``{project_slash_path: [device_id, ...]}``.  Dotted keys
-    (``garage.door``) normalize to slash form to match the slash-form
-    output of :func:`_resolve_project_name`.  A scalar
+    (``garage.door``) normalize to slash form.  A scalar
     string value auto-promotes to a single-element list so
     one-target projects can stay terse::
 
         garage/door: pi-pico-w-circuitpython-board    # bare string
         garage/door: [pi-pico-w-circuitpython-board]  # equivalent
 
-    Empty / missing block → empty dict.
+    Returns an empty dict when the block is missing or empty.
 
     Args:
         workspace_yaml: Path to ``workspace.yml``.
 
     Returns:
-        Mapping ``project_path -> [device_id, ...]``.
+        Mapping from project path to a list of device ids.
 
     Raises:
         WorkspaceConfigError: The top-level YAML isn't a mapping,

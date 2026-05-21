@@ -3,26 +3,24 @@
 ``chumicro_deploy.ImportGraphSource`` already performs the AST walk
 (parses an entrypoint, follows ``import`` / ``from ... import``
 targets, recurses).  This module assembles the *workspace-shaped*
-search-path list — project directory + ``shared/`` (user-authored
-shared modules) + ``packages/`` (third-party, gitignored) +
-optional ``library_sources:`` overrides — and wraps the result
-with :class:`WithRuntimeConfig` so the merged runtime-config
-msgpack rides the deploy alongside the AST-resolved app code.
+search-path list: project directory, ``shared/`` (user-authored shared
+modules), ``packages/`` (third-party, gitignored), and optional
+``library_sources:`` overrides.  It then wraps the result with
+:class:`WithRuntimeConfig` so the merged runtime-config msgpack rides
+the deploy alongside the AST-resolved app code.
 
 Two pieces:
 
-* :func:`read_library_sources` — parses ``workspace.yml``'s
-  ``library_sources:`` map into ``{package_name: Path}``.  These
-  are explicit overrides for "use the local checkout instead of
-  the published copy"; the value is a search path that the
-  import-graph walker tries before the workspace's ``shared/`` /
-  ``packages/`` defaults.
-* :func:`project_import_graph_source` — convenience that builds the
-  search-path list, constructs an :class:`ImportGraphSource` for
-  the project's entrypoint, and wraps with :class:`WithRuntimeConfig`.
-  The CLI ``deploy --import-graph`` invokes this; programmatic
-  callers can compose the layers themselves for finer control
-  (custom search paths, extra modules, alternate entrypoint).
+* :func:`read_library_sources` parses ``workspace.yml``'s
+  ``library_sources:`` map into ``{package_name: Path}``.  Each entry
+  is an explicit override for "use the local checkout instead of the
+  published copy", and the value is a search path tried first during
+  import resolution.
+* :func:`project_import_graph_source` builds the search-path list,
+  constructs an :class:`ImportGraphSource` for the project's
+  entrypoint, and wraps with :class:`WithRuntimeConfig`.  Programmatic
+  callers can compose the layers themselves for finer control (custom
+  search paths, extra modules, alternate entrypoint).
 """
 
 from __future__ import annotations
@@ -106,14 +104,14 @@ def build_search_paths(
 ) -> list[Path]:
     """Compose the import-resolution search path list for *workspace*.
 
-    Order matters — first match wins inside
+    Order matters: first match wins inside
     :class:`ImportGraphSource`.  Explicit overrides beat
     workspace-internal sources beat third-party packages.
 
     Resolution order::
 
         1. library_sources_override values
-        2. workspace/shared/         (user-authored shared modules — flat layout)
+        2. workspace/shared/         (user-authored shared modules, flat layout)
         3. workspace/libraries/<name>/src/  (full chumicro-style library
                                              packages, scaffolded via
                                              ``new --library``)
@@ -121,19 +119,16 @@ def build_search_paths(
         5. extra_search_paths      (caller-supplied tail; e.g. mono-repo
                                     devs adding the live chumicro src/)
 
-    Only paths that actually exist on disk are returned —
+    Only paths that actually exist on disk are returned.
     :class:`ImportGraphSource` rejects nonexistent search paths at
-    construction.  Read ``library_sources`` from ``workspace.yml``
-    yourself via :func:`read_library_sources` and pass it in if you
-    want the override layer; this function is content with whatever
-    map you supply (or none).
+    construction.
 
     Args:
         workspace: Resolved :class:`WorkspaceLayout`.
         library_sources_override: ``{package_name: Path}`` from
             ``workspace.yml``'s ``library_sources:``.  Pass ``None``
-            (the default) when you don't want override processing —
-            this function doesn't read the file itself, so callers
+            (the default) when you don't want override processing.
+            This function doesn't read the file itself, so callers
             stay in control of when YAML I/O happens.
         extra_search_paths: Additional directories to append at the
             tail.  Useful for in-mono-repo dogfooding where the
@@ -141,8 +136,8 @@ def build_search_paths(
     """
     candidates: list[Path] = []
     if library_sources_override:
-        # Stable ordering — sort by package name so two invocations
-        # with the same map produce the same search-path list.
+        # Sort by package name so two invocations with the same map
+        # produce the same search-path list.
         for _name, override_path in sorted(library_sources_override.items()):
             candidates.append(override_path)
     candidates.append(workspace.shared_dir)
@@ -188,16 +183,15 @@ def project_import_graph_source(
 ) -> WithRuntimeConfig:
     """Build a deploy-ready FileSource using AST-walked imports.
 
-    Mirrors :func:`project_directory_source` but uses
-    :class:`chumicro_deploy.ImportGraphSource` so only transitively-
-    imported modules ship — keeps the device payload minimal even
-    when the workspace has many shared libs.
+    Uses :class:`chumicro_deploy.ImportGraphSource` so only
+    transitively-imported modules ship.  This keeps the device payload
+    minimal even when the workspace has many shared libs.
 
-    The project's entrypoint file is parsed; every reachable module
+    The project's entrypoint file is parsed and every reachable module
     via ``shared/`` / ``packages/`` / ``library_sources:`` lands in
     the deploy.  Modules that don't resolve (``gc``, ``time``,
-    ``board``, etc.) are silently skipped — they're assumed to be
-    runtime built-ins the host can't ship anyway.
+    ``board``, etc.) are silently skipped.  They're assumed to be
+    runtime built-ins the host can't ship.
 
     Args:
         project_dir: ``projects/<name>/`` directory.  Used as the root
@@ -225,14 +219,13 @@ def project_import_graph_source(
         extra_modules: Dotted module names to force-include even
             when AST can't see them.  Forwarded to
             :class:`ImportGraphSource`.
-        extra_search_paths: Additional directories prepended to the
+        extra_search_paths: Additional directories appended to the
             workspace-derived search path tail.
         target_runtime: Forwarded to :class:`ImportGraphSource` so
             modules marked for a different runtime via
             ``__chumicro_runtimes__`` are dropped (and their
             imports not walked).  ``None`` (the default) ships
-            every module unfiltered; the workspace ``deploy`` CLI
-            fills this in from the device's runtime.
+            every module unfiltered.
 
     Raises:
         FileNotFoundError: When *project_dir* doesn't contain a

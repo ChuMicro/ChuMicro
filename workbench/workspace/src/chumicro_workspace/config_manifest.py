@@ -14,9 +14,9 @@ the exact key the library code will request.
 
 This module reads those manifests, unions them across the libraries
 imported by a project, and validates a merged-and-resolved **flat**
-config dict against the union — turning a class of "config mismatch
-lands on device, fails at boot, prints a cryptic ``MissingConfigKey``"
-errors into precise deploy-time failures.
+config dict against the union. Errors that would otherwise land on
+device, fail at boot, and print a cryptic ``MissingConfigKey``
+become precise deploy-time failures.
 
 Public surface:
 
@@ -26,7 +26,8 @@ Public surface:
 * :func:`read_manifest` — parse one library's ``pyproject.toml``.
 * :func:`aggregate_manifests` — union the required + optional sets
   across multiple libraries.  A key declared optional by one library
-  and required by another is required overall.
+  and required by another is required overall: the strictest
+  declaration wins.
 * :func:`validate_runtime_config` — check a flat config dict against
   an aggregated manifest; raise on missing required.
 
@@ -67,8 +68,8 @@ class ConfigManifest:
             merged runtime config.  Missing any of them at deploy
             time raises :class:`ConfigManifestError`.
         optional_keys: Flat dotted keys the library reads but
-            tolerates missing — ``load_section``'s factory uses its
-            declared default when absent.  Listed here so doc
+            tolerates missing. ``load_section``'s factory uses its
+            declared default when absent. Listed here so doc
             tooling can render the full surface, and so the
             aggregator can spot "optional in lib A, required in lib B".
         declared_by: Path(s) to the ``pyproject.toml`` that declared
@@ -89,7 +90,7 @@ class ConfigManifestError(Exception):
     Subclasses :class:`Exception` directly (not :class:`ValueError`)
     so deploy-time error reporting can catch it with a single
     ``except`` clause and route to the user-facing recovery hint
-    layer (`chumicro_workspace.recovery`).
+    layer.
     """
 
 
@@ -110,8 +111,8 @@ def read_manifest(library_root: Path) -> ConfigManifest | None:
     Returns:
         :class:`ConfigManifest` when the library declares a manifest,
         ``None`` when the library has no ``[tool.chumicro.config]``
-        block (the common case — most libraries don't read runtime
-        config).
+        block. Most libraries don't read runtime config, so this is
+        the common case.
 
     Raises:
         ConfigManifestError: ``pyproject.toml`` is malformed or the
@@ -249,8 +250,6 @@ def aggregate_manifests(
             sources.append(manifest.declared_by)
     if not saw_any:
         return None
-    # Required wins: an "optional" key in one library doesn't override
-    # a "required" declaration from another.
     aggregated_optional -= aggregated_required
     return ConfigManifest(
         library_name="<aggregated>",

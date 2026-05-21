@@ -1,11 +1,9 @@
 """Library scaffolder — creates a chumicro-style library tree.
 
-External users developing their own chumicro-style libraries get
-the same starter layout chumicro libraries themselves use.  The
-shipped templates live alongside this module under
+The shipped templates live alongside this module under
 ``_payloads/library_template/`` and travel with the wheel.
 Workbench-kind packages pull their four ``docs/`` files from a
-companion ``_payloads/workbench_template/`` tree instead — see
+companion ``_payloads/workbench_template/`` tree instead.  See
 :func:`scaffold_library` ``package_kind`` for the details.
 
 The output layout::
@@ -39,13 +37,10 @@ from __future__ import annotations
 from pathlib import Path
 
 #: Directories under :mod:`chumicro_workspace`'s package tree where
-#: scaffolding templates live.  Resolved at import time so filesystem
-#: reads stay simple — the wheel ships both paths.  The workbench
-#: tree carries only the four ``docs/`` templates (workbench
-#: packages need a different doc shape: no Runner pattern, no Memory
-#: notes, no Bundle footer links).  Every other scaffolded file is
-#: shared, so it lives under :data:`_LIBRARY_TEMPLATE_DIR` and
-#: workbench scaffolds pull from there too.
+#: scaffolding templates live.  The workbench tree carries only the
+#: four ``docs/`` templates.  Every other scaffolded file is shared,
+#: so it lives under :data:`_LIBRARY_TEMPLATE_DIR` and workbench
+#: scaffolds pull from there too.
 _LIBRARY_TEMPLATE_DIR = (
     Path(__file__).resolve().parent / "_payloads" / "library_template"
 )
@@ -67,10 +62,9 @@ def _load_template(
 ) -> str:
     """Read a scaffolding template by filename.
 
-    Defaults to :data:`_LIBRARY_TEMPLATE_DIR`; pass
+    Defaults to :data:`_LIBRARY_TEMPLATE_DIR`.  Pass
     *template_dir=_WORKBENCH_TEMPLATE_DIR* for the workbench-flavored
-    docs templates.  Pure filesystem read — no caching, no formatting.
-    Caller does ``.format(**vars)`` on the returned string.
+    docs templates.  Pure filesystem read, no caching, no formatting.
     """
     template_path = template_dir / filename
     if not template_path.is_file():
@@ -155,7 +149,7 @@ def scaffold_library(
     (library_dir / "examples").mkdir()
     (library_dir / "functional_tests" / ".gitkeep").touch()
 
-    # VERSION — every package starts at 0.1.0 per the SemVer policy.
+    # VERSION
     (library_dir / "VERSION").write_text("0.1.0\n")
 
     pyproject_template = (
@@ -177,8 +171,7 @@ def scaffold_library(
         ),
     )
 
-    # docs/.  Workbench-kind packages pull from _WORKBENCH_TEMPLATE_DIR
-    # per the constants above.
+    # docs/.  Workbench-kind packages pull from _WORKBENCH_TEMPLATE_DIR.
     docs_template_dir = (
         _WORKBENCH_TEMPLATE_DIR
         if package_kind == "workbench"
@@ -215,20 +208,14 @@ def scaffold_library(
     )
 
     # examples/helpers.py — standalone wifi-up + msgpack-decoder helper
-    # for libraries whose examples bring wifi up.  No template variables;
-    # delete the file when the library doesn't need it.
+    # for libraries whose examples bring wifi up.  No template variables.
     (library_dir / "examples" / "helpers.py").write_text(
         _load_template("helpers.py.template"),
     )
 
     # src/<package>/__init__.py — absolute imports only: CircuitPython
     # RAM-mode `exec()`s library modules without a `__package__`, so
-    # leading-dot relatives break at deploy.  Eager imports are correct for
-    # small-surface libraries; if the library grows per-runtime
-    # adapters, push the lazy selection into a `_select_<project>`
-    # function rather than a module-level PEP 562 `__getattr__`
-    # (the deploy harness's CircuitPython RAM-mode wrapper bypasses
-    # PEP 562).
+    # leading-dot relatives break at deploy.
     (library_dir / "src" / import_name / "__init__.py").write_text(
         f'"""Public exports for the chumicro-{name} package."""\n'
         f"\n"
@@ -247,7 +234,7 @@ def scaffold_library(
         ),
     )
 
-    # tests/.  No __init__.py — keeps test module names from
+    # tests/.  No __init__.py, which keeps test module names from
     # colliding across libraries when pytest collects.
     (library_dir / "tests" / "conftest.py").write_text(
         f'"""Test configuration for the chumicro-{name} package."""\n',

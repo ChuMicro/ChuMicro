@@ -6,9 +6,8 @@ filesystem / YAML / counting operations.  Each check returns a
 it found, and (when relevant) a hint the user can act on.
 
 The ``status`` and ``doctor`` CLI commands both route through these
-checks — ``status`` prints a one-liner per finding, ``doctor`` adds
-the stricter checks (Python version, AST, FSKit wedge, held serial
-ports).
+checks.  ``status`` prints a one-liner per finding, and ``doctor``
+adds stricter checks.
 """
 
 from __future__ import annotations
@@ -79,11 +78,7 @@ def check_workspace_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             message=f"missing at {workspace.workspace_yaml}",
             hint="run `python3 run.py setup` to materialize it.",
         )
-    # Import outside the `try` so pyright can prove `YAMLError` is bound on
-    # the `except` arm — an import failure inside the try would short-circuit
-    # before the binding, which pyright correctly flags.  ruamel.yaml is a
-    # hard dependency; if the import fails, we want the ImportError to
-    # surface, not a misleading "malformed YAML" finding.
+    # Import outside `try` so YAMLError is bound on the except arm.
     from ruamel.yaml import YAML, YAMLError  # noqa: PLC0415
     try:
         with workspace.workspace_yaml.open("r", encoding="utf-8") as handle:
@@ -232,7 +227,7 @@ def collect_health_findings(
 
 
 # ---------------------------------------------------------------------------
-# Doctor checks — stricter than status, AST + config-merge
+# Doctor checks
 # ---------------------------------------------------------------------------
 
 
@@ -348,13 +343,10 @@ def check_macos_fskit_wedge() -> HealthFinding:
     :func:`detect_fskit_wedge` returns ``False`` immediately, surfacing
     here as a "not applicable" OK row that the doctor renderer keeps
     out of the way.  On macOS the detector probes
-    ``ps -o state= -p $(pgrep diskarbitrationd)``; uninterruptible
-    kernel wait (``Us``) is the wedge signature.
+    ``ps -o state= -p $(pgrep diskarbitrationd)``.
 
-    Doctor-only — the subprocess probe is too heavy for every
-    ``status`` poll, but doctor is the diagnose-deeply surface where
-    catching a wedge before the user runs into a 30-second-per-deploy
-    failure cascade is the whole point.
+    Doctor-only; the subprocess probe is too heavy for the per-second
+    status loop.
     """
     if sys.platform != "darwin":
         return HealthFinding(
@@ -394,9 +386,7 @@ def check_serial_ports_held(workspace: WorkspaceLayout) -> HealthFinding:
     may be debugging — but if the next action is a deploy, the deploy
     will fail with ``Resource busy`` until the holder is closed.
 
-    Doctor-only.  Status skips it; the lsof probe is heavier than
-    the rest of the per-second status loop and the per-port detail
-    lives below the simple "ports look good" / "ports held" summary.
+    Doctor-only.
 
     Returns OK on Windows (no portable lsof equivalent without
     ``handle.exe``) and when no devices are registered.
