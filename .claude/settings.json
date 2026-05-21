@@ -38,19 +38,6 @@
           }
         ]
       }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "{ printf '# Read this before running git commit (auto-injected by PreToolUse hook on git commit)\\n\\n'; cat .github/skills/git-commit/SKILL.md; } | jq -Rs '{hookSpecificOutput:{hookEventName:\"PreToolUse\",additionalContext:.}}'",
-            "if": "Bash(git commit *)",
-            "timeout": 10
-          }
-        ]
-      }
     ]
   }
 }
