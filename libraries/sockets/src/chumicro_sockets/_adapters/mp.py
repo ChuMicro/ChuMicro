@@ -32,15 +32,14 @@ def _no_fileno():
 
 
 def _no_op(*_args, **_kwargs):
-    """Stand-in for ``setblocking`` / ``settimeout`` / ``fileno`` on
-    sockets that don't expose them.
+    """Stand-in no-op for socket methods absent on a given MP port.
 
-    Verified live on MP 1.28.0 (Pi Pico W RP2 + Lolin S2 ESP32-S2):
-    both plain ``socket`` and mbedTLS ``SSLSocket`` *do* expose
-    ``setblocking`` so the no-op fallback is mostly defensive for
-    older firmwares / non-mbedTLS ports.  ``settimeout`` is genuinely
-    absent on SSLSocket on those boards (the call surface stops at
-    ``setblocking``); ``fileno`` is absent on RP2's plain socket.
+    Installed via ``getattr(sock, "<method>", _no_op)`` in
+    :class:`_MpSocketWrapper` so the wrapper exposes the full
+    protocol surface even when the underlying socket doesn't.
+    Two real gaps: mbedTLS ``SSLSocket`` lacks ``settimeout``
+    (its call surface stops at ``setblocking``), and rp2's plain
+    socket lacks ``fileno``.
     """
     return None
 
@@ -64,12 +63,10 @@ class _MpSocketWrapper:
         # socket-shaped object exposes them.
         self.send = sock.send
         self.close = sock.close
-        # Soft-forward setblocking / settimeout / fileno.  Live-board
-        # findings on MP 1.28.0 (Pi Pico W RP2, Lolin S2 ESP32-S2):
-        # SSLSocket exposes ``setblocking`` but not ``settimeout``;
-        # plain socket on RP2 has no ``fileno``.  Fall back to no-op
-        # / ``-1`` stubs so downstream code doesn't trip at
-        # construction time on the cases where a method is absent.
+        # Soft-forward setblocking / settimeout / fileno: mbedTLS
+        # SSLSocket lacks ``settimeout`` and rp2's plain socket lacks
+        # ``fileno``, so a missing method falls back to a no-op /
+        # ``-1`` stub and downstream construction stays uniform.
         self.setblocking = getattr(sock, "setblocking", _no_op)
         self.settimeout = getattr(sock, "settimeout", _no_op)
         forwarded_fileno = getattr(sock, "fileno", None)
