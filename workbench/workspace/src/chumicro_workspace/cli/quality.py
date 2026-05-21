@@ -49,29 +49,16 @@ def _cmd_test(args: argparse.Namespace) -> int:
 def _cmd_lint(args: argparse.Namespace) -> int:
     """Run ``ruff check`` plus ``chumicro-checks`` across the workspace.
 
-    Picks up the workspace's ``[tool.ruff]`` config from
-    ``pyproject.toml`` automatically.  The workspace template ships
-    a pre-configured ruff block.  Extra args after ``--`` forward to
-    ruff (e.g. ``--fix``, ``--select`` overrides).
-
-    After ruff, runs ``chumicro-checks`` for the workspace-internal
-    rules ruff can't express.  Each rule self-scopes (silent
-    no-op in repos where its target paths don't exist), so most
-    don't fire in a user workspace.  The upstream-derivative-leak
-    detector typically does.  ``chumicro-checks`` reads its own
-    ``[tool.chumicro-checks]`` config from ``pyproject.toml``.
-
-    No-op (exit 0 with a hint) when either ``ruff`` or
-    ``chumicro-checks`` isn't installed, so the command stays
-    discoverable in workspaces that haven't pulled the ``[dev]``
-    extra yet.
+    Each tool reads its own config from ``pyproject.toml``
+    (``[tool.ruff]`` and ``[tool.chumicro-checks]``).  Extra args
+    after ``--`` forward to ruff.  Either tool missing from the venv
+    surfaces an exit-0 install hint, so this command stays
+    discoverable on workspaces without the ``[dev]`` extra installed.
 
     ``workspace.yml``'s ``quality.lint`` knobs flow through.
-    ``enabled = false`` skips the entire phase.  ``tools`` selects
-    which tools run (default ``["ruff", "chumicro-checks"]``, drop
-    one to disable that tool only).  ``select`` prepends a
-    ``--select <comma list>`` flag for ruff.  ``chumicro-checks``
-    ignores it (its rule selection is via its own config and CLI flags).
+    ``enabled = false`` skips the phase.  ``tools`` selects which
+    tools run.  ``select`` prepends a ``--select <comma list>`` flag
+    to ruff and is ignored by chumicro-checks.
     """
     workspace = _resolve_workspace(args)
     quality = load_quality_config(workspace.workspace_yaml)

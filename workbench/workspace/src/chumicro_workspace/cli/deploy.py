@@ -49,9 +49,8 @@ from chumicro_workspace.workspace import (
     WorkspaceLayout,
 )
 
-#: Tail-window default (seconds) for ``deploy --tail`` with no explicit
-#: value.  Covers "deploy a heartbeat project, watch a few cycles
-#: confirm it booted" without the user having to pick a number.
+#: Tail-window default (seconds) when ``deploy --tail`` is passed
+#: without an explicit value.
 _DEFAULT_TAIL_SECONDS = 30.0
 
 
@@ -600,9 +599,6 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 tail_target = device
 
     if args.tail is not None and tail_target is not None and exit_code == 0:
-        # One deploy path. The watch is a flag on it, not a second
-        # deploy path inside `repl`.  repl owns only the interactive /
-        # standalone-tail surface.
         from chumicro_repl import tail  # noqa: PLC0415
 
         return int(tail(

@@ -259,13 +259,12 @@ def project_boot_source(
 
     Args:
         project_dir: Filesystem path to the project directory.
-        workspace: Resolved :class:`WorkspaceLayout`.  Used to
-            locate ``secrets.toml`` when *secrets_toml* is ``None``.
+        workspace: Resolved :class:`WorkspaceLayout`.  Supplies the
+            ``secrets.toml`` fallback when *secrets_toml* is ``None``.
         entrypoint_filename: ``"code.py"`` for CP, ``"main.py"``
             for MP.  Decides the host-side filename for the shim
             stub written at the device root.
-        secrets_toml: Override ``secrets.toml`` path (workspace-wide
-            credentials + device defaults).
+        secrets_toml: Override ``secrets.toml`` path.
         extra_excluded: Additional filename / directory names to
             skip on the project walk.
         target_runtime: When set, ``.py`` files in the project

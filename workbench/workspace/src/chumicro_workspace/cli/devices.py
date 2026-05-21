@@ -210,24 +210,23 @@ def _cmd_add_device(
     *,
     prompt_func: Callable[[str], str] = _stdin_prompt,
 ) -> int:
-    """Probe a board + register it in devices.yml.
+    """Probe a board and register it in devices.yml.
 
-    Builds a fresh entry by probing the resolved address: ``runtime``
-    + ``hardware.uid`` + ``hardware.machine`` come from
-    :func:`chumicro_deploy.probe_device`; ``address`` rides through
-    as-is.  When ``--address`` is omitted in interactive mode, the
-    user is shown a numbered list of detected serial ports (or the
-    only one is auto-picked); ``--non-interactive`` requires
-    ``--address`` and exits 2 otherwise.  When ``--runtime`` is
-    omitted, the runtime is inferred by trying every candidate
-    transport in turn, so the user can plug a fresh board in and
-    register it without knowing what firmware it runs.  Re-running
-    with the same id triggers a re-probe and is blocked unless
-    ``--force`` is passed (the typical second invocation is "I
-    swapped boards on this id", which the user is asked to confirm).
-    Passing
-    ``--demo`` chains into the built-in demo deploy after the
-    register succeeds.
+    The ``runtime``, ``hardware.uid``, and ``hardware.machine``
+    fields come from :func:`chumicro_deploy.probe_device`; ``address``
+    rides through as-is.
+
+    ``--address`` defaults to a port picker when interactive (numbered
+    list of detected serial ports, or auto-pick when only one).
+    Non-interactive requires the flag and exits 2 otherwise.
+    ``--runtime`` defaults to runtime inference: every candidate
+    transport is tried in turn so the user can register a board
+    without knowing what firmware it runs.
+
+    Re-running with an existing id is blocked unless ``--force`` is
+    passed.  The typical second invocation is "I swapped boards on
+    this id" and warrants an explicit confirmation.  ``--demo``
+    chains into the built-in demo deploy after a successful register.
     """
     workspace = _resolve_workspace(args)
     if args.address is None:

@@ -122,8 +122,7 @@ def example_source(
             ``compose_runtime_config`` raises for the secrets file).
 
     Returns:
-        A ``WithRuntimeConfig`` wrapping an ``ImportGraphSource`` —
-        ready to hand to ``Deployer.deploy_diff(source)``.
+        A ``WithRuntimeConfig`` wrapping an ``ImportGraphSource``.
     """
     from chumicro_deploy import ImportGraphSource  # noqa: PLC0415
 

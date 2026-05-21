@@ -78,8 +78,7 @@ class WithRuntimeConfig:
 
     Args:
         inner: The base ``FileSource`` (typically the project's app code).
-        secrets_toml: Path to ``secrets.toml`` (workspace-wide
-            credentials + device defaults).
+        secrets_toml: Path to ``secrets.toml``.
         project_config: Path to ``projects/<name>/project_config.toml``,
             or ``None`` when no per-project overrides apply (the merged
             config is then just the secrets.toml contents).  When
@@ -278,8 +277,7 @@ def project_directory_source(
 
     Args:
         project_dir: ``projects/<name>/`` directory.
-        secrets_toml: Path to ``secrets.toml`` (workspace-wide
-            credentials + device defaults).
+        secrets_toml: Path to ``secrets.toml``.
         entrypoint: On-device entrypoint path.  Defaults to
             ``"/code.py"`` (CircuitPython convention).  Override to
             ``"/main.py"`` for MicroPython projects.

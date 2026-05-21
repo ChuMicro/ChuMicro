@@ -1,9 +1,8 @@
 """``repl`` subcommand: interactive REPL and standalone tail mode.
 
-Deploying a project then watching it is **not** here: that is
-`deploy <project> --tail`.  One deploy path, the watch a flag on it.
-`repl` owns only the interactive and tail surface, and never stages
-code to a board.
+For deploy-then-watch use `deploy <project> --tail`.  This command
+never stages code to a board.  It owns only the interactive REPL
+and standalone tail surfaces.
 """
 
 from __future__ import annotations
