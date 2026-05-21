@@ -22,8 +22,7 @@ def _is_eagain(error):
 
 
 #: Seconds between the NTP epoch (1900-01-01T00:00:00Z) and the
-#: Unix epoch (1970-01-01T00:00:00Z).  Constant since both epochs
-#: are fixed.
+#: Unix epoch (1970-01-01T00:00:00Z).
 NTP_TO_UNIX = const(2208988800)
 
 #: SNTP packet length in bytes.  Fixed by the protocol — every
@@ -35,8 +34,8 @@ PACKET_SIZE = const(48)
 CLIENT_FIRST_BYTE = const(0x23)
 
 #: First byte of an SNTP **response** has Mode=4 (server) in the
-#: low three bits.  Tests check the mode rather than the whole
-#: byte because some servers echo VN!=4.
+#: low three bits.  Match against the low three bits only — some
+#: servers echo VN!=4.
 SERVER_MODE = const(4)
 
 #: The complete 48-byte SNTP client request — first byte is
@@ -144,9 +143,8 @@ class NTPClient:
     """Runner-shaped SNTP client over an injected UDP socket.
 
     Single in-flight request at a time — calling :meth:`query` while
-    :attr:`busy` is ``True`` raises ``RuntimeError`` (mirrors
-    ``HttpClient.busy``).  Apps wanting parallel queries instantiate
-    multiple clients on distinct sockets.
+    :attr:`busy` is ``True`` raises ``RuntimeError``.  Apps wanting
+    parallel queries instantiate multiple clients on distinct sockets.
 
     The socket is **not owned** by the client — caller passes it in
     and is responsible for closing it.  The ``sockets_factory``
@@ -255,8 +253,7 @@ class NTPClient:
         self._ticks = ticks
         self._result: NTPResult | None = None
         # Pre-allocate the receive buffer so the hot path doesn't
-        # allocate.  48 bytes is the SNTP packet size; larger buffers
-        # would just hold tail bytes nobody wants.
+        # allocate.  48 bytes is the SNTP packet size.
         self._recv_buffer = bytearray(PACKET_SIZE)
 
     @property

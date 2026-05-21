@@ -3,17 +3,16 @@
 End-to-end: bring wifi up, open a UDP socket, query a public NTP
 server, verify the returned Unix-epoch seconds is plausibly close to
 the host's clock.  Exercises chumicro-ntp's SNTP wire format,
-chumicro-sockets' UDP path, and the ``sockets_factory`` Decision-
-0042 deploy-rule submodule end-to-end on real hardware.
+chumicro-sockets' UDP path, and the ``sockets_factory`` submodule
+end-to-end on real hardware.
 
 Skipped at collection time when no credentials are configured —
 the conftest's ``set_runtime_config(..., required_keys=...)`` declares
 ``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
 applies ``pytest.mark.skip`` with a clear message before deploy.
-Credentials
-ship from the host conftest as ``/runtime_config.msgpack`` and are
-read here via ``chumicro_config.load_runtime_config()`` — the same
-API user code uses.
+Credentials ship from the host conftest as ``/runtime_config.msgpack``
+and are read here via ``chumicro_config.config`` — the same API user
+code uses.
 """
 
 import time

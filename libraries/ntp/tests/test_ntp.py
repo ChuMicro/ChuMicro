@@ -24,9 +24,9 @@ from chumicro_timing.testing import FakeTicks
 def _server_response(unix_seconds: int) -> bytes:
     """Build a minimal valid SNTP server response.
 
-    LI=0, VN=4, Mode=4 (server) → first byte 0x24.  Stratum 1 ("primary
-    reference") so the parser doesn't reject as kiss-of-death.  All
-    other fields zero except the transmit timestamp (bytes 40-47).
+    LI=0, VN=4, Mode=4 (server), so the first byte is 0x24.  Stratum 1
+    ("primary reference") so the parser doesn't reject as kiss-of-death.
+    All other fields zero except the transmit timestamp (bytes 40-47).
     """
     seconds_1900 = unix_seconds + NTP_TO_UNIX
     packet = bytearray(48)
@@ -56,13 +56,13 @@ def test_ntp_error_is_oserror_subclass() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _build_request / _parse_response
+# _CLIENT_REQUEST / _parse_response
 # ---------------------------------------------------------------------------
 
 
 def test_client_request_packet_shape() -> None:
     assert len(_CLIENT_REQUEST) == 48
-    # First byte: LI=0 (00), VN=4 (100), Mode=3 (011) → 0b00100011 = 0x23
+    # First byte: LI=0 (00), VN=4 (100), Mode=3 (011) = 0b00100011 = 0x23
     assert _CLIENT_REQUEST[0] == 0x23
     # All other bytes zero.
     assert _CLIENT_REQUEST[1:] == b"\x00" * 47
@@ -248,7 +248,7 @@ def test_handle_times_out_when_no_data_arrives() -> None:
 
 
 def test_handle_timeout_via_zero_byte_recv() -> None:
-    """Empty queue (no EAGAIN) and timeout elapsed → fail."""
+    """Empty queue (no EAGAIN) and timeout elapsed; expect failure."""
     sock = FakeUDPSocket()
     ticks = FakeTicks()
     client = NTPClient(socket=sock, timeout_ms=200, ticks=ticks)
@@ -392,11 +392,7 @@ class TestFromConfig:
         assert client.socket is sock
 
     def test_defaults_apply_when_keys_absent(self) -> None:
-        """Empty config dict → every manifest key falls back to its default.
-
-        This is the asymmetry vs ``MQTTClient.from_config``: ntp's
-        public-pool fallback means an empty config is valid input.
-        """
+        """Empty config dict falls back to every default."""
         sock = FakeUDPSocket()
         client = NTPClient.from_config(
             {}, socket_factory=self._injected_factory(sock),
@@ -484,11 +480,12 @@ class TestFromConfig:
         assert sock._blocking is False  # noqa: SLF001
 
     def test_default_factory_does_not_raise_on_empty_config(self) -> None:
-        """Documents the asymmetry vs MQTTClient.from_config: the
-        ntp default factory reads zero config keys (server/port live
-        on the NTPClient itself, not on the socket), so an empty
-        config dict is valid input even without socket=/socket_factory=.
-        Unlike mqtt, no MissingConfigKey is ever raised."""
+        """Empty config dict is valid input even without socket=/socket_factory=.
+
+        The default factory reads zero config keys (server/port live on
+        the NTPClient itself, not on the socket), so there is nothing
+        to require.
+        """
         sock = FakeUDPSocket()
 
         def fake_chumicro_sockets_factory(*, radio=None, broadcast=False):
