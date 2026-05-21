@@ -13,13 +13,12 @@ peek-then-route on the HTTP request line).  The optional
 *accept_path* knob lets a server filter inbound upgrades by URI
 path.
 
-The OPEN/CLOSING/CLOSED machinery — frame dispatch, oversize policy,
-control-frame handling, close handshake, send queue, pong watchdog —
-lives in :class:`chumicro_websockets._session._BaseSession`, shared
-with :class:`chumicro_websockets.client.WebSocketClient`.  This file
-owns only the server-specific bits: opening-handshake direction
-(parse request → send 101), outbound-mask discipline (servers MUST
-NOT mask), and the accept-loop in :class:`WebSocketServer`.
+Everything from OPEN onward is shared with
+:class:`chumicro_websockets.client.WebSocketClient` through
+:class:`chumicro_websockets._session._BaseSession`.  This file owns
+the server-specific bits: the opening-handshake direction (parse
+request, send 101), outbound-mask discipline (servers MUST NOT mask),
+and the accept-loop in :class:`WebSocketServer`.
 """
 
 from chumicro_websockets._session import (

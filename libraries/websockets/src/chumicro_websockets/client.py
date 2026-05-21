@@ -10,12 +10,11 @@ handshake, frame I/O, and the close handshake.
 Single-connection per client: two parallel websocket sessions need
 two :class:`WebSocketClient` instances.
 
-The OPEN/CLOSING/CLOSED machinery — frame dispatch, oversize policy,
-control-frame handling, close handshake, send queue, pong watchdog —
-lives in :class:`chumicro_websockets._session._BaseSession`, shared
-with :class:`chumicro_websockets.server.Connection`.  This file owns
-only the client-specific bits: opening-handshake direction (send
-request → parse 101), outbound-mask discipline (clients MUST mask),
+Everything from OPEN onward is shared with
+:class:`chumicro_websockets.server.Connection` through
+:class:`chumicro_websockets._session._BaseSession`.  This file owns
+the client-specific bits: the opening-handshake direction (send
+request, parse 101), outbound-mask discipline (clients MUST mask),
 and the optional auto-ping keep-alive.
 """
 
