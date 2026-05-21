@@ -160,23 +160,11 @@ _OUT_OF_SUBSET = {
     0xdf: ("map32", "maps must be under 65 536 entries"),
 }
 
-# Trusting-decoder bounds.  unpackb is hardened against malformed
-# *framing* — truncation, over-length, trailing bytes, unbounded
-# nesting — but is not a per-type spec validator; a
-# structurally-valid payload of the wrong shape is the caller's
-# contract.  Nesting deeper than _MAX_DEPTH raises rather than
-# exhausting the interpreter stack on a 256 KB board.  The bound is
-# bench-set, not analytical: a Pi Pico W under MicroPython faults
-# (pystack exhausted) at 17 nested containers and survives 16, so the
-# guard must trip well below that on the smallest supported board.  8
-# fires the guard ~18 frames deep — comfortably under the measured
-# ~32-frame ceiling, with headroom for caller frames — while still
-# being 2x any realistic persisted config / kvstore payload (those
-# nest 2–4 deep).  struct-prefixed reads need no check here:
-# MicroPython/CircuitPython struct.unpack_from already raises
-# ValueError("buffer too small") on a short buffer, so only the
-# slice-based str/bin reads (memoryview slicing truncates silently)
-# and the container loops need an explicit length guard.
+# Cap on decoder recursion depth. A Pi Pico W under MicroPython
+# exhausts pystack at 17 nested containers, so the guard has to trip
+# well below that on the smallest supported board. 8 leaves room for
+# realistic persisted config / kvstore payloads (which nest 2-4 deep)
+# while staying safely under the stack ceiling.
 _MAX_DEPTH = 8
 _MALFORMED = "malformed msgpack: truncated or over-length framing"
 
@@ -323,9 +311,10 @@ def _decode_array(data: memoryview, offset: int, length: int, depth: int) -> tup
 
 def _decode_map(data: memoryview, offset: int, length: int, depth: int) -> tuple:
     """Decode *length* map key/value pairs starting at *offset*; return ``(dict, new_offset)``."""
-    # Each pair is at least two bytes; the one-byte-per-entry lower
-    # bound is a safe conservative reject (never false-positives on
-    # valid data) that stops an unbounded loop on corrupt input.
+    # Each pair is at least two bytes, so a claimed length past the
+    # remaining buffer (using the conservative 1-byte-per-entry bound)
+    # is malformed framing. Reject before the loop allocates from
+    # corrupt input.
     if length > len(data) - offset:
         raise ValueError(_MALFORMED)
     result = {}
