@@ -1656,9 +1656,9 @@ class TestDeployFilesSoftReboot:
         enter_calls = [call for call in serial.calls if call[0] == "enter_raw_repl"]
         post_read_enters = [
             call for call in enter_calls
-            # Earlier, _ensure_serial ran; we just need to ensure no call
-            # appears AFTER the soft-reboot read_until.  Order check via
-            # index: any enter_raw_repl after the second read_until is wrong.
+            # Filter to enters after the last read_until.  The earlier
+            # _ensure_serial enter is expected, only a post-read enter
+            # would Ctrl-C the just-started main.py.
             if serial.calls.index(call)
             > max(
                 idx for idx, prior in enumerate(serial.calls)

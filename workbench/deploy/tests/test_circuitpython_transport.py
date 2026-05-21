@@ -2986,13 +2986,12 @@ class TestListFilesInScopeAndDelete:
     ) -> None:
         """A root-level orphan `/<pkg>/` (from a prior deploy convention) gets reaped.
 
-        Regression: the reap used to be ``/lib/``-only, so a board
-        carrying ``/<pkg>/`` at root from an older deploy layout kept
-        the husk after stale-file removal.  An empty root-level
-        ``/<pkg>/`` resolves ``import <pkg>`` to a PEP 420 namespace
-        package and shadows the populated ``/lib/<pkg>/`` underneath
-        in ``sys.path``, exactly the failure that bit Lolin S2 MP.
-        Widening the reap to the whole drive scope closes the gap.
+        An empty ``/<pkg>/`` at root resolves ``import <pkg>`` to a
+        PEP 420 namespace package and shadows the populated
+        ``/lib/<pkg>/`` underneath in ``sys.path``.  The reap targets
+        the whole deploy scope, not just ``/lib/``, so a board
+        carrying the husk from an older deploy layout has it cleaned
+        out alongside the lib-side stale files.
         """
         (tmp_path / "chumicro_timing").mkdir()
         (tmp_path / "chumicro_timing" / "old.py").write_text("# stale")
