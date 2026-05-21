@@ -90,9 +90,9 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "dated incident — move to commit message or workstream file",
     ),
     (
-        # "the YYYY-MM-DD audit|sweep|incident|pass|investigation"
-        # — verb-less dated-incident shape; the verb-prefixed variants
-        # above don't catch this phrasing.
+        # Verb-less dated-incident phrasings like "the 2026-05-09
+        # audit". The verb-prefixed patterns above don't match these
+        # because there is no leading verb to anchor on.
         re.compile(
             r"\bthe \d{4}-\d{2}-\d{2}\s+"
             r"(?:audit|sweep|incident|pass|investigation|review|finding)\b",

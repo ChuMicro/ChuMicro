@@ -42,10 +42,10 @@ def line_suppresses(line: str, code: str) -> bool:
 def strip_noqa(line: str) -> str:
     """Return *line* with every noqa directive removed.
 
-    Useful when a rule's pattern would itself match a CHU code embedded
-    in a noqa marker (CHU006's "no CHU codes in prose" rule needs the
-    marker stripped before searching, otherwise ``# noqa: CHU006`` would
-    self-flag).
+    Useful when a rule's own match pattern would itself match content
+    inside a noqa marker. Strip the marker before searching so a line
+    carrying ``# noqa: CHU0NN`` doesn't self-flag against a rule that
+    scans for CHU codes in prose.
     """
     for pattern in _NOQA_PATTERNS:
         line = pattern.sub("", line)
