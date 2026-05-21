@@ -1,4 +1,4 @@
-"""Multiple services — combining patterns in one runner (advanced).
+"""Multiple services: combining patterns in one runner (advanced).
 
 Shows how object-based, callable, and periodic registration patterns
 coexist in a single ``Runner``:
@@ -37,7 +37,7 @@ from chumicro_runner import Runner
 
 
 class MotionDetector:
-    """PIR motion sensor — object-based gate task.
+    """PIR motion sensor as an object-based gate task.
 
     ``check()`` performs a fast digital pin read via
     ``detect_motion()``.  On a real board this reads a GPIO input.
@@ -52,7 +52,7 @@ class MotionDetector:
         self._check_count = 0
 
     def detect_motion(self) -> bool:
-        """Read the PIR sensor pin — fast digital read.
+        """Read the PIR sensor pin (fast digital read).
 
         Returns:
             True if motion is detected.
@@ -84,7 +84,7 @@ class MotionDetector:
 
 
 class LightSensor:
-    """Ambient light sensor — used with the callable registration pattern.
+    """Ambient light sensor, registered with the callable pattern.
 
     On a real board, ``read_level()`` would sample an ADC pin.
     Here it simulates a dark period so the light handler fires.
@@ -138,8 +138,8 @@ runner.add_periodic(
 print("Running services...\n")
 
 while True:
-    # tick() checks all registered tasks — periodic, object-based,
-    # and callable — then fires any whose conditions are met.
+    # tick() checks every registered task (periodic, object-based,
+    # callable) then fires any whose conditions are met.
     runner.tick()
 
     # In a real project, the rest of your main loop goes here.

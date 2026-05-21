@@ -1,4 +1,4 @@
-"""Button-controlled LED — MicroPython gate pattern.
+"""Button-controlled LED: MicroPython gate pattern.
 
 Reads a button and toggles an LED using the runner's check/handle
 gate pattern.  The runner calls ``check()`` every tick; when the
@@ -28,7 +28,7 @@ Setup:
 Runs on MicroPython.
 """
 
-#: MicroPython-only — uses ``machine.Pin`` (MP API).
+#: MicroPython-only.  Uses ``machine.Pin`` (MP API).
 #: Pair: ``circuitpython_button_led.py`` for the CP equivalent (``board`` + ``digitalio``).
 __chumicro_runtimes__ = ("micropython",)
 
@@ -39,7 +39,7 @@ from machine import Pin
 led = Pin(2, Pin.OUT)
 
 # Set up a button with an internal pull-up resistor.
-# Pressing the button connects GPIO 0 to GND → value goes 0.
+# Pressing the button connects GPIO 0 to GND, so value reads 0.
 button = Pin(0, Pin.IN, Pin.PULL_UP)
 
 

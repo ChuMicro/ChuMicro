@@ -1,4 +1,4 @@
-"""Runner LED blink — MicroPython.
+"""Runner LED blink: MicroPython.
 
 Toggles the onboard LED every 500 ms using a periodic runner task.
 Prints a line on each toggle so a serial console (or a sweep harness)
@@ -23,7 +23,7 @@ Example output::
 Runs on MicroPython.
 """
 
-#: MicroPython-only — uses ``machine.Pin`` (MP API).
+#: MicroPython-only.  Uses ``machine.Pin`` (MP API).
 #: Pair: ``circuitpython_blink.py`` for the CP equivalent (``board`` + ``digitalio``).
 __chumicro_runtimes__ = ("micropython",)
 

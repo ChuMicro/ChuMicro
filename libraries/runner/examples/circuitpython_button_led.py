@@ -1,4 +1,4 @@
-"""Button-controlled LED — CircuitPython gate pattern.
+"""Button-controlled LED: CircuitPython gate pattern.
 
 Reads a button and toggles an LED using the runner's check/handle
 gate pattern.  The runner calls ``check()`` every tick; when the
@@ -27,7 +27,7 @@ Setup:
 Runs on CircuitPython.
 """
 
-#: CircuitPython-only — uses ``board`` + ``digitalio`` (CP API).
+#: CircuitPython-only.  Uses ``board`` + ``digitalio`` (CP API).
 #: Pair: ``micropython_button_led.py`` for the MP equivalent (``machine.Pin``).
 __chumicro_runtimes__ = ("circuitpython",)
 
