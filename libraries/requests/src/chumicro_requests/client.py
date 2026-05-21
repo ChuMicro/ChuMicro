@@ -437,13 +437,12 @@ class HttpClient:
         """
         self._connection_factory = connection_factory
         self._recv_budget_per_tick = recv_budget_per_tick
-        # Pre-allocated recv scratch buffer — reused on every tick so we
-        # don't churn the heap with per-call allocations.  Mirrors the
-        # static-buffer pattern in :class:`chumicro_mqtt._wire.PacketDecoder`
-        # and ``chumicro_websockets._session.WebSocketSession`` — both caught
-        # the per-tick alloc on a Pi Pico W's 124 KB heap.  Capped at 512 B
-        # so a client with ``recv_budget_per_tick=64K`` doesn't pin 64 KB of
-        # steady-state heap for a buffer that gets sliced down per call.
+        # Pre-allocated recv scratch reused on every tick — _drive_recv
+        # passes a memoryview into this buffer to socket.recv_into
+        # instead of allocating per call.  Capped at 512 B so a
+        # generous recv_budget_per_tick (say 64K) doesn't pin a 64K
+        # resident buffer for what's only ever a sliced-down working
+        # window.
         recv_scratch_size = recv_budget_per_tick if recv_budget_per_tick <= 512 else 512
         self._recv_buffer = bytearray(recv_scratch_size)
         self._recv_view = memoryview(self._recv_buffer)
@@ -466,12 +465,12 @@ class HttpClient:
         self._tx_buffer = b""  # request bytes pending send
         self._tx_offset = 0
         self._parser = None
-        # Long-lived body buffer reused across requests — the parser is
-        # constructed per-request (single-in-flight) but the body
-        # buffer is the only per-request alloc big enough
-        # to fragment small-tier free lists on Lolin S2.  We hold the
-        # buffer here and hand it to each parser so per-request body
-        # alloc happens only when ``Content-Length > body_buffer_size``.
+        # Long-lived body buffer reused across requests.  The parser
+        # is constructed fresh per request, but the body buffer is
+        # the largest per-request alloc; holding it on the client
+        # and passing it to each new parser means a per-request body
+        # allocation happens only when the response would exceed
+        # body_buffer_size.
         self._body_buffer = bytearray(DEFAULT_BODY_BUFFER_SIZE)
         self._body_buffer_view = memoryview(self._body_buffer)
         self._deadline_ticks = None

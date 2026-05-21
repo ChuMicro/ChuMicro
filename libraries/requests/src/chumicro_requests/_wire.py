@@ -577,17 +577,11 @@ class ResponseParser:
             self._body_view = body_buffer_view
             self._body_capacity = len(body_buffer)
         else:
-            # No external buffer — start empty and grow on demand.
-            # Pre-allocating a fixed N-byte default per parser instance
-            # would put a tier-N alloc/free cycle on every standalone
-            # use (the on-device fragmentation tests caught this:
-            # ``test_small_body`` and ``test_large_body`` regressed with
-            # a 1024-byte default).  Geometric growth via ``extend``
-            # primes the small allocator tiers along the way, which the
-            # allocator can recycle cleanly between iterations.  When
-            # the consumer is long-lived (``HttpClient``), it should
-            # pass ``body_buffer`` so the steady-state buffer is shared
-            # across requests instead of reallocated per-instance.
+            # No external buffer: start empty and let the absorb path
+            # grow the body on demand (exact-size replacement per
+            # _absorb_body_chunk).  Long-lived consumers pass
+            # body_buffer instead so the steady-state buffer is
+            # reused across requests instead of reallocated per-parser.
             self._body = bytearray()
             self._body_view = memoryview(self._body)
             self._body_capacity = 0
@@ -860,15 +854,11 @@ class ResponseParser:
                 return
             self.state = ParseState.BODY
             self._body_write_offset = 0
-            # Don't pre-allocate the body upfront: the absorb path
-            # handles growth via doubling-grow (one-shot realloc when
-            # the write would overflow current capacity).  When the
-            # consumer supplied an external ``body_buffer`` and the
-            # response fits, no allocation happens at all.  When no
-            # external buffer was supplied, geometric grow primes the
-            # small allocator tiers along the way — measured cleaner on
-            # MicroPython than a single tier-N alloc/free cycle per
-            # request (on-device fragmentation tests caught this).
+            # Don't pre-allocate the body upfront: _absorb_body_chunk
+            # writes in place when the bytes fit in current capacity,
+            # otherwise rebinds _body to an exact-size replacement.
+            # The caller's body_buffer (when supplied) lets responses
+            # that fit complete with no per-request allocation at all.
             # Any bytes left in the buffer after the header CRLF are
             # the start of the body — flush into the body absorber.
             if self._live_len() > 0:
