@@ -1,6 +1,6 @@
 """Periodic action using tick functions directly.
 
-Shows the manual version of what ``Heartbeat`` does internally —
+Shows the manual version of what ``Heartbeat`` does internally:
 running an action every N milliseconds using ``ticks_ms`` and
 ``ticks_diff``.  This is the simplest tick-based timing loop and
 a good starting point before reaching for ``Heartbeat``.

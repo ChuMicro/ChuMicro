@@ -1,7 +1,7 @@
 """Button debounce using tick functions directly.
 
 Demonstrates ``ticks_ms`` and ``ticks_diff`` for ignoring rapid state
-changes — the classic debounce pattern.  A raw button signal bounces
+changes.  This is the classic debounce pattern.  A raw button signal bounces
 for a few milliseconds after each press.  The debouncer records the
 timestamp of the last accepted transition and ignores any further
 changes until the quiet period has elapsed.
@@ -79,14 +79,14 @@ while True:
 
     if raw != last_stable:
         if elapsed_since_change >= DEBOUNCE_MS:
-            # Enough quiet time has passed — accept the transition.
+            # Enough quiet time has passed, so accept the transition.
             action = "PRESS" if raw else "RELEASE"
             print(f"  [{elapsed_total:5d} ms] raw={raw!s:<6s}"
                   f"-> {action} accepted")
             last_stable = raw
             last_change_ms = now
         else:
-            # Too soon after the last transition — bounce, ignore.
+            # Too soon after the last transition: bounce, ignore.
             print(f"  [{elapsed_total:5d} ms] raw={raw!s:<6s}"
                   f"   (ignored, {elapsed_since_change} ms "
                   f"< {DEBOUNCE_MS} ms)")

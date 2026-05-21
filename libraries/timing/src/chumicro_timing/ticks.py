@@ -7,14 +7,6 @@ with a fixed wrap period of 2**29 ms (~6.2 days).
 
 The 2**29 period keeps add/subtract results below 2**30, avoiding
 heap-allocated long integers on boards without big-int support.
-
-Design note
------------
-The wraparound-safe tick contract and the 2**29 period originate from
-MicroPython's ``time`` module and are also used by Adafruit's
-``adafruit_ticks`` library (MIT-licensed).  This module is an
-independent implementation written from the mathematical specification
-of modular/ring arithmetic for tick counters.
 """
 
 import time
@@ -28,8 +20,7 @@ except ImportError:
 
 # const() on a public name keeps both wins on MicroPython: the use
 # sites get inlined as compile-time literals, AND the name remains
-# importable from this module (which testing.py relies on for the
-# cross-runtime test runs).  Only the leading-underscore form
+# importable from this module.  Only the leading-underscore form
 # additionally strips the module-level binding.
 TICKS_PERIOD = const(1 << 29)
 TICKS_MAX = const(TICKS_PERIOD - 1)
