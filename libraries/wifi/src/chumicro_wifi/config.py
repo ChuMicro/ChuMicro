@@ -29,8 +29,8 @@ class WifiConfig:
             unlimited.
         power_save: Whether to leave the radio's power-save mode
             enabled.  ``False`` (default) disables power-save on
-            backends that support it (Pi Pico W CYW43); ignored
-            on backends that don't expose the knob.
+            backends that support it (Pi Pico W CYW43), and is
+            ignored on backends that don't expose the knob.
     """
 
     #: Optional flat keys read by ``from_config`` / ``try_from_config``,

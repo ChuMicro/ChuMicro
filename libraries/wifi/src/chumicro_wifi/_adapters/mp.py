@@ -23,10 +23,8 @@ CircuitPython, including unix-port host builds), falling back to
 Anything outside the whitelist (today's ESP boards + future
 unknowns) falls through to ``"espidf"``, where the ESP-side knob
 has its own try/except guard so it no-ops cleanly on chips that
-don't expose it.  This shape avoids the prior "if not ESP, assume
-CYW43" inference — new CYW43-bearing boards extend
-:data:`CYW43_MACHINES` rather than relying on an exception path to
-do the right thing.
+don't expose it.  New CYW43-bearing boards extend
+:data:`CYW43_MACHINES` rather than relying on the exception path.
 
 Tests inject the stack explicitly via ``stack="espidf"`` /
 ``stack="cyw43"`` to exercise both branches on CPython.
@@ -50,12 +48,12 @@ except ImportError:
     def const(value):
         return value
 
-#: Magic value disabling CYW43 idle power-save mode.  From CYW43
-#: vendor docs + community measurements; the adapter applies it
-#: when ``WifiConfig.power_save`` is ``False`` (the default).
-#: Wrapped in ``const(...)`` so MicroPython inlines the literal at
-#: the use site at compile time.  Public name (no leading underscore)
-#: so cross-runtime tests + on-device tests can keep importing it.
+#: Magic value disabling CYW43 idle power-save mode.  Applied by
+#: the adapter when ``WifiConfig.power_save`` is ``False`` (the
+#: default).  Wrapped in ``const(...)`` so MicroPython inlines
+#: the literal at the use site at compile time.  Public name
+#: (no leading underscore) so cross-runtime tests and on-device
+#: tests can import it.
 CYW43_PM_DISABLE = const(0xA11140)
 
 #: Known CYW43-based MicroPython board identifiers.
