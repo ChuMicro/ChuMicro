@@ -118,11 +118,10 @@ def test_run_module_duration_excludes_gc_collect_time(
 ) -> None:
     """Per-test duration must exclude time spent in ``gc.collect``.
 
-    Regression: on ESP32-S2 with PSRAM a single ``gc.collect`` can
-    cost hundreds of ms.  The harness used to run the pre- and
-    post-test collects *inside* the timed region, inflating a 50 ms
-    test to well over a second.  The duration now brackets only
-    ``function()``.
+    Stubs ``gc.collect`` to advance the fake clock by 500 ms per call
+    and runs a 50 ms test body. The reported duration must stay well
+    under the 550 ms a single bracketing collect would add. The PSRAM
+    boards this matters on can spend hundreds of ms in one collect.
     """
     slow_collect_seconds = 0.5
     fake_time = {"now": 1000.0}
