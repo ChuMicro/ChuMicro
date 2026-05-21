@@ -132,7 +132,7 @@ The pass split also lets work parallelize: dispatch one sub-agent per file (or p
 10. **Execute Pass 2.**  HIGH as one cohesive commit; MEDIUM as separate commits, one per finding (small reversible edits; if one rewrite reads worse on a second look, the rest stand).  Re-run preflight per Pass 1 step 5 if `src/` comments changed.
 11. **Defer code-shape findings throughout.**  If reading the code to write a comment surfaces dead code / a lying name / a method that should split — *do not fix it here*.  File it as a `## Next` entry pointing at `/audit-library <name>` and move on.  Out-of-scope diffs riding along is the leading cause of revert traffic on audit work.
 
-End-of-work for the whole audit (after Pass 2) is `task-checkpoint`'s job — defer to it for preflight, `plans/next-up.md` update, commit, and push.  Commit message mechanics are `git-commit`'s — read it before committing.  Do not re-implement either here.
+After Pass 2, invoke the `task-checkpoint` skill — it owns preflight, `plans/next-up.md` refresh, commit, and push.  Read the `git-commit` skill before committing for the heredoc mechanics.  Don't re-implement either here, and don't stop without invoking `task-checkpoint`.
 
 ## Output format
 
