@@ -48,7 +48,7 @@ class _PurePythonPartial:
         return self.func(*self.args, *args, **combined)
 
     def __repr__(self) -> str:
-        """Return a developer-friendly representation."""
+        """Return a ``functools.partial(...)`` string showing func, args, and keywords."""
         parts = [repr(self.func)]
         parts.extend(repr(arg) for arg in self.args)
         parts.extend(f"{key}={value!r}" for key, value in self.keywords.items())
