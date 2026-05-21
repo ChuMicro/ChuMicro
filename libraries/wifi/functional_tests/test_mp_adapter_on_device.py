@@ -70,7 +70,7 @@ def test_configure_activates_radio_on_real_hardware() -> None:
 
 
 def test_is_linked_reflects_substrate_state_when_disconnected() -> None:
-    """No association → adapter reports False."""
+    """No association means the adapter reports ``False``."""
     _disconnect_quietly()
     adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))

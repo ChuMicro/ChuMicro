@@ -110,7 +110,7 @@ def test_connect_returns_true_when_radio_links() -> None:
 
 
 def test_connect_returns_false_on_oserror() -> None:
-    """``OSError`` from the substrate (timeout / connection refused) → ``False``.
+    """``OSError`` from the substrate (timeout, connection refused) maps to ``False``.
 
     CircuitPython raises both ``TimeoutError`` and
     ``ConnectionError`` on the failure paths the adapter cares
@@ -182,7 +182,7 @@ def test_ip_returns_str_when_linked() -> None:
 
 
 def test_ip_returns_none_if_radio_reports_no_address_even_when_linked() -> None:
-    """Defensive: linked but no address yet (mid-DHCP) → None, not crash."""
+    """Defensive: linked but no address yet (mid-DHCP) returns ``None``, doesn't crash."""
     radio = _FakeRadio(ipv4=None)
     radio.connected = True
     adapter = CpWifiAdapter(radio=radio)

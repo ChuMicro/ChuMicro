@@ -10,9 +10,9 @@ on both wifi stacks the adapter supports:
 The fake mirrors the subset of the WLAN shape the adapter touches:
 ``active(state=None)`` (getter / setter), ``connect(ssid, password)``
 (non-blocking), ``disconnect()``, ``isconnected()``, ``ifconfig()``,
-``config(**kwargs)`` (the substrate's tuning knob — used to disable
-the firmware auto-reconnect supervisor on ESP-IDF, the CYW43 PM-disable
-knob on CYW43, and ``dhcp_hostname`` on both).
+``config(**kwargs)``, which the adapter uses to disable the
+firmware auto-reconnect supervisor on ESP-IDF, set the CYW43
+PM-disable knob on CYW43, and apply ``dhcp_hostname`` on both.
 
 Hardware-side coverage (real WLAN against a real AP) lives under
 ``functional_tests/``.
@@ -187,7 +187,7 @@ def test_configure_skips_dhcp_hostname_when_none_on_espidf() -> None:
 
 
 def test_configure_disables_power_save_by_default_on_cyw43() -> None:
-    """``power_save=False`` (default) ⇒ apply the CYW43 PM-disable magic value."""
+    """``power_save=False`` (default) applies the CYW43 PM-disable magic value."""
     wlan = _FakeWlan()
     adapter = MpWifiAdapter(wlan=wlan, stack="cyw43")
     adapter.configure(WifiConfig(ssid="x", password="y"))
@@ -195,7 +195,7 @@ def test_configure_disables_power_save_by_default_on_cyw43() -> None:
 
 
 def test_configure_leaves_power_save_alone_when_user_opts_in_on_cyw43() -> None:
-    """Explicit ``power_save=True`` ⇒ don't touch the firmware default."""
+    """Explicit ``power_save=True`` leaves the firmware default in place."""
     wlan = _FakeWlan()
     adapter = MpWifiAdapter(wlan=wlan, stack="cyw43")
     adapter.configure(WifiConfig(ssid="x", password="y", power_save=True))

@@ -5,7 +5,7 @@ Library is the sole supervisor on every runtime — no
 class drives the substrate adapter and tracks state in the runner's
 tick loop.
 
-State machine (`state.py` constants)::
+State machine (``WifiState`` constants)::
 
     DISCONNECTED -> CONNECTING -> CONNECTED
                         |            |
@@ -159,8 +159,8 @@ class WifiService:
     def handle(self, now_ms):
         """Drive the state machine forward.
 
-        Idempotent within a tick — if ``check`` returned ``False``
-        and ``handle`` is called anyway, this is a no-op.
+        If ``check`` returned ``False`` and ``handle`` is called
+        anyway, returns without changing state.
         """
         if self.state == WifiState.CONNECTED:
             if not self.adapter.is_linked():

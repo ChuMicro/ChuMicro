@@ -29,7 +29,7 @@ from chumicro_workspace import compose_runtime_config
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _SECRETS_TOML = _REPO_ROOT / "secrets.toml"
-_LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
+_LIBRARY_CONFIG = _HERE / "config.toml"  # optional. absent means workspace defaults only.
 
 
 def _merged_runtime_config() -> dict | None:

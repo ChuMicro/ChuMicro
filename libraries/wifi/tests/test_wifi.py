@@ -254,7 +254,7 @@ def test_adapter_exception_stored_in_last_error() -> None:
     service, ticks, adapter = _service()
     adapter.set_connect_outcome(_BoomError)
     service.handle(ticks.ticks_ms())
-    # Connect raised → state stays CONNECTING, error stored.
+    # Connect raised: state stays CONNECTING, error stored.
     assert isinstance(service.last_error, _BoomError)
     assert service.state == WifiState.CONNECTING
 
@@ -414,9 +414,9 @@ def test_adapter_name_field_reflects_injected_adapter() -> None:
 def test_default_adapter_on_cpython_is_fake() -> None:
     """``_select_adapter`` returns ``FakeWifiAdapter`` on CPython.
 
-    The CP and MP adapters are now real and exercised by the
-    functional suites; this host-side test stays scoped to the
-    CPython fake-adapter path.
+    The CP and MP adapters are exercised by the functional suites.
+    This host-side test stays scoped to the CPython fake-adapter
+    path.
     """
     if not _IS_CPYTHON:
         skip("CP/MP adapter selection is covered by the functional suites")

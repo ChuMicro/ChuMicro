@@ -4,7 +4,7 @@ Adapters wrap the runtime's wifi stack (`wifi.radio` on CP,
 `network.WLAN` on MP).  ``WifiService`` drives them; users never
 touch them directly.
 
-Six methods cover the substrate's lifecycle:
+Six members cover the substrate's lifecycle:
 
 * :meth:`configure` — apply hostname / power-save / static-IP
   settings (called once at construction, before the first connect).
@@ -16,7 +16,7 @@ Six methods cover the substrate's lifecycle:
   an active association.
 * :meth:`ip` — return the assigned IPv4 string, or ``None`` when
   not linked.
-* :meth:`name` — stable identifier for the adapter ("cp",
+* :attr:`name` — stable identifier for the adapter ("cp",
   "mp_esp32", "mp_rp2", "fake").  Read it as ``wifi.adapter.name``
   for logging.
 """
@@ -26,7 +26,7 @@ class WifiAdapter:
     """Concrete adapters inherit and override the six members below.
 
     Class rather than ``Protocol`` because MicroPython has no
-    ``typing`` module — library code cannot import it.
+    ``typing`` module that library code can import.
     """
 
     name = "base"

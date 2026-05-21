@@ -169,7 +169,5 @@ def test_state_callback_observes_transitions() -> None:
     )
     assert ok, "Did not reach CONNECTED"
 
-    # The CONNECTED transition is the canonical signal apps register
-    # for; assert it's in the captured sequence.
     print(f"Captured {len(transitions)} transitions: {transitions}")
     assert (WifiState.CONNECTING, WifiState.CONNECTED) in transitions
