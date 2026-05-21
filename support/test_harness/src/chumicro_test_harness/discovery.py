@@ -1,4 +1,4 @@
-"""Cross-runtime test discovery — worker-side helpers.
+"""Cross-runtime test discovery: worker-side helpers.
 
 Used by :mod:`support.test_harness.run_cross_runtime` (the worker
 entry point) and by :mod:`chumicro_pytest_device.plugin` (the host
@@ -73,7 +73,7 @@ def discover_source_roots(root_dir="."):
     """
     source_roots = []
     for parent in ("libraries", "support"):
-        # String concatenation instead of os.path.join — os.path may not
+        # String concatenation instead of os.path.join: os.path may not
         # exist on CircuitPython (see module docstring).
         parent_dir = root_dir + "/" + parent if root_dir != "." else parent
         for name in _sorted_listdir(parent_dir):
@@ -110,7 +110,7 @@ def _exec_chunked(source, boundaries, namespace):
 
     Splitting a module at top-level statement boundaries and exec'ing
     each piece into the *same* globals dict, in source order, is
-    semantically identical to exec'ing the whole module — name
+    semantically identical to exec'ing the whole module. Name
     resolution goes through the shared dict either way.  What it buys
     is a bounded *compile* transient: MicroPython / CircuitPython
     compile the whole ``exec`` argument at once, and that peak (not the
@@ -119,7 +119,7 @@ def _exec_chunked(source, boundaries, namespace):
     largest single top-level statement.
 
     Each chunk is left-padded with newlines so its statements keep
-    their original line numbers — tracebacks still point at the real
+    their original line numbers. Tracebacks still point at the real
     source line.
 
     Args:
@@ -130,8 +130,8 @@ def _exec_chunked(source, boundaries, namespace):
     """
     lines = source.split("\n")
     # Line 1 anchors the module preamble (docstring / imports before
-    # the first statement); the rest are statement starts.  Built with
-    # plain list ops — MicroPython / CircuitPython lack PEP 448 set
+    # the first statement). The rest are statement starts.  Built with
+    # plain list ops: MicroPython / CircuitPython lack PEP 448 set
     # unpacking, and this module runs on-device.
     candidates = [1]
     for line in boundaries:
@@ -166,7 +166,7 @@ def _exec_as_namespace(file_path, name="__main__", package="", chunk_boundaries=
         chunk_boundaries: Optional 1-based top-level statement start
             lines (computed host-side via ``ast``).  When provided the
             file is exec'd in per-statement chunks to bound the compile
-            transient on RAM-constrained boards; ``None`` keeps the
+            transient on RAM-constrained boards. ``None`` keeps the
             single whole-file ``exec`` (CPython / unix-port, where RAM
             is ample and one compile is faster).
 
@@ -182,7 +182,7 @@ def _exec_as_namespace(file_path, name="__main__", package="", chunk_boundaries=
         _exec_chunked(source, chunk_boundaries, namespace)
     else:
         exec(source, namespace)
-    # Convert dict → attribute object so run_module can use dir()/getattr().
+    # Copy entries into an attribute container so run_module can use dir() and getattr().
     result = _Namespace()
     for key in namespace:
         setattr(result, key, namespace[key])

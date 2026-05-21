@@ -31,7 +31,7 @@ class raises:
 
         Args:
             expected: Exception class to catch.
-            match: Optional regex pattern; the caught exception's
+            match: Optional regex pattern. The caught exception's
                 ``str()`` form must match it via ``re.search``.
         """
         self.expected = expected
@@ -43,7 +43,7 @@ class raises:
         """Pytest-compatible alias for :attr:`exception`.
 
         Tests converted from ``pytest.raises(...) as ctx`` reach for
-        ``ctx.value`` to read the captured exception; expose the same
+        ``ctx.value`` to read the captured exception. Expose the same
         name so the conversion is mechanical.
         """
         return self.exception

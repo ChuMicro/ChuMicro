@@ -2,7 +2,7 @@
 
 Discovers ``test_*`` callables on a module-like object, runs each one,
 and reports per-test timing plus an optional memory summary.  Works on
-CPython, MicroPython, and CircuitPython — including on real boards.
+CPython, MicroPython, and CircuitPython, including on real boards.
 """
 
 import sys
@@ -21,10 +21,11 @@ except ImportError:  # pragma: no cover - gc may be absent on some CPython confi
 	_gc = None
 
 # Cross-runtime monotonic seconds: CPython/CircuitPython expose
-# time.monotonic(); MicroPython only has time.ticks_ms().
+# time.monotonic(). MicroPython only has time.ticks_ms().
 if hasattr(time, "monotonic"):
 	_now_seconds = time.monotonic
-else:  # pragma: no cover — MicroPython fallback; time.monotonic always exists on CPython.
+else:  # pragma: no cover
+	# MicroPython fallback. time.monotonic always exists on CPython.
 	def _now_seconds():
 		"""Return monotonic seconds from MicroPython's ``ticks_ms``."""
 		return time.ticks_ms() / 1000
@@ -41,7 +42,7 @@ _MEM_FREE_AVAILABLE = _has_mem_free()
 def _iter_test_functions(module: object):
 	"""Yield `(qualified_name, callable)` pairs for tests in *module*.
 
-	Discovers two shapes — matching pytest's default collection rules:
+	Discovers two shapes, matching pytest's default collection rules:
 
 	1. Module-level functions whose name starts with ``test_``.
 	2. Methods named ``test_*`` on classes whose name starts with
@@ -80,7 +81,7 @@ def _iter_test_methods_on_class(class_name, test_class):
 		method = getattr(test_class, attr, None)
 		if not callable(method):
 			continue
-		# Fresh instance per test — match pytest semantics.
+		# Fresh instance per test. Match pytest semantics.
 		instance = test_class()
 		yield f"{class_name}.{attr}", getattr(instance, attr)
 
@@ -90,9 +91,9 @@ def _print_exception(exception):
 
 	Three tiers, in priority order:
 
-	1. ``sys.print_exception`` — MicroPython/CircuitPython native hook.
-	2. ``traceback.print_exception`` — CPython standard library fallback.
-	3. Bare class-name + message — always works, no traceback.
+	1. ``sys.print_exception``: MicroPython/CircuitPython native hook.
+	2. ``traceback.print_exception``: CPython standard library fallback.
+	3. Bare class-name + message: always works, no traceback.
 
 	Args:
 		exception: Exception instance to print.
@@ -165,7 +166,7 @@ def run_module(module, name_filter=None):
 		# heaps (ESP32-S2 with PSRAM in particular) a full ``gc.collect``
 		# can take hundreds of ms, which would swamp the runtime of a
 		# sub-100 ms test.  The heap baseline is captured before the
-		# timer starts; the post-test collect happens after the timer
+		# timer starts. The post-test collect happens after the timer
 		# stops.  ``test_delta`` is still an accurate "bytes retained
 		# by this test" measurement because both ``mem_free`` samples
 		# straddle only ``function()`` itself.
@@ -178,7 +179,7 @@ def run_module(module, name_filter=None):
 			function()
 		except _SkipException as skip_error:
 			# Drain heap tracking so the next test's baseline is fresh,
-			# but don't print a heap suffix — a skipped test didn't run
+			# but don't print a heap suffix: a skipped test didn't run
 			# any allocations worth reporting.
 			if gc_tracking:
 				_gc.collect()

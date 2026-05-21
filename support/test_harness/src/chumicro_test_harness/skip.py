@@ -7,7 +7,7 @@ line.  Two runtime contexts call into the same primitive:
 
 * The lightweight runner (``run_module``) used by the cross-runtime
   test path on CPython, MicroPython unix-port, and CircuitPython
-  unix-port — and on real devices via :mod:`chumicro_pytest_device`.
+  unix-port, and on real devices via :mod:`chumicro_pytest_device`.
   The runner catches :data:`_SkipException` and emits
   ``SKIP <name> (<reason>)``.
 
@@ -26,7 +26,7 @@ gets a visible skip in either path, never a fake PASS via bare
 try:
     import pytest as _pytest
 except ImportError:
-    _pytest = None  # MicroPython / CircuitPython unix-ports — no pytest.
+    _pytest = None  # MicroPython / CircuitPython unix-ports: no pytest.
 
 if _pytest is not None:
     #: Pytest's own ``Skipped`` exception, exposed as ``pytest.skip.Exception``
@@ -40,7 +40,7 @@ else:
 
         Caught by :func:`chumicro_test_harness.runner.run_module` so the
         test reports as ``SKIP`` rather than ``PASS`` / ``FAIL``.  Not a
-        public type — tests should call :func:`skip` instead of raising
+        public type. Tests should call :func:`skip` instead of raising
         directly.
         """
 

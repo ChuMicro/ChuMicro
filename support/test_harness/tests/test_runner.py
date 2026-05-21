@@ -155,7 +155,7 @@ def test_run_module_duration_excludes_gc_collect_time(
     match = re.search(r"\((\d+\.\d{3})s", pass_line)
     assert match is not None
     reported_duration = float(match.group(1))
-    # Duration should be ~0.05 s (the test body) — never the ~0.55 s
+    # Duration should be ~0.05 s (the test body), never the ~0.55 s
     # that includes the post-test gc.collect.  Give a generous
     # tolerance to keep the test stable on CI timing jitter.
     assert reported_duration < 0.20, (
@@ -261,7 +261,7 @@ def test_run_module_name_filter_none_runs_all(capsys) -> None:
 
 
 def test_run_module_discovers_class_grouped_tests(capsys) -> None:
-    """``class Test*`` collection mirrors pytest — methods + module-level functions both run."""
+    """``class Test*`` collection mirrors pytest. Methods + module-level functions both run."""
     state = {"calls": []}
 
     class TestExample:
@@ -271,7 +271,7 @@ def test_run_module_discovers_class_grouped_tests(capsys) -> None:
         def test_beta(self) -> None:
             state["calls"].append("TestExample.beta")
 
-        def helper(self) -> None:  # not collected — no test_ prefix
+        def helper(self) -> None:  # not collected: no test_ prefix
             state["calls"].append("helper")
 
     def test_module_level() -> None:
@@ -298,7 +298,7 @@ def test_run_module_discovers_class_grouped_tests(capsys) -> None:
 
 
 def test_run_module_class_test_gets_fresh_instance_per_method(capsys) -> None:
-    """Each test method runs against a fresh instance — no state leak."""
+    """Each test method runs against a fresh instance. No state leak."""
     seen_ids: list[int] = []
 
     class TestIsolation:

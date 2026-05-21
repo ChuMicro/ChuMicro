@@ -204,7 +204,7 @@ def test_exec_chunked_preserves_line_numbers(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# run_one_file — the worker entry point used by the pytest plugin's
+# run_one_file: the worker entry point used by the pytest plugin's
 # UnixPortBackend (spawns one subprocess per test file).
 # ---------------------------------------------------------------------------
 
