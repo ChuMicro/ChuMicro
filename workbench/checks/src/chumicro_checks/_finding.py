@@ -1,4 +1,4 @@
-"""The :class:`Finding` value type — one rule violation."""
+"""The :class:`Finding` value type, one rule violation."""
 
 from __future__ import annotations
 

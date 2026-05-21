@@ -169,7 +169,7 @@ class TestMultiRoot:
             suffixes=(".py",),
         )
         findings = rule.check(tmp_path)
-        # The same file is reachable from both roots; emit only once.
+        # The same file is reachable from both roots. Emit only once.
         assert len(findings) == 1
 
 

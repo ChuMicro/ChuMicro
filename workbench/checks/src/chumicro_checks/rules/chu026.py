@@ -1,10 +1,10 @@
-"""CHU026 — no orphan governance-doc files.
+"""CHU026: no orphan governance-doc files.
 
 A governance document (``AGENTS.notes.md``, ``RULES.md``,
 ``*GUIDELINES*.md``) referenced from ``AGENTS.md`` must also be auto-
 loaded via ``CLAUDE.md``'s ``@``-include chain.  Otherwise the file
 exists on disk and ``AGENTS.md`` directs agents at it, but no agent
-session ever opens it — the second-not-auto-loaded governance file
+session ever opens it. The second-not-auto-loaded governance file
 shape the AGENTS.md self-editing meta-rule forbids.
 
 The rule walks ``CLAUDE.md``'s ``@<path>`` directives transitively to
@@ -19,7 +19,7 @@ concern (a CHU006-class leak).  A reference whose target exists and is
 auto-loaded is fine.  A reference whose target exists but is NOT
 auto-loaded is the orphan shape this rule catches.
 
-Scope: ``CLAUDE.md`` at the repo root.  Absent → silent no-op.
+Scope: ``CLAUDE.md`` at the repo root.  Absent, a silent no-op.
 
 Suppression: ``<!-- noqa: CHU026 -->`` in ``AGENTS.md`` on the line
 that names the governance file, paired with the one-line *why*.
@@ -38,7 +38,7 @@ _RULE_CODE = "CHU026"
 
 _AT_INCLUDE = re.compile(r"^\s*@([A-Za-z0-9_./-]+\.md)\b", re.MULTILINE)
 
-#: Governance-doc filename shapes — closed set of "second governance
+#: Governance-doc filename shapes: closed set of "second governance
 #: file" patterns the no-orphan rule catches.
 _GOVERNANCE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bAGENTS\.notes\.md\b"),
@@ -108,7 +108,7 @@ class CHU026_OrphanGovernanceDoc(Rule):
             for line_number, filename in _governance_refs(text):
                 target = repo_root / filename
                 if not target.is_file():
-                    # Reference to a non-existent file — out of scope
+                    # Reference to a non-existent file, out of scope
                     # (CHU006-class leak, not the orphan shape).
                     continue
                 if filename in reachable_names:

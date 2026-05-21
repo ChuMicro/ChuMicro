@@ -8,13 +8,13 @@ set, and prints findings in the standard
 
 Resolution order (most specific wins):
 
-1. CLI ``--select`` — if given, only those codes run.
-2. CLI ``--ignore`` — codes to skip on top of (1) or the registry default.
-3. ``[tool.chumicro-checks].ignore`` — repo-level default ignore list.
+1. CLI ``--select``: if given, only those codes run.
+2. CLI ``--ignore``: codes to skip on top of (1) or the registry default.
+3. ``[tool.chumicro-checks].ignore``: repo-level default ignore list.
 
 So ``--select CHU006`` runs CHU006 ignoring everything else and
-ignoring config; ``--ignore CHU012`` adds CHU012 to whatever the
-config already skips; running with no flags applies just the
+ignoring config. ``--ignore CHU012`` adds CHU012 to whatever the
+config already skips. Running with no flags applies just the
 config's defaults.
 
 Exit codes::
@@ -116,8 +116,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     repo_root = (args.root or _find_repo_root(Path.cwd())).resolve()
     config = load_config(repo_root)
 
-    # CLI --select overrides config's ignore list entirely;
-    # otherwise CLI --ignore extends the config's ignore.
+    # CLI --select overrides config's ignore list entirely.
+    # Otherwise CLI --ignore extends the config's ignore.
     if cli_select:
         active_codes = cli_select - cli_ignore
     else:

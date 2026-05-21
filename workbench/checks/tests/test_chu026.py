@@ -1,4 +1,4 @@
-"""Tests for CHU026 — orphan governance-doc files."""
+"""Tests for CHU026: orphan governance-doc files."""
 
 from __future__ import annotations
 
@@ -62,8 +62,7 @@ class TestNoFalsePositives:
     def test_reference_to_nonexistent_file_skipped(
         self, tmp_path: Path,
     ) -> None:
-        # File doesn't exist on disk → not the orphan shape this rule
-        # catches (a CHU006-class leak instead).
+        # File doesn't exist on disk, so this is a CHU006-class leak instead of the orphan shape.
         _write(tmp_path, "CLAUDE.md", "@AGENTS.md\n")
         _write(tmp_path, "AGENTS.md", "See RULES.md for ...\n")
         # No RULES.md written.

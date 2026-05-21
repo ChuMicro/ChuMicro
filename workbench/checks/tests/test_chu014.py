@@ -1,4 +1,4 @@
-"""Tests for CHU014 — workspace CLI command-table parity."""
+"""Tests for CHU014: workspace CLI command-table parity."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ class TestParity:
         )
         _stage(tmp_path, f"{_CLI_DIR}/library.py", module)
         _stage(tmp_path, _README, _readme("| **G** | `library list\\|add` |"))
-        # Only `library` is top-level; `list`/`add` must not be
+        # Only `library` is top-level. `list`/`add` must not be
         # treated as hidden commands.
         assert CHU014.check(tmp_path) == []
 
@@ -130,7 +130,7 @@ class TestEscapedPipeParsing:
         )
         # A naive split("|") would split the library cell and read
         # `library`/`install-libraries` as hidden.  Correct parsing
-        # sees both documented → clean.
+        # sees both documented, which is clean.
         assert CHU014.check(tmp_path) == []
 
     def test_documented_extracts_leading_token_only(
@@ -199,7 +199,7 @@ class TestSuppression:
 class TestAgainstRealRepo:
     """The mono-repo's workspace command table must stay parity-clean.
 
-    Guards the regression mechanically — a phantom or hidden command
+    Guards the regression mechanically. A phantom or hidden command
     landing in the real README fails this test, not just review.
     """
 

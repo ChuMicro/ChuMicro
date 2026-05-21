@@ -1,4 +1,4 @@
-"""Tests for CHU013 — mid-tick ticks_ms refetch."""
+"""Tests for CHU013: mid-tick ticks_ms refetch."""
 
 from __future__ import annotations
 

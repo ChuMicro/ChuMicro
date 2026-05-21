@@ -1,4 +1,4 @@
-"""Tests for CHU024 — banned ADR-authoring section markers."""
+"""Tests for CHU024: banned ADR-authoring section markers."""
 
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ class TestExemptScopes:
     def test_anchored_pattern_skips_inline_naming(self, tmp_path: Path) -> None:
         # A line that names the banned heading inside backticks (as the
         # README does when *describing* the rule) doesn't start with
-        # ``## `` — the anchored pattern skips it.
+        # ``## ``. The anchored pattern skips it.
         _stage_decision(
             tmp_path,
             "0042-foo",

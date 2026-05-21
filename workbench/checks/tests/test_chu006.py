@@ -1,4 +1,4 @@
-"""Tests for CHU006 — no mono-repo-internal references in publishable trees."""
+"""Tests for CHU006: no mono-repo-internal references in publishable trees."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ class TestDecisionPattern:
         assert any("Decision/ADR NNNN" in finding.message for finding in findings)
 
     def test_adr_ref_flagged(self, tmp_path: Path) -> None:
-        # The ADR-NNNN shape is the same concept as Decision-NNNN — both
+        # The ADR-NNNN shape is the same concept as Decision-NNNN. Both
         # point a PyPI consumer at plans/decisions/ they don't have.
         body = "# See " + "ADR " + "0030 §1\n"  # noqa: CHU006  fixture string built so CHU006 doesn't self-flag this test source
         _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
@@ -54,8 +54,8 @@ class TestDecisionPattern:
         assert CHU006.check(tmp_path) == []
 
     def test_three_digit_adr_not_matched(self, tmp_path: Path) -> None:
-        # Bare "ADR 30" without leading zero is too lossy a match —
-        # would catch lots of unrelated three-digit prose.
+        # Bare "ADR 30" without leading zero is too lossy a match.
+        # It would catch lots of unrelated three-digit prose.
         _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", "ADR 30 historic\n")
         assert CHU006.check(tmp_path) == []
 
@@ -87,7 +87,7 @@ class TestRunPyPatterns:
         assert any("bare " + "run.py" in finding.message for finding in findings)  # noqa: CHU006  assertion text matches the rule's own message
 
     def test_workspace_package_exempt_from_bare_run_py(self, tmp_path: Path) -> None:
-        # Workspace owns the workspace-shim — its tree is exempt.
+        # Workspace owns the workspace-shim. Its tree is exempt.
         body = "# call " + "run.py to start\n"  # noqa: CHU006  fixture string built so CHU006 doesn't self-flag this test source
         _stage_publishable(tmp_path, "workbench", "workspace", "src/x.py", body)
         findings = CHU006.check(tmp_path)
@@ -95,7 +95,7 @@ class TestRunPyPatterns:
 
     def test_template_user_content_exempt_from_bare_run_py(self, tmp_path: Path) -> None:
         # In a workspace cloned from the template, run.py IS the
-        # legitimate command runner — bare mentions in user content
+        # legitimate command runner. Bare mentions in user content
         # are correct.
         target = tmp_path / "packages" / "foo" / "x.py"
         target.parent.mkdir(parents=True)
@@ -151,7 +151,7 @@ class TestGovernanceFilePattern:
         assert any("governance file" in finding.message for finding in findings)
 
     def test_agents_notes_md_ref_flagged(self, tmp_path: Path) -> None:
-        # The second-governance-file shape — even if no current file
+        # The second-governance-file shape. Even if no current file
         # exists, a publishable-tree pointer to it is a leak.
         body = "# see " + "AGENTS.notes.md" + "\n"  # noqa: CHU006  fixture: rule-pattern data
         _stage_publishable(tmp_path, "libraries", "wifi", "src/x.py", body)
@@ -160,7 +160,7 @@ class TestGovernanceFilePattern:
 
     def test_checks_package_exempt(self, tmp_path: Path) -> None:
         # The chu008 / chu017 rules legitimately enumerate AGENTS.md
-        # as data — the existing chumicro_checks exemption covers them.
+        # as data. The existing chumicro_checks exemption covers them.
         body = "# rule scans " + "AGENTS.md" + "\n"  # noqa: CHU006  fixture: rule-pattern data
         _stage_publishable(tmp_path, "workbench", "checks", "src/x.py", body)
         findings = CHU006.check(tmp_path)
@@ -260,7 +260,7 @@ class TestScopePredicates:
 
     def test_workspace_predicate_uses_segment_match_not_substring(self) -> None:
         # A directory like ``my-workbench/workspace-staging/...`` must
-        # not satisfy the predicate — the segments aren't the literal
+        # not satisfy the predicate. The segments aren't the literal
         # ``workbench`` / ``workspace`` boundary.
         assert _outside_chumicro_workspace(
             Path("my-workbench/workspace-staging/src/x.py")
@@ -282,7 +282,7 @@ class TestScopePredicates:
     def test_predicates_match_at_arbitrary_depth(self) -> None:
         # Absolute path of a real mono-repo checkout: parts begin with
         # the filesystem root, so the segment match has to walk the
-        # whole tuple — anchoring at parts[0] would miss this.
+        # whole tuple. Anchoring at parts[0] would miss this.
         deep = Path("/Users/dev/code/chumicro/workbench/workspace/src/x.py")
         assert _outside_chumicro_workspace(deep) is False
         deep_checks = Path("/Users/dev/code/chumicro/workbench/checks/src/x.py")

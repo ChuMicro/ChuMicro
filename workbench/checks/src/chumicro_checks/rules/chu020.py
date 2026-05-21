@@ -1,4 +1,4 @@
-"""CHU020 — closed AI-tic phrase set in user-facing prose.
+"""CHU020: closed AI-tic phrase set in user-facing prose.
 
 The AGENTS.md "Writing tone" non-negotiable enumerates a small set of
 phrases that drop information without adding any.  The five adjectives
@@ -6,7 +6,7 @@ phrases that drop information without adding any.  The five adjectives
 ``best-in-class``) and three sentence-opener filler phrases (``It is
 worth noting that``, ``It should be noted that``, ``Let's dive into``,
 ``Let's explore``, ``In this section, we will``) recur in agent-
-generated prose; lint catches them where prose lockstep does not.
+generated prose. Lint catches them where prose lockstep does not.
 
 The exemption is paired-delimiter quotation: a phrase that sits between
 matching backticks, single quotes, double quotes, or any one of those
@@ -16,10 +16,10 @@ keeps the rule off the very documentation that names what it bans.
 
 ``Note that`` is intentionally NOT in the matcher.  ``\\bNote that\\b``
 fires on legitimate technical prose (``Note that the API requires a
-trailing slash``); the FP rate makes a noqa-heavy rule that hollows
-itself out.  The AGENTS.md prose rule covers it; lint stays narrow.
+trailing slash``). The FP rate makes a noqa-heavy rule that hollows
+itself out.  The AGENTS.md prose rule covers it. Lint stays narrow.
 
-Scope: ``AGENTS.md``, ``docs/``, and ``plans/decisions/`` — same as
+Scope: ``AGENTS.md``, ``docs/``, and ``plans/decisions/``, same as
 CHU017.  The churny ``plans/next-up`` ledger, workstreams, and library
 READMEs are out of scope (drift-prone journal prose, not contract).
 
@@ -54,7 +54,7 @@ _QUOTE_DELIMS = ("`", "'", '"')
 def _is_paired_quoted(line: str, match_start: int, match_end: int) -> bool:
     """True when the match sits between paired quote / backtick delimiters.
 
-    Counts each delimiter occurring before the match; an odd count means
+    Counts each delimiter occurring before the match. An odd count means
     we're inside an open pair.  Also requires the same delimiter to
     appear again somewhere after the match so we know a close is coming.
     """

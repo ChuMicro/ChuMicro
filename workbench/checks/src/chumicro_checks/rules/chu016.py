@@ -1,10 +1,10 @@
-"""CHU016 — example imports must resolve on every declared runtime.
+"""CHU016: example imports must resolve on every declared runtime.
 
 ``verify_examples`` resolves an example's ``chumicro_*`` imports but
 *skips every platform built-in* for hardware-marked files (they
 can't import on the host).  So an example declaring both
 CircuitPython and MicroPython can ``import board`` (CircuitPython-
-only) at module top level and pass that gate — then crash on
+only) at module top level and pass that gate, then crash on
 MicroPython at first boot.  That is the "flagship example crashes on
 the other runtime" drift class this rule closes for example scripts.
 
@@ -12,15 +12,15 @@ A runtime-exclusive module imported at the **module body level**
 (not nested under a ``sys.implementation`` branch, a ``try``, or a
 function) is a finding when the example's ``__chumicro_runtimes__``
 also declares the runtime that module is absent on.  The repo's
-correct pattern — runtime-specific imports nested under
+correct pattern (runtime-specific imports nested under
 ``if sys.implementation.name == "circuitpython":`` or inside a
-helper function — is module-body-*nested* and therefore never
+helper function) is module-body-*nested* and therefore never
 flagged.
 
 Scope: ``libraries/<pkg>/examples/*.py``.  Acts only on files whose
-``__chumicro_runtimes__`` declares a hardware runtime; single-runtime
+``__chumicro_runtimes__`` declares a hardware runtime. Single-runtime
 examples (a top-level ``import board`` in a CircuitPython-only file)
-are correct and not flagged.  Absent ``libraries/`` → silent no-op.
+are correct and not flagged.  Absent ``libraries/``, a silent no-op.
 
 Suppression: ``# noqa: CHU016`` on the offending import line.
 """
@@ -90,8 +90,8 @@ def _module_root(name: str | None) -> str:
 
 def _top_level_imports(tree: ast.Module) -> list[tuple[str, int]]:
     """``(module_root, lineno)`` for imports that are direct module-body
-    statements — i.e. unconditional, not nested under a runtime guard,
-    ``try``, ``with``, or function."""
+    statements (i.e. unconditional, not nested under a runtime guard,
+    ``try``, ``with``, or function)."""
     imports: list[tuple[str, int]] = []
     for node in tree.body:
         if isinstance(node, ast.Import):

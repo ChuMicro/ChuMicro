@@ -1,4 +1,4 @@
-"""CHU007 — workbench packages must not import library packages.
+"""CHU007: workbench packages must not import library packages.
 
 ``libraries/<name>/`` packages target microcontroller runtimes; their
 CPython compatibility exists for testing and dev, not as a production
@@ -12,7 +12,7 @@ flags ``import chumicro_<libname>`` or ``from chumicro_<libname>``
 where ``<libname>`` matches a package directory under ``libraries/``.
 
 Self-scope: a repo without both a ``workbench/`` and a ``libraries/``
-tree returns no findings — silent no-op.
+tree returns no findings, a silent no-op.
 
 Suppression: ``# noqa: CHU007`` on the import line.
 """

@@ -1,15 +1,15 @@
-"""CHU013 — no mid-tick ``ticks_ms`` refetch in runner-shaped methods.
+"""CHU013: no mid-tick ``ticks_ms`` refetch in runner-shaped methods.
 
 Runner-shaped services receive ``now_ms`` once per tick from the
 runner and must reuse that value across every deadline computed that
-tick.  Calling ``self._ticks.ticks_ms()`` (or the legacy
+tick.  Calling ``self._ticks.ticks_ms()`` (or
 ``self._ticks_ms()``) inside a method that already has ``now_ms`` in
 scope produces a second timestamp microseconds later, breaking the
 "one shared instant per tick" guarantee.
 
 This rule flags any ``.ticks_ms()`` call inside a function that takes
 a ``now_ms`` parameter, unless the call is guarded by an
-``if now_ms is None:`` branch — the codified pattern for helpers
+``if now_ms is None:`` branch. The codified pattern for helpers
 shared between tick-path callers (which pass ``now_ms``) and
 user-entry callers (which don't).
 
@@ -32,7 +32,7 @@ from chumicro_checks._walker import iter_text_files
 _RULE_CODE = "CHU013"
 
 #: Method-call attribute names that count as a tick-fetch.  Matches
-#: ``self._ticks.ticks_ms()`` and the legacy ``self._ticks_ms()`` shape.
+#: ``self._ticks.ticks_ms()`` and the ``self._ticks_ms()`` shape.
 _TICKS_MS_ATTRS: frozenset[str] = frozenset({"ticks_ms", "_ticks_ms"})
 
 
@@ -73,7 +73,7 @@ def _is_ticks_ms_call(node: ast.Call) -> bool:
         return False
     if callee.attr not in _TICKS_MS_ATTRS:
         return False
-    # callee.value is the bit before ``.ticks_ms`` — either ``self``
+    # callee.value is the bit before ``.ticks_ms``: either ``self``
     # (for ``self._ticks_ms()``) or ``self._ticks`` / similar.
     receiver = callee.value
     if isinstance(receiver, ast.Name) and receiver.id == "self":
@@ -97,7 +97,7 @@ def _is_now_ms_is_none_test(test: ast.expr) -> bool:
 
 def _guarded_ticks_ms_calls(func: ast.FunctionDef) -> set[int]:
     """Return line numbers of ``ticks_ms`` calls inside an
-    ``if now_ms is None:`` branch — these are the user-entry fallback
+    ``if now_ms is None:`` branch. These are the user-entry fallback
     and must not be flagged."""
     guarded: set[int] = set()
     for node in ast.walk(func):

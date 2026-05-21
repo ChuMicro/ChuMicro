@@ -1,4 +1,4 @@
-"""Tests for CHU001 — descriptive names."""
+"""Tests for CHU001: descriptive names."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ class TestSilentNoOp:
         assert CHU001.check(tmp_path) == []
 
     def test_no_top_level_dirs(self, tmp_path: Path) -> None:
-        # File outside the scan scope — silent no-op.
+        # File outside the scan scope. The rule emits no findings.
         _stage(tmp_path, "src/foo.py", "x = 1\n")
         assert CHU001.check(tmp_path) == []
 

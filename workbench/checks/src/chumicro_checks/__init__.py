@@ -1,4 +1,4 @@
-"""``chumicro-checks`` — workspace-internal lint rules.
+"""``chumicro-checks``: workspace-internal lint rules.
 
 Public API:
 

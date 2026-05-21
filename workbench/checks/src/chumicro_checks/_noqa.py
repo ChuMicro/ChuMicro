@@ -1,4 +1,4 @@
-"""``noqa`` directive parsing — shared between every rule that supports
+"""``noqa`` directive parsing, shared between every rule that supports
 per-line suppression.
 
 Two suppression syntaxes are recognized:

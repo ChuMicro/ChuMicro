@@ -1,4 +1,4 @@
-"""Tests for CHU017 — coverage-claim honesty."""
+"""Tests for CHU017: coverage-claim honesty."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ class TestExemptions:
 
 class TestSuppression:
     def test_noqa_on_line(self, tmp_path: Path) -> None:
-        # Markdown noqa form is `<!-- noqa: CHU017 -->`; the why is
+        # Markdown noqa form is `<!-- noqa: CHU017 -->`. The why is
         # the surrounding prose (shared _noqa helper anchors on -->).
         _stage(
             tmp_path,
@@ -121,7 +121,7 @@ class TestAgainstRealRepo:
     """The real coverage-contract docs must stay honest.
 
     Critically: the corrected AGENTS.md / ADR-0025 text negates the
-    bad framing and carries the CPython-reachable qualifier — this
+    bad framing and carries the CPython-reachable qualifier. This
     guards that the rule does not regress into flagging the very
     statement of the honest contract.
     """

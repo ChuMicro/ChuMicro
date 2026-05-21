@@ -1,18 +1,18 @@
-"""CHU024 — banned ADR-authoring section markers in ``plans/decisions/``.
+"""CHU024: banned ADR-authoring section markers in ``plans/decisions/``.
 
 The ADR README's "Edit the body in place" rule forbids history banners
 on accepted decision records: ``## Update (YYYY-MM-DD)`` sections,
 ``## Amendments`` / ``## Changelog`` / ``## Progress notes`` sections,
 ``Amended by Decision NNNN`` blockquotes, and "this decision has been
 revised" preambles.  An accepted ADR describes the *current* state of
-the decision; scope changes get an in-place body edit, not a banner.
+the decision. Scope changes get an in-place body edit, not a banner.
 
 The patterns are anchored to line-start (or blockquote-marker) so the
 README and other ADRs that *name* the banned shapes in backtick-quoted
-prose don't self-flag — the rule fires on actual headings and
+prose don't self-flag. The rule fires on actual headings and
 blockquotes, not on the rule's own documentation.
 
-Scope: ``plans/decisions/*.md``.  Absent → silent no-op.
+Scope: ``plans/decisions/*.md``.  Absent, a silent no-op.
 
 Suppression: ``<!-- noqa: CHU024 -->`` on the offending line, paired
 with the one-line *why* AGENTS.md requires.

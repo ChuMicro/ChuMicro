@@ -1,4 +1,4 @@
-"""Tests for CHU011 — plans-doc brevity."""
+"""Tests for CHU011: plans-doc brevity."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ class TestBulletCap:
 
 
 class TestDoneHeadingAbsent:
-    """The ``## Done`` heading is forbidden — recent landings live in git log."""
+    """The ``## Done`` heading is forbidden. Recent landings live in git log."""
 
     def test_no_done_heading_passes(self, tmp_path: Path) -> None:
         _make_repo_with_next_up(tmp_path, """

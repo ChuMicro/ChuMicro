@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
-#: Directory names skipped during recursive walks — build artefacts,
+#: Directory names skipped during recursive walks: build artefacts,
 #: cache directories, vendored deps, IDE / CI scratch.
 EXCLUDED_DIRECTORY_NAMES: frozenset[str] = frozenset({
     "__pycache__",

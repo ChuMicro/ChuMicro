@@ -1,13 +1,13 @@
-"""CHU015 — module-docstring capability claims vs shipped symbols.
+"""CHU015: module-docstring capability claims vs shipped symbols.
 
 A module docstring that calls a capability "future work" / "not yet
 implemented" / "planned" while that capability ships as a public
 symbol in the same module is the drift class this rule catches.  The
 shape: a docstring says feature X is planned, the module exports a
 function or class implementing X.  Either the docstring is stale or
-the symbol is unintentional public surface — both are leaks of stale
+the symbol is unintentional public surface. Both are leaks of stale
 docs to a PyPI consumer reading the shipped source.  Prose lockstep
-doesn't catch it; this rule does.
+doesn't catch it. This rule does.
 
 Mechanism (deterministic, clause-scoped to keep false positives low):
 
@@ -18,8 +18,8 @@ Mechanism (deterministic, clause-scoped to keep false positives low):
   ``coming soon``, ``unimplemented``, ``is a stub``, ``will be
   added/implemented/supported``) is checked for a whole-word,
   case-insensitive match against the module's **public defined
-  symbols** — top-level ``def`` / ``class`` names and public methods
-  of top-level classes.
+  symbols**, meaning top-level ``def`` / ``class`` names and public
+  methods of top-level classes.
 * A match means the docstring disclaims something the module
   actually ships → finding.
 
@@ -29,10 +29,10 @@ does not flag ``from_config`` because the ``;`` ends its clause
 before ``planned``.
 
 Scope: ``libraries/<pkg>/src/`` only.  Tests, examples, workbench,
-and scripts are out of scope.  Absent ``libraries/`` → silent no-op.
+and scripts are out of scope.  Absent ``libraries/``, a silent no-op.
 
 Suppression: ``# noqa: CHU015`` on the offending docstring line (for
-the legitimately-exceptional case — e.g. a same-named symbol that is
+the legitimately-exceptional case, e.g. a same-named symbol that is
 genuinely an unrelated stub).
 """
 
@@ -50,7 +50,7 @@ from chumicro_checks._walker import iter_text_files
 _RULE_CODE = "CHU015"
 
 #: Phrases that disclaim a capability as not-shipped.  Kept
-#: high-signal — ``not supported`` alone is excluded because it is
+#: high-signal. ``not supported`` alone is excluded because it is
 #: overloaded with legitimate per-runtime platform caveats.
 _NOT_YET = re.compile(
     r"future work"

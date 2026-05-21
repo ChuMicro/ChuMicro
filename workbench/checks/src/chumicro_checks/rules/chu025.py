@@ -1,22 +1,22 @@
-"""CHU025 — ``Superseded by:`` pointer integrity.
+"""CHU025: ``Superseded by:`` pointer integrity.
 
 CHU019 already enforces that an ADR's status, filename marker, and
 ``Superseded by:`` line agree.  This rule fills the remaining gaps:
 
 - A ``Superseded by: [Decision NNNN]`` line whose cited NNNN has no
-  matching file in ``plans/decisions/`` (a dangling pointer — the
+  matching file in ``plans/decisions/`` (a dangling pointer: the
   target was renamed or removed without fixing the inbound link).
 - A filename ``NNNN-SUPERSEDED-BY-MMMM-<slug>.md`` whose target MMMM
   has no matching file (same shape via the filename marker).
 - An ADR with ``Status: accepted`` that also carries a ``Superseded by:``
-  line — a half-finished supersession edit; either the status should
+  line, a half-finished supersession edit. Either the status should
   flip or the field should not be there.
 
 The check is glob-based existence ("is there any file whose stem starts
 with ``MMMM-``?"), which works under the dead-record filename
 convention without coupling to slug knowledge.
 
-Scope: ``plans/decisions/*.md``.  Absent → silent no-op.
+Scope: ``plans/decisions/*.md``.  Absent, a silent no-op.
 
 Suppression: ``<!-- noqa: CHU025 -->`` anywhere in the offending file.
 """

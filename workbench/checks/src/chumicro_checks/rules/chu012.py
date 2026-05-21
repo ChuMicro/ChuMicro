@@ -1,9 +1,9 @@
-"""CHU012 — no dated narration or workstream-phase pointers in code.
+"""CHU012: no dated narration or workstream-phase pointers in code.
 
 Code comments document the *why* of current code, nothing else.
 Dated incidents, removed-code framing, and workstream-phase pointers
-belong in the commit message, the ADR body, or the workstream file —
-all reachable via ``git log`` and ``plans/``.
+belong in the commit message, the ADR body, or the workstream file.
+All reachable via ``git log`` and ``plans/``.
 
 The walker covers every ``.py`` and ``.md`` file under ``libraries/``,
 ``workbench/``, ``support/``, and ``scripts/``.  ``plans/`` is
@@ -11,7 +11,7 @@ journal-shaped by intent and excluded.
 
 Self-scope: the rule walks paths under the repo root.  In a tree
 without any of those top-level directories (a downstream user
-workspace), it returns no findings — silent no-op.
+workspace), it returns no findings, a silent no-op.
 """
 
 from __future__ import annotations
@@ -54,20 +54,20 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "workstream-phase pointer — move to commit message or workstream file",
     ),
     (
-        # Slice N — workstream-only jargon in this codebase (no
+        # Slice N: workstream-only jargon in this codebase (no
         # procedural meaning), so match every numbered occurrence.
         re.compile(r"\bSlice\s+\d+[a-z]?\b"),
         "workstream-phase pointer — move to commit message or workstream file",
     ),
     (
-        # Phase|Step N when NOT followed by a colon — procedural
+        # Phase|Step N when NOT followed by a colon. Procedural
         # numbered steps ("# Step 1: put the board in bootloader mode")
         # use the colon and stay clean.
         re.compile(r"\b(?:Phase|Step)\s+\d+[a-z]?\b(?!\s*:)"),
         "workstream-phase pointer — move to commit message or workstream file",
     ),
     (
-        # Item N — multi-item workstream shape; no procedural usage
+        # Item N: multi-item workstream shape. No procedural usage
         # exists in this codebase.
         re.compile(r"\bItem\s+\d+[a-z]?\b"),
         "workstream-phase pointer — move to commit message or workstream file",
@@ -108,23 +108,23 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "removed-code framing — move to commit message or workstream file",
     ),
     (
-        # "X retained only until Y lands|landed" — roadmap framing
+        # "X retained only until Y lands|landed": roadmap framing
         # for a thing kept around pending future work.
         re.compile(r"\bretained (?:only )?until\b[^\n]{0,80}\b(?:lands?|landed)\b"),
         "dateless landed-history framing — move to commit message or workstream file",
     ),
     (
-        # "before X landed" — past-tense framing of a prior incident.
+        # "before X landed": past-tense framing of a prior incident.
         re.compile(r"\bbefore [^\n]{1,80}\blanded\b"),
         "dateless landed-history framing — move to commit message or workstream file",
     ),
     (
-        # "deferred until ..." — future-work / roadmap framing.
+        # "deferred until ...": future-work / roadmap framing.
         re.compile(r"\bdeferred until\b"),
         "deferred-work framing — move to commit message or workstream file",
     ),
     (
-        # "until we have a|an X" — roadmap framing for a future capability.
+        # "until we have a|an X": roadmap framing for a future capability.
         re.compile(r"\buntil we have (?:a|an)\b"),
         "deferred-work framing — move to commit message or workstream file",
     ),

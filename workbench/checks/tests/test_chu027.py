@@ -1,4 +1,4 @@
-"""Tests for CHU027 — cross-site duplicate comment / docstring blocks."""
+"""Tests for CHU027: cross-site duplicate comment / docstring blocks."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 from chumicro_checks.rules.chu027 import CHU027
 
-#: A 12-token block — long enough to trigger the rule's min-token floor.
+#: A 12-token block, long enough to clear the min-token floor.
 _LONG_BLOCK = (
     "# This helper coordinates timing of repeated transitions across\n"
     "# multiple device adapters and emits a single normalized event\n"
@@ -79,7 +79,7 @@ class TestSuppression:
     def test_noqa_on_block_line_suppresses(self, tmp_path: Path) -> None:
         suppressed = "# noqa: CHU027 reason\n" + _LONG_BLOCK + "value = 1\n"
         # First line carries noqa: when blocks are extracted, the line of
-        # the block is the line of the first '#' — the noqa line counts.
+        # the block is the line of the first '#'. The noqa line counts.
         _stage_lib(tmp_path, "foo", "x.py", suppressed)
         _stage_lib(tmp_path, "bar", "x.py", _LONG_BLOCK + "value = 2\n")
         # Only the bar finding remains.
@@ -110,7 +110,7 @@ class TestSuppression:
         _stage_lib(tmp_path, "foo", "x.py", body_foo)
         _stage_lib(tmp_path, "bar", "x.py", body_bar)
         findings = CHU027.check(tmp_path)
-        # foo is suppressed; only bar's finding remains.
+        # foo is suppressed, so only bar's finding remains.
         assert len(findings) == 1
         assert "bar" in str(findings[0].path)
 
@@ -124,7 +124,7 @@ class TestPackageBoundaries:
         (harness / "a.py").write_text(_LONG_BLOCK + "value = 1\n", encoding="utf-8")
         _stage_lib(tmp_path, "foo", "x.py", _LONG_BLOCK + "value = 2\n")
         findings = CHU027.check(tmp_path)
-        # Two packages (libraries/foo, support/test_harness) -> flagged.
+        # Two packages (libraries/foo, support/test_harness) trigger the duplicate.
         assert len(findings) == 2
 
 
