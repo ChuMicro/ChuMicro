@@ -60,13 +60,7 @@ def _is_eagain(error):
 
 
 class WhenOversized:
-    """Policy for response bodies exceeding ``max_body_bytes``.
-
-    Mirrors :class:`chumicro_mqtt.WhenOversized` — the third user is
-    when we factor a shared one out of ``chumicro_compat``.  Until
-    then, copy-don't-couple keeps each library's policy enum local
-    to its concerns.
-    """
+    """Policy for response bodies exceeding ``max_body_bytes``."""
 
     #: Drop the body silently.  The request finishes as ``done`` with
     #: an empty body and the headers intact — useful when callers only
@@ -85,10 +79,7 @@ class WhenOversized:
 def _encode_body(body, json_body):
     """Convert *body* / *json_body* into ``bytes`` (or ``None``).
 
-    Mirrors `HttpClient._start_request`'s contract: at most one of
-    *body* / *json_body* is non-None (caller already validated).
-    Pulled out so the redirect-replay path can re-encode without
-    repeating the type-check ladder.
+    At most one of *body* / *json_body* is non-None (caller validates).
     """
     if json_body is not None:
         return json.dumps(json_body).encode("utf-8")
@@ -108,9 +99,8 @@ def _merge_default_header(user_headers, name, value):
 
     *user_headers* may be ``None``, a ``dict``, a
     :class:`CaseInsensitiveDict`, or an iterable of ``(name, value)``
-    pairs.  Used by :meth:`HttpClient.post` to default
-    ``Content-Type: application/json`` when the caller passed
-    ``json=...`` without setting Content-Type explicitly.
+    pairs.  Lets a default like ``Content-Type: application/json``
+    apply only when the caller hasn't supplied that header.
     """
     merged = CaseInsensitiveDict()
     merged[name] = value
@@ -130,8 +120,7 @@ def _merge_default_header(user_headers, name, value):
 def _force_non_blocking(socket):
     """Best-effort ``setblocking(False)`` on a chumicro-sockets socket.
 
-    Mirrors :func:`chumicro_mqtt.client._force_non_blocking` — the
-    tick-based RX path expects ``recv_into`` to raise EAGAIN when
+    The tick-based RX path expects ``recv_into`` to raise EAGAIN when
     no data is available, never to block.  MicroPython's stdlib
     socket starts in blocking mode and chumicro_sockets' MP adapter
     doesn't override that, so we enforce here.
@@ -166,7 +155,7 @@ class Response:
         oversized_dropped: ``True`` when the body was dropped per
             ``when_oversized`` policy (``False`` for normal responses).
 
-    Body decoding (slice 3b):
+    Body decoding:
 
     * :attr:`encoding` — charset sniffed from ``Content-Type``,
       defaulting to ``"utf-8"``.  Settable so callers can override
@@ -341,12 +330,14 @@ class HttpClient:
         Reads the ``[tool.chumicro.config]`` keys — all optional with
         sensible defaults:
 
-        * ``requests.default_timeout_ms`` →
+        * ``requests.default_timeout_ms`` defaults to
           :data:`DEFAULT_TIMEOUT_MS` (10 000 ms).
-        * ``requests.default_max_redirects`` →
+        * ``requests.default_max_redirects`` defaults to
           :data:`DEFAULT_MAX_REDIRECTS` (5).
-        * ``requests.user_agent`` → built-in ``"chumicro-requests/0.1"``.
-        * ``requests.max_body_bytes`` → :data:`DEFAULT_MAX_BODY_BYTES`.
+        * ``requests.user_agent`` defaults to the built-in
+          ``"chumicro-requests/0.1"``.
+        * ``requests.max_body_bytes`` defaults to
+          :data:`DEFAULT_MAX_BODY_BYTES`.
 
         No key is required; empty ``config`` is valid input.  When
         *connection_factory* is supplied, the caller owns the
@@ -423,8 +414,7 @@ class HttpClient:
             recv_budget_per_tick: Soft cap on bytes drained from the
                 socket in a single :meth:`handle` call.  Default 1024.
                 Bounds tick latency so concurrent runner tasks (LED
-                blink, control loop) keep getting CPU time.  Mirrors
-                :data:`chumicro_mqtt.MQTTClient` default.
+                blink, control loop) keep getting CPU time.
             max_body_bytes: Cap on a single response body.  Default
                 64 KB — minimum supported board has 256 KB MCU RAM,
                 so 64 KB leaves headroom.
@@ -482,9 +472,6 @@ class HttpClient:
         # to fragment small-tier free lists on Lolin S2.  We hold the
         # buffer here and hand it to each parser so per-request body
         # alloc happens only when ``Content-Length > body_buffer_size``.
-        # Live-board MP signal (``test_large_body_no_leak_no_fragmentation
-        # _on_device``) caught the per-request body alloc churn at the
-        # 1024 tier.
         self._body_buffer = bytearray(DEFAULT_BODY_BUFFER_SIZE)
         self._body_buffer_view = memoryview(self._body_buffer)
         self._deadline_ticks = None

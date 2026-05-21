@@ -66,8 +66,7 @@ class _StalledRecvSocket(FakeSocket):
     ``timeout_ms`` budgets.  FakeSocket's default behavior of
     returning 0 on an empty queue is a clean-peer-close signal in
     real socket semantics, which the production client correctly
-    treats as end-of-response.  This subclass is the right fixture
-    for "stalled connection" tests.
+    treats as end-of-response.
     """
 
     def recv_into(self, buffer, nbytes=0):
@@ -180,9 +179,9 @@ class TestHttpClientErrors:
 
     def test_peer_close_completes_unknown_length_body(self):
         socket = FakeSocket()
-        # No Content-Length → length-unknown body.  FakeSocket returns
-        # 0 once the recv queue drains, which mirrors a clean peer
-        # close — the production client calls feed_eof() and the
+        # No Content-Length means a length-unknown body.  FakeSocket
+        # returns 0 once the recv queue drains, which mirrors a clean
+        # peer close; the production client calls feed_eof() and the
         # parser transitions BODY -> DONE.
         socket.enqueue_recv(b"HTTP/1.1 200 OK\r\n\r\nstreamed-bytes")
         client, ticks, _ = make_client(socket_or_factory=socket)

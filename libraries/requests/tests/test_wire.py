@@ -1,11 +1,5 @@
 """Wire-format tests for chumicro_requests — URL / header / encode /
 streaming response parser / redirect resolution.
-
-Mirrors ``chumicro_requests._wire``: ``parse_url``, ``parse_charset``,
-``CaseInsensitiveDict``, ``encode_request``, ``ResponseParser`` (status,
-headers, length-unknown, errors, chunked), ``resolve_redirect_url``.
-``HttpClient``-level behaviour lives in the sibling ``test_client.py``;
-pytest-fixture variants in ``test_requests_pytest.py``.
 """
 
 from chumicro_requests import (
@@ -490,7 +484,7 @@ class TestResponseParserErrors:
 
 
 # ---------------------------------------------------------------------------
-# ResponseParser chunked transfer-encoding — slice 3f
+# ResponseParser chunked transfer-encoding
 # ---------------------------------------------------------------------------
 
 

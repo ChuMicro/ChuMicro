@@ -1,5 +1,4 @@
-"""requests client: response decode, GET, runner contract. Sibling:
-other test_client_*.py; wire-level in test_wire_*.py."""
+"""requests client: response decode, GET, runner contract."""
 
 from chumicro_requests import (
     CaseInsensitiveDict,
@@ -124,7 +123,7 @@ class TestResponseDecode:
 
 
 class TestHttpClientGet:
-    """End-to-end GET against FakeSocket — slice 3a happy path + structure."""
+    """End-to-end GET against FakeSocket — happy path + structure."""
 
     def test_simple_get_returns_response(self):
         socket = FakeSocket()

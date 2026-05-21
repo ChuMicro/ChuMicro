@@ -18,3 +18,4 @@ _(nothing in flight)_
 - [ ] **`_load_fallback_device` — stash sessionstart error.**  [workstreams/load-fallback-device-stash-sessionstart.md](workstreams/load-fallback-device-stash-sessionstart.md)
 - [ ] **Deploy walker fails on unresolved imports.**  [workstreams/walker-unresolved-import-failure.md](workstreams/walker-unresolved-import-failure.md)
 - [ ] **Concurrent-agent commit scrambling — process / skill note.**  [workstreams/concurrent-agent-commit-scrambling.md](workstreams/concurrent-agent-commit-scrambling.md)
+- [ ] **`/audit-library libraries/requests` — dedup test helpers (`make_factory` / `canned_response` / `drive_until_done` / `make_client` repeated near-verbatim across 4 `test_client_*.py` files).**
