@@ -208,13 +208,13 @@ def test_classify_is_case_insensitive() -> None:
 
 
 def test_classify_disk_full_wins_over_circuitpy_drive_wrap() -> None:
-    # The transport's _resolve_circuitpy_drive used to wrap any probe
-    # OSError as "CIRCUITPY drive not found or not writable", even
-    # ENOSPC, which means the drive was found and just full.  After
-    # the disk-state-pattern reorder, a message that mentions both
-    # the legacy CIRCUITPY wrapper and "no space left on device"
-    # should classify as FLASH_COPY_FAILED so the user sees the
-    # free-up-space coaching, not the tap-RESET-to-remount coaching.
+    # The CIRCUITPY-wrap message format is wide: every probe-side
+    # OSError surfaces as "CIRCUITPY drive not found or not writable",
+    # including ENOSPC where the drive was found and only the write
+    # failed.  When the wrap text and a flash-state substring ("no
+    # space left on device") co-exist in one message, the flash-state
+    # signal must win so the user gets free-up-space coaching, not
+    # the tap-RESET-to-remount coaching.
     error = CircuitpythonTransportError(
         "CIRCUITPY drive not found or not writable: /Volumes/CIRCUITPY "
         "(OSError: [Errno 28] No space left on device)"
@@ -853,11 +853,13 @@ def test_macos_fskit_wedged_plan_contains_recovery_command() -> None:
 
 
 def test_stale_mount_eaccess_message_promotes_to_fskit_wedged() -> None:
-    # End-to-end regression for the wild-caught bug: the stale-mount
-    # error carries an inner "Permission denied" that used to win the
-    # classifier race and route to PORT_UNAVAILABLE, which in turn
-    # skipped the FSKit wedge detector.  After the reorder + pattern
-    # additions, the wedged path should promote correctly.
+    # Stale Finder-eject leaves /Volumes/CIRCUITPY as a placeholder
+    # the host can stat but the kernel refuses writes on.  The probe
+    # surfaces this as a CIRCUITPY-wrap message whose inner
+    # "Permission denied" text overlaps _PORT_UNAVAILABLE_PATTERNS.
+    # When the FSKit wedge detector confirms the wedge, classification
+    # must route to the wedged path so the user gets clear-wedge
+    # coaching, not replug coaching.
     from chumicro_deploy.macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND
     fake = _FakeDeployer(
         [
