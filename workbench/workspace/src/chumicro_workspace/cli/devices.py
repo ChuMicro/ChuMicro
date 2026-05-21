@@ -69,7 +69,7 @@ from chumicro_workspace.onboarding import (
     probe_with_runtime_inference,
 )
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from chumicro_deploy import DeviceImplementation
 
 
@@ -126,7 +126,7 @@ def _cmd_devices(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Device-id suggestion helpers (used by add-device and the bootstrap wizard)
+# Device-id suggestion helpers
 # ---------------------------------------------------------------------------
 
 
@@ -141,12 +141,12 @@ def _suggest_device_id(implementation: DeviceImplementation) -> str:
     * ``"LOLIN_S2_MINI with ESP32-S2FN4R2"``    → ``"lolin-s2-mini"``
 
     The strip pattern is ``" with <anything-to-end-of-string>"``
-    rather than ``\\w+$`` — chip variants like ``ESP32S2-S2FN4R2``
+    rather than ``\\w+$``, because chip variants like ``ESP32S2-S2FN4R2``
     contain hyphens and would otherwise survive into the slug as
     ``s2mini-with-esp32s2-s2fn4r2``.
 
     Falls back to ``"board"`` when ``machine`` is empty (older
-    firmware) or sanitises to nothing — neutral default that the
+    firmware) or sanitises to nothing.  Neutral default that the
     user can rename via ``rename --device``.
     """
     machine = implementation.machine or ""
@@ -173,15 +173,16 @@ def _suggest_add_device_id(
     * ``"LOLIN_S2_MINI with ESP32-S2FN4R2"`` + micropython
       → ``"lolin-s2-mini-mp"``
     * Empty machine string → ``"circuitpython-cp"`` (slug-helper
-      fallback; rare — probe returned no machine identifier).
+      fallback, rare, only fires when the probe returned no machine
+      identifier).
 
-    On collision with *existing_ids*, append ``"-2"``, ``"-3"``, …;
-    the user can ``rename --device <old> <new>`` afterwards.
+    On collision with *existing_ids*, append ``"-2"``, ``"-3"``, etc.
+    The user can ``rename --device <old> <new>`` afterwards.
 
     Args:
         implementation: Probe's :class:`DeviceImplementation` (carries
             the ``machine`` string + runtime ``name``).
-        existing_ids: All ids already in ``devices.yml`` — for
+        existing_ids: All ids already in ``devices.yml``, for
             collision resolution.
     """
     base_slug = _suggest_device_id(implementation)
@@ -219,11 +220,12 @@ def _cmd_add_device(
     only one is auto-picked); ``--non-interactive`` requires
     ``--address`` and exits 2 otherwise.  When ``--runtime`` is
     omitted, the runtime is inferred by trying every candidate
-    transport in turn — the user can plug a fresh board in and
+    transport in turn, so the user can plug a fresh board in and
     register it without knowing what firmware it runs.  Re-running
     with the same id triggers a re-probe and is blocked unless
     ``--force`` is passed (the typical second invocation is "I
-    swapped boards on this id" — make the user confirm).  Passing
+    swapped boards on this id", which the user is asked to confirm).
+    Passing
     ``--demo`` chains into the built-in demo deploy after the
     register succeeds.
     """
@@ -259,7 +261,7 @@ def _cmd_add_device(
         probe_device_obj = Device(transport=args.runtime, address=args.address)
         try:
             info = chumicro_deploy.probe_device(probe_device_obj)
-        except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
+        except Exception as exception:  # noqa: BLE001 - onboarding diagnoses every failure
             _emit_probe_failure(
                 "add-device",
                 address=args.address,
@@ -372,8 +374,8 @@ def _cmd_rename(args: argparse.Namespace) -> int:
     ``--device OLD NEW`` rewrites the devices.yml entry id + every
     reference to it under ``defaults:``.
 
-    A project rename does NOT touch already-deployed devices —
-    re-deploy under the new name to ship the project's files to the
+    A project rename does NOT touch already-deployed devices.
+    Re-deploy under the new name to ship the project's files to the
     board.
     """
     workspace = _resolve_workspace(args)
@@ -390,8 +392,8 @@ def _cmd_rename(args: argparse.Namespace) -> int:
         _validate_project_name(old_input)
         _validate_project_name(new_input)
         # Old name accepts bare-name disambiguation against the live
-        # tree (mirrors deploy / switch).  New name is just normalized
-        # — it doesn't exist yet so disambiguation doesn't apply.
+        # tree, matching the deploy / switch shape.  New name is just
+        # normalized.  It doesn't exist yet so disambiguation doesn't apply.
         resolved_old = _resolve_project_name(workspace, old_input)
         resolved_new = new_input.replace(".", "/")
         old_path = workspace.project_dir(resolved_old)
@@ -430,7 +432,7 @@ def _cmd_rename(args: argparse.Namespace) -> int:
 def _cmd_remove_device(args: argparse.Namespace) -> int:
     """Delete a device entry from devices.yml.
 
-    Destructive — drops the user-owned metadata (description,
+    Destructive: drops the user-owned metadata (description,
     deploy_mode, ...) that no probe can regenerate, so it is gated
     behind ``--yes`` exactly like ``reset-board``.  Any ``defaults:``
     reference to the id is nulled so the file stays loadable.
@@ -468,14 +470,14 @@ def _cmd_reset_device(args: argparse.Namespace) -> int:
     """Rebuild a device entry from a fresh probe (full replace).
 
     Where ``add-device --force`` *updates* (keeps the user-owned
-    zone), ``reset-device`` *replaces*: it re-probes the connected
+    zone), ``reset-device`` *replaces*.  It re-probes the connected
     board and rewrites the entry from silicon, dropping accumulated
     user-owned drift (description, deploy_mode, serial_baudrate) and
     re-deriving the hardware-once zone.  The id and any ``defaults:``
     binding survive (the id is the selector).  Gated behind ``--yes``
     because the user-owned drop is unrecoverable.  Re-infers the
-    runtime by default — a reset is exactly when firmware may have
-    been reflashed — unless ``--runtime`` pins it.
+    runtime by default (a reset is exactly when firmware may have
+    been reflashed), unless ``--runtime`` pins it.
     """
     workspace = _resolve_workspace(args)
     if not workspace.devices_yaml.is_file():
@@ -534,7 +536,7 @@ def _cmd_reset_device(args: argparse.Namespace) -> int:
         probe_device_obj = Device(transport=args.runtime, address=address)
         try:
             info = chumicro_deploy.probe_device(probe_device_obj)
-        except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
+        except Exception as exception:  # noqa: BLE001 - onboarding diagnoses every failure
             _emit_probe_failure(
                 "reset-device",
                 address=address,

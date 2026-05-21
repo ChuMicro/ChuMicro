@@ -2,13 +2,13 @@
 
 Two input shapes, both TOML:
 
-* ``secrets.toml`` — workspace-wide credentials + device defaults.
+* ``secrets.toml``: workspace-wide credentials and device defaults.
   Gitignored, materialized on first ``setup`` from the shipped
   template. The whole file is the device config: no ``defaults:``
   wrapper, no other top-level blocks. Keys are nested TOML tables
   (``[wifi] ssid = "x"``). Compose-time flattening produces the
   wire shape the on-device reader consumes.
-* ``projects/<name>/project_config.toml`` — per-project knobs that
+* ``projects/<name>/project_config.toml``: per-project knobs that
   override the workspace defaults at deploy time.
 
 ``workspace.yml`` is the workspace **machinery** file (``library_sources``,
@@ -16,7 +16,7 @@ Two input shapes, both TOML:
 separate concern, read by other modules
 (:mod:`chumicro_workspace.import_graph`,
 :mod:`chumicro_workspace.deploy_targets`).  It never flows onto a
-device; this module doesn't touch it.
+device, and this module doesn't touch it.
 
 Both readers return plain dicts via stdlib ``tomllib`` (CPython 3.11+).
 """

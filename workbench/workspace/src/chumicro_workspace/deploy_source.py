@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 
 from chumicro_workspace.pipeline import build_runtime_config
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from chumicro_deploy import FileSource
 
     from chumicro_workspace.workspace import WorkspaceLayout
@@ -83,8 +83,8 @@ class WithRuntimeConfig:
         project_config: Path to ``projects/<name>/project_config.toml``,
             or ``None`` when no per-project overrides apply (the merged
             config is then just the secrets.toml contents).  When
-            ``None``, *output_path* must be supplied — there is no
-            project file to anchor the ``_generated/`` default to.
+            ``None``, *output_path* must be supplied, because there is
+            no project file to anchor the ``_generated/`` default to.
         output_path: Where to write the msgpack on the host.  Defaults
             to ``project_config.parent / _generated / runtime_config.msgpack``.
         device_path: On-device path for the msgpack.  Defaults to
@@ -101,7 +101,7 @@ class WithRuntimeConfig:
 
     Raises:
         ValueError: If *device_path* is already a key in the inner
-            source's file map — indicates the caller is producing two
+            source's file map.  Indicates the caller is producing two
             different files for the same on-device location, which the
             transport would resolve unpredictably.
     """
@@ -212,14 +212,14 @@ def wrap_with_runtime_config(
     Args:
         inner: The base ``FileSource`` to wrap.
         project_dir: The project (or, for an example, the owning
-            library) directory — only consulted for the
+            library) directory.  Only consulted for the
             *project_config* / *output_path* defaults.
         search_paths: Import-graph search paths.  When given, each
             ``libraries/<name>/`` root among them is read for its
             ``[tool.chumicro.config]`` manifest and the merged config
             is validated before the msgpack is written.
-        workspace: Resolved :class:`WorkspaceLayout` — the
-            *secrets_toml* fallback source.
+        workspace: Resolved :class:`WorkspaceLayout`.  Used as the
+            *secrets_toml* fallback when *secrets_toml* is ``None``.
         secrets_toml: Explicit ``secrets.toml`` path; overrides the
             *workspace* fallback.
         project_config: Explicit per-project config path; overrides
@@ -228,8 +228,8 @@ def wrap_with_runtime_config(
             overrides the ``_generated/`` default.
 
     Raises:
-        ValueError: Neither *secrets_toml* nor *workspace* given —
-            there is no ``secrets.toml`` to resolve.
+        ValueError: Neither *secrets_toml* nor *workspace* given,
+            so there is no ``secrets.toml`` to resolve.
         FileNotFoundError: *project_config* defaulted and no
             recognized config file exists under *project_dir*.
     """

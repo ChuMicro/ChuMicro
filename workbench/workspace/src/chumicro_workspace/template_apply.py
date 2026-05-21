@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from chumicro_workspace.template_zones import Zone, classify
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from collections.abc import Iterable
 
 
@@ -42,7 +42,7 @@ class ApplyAction(StrEnum):
     SKIPPED = "skipped"
     #: Tool-owned, rewritten by `update` because bytes changed.
     REFRESHED = "refreshed"
-    #: `update` write would have produced identical bytes — no-op.
+    #: `update` write would have produced identical bytes (no-op).
     UNCHANGED = "unchanged"
     #: User-owned file written for the first time, seeded from the
     #: shipped template.
@@ -172,7 +172,7 @@ def _git_clone(
     if git_reference is not None:
         arguments.extend(["--branch", git_reference])
     arguments.extend([url, str(target)])
-    completed = subprocess.run(arguments, capture_output=True, check=False, text=True)  # noqa: S603 — args fully controlled
+    completed = subprocess.run(arguments, capture_output=True, check=False, text=True)  # noqa: S603 - args fully controlled
     if completed.returncode != 0:
         raise RuntimeError(
             f"git clone failed: {completed.stderr.strip() or completed.stdout.strip()}",

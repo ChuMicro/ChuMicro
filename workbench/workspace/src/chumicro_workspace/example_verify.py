@@ -1,12 +1,12 @@
 """AST-based example verification.
 
 Verifies that example files (``<package>/examples/*.py``) have valid
-syntax and resolvable imports using static analysis — no execution
-required.
+syntax and resolvable imports using static analysis (no execution
+required).
 
-Hardware examples — files declaring ``__chumicro_runtimes__`` listing
-a non-CPython runtime (CircuitPython or MicroPython) — verify only
-``chumicro_*`` imports; platform built-ins (``board``, ``digitalio``,
+Hardware examples (files declaring ``__chumicro_runtimes__`` listing
+a non-CPython runtime, either CircuitPython or MicroPython) verify only
+``chumicro_*`` imports. Platform built-ins (``board``, ``digitalio``,
 ``machine``, ``wifi``, ``network``) are skipped because they won't
 resolve on the host.  The explicit marker is the contract.  Filename
 conventions (``circuitpython_*.py`` / ``micropython_*.py``) are for
@@ -134,15 +134,15 @@ def verify_examples(
     1. Parse the file.  Syntax errors fail it.
     2. Detect whether it's hardware-only via the
        ``__chumicro_runtimes__`` marker.
-    3. Walk imports — every ``chumicro_*`` import must resolve.
+    3. Walk imports: every ``chumicro_*`` import must resolve.
        Non-``chumicro_`` imports must resolve only on non-hardware files.
        Hardware files skip them so platform built-ins don't fail on the host.
 
     Args:
         package_dirs: Package directories whose ``examples/`` to verify.
         display_root: Path that relative-display paths are computed
-            against.  Defaults to ``Path.cwd()``.  Purely cosmetic — the
-            verifier walks ``package_dirs`` to find files regardless.
+            against.  Defaults to ``Path.cwd()``.  Purely cosmetic, since
+            the verifier walks ``package_dirs`` to find files regardless.
 
     Returns:
         Exit code (0 for success, 1 for failures).

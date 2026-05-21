@@ -25,17 +25,17 @@ from chumicro_workspace.cli._common import (
 def _cmd_install_firmware(args: argparse.Namespace) -> int:
     """Download + flash firmware onto the selected board.
 
-    ``upgrade-firmware`` is registered as an alias of this command —
-    flashing the same URL onto a board that already has firmware *is*
+    ``upgrade-firmware`` is registered as an alias of this command.
+    Flashing the same URL onto a board that already has firmware *is*
     an upgrade, so the implementation does not branch.
 
-    ``--url`` is optional: when omitted, the URL is derived via
-    :func:`chumicro_workspace.derive_firmware_url` from the device
-    entry's ``hardware.firmware_source`` (custom), ``hardware.board_id``
-    (CP S3 listing → latest stable), or ``hardware.machine`` (MP
-    curated map).  Unresolvable cases surface a precise message + exit
-    2 so the user can paste an explicit URL into ``--url`` (or the
-    entry's ``hardware.firmware_source``).
+    ``--url`` is optional.  When omitted, the URL is derived via
+    :func:`chumicro_deploy.firmware_url.derive_firmware_url` from the
+    device entry's ``hardware.firmware_source`` (custom),
+    ``hardware.board_id`` (CP S3 listing → latest stable), or
+    ``hardware.machine`` (MP curated map).  Unresolvable cases surface
+    a precise message and exit 2 so the user can paste an explicit URL
+    into ``--url`` (or the entry's ``hardware.firmware_source``).
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)

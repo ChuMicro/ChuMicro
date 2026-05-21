@@ -31,14 +31,14 @@ def _cmd_test(args: argparse.Namespace) -> int:
     When ``workspace.yml``'s ``quality.coverage_threshold`` is set,
     prepend ``--cov-fail-under=<n>`` so the workspace-level gate
     kicks in.  User passthrough args (after ``--``) win over the
-    workspace default — pytest takes the last occurrence.
+    workspace default, since pytest takes the last occurrence.
     """
     workspace = _resolve_workspace(args)
     quality = load_quality_config(workspace.workspace_yaml)
     quality_flags: list[str] = []
     if quality.coverage_threshold is not None:
         quality_flags.append(f"--cov-fail-under={quality.coverage_threshold}")
-    completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
+    completed = args._env.subprocess_runner(  # noqa: S603 - args fully controlled
         [sys.executable, "-m", "pytest", *quality_flags, *args.pytest_args],
         cwd=workspace.root,
         check=False,
@@ -50,29 +50,28 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     """Run ``ruff check`` plus ``chumicro-checks`` across the workspace.
 
     Picks up the workspace's ``[tool.ruff]`` config from
-    ``pyproject.toml`` automatically — the workspace template ships
+    ``pyproject.toml`` automatically.  The workspace template ships
     a pre-configured ruff block.  Extra args after ``--`` forward to
     ruff (e.g. ``--fix``, ``--select`` overrides).
 
     After ruff, runs ``chumicro-checks`` for the workspace-internal
-    rules ruff can't express.  Each rule self-scopes — silent
-    no-op in repos where its target paths don't exist — so most
-    don't fire in a user workspace; the upstream-derivative-leak
+    rules ruff can't express.  Each rule self-scopes (silent
+    no-op in repos where its target paths don't exist), so most
+    don't fire in a user workspace.  The upstream-derivative-leak
     detector typically does.  ``chumicro-checks`` reads its own
     ``[tool.chumicro-checks]`` config from ``pyproject.toml``.
 
     No-op (exit 0 with a hint) when either ``ruff`` or
-    ``chumicro-checks`` isn't installed — keeps the command
+    ``chumicro-checks`` isn't installed, so the command stays
     discoverable in workspaces that haven't pulled the ``[dev]``
     extra yet.
 
     ``workspace.yml``'s ``quality.lint`` knobs flow through.
-    ``enabled = false`` skips the entire phase; ``tools`` selects
+    ``enabled = false`` skips the entire phase.  ``tools`` selects
     which tools run (default ``["ruff", "chumicro-checks"]``, drop
-    one to disable that tool only); ``select`` prepends a
-    ``--select <comma list>`` flag for ruff (chumicro-checks
-    ignores it — its rule selection is via its own config and
-    CLI flags).
+    one to disable that tool only).  ``select`` prepends a
+    ``--select <comma list>`` flag for ruff.  ``chumicro-checks``
+    ignores it (its rule selection is via its own config and CLI flags).
     """
     workspace = _resolve_workspace(args)
     quality = load_quality_config(workspace.workspace_yaml)
@@ -88,7 +87,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         return 0
     if "ruff" in quality.lint.tools:
         try:
-            import ruff  # noqa: F401, PLC0415  — availability probe
+            import ruff  # noqa: F401, PLC0415 - availability probe
         except ImportError:
             print(
                 "ruff is not installed in this venv.  Install the dev "
@@ -100,7 +99,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         quality_flags: list[str] = []
         if quality.lint.select:
             quality_flags.extend(["--select", ",".join(quality.lint.select)])
-        ruff_completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
+        ruff_completed = args._env.subprocess_runner(  # noqa: S603 - args fully controlled
             [
                 sys.executable, "-m", "ruff", "check",
                 *quality_flags, *args.ruff_args, ".",
@@ -112,7 +111,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
             return ruff_completed.returncode
     if "chumicro-checks" in quality.lint.tools:
         try:
-            import chumicro_checks  # noqa: F401, PLC0415  — availability probe
+            import chumicro_checks  # noqa: F401, PLC0415 - availability probe
         except ImportError:
             print(
                 "chumicro-checks is not installed in this venv.  Install "
@@ -121,7 +120,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
                 "or add it to your workspace's pyproject.toml dev deps.",
             )
             return 0
-        checks_completed = args._env.subprocess_runner(  # noqa: S603 — args fully controlled
+        checks_completed = args._env.subprocess_runner(  # noqa: S603 - args fully controlled
             [sys.executable, "-m", "chumicro_checks", "--root", str(workspace.root)],
             cwd=workspace.root,
             check=False,
@@ -134,17 +133,17 @@ def _cmd_lint(args: argparse.Namespace) -> int:
 def _cmd_preflight(args: argparse.Namespace) -> int:
     """Run lint + tests as a single sanity gate.
 
-    Composition of :func:`_cmd_lint` then :func:`_cmd_test` — same
+    Composition of :func:`_cmd_lint` then :func:`_cmd_test`.  Same
     workspace, same ``quality:`` knobs from ``workspace.yml``
     (``lint.enabled`` / ``lint.select`` / ``coverage_threshold``),
     no extra args forwarded.  Aimed at "all the fast static checks
-    I'd want before pushing" — without CI, this is the gate the
+    I'd want before pushing"; without CI, this is the gate the
     user runs by hand.
 
     Returns nonzero on the first failing step (short-circuit) so
     a lint failure doesn't cost a test run.  Both steps respect
     their disable knobs (``lint.enabled = false`` skips lint
-    silently; no equivalent disable for tests today).
+    silently, no equivalent disable for tests today).
     """
     workspace = _resolve_workspace(args)
     print(f"preflight: {workspace.root}")

@@ -36,7 +36,7 @@ _REAPPLY_TARGETS: tuple[str, ...] = ("workspace.yml", "secrets.toml")
 def additive_reapply(workspace_root: Path) -> dict[str, list[str]]:
     """For each tracked file, append upstream-template keys the user is missing.
 
-    Returns a dict mapping filename → list of appended dotted paths.
+    Returns a dict mapping filename to list of appended dotted paths.
     Files with no drift (or no user file yet) are absent from the
     returned dict.
 
@@ -48,7 +48,7 @@ def additive_reapply(workspace_root: Path) -> dict[str, list[str]]:
         workspace_root: Workspace root containing the user files.
 
     Returns:
-        Dict of ``filename → [dotted-paths-appended]`` for files that
+        Dict of ``filename: [dotted-paths-appended]`` for files that
         actually changed.  Empty dict when nothing drifted.
     """
     appended: dict[str, list[str]] = {}
@@ -70,11 +70,6 @@ def additive_reapply(workspace_root: Path) -> dict[str, list[str]]:
         user_path.write_text(new_text, encoding="utf-8")
         appended[filename] = missing
     return appended
-
-
-# ---------------------------------------------------------------------------
-# TOML — tomlkit
-# ---------------------------------------------------------------------------
 
 
 def _append_missing_toml(
@@ -135,11 +130,6 @@ def _set_nested(
             cursor[segment] = table_factory()
         cursor = cursor[segment]
     cursor[segments[-1]] = value
-
-
-# ---------------------------------------------------------------------------
-# YAML — ruamel.yaml
-# ---------------------------------------------------------------------------
 
 
 def _append_missing_yaml(

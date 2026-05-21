@@ -2,9 +2,9 @@
 
 Workspace lifecycle entry points.  Workspaces are created by cloning
 the template repo directly (no scaffolding command).  ``setup`` runs
-the editable install + template materialization on a freshly cloned
-workspace; ``update`` re-flows tool-owned template files from
-upstream; ``new`` scaffolds individual projects (or library /
+the editable install plus template materialization on a freshly cloned
+workspace.  ``update`` re-flows tool-owned template files from
+upstream.  ``new`` scaffolds individual projects (or library /
 workbench packages) inside an already-set-up workspace.
 """
 
@@ -57,7 +57,7 @@ def _setup_pip_install_editable(
 
     Returns the subprocess return code (``0`` on success, nonzero from pip on
     failure).  Returns ``0`` and prints a skip note when no pyproject.toml is
-    present — a workspace without one is a runtime-only layout that doesn't
+    present.  A workspace without one is a runtime-only layout that doesn't
     declare its own deps.
     """
     pyproject = workspace.root / "pyproject.toml"
@@ -68,7 +68,7 @@ def _setup_pip_install_editable(
         )
         return 0
     print(f"setup: installing {workspace.root} (editable)")
-    completed = subprocess_runner(  # noqa: S603 — args fully controlled
+    completed = subprocess_runner(  # noqa: S603 - args fully controlled
         [sys.executable, "-m", "pip", "install", "-e", str(workspace.root)],
         check=False,
     )
@@ -78,7 +78,7 @@ def _setup_pip_install_editable(
 def _setup_materialize_templates(workspace: WorkspaceLayout) -> None:
     """Land the first-write text for the three workspace-root files.
 
-    ``workspace.yml`` / ``secrets.toml`` / ``devices.yml`` — only files
+    ``workspace.yml`` / ``secrets.toml`` / ``devices.yml``: only files
     that don't already exist are touched.  Print one line per materialized
     file so the user sees what landed.
     """
@@ -162,15 +162,16 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     workspace templates (``devices.yml``, ``workspace.yml``,
     ``secrets.toml``) from the content shipped in
     :mod:`chumicro_workspace.templates` (``devices.yml`` ships from
-    ``chumicro_deploy`` since it owns the schema).  Idempotent —
-    re-running is safe.
+    ``chumicro_deploy`` since it owns the schema).  Re-running is
+    safe: only missing template files are materialized, existing
+    ones are left alone.
 
-    ``setup`` materializes ``workspace.yml`` on a fresh clone; every
-    other command requires it to already exist.  So this is the one
+    ``setup`` materializes ``workspace.yml`` on a fresh clone.  Every
+    other command requires it to already exist, so this is the one
     place that *cannot* use :func:`_resolve_workspace`'s walk-up-
-    and-find-marker discovery — the marker isn't there yet.  Resolve
-    the workspace root directly from ``--workspace-dir`` or ``cwd``;
-    every other command continues to use the marker-based discovery
+    and-find-marker discovery; the marker isn't there yet.  Resolve
+    the workspace root directly from ``--workspace-dir`` or ``cwd``.
+    Every other command continues to use the marker-based discovery
     so they keep working from any subdirectory inside an already-set-up
     workspace.
     """
@@ -186,7 +187,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         return pip_exit_code
 
     _setup_materialize_templates(workspace)
-    # chumicro-dev.toml mode — sync workspace.yml's library_sources:
+    # chumicro-dev.toml mode: sync workspace.yml's library_sources:
     # block so deploy --import-graph resolves `import chumicro_<name>`
     # against the sibling checkout rather than the empty packages/
     # dir.
@@ -225,14 +226,14 @@ def _validate_project_name(name: str) -> None:
     Accepts three shapes: bare (``"bedroom_sensor"``), slash-form
     (``"upstairs/bedroom_sensor"``), and dotted
     (``"upstairs.bedroom_sensor"``).  Each path segment is validated
-    independently — the on-device import path is
+    independently.  The on-device import path is
     ``projects.<seg1>.<seg2>.app`` so every segment must be a valid
     Python identifier (no hyphens, leading digits, leading underscore,
     or Python keywords).
 
     Leading underscore is reserved at every level for
     workspace-internal directories such as ``_template`` /
-    ``_generated``; the recursive project classifier filters those out,
+    ``_generated``.  The recursive project classifier filters those out,
     so a user-created ``_foo/bar`` segment would be invisible to
     ``projects``/``deploy``.
     """
@@ -273,9 +274,9 @@ def _ensure_namespace_parents(
 
     Returns the list of namespace dirs newly created so the caller can
     print a per-command trace line.  Pre-existing namespace dirs are
-    reused silently.  Used by both ``new`` and ``rename`` so a project
-    moved into ``garage/sensors/`` lands with the same host-side
-    namespace marker layout ``new`` would produce.
+    reused silently.  A project moved into ``garage/sensors/`` lands
+    with the same host-side namespace marker layout that ``new`` would
+    produce.
     """
     workspace.projects_dir.mkdir(parents=True, exist_ok=True)
     parent = target.parent
@@ -304,7 +305,7 @@ def _resolve_new_source(
     Without ``--from``, returns ``projects/_template/``.  With
     ``--from <path>``, resolves *path* relative to the workspace
     root and validates that the resulting directory exists and looks
-    like a project — i.e. has at least one of
+    like a project, i.e. has at least one of
     :data:`~chumicro_workspace.workspace.ENTRY_POINT_FILENAMES`.
     An entry-point is the only way to confirm the source is a project
     (vs. a namespace dir or a docs folder).
@@ -320,7 +321,7 @@ def _resolve_new_source(
             )
         return template
     candidate = (workspace.root / from_path).resolve()
-    # Defense against `--from ../../etc/passwd` shenanigans — keep the
+    # Defense against `--from ../../etc/passwd` shenanigans: keep the
     # source under the workspace root.
     try:
         candidate.relative_to(workspace.root.resolve())
@@ -361,8 +362,8 @@ def _cmd_new(args: argparse.Namespace) -> int:
     of ``projects/_template/``.
 
     Library mode (``--library``): creates a chumicro-style library
-    tree under ``libraries/<name>/`` — same scaffolder chumicro
-    libraries themselves use.  ``--into <path>`` overrides the
+    tree under ``libraries/<name>/``, using the same scaffolder
+    chumicro libraries themselves use.  ``--into <path>`` overrides the
     parent directory.
 
     Each path segment is validated against the Python identifier
@@ -431,9 +432,9 @@ def _cmd_new(args: argparse.Namespace) -> int:
 def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
     """Register ``setup`` / ``update`` / ``new`` subparsers.
 
-    Workspace *creation* is intentionally not a CLI command — users
+    Workspace *creation* is intentionally not a CLI command.  Users
     clone the template repo directly (``git clone`` or GitHub "Use
-    this template"); ``update`` is the supported way to re-sync an
+    this template").  ``update`` is the supported way to re-sync an
     existing workspace's tool-owned files with the template.
     """
     setup_parser = subparsers.add_parser(

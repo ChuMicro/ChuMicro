@@ -34,7 +34,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:  # pragma: no cover: type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from chumicro_deploy import Device, DeviceInfo
 
 
@@ -179,18 +179,18 @@ def detect_board_state(
 
     1. Try the probe.  If it returns an implementation marker, the
        board is in :attr:`~BoardState.REPL_REACHABLE`.  No UF2 scan
-       needed — a running firmware can't also be the bootloader for
+       is needed.  A running firmware can't also be the bootloader for
        the same board, and a stray UF2 drive from a different board
        would be a false positive.
     2. On probe failure, scan for a UF2 drive.  If found, the board
        is in :attr:`~BoardState.UF2_BOOTLOADER` (or one of the user's
        *other* boards is, but the user-facing recommendation is the
        same: flash firmware before retrying).
-    3. Otherwise, the probe error string disambiguates: a "could not
+    3. Otherwise, the probe error string disambiguates.  A "could not
        open port" type failure maps to
-       :attr:`~BoardState.SERIAL_UNREACHABLE`; anything else maps to
+       :attr:`~BoardState.SERIAL_UNREACHABLE`.  Anything else maps to
        :attr:`~BoardState.NO_PROBE_RESPONSE` (port opens but the
-       board doesn't speak Python — typically an ESP32 in ROM
+       board doesn't speak Python, typically an ESP32 in ROM
        bootloader).
 
     Args:
