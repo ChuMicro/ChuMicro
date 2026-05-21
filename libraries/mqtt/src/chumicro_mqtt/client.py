@@ -356,9 +356,7 @@ class MQTTClient:
                 See the user guide's "Bring your own transport" table
                 for the per-method contract.  The client takes
                 ownership.  :meth:`disconnect` closes it.  May be
-                ``None`` when *socket_factory* is provided.  The
-                factory fires on :meth:`connect` and self-heal, never
-                from ``__init__``.
+                ``None`` when *socket_factory* is provided.
             socket_factory: Optional zero-arg callable returning an
                 object of the same shape as *socket*.  Used in two
                 paths: (1) when *socket* is ``None``, :meth:`connect`
