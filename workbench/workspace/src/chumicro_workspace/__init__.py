@@ -55,11 +55,7 @@ from chumicro_workspace.workspace import (
     WorkspaceNotFoundError,
 )
 
-#: Narrow front-door surface: symbols sibling packages
-#: (``libraries/*/functional_tests/conftest.py``, ``scripts/*``) reach for
-#: via ``from chumicro_workspace import ...``.  Everything else is a
-#: submodule reach.  ``from chumicro_workspace.deploy_source import
-#: WithRuntimeConfig`` etc. still works.
+#: Re-exported sibling-package surface.
 __all__ = [
     "ProjectClassification",
     "WorkspaceLayout",

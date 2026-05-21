@@ -8,14 +8,10 @@ to a snapshot, not a per-library version.  Library pyprojects carry no
 version constraints, so the closure a library declares in its
 ``pyproject.toml`` is whatever shipped in the same snapshot.
 
-Two channels, one repo each::
-
-    stable        ChuMicro/ChuMicro-Libraries
-    experimental  ChuMicro/ChuMicro-Libraries-Experimental
-
+Two channels, each backed by its own repo (see :data:`CHANNEL_REPOS`).
 Each repo carries one ``<name>/`` directory per library (the same
-``src/ tests/ examples/ docs/`` + metadata shape it has upstream) and a
-root ``index.json`` that doubles as the per-snapshot manifest and the
+``src/ tests/ examples/ docs/`` plus metadata shape it has upstream) and
+a root ``index.json`` that doubles as the per-snapshot manifest and the
 browse catalog: every library's version, one-line description, and
 README path as of that tag.  ``index.json`` on the default branch
 records the latest tag, so resolving "latest" is one GET, not a

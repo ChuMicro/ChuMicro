@@ -122,8 +122,7 @@ def render_curated_child_lines(
 ) -> list[str]:
     """Render the indented YAML lines under ``libraries:``.
 
-    Keys sorted alphabetically so the block is diff-stable across
-    runs; ``declined`` emitted only when true.
+    Keys sorted alphabetically so the block is diff-stable across runs.
     """
     lines: list[str] = []
     for name in sorted(libraries):

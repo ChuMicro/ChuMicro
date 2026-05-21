@@ -150,9 +150,8 @@ def _place_library(
       doesn't want it replaced, even on a transitive re-fetch.  Prints
       a one-line notice so the user knows the channel had a different
       version available.
-    * Otherwise, back up an existing curated copy (edit-preserving —
-      never an implicit clobber), then copy the curated subset into
-      ``libraries/<package>/``.
+    * Otherwise, back up an existing curated copy, then copy the
+      curated subset into ``libraries/<package>/``.
 
     Returns the destination either way.
     """
@@ -243,15 +242,15 @@ def fetch_closure(
 ) -> list[str]:
     """Fetch *root* and every chumicro library reachable from it.
 
-    One ``index.json`` GET + one tarball GET cover the whole closure;
-    see :mod:`chumicro_workspace.library_channel` for why.
+    One ``index.json`` GET plus one tarball GET cover the whole
+    closure.  See :mod:`chumicro_workspace.library_channel` for why.
     Breadth-first from *root* over each placed library's
     ``chumicro-`` deps, via the shared
     :func:`~chumicro_workspace.dep_resolver.transitive_closure`.
-    Returns the closure as import names in BFS order (root first);
+    Returns the closure as import names in BFS order (root first),
     cycle-safe.  Raises :class:`LibraryFetchError` from the first
-    member that fails to extract (already-placed members stay on
-    disk; the caller decides whether to roll back).
+    member that fails to extract.  Already-placed members stay on
+    disk and the caller decides whether to roll back.
     """
     snapshot, tarball = _snapshot_and_tarball(channel, version, http_get)
     from chumicro_workspace.library_channel import extract_library

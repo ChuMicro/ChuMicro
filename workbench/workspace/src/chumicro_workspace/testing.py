@@ -102,8 +102,7 @@ def seed_project(workspace_root: Path, name: str = "back-porch") -> Path:
 class FakePort:
     """Stand-in for ``serial.tools.list_ports_common.ListPortInfo``.
 
-    Two attributes are load-bearing for the workspace CLI's
-    ``list_ports.comports`` callers: ``device`` (the ``/dev/cu.*`` path)
+    Two attributes are load-bearing: ``device`` (the ``/dev/cu.*`` path)
     and ``description`` (the user-facing label).  Everything else the
     real ``ListPortInfo`` carries is unused.
     """

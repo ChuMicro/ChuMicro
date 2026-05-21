@@ -45,13 +45,11 @@ def read_library_sources(workspace_yaml: Path) -> dict[str, Path]:
 
     Returns ``{package_or_root_name: Path}``.  The key is what a
     Python ``import`` statement would spell (e.g. ``chumicro_wifi``
-    or ``my_house_libs``); the value points at a directory whose
-    children are importable under that name.  Typical
-    local-checkout case: ``chumicro_wifi:
-    /home/me/dev/chumicro/libraries/wifi/src``.
+    or ``my_house_libs``), and the value points at a directory whose
+    children are importable under that name.
 
     Returns an empty dict when ``workspace.yml`` has no
-    ``library_sources:`` block — the no-overrides case is normal,
+    ``library_sources:`` block.  The no-overrides case is normal,
     not an error.
 
     Args:
