@@ -1,7 +1,7 @@
 """End-to-end portability test for a standalone non-chumicro template.
 
 Drives the ``tests/fixtures/third_party_template/`` fixture through
-chumicro-deploy's public API only — no ``libraries/``, ``support/``,
+chumicro-deploy's public API only, with no ``libraries/``, ``support/``,
 or ``scripts/`` imports.  Proves the public surface is something
 third parties can actually build on.
 
@@ -25,7 +25,7 @@ from chumicro_deploy import (
     FileSource,
 )
 
-#: Template root — deliberately reached via a relative path under
+#: Template root, deliberately reached via a relative path under
 #: the test file rather than any chumicro discovery helper.  A real
 #: third party would ``pip install`` their template separately.
 _TEMPLATE_ROOT = Path(__file__).parent / "fixtures" / "third_party_template"
@@ -37,7 +37,7 @@ def _import_template(monkeypatch: pytest.MonkeyPatch):
 
     Appends the template root to sys.path for the duration of the
     test.  A real third-party package would be importable after
-    ``pip install .`` from the template directory; this test-only
+    ``pip install .`` from the template directory.  This test-only
     shortcut lets us skip the install step.
     """
     monkeypatch.syspath_prepend(str(_TEMPLATE_ROOT))
@@ -50,7 +50,7 @@ class TestThirdPartyPortability:
         from my_template import CustomLayoutFileSource
 
         source = CustomLayoutFileSource(_TEMPLATE_ROOT)
-        # Duck-typed check — custom class was not declared to inherit
+        # Duck-typed check.  Custom class was not declared to inherit
         # from FileSource.  runtime_checkable Protocol confirms the
         # .files() / .entrypoint() shape is enough.
         assert isinstance(source, FileSource)
@@ -88,7 +88,7 @@ class TestThirdPartyPortability:
         assert result.execute_output == "hello, third-party\n"
         assert result.staged_files == ["/code.py", "/lib/greeter.py"]
 
-        # Inspect what the transport actually received — the custom
+        # Inspect what the transport actually received.  The custom
         # layout's files landed at the correct on-device paths.
         deploy_call = next(
             call for call in fake.calls if call[0] == "deploy_files"
@@ -99,7 +99,7 @@ class TestThirdPartyPortability:
         assert "/lib/greeter.py" in files_arg
 
     def test_public_api_alone_is_sufficient(self, _import_template) -> None:
-        """The fixture touches only chumicro_deploy — never mono-repo paths.
+        """The fixture touches only chumicro_deploy, never mono-repo paths.
 
         Captures the ``sys.modules`` delta caused by importing the
         third-party fixture and asserts no mono-repo namespaces like
@@ -108,12 +108,12 @@ class TestThirdPartyPortability:
         hidden coupling the public API should not require.
 
         Per-package pytest invocations run in isolation, so a global
-        ``sys.modules`` scan would suffice there — but root-level
-        pytest (VS Code Testing panel, bare ``pytest`` from rootdir)
-        shares one session across libraries and workbench, so prior
-        library tests would leave their own ``chumicro_timing``
-        import in ``sys.modules`` and the global scan would
-        false-positive.  The delta scan is correct in both regimes.
+        ``sys.modules`` scan would suffice there.  Root-level pytest
+        (VS Code Testing panel, bare ``pytest`` from rootdir) shares
+        one session across libraries and workbench, so prior library
+        tests would leave their own ``chumicro_timing`` import in
+        ``sys.modules`` and the global scan would false-positive.
+        The delta scan is correct in both regimes.
         """
         baseline_modules = set(sys.modules)
         from my_template import CustomLayoutFileSource  # noqa: F401

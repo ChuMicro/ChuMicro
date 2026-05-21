@@ -63,7 +63,7 @@ def test_detect_returns_false_on_non_darwin() -> None:
 
 
 def test_detect_true_when_diskarbitrationd_in_uninterruptible_wait() -> None:
-    # pgrep returns PID 351; ps reports state "Us" — the smoking-gun
+    # pgrep returns PID 351, ps reports state "Us": the smoking-gun
     # uninterruptible-wait state that indicates the FSKit wedge.
     runner, calls = _scripted_runner(
         [
@@ -79,7 +79,7 @@ def test_detect_true_when_diskarbitrationd_in_uninterruptible_wait() -> None:
 
 
 def test_detect_false_when_diskarbitrationd_healthy() -> None:
-    # Healthy daemon sits in "Ss" (interruptible sleep) — no U in
+    # Healthy daemon sits in "Ss" (interruptible sleep), no U in
     # the state column means no wedge.
     runner, _calls = _scripted_runner(
         [
@@ -91,7 +91,7 @@ def test_detect_false_when_diskarbitrationd_healthy() -> None:
 
 
 def test_detect_false_when_pgrep_finds_no_process() -> None:
-    # pgrep returns non-zero when nothing matches — treat as "no
+    # pgrep returns non-zero when nothing matches, treat as "no
     # wedge to detect" rather than as an error.
     runner, _calls = _scripted_runner(
         [
@@ -115,7 +115,7 @@ def test_detect_false_when_pgrep_stdout_is_empty() -> None:
 
 def test_detect_false_when_pgrep_prints_non_numeric() -> None:
     # Defense against a corrupted shell env where pgrep emits
-    # something weird — never pass it to ps.
+    # something weird.  Never pass it to ps.
     runner, _calls = _scripted_runner(
         [
             _completed(["pgrep", "diskarbitrationd"], 0, "not-a-pid\n"),
@@ -126,7 +126,7 @@ def test_detect_false_when_pgrep_prints_non_numeric() -> None:
 
 def test_detect_false_when_ps_fails() -> None:
     # If the daemon dies between pgrep and ps, ps will exit non-zero.
-    # That's not a wedge — it's just a race.
+    # That's not a wedge, it's just a race.
     runner, _calls = _scripted_runner(
         [
             _completed(["pgrep", "diskarbitrationd"], 0, "351\n"),
@@ -137,14 +137,14 @@ def test_detect_false_when_ps_fails() -> None:
 
 
 def test_detect_false_when_pgrep_missing() -> None:
-    # Truly minimal systems may not have pgrep — fail open.
+    # Truly minimal systems may not have pgrep, so fail open.
     runner, _calls = _scripted_runner([FileNotFoundError("pgrep")])
     assert detect_fskit_wedge(runner=runner, platform="darwin") is False
 
 
 def test_detect_false_when_pgrep_times_out() -> None:
     # A timeout reaching pgrep itself means the system is in such
-    # bad shape that we can't reliably diagnose — don't block retry.
+    # bad shape that we can't reliably diagnose, so don't block retry.
     runner, _calls = _scripted_runner(
         [subprocess.TimeoutExpired(cmd="pgrep", timeout=2.0)],
     )
@@ -175,7 +175,7 @@ def test_detect_true_with_leading_whitespace_state() -> None:
 
 
 def test_recovery_command_mentions_expected_daemons() -> None:
-    # Smoke check — the pasted command is the contract between this
+    # Smoke check.  The pasted command is the contract between this
     # module and the recovery coaching, so catch silent drift.
     assert "sudo killall -9" in MACOS_FSKIT_RECOVERY_COMMAND
     assert "com.apple.fskit.msdos" in MACOS_FSKIT_RECOVERY_COMMAND
@@ -190,7 +190,7 @@ def test_recovery_command_mentions_expected_daemons() -> None:
 def test_doc_recovery_block_matches_constant() -> None:
     # docs/troubleshooting/macos-circuitpy.md hardcodes the recovery
     # command in a `bash` code block.  The constant in this module is
-    # the single source of truth — assert the doc literally contains
+    # the single source of truth, so assert the doc literally contains
     # the string so the two cannot drift.
     from pathlib import Path
 
@@ -201,7 +201,7 @@ def test_doc_recovery_block_matches_constant() -> None:
         / "macos-circuitpy.md"
     )
     if not doc_path.is_file():
-        # Doc tree may be absent in stripped-down install layouts; the
+        # Doc tree may be absent in stripped-down install layouts.  The
         # constant assertion above is the load-bearing check.
         return
     assert MACOS_FSKIT_RECOVERY_COMMAND in doc_path.read_text(encoding="utf-8"), (

@@ -188,14 +188,14 @@ class TestImportGraphSource:
         assert "/lib/pkg/__init__.py" in files
         assert "/lib/pkg/inner.py" in files
         # helpers/__init__.py is not directly imported (only
-        # helpers.greeting is); ImportGraphSource should leave it out.
+        # helpers.greeting is), so ImportGraphSource should leave it out.
         assert "/lib/helpers/__init__.py" not in files
 
     def test_unresolved_modules_are_skipped(self, tmp_path: Path):
         entrypoint, libs = self._scaffold(tmp_path)
         source = ImportGraphSource(entrypoint, search_paths=[libs])
         # sys is a stdlib module, not resolvable against the search
-        # path — ImportGraphSource silently skips it rather than
+        # path.  ImportGraphSource silently skips it rather than
         # raising.
         assert "sys" not in " ".join(source.files())
 
@@ -282,9 +282,9 @@ class TestImportGraphSource:
         assert "/lib/timing/heartbeat.py" in files
         assert "/lib/timing/__init__.py" in files
         # Class-import alias does NOT produce a wrong-case device path.
-        # The check has to be case-strict — on macOS APFS the lookup
-        # ``Heartbeat.py`` succeeds against the real ``heartbeat.py``;
-        # the regression bug staged that path.
+        # The check has to be case-strict.  On macOS APFS the lookup
+        # ``Heartbeat.py`` succeeds against the real ``heartbeat.py``,
+        # and the regression bug staged that path.
         assert "/lib/timing/Heartbeat.py" not in files
 
     def test_syntax_error_in_reachable_module_is_skipped(self, tmp_path: Path):
@@ -299,7 +299,7 @@ class TestImportGraphSource:
         )
         source = ImportGraphSource(entrypoint, search_paths=[libs])
         files = source.files()
-        # broken module still ships as bytes; its imports just don't
+        # broken module still ships as bytes, its imports just don't
         # contribute further walk targets.
         assert "/lib/broken.py" in files
         assert "/lib/ok.py" in files
@@ -348,7 +348,7 @@ class TestImportGraphSource:
 
         ``not_a_module`` is a function/class defined inside
         ``foo/__init__.py``.  The walker probes ``foo.not_a_module``,
-        gets a None from ``_resolve_module``, and silently skips —
+        gets a None from ``_resolve_module``, and silently skips,
         the same path stdlib imports take.
         """
         libs = tmp_path / "libs"
@@ -369,7 +369,7 @@ class TestImportGraphSource:
         assert not any("not_a_module" in path for path in files)
 
     def test_from_import_wildcard_does_not_probe(self, tmp_path: Path):
-        """``from foo import *`` shouldn't probe ``foo.*`` as a name."""
+        """``from foo import *`` should not probe ``foo.*`` as a name."""
         libs = tmp_path / "libs"
         libs.mkdir()
         pkg = libs / "foo"
@@ -378,7 +378,7 @@ class TestImportGraphSource:
         entrypoint = tmp_path / "app.py"
         entrypoint.write_text("from foo import *\n")
 
-        # Just confirms construction doesn't raise on the literal "*".
+        # Just confirms construction does not raise on the literal "*".
         source = ImportGraphSource(entrypoint, search_paths=[libs])
         assert "/lib/foo/__init__.py" in source.files()
 
@@ -392,7 +392,7 @@ class TestImportGraphSource:
         entrypoint = tmp_path / "app.py"
         entrypoint.write_text("import pkg\n")
         source = ImportGraphSource(entrypoint, search_paths=[libs])
-        # pkg/__init__.py uses a relative import (level=1); the walker
+        # pkg/__init__.py uses a relative import (level=1).  The walker
         # must not treat "inner" as a top-level name to resolve.  It
         # still ships pkg/__init__.py itself since pkg was imported
         # from app.py.
@@ -422,7 +422,7 @@ class TestDirectorySourceTargetRuntime:
         )
 
     def test_target_runtime_none_ships_everything(self, tmp_path: Path) -> None:
-        """Default behavior preserved — no filtering."""
+        """Default behavior preserved, no filtering."""
         root = tmp_path / "src"
         root.mkdir()
         self._build_pkg(root)
@@ -468,7 +468,7 @@ class TestDirectorySourceTargetRuntime:
         assert "/chumicro_pkg/_adapters/cpython.py" not in files
 
     def test_non_python_files_unaffected(self, tmp_path: Path) -> None:
-        """Markers only filter ``.py`` files; data files always ship."""
+        """Markers only filter ``.py`` files.  Data files always ship."""
         root = tmp_path / "src"
         root.mkdir()
         (root / "code.py").write_text("# entrypoint\n")
@@ -550,7 +550,7 @@ class TestImportGraphSourceTargetRuntime:
         )
         files = source.files()
         assert "/lib/cp_only.py" not in files
-        # cp_dependency was reachable only via cp_only — also dropped.
+        # cp_dependency was reachable only via cp_only, also dropped.
         assert "/lib/cp_dependency.py" not in files
 
 

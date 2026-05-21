@@ -294,7 +294,7 @@ class TestMicropythonBoardForMachine:
 
 
 # ---------------------------------------------------------------------------
-# MicroPython scrape — list_micropython_builds + latest_micropython_url
+# MicroPython scrape: list_micropython_builds + latest_micropython_url
 # ---------------------------------------------------------------------------
 
 
@@ -312,7 +312,7 @@ def _mp_download_html(
     ``"v1.29.0-preview.69.gSHA"`` and the helper builds the right
     filename (no `unstable-` prefix).  Filenames take the standard
     ``<BOARD>-<DATE>-[unstable-]<VERSION>[-<commit>]?.<ext>`` shape.
-    Extra anchors get included verbatim — useful for testing that
+    Extra anchors get included verbatim, useful for testing that
     unrelated links don't pollute the parse.
     """
     anchors: list[str] = []
@@ -366,7 +366,7 @@ class TestListMicropythonBuilds:
         )
 
     def test_filters_by_file_extension(self) -> None:
-        """ESP32 .bin shouldn't pollute an RP2040 .uf2 lookup."""
+        """ESP32 .bin should not pollute an RP2040 .uf2 lookup."""
         opener = _make_opener(
             _mp_download_html(
                 board="RPI_PICO_W",
@@ -397,7 +397,7 @@ class TestListMicropythonBuilds:
         assert all(build[4].endswith(".bin") for build in builds)
 
     def test_skips_unrelated_anchors(self) -> None:
-        """Other-page links + non-firmware anchors get filtered out."""
+        """Other-page links and non-firmware anchors get filtered out."""
         opener = _make_opener(
             _mp_download_html(
                 board="RPI_PICO_W",
@@ -561,8 +561,8 @@ class TestLatestMicropythonUrl:
         dropped the ``-preview...`` suffix, so the build looked stable
         (no ``unstable-`` prefix, version matched the bare-vN.M.P
         regex) and outranked an older stable release like v1.28.0.
-        Post-fix the parser captures the suffix into a separate group;
-        stable filter rejects builds whose suffix is non-empty.
+        Post-fix the parser captures the suffix into a separate group,
+        and the stable filter rejects builds whose suffix is non-empty.
         """
         opener = _make_opener(
             _mp_download_html(
@@ -570,7 +570,7 @@ class TestLatestMicropythonUrl:
                 builds=[
                     # Older stable
                     ("20260406", "v1.28.0", False, "uf2"),
-                    # Newer-date "stable-looking" preview — must NOT win
+                    # Newer-date "stable-looking" preview, must NOT win
                     ("20260420", "v1.29.0-preview.69.g8a56be6660", False, "uf2"),
                 ],
             ),
@@ -615,7 +615,7 @@ class TestLatestMicropythonUrl:
 
 
 # ---------------------------------------------------------------------------
-# derive_firmware_url — top-level resolver
+# derive_firmware_url: top-level resolver
 # ---------------------------------------------------------------------------
 
 
@@ -626,7 +626,7 @@ class TestDeriveFirmwareUrl:
             "runtime": "circuitpython",
             "hardware": {"firmware_source": "https://my-mirror/custom.uf2"},
         }
-        # No url_opener — must NOT call S3 because firmware_source wins first.
+        # No url_opener: must NOT call S3 because firmware_source wins first.
         assert derive_firmware_url(entry) == "https://my-mirror/custom.uf2"
 
     def test_firmware_source_works_for_unsupported_runtime(self) -> None:
@@ -699,7 +699,7 @@ class TestDeriveFirmwareUrl:
         assert "RPI_PICO_W-20240301-v1.22.2.uf2" in url
 
     def test_micropython_firmware_extension_override(self) -> None:
-        """ESP32 boards need .bin not .uf2 — hardware.firmware_extension override."""
+        """ESP32 boards need .bin not .uf2.  hardware.firmware_extension overrides."""
         entry = {
             "id": "x",
             "runtime": "micropython",

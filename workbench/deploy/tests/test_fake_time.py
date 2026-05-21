@@ -1,4 +1,4 @@
-"""Tests for FakeTime — deterministic seconds-domain time source."""
+"""Tests for FakeTime, the deterministic seconds-domain time source."""
 
 from __future__ import annotations
 

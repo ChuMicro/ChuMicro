@@ -2,16 +2,16 @@
 
 Entrypoint-level ``__chumicro_skip_factories__`` opt-out:
 
-* Family entry (``"sockets_factory"``) — matches every
+* Family entry (``"sockets_factory"``) matches every
   ``chumicro_*.sockets_factory`` discovered under the search paths.
-* Exact entry (``"chumicro_mqtt.sockets_factory"``) — matches one
+* Exact entry (``"chumicro_mqtt.sockets_factory"``) matches one
   module.
-* Typo (no match) — raises ``ValueError`` from
+* Typo (no match) raises ``ValueError`` from
   :class:`ImportGraphSource` construction.
-* Direct-import override — entrypoint explicitly imports a skip target
-  → it ships with a warning.
-* Dead-skip — none of an entry's matched libraries are imported →
-  informational warning, no failure.
+* Direct-import override: entrypoint explicitly imports a skip
+  target, so it ships with a warning.
+* Dead-skip: none of an entry's matched libraries are imported,
+  producing an informational warning, no failure.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class TestReadSkipFactoriesMarker:
         assert read_skip_factories_marker(file) == ("sockets_factory", "tls_factory")
 
     def test_marker_does_not_execute_file(self, tmp_path: Path) -> None:
-        """The reader is AST-only — device-only imports do not crash it."""
+        """The reader is AST-only.  Device-only imports do not crash it."""
         file = tmp_path / "app.py"
         file.write_text(
             '__chumicro_skip_factories__ = ("sockets_factory",)\n'
@@ -80,7 +80,7 @@ class TestReadSkipFactoriesMarker:
         assert read_skip_factories_marker(file) is None
 
     def test_other_top_level_assignments_skipped(self, tmp_path: Path) -> None:
-        """Unrelated top-level assignments don't confuse the reader."""
+        """Unrelated top-level assignments do not confuse the reader."""
         file = tmp_path / "app.py"
         file.write_text(
             "FOO = 1\n"
@@ -156,7 +156,7 @@ class TestDiscoverFactoryModules:
             pkg.mkdir(parents=True)
             (pkg / "sockets_factory.py").write_text("# from " + base.name + "\n")
         discovered = discover_factory_modules([first, second])
-        # Both contribute the same key; this test just confirms no
+        # Both contribute the same key.  This test just confirms no
         # duplicate-key crash and that the dict has the one expected
         # entry.
         assert discovered == {"chumicro_dup.sockets_factory": "sockets_factory"}
@@ -226,7 +226,7 @@ class TestImportGraphSourceSkipFactories:
         - libs/chumicro_mqtt/{__init__,client,sockets_factory}.py
         - libs/chumicro_sockets/__init__.py
         - chumicro_mqtt.client lazily imports chumicro_mqtt.sockets_factory
-          (mirroring the real from_config lazy import — discovered by the walker).
+          (mirroring the real from_config lazy import, discovered by the walker).
         - chumicro_mqtt.sockets_factory imports chumicro_sockets.
         - libs/chumicro_other/sockets_factory.py exists so family-form skips
           have something to validate against.
@@ -285,7 +285,7 @@ class TestImportGraphSourceSkipFactories:
         assert "/lib/chumicro_mqtt/__init__.py" in files
         assert "/lib/chumicro_mqtt/client.py" in files
         assert "/lib/chumicro_mqtt/sockets_factory.py" not in files
-        # chumicro_sockets is only reachable through the factory — falls
+        # chumicro_sockets is only reachable through the factory, falls
         # out of the graph naturally.
         assert "/lib/chumicro_sockets/__init__.py" not in files
 
@@ -314,7 +314,7 @@ class TestImportGraphSourceSkipFactories:
     def test_direct_import_override_keeps_module_and_warns(
         self, tmp_path: Path,
     ) -> None:
-        """User imports a skip target directly → it ships, warning emitted."""
+        """User imports a skip target directly: it ships, warning emitted."""
         root, libs = self._scaffold(tmp_path)
         entrypoint = root / "app.py"
         entrypoint.write_text(
@@ -334,7 +334,7 @@ class TestImportGraphSourceSkipFactories:
         )
 
     def test_dead_skip_emits_info_warning(self, tmp_path: Path) -> None:
-        """Skip entry whose parent library is never imported → info warning."""
+        """Skip entry whose parent library is never imported triggers an info warning."""
         root, libs = self._scaffold(tmp_path)
         entrypoint = root / "app.py"
         entrypoint.write_text(
@@ -348,14 +348,14 @@ class TestImportGraphSourceSkipFactories:
             and "no effect" in warning
             for warning in warnings
         )
-        # The mqtt deploy still works — dead-skip is informational only.
+        # The mqtt deploy still works, dead-skip is informational only.
         files = source.files()
         assert "/lib/chumicro_mqtt/__init__.py" in files
 
     def test_family_skip_is_not_dead_when_one_library_uses_it(
         self, tmp_path: Path,
     ) -> None:
-        """A family entry that matches 2 libs and at least one is used → no warning."""
+        """A family entry that matches 2 libs and at least one is used emits no warning."""
         root, libs = self._scaffold(tmp_path)
         entrypoint = root / "app.py"
         entrypoint.write_text(

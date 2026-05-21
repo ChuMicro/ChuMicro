@@ -1,6 +1,6 @@
 """Tests for ``chumicro_deploy.runtime_marker``.
 
-Decisions 0037 + 0044 — the marker is read via AST (no module
+Decisions 0037 + 0044: the marker is read via AST (no module
 execution), unmarked files match every target (default-safe), and
 sub-runtime markers fold into ``micropython``.
 """
@@ -43,7 +43,7 @@ class TestReadRuntimeMarker:
         )
 
     def test_marker_does_not_execute_file(self, tmp_path: Path) -> None:
-        """AST-only — adapter files import device-only modules, so we don't execute them."""
+        """AST-only.  Adapter files import device-only modules, so we don't execute them."""
         file = tmp_path / "cp.py"
         file.write_text(
             '__chumicro_runtimes__ = ("circuitpython",)\n'
@@ -68,7 +68,7 @@ class TestFileTargetsRuntime:
         assert file_targets_runtime(file, target_runtime=None) is True
 
     def test_unmarked_file_matches_every_target(self, tmp_path: Path) -> None:
-        """Default-safe — unmarked files ship to every target."""
+        """Default-safe: unmarked files ship to every target."""
         file = tmp_path / "shared.py"
         file.write_text("# universal\n")
         for runtime in ("circuitpython", "micropython", "cpython"):
@@ -97,7 +97,7 @@ class TestFileTargetsRuntime:
         assert "cpython" in KNOWN_RUNTIMES
 
     def test_device_runtimes_constant(self) -> None:
-        """``DEVICE_RUNTIMES`` is the source-bundle target — both MCU runtimes."""
+        """``DEVICE_RUNTIMES`` is the source-bundle target.  It covers both MCU runtimes."""
         assert DEVICE_RUNTIMES == frozenset({"circuitpython", "micropython"})
 
     def test_frozenset_target_drops_cpython_only_marker(
@@ -153,7 +153,7 @@ class TestIsTestSupportModule:
         assert is_test_support_module(file) is False
 
     def test_independent_of_runtime_marker(self, tmp_path: Path) -> None:
-        # No runtime marker → universal for runtime filtering, yet
+        # No runtime marker, so universal for runtime filtering, yet
         # still test-support for the deploy/bundle exclusion.
         file = tmp_path / "testing.py"
         file.write_text("__chumicro_test_support__ = True\n")

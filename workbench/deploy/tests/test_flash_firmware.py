@@ -26,7 +26,7 @@ from chumicro_deploy.firmware import (
 
 
 class _FakeUrlResponse:
-    """Minimal urlopen return fake — supports read(chunk), getheader, close."""
+    """Minimal urlopen return fake.  Supports read(chunk), getheader, close."""
 
     def __init__(self, payload: bytes, *, content_length: bool = True) -> None:
         self._stream = io.BytesIO(payload)
@@ -47,7 +47,7 @@ class _FakeUrlResponse:
 
 @dataclass
 class _FakeClock:
-    """Monotonic that advances on demand; sleep advances it."""
+    """Monotonic that advances on demand.  sleep advances it."""
 
     now: float = 0.0
 
@@ -355,14 +355,14 @@ class TestEsptoolPath:
         assert "--port" in runner_calls[0]
         assert "/dev/ttyUSB0" in runner_calls[0]
         assert "write-flash" in runner_calls[0]
-        # Default offset is 0x0; the offset slot is the argv
+        # Default offset is 0x0.  The offset slot is the argv
         # position immediately after ``write-flash``.
         assert runner_calls[0][runner_calls[0].index("write-flash") + 1] == "0x0"
 
     def test_custom_flash_offset_is_passed_to_esptool(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     ) -> None:
-        """MicroPython ESP32 .bin needs 0x1000 — custom offset must round-trip."""
+        """MicroPython ESP32 .bin needs 0x1000.  Custom offset must round-trip."""
         monkeypatch.setattr(
             "shutil.which",
             lambda name: "/fake/esptool" if name == "esptool" else None,
@@ -390,10 +390,10 @@ class TestEsptoolPath:
     ) -> None:
         """Erase and write are separate esptool calls.
 
-        esptool v5 dropped chained sub-commands; each sub-command
+        esptool v5 dropped chained sub-commands.  Each sub-command
         is its own invocation.  The erase call must pass
         ``--after no_reset`` so the chip stays in ROM bootloader
-        for the write call — otherwise esptool's default hard_reset
+        for the write call.  Otherwise esptool's default hard_reset
         strands the (now empty-flash) board until the user holds
         GPIO0 and re-plugs.
         """
@@ -474,7 +474,7 @@ class TestEnterEsp32RomBootloader:
             transport="micropython", address="/dev/cu.usbmodem01",
         )
         # With a bootloader-style address, no transport calls should fire
-        # and no polling is needed — the helper returns the address
+        # and no polling is needed.  The helper returns the address
         # unchanged.
         result = _enter_esp32_rom_bootloader(
             device, interactive=False,
@@ -531,7 +531,7 @@ class TestEnterEsp32RomBootloader:
             transport_factory=lambda _device: fake,
         )
 
-        # Port list never changes — programmatic entry never produces a
+        # Port list never changes, so programmatic entry never produces a
         # new port.
         monkeypatch.setattr(
             "chumicro_deploy.firmware._list_candidate_serial_ports",
@@ -549,7 +549,7 @@ class TestEnterEsp32RomBootloader:
                 monotonic=clock.monotonic,
             )
         # Manual-entry steps + the --non-interactive escape hatch
-        # are part of the message — verify they're present so the
+        # are part of the message.  Verify they're present so the
         # user sees the recovery instructions, not just the symptom.
         message = str(exc_info.value)
         assert "Hold the BOOT button" in message
@@ -636,7 +636,7 @@ class TestFlashFirmwareUf2End2End:
     def test_happy_path_with_explicit_drive(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Integration-style: download → copy → reboot (all faked)."""
+        """Integration-style: download, copy, reboot (all faked)."""
         firmware_path = tmp_path / "fw.uf2"
         firmware_path.write_bytes(b"UF2 MAGIC")
 

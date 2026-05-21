@@ -89,7 +89,7 @@ devices:
 
     def test_missing_devices_key_returns_empty(self, tmp_path) -> None:
         # An absent ``devices:`` key is the same valid empty-registry
-        # state as ``devices: []`` — workspace-template repo + mono-repo
+        # state as ``devices: []``.  Workspace-template repo + mono-repo
         # both ship this shape at clone time and let ``add-device``
         # populate it.  See unification workstream
         # ``scripts-workbench-config-unification.md``.
@@ -163,7 +163,7 @@ devices:
         assert device.serial_baudrate == 115200
         # Flash is the default when no deploy_mode is set.
         assert device.deploy_mode == "flash"
-        # Absent capability ⇒ RAM-capable (back-compatible).
+        # Absent capability means RAM-capable (back-compatible).
         assert device.supports_ram_mode is True
         assert device.description == ""
 
@@ -223,7 +223,7 @@ devices:
         # A fresh-clone ``devices.yml`` ships ``devices: []`` and lets
         # ``chumicro-workspace add-device`` populate it on first
         # registration.  An empty registry must therefore be a valid
-        # state — not an error — so that workspace setup + preflight
+        # state, not an error, so that workspace setup + preflight
         # can run on a fresh clone before any board is registered.
         devices_file = _write_yaml(tmp_path / "devices.yml", """
 defaults:

@@ -71,7 +71,7 @@ class TestFakeTransportExtended:
 
         # Top-level execute_scripts call recorded.
         assert ("execute_scripts", (["chunk-1", "chunk-2", "chunk-3"],)) in fake.calls
-        # Plus three execute calls — counts that exist for tests asserting
+        # Plus three execute calls.  Counts that exist for tests asserting
         # on per-call behavior still work.
         execute_calls = [call for call in fake.calls if call[0] == "execute"]
         assert len(execute_calls) == 3
@@ -116,7 +116,7 @@ class TestFakeTransportExtended:
 
 
 class TestParseProbeOutput:
-    """Tests for parse_probe_output — the on-device probe marker parser."""
+    """Tests for parse_probe_output, the on-device probe marker parser."""
 
     def test_parses_marker_line(self) -> None:
         """A well-formed __CHU_IMPL__ line yields a DeviceImplementation."""
@@ -153,7 +153,7 @@ class TestParseProbeOutput:
         assert parse_probe_output(output) is None
 
     def test_machine_may_contain_pipe_when_last(self) -> None:
-        """Only the first two ``|`` separators are significant — machine keeps its own."""
+        """Only the first two ``|`` separators are significant.  Machine keeps its own."""
         # maxsplit=2 means extra pipes belong to the machine field.
         output = "__CHU_IMPL__:circuitpython|10.1.4|Board | variant\n"
         result = parse_probe_output(output)
@@ -200,8 +200,8 @@ class TestProbeImplementationScript:
         assert "__CHU_IMPL__:" in PROBE_IMPLEMENTATION_SCRIPT
 
     def test_script_does_not_require_staged_files(self) -> None:
-        """No imports beyond ``sys`` — probe must work pre-stage."""
-        # Only ``sys`` is imported; staged modules (``chumicro_test_harness``
+        """No imports beyond ``sys``: probe must work pre-stage."""
+        # Only ``sys`` is imported.  Staged modules (``chumicro_test_harness``
         # etc.) are not referenced.  If this ever changes the probe may
         # run before stage() and fail.
         imported_modules = [
@@ -216,7 +216,7 @@ class TestProbeVersionStringification:
     """Verify the probe stringifies major.minor.micro cleanly.
 
     CircuitPython and MicroPython both ship a 4-tuple from
-    ``sys.implementation.version`` — ``(major, minor, micro, marker)``
+    ``sys.implementation.version``: ``(major, minor, micro, marker)``
     where ``marker`` is ``''`` on a tagged build and ``'preview'`` on a
     pre-release / dev build (see ``py/modsys.c`` in either upstream).
     Naïvely joining every element produced ``"10.2.0."`` (trailing dot)
@@ -274,29 +274,29 @@ class TestProbeVersionStringification:
         )
 
     def test_cp_final_strips_empty_marker(self) -> None:
-        """``(10, 2, 0, '')`` (CP final shape) → ``"10.2.0"``."""
+        """``(10, 2, 0, '')`` (CP final shape) yields ``"10.2.0"``."""
         assert self._run_probe_with_version((10, 2, 0, "")) == "10.2.0"
 
     def test_mp_final_strips_empty_marker(self) -> None:
-        """``(1, 28, 0, '')`` (MP final shape) → ``"1.28.0"``."""
+        """``(1, 28, 0, '')`` (MP final shape) yields ``"1.28.0"``."""
         assert self._run_probe_with_version(
             (1, 28, 0, ""), name="micropython",
         ) == "1.28.0"
 
     def test_prerelease_strips_preview_marker(self) -> None:
-        """``(1, 28, 0, 'preview')`` (CP / MP pre-release) → ``"1.28.0"``.
+        """``(1, 28, 0, 'preview')`` (CP / MP pre-release) yields ``"1.28.0"``.
 
         Both runtimes use the literal ``'preview'`` for builds with
-        ``MICROPY_VERSION_PRERELEASE`` enabled; covers either runtime.
+        ``MICROPY_VERSION_PRERELEASE`` enabled, covering either runtime.
         """
         assert self._run_probe_with_version(
             (1, 28, 0, "preview"), name="micropython",
         ) == "1.28.0"
 
     def test_cpython_five_tuple_takes_first_three_slots(self) -> None:
-        """``(3, 12, 0, 'final', 0)`` (CPython) → ``"3.12.0"``.
+        """``(3, 12, 0, 'final', 0)`` (CPython) yields ``"3.12.0"``.
 
-        The probe is exec'd on host CPython by these tests; the
+        The probe is exec'd on host CPython by these tests.  The
         ``[:3]`` slice keeps only the dotted ints and drops both
         ``releaselevel`` and ``serial``.
         """

@@ -1,4 +1,4 @@
-"""Tests for chumicro_deploy.preflight — `[tool.chumicro].requires_flash` discovery."""
+"""Tests for chumicro_deploy.preflight: `[tool.chumicro].requires_flash` discovery."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def _write_pyproject(
     """Write a minimal pyproject.toml at *directory*.
 
     *requires_flash* ``None`` omits the ``[tool.chumicro]`` block
-    entirely; ``True`` / ``False`` writes the explicit flag.
+    entirely.  ``True`` / ``False`` writes the explicit flag.
     """
     lines = [
         "[project]",
@@ -111,7 +111,7 @@ class TestFindLibrariesRequiringFlash:
         orphan = tmp_path / "orphan_dir"
         orphan.mkdir()
         (orphan / "code.py").write_text("")
-        # No pyproject anywhere — silent skip, no exception.
+        # No pyproject anywhere, silent skip, no exception.
         assert find_libraries_requiring_flash([orphan / "code.py"]) == []
 
     def test_malformed_pyproject_skipped(self, tmp_path: Path):
@@ -126,7 +126,7 @@ class TestFindLibrariesRequiringFlash:
 
     def test_flagged_pyproject_without_project_name_skipped(self, tmp_path: Path):
         """A pyproject with the flag but no [project].name returns nothing
-        (defensive — every real chumicro library has a name).
+        (defensive: every real chumicro library has a name).
         """
         lib = tmp_path / "mylib"
         source_dir = lib / "src" / "mylib"
