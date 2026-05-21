@@ -58,8 +58,8 @@ class TestDecodeVarlen:
         assert consumed == 2
 
     def test_varlen_past_4_bytes_raises_protocol_error(self) -> None:
-        # All 4 bytes set the continuation bit — malformed, not
-        # "incomplete".  Must raise, not return (0, 0) and stall.
+        # All 4 bytes set the continuation bit (malformed, not
+        # "incomplete").  Must raise, not return (0, 0) and stall.
         with raises(MQTTProtocolError):
             decode_varlen(memoryview(b"\x80\x80\x80\x80"), 0)
 

@@ -55,7 +55,7 @@ class TestSocketBlockingMode:
         assert sock.blocking is False
 
     def test_self_heal_forces_replacement_socket_non_blocking(self) -> None:
-        """The factory may hand back a blocking socket — heal still wins."""
+        """The factory may hand back a blocking socket.  Heal still wins."""
         first_sock = FakeSocket()
         replacement = FakeSocket()
         replacement.setblocking(True)  # arrive blocking
@@ -215,7 +215,7 @@ class TestPublishQos1:
 
         # After tick 3: PUBLISH on the wire.
         _drive(client, ticks, count=1)
-        # The packet_id allocated should be the next free (1 — the
+        # The packet_id allocated should be the next free (1: the
         # SUBACK/PUBACK pool is shared but no subs queued yet).
         assert b"temp" in bytes(sock.sent)
         # Now broker sends PUBACK.
@@ -268,7 +268,7 @@ class TestPublishQos1:
         client.publish("temp", b"42", qos=1)
         _drive(client, ticks, count=1)
         first_send_length = len(sock.sent)
-        # Skip past the ack timeout — no PUBACK arrives.
+        # Skip past the ack timeout.  No PUBACK arrives.
         ticks.advance(10_000)
         _drive(client, ticks, count=1)
         # Retry packet should now be on the wire (DUP flag set).

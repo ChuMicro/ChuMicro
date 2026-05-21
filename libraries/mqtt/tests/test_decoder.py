@@ -123,7 +123,7 @@ class TestParsePublish:
 
 class TestStreaming:
     def test_partial_then_complete(self) -> None:
-        """Half a packet first; second feed completes it."""
+        """Half a packet first.  Second feed completes it."""
         decoder = PacketDecoder()
         whole = canned_connack_bytes(return_code=0)
         _feed(decoder, whole[:2])
@@ -146,7 +146,7 @@ class TestStreaming:
         assert third is None
 
     def test_one_byte_at_a_time(self) -> None:
-        """Trickled bytes still parse cleanly — every byte is individually fed."""
+        """Trickled bytes still parse cleanly.  Every byte is individually fed."""
         decoder = PacketDecoder()
         whole = canned_publish_bytes("hello", b"world", qos=0)
         for byte_value in whole:
@@ -270,7 +270,7 @@ class TestOversizedTier:
         """When the topic alone exceeds rx_buffer_size, the oversized
         event reports topic=None (the topic can't be parsed)."""
         decoder = PacketDecoder(
-            rx_buffer_size=16,        # tiny — even modest topics overflow
+            rx_buffer_size=16,        # tiny: even modest topics overflow
             max_message_bytes=32,
         )
         long_topic = "a" * 50
@@ -279,7 +279,7 @@ class TestOversizedTier:
         oversized = [event for event in events if isinstance(event, _OversizedMessage)]
         assert len(oversized) == 1
         assert oversized[0].topic is None
-        # Decoder should be back to steady state — feed a normal small
+        # Decoder should be back to steady state.  Feed a normal small
         # packet and verify it parses cleanly.
         small_packet = canned_publish_bytes("a", b"b", qos=0)
         events2 = _drive_until_done(decoder, small_packet, chunk_size=8)

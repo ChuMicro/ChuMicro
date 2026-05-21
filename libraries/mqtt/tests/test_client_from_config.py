@@ -8,7 +8,7 @@ from chumicro_test_harness.assertions import raises
 
 class TestFromConfig:
     """``MQTTClient.from_config`` reads the manifest's optional keys
-    with sensible defaults; non-config args (socket, socket_factory,
+    with sensible defaults.  Non-config args (socket, socket_factory,
     radio) come through kwargs."""
 
     @staticmethod
@@ -47,25 +47,25 @@ class TestFromConfig:
         assert client._password is None  # noqa: SLF001
 
     def test_partial_config_mixes_overrides_with_defaults(self) -> None:
-        """Caller-set keys win; absent keys take defaults."""
+        """Caller-set keys win.  Absent keys take defaults."""
         sock = FakeSocket()
         client = MQTTClient.from_config(
             {"mqtt.client_id": "halfway"},
             socket_factory=self._injected_factory(sock),
         )
         assert client._client_id == "halfway"  # noqa: SLF001
-        assert client._keep_alive_seconds == 60  # noqa: SLF001 — default
-        assert client._username is None  # noqa: SLF001 — default
+        assert client._keep_alive_seconds == 60  # noqa: SLF001 - default
+        assert client._username is None  # noqa: SLF001 - default
 
     def test_explicit_socket_bypasses_factory(self) -> None:
-        """Passing a pre-built socket skips the auto-built factory entirely
-        — caller owns the connection."""
+        """Passing a pre-built socket skips the auto-built factory entirely.
+        Caller owns the connection."""
         sock = FakeSocket()
         client = MQTTClient.from_config({}, socket=sock)
         assert client._socket is sock  # noqa: SLF001
 
     def test_runtime_config_wrapper_works_too(self) -> None:
-        """Real ``RuntimeConfig`` instance — same flat-key reads as a
+        """Real ``RuntimeConfig`` instance.  Same flat-key reads as a
         plain dict.  Confirms compatibility with ``chumicro_config.config``
         on a real device."""
         from chumicro_config import RuntimeConfig  # noqa: PLC0415
@@ -105,7 +105,7 @@ class TestFromConfig:
                 {"mqtt.broker.host": "10.0.0.42", "mqtt.broker.port": 8883},
                 radio="fake-radio",
             )
-            # Construction is side-effect free — factory fires on connect().
+            # Construction is side-effect free.  Factory fires on connect().
             assert captured == {}
             client.connect()
         finally:
@@ -151,7 +151,7 @@ class TestFromConfig:
 
     def test_ssl_context_ignored_when_socket_factory_passed(self) -> None:
         """``ssl_context=`` is documented as ignored when *socket* or
-        *socket_factory* is supplied — caller-owned factories already
+        *socket_factory* is supplied.  Caller-owned factories already
         encode their own TLS choice.  Confirms the dispatch doesn't
         accidentally consult ``ssl_context`` once a factory is in hand."""
         sock = FakeSocket()
@@ -160,7 +160,7 @@ class TestFromConfig:
             socket_factory=self._injected_factory(sock),
             ssl_context="should-be-ignored",
         )
-        # Construction is side-effect free; calling connect() wires the
+        # Construction is side-effect free.  Calling connect() wires the
         # socket via the injected factory.
         client.connect()
         assert client._socket is sock  # noqa: SLF001
@@ -175,7 +175,7 @@ class TestFromConfig:
             MQTTClient.from_config({})
 
     def test_default_factory_requires_broker_port(self) -> None:
-        """Host present but port missing still raises — both keys are
+        """Host present but port missing still raises.  Both keys are
         required by the auto-built socket factory."""
         from chumicro_config import MissingConfigKey  # noqa: PLC0415
 
@@ -189,11 +189,11 @@ class TestFromConfig:
         kwarg instead of leaking ``ImportError``.
 
         Simulates the post-deploy state by stuffing ``None`` into
-        ``sys.modules`` for the factory submodule — a ``None`` entry
+        ``sys.modules`` for the factory submodule.  A ``None`` entry
         makes a subsequent ``import`` raise ``ImportError`` on
         CPython.  MicroPython / CircuitPython do not honor the
         ``None``-sentinel convention so the test only runs on
-        CPython; the RuntimeError-translation behavior itself is
+        CPython.  The RuntimeError-translation behavior itself is
         runtime-agnostic (a real on-device skip-factories deploy
         triggers the same code path).
         """

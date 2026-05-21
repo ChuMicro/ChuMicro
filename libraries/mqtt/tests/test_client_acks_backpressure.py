@@ -96,8 +96,8 @@ class TestUnexpectedAcks:
         """PINGRESP with no pending tracker keeps the connection alive.
 
         Reason: PINGREQ timeout fires (clearing the tracker), the
-        broker's PINGRESP arrives a tick later — re-faulting through a
-        healthy connection would be a false positive.
+        broker's PINGRESP arrives a tick later, and re-faulting through
+        a healthy connection would be a false positive.
         """
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
@@ -116,7 +116,7 @@ class TestSocketFactorySelfHeal:
 
     When ``MQTTClient`` is constructed with a ``socket_factory``, a tick
     in ``FAILED`` state rebuilds the socket via the factory and re-issues
-    ``connect()`` automatically — the thing's run loop sees mqtt come
+    ``connect()`` automatically.  The caller's run loop sees mqtt come
     back without writing any recovery code.
     """
 
@@ -125,7 +125,7 @@ class TestSocketFactorySelfHeal:
             MQTTClient(client_id="x")
 
     def test_factory_only_constructor_defers_socket_build_to_connect(self) -> None:
-        """Factory is NOT called at construction — only when connect() runs.
+        """Factory is NOT called at construction.  Only when connect() runs.
 
         Construction is side-effect free: ``__init__`` must not open
         sockets, so network errors land in ``state == FAILED`` /
@@ -155,7 +155,7 @@ class TestSocketFactorySelfHeal:
         assert len(builds) == 1
         _drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
-        # Factory not called a second time — the socket is healthy.
+        # Factory not called a second time.  The socket is healthy.
         assert len(builds) == 1
 
     def test_factory_failure_in_connect_marks_failed(self) -> None:
@@ -170,7 +170,7 @@ class TestSocketFactorySelfHeal:
             client_id="x",
             ticks=ticks,
         )
-        # Construction succeeds — no I/O yet.
+        # Construction succeeds with no I/O yet.
         assert client.state == ProtocolState.DISCONNECTED
         client.connect()
         # Factory error transitions to FAILED instead of propagating.
@@ -179,7 +179,7 @@ class TestSocketFactorySelfHeal:
         assert "factory failed" in str(client.last_error)
 
     def test_failed_state_with_factory_self_heals_and_reconnects(self) -> None:
-        """Factory is called on FAILED + handle(); a new socket comes up."""
+        """Factory is called on FAILED + handle().  A new socket comes up."""
         ticks = FakeTicks()
         sock_one = FakeSocket()
         sock_two = FakeSocket()
@@ -199,7 +199,7 @@ class TestSocketFactorySelfHeal:
         _drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
 
-        # Force FAILED — simulate a wifi-drop that killed the socket.
+        # Force FAILED to simulate a wifi-drop that killed the socket.
         client.state = ProtocolState.FAILED
         _drive(client, ticks, count=2)
 
@@ -253,7 +253,7 @@ class TestSocketFactorySelfHeal:
         assert client.state == ProtocolState.CONNECTED
 
         client.state = ProtocolState.FAILED
-        # Factory raises on the next 3 attempts; client stays FAILED.
+        # Factory raises on the next 3 attempts.  Client stays FAILED.
         _drive(client, ticks, count=3)
         assert client.state == ProtocolState.FAILED
         assert "wifi still down" in str(client.last_error)
@@ -286,7 +286,7 @@ class TestSocketFactorySelfHeal:
         client.disconnect()
         assert client.state == ProtocolState.DISCONNECTED
 
-        # Force FAILED — even with the factory present, the user-driven
+        # Force FAILED.  Even with the factory present, the user-driven
         # disconnect should keep self-heal off.
         client.state = ProtocolState.FAILED
         _drive(client, ticks, count=5)
@@ -320,7 +320,7 @@ class TestBoundedRecvPerTick:
         ticks = FakeTicks()
         client = self._connected_client(sock, ticks, recv_budget_per_tick=512)
 
-        # Queue a 4 KB payload in a single chunk; FakeSocket honors
+        # Queue a 4 KB payload in a single chunk.  FakeSocket honors
         # recv_into's *nbytes* cap so we'll consume in pieces.
         big_publish = canned_publish_bytes("topic/a", b"x" * 4096, qos=0)
         sock.enqueue_recv(big_publish)
@@ -329,19 +329,19 @@ class TestBoundedRecvPerTick:
         assert sock.bytes_received_total <= 512
 
     def test_default_budget_is_1024_bytes(self) -> None:
-        """Default budget keeps tick latency LED-friendly out of the box."""
+        """Default 1024-byte recv budget holds without explicit configuration."""
         sock = _CountingSocket()
         ticks = FakeTicks()
         client = self._connected_client(sock, ticks)  # default budget
 
-        # Stuff a multi-KB blob; assert the default 1024-byte cap holds.
+        # Stuff a multi-KB blob.  Assert the default 1024-byte cap holds.
         big_publish = canned_publish_bytes("topic/a", b"x" * 8192, qos=0)
         sock.enqueue_recv(big_publish)
         client.handle(ticks.ticks_ms())
         assert sock.bytes_received_total <= 1024
 
     def test_budget_eventually_drains_full_payload_across_ticks(self) -> None:
-        """Multiple ticks accumulate; a big blob arrives complete eventually.
+        """Multiple ticks accumulate.  A big blob arrives complete eventually.
 
         Configures a 16 KB ``rx_buffer_size`` so an 8 KB PUBLISH
         stays on the steady-state path (the default 256 B buffer
@@ -360,8 +360,8 @@ class TestBoundedRecvPerTick:
         big_payload = b"y" * 8192
         sock.enqueue_recv(canned_publish_bytes("topic/big", big_payload, qos=0))
 
-        # Drive until the payload arrives — ~9 ticks at 1024 B/tick
-        # for 8192 + small header bytes total.
+        # Drive until the payload arrives (~9 ticks at 1024 B/tick
+        # for 8192 + small header bytes total).
         for _ in range(20):
             _drive(client, ticks, count=1)
             if received_payloads:
@@ -391,7 +391,7 @@ class TestTxQueueBackpressure:
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
         client = _new_client(sock, ticks)  # default cap
-        assert client._max_tx_queue_size == 20  # noqa: SLF001 — pin the default
+        assert client._max_tx_queue_size == 20  # noqa: SLF001 - pin the default
 
     def test_publish_raises_when_cap_exceeded(self) -> None:
         sock = FakeSocket()
@@ -401,7 +401,7 @@ class TestTxQueueBackpressure:
         client.connect()
         _drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
-        # Queue is empty post-CONNECT.  Three publishes fill it; the
+        # Queue is empty post-CONNECT.  Three publishes fill it.  The
         # fourth should raise.  Don't drive between publishes so the
         # queue actually accumulates.
         client.publish("topic/a", b"one", qos=0)
@@ -426,7 +426,7 @@ class TestTxQueueBackpressure:
         in_flight_after_first = list(client._in_flight)  # noqa: SLF001
         assert len(in_flight_after_first) == 1
 
-        # Second publish overflows; expect the packet_id allocation to
+        # Second publish overflows.  Expect the packet_id allocation to
         # be discarded along with the raise.
         with raises(MQTTBackpressureError):
             client.publish("topic/a", b"two", qos=1)
@@ -436,7 +436,7 @@ class TestTxQueueBackpressure:
 
     def test_protocol_internal_traffic_bypasses_cap(self) -> None:
         """PUBACK responses on inbound QoS 1 PUBLISHes are protocol
-        bookkeeping; they must enqueue even if the user TX queue is
+        bookkeeping.  They must enqueue even if the user TX queue is
         full, otherwise QoS 1 contract breaks."""
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
@@ -449,10 +449,10 @@ class TestTxQueueBackpressure:
         # Fill the user cap.
         client.publish("topic/a", b"user-pub", qos=0)
 
-        # Now an inbound QoS 1 PUBLISH from the broker — handler must
+        # Now an inbound QoS 1 PUBLISH from the broker.  Handler must
         # enqueue the PUBACK even though the user-cap is full.
         sock.enqueue_recv(canned_publish_bytes(
             "topic/in", b"hi from broker", qos=1, packet_id=42,
         ))
-        # No exception — internal enqueue bypasses the cap.
+        # No exception: internal enqueue bypasses the cap.
         client.handle(ticks.ticks_ms())
