@@ -1,14 +1,16 @@
 """App-level deploy-failure recovery hints.
 
-When a project's own code fails on the device, the deploy command's
-captured traceback is the only signal the user gets.  Raw tracebacks
-don't name the workspace-shaped cause.  Common ones (missing required
-config key, library not installed locally) all surface as terse stdlib
-errors that don't mention the workspace context that produced them.
+Pattern-matches a captured Python traceback against known
+workspace-shaped failure modes (NameError, missing chumicro
+library, missing config key, RAM-mode runtime_config write) and
+returns one or more :class:`AppErrorHint` rows for the CLI to
+print under the traceback.
 
-This module pattern-matches against the captured traceback and
-returns one or more :class:`AppErrorHint` rows the CLI can display
-under the traceback.
+Raw Python tracebacks name the stdlib error but not the
+workspace context behind it, so a missing config key surfaces
+as a bare ``KeyError`` without saying which file should have
+carried it.  Each pattern in :data:`_HINT_TABLE` translates a
+generic error into a workspace-aware remediation pointer.
 """
 
 from __future__ import annotations

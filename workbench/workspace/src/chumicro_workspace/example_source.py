@@ -139,13 +139,13 @@ def example_source(
     entrypoint_path = _resolve_example_path(library_root, example_name)
     device_entrypoint = _ENTRYPOINT_BY_RUNTIME[runtime]
 
-    # Search paths: each library's src/ directory + the current
-    # example's own examples/ directory (so a peer `helpers.py`
-    # alongside the entrypoint resolves and rides along to /lib/).
-    # Drop duplicates while preserving order — the example's own
-    # library naturally appears in *library_roots* if the caller
-    # passed the full libraries/ glob, but a caller who didn't can
-    # still reach the owning library's modules.
+    # Build the ImportGraphSource search paths in resolution order:
+    # the example's own examples/ directory first (so a peer
+    # helpers.py alongside the entrypoint resolves and rides along
+    # to /lib/), then library_root/src, then each library_roots
+    # entry's src/.  Dedup by resolved path: library_root is added
+    # explicitly here and is allowed to also appear in
+    # *library_roots* without producing a duplicate search path.
     seen: set[Path] = set()
     search_paths: list[Path] = []
     examples_dir = library_root / "examples"

@@ -1,10 +1,4 @@
-"""Library scaffolder — creates a chumicro-style library tree.
-
-The shipped templates live alongside this module under
-``_payloads/library_template/`` and travel with the wheel.
-Workbench-kind packages pull their four ``docs/`` files from a
-companion ``_payloads/workbench_template/`` tree instead.  See
-:func:`scaffold_library` ``package_kind`` for the details.
+"""Create chumicro-style library and workbench package trees.
 
 The output layout::
 
@@ -27,9 +21,14 @@ The output layout::
     └── examples/
         └── basic_usage.py
 
-The CLI exposes this as ``python run.py new --library <name>``.
-Callers that need finer control construct an explicit target
-directory and call :func:`scaffold_library` directly.
+Templates ship beside this module under ``_payloads/library_template/``
+and travel with the wheel.  ``package_kind="workbench"`` swaps the
+four ``docs/`` templates for a workbench-flavored set under
+``_payloads/workbench_template/``; every other file is shared.
+
+``python run.py new --library <name>`` is the usual entry point.
+Callers that need finer control call :func:`scaffold_library`
+directly with an explicit target directory.
 """
 
 from __future__ import annotations

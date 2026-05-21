@@ -1,17 +1,13 @@
 """Firmware-version floor check for the workspace tool.
 
-A board that's reachable over serial REPL can still be running
-firmware *below* the workspace tool's tested matrix.  This module
-owns the floor constants, parses the dotted version string the
-probe returns, and classifies a
-:class:`chumicro_deploy.DeviceImplementation` against the floor.
+Classifies a probed :class:`chumicro_deploy.DeviceImplementation`
+against per-runtime minimum versions, parses the dotted-version
+string the probe returns, and produces human-readable warning
+text for OLD / UNKNOWN / UNPARSEABLE results.  Commands that
+need the check route through :func:`check_firmware_supported`
+and :func:`explain` so the policy lives in one place.
 
-The ``add-device`` command prints a warning at registration when
-the floor isn't met; other commands needing the same check route
-through :func:`check_firmware_supported` + :func:`explain` so the
-policy lives in one place.
-
-Checks are warn-only; callers proceed regardless.
+Checks are warn-only.  Callers proceed regardless.
 """
 
 from dataclasses import dataclass

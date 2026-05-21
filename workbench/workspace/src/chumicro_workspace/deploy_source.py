@@ -1,28 +1,25 @@
-"""Deploy-time integration with ``chumicro-deploy``.
+"""``FileSource`` composition that injects the merged runtime config.
 
-The deploy package owns ``FileSource`` (path → bytes producers that
-the ``Deployer`` ships onto a device).  Workspace-runtime composes
-those sources so a single :meth:`Deployer.deploy` call sends both
-the project's app code and its generated ``/runtime_config.msgpack``
-in one shot — the user no longer has to remember to regenerate the
-config before each deploy.
+Each deploy ships the project's app code together with the merged
+``/runtime_config.msgpack`` so users don't have to regenerate the
+config before deploying.  This module's pieces compose with the
+``FileSource`` producers in ``chumicro-deploy`` to do that in one
+:meth:`Deployer.deploy` call.
 
-Two pieces:
-
-* :class:`WithRuntimeConfig` — a ``FileSource`` decorator that wraps
-  any inner source (``DirectorySource``, ``FileMapSource``,
-  ``ImportGraphSource``, custom) and injects the merged msgpack at
+* :class:`WithRuntimeConfig` decorates any inner ``FileSource``
+  (``DirectorySource``, ``FileMapSource``, ``ImportGraphSource``,
+  custom) and injects the msgpack at
   ``/runtime_config.msgpack``.
-* :func:`project_directory_source` — convenience that builds a
-  ``DirectorySource`` from ``projects/<name>/`` (skipping the host-side
-  ``config.{toml,yml,yaml}``, ``_generated/`` output dir, and the
-  usual cache artifacts) and wraps it with :class:`WithRuntimeConfig`.
-  Covers the typical "self-contained project directory" case.
+* :func:`project_directory_source` builds a ``DirectorySource``
+  from ``projects/<name>/`` (skipping ``project_config.toml``, the
+  ``_generated/`` output directory, and the usual cache
+  artifacts) and wraps it with :class:`WithRuntimeConfig``.
+  Covers the self-contained project-directory case.
 
-For projects that import shared libs from elsewhere in the workspace,
-build the inner source explicitly (`ImportGraphSource(...)` or a
+Projects that pull in shared libraries elsewhere in the workspace
+build the inner source explicitly (``ImportGraphSource(...)`` or a
 custom ``FileSource``) and wrap it with :class:`WithRuntimeConfig`
-yourself.
+directly.
 """
 
 from __future__ import annotations
@@ -191,26 +188,26 @@ def wrap_with_runtime_config(
     project_config: Path | None = None,
     output_path: Path | None = None,
 ) -> WithRuntimeConfig:
-    """Wrap *inner* in :class:`WithRuntimeConfig`, resolving conventions.
+    """Wrap *inner* in :class:`WithRuntimeConfig` after filling in conventional defaults.
 
-    Every ``FileSource`` front-end ends the same way: build an inner
-    source, then wrap it so the merged ``runtime_config.msgpack`` rides
-    the deploy.  The wrapping needed the same four conventional-default
-    resolutions open-coded in each builder.  This collapses them into
-    one call; each front-end keeps its own inner-source construction
-    and ends with ``return wrap_with_runtime_config(inner, ...)``.
+    Each front-end (directory source, boot-shim source, import-graph
+    source) calls this once it has built its inner ``FileSource``, so
+    the four conventional paths the wrapper needs are resolved here
+    instead of in each builder.
 
-    Conventions resolved when the corresponding argument is ``None``:
+    Defaults applied when the corresponding argument is ``None``:
 
-    * *secrets_toml* → ``workspace.secrets_toml`` (requires *workspace*).
-    * *project_config* → :func:`find_project_config` under
-      *project_dir* (the per-project ``project_config.toml``).
-    * *output_path* → ``project_dir / _generated /
-      runtime_config.msgpack`` (the gitignored build-artifact dir).
-    * *library_roots* (for manifest validation) → derived from
-      *search_paths* when given (an import-graph front-end), else
-      left empty (a directory / boot-shim front-end with no walked
-      libraries — validation off, as before).
+    * *secrets_toml* falls back to ``workspace.secrets_toml``;
+      *workspace* is required when *secrets_toml* is ``None``.
+    * *project_config* falls back to :func:`find_project_config`
+      under *project_dir*.
+    * *output_path* falls back to
+      ``project_dir / _generated / runtime_config.msgpack`` (the
+      gitignored build-artifact directory).
+    * *library_roots* (for manifest validation) is derived from
+      *search_paths* when given (an import-graph front-end) and
+      left empty otherwise (a directory or boot-shim front-end
+      without walked libraries; validation is then off).
 
     Args:
         inner: The base ``FileSource`` to wrap.

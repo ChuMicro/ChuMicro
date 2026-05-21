@@ -206,7 +206,7 @@ class WorkspaceLayout:
 
         Walks the tree recursively per the classifier in
         :data:`ProjectClassification`.  Each path returned is a deployable
-        leaf — namespaces, supporting directories, ``_template`` /
+        leaf.  Namespaces, supporting directories, ``_template`` /
         ``_generated`` and hidden dirs are filtered out.
 
         Returns an empty list when ``projects/`` doesn't exist yet.
@@ -227,9 +227,9 @@ class WorkspaceLayout:
         """Return every classified directory under ``projects/``, sorted.
 
         Includes both projects and namespaces — namespaces are needed so
-        the tree renderer can draw branches above leaves and ``doctor``
-        can report on empty / supporting branches.  Sorting is by
-        slash-form path, which gives natural depth-first display order.
+        the tree renderer can draw branches above leaves and callers that
+        report on supporting branches.  Sorting is by slash-form path,
+        which gives natural depth-first display order.
         """
         if not self.projects_dir.is_dir():
             return []
@@ -241,9 +241,9 @@ class WorkspaceLayout:
     def from_dir(cls, start: Path | None = None) -> WorkspaceLayout:
         """Walk up from *start* until a ``workspace.yml`` is found.
 
-        Walks parents until ``workspace.yml`` is found, so users
-        can run ``python run.py deploy ...`` from any directory inside
-        the workspace and the right files get located.
+        The walk lets users run ``python run.py deploy ...`` from any
+        directory inside the workspace.  The root is resolved as the
+        nearest ancestor with a ``workspace.yml``.
 
         Args:
             start: Starting directory.  Defaults to ``Path.cwd()``.

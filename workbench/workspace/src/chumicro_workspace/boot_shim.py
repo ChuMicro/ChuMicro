@@ -1,28 +1,27 @@
-"""Boot-shim deploy pattern.
+"""Boot-shim deploy layout: shim entrypoint + flat project files.
 
-The boot shim layer is a tiny synthesized entrypoint written onto the
-device alongside the project's app code:
+The boot shim is a three-line ``/code.py`` (CircuitPython) or
+``/main.py`` (MicroPython) module synthesised by
+chumicro-workspace.  It runs ``from app import run; run()``, so
+every project that opts in ships an ``app.py`` exporting a
+synchronous ``run()``.  ``app.py`` and any helper modules land at
+the device root, alongside the merged ``/runtime_config.msgpack``.
+One project per board: switch projects by redeploying.
 
-* ``/code.py`` (CP) or ``/main.py`` (MP), a three-line bootstrapper
-  that imports the project's ``app.run`` and calls it.
+Three public builders:
 
-The project's own files (``app.py``, helper modules) land at the
-device root.  ``app.py`` exports ``run()``, and the synthesized shim
-calls it.  No ``active.py``, no ``/lib/workspace_runtime/`` payload,
-no ``/lib/projects/<name>/`` namespace.  Chumicro is one-project-per-
-board.  Switch to a different project by redeploying.
+* :func:`boot_shim_files` returns the synthesised shim file map
+  for the runtime-matching entrypoint.
+* :func:`project_boot_source` wraps the shim plus flat project
+  files in :class:`WithRuntimeConfig` so the msgpack rides the
+  deploy.
+* :func:`project_boot_with_import_graph_source` adds the
+  import-graph contribution for projects that pull in workspace
+  libraries.
 
-Two pieces:
-
-* :func:`boot_shim_files` returns the synthesized shim file,
-  a single entry for the runtime-matching entrypoint.
-* :func:`project_boot_source` produces a ``WithRuntimeConfig``-
-  wrapped source that bundles the shim, the project's files at
-  the device root, and the merged runtime-config msgpack.
-
-The CLI ``deploy --boot-shim`` flag (and the auto-detected default
-when a project ships ``app.py`` with ``run()`` and no
-``code.py``/``main.py``) opts into this pattern.
+Opt-in is automatic when a project ships ``app.py`` with a
+top-level ``run()`` and no ``code.py`` / ``main.py``; the
+``deploy --boot-shim`` CLI flag forces it.
 """
 
 from __future__ import annotations
@@ -102,18 +101,15 @@ def _top_level_run_node(project_dir: Path) -> ast.AST | None:
 
 
 def project_app_exports_run(project_dir: Path) -> bool:
-    """Return ``True`` when ``app.py`` defines a top-level *synchronous* ``run``.
+    """Return ``True`` when ``app.py`` defines a top-level synchronous ``run``.
 
-    Only a plain ``def run(...)`` qualifies.  The synthesized shim
-    calls ``run()`` synchronously (``from app import run; run()``), so
-    an ``async def run`` is *not* a usable boot-shim entrypoint.
-    :func:`project_app_exports_async_run` detects that case and the
-    deploy auto-detect rejects it with an actionable message rather
-    than shipping a board that boots and silently does nothing.
-
-    Boot-shim mode is the right default when the project ships
-    ``app.py`` with a sync ``run()`` and no runtime-specific
-    entrypoint (``code.py`` / ``main.py``).
+    Only a plain ``def run(...)`` qualifies.  The shim calls ``run()``
+    synchronously (``from app import run; run()``), so an
+    ``async def run`` is not a usable entrypoint and returns
+    ``False`` here.  :func:`project_app_exports_async_run`
+    distinguishes the async case so callers can surface it as a
+    clear failure instead of shipping a board that boots and
+    silently does nothing.
     """
     return isinstance(_top_level_run_node(project_dir), ast.FunctionDef)
 
@@ -302,27 +298,21 @@ def project_boot_source(
 
 
 class _BootShimWithImportGraphSource:
-    """Combine the boot-shim file map with import-graph-discovered libraries.
+    """Merge a boot-shim file map with an import-graph file map.
 
-    Internal.  The public surface is the
-    :class:`WithRuntimeConfig`-wrapped instance returned by the
-    helper function.
+    Internal; the public surface is the
+    :class:`WithRuntimeConfig`-wrapped instance returned by
+    :func:`project_boot_with_import_graph_source`.
 
-    The boot-shim source ships the entrypoint shim and the project's
-    own files at the device root.  The import-graph source walks the
-    project's host-side entrypoint (``app.py`` by default), follows
-    every reachable ``import`` / ``from … import``, and ships each
-    resolved module under ``/lib/<package>/...``.
-
-    The two contributions land at disjoint device paths *except* for
-    the project-local modules the import-graph walker reaches via
-    ``project_dir`` as a search path.  Those modules are already
-    shipped by the boot-shim at the device root; the import-graph's
-    parallel ``/lib/<basename>.py`` landing is dead weight (project
-    code resolves at the device root, not under ``/lib/``).  We drop
-    them post-hoc.
-
-    Boot-shim wins on any other overlap (the entrypoint shim).
+    The boot-shim contribution ships the entrypoint shim and the
+    project's flat files at the device root.  The import-graph
+    contribution ships every reachable module under
+    ``/lib/<package>/...``.  The two contributions land at disjoint
+    paths except where the import-graph walker reaches a
+    project-local module via *project_dir* on its search path.  That
+    module is already shipped by the boot-shim at the device root,
+    so its ``/lib/<basename>.py`` twin from the import-graph side
+    gets dropped here.  Boot-shim wins on any other overlap.
     """
 
     def __init__(
@@ -337,15 +327,18 @@ class _BootShimWithImportGraphSource:
         self._project_dir = project_dir
 
     def _project_local_device_paths(self) -> set[str]:
-        """Device paths the import-graph walker would assign to project-local files.
+        """Return ``/lib/<relative>`` paths the walker would assign to project-local files.
 
-        Mirrors :class:`chumicro_deploy.ImportGraphSource`'s
-        ``resource_prefix=/lib`` + ``relative_path_from_search_path``
-        rule for files under ``project_dir`` (which the combined
-        builder adds as the first search path so the walker can follow
-        project-internal relative imports).  These paths shadow the
-        boot-shim's device-root placement and would be dead weight on
-        the device — drop them from the import-graph contribution.
+        The combined builder adds *project_dir* as the first
+        import-graph search path so the walker can follow
+        project-internal relative imports.  With
+        ``resource_prefix=/lib``, that puts every project ``.py`` at
+        ``/lib/<relative>`` in the import-graph map.  The boot-shim
+        already ships those files at the device root, so these
+        ``/lib/<basename>.py`` paths are dead weight (project code
+        resolves at the root, not under ``/lib/``).  :meth:`files`
+        uses this set to drop them from the import-graph contribution
+        before the merge.
         """
         local: set[str] = set()
         for source_path in self._project_dir.rglob("*.py"):

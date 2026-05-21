@@ -1,13 +1,13 @@
-"""Compare materialized user files to their shipped templates.
+"""Compare a user's materialized workspace file to its shipped template.
 
-Walks the parsed file and surfaces dotted-path keys present in the
-template but absent from the user's file.  Used by
-:mod:`chumicro_workspace.additive_apply` to drive the comment-preserving
-append pass during ``setup``.
+Returns the dotted-path keys present in the template but absent
+from the user's copy, in a form an append pass can apply
+key-by-key while preserving the existing file's comments and
+ordering.
 
-Two files are checked: ``workspace.yml`` (workspace machinery) and
-``secrets.toml`` (device-bound credentials + defaults).  Both diff
-against the workbench-owned template from
+Two files are checked: ``workspace.yml`` (workspace machinery)
+and ``secrets.toml`` (device-bound credentials + defaults).  Both
+diff against the workbench-owned template from
 :mod:`chumicro_workspace.templates`.
 """
 
@@ -84,13 +84,12 @@ def _diff_dotted_paths(
     *,
     prefix: str,
 ) -> list[str]:
-    """Walk *template*; collect dotted paths absent from *user*.
+    """Walk *template* and collect dotted paths absent from *user*.
 
     Recurses into nested dicts so additions to existing sections
     surface alongside whole-section additions.  Stops at non-dict
     values: once a key matches in *user*, that subtree is the
-    user's territory (matches ``merge_configs`` semantics — the
-    higher-precedence layer wins outright at any non-dict node).
+    user's territory.
     """
     missing: list[str] = []
     for key, template_value in template.items():

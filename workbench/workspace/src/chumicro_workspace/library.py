@@ -184,8 +184,7 @@ def _snapshot_and_tarball(channel: str, version: str, http_get):
     *version* is the :data:`HEAD` sentinel (latest snapshot) or a
     pinned snapshot tag.
     """
-    # Deferred so importing this module is cheap and test fixtures can
-    # swap the transport without pulling in placement logic.
+    # Deferred so importing this module is cheap.
     from chumicro_workspace.library_channel import (
         fetch_snapshot_tarball,
         resolve_snapshot,
@@ -241,15 +240,18 @@ def fetch_closure(
 ) -> list[str]:
     """Fetch *root* and every chumicro library reachable from it.
 
-    One ``index.json`` GET plus one tarball GET cover the whole
-    closure.  See :mod:`chumicro_workspace.library_channel` for why.
-    Breadth-first from *root* over each placed library's
-    ``chumicro-`` deps, via the shared
-    :func:`~chumicro_workspace.dep_resolver.transitive_closure`.
-    Returns the closure as import names in BFS order (root first),
-    cycle-safe.  Raises :class:`LibraryFetchError` from the first
-    member that fails to extract.  Already-placed members stay on
-    disk and the caller decides whether to roll back.
+    The snapshot tarball already contains every library in the
+    channel, so one ``index.json`` GET and one tarball GET cover
+    the whole closure regardless of size.  Each library's direct
+    deps are read from its placed ``pyproject.toml``, and the walk
+    is breadth-first from *root* via
+    :func:`~chumicro_workspace.dep_resolver.transitive_closure`
+    (cycle-safe, deterministic order).
+
+    Returns the closure as import names in BFS order, root first.
+    Raises :class:`LibraryFetchError` on the first member that
+    fails to extract; libraries already placed stay on disk and
+    the caller decides whether to roll back.
     """
     snapshot, tarball = _snapshot_and_tarball(channel, version, http_get)
     from chumicro_workspace.library_channel import extract_library

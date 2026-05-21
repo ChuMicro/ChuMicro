@@ -94,37 +94,32 @@ def build_search_paths(
     library_sources_override: dict[str, Path] | None = None,
     extra_search_paths: list[Path] | None = None,
 ) -> list[Path]:
-    """Compose the import-resolution search path list for *workspace*.
+    """Compose the import-resolution search-path list for *workspace*.
 
-    Order matters: first match wins inside
-    :class:`ImportGraphSource`.  Explicit overrides beat
-    workspace-internal sources beat third-party packages.
+    First match wins inside :class:`ImportGraphSource`, so order
+    encodes precedence: explicit overrides, then workspace-internal
+    sources, then third-party packages.  Pure path arithmetic: the
+    caller passes any ``library_sources:`` map already parsed, so
+    this function performs no YAML I/O.  Paths that don't exist on
+    disk are dropped, and duplicates collapse.
 
     Resolution order::
 
         1. library_sources_override values
-        2. workspace/shared/         (user-authored shared modules, flat layout)
-        3. workspace/libraries/<name>/src/  (full chumicro-style library
-                                             packages, scaffolded via
-                                             ``new --library``)
-        4. workspace/packages/     (third-party, gitignored)
-        5. extra_search_paths      (caller-supplied tail; e.g. mono-repo
-                                    devs adding the live chumicro src/)
-
-    Only paths that actually exist on disk are returned.
-    :class:`ImportGraphSource` rejects nonexistent search paths at
-    construction.
+        2. workspace/shared/                (user-authored shared modules)
+        3. workspace/libraries/<name>/src/  (scaffolded chumicro-style
+                                             library packages)
+        4. workspace/packages/              (third-party, gitignored)
+        5. extra_search_paths               (caller-supplied tail; e.g.
+                                             mono-repo dogfooding with the
+                                             live chumicro src/)
 
     Args:
         workspace: Resolved :class:`WorkspaceLayout`.
-        library_sources_override: ``{package_name: Path}`` from
-            ``workspace.yml``'s ``library_sources:``.  Pass ``None``
-            (the default) when you don't want override processing.
-            This function doesn't read the file itself, so callers
-            stay in control of when YAML I/O happens.
-        extra_search_paths: Additional directories to append at the
-            tail.  Useful for in-mono-repo dogfooding where the
-            chumicro library checkouts live alongside the workspace.
+        library_sources_override: ``{package_name: Path}`` already
+            read from ``workspace.yml``'s ``library_sources:``, or
+            ``None`` to skip override processing.
+        extra_search_paths: Directories appended at the tail.
     """
     candidates: list[Path] = []
     if library_sources_override:
@@ -133,12 +128,8 @@ def build_search_paths(
         for _name, override_path in sorted(library_sources_override.items()):
             candidates.append(override_path)
     candidates.append(workspace.shared_dir)
-    # Full chumicro-style library packages scaffolded via
-    # ``new --library`` live at ``libraries/<name>/`` with the
-    # importable module under ``src/``.  Add each ``src/`` so a
-    # project's ``import my_lib`` resolves against the local checkout
-    # without forcing the user to register an entry in
-    # ``library_sources:``.
+    # Add each library's src/ so ``import my_lib`` resolves against
+    # the local checkout without needing a ``library_sources:`` entry.
     if workspace.libraries_dir.is_dir():
         for library_dir in sorted(workspace.libraries_dir.iterdir()):
             src_dir = library_dir / "src"
