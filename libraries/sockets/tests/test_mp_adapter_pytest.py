@@ -155,10 +155,11 @@ class TestConnectTcp:
     ) -> None:
         """MP rp2/esp32 stream sockets expose recv() but NOT recv_into.
 
-        Live-board acceptance run on Lolin S2 MP + Pi Pico W MP confirmed
-        ``AttributeError("'socket' object has no attribute 'recv_into'")``;
-        the wrapper polyfills it.  This test pins the polyfill in place
-        on every refactor.
+        A bare ``sock.recv_into(buffer, n)`` raises
+        ``AttributeError("'socket' object has no attribute 'recv_into'")``
+        on the real MP boards; the wrapper polyfills via ``recv()`` +
+        buffer copy.  This test pins the polyfill in place on every
+        refactor.
         """
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
         underlying = wrapper._sock  # type: ignore[attr-defined]
@@ -228,12 +229,12 @@ class TestConnectTcp:
     def test_missing_settimeout_falls_back_to_noop(
         self, mp_adapter: types.ModuleType,
     ) -> None:
-        """Some MP SSLSocket impls drop settimeout — wrapper must not trip.
+        """Missing ``settimeout`` on an MP SSLSocket falls back to a no-op.
 
-        Live-board acceptance on Lolin S2 ESP32 surfaced
-        AttributeError("'SSLSocket' object has no attribute 'settimeout'");
-        the wrapper falls back to a no-op stub.  This test pins that
-        in place so future refactors can't reintroduce the hard error.
+        mbedTLS SSLSocket on the supported MP ports lacks ``settimeout`` —
+        a bare ``sock.settimeout(2.5)`` raises ``AttributeError("'SSLSocket'
+        object has no attribute 'settimeout'")``.  The wrapper falls
+        back to a no-op stub; this test pins that fallback in place.
         """
 
         class _SSLishSocket:

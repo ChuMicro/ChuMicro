@@ -208,27 +208,23 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
 def ssl_context_with_cert_and_key_paths(cert_path, key_path):
     """Build a CP server-side SSLContext from cert + key file paths.
 
-    The build sequence::
-
-        ctx = ssl.create_default_context()
-        ctx.load_verify_locations(cadata="")
-        ctx.load_cert_chain(cert_path, key_path)
-
-    CircuitPython's ``create_default_context()`` returns an
-    ``SSLContext`` that's nominally client-side, but ``wrap_socket(sock,
-    server_side=True)`` works on it as long as ``load_cert_chain`` has
-    been called with valid cert + key paths.  The empty-cadata
-    ``load_verify_locations`` call is required by CP's mbedTLS
-    binding before ``load_cert_chain`` is accepted.
-
-    Returns an ``ssl.SSLContext`` ready to pass to
-    :func:`tls_listening_socket`.
+    CircuitPython's ``create_default_context()`` returns a context
+    that's nominally client-side, but ``wrap_socket(sock,
+    server_side=True)`` works on it once ``load_cert_chain`` has
+    loaded valid cert + key paths.  The empty-cadata
+    ``load_verify_locations(cadata="")`` call before
+    ``load_cert_chain`` is required by CP's mbedTLS binding —
+    without it ``load_cert_chain`` is refused.
 
     Args:
         cert_path: On-device filesystem path to the cert PEM file
             (e.g. ``"/lib/server_cert.pem"``).
         key_path: On-device filesystem path to the private-key PEM
             file (e.g. ``"/lib/server_key.pem"``).
+
+    Returns:
+        An ``ssl.SSLContext`` ready to pass to
+        :func:`tls_listening_socket`.
 
     CP-rp2 boards (Pi Pico W / Pi Pico 2 W) are unsupported —
     :func:`listen_tls` refuses up-front via
