@@ -1,9 +1,9 @@
 """Pre-baked broker responses for unit tests.
 
 Tests typically drive :class:`MQTTClient` via a
-:class:`chumicro_sockets.testing.FakeSocket` — script broker
-responses with ``sock.enqueue_recv(canned_connack_bytes())`` etc., let
-the client tick, then assert the wire-format on ``sock.sent``.
+:class:`chumicro_sockets.testing.FakeSocket`.  Script broker responses
+with ``sock.enqueue_recv(canned_connack_bytes())`` etc., let the
+client tick, then assert the wire format on ``sock.sent``.
 
 These canned-bytes helpers stay in sync with the encoder/decoder so a
 hand-rolled byte literal in a test doesn't drift when the wire format
@@ -19,7 +19,7 @@ def canned_connack_bytes(*, return_code: int = 0, session_present: bool = False)
     """Return the four-byte CONNACK packet for *return_code*.
 
     Args:
-        return_code: 0 = accepted; 1-5 = various rejection reasons
+        return_code: 0 = accepted.  1-5 = various rejection reasons
             per MQTT 3.1.1 §3.2.2.3.  Tests for the rejection path
             pass non-zero here.
         session_present: Bit 0 of the ack flags byte.  ``True`` only

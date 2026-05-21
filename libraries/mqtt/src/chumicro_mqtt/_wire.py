@@ -117,7 +117,7 @@ def decode_varlen(buffer, start_index):
 
     Returns ``(value, bytes_consumed)``.  Returns ``(0, 0)`` only when
     the buffer doesn't yet contain a complete varlen at *start_index*
-    (incomplete — pull more bytes and retry).  A varlen still
+    (incomplete: pull more bytes and retry).  A varlen still
     continuing past 4 bytes is malformed, not incomplete, so it raises
     :class:`MQTTProtocolError` rather than masquerading as "need more".
     """
@@ -243,7 +243,7 @@ def encode_connect(
             QoS 1+ retransmission across reconnects.
         username: Optional auth username (paired with *password*).
         password: Optional auth password.
-        will_topic: Topic for the broker's last-will message — published
+        will_topic: Topic for the broker's last-will message.  Published
             on uncleanly-dropped connection.  ``None`` disables the will.
         will_message: Payload for the broker's last-will message.
         will_qos: QoS for the will message (0 or 1).
@@ -288,7 +288,7 @@ def encode_connect(
 def encode_publish(*, topic, payload, qos=0, retain=False, packet_id=None):
     """Build a PUBLISH packet ready to send.
 
-    *payload* is sent verbatim; ``str`` is auto-encoded as UTF-8.
+    *payload* is sent verbatim.  ``str`` is auto-encoded as UTF-8.
 
     Raises:
         UnsupportedQoSError: ``qos > 1``.
@@ -324,7 +324,7 @@ def encode_subscribe(*, packet_id, subscriptions):
     """Build a SUBSCRIBE packet for one-or-more ``(topic, qos)`` pairs.
 
     Raises:
-        ValueError: Empty *subscriptions* — a SUBSCRIBE with zero
+        ValueError: Empty *subscriptions*.  A SUBSCRIBE with zero
             filters is a protocol error.
         UnsupportedQoSError: Any *qos > 1*.
     """
@@ -406,8 +406,8 @@ class ParsedAck:
     """Inbound CONNACK / PUBACK / SUBACK / UNSUBACK / PINGRESP.
 
     A single shape covers all five.  ``return_code`` is set only on
-    CONNACK; ``granted_qos`` only on SUBACK; ``packet_id`` is None
-    for CONNACK / PINGRESP.
+    CONNACK.  ``granted_qos`` is set only on SUBACK.  ``packet_id`` is
+    None for CONNACK / PINGRESP.
     """
 
     def __init__(
@@ -459,7 +459,7 @@ class PacketDecoder:
 
     Tier 2 (intact): packets > ``rx_buffer_size`` but ≤ ``max_message_bytes``.
     A one-shot ``bytearray(payload_length)`` is allocated for this
-    message; payload drains through the steady-state buffer into it;
+    message.  Payload drains through the steady-state buffer into it.
     :class:`ParsedPublish` is delivered with the full payload.  The
     intact buffer drops out of scope after delivery.
 
@@ -579,7 +579,7 @@ class PacketDecoder:
         fixed_byte = view[base]
         message_length, varlen_consumed = decode_varlen(view, base + 1)
         if varlen_consumed == 0:
-            return None  # Incomplete varlen — wait for more bytes.
+            return None  # Incomplete varlen: wait for more bytes.
         header_length = 1 + varlen_consumed
         total_length = header_length + message_length
 
