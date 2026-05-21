@@ -1,8 +1,8 @@
 """Worker entry point for one cross-runtime test file.
 
 Invoked as ``<runtime-binary> run_cross_runtime.py --worker <test_file>``
-by the ``chumicro-pytest-device`` plugin's :class:`UnixPortBackend` —
-one subprocess per ``libraries/<name>/tests/test_*.py`` file, fresh
+by the ``chumicro-pytest-device`` plugin's :class:`UnixPortBackend`.
+One subprocess per ``libraries/<name>/tests/test_*.py`` file, fresh
 heap per call.
 
 The script bootstraps ``sys.path`` so the harness package is

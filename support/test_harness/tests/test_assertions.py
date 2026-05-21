@@ -46,7 +46,7 @@ def test_raises_match_accepts_when_message_matches():
 
 
 def test_raises_match_uses_search_not_fullmatch():
-    """``match`` semantics mirror pytest — re.search, not re.fullmatch."""
+    """``match`` semantics mirror pytest: re.search, not re.fullmatch."""
     with raises(RuntimeError, match="oops"):
         raise RuntimeError("prefix oops suffix")
 
@@ -81,7 +81,7 @@ def test_raises_value_alias_mirrors_exception():
 
 
 def test_raises_value_is_none_until_block_exits():
-    """`.value` mirrors `.exception` — both unset until __exit__ runs."""
+    """`.value` mirrors `.exception`. Both unset until __exit__ runs."""
     ctx = raises(ValueError)
     assert ctx.value is None
     assert ctx.exception is None
