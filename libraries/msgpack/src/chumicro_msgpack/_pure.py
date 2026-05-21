@@ -1,9 +1,8 @@
 """Pure-Python msgpack encoder/decoder.
 
-Used by all runtimes when the native ``msgpack`` C module isn't
-available — `__init__.py` handles dispatch.  Supports None, bool,
-int (32-bit), float (32-bit), str, bytes, bytearray, list, tuple,
-and dict.
+Selected when the native ``msgpack`` C module is not available.
+Supports None, bool, int (32-bit), float (32-bit), str, bytes,
+bytearray, list, tuple, and dict.
 """
 
 import struct
