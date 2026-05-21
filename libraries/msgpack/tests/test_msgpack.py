@@ -525,8 +525,7 @@ def test_map32_decode_raises() -> None:
 def test_truncated_bin8_raises() -> None:
     """A bin8 claiming more bytes than remain raises, not a short read.
 
-    The audit case: 0xc4 + length 0xc8 (200) but only 2 payload bytes.
-    Pre-hardening this returned the 2 available bytes.
+    Wire bytes: 0xc4 (bin8 tag) + length 0xc8 (200) + 2 payload bytes.
     """
     with raises(ValueError):
         _pure_unpackb(b"\xc4\xc8\x01\x02")
@@ -553,8 +552,7 @@ def test_truncated_bin16_raises() -> None:
 def test_trailing_bytes_raises() -> None:
     """Bytes left after one complete object raise at the top level.
 
-    The audit case: 0x01 decodes as int 1, leaving 3 trailing bytes
-    that were silently dropped pre-hardening.
+    Wire bytes: 0x01 decodes as int 1, leaving 3 trailing bytes.
     """
     with raises(ValueError):
         _pure_unpackb(b"\x01\xff\xff\xff")
@@ -583,7 +581,7 @@ def test_nesting_too_deep_raises() -> None:
 
     The bound (8) is well below where a Pi Pico W under MicroPython
     exhausts pystack (17 nested), so the guard fires first on every
-    supported board — bench-confirmed on the 4-board matrix.
+    supported board.
     """
     # 9 nested single-element arrays — one past _MAX_DEPTH (8).
     with raises(ValueError):
