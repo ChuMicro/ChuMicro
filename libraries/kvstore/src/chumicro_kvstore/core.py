@@ -1,8 +1,9 @@
 """Core ``KVStore`` class, exception hierarchy, and ``Backend`` ABC.
 
-``MemoryBackend`` is lazy-imported (only the CPython fall-through and
-``backend="memory"`` paths touch it) — saves ~600-800 B of heap on
-device imports.  ``msgpack`` stays at module top: it runs on every
+``MemoryBackend`` is lazy-imported on the two paths that touch it
+(the CPython fall-through and ``backend="memory"``), keeping ~700 B
+of heap off device-runtime imports.  ``msgpack`` stays at module top:
+it runs on every
 commit/load and lazy overhead would dominate.  ``Backend`` lives
 alongside the exceptions so backends import their ABC + exception
 classes from one place, breaking the cycle that would otherwise
@@ -84,8 +85,7 @@ def _select_backend() -> Backend:
             return MpLittlefsBackend()
         from chumicro_kvstore._backends.mp_nvs import MpNvsBackend  # noqa: PLC0415
         return MpNvsBackend()
-    # CPython fall-through — MemoryBackend is lazy-imported here so
-    # device runtimes never pay its ~700 B import cost.
+    # CPython fall-through.
     from chumicro_kvstore._backends.memory import MemoryBackend  # noqa: PLC0415
     return MemoryBackend()
 
@@ -97,9 +97,6 @@ def _resolve_backend(backend: Backend | str) -> Backend:
     if backend == "auto":
         return _select_backend()
     if backend == "memory":
-        # Lazy: device runtimes never reach this path under "auto",
-        # so importing MemoryBackend at module top would waste ~700
-        # bytes of on-device heap.
         from chumicro_kvstore._backends.memory import MemoryBackend  # noqa: PLC0415
         return MemoryBackend()
     if backend == "nvm":
