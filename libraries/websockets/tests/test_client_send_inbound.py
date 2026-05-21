@@ -153,7 +153,7 @@ class TestSendOpenStateGate:
         client.send_binary(bytearray(b"hello"))
         client.handle(clock.ticks_ms())
         outbound = socket.read_outbound()
-        # Outbound is masked client frame; verify by parsing via FrameParser
+        # Outbound is masked client frame.  Verify by parsing via FrameParser
         # with no mask validation (FrameParser strips the mask).
         parser = FrameParser()
         parser.feed(outbound)
@@ -205,7 +205,7 @@ class TestSendQueuesAndDrains:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_text("hello world")
-        # Drain over multiple handles; each capped at 4 bytes.
+        # Drain over multiple handles, each capped at 4 bytes.
         for _tick in range(20):
             client.handle(clock.ticks_ms())
             if client._tx_partial is None and not client._tx_queue:
@@ -256,7 +256,7 @@ class TestInboundData:
         socket.feed_inbound(_client_frame(OPCODE_TEXT, b"\xff\xfe"))
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
-        # The CLOSE frame we queued is still in tx_queue; verify by draining.
+        # The CLOSE frame we queued is still in tx_queue.  Verify by draining.
         client.handle(clock.ticks_ms())
         sent = socket.read_outbound()
         parser = FrameParser()
@@ -268,7 +268,7 @@ class TestInboundData:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
-        # Servers MUST NOT mask outbound; injecting mask is a violation.
+        # Servers MUST NOT mask outbound.  Injecting mask is a violation.
         socket.feed_inbound(encode_frame(OPCODE_TEXT, b"hi", mask=b"mask"))
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSING
@@ -315,7 +315,7 @@ class TestFragmentation:
             encode_frame(OPCODE_TEXT, b"hel", fin=False, mask=None)
             + encode_frame(OPCODE_CONTINUATION, b"lo!", fin=True, mask=None),
         )
-        # Two ticks — one per frame the parser consumes.
+        # Two ticks, one per frame the parser consumes.
         client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
         assert texts == ["hello!"]

@@ -7,8 +7,8 @@ Two responsibilities:
    ``/runtime_config.msgpack`` on the device — on-device tests read
    wifi creds + the dynamic ``websockets.server`` host/port from there.
 2. Spawn a host-side ``websockets`` PyPI echo server on the LAN
-   interface so ``test_real_client_against_host.py`` has a battle-
-   tested third-party counterparty.
+   interface so ``test_real_client_against_host.py`` has a
+   third-party counterparty independent of the library under test.
 
 Skips the echo-server fixture (and so the host-counterparty test)
 silently when the ``websockets`` PyPI package isn't installed in
@@ -40,7 +40,7 @@ def _merged_runtime_config_with_creds() -> dict | None:
     """Return the deep-merged + flattened runtime-config dict, or ``None``."""
     if not _SECRETS_TOML.is_file():
         return None
-    # Any exception from ``compose_runtime_config`` propagates — a
+    # Any exception from ``compose_runtime_config`` propagates.  A
     # malformed ``secrets.toml`` is a real bug to surface, not the
     # same shape as a fresh-clone "user hasn't filled it in yet."
     # The missing-file path above is the only silent-skip case.
@@ -58,10 +58,7 @@ def _merged_runtime_config_with_creds() -> dict | None:
 
 
 def _detect_lan_ip() -> str | None:
-    """Return the host's primary LAN IPv4, or ``None`` if undetectable.
-
-    Mirrors :func:`chumicro_mqtt.functional_tests.conftest._detect_lan_ip`.
-    """
+    """Return the host's primary LAN IPv4, or ``None`` if undetectable."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.connect(("8.8.8.8", 80))

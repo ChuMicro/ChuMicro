@@ -1,6 +1,5 @@
 """WebSocket client tests (chumicro_websockets.client): constructor,
-connect, opening-handshake send/receive. Sibling slices: the
-other test_client_*.py files; wire-level in test_wire_*.py."""
+connect, opening-handshake send/receive."""
 
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
@@ -183,7 +182,7 @@ class TestHandshakeSend:
         client, _socket, clock, _ = _make_client(socket=socket)
         client.connect("ws://example.com/")
         client.handle(clock.ticks_ms())
-        # State unchanged; no bytes were consumed.
+        # State unchanged.  No bytes were consumed.
         assert client.state == WebSocketState.CONNECTING
         assert client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
 
@@ -240,7 +239,7 @@ class TestHandshakeReceive:
         client.connect("ws://example.com/")
         while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
             client.handle(clock.ticks_ms())
-        # No inbound bytes, no EOF — recv_into raises EAGAIN.
+        # No inbound bytes, no EOF.  recv_into raises EAGAIN.
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CONNECTING
 

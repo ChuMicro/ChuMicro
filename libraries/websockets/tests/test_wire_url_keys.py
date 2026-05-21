@@ -1,7 +1,5 @@
 """Wire tests for chumicro_websockets._wire: exception hierarchy,
-CaseInsensitiveDict, parse_ws_url. Sibling slices: see the other
-test_wire_*.py files; pytest-fixture variants in
-test_websockets_pytest.py."""
+CaseInsensitiveDict, parse_ws_url."""
 
 from chumicro_test_harness.assertions import raises
 from chumicro_websockets import (

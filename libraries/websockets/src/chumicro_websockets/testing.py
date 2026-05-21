@@ -1,10 +1,10 @@
 """Test helpers for libraries that depend on chumicro-websockets.
 
 Two fakes parallel to the patterns proven in
-:mod:`chumicro_sockets.testing` — fakes ship in the upstream library
+:mod:`chumicro_sockets.testing`.  Fakes ship in the upstream library
 so consumers don't write their own:
 
-* :class:`FakeConnection` — bidirectional in-memory pipe satisfying
+* :class:`FakeConnection`: bidirectional in-memory pipe satisfying
   the :class:`chumicro_sockets.TCPClientSocket` shape consumed by
   :class:`WebSocketClient` / :class:`Connection`.  Drive both sides
   via :meth:`feed_inbound` (peer pushes data the local end will
@@ -12,14 +12,14 @@ so consumers don't write their own:
   written).  Inject an ``OSError`` via ``raise_on_send`` /
   ``raise_on_recv`` to exercise EAGAIN and socket-error paths.
 
-* :class:`FakeListener` — stand-in for
+* :class:`FakeListener`: stand-in for
   :func:`chumicro_sockets.tcp_listening_socket`.  Tests call
   :meth:`queue_accept` to enqueue a :class:`FakeConnection` that
-  the next :meth:`accept` call returns; an empty queue surfaces
+  the next :meth:`accept` call returns.  An empty queue surfaces
   EAGAIN exactly like a real non-blocking listener.
 
-For ticks-domain fakes use :class:`chumicro_timing.testing.FakeTicks`
-— pass it through the client's / server's ``ticks=`` kwarg.
+For ticks-domain fakes use :class:`chumicro_timing.testing.FakeTicks`;
+pass it through the client's / server's ``ticks=`` kwarg.
 """
 
 __chumicro_test_support__ = True
@@ -33,8 +33,8 @@ class FakeConnection:
     :class:`Connection` directly.  The two halves of the pipe are
     addressable distinctly:
 
-    * :meth:`feed_inbound` puts bytes on the peer-to-local path —
-      they show up on the next :meth:`recv_into`.
+    * :meth:`feed_inbound` puts bytes on the peer-to-local path
+      so they show up on the next :meth:`recv_into`.
     * :meth:`read_outbound` drains whatever the local end has written
       (via :meth:`send`) so test assertions can inspect the bytes.
 
@@ -45,17 +45,17 @@ class FakeConnection:
 
     Error injection:
 
-    * ``raise_on_send`` — set to an :class:`Exception` instance and
+    * ``raise_on_send``: set to an :class:`Exception` instance and
       the next :meth:`send` raises it (then resets to ``None``).
-    * ``raise_on_recv`` — same shape for :meth:`recv_into`.
-    * ``send_chunk_cap`` — when set, each :meth:`send` returns at
+    * ``raise_on_recv``: same shape for :meth:`recv_into`.
+    * ``send_chunk_cap``: when set, each :meth:`send` returns at
       most this many bytes.  Useful for exercising partial-send
       resumption without injecting a full error.
 
     Public observation:
 
-    * ``closed`` — flips ``True`` after :meth:`close`.
-    * ``outbound`` / ``inbound`` — raw :class:`bytearray` buffers
+    * ``closed``: flips ``True`` after :meth:`close`.
+    * ``outbound`` / ``inbound``: raw :class:`bytearray` buffers
       (read-only convention; tests should use :meth:`read_outbound`
       and :meth:`feed_inbound`).
     """
@@ -88,7 +88,7 @@ class FakeConnection:
         return bytes(self.outbound)
 
     def close_inbound(self) -> None:
-        """Signal peer-EOF — next recv_into returns 0 instead of EAGAIN."""
+        """Signal peer-EOF: next recv_into returns 0 instead of EAGAIN."""
         self.eof = True
 
     # ------------------------------------------------------------------
@@ -121,15 +121,15 @@ class FakeConnection:
         if not self.inbound:
             if self.eof:
                 return 0
-            # ``OSError(EAGAIN)`` rather than ``BlockingIOError`` —
+            # ``OSError(EAGAIN)`` rather than ``BlockingIOError``.
             # MicroPython lacks the latter.  Real adapters raise
             # ``OSError`` too on every runtime, so this is closer to
             # what production sees.
             raise OSError(11, "no data ready")
         take = min(cap, len(self.inbound))
         buffer[:take] = self.inbound[:take]
-        # CircuitPython doesn't support `del bytearray[start:stop]` —
-        # slice-rebind works on every runtime.
+        # CircuitPython doesn't support `del bytearray[start:stop]`.
+        # Slice-rebind works on every runtime.
         self.inbound = bytearray(self.inbound[take:])
         return take
 
@@ -160,7 +160,7 @@ class FakeListener:
     def accept(self):
         """Return ``(connection, address)`` or raise EAGAIN if no pending."""
         if not self._pending:
-            # OSError, not BlockingIOError — see FakeConnection.recv_into above.
+            # OSError, not BlockingIOError, since MicroPython lacks the latter.
             raise OSError(11, "no pending connection")
         peer = self._pending.pop(0)
         return peer, ("127.0.0.1", 12345)

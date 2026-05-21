@@ -11,7 +11,7 @@ feeds bytes in.
 
 v1 scope:
 
-* RFC 6455 framing — opcodes 0/1/2/8/9/A, 7 / 16 / 64-bit length,
+* RFC 6455 framing: opcodes 0/1/2/8/9/A, 7 / 16 / 64-bit length,
   client masking, inbound fragmentation, control-frame interleave.
 * UTF-8 validation on text frames per RFC 6455 §8.1.
 * Outbound is always single-frame (``FIN=1``).
@@ -71,14 +71,14 @@ class WebSocketError(Exception):
 
 
 class WebSocketProtocolError(WebSocketError):
-    """Peer sent bytes the spec doesn't allow — anything RFC 6455 calls
-    out as MUST close.  Right response: close with
-    :data:`CLOSE_PROTOCOL_ERROR` (or :data:`CLOSE_BAD_DATA` for UTF-8).
+    """Peer sent bytes RFC 6455 calls out as MUST close.  Right
+    response: close with :data:`CLOSE_PROTOCOL_ERROR` (or
+    :data:`CLOSE_BAD_DATA` for UTF-8).
     """
 
 
 class WebSocketHandshakeError(WebSocketError):
-    """Opening-handshake failed — non-101 status, wrong accept token,
+    """Opening-handshake failed: non-101 status, wrong accept token,
     missing/wrong ``Upgrade``/``Connection`` headers, or malformed
     HTTP/1.1 (server-side: bad method/version/key).
     """
@@ -112,7 +112,7 @@ class WebSocketStateError(WebSocketError):
 #: and SHA-1'd to derive ``Sec-WebSocket-Accept``.
 WS_MAGIC_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-#: RFC 6455 §4.1 — required version token for the opening handshake.
+#: RFC 6455 §4.1: required version token for the opening handshake.
 WS_VERSION = "13"
 
 #: HTTP/1.1 line terminator.
@@ -149,10 +149,10 @@ DEFAULT_CLOSE_TIMEOUT_MS = const(5000)
 #: Default pong-after-ping budget in ms.
 DEFAULT_PONG_TIMEOUT_MS = const(30000)
 
-#: RFC 6455 §5.5 — control payloads MUST be <=125 bytes.
+#: RFC 6455 §5.5: control payloads MUST be <=125 bytes.
 MAX_CONTROL_PAYLOAD_BYTES = const(125)
 
-# Opcodes — RFC 6455 §5.2.
+# Opcodes: RFC 6455 §5.2.
 OPCODE_CONTINUATION = const(0x0)
 OPCODE_TEXT = const(0x1)
 OPCODE_BINARY = const(0x2)
@@ -163,11 +163,11 @@ OPCODE_PONG = const(0xA)
 #: Opcodes that carry data (vs. control).  RFC 6455 §5.6.
 DATA_OPCODES = frozenset({OPCODE_CONTINUATION, OPCODE_TEXT, OPCODE_BINARY})
 
-#: Opcodes that are control frames.  RFC 6455 §5.5 — MUST be ``FIN=1``,
+#: Opcodes that are control frames.  RFC 6455 §5.5: MUST be ``FIN=1``,
 #: payload <=125 bytes, may interleave between fragmented data frames.
 CONTROL_OPCODES = frozenset({OPCODE_CLOSE, OPCODE_PING, OPCODE_PONG})
 
-# Close codes — RFC 6455 §7.4.1 / §7.4.2.
+# Close codes: RFC 6455 §7.4.1 / §7.4.2.
 CLOSE_NORMAL = const(1000)
 CLOSE_GOING_AWAY = const(1001)
 CLOSE_PROTOCOL_ERROR = const(1002)
@@ -181,8 +181,8 @@ CLOSE_MISSING_EXTN = const(1010)
 CLOSE_INTERNAL_ERROR = const(1011)
 CLOSE_TLS_HANDSHAKE = const(1015)   # reserved; never sent on the wire
 
-#: Close codes the spec forbids on the wire (RFC 6455 §7.4.1) —
-#: a peer-supplied close code matching one of these is itself a
+#: Close codes the spec forbids on the wire (RFC 6455 §7.4.1).
+#: A peer-supplied close code matching one of these is itself a
 #: protocol error.
 RESERVED_CLOSE_CODES = frozenset({
     CLOSE_NO_STATUS_RCVD,
@@ -218,16 +218,15 @@ class CaseInsensitiveDict:
     """Header dict whose lookups fold to lowercase.
 
     HTTP/1.1 §3.2 requires header names to be case-insensitive on
-    receipt — the websocket opening handshake is HTTP/1.1.  We store
+    receipt, and the websocket opening handshake is HTTP/1.1.  Stores
     the original-cased name (so callers see ``Upgrade`` not
     ``upgrade``) keyed off the lowercased form.  ``items()`` yields
-    in insertion order on every runtime — MicroPython and CircuitPython
+    in insertion order on every runtime.  MicroPython and CircuitPython
     dicts do not preserve insertion order unlike CPython 3.7+, so a
     paired ``_order`` list of lowercase keys drives iteration.
 
     Slim subset (no ``__iter__`` / ``__len__`` / ``__eq__`` / ``__repr__``
-    / ``add()``) since the WS encoders + parsers only need the methods
-    below.
+    / ``add()``).
     """
 
     def __init__(self):
@@ -392,7 +391,7 @@ def encode_client_handshake(
 
     merged = CaseInsensitiveDict()
     _merge_extra_headers(merged, extra_headers)
-    # Mandatory upgrade headers — applied AFTER caller's so they win.
+    # Mandatory upgrade headers, applied AFTER caller's so they win.
     merged["Host"] = host_value
     merged["Upgrade"] = "websocket"
     merged["Connection"] = "Upgrade"
@@ -465,7 +464,7 @@ class HandshakeParseState:
     """Streaming-handshake parser states.
 
     Forward-only.  ``REQUEST_LINE`` is the server-side first line
-    (``GET /path HTTP/1.1``); ``STATUS_LINE`` is the client-side
+    (``GET /path HTTP/1.1``).  ``STATUS_LINE`` is the client-side
     first line (``HTTP/1.1 101 Switching Protocols``).  Both then
     flow through ``HEADERS`` to ``DONE``.  ``ERROR`` is terminal.
     """
@@ -493,8 +492,9 @@ class _HandshakeLineParser:
         self._max_header_bytes = max_header_bytes
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Per-line
-        # ``_buffer = bytearray(_buffer[N:])`` fragments the embedded
-        # heap into 1024-byte tiers under sustained handshake load.
+        # ``_buffer = bytearray(_buffer[N:])`` would fragment the
+        # embedded heap into 1024-byte tiers under sustained
+        # handshake load.
         self._read_offset = 0
         self.state = self._initial_state
         self.http_version = ""
@@ -513,7 +513,7 @@ class _HandshakeLineParser:
         if self.state in (HandshakeParseState.DONE, HandshakeParseState.ERROR):
             return
         self._buffer.extend(chunk)
-        # Cap is on *unconsumed* bytes — the cursor amortizes the
+        # Cap is on *unconsumed* bytes.  The cursor amortizes the
         # bytearray reuse, so checking ``len(_buffer)`` would over-count
         # bytes the cursor has logically dropped but the compaction step
         # hasn't reclaimed yet.
@@ -538,7 +538,7 @@ class _HandshakeLineParser:
                 self._parse_first_line(line)
 
     # ------------------------------------------------------------------
-    # Buffer helpers (read-cursor pattern — see ResponseParser)
+    # Buffer helpers (read-cursor pattern)
     # ------------------------------------------------------------------
 
     def _live_len(self):
@@ -563,9 +563,7 @@ class _HandshakeLineParser:
         """Advance the cursor; compact when past the halfway mark.
 
         Slice-assign-empty (``self._buffer[:offset] = b""``) does an
-        in-place memmove on every runtime — no allocation.  See
-        :meth:`chumicro_requests._wire.ResponseParser._consume` for the
-        original allocating shape this replaces.
+        in-place memmove on every runtime, no allocation.
         """
         self._read_offset += count
         if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
@@ -639,7 +637,7 @@ class HandshakeResponseParser(_HandshakeLineParser):
             raise self._fail(
                 f"non-ASCII bytes in status line: {decode_error}",
             ) from decode_error
-        # "HTTP/1.1 101 Switching Protocols" — split on first two spaces.
+        # "HTTP/1.1 101 Switching Protocols": split on first two spaces.
         parts = decoded.split(" ", 2)
         if len(parts) < 2:
             raise self._fail(f"malformed status line: {decoded!r}")
@@ -779,19 +777,19 @@ class FrameParseState:
 class FrameParser:
     """Streaming RFC 6455 §5 binary-frame parser.
 
-    One frame at a time — the higher layers (client / server) handle
+    One frame at a time.  The higher layers (client / server) handle
     fragmentation reassembly, control-frame routing, mask-direction
     policy, and UTF-8 validation.
 
     Three-tier inbound size handling:
 
-    * **Tier 1 — steady.**  Frame payload ≤ ``payload_buffer_size``.
+    * **Tier 1, steady.**  Frame payload ≤ ``payload_buffer_size``.
       Reuses the pre-allocated steady-state buffer.  No allocation.
-    * **Tier 2 — intact.**  Frame payload > ``payload_buffer_size``
+    * **Tier 2, intact.**  Frame payload > ``payload_buffer_size``
       but ≤ ``max_payload_bytes``.  One-shot ``bytearray(payload_length)``
       allocated for this frame, dropped on the next :meth:`reset`.
-    * **Tier 3 — oversized.**  Frame payload > ``max_payload_bytes``.
-      No allocation beyond the steady-state buffer; payload bytes are
+    * **Tier 3, oversized.**  Frame payload > ``max_payload_bytes``.
+      No allocation beyond the steady-state buffer.  Payload bytes are
       consumed off the wire without being stored (rolling discard).
       :attr:`oversized` is set on ``FRAME_READY`` and :attr:`payload`
       returns ``b""``.  The higher layer applies its ``WhenOversized``
@@ -799,21 +797,21 @@ class FrameParser:
 
     Args:
         max_payload_bytes: Per-frame payload cap.  Frames declaring a
-            larger length enter tier 3 (rolling discard); the parser
+            larger length enter tier 3 (rolling discard) and the parser
             stays usable for the next frame.  This bounds heap, not
-            connection lifetime — a hostile peer can still trickle a
+            connection lifetime.  A hostile peer can still trickle a
             multi-GB declared length, which the session layer's
             ``WhenOversized=DISCONNECT`` policy is the answer to.
 
     Public state on :attr:`state` == ``FRAME_READY``:
 
-    * :attr:`fin`        — bool, FIN bit
-    * :attr:`rsv`        — int, three RSV bits packed (RSV1<<2|RSV2<<1|RSV3)
-    * :attr:`opcode`     — int (one of ``OPCODE_*``)
-    * :attr:`had_mask`   — bool (was MASK bit set?)
-    * :attr:`payload`    — ``bytes`` of unmasked payload (``b""`` on tier 3)
-    * :attr:`oversized`  — bool, payload was drained without buffering
-    * :attr:`reported_length` — int, declared frame length (load-bearing
+    * :attr:`fin`: bool, FIN bit
+    * :attr:`rsv`: int, three RSV bits packed (RSV1<<2|RSV2<<1|RSV3)
+    * :attr:`opcode`: int (one of ``OPCODE_*``)
+    * :attr:`had_mask`: bool (was MASK bit set?)
+    * :attr:`payload`: ``bytes`` of unmasked payload (``b""`` on tier 3)
+    * :attr:`oversized`: bool, payload was drained without buffering
+    * :attr:`reported_length`: int, declared frame length (load-bearing
       on tier 3, where :attr:`payload` is empty)
     """
 
@@ -925,7 +923,7 @@ class FrameParser:
                 with payload >125, or control frame with FIN=0.  The
                 parser also transitions to ``ERROR`` and stores the
                 message in :attr:`error`.  Oversized data frames do
-                NOT raise — they enter tier-3 drain.
+                NOT raise.  They enter tier-3 drain.
         """
         consumed = 0
         effective_length = len(chunk) - start
@@ -1041,13 +1039,13 @@ class FrameParser:
     def _after_length(self) -> None:
         # RFC 6455 §5.5: control frames MUST be ≤ 125 bytes.  This is
         # a protocol violation regardless of ``max_payload_bytes``, so
-        # it still raises — the connection must close with 1002.
+        # it still raises and the connection must close with 1002.
         if self.opcode in CONTROL_OPCODES and self._payload_length > MAX_CONTROL_PAYLOAD_BYTES:
             raise self._fail(
                 f"control frame opcode 0x{self.opcode:x} payload "
                 f"{self._payload_length} > {MAX_CONTROL_PAYLOAD_BYTES}",
             )
-        # Data frame > max_payload_bytes — enter tier-3 drain instead
+        # Data frame > max_payload_bytes: enter tier-3 drain instead
         # of raising.  The session layer's ``WhenOversized`` policy
         # decides whether to stay connected.  Mask state must still
         # be consumed off the wire if MASK was set, since the 4 mask
@@ -1103,7 +1101,7 @@ class FrameParser:
 def make_mask_key() -> bytes:
     """Return 4 random bytes for client-side outbound frame masking.
 
-    Per RFC 6455 §5.3 — the mask is a random 32-bit value freshly
+    Per RFC 6455 §5.3: the mask is a random 32-bit value freshly
     chosen for each frame.  Predictability undermines the masking
     purpose (cache-poisoning protection on intermediaries).
     """
@@ -1196,7 +1194,7 @@ def encode_close_payload(code: int | None, reason: str = "") -> bytes:
 
     Raises:
         WebSocketProtocolError: Code is in :data:`RESERVED_CLOSE_CODES`
-            (1005 / 1006 / 1015 — RFC 6455 §7.4.1 forbids these on
+            (1005 / 1006 / 1015: RFC 6455 §7.4.1 forbids these on
             the wire), or reason encoded would push the body past
             125 bytes.
     """
@@ -1237,7 +1235,7 @@ def parse_close_payload(payload: bytes) -> tuple[int | None, str]:
         WebSocketProtocolError: Length is exactly 1 (must be 0 or
             >=2 per RFC 6455 §5.5.1), code is in
             :data:`RESERVED_CLOSE_CODES`, or reason bytes are not
-            valid UTF-8 (RFC 6455 §8.1 — close reason MUST be UTF-8).
+            valid UTF-8 (RFC 6455 §8.1: close reason MUST be UTF-8).
     """
     if not payload:
         return None, ""

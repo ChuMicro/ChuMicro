@@ -39,8 +39,8 @@ import time
 from chumicro_websockets import WebSocketServer
 from helpers import runtime_config, ticks_ms, wifi_up
 
-WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
-WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
+WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
+WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 
 config = runtime_config()
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)

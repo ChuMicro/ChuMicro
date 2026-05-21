@@ -1,16 +1,16 @@
-"""End-to-end integration tests for chumicro_websockets — slice 4.
+"""End-to-end integration tests for chumicro_websockets.
 
 Wires a :class:`WebSocketClient` and a :class:`WebSocketServer` together
 in-process via paired :class:`FakeConnection` objects.  Bytes the
 client writes get pumped into the server's inbound queue between
-ticks, and vice versa — a complete client ↔ server loopback that
+ticks, and vice versa: a complete client / server loopback that
 drives both state machines through the runner contract without any
 real sockets.
 
-Proves the slice 1/2/3 components fit together:
+Proves the wire / session / runner layers fit together:
 
 * The client-side handshake produces bytes the server's
-  :class:`HandshakeRequestParser` accepts; the server's 101 response
+  :class:`HandshakeRequestParser` accepts.  The server's 101 response
   is what the client's :class:`HandshakeResponseParser` validates
   against the derived accept token.
 * Client outbound mask discipline (clients MUST mask) is exactly

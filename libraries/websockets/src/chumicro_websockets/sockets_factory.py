@@ -1,6 +1,6 @@
 """Default :mod:`chumicro_sockets` wiring for :class:`WebSocketClient`.
 
-Opt-in submodule — the package's ``__init__.py`` does not import it,
+Opt-in submodule.  The package's ``__init__.py`` does not import it,
 so users who pass their own ``connection_factory`` never pull
 :mod:`chumicro_sockets` into the deploy graph.
 """

@@ -36,7 +36,7 @@ class TestFrameParserHappyPath:
         assert parser.payload == b"hello"
 
     def test_short_masked_frame_unmasks_payload(self):
-        # Client → server: MASK=1, mask=b"mask", len=4, payload="ping" XOR mask.
+        # Client to server: MASK=1, mask=b"mask", len=4, payload="ping" XOR mask.
         mask = b"mask"
         plaintext = b"ping"
         masked = bytes(plaintext[index] ^ mask[index & 3] for index in range(4))
@@ -59,7 +59,7 @@ class TestFrameParserHappyPath:
 
     def test_64bit_length_frame(self):
         # Up to max_payload_bytes default 16384.  Exercise the 64-bit branch
-        # with a small payload — the length-byte parsing path matters more
+        # with a small payload: the length-byte parsing path matters more
         # than payload size.
         payload = b"Y" * 3000
         frame = b"\x82\x7f" + struct.pack("!Q", 3000) + payload
@@ -85,7 +85,7 @@ class TestFrameParserHappyPath:
         assert parser.payload == b"hello"
 
     def test_consumed_count_stops_at_frame_boundary(self):
-        # Feed two back-to-back frames; first call should consume only frame 1.
+        # Feed two back-to-back frames.  First call consumes only frame 1.
         first = b"\x81\x03foo"
         second = b"\x81\x03bar"
         parser = FrameParser()
@@ -107,8 +107,8 @@ class TestFrameParserHappyPath:
         assert parser.opcode == 0
 
     def test_continuation_opcode_recognized(self):
-        # FIN=0 + CONT is valid mid-fragmentation; parser doesn't enforce
-        # message-level rules (that's the client/server's job).
+        # FIN=0 + CONT is valid mid-fragmentation.  The parser doesn't
+        # enforce message-level rules (that's the client/server's job).
         parser = FrameParser()
         parser.feed(b"\x00\x03foo")
         assert parser.state == FrameParseState.FRAME_READY
@@ -132,11 +132,9 @@ class TestFrameParserHappyPath:
 
 class TestFrameParserOversizeDrain:
     """Frames declaring a length > ``max_payload_bytes`` drain through
-    the parser without storing the payload; the parser stays usable
-    for the next frame.  Mirrors :class:`chumicro_mqtt._wire.PacketDecoder`'s
-    tier-3 rolling discard so the session layer can apply its
-    ``WhenOversized`` policy at message-FIN time, matching the shared
-    cross-library oversize contract.
+    the parser without storing the payload.  The parser stays usable
+    for the next frame, and the session layer applies its
+    ``WhenOversized`` policy at message-FIN time.
     """
 
     def test_oversize_16bit_length_drains_payload(self):
@@ -161,8 +159,8 @@ class TestFrameParserOversizeDrain:
 
     def test_oversize_masked_frame_drains_without_unmasking(self):
         # Mask bytes still consumed off the wire, but payload bytes
-        # are discarded — XOR is skipped (the bytes are going in the
-        # bin either way).
+        # are discarded.  XOR is skipped since the bytes are going in
+        # the bin either way.
         parser = FrameParser(max_payload_bytes=100)
         mask = b"mask"
         payload = b"Z" * 500
@@ -176,7 +174,7 @@ class TestFrameParserOversizeDrain:
         assert consumed == len(frame)
 
     def test_oversize_drain_across_feed_calls(self):
-        # Tier-3 drain must hold state across short feeds — real TCP
+        # Tier-3 drain must hold state across short feeds.  Real TCP
         # delivers bytes in arbitrary chunks.
         parser = FrameParser(max_payload_bytes=100)
         frame = b"\x82\x7e" + struct.pack("!H", 500) + b"X" * 500
@@ -203,7 +201,7 @@ class TestFrameParserOversizeDrain:
 
     def test_oversize_frame_followed_by_normal_frame(self):
         # Two back-to-back frames in one feed call: oversized + normal.
-        # `consumed` stops at the oversized frame's last byte; caller
+        # `consumed` stops at the oversized frame's last byte.  Caller
         # then resets and feeds the rest.
         parser = FrameParser(max_payload_bytes=100)
         oversized = b"\x82\x7e" + struct.pack("!H", 500) + b"X" * 500
@@ -255,8 +253,8 @@ class TestFrameParserErrors:
             parser.feed(b"\x09\x00")
 
     def test_control_frame_payload_over_125_raises(self):
-        # PING with 126-byte payload — uses the 16-bit length form which
-        # itself is illegal for control frames.
+        # PING with 126-byte payload, which uses the 16-bit length form
+        # which itself is illegal for control frames.
         parser = FrameParser()
         with raises(WebSocketProtocolError, match="125"):
             parser.feed(b"\x89\x7e" + struct.pack("!H", 126))

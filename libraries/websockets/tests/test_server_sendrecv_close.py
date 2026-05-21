@@ -121,8 +121,8 @@ class TestSendReceive:
     def test_unmasked_inbound_frame_closes_with_protocol_error(self):
         server, listener, clock = _make_server()
         peer, _key, _response = _drive_server_handshake(server, listener, clock)
-        # Server expects MASK bit set on inbound; sending a server-style frame
-        # (no mask) is a protocol violation.
+        # Server expects MASK bit set on inbound.  Sending a server-style
+        # frame (no mask) is a protocol violation.
         peer.feed_inbound(encode_frame(OPCODE_TEXT, b"hi", mask=None))
         server.handle(clock.ticks_ms())
         # Connection finalizes after draining the close.
