@@ -293,17 +293,19 @@ class WebSocketServer:
     ``websockets.server.max_message_bytes`` from
     ``runtime_config.msgpack``.
 
-    Knobs: ``max_connections`` (default 2; inbound accepts past the
-    cap close immediately to bound heap + per-tick work);
-    ``max_message_bytes`` / ``recv_budget_per_tick`` /
-    ``send_budget_per_tick`` / ``max_tx_queue_size`` / ``when_oversized`` /
-    ``pong_timeout_ms`` / ``handshake_timeout_ms`` /
-    ``close_timeout_ms`` — same semantics as
-    :class:`WebSocketClient`, applied per-connection;
-    ``ticks`` — optional tick source (any object exposing
-    ``ticks_ms`` / ``ticks_diff`` / ``ticks_add``); defaults to
-    :mod:`chumicro_timing`'s ``ticks`` submodule.  Tests pass
-    ``FakeTicks`` from :mod:`chumicro_timing.testing`.
+    Knobs:
+
+    * ``max_connections``: default 2.  Inbound accepts past the cap
+      close immediately to bound heap + per-tick work.
+    * ``max_message_bytes`` / ``recv_budget_per_tick`` /
+      ``send_budget_per_tick`` / ``max_tx_queue_size`` /
+      ``when_oversized`` / ``pong_timeout_ms`` /
+      ``handshake_timeout_ms`` / ``close_timeout_ms``: same
+      semantics as :class:`WebSocketClient`, applied per-connection.
+    * ``ticks``: optional tick source (any object exposing
+      ``ticks_ms`` / ``ticks_diff`` / ``ticks_add``).  Defaults to
+      the :mod:`chumicro_timing` ``ticks`` submodule.  Tests pass
+      ``FakeTicks`` from :mod:`chumicro_timing.testing`.
     """
 
     @classmethod
