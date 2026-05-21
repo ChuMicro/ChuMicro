@@ -11,21 +11,12 @@ When instructions overlap:
 3. Accepted decisions in [`plans/decisions/`](plans/decisions/)
 4. Repository docs ([style guide](docs/contributing/style-guide.md), [contributing/](docs/contributing/))
 
-## Session start
-
-Every session, in this order:
-
-1. `git --no-pager log --oneline -10` to see what just shipped.
-2. Read [`plans/next-up.md`](plans/next-up.md) for the current open work items.
-3. Read the ADR file name (slugs) at `ls plans/decisions/`.
-
-Commit history is the primary fallback when planning docs are stale. Write commit messages that aid future context recovery.
-
 ## Non-negotiable rules
 
 **Workflow**
 
 - Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop.
+- End-of-work invokes the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill. It owns preflight, `plans/next-up.md` refresh, durable-lesson lift, commit, and push. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial, and say so.
 - Anchor claims to evidence (file, symbol, test, or command). Don't fabricate. Verify by reading code, running tests, or checking command output. Training recall is not verification. For anything time-sensitive, version-specific, or newer than the model cutoff, web-search rather than asserting from memory.
 - Verify sub-agent (Explore / audit-* / general-purpose) concrete claims before relaying. Grep or read the referenced files. Reports describe intent, not state.
 - Don't modify unrelated code when fixing a focused bug. Mention pre-existing issues separately.
@@ -111,6 +102,7 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 - **Grep is for verifying a specific claim, not for replacing the read on judgment tasks.** When the deliverable is a judgment that requires holding context (audit, code review, comprehending unfamiliar code), workload size is not permission to drop to pattern-scanning. Split the target into smaller sequential passes. Do not switch tools. Token cost is not the success metric when the work *is* the read. Grep is the right primary tool when the deliverable is *finding* something specific, like callers of X or occurrences of a pattern. It is the wrong primary tool when the deliverable is *judging* prose, structure, or design.
 - **Surface tradeoffs early.** When multiple reasonable approaches exist, name them. When ambiguity affects correctness, ask. When a simpler approach would work, say so.
 - **Default to action on reversible local work.** File edits, tests, refactors, plans-doc updates: execute, don't ask. Surface before destructive ops (deletions, force-pushes, breaking API changes), anything visible outside this repo, or unasked scope expansion. Auto mode amplifies *lean toward action*, not *skip the destructive-op check*.
+- **A named successor is a directive, not an off-ramp.** When a skill or doc points at another step as the owner of what comes next, follow the pointer. Words like *"defer"*, *"later"*, *"elsewhere"* describe where to go, not that you're done.
 - **Quality bar.** Small focused diffs, preflight green, commit messages that name the rule / decision / pattern applied.
 
 ## Writing tone

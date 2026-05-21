@@ -5,7 +5,7 @@ description: Sanity check at the end of a unit of work — preflight green, plan
 
 # Task Checkpoint
 
-Per [AGENTS.md → Keeping plans and docs current](../../../AGENTS.md), run this at the end of every unit of work — before telling the user you're done.
+Per [AGENTS.md → Keeping plans and docs current](../../../AGENTS.md#keeping-plans-and-docs-current), run this at the end of every unit of work — before telling the user you're done.
 
 **Trigger gate.** Did you just complete a unit of work that could be described in one commit subject?  If no, you're not at a checkpoint — go finish the work.
 
@@ -21,6 +21,7 @@ git diff --stat
 Scan the output. Ask yourself:
 - Are there files I changed that I forgot about?
 - Are there files I didn't mean to change?
+- Are there modifications I didn't make this session?  If yes, surface them to the user *before* running step 2 — preflight will likely fail on someone else's red and waste the slow gate.  When you stage in step 5, use explicit pathspecs (never `git add .` / `git add -A`) so the pre-existing dirt doesn't ride into your commit.
 - Did I leave any temporary or scratch files outside `.scratch/`?
 
 ## 2. Run preflight
@@ -35,28 +36,27 @@ Must show: `Preflight passed`. If it fails because of your work, fix it before c
 
 This is the compression tier — without it, lessons get sealed into dated history entries or commit messages and stop being re-readable.
 
-Ask: **did this session produce something that future sessions need to know without scrolling git log?** Walk the four homes and lift if any apply. Lift *now*, in the same commit as the work, so the dated entry (if any) can be terse.
+Ask: **did this session produce something that future sessions need to know without scrolling git log?** Walk the four destinations below and lift if any apply. Lift *now*, in the same commit as the work, so the dated entry (if any) can be terse.
 
 - [ ] **Lifted one bullet** — or explicitly decided "routine session, no lift".  Default to lifting rather than skipping.  Bar is *"would I want to know this if I picked up cold"*, not *"is this a flagship insight"*.
 
-| Home | Lift when the session produced… | Where it lives |
-|------|--------------------------------|----------------|
+| Destination | Lift when the session produced… | How to write it |
+|-------------|---------------------------------|------------------|
 | `plans/decisions/NNNN-*.md` | A tradeoff or structural choice future contributors will need to know *why* about | New ADR via the `new-decision` skill |
 | `plans/patterns.md` | Reusable code shape, subprocess invocation, IDE wiring, transport contract — *how* to implement correctly | Append a section under the right heading |
 | Inline code comment | A non-obvious constraint discovered the hard way (hardware quirk, third-party-tool gotcha, runtime-specific behavior) — anywhere a reader of the code might trip on the same surface | One-line `# `-comment next to the workaround; keep the prose in the commit message |
 | `AGENTS.md` non-negotiables | An agent-facing rule whose violation already cost time | Append to the rules list |
-| Commit message body | Narrative context, what was tried and rejected, the rationale a future reader will want when running `git log <range>` | The commit you're about to write |
+
+Narrative context, what was tried and rejected, and the rationale a future reader will want when running `git log <range>` go in the commit message body you're about to write.  That's the default; the table above is for the durable-lesson exceptions worth their own destination.
 
 ## 4. Refresh `plans/next-up.md`
 
-`next-up.md` is the agent-managed work queue and the single source of truth for what's in flight and what's queued.  No `## Done` section — `git log` carries history (AGENTS.md "Keeping plans and docs current").  Every checkpoint touches it:
+Per [AGENTS.md → Keeping plans and docs current](../../../AGENTS.md#keeping-plans-and-docs-current), every checkpoint refreshes `plans/next-up.md`:
 
-- **`## Now`** — remove the bullet for what just shipped.  If Now is now empty, leave it empty.
-- **`## Next` / `## Investigations`** — remove the bullet for any item that just shipped; add new follow-ups discovered during the work as one-line entries (promote to `plans/workstreams/<slug>.md` if the item needs more than a title).
+- Remove the bullet for what just shipped from whichever section held it.  `## Now` is typical; `## Next`, `## Out of scope`, and `## Investigations` are also valid (see [plans/README.md](../../../plans/README.md) for the section list).
+- Add follow-ups discovered during the work as one-line entries under `## Next`.  If an entry would need more than a title, promote to `plans/workstreams/<slug>.md` and link from a one-line pointer here (enforced by CHU011).
 
-Each top-level bullet stays at one line, no sub-bullets (CHU011).  If an entry would need more, promote to `plans/workstreams/<slug>.md` and link from a one-line pointer here.
-
-The narrative of what shipped lives in the commit message you write in step 5.  A future agent picking up cold runs `git --no-pager log -20 --oneline` to see the recent landings.
+A future agent picking up cold reads `next-up.md` for what's queued and runs `git --no-pager log -20 --oneline` for what just landed.
 
 ## 5. Commit and push if the work is meaningful
 
@@ -76,7 +76,7 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 
 - Preflight green (or pre-existing red surfaced to the user and work paused).
 - Step 3 either lifted one bullet or explicitly decided "routine session, no lift".
-- `plans/next-up.md` reflects what just shipped: the matching `## Now` / `## Next` bullet removed; new follow-ups added.
+- `plans/next-up.md` reflects what just shipped: the shipped bullet removed from whichever section held it; new follow-ups added under `## Next`.
 - Commit pushed — or the work explicitly declared partial.
 
 ## Rules
@@ -84,6 +84,4 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 - **This is fast.** Preflight takes a few seconds. Step 3 takes under a minute on the average session and is skipped entirely on routine ones. The whole checkpoint should fit inside two minutes.
 - **Don't skip step 1.** A `git status` catches surprises — files you forgot, files you didn't mean to change, merge artifacts.
 - **Don't skip step 2.** Preflight is the single gate. If it passes, CI will pass. Narrow checks miss cross-cutting breakage.
-- **Step 3 is the compression tier.** `git log` is the journal — there's no separate dated-timeline file. If you find yourself writing long planning-doc prose, stop and ask whether it should be a Pattern, a Learning, a Decision, or a commit-message body instead.
-- **Step 4 is cheap.** Removing the shipped bullet from `## Now` / `## Next` is all most checkpoints need. Always do it — the next session reads `next-up.md` cold.
-- **Commit and push early.** Small commits are easier to review and revert than large ones. The compression artifacts ride with the work — one commit, not two.
+- **One commit, not two.** The step 3 compression artifacts and the step 4 `next-up.md` refresh ride with the work commit. No separate housekeeping commit.
