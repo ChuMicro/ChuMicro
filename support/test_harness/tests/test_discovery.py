@@ -229,13 +229,12 @@ def test_run_one_file_runs_passing_test(tmp_path, capsys):
 
 
 def test_run_one_file_fails_on_import_errors(tmp_path, capsys):
-    """run_one_file returns 1 (FAIL) when the file fails to import.
+    """run_one_file returns 1 and prints a FAIL line when the file fails to import.
 
-    The harness used to swallow ``ImportError`` as a silent SKIP — that
-    let mis-classified files (genuinely cross-runtime in name, but
-    pulling in pytest / unittest / tracemalloc) silently disappear
-    from MP / CP test runs.  Now they're loud failures with a fix
-    hint pointing at the convert-or-rename remediation.
+    The FAIL message must name ``__chumicro_runtimes__`` so a reader of
+    the output knows which marker to add: a cross-runtime test file that
+    imports pytest / unittest / tracemalloc must be declared CPython-only,
+    not silently dropped from MP / CP runs.
     """
     root = str(tmp_path)
     _make_library(root, "broken", ["test_broken.py"])

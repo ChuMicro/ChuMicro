@@ -190,13 +190,12 @@ def _exec_as_namespace(file_path, name="__main__", package="", chunk_boundaries=
 
 
 def run_one_file(test_file, root_dir="."):
-    """Run a single test file in the current process; return shell exit code.
+    """Set up sys.path, exec the file, run its tests, return 0/1 exit code.
 
-    An ImportError here is a hard FAIL, not a silent SKIP — the offending
-    file must either be converted to cross-runtime or declare
-    ``__chumicro_runtimes__ = ("cpython",)`` (or
-    ``__chumicro_host_only__ = True`` if it drives runtime-specific
-    source through host fakes).
+    Returns 1 for ImportError during load (with a FAIL line whose
+    message names the runtime markers the file needs to declare), for
+    non-ImportError load failures (ERROR line), or for any test failure
+    inside the file. Returns 0 only when every test passes.
     """
     setup_source_paths(root_dir)
     print(f"== {test_file} ==")
