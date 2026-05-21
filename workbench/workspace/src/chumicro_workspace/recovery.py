@@ -89,7 +89,7 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
 def detect_hints(traceback_text: str) -> list[AppErrorHint]:
     """Return remediation hints matching patterns in *traceback_text*.
 
-    Order matches the table — earlier patterns fire first.  Multiple
+    Order matches the table, so earlier patterns fire first.  Multiple
     patterns can match the same traceback, and each independent
     match becomes its own hint.
 
@@ -106,7 +106,7 @@ def detect_hints(traceback_text: str) -> list[AppErrorHint]:
         seen_labels.add(label)
         try:
             hint_text = template.format(*match.groups())
-        except (IndexError, KeyError):  # pragma: no cover — defensive
+        except (IndexError, KeyError):  # pragma: no cover - defensive
             hint_text = template
         hints.append(AppErrorHint(pattern_label=label, hint=hint_text))
     return hints

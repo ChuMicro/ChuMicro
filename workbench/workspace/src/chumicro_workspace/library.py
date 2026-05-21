@@ -64,7 +64,7 @@ def is_locally_held(workspace_root: Path, package: str) -> bool:
 
 
 class LibraryFetchFailureKind(Enum):
-    """Closed set of fetch-failure kinds — no string-typed failures."""
+    """Closed set of fetch-failure kinds.  No string-typed failures."""
 
     NETWORK = "network"
     PACKAGE_NOT_FOUND = "package-not-found"
@@ -145,7 +145,7 @@ def _place_library(
 
     * If the destination carries ``.chumicro-local``
       (:data:`LOCAL_EDIT_SENTINEL`), leave it alone and return the
-      existing path — the user has claimed the tree as their own and
+      existing path.  The user has claimed the tree as their own and
       doesn't want it replaced, even on a transitive re-fetch.  Prints
       a one-line notice so the user knows the channel had a different
       version available.

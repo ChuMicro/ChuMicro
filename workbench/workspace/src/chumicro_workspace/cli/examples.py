@@ -1,7 +1,7 @@
 """``demo`` and ``deploy-example`` subcommands.
 
 ``demo`` ships a baked-in cross-runtime print-loop payload to the
-active device — gives a freshly-registered board something to run on
+active device, giving a freshly-registered board something to run on
 day one.  ``deploy-example`` is the front-door command for shipping
 a library example (``libraries/<lib>/examples/<name>.py``) and
 tailing its output, with distinct exit codes per failure class so
@@ -40,15 +40,14 @@ from chumicro_workspace.workspace import WorkspaceLayout
 # ---------------------------------------------------------------------------
 
 
-#: Built-in demo payload — runtime-agnostic so it deploys cleanly on
+#: Built-in demo payload.  Runtime-agnostic so it deploys cleanly on
 #: any registered board.
 #:
 #: Cross-runtime safe (CircuitPython + MicroPython): only ``time.sleep``
-#: + ``print``.  No hardware access — every supported board reaches the
-#: print path identically, so the demo "just works" out-of-the-box on
-#: any registered device without runtime-config or pin pickers.  Runs
-#: for ~5 seconds and exits cleanly so the deploy command's
-#: synchronous-execute path doesn't appear to hang.
+#: and ``print``.  No hardware access, so every supported board reaches
+#: the print path identically and the demo runs without runtime-config
+#: or pin pickers.  Runs for ~5 seconds and exits cleanly so the deploy
+#: command's synchronous-execute path doesn't appear to hang.
 DEMO_PAYLOAD: str = (
     "import time\n"
     "print('Hello from ChuMicro!')\n"
@@ -95,13 +94,13 @@ def _cmd_demo(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# deploy-example — front-door command for running a library example on a board
+# deploy-example: front-door command for running a library example on a board
 # ---------------------------------------------------------------------------
 
 
 #: Distinct exit codes for `chumicro-workspace deploy-example` so agents
 #: and CI runners can branch on the code without parsing stderr.  The
-#: codes are stable contract — adding a new one is safe, renumbering an
+#: codes are a stable contract.  Adding a new one is safe, renumbering an
 #: existing one is a breaking change.
 DEPLOY_EXAMPLE_EXIT_PRECHECK_FAILED = 2
 DEPLOY_EXAMPLE_EXIT_NO_DEVICE_REGISTERED = 3
@@ -161,12 +160,12 @@ def _list_examples(libraries_root: Path, library_name: str | None) -> int:
 def _resolve_deploy_example_modes(args: argparse.Namespace) -> tuple[bool, bool]:
     """Resolve the ``(non_interactive, tail)`` mode pair for deploy-example.
 
-    TTY auto-detection sets the default; explicit ``--non-interactive``
+    TTY auto-detection sets the default.  Explicit ``--non-interactive``
     / ``--no-tail`` flags override.
 
     Returns:
         ``(non_interactive, should_tail)``.  ``should_tail`` is
-        always ``False`` when ``non_interactive`` is ``True`` —
+        always ``False`` when ``non_interactive`` is ``True``, because
         long-running tail processes are inherently interactive.
     """
     if args.non_interactive:
@@ -272,10 +271,10 @@ def _resolve_example_runtime_required(
     * None marker / no constraint → returns None (universal example, fall
       through to whatever the device runs).
     * Single-runtime marker → returns that runtime.
-    * Multi-runtime marker → ``--runtime`` wins if it's in the set; an
+    * Multi-runtime marker → ``--runtime`` wins if it's in the set.  An
       explicit ``--device <id>`` defers the decision to the device-resolve
       step (returns None).  Neither flag with a multi-runtime marker is
-      ambiguous — raise the precheck error.
+      ambiguous, so raise the precheck error.
     """
     if marker is None:
         return None
@@ -318,7 +317,7 @@ def _resolve_deploy_example_device(
     try:
         return _resolve_device(workspace, device_args)
     except (SystemExit, ValueError, FileNotFoundError):
-        # devices.yml missing / unloadable / no matching entry — route
+        # devices.yml missing / unloadable / no matching entry: route
         # to the wizard fallback below.  ``_resolve_device`` raises
         # ``SystemExit`` for the missing-file path and forwards
         # ``ValueError`` / ``FileNotFoundError`` from
@@ -384,14 +383,14 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
     Exit codes (distinct so agents and CI runners can branch on the
     code without parsing stderr):
 
-    * 0 — Deploy succeeded.
-    * 2 — Precheck failed (file missing, runtime mismatch, missing
+    * 0: Deploy succeeded.
+    * 2: Precheck failed (file missing, runtime mismatch, missing
       config key).
-    * 3 — No device registered for runtime, ``--no-auto-register`` in
+    * 3: No device registered for runtime, ``--no-auto-register`` in
       effect (or non-interactive default).
-    * 4 — Deploy failed (transport error; recovery hints on stderr).
-    * 5 — Bootstrap wizard canceled by user (interactive mode only).
-    * 6 — ``NO_PYTHON_RUNTIME``: board has Arduino or unknown firmware.
+    * 4: Deploy failed (transport error, recovery hints on stderr).
+    * 5: Bootstrap wizard canceled by user (interactive mode only).
+    * 6: ``NO_PYTHON_RUNTIME``: board has Arduino or unknown firmware.
     """
     workspace = _resolve_workspace(args)
     libraries_root = workspace.root / "libraries"
@@ -459,7 +458,7 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
             on_file_deleted=deleted.append,
             tail_seconds=args.tail_seconds,
         )
-    except Exception as deploy_error:  # noqa: BLE001 — classify + route
+    except Exception as deploy_error:  # noqa: BLE001 - classify + route
         kind = classify_deploy_failure(deploy_error)
         if kind is DeployFailureKind.NO_PYTHON_RUNTIME:
             return DEPLOY_EXAMPLE_EXIT_NO_PYTHON_RUNTIME
@@ -474,7 +473,7 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
         return DEPLOY_EXAMPLE_EXIT_DEPLOY_FAILED
 
     if should_tail:
-        # Optional REPL drop — interactive mode only.  Opens an
+        # Optional REPL drop, interactive mode only.  Opens an
         # interactive serial REPL against the device so the user can
         # follow the example's output and press Ctrl-D to exit.
         print("deploy-example: dropping into chumicro-repl ...")
@@ -496,7 +495,7 @@ def _cmd_deploy_example(args: argparse.Namespace) -> int:
 
 
 def _add_demo_parser(subparsers: argparse._SubParsersAction) -> None:
-    """``demo`` — deploy the built-in payload."""
+    """``demo``: deploy the built-in payload."""
     demo_parser = subparsers.add_parser(
         "demo",
         help=(
@@ -511,7 +510,7 @@ def _add_demo_parser(subparsers: argparse._SubParsersAction) -> None:
 
 
 def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
-    """``deploy-example`` — front-door for the first-touch board flow."""
+    """``deploy-example``: front-door for the first-touch board flow."""
     deploy_example_parser = subparsers.add_parser(
         "deploy-example",
         help=(

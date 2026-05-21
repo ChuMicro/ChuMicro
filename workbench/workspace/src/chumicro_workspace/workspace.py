@@ -54,11 +54,11 @@ ENTRY_POINT_FILENAMES: tuple[str, ...] = ("app.py", "code.py", "main.py")
 class ProjectClassification(StrEnum):
     """How a directory under ``projects/`` is treated by the workspace tools."""
 
-    #: Deployable — has an entry-point file.
+    #: Deployable: has an entry-point file.
     PROJECT = "project"
     #: Recursively contains at least one project or namespace.
     NAMESPACE = "namespace"
-    #: Neither — silently ignored by deploy / list / new.
+    #: Neither.  Silently ignored by deploy / list / new.
     SUPPORTING = "supporting"
 
 
@@ -95,7 +95,7 @@ def _walk_classified(
     namespace before its descendants.
 
     Returns ``True`` when *parent* contained at least one project or
-    namespace child — caller uses this to decide whether *parent*
+    namespace child.  The caller uses this to decide whether *parent*
     itself qualifies as a namespace.
     """
     has_project_or_namespace = False
@@ -139,7 +139,7 @@ class WorkspaceLayout:
 
     @property
     def secrets_toml(self) -> Path:
-        """Path to ``<root>/secrets.toml`` — gitignored device-bound config.
+        """Path to ``<root>/secrets.toml`` (gitignored device-bound config).
 
         Materialized on first ``setup`` from the shipped template
         (:func:`read_secrets_toml_template`).  Carries wifi credentials,
@@ -156,7 +156,7 @@ class WorkspaceLayout:
 
     @property
     def projects_dir(self) -> Path:
-        """Path to ``<root>/projects/`` — the parent of every project directory."""
+        """Path to ``<root>/projects/``."""
         return self.root / PROJECTS_DIRNAME
 
     @property
@@ -187,15 +187,15 @@ class WorkspaceLayout:
 
     @property
     def packages_dir(self) -> Path:
-        """Path to ``<root>/packages/`` — third-party packages (gitignored)."""
+        """Path to ``<root>/packages/`` (third-party packages, gitignored)."""
         return self.root / "packages"
 
     def project_dir(self, name: str) -> Path:
         """Return the directory for the named project (existence not checked).
 
         *name* may be a single segment (``"bedroom_sensor"``), slash-form
-        (``"upstairs/bedroom_sensor"``), or dotted (``"upstairs.bedroom_sensor"``)
-        — dotted forms are normalized to slash so the ``Path`` join lands
+        (``"upstairs/bedroom_sensor"``), or dotted (``"upstairs.bedroom_sensor"``).
+        Dotted forms are normalized to slash so the ``Path`` join lands
         in the right directory.
         """
         normalized = name.replace(".", "/")
@@ -226,7 +226,7 @@ class WorkspaceLayout:
     ) -> list[tuple[str, ProjectClassification]]:
         """Return every classified directory under ``projects/``, sorted.
 
-        Includes both projects and namespaces — namespaces are needed so
+        Includes both projects and namespaces.  Namespaces are needed so
         the tree renderer can draw branches above leaves and callers that
         report on supporting branches.  Sorting is by slash-form path,
         which gives natural depth-first display order.

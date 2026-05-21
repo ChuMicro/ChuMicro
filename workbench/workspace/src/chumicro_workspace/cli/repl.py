@@ -1,8 +1,8 @@
-"""``repl`` subcommand — interactive REPL and standalone tail mode.
+"""``repl`` subcommand: interactive REPL and standalone tail mode.
 
 Deploying a project then watching it is **not** here: that is
-`deploy <project> --tail` — one deploy path, the watch a flag on it.
-`repl` owns only the interactive / tail surface; it never stages
+`deploy <project> --tail`.  One deploy path, the watch a flag on it.
+`repl` owns only the interactive and tail surface, and never stages
 code to a board.
 """
 
@@ -25,7 +25,7 @@ def _resolve_repl_mode(requested: str, *, stdin: object) -> str:
 
     *requested* is ``"auto"`` / ``"line"`` / ``"passthrough"``.  Auto
     picks ``line`` when stdin is a TTY (an interactive terminal) and
-    ``passthrough`` otherwise — line mode requires interactive input
+    ``passthrough`` otherwise.  Line mode requires interactive input
     (``prompt_toolkit`` reads from the terminal), so falling back to
     passthrough lets the same command work under CI / piped stdin.
 
@@ -43,8 +43,8 @@ def _cmd_repl(args: argparse.Namespace) -> int:
 
     Two modes:
 
-    * ``repl`` — interactive REPL on the selected board.
-    * ``repl --tail SECONDS`` — capture the next *SECONDS* of REPL
+    * ``repl``: interactive REPL on the selected board.
+    * ``repl --tail SECONDS``: capture the next *SECONDS* of REPL
       output, exit cleanly.
     """
     workspace = _resolve_workspace(args)
@@ -81,7 +81,7 @@ def _cmd_repl(args: argparse.Namespace) -> int:
 
 
 def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
-    """``repl`` — interactive REPL or standalone tail mode."""
+    """``repl``: interactive REPL or standalone tail mode."""
     repl_parser = subparsers.add_parser(
         "repl",
         help=(

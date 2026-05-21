@@ -46,7 +46,7 @@ class ConfigManifest:
 
     Attributes:
         library_name: The library's PyPI name (``chumicro-wifi``,
-            etc.) — derived from ``[project].name`` in
+            etc.), derived from ``[project].name`` in
             ``pyproject.toml``, falling back to the library directory
             name.
         required_keys: Flat dotted keys that must be present in the
@@ -58,7 +58,7 @@ class ConfigManifest:
         declared_by: Path(s) to the ``pyproject.toml`` that declared
             this manifest.  After :func:`aggregate_manifests` joins
             multiple libraries, this becomes a comma-separated list
-            of every contributor.  Used by error messages.
+            of every contributor.
     """
 
     library_name: str
@@ -156,7 +156,7 @@ def _parse_key_list(
 
 
 # ---------------------------------------------------------------------------
-# Helpers — derive library roots from import-graph search paths
+# Helpers: derive library roots from import-graph search paths
 # ---------------------------------------------------------------------------
 
 
@@ -205,7 +205,7 @@ def aggregate_manifests(
     """Union the required + optional key sets across multiple libraries.
 
     A key declared **optional** by one library and **required** by
-    another is required overall — the strictest declaration wins.
+    another is required overall: the strictest declaration wins.
     The aggregated ``declared_by`` is a comma-joined list of every
     library that contributed.
 
@@ -257,9 +257,9 @@ def validate_runtime_config(
 
     * Every key in ``manifest.required_keys`` must be present as a
       top-level key in the flat *config* dict.
-    * Optional keys carry no constraint — present or absent, any
+    * Optional keys carry no constraint. Present or absent, any
       value is accepted.
-    * Keys in *config* not declared by any library are ignored —
+    * Keys in *config* not declared by any library are ignored, so
       apps can carry app-specific config alongside library config.
 
     Args:

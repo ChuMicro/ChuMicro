@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from chumicro_deploy import DeviceImplementation
 
 
@@ -78,15 +78,15 @@ def parse_version_tuple(version: str) -> tuple[int, ...] | None:
 
     * ``"10.1.4"`` → ``(10, 1, 4)``
     * ``"1.26.0"`` → ``(1, 26, 0)``
-    * ``"10.2.0."`` → ``(10, 2, 0)`` — trailing dot from CP's
-      ``(10, 2, 0, '')`` 4-tuple shape on RC builds
-    * ``"10.2.0.rc.0"`` → ``(10, 2, 0)`` — non-int suffix stops parsing
-    * ``"10.1.0-rc1"`` / ``"1.27.0-dev"`` → ``(10, 1, 0)`` / ``(1, 27, 0)``
-      — release-suffix stripped before splitting
+    * ``"10.2.0."`` → ``(10, 2, 0)``.  Trailing dot comes from CP's
+      ``(10, 2, 0, '')`` 4-tuple shape on RC builds.
+    * ``"10.2.0.rc.0"`` → ``(10, 2, 0)``.  Non-int suffix stops parsing.
+    * ``"10.1.0-rc1"`` / ``"1.27.0-dev"`` → ``(10, 1, 0)`` / ``(1, 27, 0)``.
+      Release-suffix stripped before splitting.
     * ``""`` / ``"abc"`` / no leading ints → ``None``
 
     Returns ``None`` for empty input, no leading int component, or
-    any other parse failure — callers treat ``None`` as
+    any other parse failure.  Callers treat ``None`` as
     :attr:`FirmwareSupportStatus.UNPARSEABLE`.
 
     Args:
@@ -164,8 +164,8 @@ def _format_version(version_tuple: tuple[int, ...]) -> str:
 def explain(result: FirmwareSupportResult) -> list[str]:
     """Return human-readable lines describing the result.
 
-    Empty list for :attr:`FirmwareSupportStatus.SUPPORTED` — silent
-    on the happy path.  Non-empty for OLD / UNKNOWN / UNPARSEABLE,
+    Empty list for :attr:`FirmwareSupportStatus.SUPPORTED` (silent
+    on the happy path).  Non-empty for OLD / UNKNOWN / UNPARSEABLE,
     each ending with the install-firmware pointer when applicable.
 
     Args:

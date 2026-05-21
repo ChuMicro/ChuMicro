@@ -69,16 +69,16 @@ def discover_chumicro_libraries(chumicro_path: Path) -> dict[str, Path]:
     """Walk ``<chumicro_path>/libraries/`` and return ``{import_name: src_path}``.
 
     Each entry maps the package's importable name (``chumicro_<libname>``)
-    to the directory whose children are importable under that name —
-    ``<chumicro_path>/libraries/<libname>/src/``.
+    to the directory whose children are importable under that name,
+    i.e. ``<chumicro_path>/libraries/<libname>/src/``.
 
     Skips library directories that don't expose a recognizable src
     tree (missing ``src/chumicro_<libname>/__init__.py``) so an
     in-progress scaffold under ``libraries/`` doesn't wedge the sync.
     Hidden / dotfile dirs are skipped too.
 
-    Returns ``{}`` when the ``libraries/`` directory itself is missing
-    — caller decides whether that's a warning or an error.
+    Returns ``{}`` when the ``libraries/`` directory itself is missing.
+    The caller decides whether that is a warning or an error.
 
     Args:
         chumicro_path: Resolved sibling chumicro repository root.
@@ -107,8 +107,8 @@ def discover_chumicro_libraries(chumicro_path: Path) -> dict[str, Path]:
 def _relative_to_or_absolute(path: Path, anchor: Path) -> str:
     """Return *path* relative to *anchor* when possible, else absolute.
 
-    Used to keep the written ``library_sources:`` block readable —
-    a sibling chumicro checkout produces ``../chumicro/libraries/<name>/src``
+    Keeps the written ``library_sources:`` block readable.
+    A sibling chumicro checkout produces ``../chumicro/libraries/<name>/src``
     instead of a long absolute path that varies per developer.
     """
     resolved = path.resolve()
@@ -116,7 +116,7 @@ def _relative_to_or_absolute(path: Path, anchor: Path) -> str:
     try:
         return str(resolved.relative_to(anchor_resolved))
     except ValueError:
-        # Path is not under anchor; use walk-up form for sibling checkouts.
+        # Path is not under anchor. Use walk-up form for sibling checkouts.
         import os  # noqa: PLC0415
         return os.path.relpath(resolved, anchor_resolved)
 
@@ -127,7 +127,7 @@ def sync_library_sources(
     """Write or replace the managed ``library_sources:`` block in *workspace_yaml*.
 
     Returns ``True`` when the file was modified, ``False`` on an
-    idempotent re-run.  The block REPLACES any existing top-level
+    idempotent re-run.  The block replaces any existing top-level
     ``library_sources:`` (with or without our marker).
     Every byte outside the block is preserved; see
     :mod:`chumicro_workspace.managed_block` for why this is raw-text
@@ -141,7 +141,7 @@ def sync_library_sources(
 
     Args:
         workspace_yaml: Path to ``workspace.yml`` (created if missing).
-        libraries: ``{import_name: host_path}`` mapping — typically
+        libraries: ``{import_name: host_path}`` mapping, typically
             from :func:`discover_chumicro_libraries`.
     """
     workspace_dir = workspace_yaml.parent

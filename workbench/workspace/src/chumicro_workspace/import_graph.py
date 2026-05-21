@@ -30,7 +30,7 @@ from chumicro_workspace.deploy_source import (
 )
 from chumicro_workspace.loaders import WorkspaceConfigError
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from chumicro_workspace.workspace import WorkspaceLayout
 
 
@@ -180,16 +180,13 @@ def project_import_graph_source(
         project_dir: ``projects/<name>/`` directory.  Used as the root
             of the entrypoint lookup *and* as a search path so
             project-local modules under the same dir resolve.
-        workspace: Resolved :class:`WorkspaceLayout`.  Used to
-            locate ``workspace.yml`` (for ``library_sources:``) and
-            ``secrets.toml`` (for runtime config) when the explicit
-            overrides aren't supplied.
-        workspace_yaml: Override the workspace.yml path — used by the
-            import-graph walker to read ``library_sources:``.
+        workspace: Resolved :class:`WorkspaceLayout`.  Supplies the
+            ``workspace.yml`` and ``secrets.toml`` fallbacks when
+            *workspace_yaml* and *secrets_toml* are not given.
+        workspace_yaml: Override the workspace.yml path.
             Defaults to ``workspace.workspace_yaml``.
-        secrets_toml: Override the secrets.toml path — used by
-            ``WithRuntimeConfig`` to read workspace-wide credentials
-            and device defaults.  Defaults to ``workspace.secrets_toml``.
+        secrets_toml: Override the secrets.toml path.
+            Defaults to ``workspace.secrets_toml``.
         entrypoint_filename: Host-side filename of the project's
             entrypoint; must exist under *project_dir*.  Defaults to
             ``"code.py"`` (CircuitPython convention).  Override to
@@ -197,7 +194,7 @@ def project_import_graph_source(
         device_entrypoint: On-device path the runtime executes
             after staging.  Defaults to ``"/code.py"``.
         resource_prefix: On-device prefix for non-entrypoint module
-            files.  Defaults to ``"/lib"`` — the conventional
+            files.  Defaults to ``"/lib"``, the conventional
             CP / MP search path.
         extra_modules: Dotted module names to force-include even
             when AST can't see them.  Forwarded to

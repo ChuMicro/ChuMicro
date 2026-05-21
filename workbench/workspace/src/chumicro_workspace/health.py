@@ -28,7 +28,7 @@ from chumicro_workspace.loaders import (
     read_secrets_toml,
 )
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from pathlib import Path
 
     from chumicro_workspace.workspace import WorkspaceLayout
@@ -49,12 +49,11 @@ class HealthFinding:
     Attributes:
         label: Section name (``"WORKSPACE.YML"``, ``"PROJECTS"`` …).
             Rendered in column-1; uppercase by convention.
-        level: Severity (OK / WARN / ERROR).  Decides the prefix
-            symbol used by the renderer.
+        level: Severity (OK / WARN / ERROR).
         message: One-line summary of what was found.  Optional
             detail can ride along in *hint*.
-        hint: Optional remediation pointer — what the user should
-            do next.  Status prints it on the line below; doctor
+        hint: Optional remediation pointer with what the user should
+            do next.  Status prints it on the line below.  Doctor
             renders it as a bullet under the failure.
     """
 
@@ -67,7 +66,7 @@ class HealthFinding:
 def check_workspace_yaml(workspace: WorkspaceLayout) -> HealthFinding:
     """Verify ``workspace.yml`` parses as the expected shape.
 
-    Only confirms the file exists and parses to a mapping — schema
+    Only confirms the file exists and parses to a mapping.  Schema
     validation for the ``library_sources:`` / ``deploy_targets:`` /
     ``quality:`` blocks happens lazily inside the modules that
     consume each one.
@@ -131,7 +130,7 @@ def check_secrets_toml(workspace: WorkspaceLayout) -> HealthFinding:
             message=f"malformed: {exception}",
             hint="fix the TOML structure; expected nested tables of strings.",
         )
-    except Exception as exception:  # noqa: BLE001 — tomllib raises various
+    except Exception as exception:  # noqa: BLE001 - tomllib raises various
         return HealthFinding(
             label="SECRETS.TOML",
             level=HealthLevel.ERROR,
@@ -159,7 +158,7 @@ def check_devices_yaml(workspace: WorkspaceLayout) -> HealthFinding:
         )
     try:
         data = load_devices(workspace.devices_yaml)
-    except Exception as exception:  # noqa: BLE001 — every parse failure surfaces here
+    except Exception as exception:  # noqa: BLE001 - every parse failure surfaces here
         return HealthFinding(
             label="DEVICES.YML",
             level=HealthLevel.ERROR,
@@ -408,7 +407,7 @@ def check_serial_ports_held(workspace: WorkspaceLayout) -> HealthFinding:
 
     try:
         data = load_devices(devices_path)
-    except Exception:  # noqa: BLE001 — devices.yml issues surface elsewhere
+    except Exception:  # noqa: BLE001 - devices.yml issues surface elsewhere
         return HealthFinding(
             label="SERIAL PORTS",
             level=HealthLevel.OK,
@@ -430,7 +429,7 @@ def check_serial_ports_held(workspace: WorkspaceLayout) -> HealthFinding:
             continue
         try:
             holders = diagnose_port_holders(port)
-        except Exception:  # noqa: BLE001 — best-effort probe
+        except Exception:  # noqa: BLE001 - best-effort probe
             continue
         if not holders:
             continue

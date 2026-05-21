@@ -19,7 +19,7 @@ from chumicro_workspace.deploy_source import (
 
 #: On-device entrypoint name keyed by runtime.  CircuitPython runs
 #: ``code.py`` at boot; MicroPython runs ``main.py``.  CPython has no
-#: device-level entrypoint convention — passed in here as ``"cpython"``
+#: device-level entrypoint convention; it is accepted as ``"cpython"``
 #: only when a host-side test exercises the source machinery.
 _ENTRYPOINT_BY_RUNTIME: dict[str, str] = {
     "circuitpython": "/code.py",
@@ -32,7 +32,7 @@ def _resolve_example_path(library_root: Path, example_name: str) -> Path:
     """Return the host path to ``libraries/<lib>/examples/<name>.py``.
 
     Strips a trailing ``.py`` from *example_name* if the caller
-    supplied it — both ``"circuitpython_blink"`` and
+    supplied it, so ``"circuitpython_blink"`` and
     ``"circuitpython_blink.py"`` resolve to the same file.
     """
     stem = example_name[:-3] if example_name.endswith(".py") else example_name
@@ -42,9 +42,9 @@ def _resolve_example_path(library_root: Path, example_name: str) -> Path:
 def _default_output_path(library_root: Path, example_name: str) -> Path:
     """Default output path for the generated msgpack.
 
-    Lives under ``libraries/<lib>/examples/_generated/`` — the same
+    Lives under ``libraries/<lib>/examples/_generated/``, the same
     ``_generated/`` build-artifact convention :class:`WithRuntimeConfig`
-    uses for project deploys, gitignored so it isn't committed beside
+    uses for project deploys.  Gitignored so it isn't committed beside
     the tracked example source.
     """
     stem = example_name[:-3] if example_name.endswith(".py") else example_name
@@ -87,13 +87,12 @@ def example_source(
     with a precise error.
 
     Args:
-        library_root: Path to ``libraries/<lib>/`` — the library this
-            example belongs to.  Used to resolve
-            ``examples/<example_name>.py``; ``<library_root>/src`` is
-            included in the search paths automatically (added once
-            even if also present in *library_roots*).
+        library_root: Path to ``libraries/<lib>/``, the library this
+            example belongs to.  ``<library_root>/src`` is included in
+            the search paths automatically (added once even if also
+            present in *library_roots*).
         example_name: Filename stem under
-            ``<library_root>/examples/`` — the trailing ``.py`` is
+            ``<library_root>/examples/``.  A trailing ``.py`` is
             optional (``"circuitpython_blink"`` and
             ``"circuitpython_blink.py"`` both resolve).
         library_roots: Every ``libraries/<name>/`` path the example
@@ -104,19 +103,17 @@ def example_source(
             the mono-repo's ``libraries/``.
         runtime: ``"circuitpython"`` (entrypoint ``/code.py``),
             ``"micropython"`` (entrypoint ``/main.py``), or
-            ``"cpython"`` (host-side test only — never lands on a
+            ``"cpython"`` (host-side test only, never lands on a
             device).  Forwarded to ``ImportGraphSource`` as
             ``target_runtime`` so wrong-runtime files filter out.
-        secrets_toml: Path to the workspace's ``secrets.toml`` —
-            workspace-wide credentials and device defaults consumed
-            by ``WithRuntimeConfig``.
+        secrets_toml: Path to the workspace's ``secrets.toml``.
         output_path: Where to write the generated
             ``runtime_config.msgpack`` on the host.  Defaults to
             ``libraries/<lib>/examples/_generated/example_runtime_config_<lib>_<name>.msgpack``
             (the gitignored ``_generated/`` build-artifact convention).
-        extra_modules: Force-included dotted module names — passed
-            through to ``ImportGraphSource`` for dynamic-import
-            cases the AST walker can't see.
+        extra_modules: Force-included dotted module names.  Forwarded
+            to ``ImportGraphSource`` for dynamic-import cases the AST
+            walker can't see.
 
     Raises:
         ValueError: *runtime* is not one of the accepted values.

@@ -62,9 +62,9 @@ def _print_health_findings(
     """Print *findings* with the status/doctor renderer; return exit code.
 
     Header line carries the workspace root.  Each finding renders as
-    ``LABEL <glyph> message``; warning / error findings carry an
+    ``LABEL <glyph> message``.  Warning / error findings carry an
     optional hint indented under the label column.  Exit code flips
-    to 1 only on at least one ERROR — warnings stay at 0 so the
+    to 1 only on at least one ERROR.  Warnings stay at 0 so the
     output composes cleanly with shell-pipe checks.
     """
     print(f"WORKSPACE       {workspace.root}")
@@ -172,9 +172,9 @@ def _fix_fskit_wedge(
         "(sudo will prompt for your password).",
     )
     # MACOS_FSKIT_RECOVERY_COMMAND is the literal "sudo killall -9
-    # <daemon> <daemon> ..." line; whitespace-split is safe — the
-    # constant has no quoting / shell metacharacters.
-    completed = subprocess_runner(  # noqa: S603 — argv from a vetted constant
+    # <daemon> <daemon> ..." line.  Whitespace-split is safe because
+    # the constant has no quoting / shell metacharacters.
+    completed = subprocess_runner(  # noqa: S603 - argv from a vetted constant
         MACOS_FSKIT_RECOVERY_COMMAND.split(),
         check=False,
     )

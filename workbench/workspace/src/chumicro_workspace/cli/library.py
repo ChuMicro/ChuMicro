@@ -1,18 +1,18 @@
-"""``chumicro-workspace library`` subcommands — curated library host.
+"""``chumicro-workspace library`` subcommands: curated library host.
 
 ``list`` / ``add`` / ``update`` / ``remove`` / ``forget`` /
 ``switch-channel`` pull chumicro libraries from a published snapshot
 channel into the workspace's ``libraries/`` folder and maintain the
 ``libraries:`` table in ``workspace.yml``.  ``remove`` uninstalls but
 keeps the row as ``declined: true`` (so ``update`` skips it and the
-decision is auditable); ``forget`` drops the row entirely.  The heavy
+decision is auditable).  ``forget`` drops the row entirely.  The heavy
 lifting (snapshot resolve, extract, dep walk) lives in
-:mod:`chumicro_workspace.library`; this module is the parser + the
-prompt/IO surface.
+:mod:`chumicro_workspace.library`.  This module is the parser plus
+the prompt/IO surface.
 
 Interactivity follows the workspace convention: default to
 ``sys.stdin.isatty()``, with ``--non-interactive`` as the explicit
-override.  Non-interactive runs never prompt — ``add`` keeps the full
+override.  Non-interactive runs never prompt.  ``add`` keeps the full
 transitive set and the rest are prompt-free by nature.  Exit codes:
 0 success, 1 a fetch/operation failed, 2 a usage error (unknown
 library, bad channel, conflicting flags).
@@ -77,12 +77,12 @@ def _print_install_summary(
 ) -> None:
     """Print one line per library in *closure* with its version + channel.
 
-    *primary* (what the user asked for) prints as the headline; the
+    *primary* (what the user asked for) prints as the headline.  The
     rest of *closure* came along through ``[project].dependencies`` and
     prints with a ``  + `` prefix.  Sentinel-held trees show their
     on-disk version with a ``(kept local edits — sentinel)`` marker so
     a closure member that kept the user's edits is distinguishable
-    from one that tracked the channel — printing one line per library
+    from one that tracked the channel.  Printing one line per library
     rather than a comma-joined list is what makes that distinction
     legible.
     """
@@ -107,7 +107,7 @@ def _declined_transitive(
     """Per-dependency deselect prompt for the transitive set.
 
     Returns the deps the user declined.  Non-interactive (or an empty
-    set) keeps everything — the agent-runnable default.  Interactive
+    set) keeps everything (the agent-runnable default).  Interactive
     asks per dep so a user injecting a custom transport can drop just
     ``chumicro_sockets`` without losing the rest of the closure.
     """
@@ -466,8 +466,8 @@ def _apply_selected(
 def _run_browse(args: argparse.Namespace) -> int:  # pragma: no cover
     """Build the model, run the full-screen browser, apply the result.
 
-    No coverage — the prompt_toolkit shell needs a real terminal (the
-    device-adapter convention); the model and :func:`_apply_selected`
+    No coverage: the prompt_toolkit shell needs a real terminal (the
+    device-adapter convention).  The model and :func:`_apply_selected`
     are tested directly.
     """
     workspace = _resolve_workspace(args)
@@ -489,7 +489,7 @@ def _run_browse(args: argparse.Namespace) -> int:  # pragma: no cover
 
 
 def _cmd_library_browse(args: argparse.Namespace) -> int:
-    """Interactive catalog browser — the TTY twin of ``library add``."""
+    """Interactive catalog browser, the TTY twin of ``library add``."""
     if not sys.stdin.isatty():
         print(
             "library browse is interactive and needs a TTY; use "

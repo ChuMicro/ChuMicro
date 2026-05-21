@@ -109,15 +109,15 @@ def scaffold_library(
             converted to underscores in the import path
             (``chumicro-my-project`` → ``chumicro_my_project``).
         package_kind: ``"library"`` (default) for cross-runtime
-            device packages — produces the standard chumicro library
+            device packages.  Produces the standard chumicro library
             shape with no extras.  ``"workbench"`` for host-only
-            CPython tools — uses a workbench-flavored pyproject
+            CPython tools uses a workbench-flavored pyproject
             template with a ``[project.scripts]`` block (CLI entry
             point), and pulls the four ``docs/`` templates from
             ``_payloads/workbench_template/`` (no Runner pattern,
             no Memory notes, no Bundle footer link).  The rest of
             the tree (src/tests/examples/README/mkdocs) is shared
-            between kinds — same directory shape for both.
+            between kinds.
 
     Returns:
         Path to the created library directory.
@@ -209,13 +209,13 @@ def scaffold_library(
         ),
     )
 
-    # examples/helpers.py — standalone wifi-up + msgpack-decoder helper
+    # examples/helpers.py: standalone wifi-up + msgpack-decoder helper
     # for libraries whose examples bring wifi up.  No template variables.
     (library_dir / "examples" / "helpers.py").write_text(
         _load_template("helpers.py.template"),
     )
 
-    # src/<package>/__init__.py — absolute imports only: CircuitPython
+    # src/<package>/__init__.py: absolute imports only.  CircuitPython
     # RAM-mode `exec()`s library modules without a `__package__`, so
     # leading-dot relatives break at deploy.
     (library_dir / "src" / import_name / "__init__.py").write_text(

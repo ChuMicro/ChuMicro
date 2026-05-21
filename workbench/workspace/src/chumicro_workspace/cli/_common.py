@@ -5,7 +5,7 @@ probe + deploy-failure formatters, and the ``--dry-run`` summary
 renderer.  Subcommand modules under :mod:`chumicro_workspace.cli`
 import from here.
 
-Kept private — the underscore-prefixed names are an internal contract
+Kept private.  The underscore-prefixed names are an internal contract
 between the CLI submodules and are re-exported from
 :mod:`chumicro_workspace.cli` for the test suite's benefit only.
 """
@@ -36,7 +36,7 @@ from chumicro_workspace.workspace import (
     WorkspaceNotFoundError,
 )
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from chumicro_deploy import DeviceInfo
 
 
@@ -49,9 +49,9 @@ def _add_workspace_arg(parser: argparse.ArgumentParser) -> None:
     """Attach the shared ``--workspace-dir`` flag.
 
     Defaults to walking up from the current working directory until a
-    ``workspace.yml`` is found (mirrors ``git`` discovery).  Override
-    when running multiple workspaces in parallel or when the user
-    invokes the CLI from outside the tree (CI runners, IDE tasks).
+    ``workspace.yml`` is found, matching ``git``'s discovery shape.
+    Override when running multiple workspaces in parallel or when the
+    user invokes the CLI from outside the tree (CI runners, IDE tasks).
     """
     parser.add_argument(
         "--workspace-dir",
@@ -130,9 +130,9 @@ def _find_devices_yml_entry_for_args(
     """Locate the raw ``devices.yml`` entry matching *args*' selectors.
 
     Thin policy wrapper over
-    :func:`chumicro_deploy.config.default.load_devices_yml_raw` — the
-    devices.yml owner does the ``--device id`` / ``--runtime`` /
-    single-default resolution; this only adds the workspace-side
+    :func:`chumicro_deploy.config.default.load_devices_yml_raw`.  That
+    function does the ``--device id`` / ``--runtime`` /
+    single-default resolution.  This wrapper adds the workspace-side
     None-on-miss policy (``install-firmware`` treats a missing entry
     as "fall back to --url", not an error).  Returns the raw entry
     dict for ``hardware`` / ``firmware_source`` access (those keys
@@ -140,8 +140,8 @@ def _find_devices_yml_entry_for_args(
     """
     if not workspace.devices_yaml.is_file():
         return None
-    # Preserve the original precedence — an explicit id wins and
-    # suppresses the runtime hint — so the two never collide into
+    # Preserve the original precedence: an explicit id wins and
+    # suppresses the runtime hint, so the two never collide into
     # load_devices_yml_raw's mutual-exclusion error.
     device_id = args.device_id
     runtime = None if device_id is not None else getattr(args, "runtime", None)
@@ -208,18 +208,18 @@ def _emit_probe_failure(
 ) -> None:
     """Emit the standard probe-failure block for *command_name* to stderr.
 
-    Header line states the cause; the diagnosis from
+    Header line states the cause.  The diagnosis from
     :func:`~chumicro_workspace.onboarding.detect_board_state` follows
     as indented next-step hints.  Pass exactly one of
-    *auto_detect_inference* / *probe_exception* — the former drives
+    *auto_detect_inference* / *probe_exception*.  The former drives
     the "auto-detect failed (TypeName: msg)." / "no runtime returned
-    a probe marker." text; the latter drives the
+    a probe marker." text.  The latter drives the
     "probe failed (TypeName: msg)." text.
 
     The diagnostic probe runs under *transport* (defaults to
-    ``"micropython"``); on a probe-already-failed path the transport
-    choice rarely matters — :func:`detect_board_state` falls back to
-    UF2 + error-string heuristics — but the chosen runtime is honored.
+    ``"micropython"``).  On a probe-already-failed path the transport
+    choice rarely matters, since :func:`detect_board_state` falls back
+    to UF2 + error-string heuristics, but the chosen runtime is honored.
     """
     diagnosis = detect_board_state(
         Device(transport=transport, address=address),
@@ -254,8 +254,8 @@ def _emit_probe_failure(
 def _hardware_from_probe_info(info: DeviceInfo) -> dict[str, str] | None:
     """Build the ``hardware:`` dict for a fresh devices.yml entry from *info*.
 
-    Picks the three hardware-once fields the probe knows about — uid,
-    machine, board_id — and returns ``None`` (not an empty dict) when
+    Picks the three hardware-once fields the probe knows about (uid,
+    machine, board_id) and returns ``None`` (not an empty dict) when
     none are populated so :func:`chumicro_deploy.add_device`'s
     "no hardware section" branch fires cleanly.
     """
@@ -274,14 +274,14 @@ def _emit_failure_hints(deploy_result: Any) -> None:
 
     The deploy result's ``traceback`` and ``execute_output`` are
     both scanned for known patterns from
-    :mod:`chumicro_workspace.recovery`; any matching hints append
+    :mod:`chumicro_workspace.recovery`.  Any matching hints append
     below the traceback under a "--- hints ---" section so users who
     hit a common failure (missing config key, library not installed)
     get the workspace-shaped pointer instead of just the raw stdlib
     error.
 
-    Skip the hints section silently when no pattern matches —
-    showing an empty block reads worse than showing nothing.
+    Skip the hints section silently when no pattern matches.
+    Showing an empty block reads worse than showing nothing.
     """
     traceback_text = getattr(deploy_result, "traceback", "") or ""
     execute_output = getattr(deploy_result, "execute_output", "") or ""
@@ -326,8 +326,8 @@ def _classify_dry_run_path(path: str) -> str:
     without parsing paths by eye.
 
     The classifier still returns ``shim`` for ``/code.py`` and
-    ``/main.py`` even when those are user-owned in plain mode —
-    they're always the firmware entrypoint, regardless of who
+    ``/main.py`` even when those are user-owned in plain mode,
+    since they're always the firmware entrypoint, regardless of who
     authored them.
     """
     if path in ("/code.py", "/main.py"):
@@ -470,14 +470,14 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
 
     Accepts three shapes:
 
-    * **Bare** (``"door_open"``) — looked up across the whole
-      ``projects/`` tree.  Unique match → that project.  Multiple matches →
-      ``SystemExit`` listing the candidates.  No match → caller's
-      existence check surfaces the ``FileNotFoundError``-shaped
-      message.
-    * **Slash** (``"garage/sensors/door_open"``) — direct path.
-    * **Dotted** (``"garage.sensors.door_open"``) — same as slash;
-      normalized before return because ``/`` is the canonical form
+    * **Bare** (``"door_open"``): looked up across the whole
+      ``projects/`` tree.  A unique match returns that project.
+      Multiple matches raise ``SystemExit`` listing the candidates.
+      No match returns *name* unchanged, and the caller's existence
+      check surfaces the ``FileNotFoundError``-shaped message.
+    * **Slash** (``"garage/sensors/door_open"``): direct path.
+    * **Dotted** (``"garage.sensors.door_open"``): same as slash,
+      normalized before return because ``/`` is the standard form
       used by :meth:`WorkspaceLayout.list_projects`.
     """
     normalized = name.replace(".", "/")
@@ -496,6 +496,6 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
             f"{candidate_list}\n"
             f"specify the path: `python run.py deploy {candidates[0]}`",
         )
-    # No match — let the caller's existence check produce the standard
+    # No match: let the caller's existence check produce the standard
     # "project not found" message after constructing the dir path.
     return name

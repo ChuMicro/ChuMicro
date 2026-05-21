@@ -52,7 +52,7 @@ _DEFAULT_TIMEOUT_SECONDS = 30
 def _real_http_get(url: str) -> bytes:
     """GET *url*, returning the body bytes."""
     try:
-        with urllib.request.urlopen(  # noqa: S310 — https GitHub URLs only
+        with urllib.request.urlopen(  # noqa: S310 - https GitHub URLs only
             url, timeout=_DEFAULT_TIMEOUT_SECONDS,
         ) as response:
             return response.read()
@@ -254,7 +254,7 @@ def extract_library(
                     f"snapshot has no {short_name!r} tree for "
                     f"{library_name!r}",
                 )
-            archive.extractall(  # noqa: S202 — paths validated above
+            archive.extractall(  # noqa: S202 - paths validated above
                 into, members=selected,
             )
     except tarfile.TarError as error:

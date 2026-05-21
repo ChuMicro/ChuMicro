@@ -4,13 +4,13 @@ Workspaces are created by cloning the template repo directly (there
 is no scaffolding CLI command).  These zones govern only what
 `update` re-syncs into an existing workspace:
 
-* **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,  <!-- noqa: CHU006 -->
+* **Tool-owned**: `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,  <!-- noqa: CHU006 -->
   `pyproject.toml`, `projects/_template/`, `examples/`
   (reading-material demos shipped from the template), and
   the agent-skill documents under `.github/skills/`.  `update`
   rewrites these so newer template releases flow in.
 
-* **User-owned** — everything else, and it's the default: anything
+* **User-owned**: everything else, and it's the default.  Anything
   not explicitly tool-owned is left alone by `update`.  Covers
   `projects/<each-real-project>/`, `devices.yml`, `shared/`,
   `packages/`, `workspace.yml`, `secrets.toml`, and tracked-but-
@@ -72,9 +72,9 @@ def classify(target_path: str) -> Zone:
     ``workspace.yml`` is never clobbered by ``update``), user-owned
     prefixes (``shared/`` / ``packages/``), exact-match tool-owned,
     tool-owned prefixes (``projects/_template/``).  Anything that
-    falls through — `README.md`, `.gitignore`, and
+    falls through (`README.md`, `.gitignore`, and
     ``projects/<a-real-project>/...`` files the user created
-    post-clone — counts as user-owned.
+    post-clone) counts as user-owned.
     """
     posix = PurePosixPath(target_path).as_posix()
     if posix in USER_OWNED_PATHS:

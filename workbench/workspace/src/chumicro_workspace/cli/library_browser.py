@@ -1,18 +1,18 @@
-"""Interactive ``library browse`` — the TTY front-end over the engine.
+"""Interactive ``library browse``: the TTY front-end over the engine.
 
 Library acquisition is one engine, two front-ends: the scriptable
 ``library add`` and this browser.  Both end by calling the same
-closure-fetch; the browser only adds selection UX (multi-select,
+closure-fetch.  The browser only adds selection UX (multi-select,
 stable/experimental toggle, read a description, drill into a README or
 an example and back).
 
 The state machine (:class:`BrowserModel`) is pure and importable
-without ``prompt_toolkit`` — every fetch is an injected callable, so
+without ``prompt_toolkit``.  Every fetch is an injected callable, so
 it unit-tests with fakes (the pattern ``chumicro_repl`` uses to keep
 its sources testable).  :func:`run_library_browser` is the thin
 ``prompt_toolkit`` shell: a full-screen app that needs a real
 terminal, so it is excluded from coverage the way device adapters
-are — its only logic is key bindings delegating to the model.
+are.  Its only logic is key bindings delegating to the model.
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ FetchText = Callable[[str, str, str], str]  # (channel, tag, path) -> text
 
 
 class BrowserModel:
-    """Pure browse state: list ⇄ detail, selection, channel toggle.
+    """Pure browse state: list, detail, selection, channel toggle.
 
     Injected seams:
 
-    * *resolve_snapshot* — ``channel -> ChannelSnapshot`` (the catalog).
-    * *fetch_text* — ``(channel, tag, path) -> str`` for a README or
+    * *resolve_snapshot*: ``channel -> ChannelSnapshot`` (the catalog).
+    * *fetch_text*: ``(channel, tag, path) -> str`` for a README or
       one example file.
 
     A failed fetch sets :attr:`status` rather than raising, so the
@@ -84,7 +84,7 @@ class BrowserModel:
         )
 
     def switch_channel(self) -> None:
-        """Toggle stable⇄experimental and re-resolve; selection persists."""
+        """Toggle stable/experimental and re-resolve.  Selection persists."""
         self.channel = _CHANNELS[(_CHANNELS.index(self.channel) + 1) % 2]
         self.view = "list"
         self._load()
@@ -121,7 +121,7 @@ class BrowserModel:
     # -- drill-in --------------------------------------------------------
 
     def enter(self) -> None:
-        """list → detail (load README); detail → view highlighted example."""
+        """From list, drill to detail (load README).  From detail, view highlighted example."""
         entry = self.current
         if entry is None or self._snapshot is None:
             return
@@ -135,7 +135,10 @@ class BrowserModel:
             self.detail_text = self._text(path, path)
 
     def back(self) -> bool:
-        """example → detail → list.  Returns False when already at list."""
+        """Step one view up.  Returns False when already at list.
+
+        Example view collapses back to detail.  Detail collapses back to list.
+        """
         if self.view == "example":
             self.view = "detail"
             entry = self.current
@@ -155,7 +158,7 @@ class BrowserModel:
             )
         except LibraryFetchError as error:
             self.status = f"{label}: {error} ({error.kind.value})"
-            return f"({label} unavailable — {error.kind.value})"
+            return f"({label} unavailable: {error.kind.value})"
 
     # -- result ----------------------------------------------------------
 
@@ -166,11 +169,11 @@ class BrowserModel:
     def commit_target(self) -> list[str] | None:
         """Selected import names, or ``None`` when nothing is selected.
 
-        Enter is gated on having an explicit Space-selection — pressing
-        Enter on a row you were just exploring shouldn't accidentally
-        install it.  The binding layer interprets ``None`` as "Enter
-        means open the info view instead," so the cursor row still
-        has a one-key path to its README + examples.
+        Enter is gated on having an explicit Space-selection so that
+        pressing Enter on a row you were just exploring shouldn't
+        accidentally install it.  The binding layer interprets ``None``
+        as "Enter means open the info view instead," so the cursor row
+        still has a one-key path to its README and examples.
         """
         if self.view != "list" or not self.selected:
             return None
@@ -180,15 +183,15 @@ class BrowserModel:
 def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no cover
     """Full-screen prompt_toolkit shell; returns the chosen roots or None.
 
-    Pure I/O wiring — needs a real terminal, so it carries no test
+    Pure I/O wiring: needs a real terminal, so it carries no test
     coverage (the device-adapter convention).  Every binding delegates
-    straight to :class:`BrowserModel`; the logic lives there and is
+    straight to :class:`BrowserModel`.  The logic lives there and is
     tested there.
 
-    Layout shape: status line + help line + horizontal rule + a
-    content pane that swaps by view (list view is a plain
-    ``FormattedTextControl``; detail / example views are a scrollable
-    ``TextArea`` so a long README / example file can be navigated).
+    Layout shape: status line, help line, horizontal rule, and a
+    content pane that swaps by view.  List view is a plain
+    ``FormattedTextControl``.  Detail and example views are a scrollable
+    ``TextArea`` so a long README or example file can be navigated.
     """
     from prompt_toolkit.application import Application
     from prompt_toolkit.key_binding import KeyBindings
@@ -234,7 +237,7 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
                     f"{len(entry.examples)}: {selected_name})"
                 )
             return f" {entry.name} — README   (no examples)"
-        # example view — show which example file is on screen
+        # example view: show which example file is on screen
         if entry.examples:
             selected_name = entry.examples[model.example_cursor]
             return f" {entry.name} — {selected_name}"
@@ -291,8 +294,8 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
     # reset to 0 so the new content shows from the top, not wherever
     # the previous view's cursor happened to land.  Focus is best-
     # effort because the TextArea sits inside a ``DynamicContainer``
-    # and isn't in the static layout tree at Layout-init time — the
-    # first transition after init may race the placement; the next
+    # and isn't in the static layout tree at Layout-init time, so the
+    # first transition after init may race the placement.  The next
     # transition catches up.
     def refresh_text_area(event) -> None:
         if model.view == "list":
@@ -301,7 +304,7 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
         content.buffer.cursor_position = 0
         try:
             event.app.layout.focus(content)
-        except ValueError:  # pragma: no cover — TextArea not yet placed
+        except ValueError:  # pragma: no cover - TextArea not yet placed
             pass
 
     root = HSplit([
@@ -338,11 +341,11 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
 
     @bindings.add("enter")
     def _(event) -> None:
-        # On the list, Enter commits the explicit Space-selected set
-        # (the user has to mark `[x]` first — Enter on a row you're
-        # just exploring should never accidentally install it).  With
+        # On the list, Enter commits the explicit Space-selected set.
+        # The user has to mark `[x]` first, so Enter on a row you're
+        # just exploring should never accidentally install it.  With
         # no selection, Enter falls through to the same drill `i` does
-        # so the cursor row still has a one-key path to its README +
+        # so the cursor row still has a one-key path to its README and
         # example list.  Inside detail view, Enter opens the example
         # under the example cursor.
         if model.view == "list":
@@ -358,8 +361,8 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
 
     @bindings.add("i")
     def _(event) -> None:
-        # Drill from list → detail.  Keeps a one-key path from the
-        # cursor row to the README + example list; Enter is reserved
+        # Drill from list to detail.  Keeps a one-key path from the
+        # cursor row to the README plus example list.  Enter is reserved
         # as the commit key on the list view.
         if model.view == "list":
             model.enter()
@@ -370,7 +373,7 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
     @bindings.add("backspace", eager=True)
     def _(event) -> None:
         # eager=True wins over the TextArea's own Esc / Backspace
-        # bindings — TextArea consumes Esc as a focus / cancel signal
+        # bindings.  TextArea consumes Esc as a focus / cancel signal
         # under prompt_toolkit's default key set, so without the eager
         # flag the user couldn't back out of detail / example views
         # with Esc even though the binding existed.
@@ -379,7 +382,7 @@ def run_library_browser(model: BrowserModel) -> list[str] | None:  # pragma: no 
 
     @bindings.add("a")
     def _(event) -> None:
-        # Explicit "add only what I Space-selected" — exits with the
+        # Explicit "add only what I Space-selected": exits with the
         # selection set even when empty.  Kept alongside Enter for
         # users who want the selections-only contract spelled out.
         event.app.exit(result=model.selected_roots())

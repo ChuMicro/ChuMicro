@@ -66,9 +66,9 @@ def _make_deploy_runner(device: Any, *, non_interactive: bool) -> RecoveringDepl
     Both modes surface the same coached recovery output and differ
     only in retry behavior:
 
-    * ``non_interactive=True`` → report once and re-raise (CI /
-      scripted flows; no stdin to prompt against).
-    * ``non_interactive=False`` → prompt to fix the condition and
+    * ``non_interactive=True``: report once and re-raise (for CI and
+      scripted flows where there is no stdin to prompt against).
+    * ``non_interactive=False``: prompt to fix the condition and
       press Enter to retry (default ``max_attempts=3``).
 
     Caller invokes ``.deploy_diff()`` on the result.
@@ -86,12 +86,12 @@ def _make_deploy_runner(device: Any, *, non_interactive: bool) -> RecoveringDepl
 
 @dataclass(frozen=True)
 class _ResolvedLayout:
-    """Resolved deploy layout — boot-shim and import-graph flags.
+    """Resolved deploy layout: boot-shim and import-graph flags.
 
     Returned by :func:`_resolve_deploy_layout` so the CLI dispatch
     has the final flag values without mutating ``args.boot_shim``
     or ``args.import_graph`` mid-flight (those represent what the
-    *user* passed; the resolver decides what to actually do).
+    *user* passed, and the resolver decides what to actually do).
     """
 
     boot_shim: bool
@@ -107,11 +107,11 @@ class ExampleSpec:
     delete / keep policy) is stated there.
 
     Attributes:
-        library_root: ``libraries/<lib>/`` — the library that owns
+        library_root: ``libraries/<lib>/``, the library that owns
             the example.
         example_name: Example filename stem (no trailing ``.py``).
-        libraries_root: ``libraries/`` — enumerated for the sibling
-            ``src/`` search paths + manifest validation roots.
+        libraries_root: ``libraries/``, enumerated for the sibling
+            ``src/`` search paths and manifest validation roots.
         extra_modules: Dotted module names to force-include past the
             AST walker (dynamic-import cases).
     """
@@ -203,12 +203,12 @@ def _resolve_deploy_layout(
             "deploy --runtime micropython.",
         )
 
-    # app.py defines `async def run` — the boot shim calls run()
+    # app.py defines `async def run`: the boot shim calls run()
     # synchronously, so an async run evaluates to a coroutine that is
-    # never awaited: the board would boot and do nothing, with no
+    # never awaited.  The board would boot and do nothing, with no
     # traceback.  Reject it explicitly rather than ship a dead board,
-    # and steer the user off async entirely — chumicro projects don't
-    # use it anywhere.
+    # and steer the user off async entirely (chumicro projects don't
+    # use it anywhere).
     if project_app_exports_async_run(project_dir):
         raise _DeployLayoutError(
             f"project {project_dir.name!r} defines `async def run()` in "
@@ -223,7 +223,7 @@ def _resolve_deploy_layout(
             "synchronous `while True:` (see chumicro_runner).",
         )
 
-    # No runtime-specific entrypoint — try shim mode.
+    # No runtime-specific entrypoint: try shim mode.
     if has_app_run:
         return _ResolvedLayout(boot_shim=True, import_graph=True)
 
@@ -262,9 +262,9 @@ def resolve_project_deploy_source(
 
     Both ``deploy`` and ``deploy-example`` route through this function
     so a project and a library example stage onto the device under the
-    same delete / keep policy; only the inner payload differs.
+    same delete / keep policy.  Only the inner payload differs.
     ``deploy`` passes a *project_dir* plus its ``--boot-shim`` /
-    ``--import-graph`` / ``--entrypoint`` / ``--target-runtime`` flags;
+    ``--import-graph`` / ``--entrypoint`` / ``--target-runtime`` flags.
     ``deploy-example`` passes an *example* spec.
 
     Exactly one of *project_dir* / *example* must be given.
@@ -273,7 +273,7 @@ def resolve_project_deploy_source(
         ValueError: Neither or both of *project_dir* / *example*.
         _DeployLayoutError: project shape doesn't match the target
             runtime's entrypoint convention.  Callers surface the
-            instance's str as the user-facing message — a malformed
+            instance's str as the user-facing message.  A malformed
             project is refused identically on every path, never
             silently shipped as a library-less boot deploy.
         FileNotFoundError, ValueError: forwarded from
@@ -344,18 +344,18 @@ def _build_deploy_plan(
 
     Three input shapes:
 
-    * ``--all-projects`` — walk ``workspace.yml``'s ``deploy_targets``
-      mapping; one tuple per (project, devices-it-targets) pair.
-    * Positional name + ``--all-devices`` — one tuple targeting every
+    * ``--all-projects``: walks ``workspace.yml``'s ``deploy_targets``
+      mapping, one tuple per (project, devices-it-targets) pair.
+    * Positional name + ``--all-devices``: one tuple targeting every
       device in ``devices.yml``.
-    * Positional name (or default-when-only-one-project) — one tuple
-      whose device list is either the user's ``--device`` /
-      ``--runtime`` choice, or — when no per-deploy override is
-      passed — the project's ``deploy_targets`` entry, falling through
-      to the workspace's ``devices.yml`` default.
+    * Positional name (or default-when-only-one-project): one tuple
+      whose device list is the user's ``--device`` / ``--runtime``
+      choice.  When no per-deploy override is passed, the project's
+      ``deploy_targets`` entry is consulted, falling through to the
+      workspace's ``devices.yml`` default.
 
     Raises:
-        _DeployPlanError: Input validation failed — the str payload is
+        _DeployPlanError: Input validation failed.  The str payload is
             the actionable user-facing message.
     """
     if args.all_projects:
@@ -456,7 +456,7 @@ def _build_deploy_plan(
 def _cmd_deploy(args: argparse.Namespace) -> int:
     """Deploy a project to a device.
 
-    Single-project default uses :func:`project_directory_source` — the
+    Single-project default uses :func:`project_directory_source`, the
     flat layout where the project's files land at the device root.
     ``--import-graph`` ships only transitively-imported modules.
     ``--boot-shim`` ships project files at the device root plus a
@@ -465,23 +465,23 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     ``app.py`` + ``run()`` and no runtime-specific entrypoint.
 
     Positional name accepts bare (``"door_open"``), slash
-    (``"garage/sensors/door_open"``), or dotted forms; bare names that
+    (``"garage/sensors/door_open"``), or dotted forms.  Bare names that
     match more than one project in the tree exit 2 with a list of
     candidates.
 
     When invoked with no positional name and the workspace contains
-    exactly one project, that project is deployed by default — covers
+    exactly one project, that project is deployed by default, covering
     the "I only have one app" beginner case.  Zero projects or
     multiple projects both require an explicit positional.
 
-    Multi-project deploys (``deploy <a> <b> <c>``) are not supported;
-    pass one positional per ``deploy`` call.
+    Multi-project deploys (``deploy <a> <b> <c>``) are not supported.
+    Pass one positional per ``deploy`` call.
     """
     workspace = _resolve_workspace(args)
 
     # Pre-deploy fast health gate.  Catches the user-visible failure
-    # modes that *would* deploy but ship junk to the device — missing
-    # workspace.yml, malformed devices.yml, etc.  Skips the slower
+    # modes that *would* deploy but ship junk to the device (missing
+    # workspace.yml, malformed devices.yml, etc.).  Skips the slower
     # per-project AST checks that ``doctor`` runs (those add latency
     # to every deploy).
     # ``--skip-health-check`` opts out for power-users + CI.
@@ -600,7 +600,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 tail_target = device
 
     if args.tail is not None and tail_target is not None and exit_code == 0:
-        # One deploy path; the watch is a flag on it — not a second
+        # One deploy path. The watch is a flag on it, not a second
         # deploy path inside `repl`.  repl owns only the interactive /
         # standalone-tail surface.
         from chumicro_repl import tail  # noqa: PLC0415
@@ -714,7 +714,7 @@ def _cmd_projects(args: argparse.Namespace) -> int:
 
 
 def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
-    """``deploy`` — the workspace's central command.  Single project per call."""
+    """``deploy``: the workspace's main command.  Single project per call."""
     deploy_parser = subparsers.add_parser(
         "deploy",
         help="Deploy one or more projects — app code + merged runtime config msgpack.",
@@ -875,7 +875,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
 
 
 def _add_projects_parser(subparsers: argparse._SubParsersAction) -> None:
-    """``projects`` — list workspace projects (tree or flat view)."""
+    """``projects``: list workspace projects (tree or flat view)."""
     projects_parser = subparsers.add_parser(
         "projects",
         help="List the projects defined under the workspace's projects/ tree.",

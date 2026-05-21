@@ -9,9 +9,9 @@ routes through this dispatcher.
 
 Every subcommand is registered on a single argparse dispatcher and
 wired straight to the underlying ``chumicro_workspace`` /
-``chumicro_deploy`` / ``chumicro_repl`` API — there are no stub
+``chumicro_deploy`` / ``chumicro_repl`` API.  There are no stub
 tiers.  ``chumicro-workspace --help`` is the authoritative command
-list; this module only assembles the parser and routes each
+list.  This module only assembles the parser and routes each
 subcommand to its handler.
 """
 
@@ -125,10 +125,9 @@ class CliEnv:
     subprocess_runner: Callable[..., subprocess.CompletedProcess] = (
         subprocess.run
     )
-    #: HTTP GET used by the curated-library snapshot backend
-    #: (``library add`` / ``update`` / ``switch-channel``).  Returns
-    #: the response body bytes.  Tests pass a fixture that serves
-    #: in-memory snapshot tarballs / ``index.json`` so no sockets open.
+    #: HTTP GET callable.  Returns the response body bytes.  Tests
+    #: pass a fixture that serves in-memory snapshot tarballs /
+    #: ``index.json`` so no sockets open.
     http_get: Callable[[str], bytes] = _real_http_get
     #: Override the firmware-flash callable.  ``None`` means use
     #: :func:`chumicro_deploy.flash_firmware`.  Tests pass a recording
@@ -142,7 +141,7 @@ _DEFAULT_ENV = CliEnv()
 def main(
     argv: Sequence[str] | None = None,
     *,
-    env: CliEnv | None = None,  # noqa: CHU001 — matches subprocess.run(env=...) convention
+    env: CliEnv | None = None,  # noqa: CHU001 - matches subprocess.run(env=...) convention
 ) -> int:
     """Parse *argv* and dispatch to the selected command.
 

@@ -1,4 +1,4 @@
-"""``bootstrap`` subcommand — onboarding entry point.
+"""``bootstrap`` subcommand: onboarding entry point.
 
 Thin wrapper over ``add-device``: same probe + register flow, plus a
 "next steps" footer aimed at first-time users.  ``--demo`` is the
@@ -44,7 +44,7 @@ def _cmd_bootstrap(
     """Onboard a board: delegate to ``add-device`` then print next steps.
 
     The remaining unique behavior beyond ``add-device`` is the
-    "next steps" footer pointing at ``new`` / ``deploy`` / ``repl`` —
+    "next steps" footer pointing at ``new`` / ``deploy`` / ``repl``,
     aimed at first-time users.  Every other concern (port-pick,
     runtime auto-detection, register, optional demo chain) lives in
     ``add-device`` and is shared.
@@ -56,7 +56,7 @@ def _cmd_bootstrap(
 
 
 def _add_bootstrap_parser(subparsers: argparse._SubParsersAction) -> None:
-    """``bootstrap`` — onboarding entry-point alias of ``add-device`` + footer."""
+    """``bootstrap``: onboarding entry-point alias of ``add-device`` + footer."""
     bootstrap_parser = subparsers.add_parser(
         "bootstrap",
         help=(

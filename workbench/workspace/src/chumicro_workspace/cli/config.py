@@ -32,17 +32,17 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     """Print the merged runtime config a project would receive on deploy.
 
     Runs the deploy-time pipeline up to (but not through) the msgpack
-    write — ``secrets.toml`` defaults + ``project_config.toml``
-    deep-merged — then pretty-prints the result, so users can see what
-    their on-device ``chumicro_config.runtime`` will read without
-    deploying.
+    write, deep-merging ``secrets.toml`` defaults with
+    ``project_config.toml``, then pretty-prints the result so users can
+    see what their on-device ``chumicro_config.runtime`` will read
+    without deploying.
 
     Useful for: debugging which layer a key landed in after the merge,
     inspecting the shape before adding consumers on the device,
     confirming that gitignored credential overrides flowed through.
 
     Output format defaults to JSON (sorted keys, indent 2) for
-    diffability; ``--repr`` switches to ``repr()`` for cases where
+    diffability.  ``--repr`` switches to ``repr()`` for cases where
     the raw Python types matter (e.g. seeing ``bytes`` vs ``str``).
     """
     workspace = _resolve_workspace(args)

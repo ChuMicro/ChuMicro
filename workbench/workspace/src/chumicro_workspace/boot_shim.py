@@ -39,7 +39,7 @@ from chumicro_workspace.deploy_source import (
     wrap_with_runtime_config,
 )
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
+if TYPE_CHECKING:  # pragma: no cover - type-only
     from chumicro_workspace.workspace import WorkspaceLayout
 
 #: Three-line ``code.py`` (CP) / ``main.py`` (MP) shim.  Imports
@@ -392,20 +392,16 @@ def project_boot_with_import_graph_source(
         project_dir: Project directory (same shape as for
             :func:`project_boot_source`).
         workspace: Resolved :class:`WorkspaceLayout`.
-        entrypoint_filename: Device-side shim entrypoint —
+        entrypoint_filename: Device-side shim entrypoint.
             ``"code.py"`` (CP) or ``"main.py"`` (MP).  The shim is
             written at ``/<entrypoint_filename>`` and calls
             ``app.run()``.
         project_entrypoint: Host-side filename inside *project_dir*
             that the import-graph walker uses as its starting point.
-            Defaults to ``"app.py"`` — the boot-shim convention's
+            Defaults to ``"app.py"``, the boot-shim convention's
             entrypoint module.
-        workspace_yaml: Override ``workspace.yml`` path — used by the
-            import-graph walker to resolve the ``library_sources:``
-            block.
-        secrets_toml: Override ``secrets.toml`` path — used by
-            ``WithRuntimeConfig`` to read workspace-wide credentials
-            and device defaults.
+        workspace_yaml: Override ``workspace.yml`` path.
+        secrets_toml: Override ``secrets.toml`` path.
         extra_excluded: Additional filename / directory names to
             skip on the project walk.
         target_runtime: Forwarded to both inner sources so
