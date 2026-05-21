@@ -3,7 +3,7 @@
 Walks ``libraries/*/VERSION`` and ``workbench/*/VERSION``, filters by an
 optional package list, skips packages whose release tag already exists,
 and emits a GitHub Actions matrix JSON describing the packages to release.
-Decision 0032 rule 3 — workbench packages carry ``kind=workbench`` so the
+Decision 0032 rule 3: workbench packages carry ``kind=workbench`` so the
 bundle + validate-mip jobs can filter them out (they ship to PyPI only,
 not to circup / mip).
 

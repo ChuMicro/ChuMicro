@@ -184,7 +184,7 @@ def _sync_vscode_extensions() -> None:
     VS Code reads this file when a folder is opened and surfaces a
     "Do you want to install the recommended extensions?" prompt.
     Without it, the Python extension only activates the first time
-    the user opens a ``.py`` file — which makes the test runner,
+    the user opens a ``.py`` file, which makes the test runner,
     interpreter picker, and Pylance all silently absent on first
     open.
     """
@@ -217,7 +217,7 @@ def _sync_pycharm_iml() -> None:
     each user's interpreter choice lives in the gitignored
     ``.idea/misc.xml`` (``project-jdk-name``) and the module inherits
     it.  PyCharm may still rewrite the ``.iml`` when the interpreter or
-    module settings change — contributors should re-run
+    module settings change.  Contributors should re-run
     ``python scripts/run.py sync-ide`` (or click the Sync IDE run
     configuration) before committing if that happens.
     """
@@ -262,10 +262,9 @@ def _pycharm_default_jdk_name() -> str:
     convention means a contributor who lets PyCharm create or attach a
     .venv by the defaults sees no broken-SDK warning on first open.
 
-    Uses the running interpreter's version — this is correct when
-    ``sync-ide`` runs from the workspace venv, which is the expected
-    flow (setup / prepare_workspace run it after the interpreter is
-    resolved).
+    Uses the running interpreter's version, which is correct when
+    ``sync-ide`` runs from the workspace venv (setup /
+    prepare_workspace run it after the interpreter is resolved).
     """
     major, minor = sys.version_info[:2]
     return f"Python {major}.{minor} ({ROOT.name})"
@@ -277,11 +276,11 @@ def _sync_pycharm_misc_xml() -> None:
     ``misc.xml`` is user-local (gitignored) and PyCharm fully manages it
     once the project SDK is set.  Writing a convention-based
     ``project-jdk-name`` the first time gives PyCharm a matching SDK
-    hint — if the contributor's auto-created venv carries that exact
-    name, imports and run configs resolve immediately; otherwise
+    hint: if the contributor's auto-created venv carries that exact
+    name, imports and run configs resolve immediately.  Otherwise
     PyCharm prompts once to pick the interpreter and overwrites this
     file with the correct name.  Never overwrite an existing
-    ``misc.xml`` — that would clobber user state.
+    ``misc.xml``, which would clobber user state.
     """
     misc_file = ROOT / ".idea" / "misc.xml"
     if misc_file.exists():

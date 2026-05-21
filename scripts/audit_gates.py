@@ -54,8 +54,8 @@ def _python(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
     """Run a Python subprocess using the running interpreter.
 
     The audit script only runs from a venv with ``griffe`` and friends
-    installed, so ``sys.executable`` is already the right interpreter —
-    no separate ``.venv/bin/python`` lookup needed.
+    installed, so ``sys.executable`` is already the right interpreter.
+    No separate ``.venv/bin/python`` lookup needed.
     """
     return subprocess.run(
         [sys.executable, *args],
@@ -125,7 +125,7 @@ def _seed_publishable_repo(
 # ---------------------------------------------------------------------------
 
 Result = tuple[str, bool, str]
-"""(label, ok, evidence) — *ok* is True when the gate fired as expected."""
+"""(label, ok, evidence): *ok* is True when the gate fired as expected."""
 
 
 def _scenario(label: str, ok: bool, evidence: str) -> Result:
@@ -133,7 +133,7 @@ def _scenario(label: str, ok: bool, evidence: str) -> Result:
 
 
 # ---------------------------------------------------------------------------
-# check_names — CHU001 (single-letter / abbreviation)
+# check_names: CHU001 (single-letter / abbreviation)
 # ---------------------------------------------------------------------------
 
 
@@ -162,7 +162,7 @@ def audit_check_names_abbreviation() -> Result:
 
 
 # ---------------------------------------------------------------------------
-# check_whitespace — CHU002 / CHU004
+# check_whitespace: CHU002 / CHU004
 # ---------------------------------------------------------------------------
 
 
@@ -187,7 +187,7 @@ def audit_check_whitespace_trailing_space() -> Result:
 
 
 # ---------------------------------------------------------------------------
-# ruff lint — F401 unused import
+# ruff lint: F401 unused import
 # ---------------------------------------------------------------------------
 
 
@@ -217,7 +217,7 @@ def audit_ruff_clean_passes() -> Result:
 
 
 # ---------------------------------------------------------------------------
-# ruff TID252 — banned-relative-imports in device-code trees
+# ruff TID252: banned-relative-imports in device-code trees
 # ---------------------------------------------------------------------------
 
 
@@ -310,7 +310,7 @@ def audit_ruff_tid252_libraries_tests_passes() -> Result:
 
 
 # ---------------------------------------------------------------------------
-# verify_examples — broken import
+# verify_examples: broken import
 # ---------------------------------------------------------------------------
 
 
@@ -352,7 +352,7 @@ def audit_verify_examples_broken_import() -> Result:
 
 
 # ---------------------------------------------------------------------------
-# check_version — workbench src change without VERSION bump
+# check_version: workbench src change without VERSION bump
 # ---------------------------------------------------------------------------
 
 
@@ -414,7 +414,7 @@ def audit_check_version_workbench_with_bump_passes() -> Result:
 
 
 # ---------------------------------------------------------------------------
-# check_api — real griffe subprocess against a real tag
+# check_api: real griffe subprocess against a real tag
 # ---------------------------------------------------------------------------
 
 
@@ -491,8 +491,8 @@ def audit_check_api_workbench_breakage_minor_passes() -> Result:
 def audit_check_api_libraries_breakage_patch_fails() -> Result:
     """Same shape as the workbench audit, against the libraries/ arm.
 
-    Confirms the absolute-vs-relative ``--search`` fix from commit
-    ``5578026`` is also live for libraries — not just workbench.
+    Confirms the absolute-vs-relative ``--search`` fix is live for the
+    libraries/ arm too, not just workbench.
     """
     with _tmp_dir("api3") as workdir:
         repo = _seed_publishable_repo(workdir, parent="libraries", name="timing")
@@ -530,7 +530,7 @@ def audit_check_api_libraries_breakage_patch_fails() -> Result:
 
 
 # ---------------------------------------------------------------------------
-# Known gaps — reported separately, not pass/fail
+# Known gaps: reported separately, not pass/fail
 # ---------------------------------------------------------------------------
 
 

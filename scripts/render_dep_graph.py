@@ -2,22 +2,22 @@
 
 Two graphs are produced from this single script:
 
-* ``support/docs/dependency-graph.svg`` — device libraries under
+* ``support/docs/dependency-graph.svg``: device libraries under
   ``libraries/<name>/``.
-* ``support/docs/workbench-dependency-graph.svg`` — host-side tools under
+* ``support/docs/workbench-dependency-graph.svg``: host-side tools under
   ``workbench/<name>/``.
 
-Both pure-Python; no external deps.
+Both pure-Python, no external deps.
 
 Two edge kinds (same convention in each graph):
 
-* **Strict deps** (solid arrows) — exactly the chumicro-prefixed entries
+* **Strict deps** (solid arrows): exactly the chumicro-prefixed entries
   in each package's ``pyproject.toml`` ``[project].dependencies``.
   Auto-discovered at script invocation; if a package's pyproject changes,
   re-running this script picks the change up.
-* **DI / typical-wiring deps** (dashed arrows) — relationships expressed
+* **DI / typical-wiring deps** (dashed arrows): relationships expressed
   through constructor injection or lazy runtime import rather than a
-  declared dep.  Hand-curated below — the user who pulls a package in
+  declared dep.  Hand-curated below, so the user who pulls a package in
   should know they exist.
 
 Run::
@@ -58,8 +58,8 @@ DI_DEPS: dict[str, list[str]] = {
 
 # Workbench DI / soft-dep relationships.  ``chumicro-workspace`` imports
 # ``chumicro_repl`` lazily inside CLI functions and prints an install hint
-# if the import fails — so it's a real runtime relationship but not a
-# declared pyproject dep.
+# if the import fails.  A real runtime relationship but not a declared
+# pyproject dep.
 WORKBENCH_DI_DEPS: dict[str, list[str]] = {
     "workspace": ["repl"],
 }
@@ -68,18 +68,18 @@ WORKBENCH_DI_DEPS: dict[str, list[str]] = {
 # Foundation row at the bottom, building blocks in the middle, services
 # at the top.  Standalone libraries (no edges) cluster on the side.
 NODES: dict[str, tuple[int, int]] = {
-    # Top row — services (y=60).
+    # Top row: services (y=60).
     "wifi":        (40,   60),
     "ntp":         (220,  60),
     "requests":    (400,  60),
     "http_server": (580,  60),
     "mqtt":        (760,  60),
     "websockets":  (940,  60),
-    # Middle row — building blocks (y=300).
+    # Middle row: building blocks (y=300).
     "config":      (100,  300),
     "kvstore":     (300,  300),
     "runner":      (520,  300),
-    # Bottom row — foundation primitives (y=540).
+    # Bottom row: foundation primitives (y=540).
     "msgpack":     (140,  540),
     "timing":      (480,  540),
     "sockets":     (840,  540),
@@ -92,13 +92,13 @@ NODES: dict[str, tuple[int, int]] = {
 # Workbench layout: composers on top, primitives below, lint-only
 # ``checks`` package off to the side as a standalone node.
 WORKBENCH_NODES: dict[str, tuple[int, int]] = {
-    # Top row — composers (y=60).
+    # Top row: composers (y=60).
     "workspace":     (40,   60),
     "pytest-device": (240,  60),
-    # Bottom row — primitives (y=240).
+    # Bottom row: primitives (y=240).
     "deploy":        (40,   240),
     "repl":          (240,  240),
-    # Standalone (no edges) — workspace-internal lint rules.
+    # Standalone (no edges): workspace-internal lint rules.
     "checks":        (470,  240),
 }
 
@@ -164,10 +164,10 @@ def edge_endpoints(
     source_cx = source_x + node_w / 2
     destination_cx = destination_x + node_w / 2
     if source_y < destination_y:
-        # Source is above destination — line drops from source bottom
+        # Source is above destination: line drops from source bottom
         # to destination top.
         return source_cx, source_y + node_h, destination_cx, destination_y
-    # Source is below destination (rare here) — flip.
+    # Source is below destination (rare here): flip.
     return source_cx, source_y, destination_cx, destination_y + node_h
 
 
@@ -322,7 +322,7 @@ def render_workbench_svg(
     strict: dict[str, list[str]],
     di: dict[str, list[str]] = WORKBENCH_DI_DEPS,
 ) -> str:
-    """Workbench dependency graph — composers above, primitives below."""
+    """Workbench dependency graph: composers above, primitives below."""
     return render_svg(
         strict,
         di,

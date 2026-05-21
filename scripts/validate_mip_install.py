@@ -69,7 +69,7 @@ from shared import resolve_micropython_binary
 def _intra_workspace_deps(library_name: str) -> list[str]:
     """Return workspace library names that *library_name* depends on.
 
-    Reads the library's ``pyproject.toml`` once per call (no caching —
+    Reads the library's ``pyproject.toml`` once per call (no caching;
     only invoked at validation startup).  Returns dependency *library
     names* with the ``chumicro-`` prefix stripped (e.g. ``"timing"``,
     not ``"chumicro-timing"``) so they match the ``library_names``
@@ -359,7 +359,7 @@ def validate_local_staging(
     ``http://localhost`` URLs, starts a background HTTP server, and
     validates that each library can be installed via mip and imported.
 
-    This is the pre-publish gate — run it after staging bundle artifacts
+    This is the pre-publish gate.  Run it after staging bundle artifacts
     but before pushing to the live bundle repository.
 
     Args:

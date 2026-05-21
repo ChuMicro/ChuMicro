@@ -3,7 +3,7 @@
 Uses ``griffe check`` to compare the current public API of each changed
 publishable package against its last release tag.  Fails when breakages
 are detected but the VERSION bump level is insufficient (Decision 0020).
-Covers both ``libraries/`` and ``workbench/`` (Decision 0032 — same
+Covers both ``libraries/`` and ``workbench/`` (Decision 0032: same
 release lifecycle, same pre-merge gate).
 
 Usage::
@@ -28,9 +28,9 @@ from repo_layout import (
     release_tags,
 )
 
-#: Cap on concurrent ``griffe check`` invocations — each is an
+#: Cap on concurrent ``griffe check`` invocations.  Each is an
 #: independent subprocess against a different package + tag, no
-#: shared state.  Override via ``--max-workers`` (mirrors
+#: shared state.  Override via ``--max-workers`` (matches
 #: ``scripts/run.py``'s ``--package-workers`` for the same fan-out
 #: shape).
 _DEFAULT_GRIFFE_PARALLEL_WORKERS = 4

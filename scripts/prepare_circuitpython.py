@@ -65,37 +65,25 @@ def prepare_circuitpython() -> int:
             RuntimePrepStep(["make", "-C", source_dir / "mpy-cross", jobs]),
             # The actual unix-port binary.  Two non-default knobs:
             #
-            # 1. ``-DMICROPY_PY_MICROPYTHON_RINGIO=0`` works around a
-            #    bug in CP's ``py`` build.  ``objringio.c`` doesn't
-            #    compile against CP's ``ringbuf_t`` (missing ``iget`` /
-            #    ``iput`` members + helper functions) — has been broken
-            #    since the file was inherited from MicroPython.  In
-            #    10.1.4 the file was missing from ``py.mk`` so the
-            #    compile bug was masked behind a linker error for
-            #    ``mp_type_ringio``; 10.2.0 added the ``py.mk`` entry,
-            #    which unmasked the compile bug.  Either way, disabling
-            #    the RingIO type sidesteps both failure modes.  See
+            # 1. ``-DMICROPY_PY_MICROPYTHON_RINGIO=0`` disables CP's
+            #    RingIO type.  ``objringio.c`` does not compile against
+            #    CP's ``ringbuf_t`` (missing ``iget`` / ``iput`` members
+            #    and helper functions), so disabling the type sidesteps
+            #    the build break.  See
             #    ``plans/decisions/0017-circuitpython-ringio-bug.md``.
             #
-            # 2. ``MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1`` (passed as
-            #    Make variables, not CFLAGS — the Makefile blocks that
-            #    pull in ``lib/axtls/crypto/sha1.c`` are gated on
-            #    Make-level conditionals in ``extmod/extmod.mk``).
-            #    Enables ``hashlib.sha1`` + ``hashlib.md5`` (gated on
-            #    ``MICROPY_PY_SSL`` in
-            #    ``ports/unix/variants/mpconfigvariant_common.h``).
+            # 2. ``MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1`` enables
+            #    ``hashlib.sha1`` and ``hashlib.md5``.  Passed as Make
+            #    variables rather than CFLAGS because the gated blocks
+            #    that pull in ``lib/axtls/crypto/sha1.c`` are Make-level
+            #    conditionals in ``extmod/extmod.mk``.  The hash
+            #    functions themselves are gated on ``MICROPY_PY_SSL`` in
+            #    ``ports/unix/variants/mpconfigvariant_common.h``.
             #
-            #    We'd prefer mbedTLS here — every real CP board ships
-            #    it, and it's what the CP ``ssl.py`` shim under
-            #    ``lib/micropython-lib/python-stdlib/ssl/`` expects
-            #    (``import tls``, where ``tls`` is the
-            #    ``extmod/modtls_mbedtls.c`` C module).  But CP's
-            #    source tree (verified through 10.2.0) has three
-            #    independent problems blocking mbedtls on the unix-port,
-            #    plus zero downstream test-recovery payoff anyway —
-            #    `git log -- scripts/prepare_circuitpython.py` carries
-            #    the full triage in commits `f701580` + `8ed0ef2` +
-            #    `3b481e5`.  We live with axtls and the resulting
+            #    mbedTLS would match the on-board behavior of every real
+            #    CP board, but the CP source tree has multiple unix-port
+            #    build blockers for it with no downstream test payoff
+            #    worth chasing.  We live with axtls and the resulting
             #    ``ssl``-module gap on the CP unix-port.
             RuntimePrepStep(
                 [

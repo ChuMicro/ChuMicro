@@ -26,7 +26,7 @@ from pathlib import Path
 
 from repo_layout import ROOT
 
-#: Strict regex for experimental tags — the promote workflow only accepts
+#: Strict regex for experimental tags.  The promote workflow only accepts
 #: tags created by release.yml's experimental path.
 _TAG_PATTERN = re.compile(
     r"^chumicro-(?P<library_name>[a-z][a-z0-9_-]*)-v(?P<version>\d+\.\d+\.\d+)-experimental$",
