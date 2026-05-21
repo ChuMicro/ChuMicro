@@ -13,6 +13,19 @@ No argument needed (or pass `--focus <area>` for a targeted pass).  Default scop
 
 This skill is the **biggest** of the three audit skills and produces the longest punch-list.  It's also the one whose findings are most likely to spawn follow-up workstreams rather than direct code edits.  Run it sparingly — once per major release cycle, or when the ecosystem feels off.
 
+## How this audit fits the wider sequence
+
+For full-sweep entry mode (release-cycle pass — see Process → Entry modes), `/audit-workspace` runs **first** in the audit family.  It produces the inventory + workstream candidates that the narrower audits depend on:
+
+1. **`/audit-workspace`** (this skill) — produces the inventory + workstream candidates.
+2. **`/audit-integration`** on each pair flagged by step 1 — confirms or refutes the boundary findings.
+3. **`/audit-library`** on each library individually — internal cleanup that's blocked or aided by the workspace decisions in step 1.
+4. **`/audit-embedded`** on each device library after step 3.  Per audit-embedded's body, the library pass shrinks surface first (dead code, single-use helpers, cargo-cult methods), which makes the embedded pass cleaner.  Skip for `workbench/*` packages — they're host-only.
+
+In practice you'll often run them in the reverse order (small fixes first), but the *thinking* benefits from the bigger-scope-first sequence.
+
+For routed-finding entry mode (a sibling escalates a single finding here), this sequencing doesn't apply — produce one workstream proposal and return.
+
 ## Audit philosophy
 
 Workspace-level cleanup operates on **library shapes**, not function shapes.  The questions are bigger:
@@ -244,13 +257,3 @@ ESCALATE:
 
 The goal: a workspace where each library has a clear reason to exist, the dependency graph reads cleanly, decisions match code, and patterns that have earned their keep are documented or hoisted.
 
-## Sequencing recommendation
-
-Run audits in this order across a release cycle:
-
-1. **`/audit-workspace`** first — produces the inventory + the workstream candidates.
-2. **`/audit-integration`** on each pair flagged by step 1 — confirms or refutes the boundary findings.
-3. **`/audit-library`** on each library individually — internal cleanup that's blocked or aided by the workspace decisions in step 1.
-4. **`/audit-embedded`** on each device library after step 3.  Per the audit-embedded body, the library pass shrinks surface first (dead code, single-use helpers, cargo-cult methods), which makes the embedded pass cleaner.  Skip for `workbench/*` packages — they're host-only.
-
-You'll often run them in the reverse order in practice (small fixes first), but the *thinking* benefits from the bigger-scope-first sequence.
