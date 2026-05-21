@@ -783,8 +783,7 @@ class FrameParser:
     fragmentation reassembly, control-frame routing, mask-direction
     policy, and UTF-8 validation.
 
-    Three-tier inbound size handling mirrors
-    :class:`chumicro_mqtt._wire.PacketDecoder`:
+    Three-tier inbound size handling:
 
     * **Tier 1 — steady.**  Frame payload ≤ ``payload_buffer_size``.
       Reuses the pre-allocated steady-state buffer.  No allocation.

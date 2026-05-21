@@ -86,8 +86,7 @@ class WebSocketClient(_BaseSession):
     one-line factory that reads ``websockets.client.max_message_bytes``
     from ``runtime_config.msgpack``.
 
-    Knobs (all default to the matching ``DEFAULT_*`` constant, mirroring
-    chumicro-mqtt + chumicro-requests):
+    Knobs (all default to the matching ``DEFAULT_*`` constant):
 
     * ``max_message_bytes`` — cap on assembled inbound message size.
     * ``recv_budget_per_tick`` / ``send_budget_per_tick`` — per-tick

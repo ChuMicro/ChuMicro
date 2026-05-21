@@ -53,7 +53,7 @@ _MAX_EMPTY_FRAGMENT_RUN = 64
 
 
 # ---------------------------------------------------------------------------
-# WhenOversized policy (lifted from client.py — used by both halves)
+# WhenOversized policy
 # ---------------------------------------------------------------------------
 
 
