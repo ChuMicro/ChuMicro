@@ -185,9 +185,8 @@ def _bounded_end(data: memoryview, start: int, length: int) -> int:
     """Return ``start + length``, or raise if it runs past *data*.
 
     A ``memoryview`` slice silently truncates instead of erroring, so
-    without this an over-length claimed length returns a short result
-    rather than failing — the length-vs-remaining check that keeps the
-    decoder safe against truncated / over-length framing.
+    without this an over-length claim returns a short read rather than
+    failing.
     """
     end = start + length
     if end > len(data):
@@ -311,7 +310,7 @@ def _decode(data: memoryview, offset: int, depth: int) -> tuple:
 def _decode_array(data: memoryview, offset: int, length: int, depth: int) -> tuple:
     """Decode *length* array elements starting at *offset*; return ``(list, new_offset)``."""
     # Every element is at least one byte, so a claimed length past the
-    # remaining buffer is malformed framing — reject before the loop
+    # remaining buffer is malformed framing. Reject before the loop
     # allocates a giant list from corrupt input.
     if length > len(data) - offset:
         raise ValueError(_MALFORMED)
@@ -364,10 +363,10 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
     """Unpack msgpack *data* to a Python object.
 
     This is a *trusting* decoder, not a spec validator.  It is safe
-    against malformed framing — truncated, over-length, or
+    against malformed framing (truncated, over-length, or
     trailing-garbage input, and unbounded nesting, all raise
-    ``ValueError`` rather than returning a silently-wrong result — but
-    it does not check that a structurally-valid payload has the type
+    ``ValueError`` rather than returning a silently-wrong result).
+    It does not check that a structurally-valid payload has the type
     shape the caller expects.  Code persisting corruption- or
     attacker-reachable bytes (e.g. flash-backed config) still owns
     type-shape validation of what comes back.
@@ -386,7 +385,7 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
     if not isinstance(data, memoryview):
         data = memoryview(data)
     result, end = _decode(data, 0, 0)
-    # Trailing bytes are rejected at the top level only — the recursive
+    # Trailing bytes are rejected at the top level only. The recursive
     # core legitimately stops mid-buffer inside a container.
     if end != len(data):
         raise ValueError("trailing bytes after msgpack value")

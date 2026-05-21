@@ -8,7 +8,7 @@ Implements a strict 32-bit-int / 16-bit-length subset of the
 - strings, bytes, arrays, and maps up to 65 535 elements / bytes
 
 The subset is what fits on a small board, but the bytes are
-spec-compliant — any standard MessagePack reader decodes them.
+spec-compliant. Any standard MessagePack reader decodes them.
 
 Public API
 ----------
@@ -25,14 +25,14 @@ encoder in ``_pure`` is never imported, keeping heap usage lower on
 memory-tight boards.
 
 On CPython and MicroPython, the implementation is always the pure
-Python ``_pure`` encoder.  Note that PyPI's ``msgpack`` package
-implements the *full* spec (``float64``, ``int64``, ``*32``-length
-prefixes, ``strict_map_key=True`` by default) — that's a different
-contract.  Host code that produces bytes for a chumicro device should
-use ``msgpack.packb(obj, use_single_float=True)`` and stay inside the
-size limits above; the resulting bytes are byte-for-byte identical to
-``chumicro_msgpack.packb(obj)``.  This identity is pinned by the
-``test_byte_identity_with_pypi_msgpack`` test in this package's tests.
+Python ``_pure`` encoder.  PyPI's ``msgpack`` package implements the
+*full* spec (``float64``, ``int64``, ``*32``-length prefixes,
+``strict_map_key=True`` by default), a different contract.  Host code
+that produces bytes for a chumicro device should use
+``msgpack.packb(obj, use_single_float=True)`` and stay inside the size
+limits above.  The resulting bytes are byte-for-byte identical to
+``chumicro_msgpack.packb(obj)``, pinned by the
+``test_byte_identity_with_pypi_msgpack`` test in this package.
 
 Out-of-subset bytes encountered on decode (``0xcb`` float64, ``0xcf``
 uint64, ``0xd3`` int64, ``0xc6/0xdb/0xdd/0xdf`` ``*32``-length tags)
