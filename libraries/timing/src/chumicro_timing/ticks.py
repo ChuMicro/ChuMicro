@@ -18,10 +18,11 @@ except ImportError:
         return value
 
 
-# const() on a public name keeps both wins on MicroPython: the use
-# sites get inlined as compile-time literals, AND the name remains
-# importable from this module.  Only the leading-underscore form
-# additionally strips the module-level binding.
+# Public names (no underscore prefix) so callers can do
+# ``from chumicro_timing.ticks import TICKS_PERIOD``.  const() inlines
+# the values at use sites on MicroPython either way; the underscore
+# form would additionally strip the module-level binding, which
+# would block that import.
 TICKS_PERIOD = const(1 << 29)
 TICKS_MAX = const(TICKS_PERIOD - 1)
 TICKS_HALFPERIOD = const(TICKS_PERIOD // 2)
