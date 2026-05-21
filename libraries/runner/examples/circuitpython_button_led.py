@@ -1,7 +1,7 @@
 """Button-controlled LED: CircuitPython gate pattern.
 
 Reads a button and toggles an LED using the runner's check/handle
-gate pattern.  The runner calls ``check()`` every tick; when the
+gate pattern.  The runner calls ``check()`` every tick.  When the
 button is pressed, ``handle()`` fires and toggles the LED.  Prints
 a startup banner and a line on every accepted press so a serial
 console (or a sweep harness) can verify the loop without a probe.
@@ -43,7 +43,7 @@ BUTTON_PIN = ""
 # Per-board fallback used when BUTTON_PIN is empty.  Key is the
 # string ``board.board_id`` returns on each board (find yours
 # at the REPL with ``import board; print(board.board_id)``).
-# One entry per line — add your board if it isn't listed.
+# One entry per line.  Add your board if it isn't listed.
 BOARD_BUTTON_PINS = {
     "raspberry_pi_pico_w":     "GP14",
     "raspberry_pi_pico2_w":    "GP14",
@@ -59,14 +59,14 @@ def _resolve_button_pin():
     pin_name = BUTTON_PIN or BOARD_BUTTON_PINS.get(board.board_id)
     if not pin_name:
         raise RuntimeError(
-            f"no button pin for board {board.board_id!r} — set BUTTON_PIN "
+            f"no button pin for board {board.board_id!r}: set BUTTON_PIN "
             f"at the top of this file (e.g. \"D5\") or add an entry to "
             f"BOARD_BUTTON_PINS.",
         )
     pin = getattr(board, pin_name, None)
     if pin is None:
         raise RuntimeError(
-            f"board has no pin named {pin_name!r} — check your "
+            f"board has no pin named {pin_name!r}: check your "
             f"BUTTON_PIN setting / BOARD_BUTTON_PINS mapping.",
         )
     return pin

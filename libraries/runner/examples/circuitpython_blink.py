@@ -8,7 +8,7 @@ Setup:
 1. Install ``chumicro_runner`` and ``chumicro_timing``
    (``circup install chumicro-runner`` or copy both packages
    to ``lib/``).
-2. No extra wiring — uses the built-in LED (``board.LED``).
+2. No extra wiring needed.  Uses the built-in LED (``board.LED``).
 3. Save this file as ``code.py`` on the board.
 
 Example output::

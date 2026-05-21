@@ -865,7 +865,7 @@ def test_start_after_ms_then_every_tick() -> None:
 
 
 def test_start_after_ms_with_period() -> None:
-    """start_after_ms should delay first fire; subsequent fires use period_ms."""
+    """start_after_ms should delay first fire.  Subsequent fires use period_ms."""
     fake = FakeTicks()
     received = []
 
@@ -881,12 +881,12 @@ def test_start_after_ms_with_period() -> None:
     runner.tick()
     assert received == []
 
-    # At start delay — first fire.
+    # At start delay: first fire.
     fake.advance(100)
     runner.tick()
     assert received == [500]
 
-    # One period later — second fire.
+    # One period later: second fire.
     fake.advance(100)
     runner.tick()
     assert received == [500, 600]
@@ -900,12 +900,12 @@ def test_start_after_ms_with_check() -> None:
     runner = Runner(ticks=fake)
     runner.add(svc, start_after_ms=200)
 
-    # Before delay — check should not be called.
+    # Before delay: check should not be called.
     fake.advance(100)
     runner.tick()
     assert svc.check_count == 0
 
-    # After delay — check runs normally.
+    # After delay: check runs normally.
     fake.advance(100)
     runner.tick()
     assert svc.check_count == 1
@@ -977,7 +977,7 @@ def test_tick_is_not_reentrant() -> None:
 
 
 def test_ticking_flag_resets_after_handler_exception() -> None:
-    """A handler raising must not wedge the runner — the guard clears."""
+    """A handler raising must not wedge the runner.  The try/finally clears the guard."""
     runner = Runner(ticks=FakeTicks())
 
     def boom(now_ms: int) -> None:

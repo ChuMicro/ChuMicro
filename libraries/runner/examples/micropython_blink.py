@@ -8,7 +8,7 @@ Setup:
 1. Install ``chumicro_runner`` and ``chumicro_timing``
    (``mpremote mip install chumicro-runner`` or copy both
    packages to the board).
-2. No extra wiring — uses pin 2, the built-in LED on most
+2. No extra wiring needed.  Uses pin 2, the built-in LED on most
    ESP32 dev boards.  Change ``Pin(2)`` to match your board.
 3. Save this file as ``main.py`` on the board.
 

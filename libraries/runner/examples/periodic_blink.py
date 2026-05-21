@@ -37,7 +37,7 @@ def toggle_led(now_ms: int) -> None:
 runner = Runner()
 
 # add_periodic registers a handler that fires on a fixed schedule.
-# The runner manages the timing internally — you just call tick()
+# The runner manages the timing internally.  You just call tick()
 # in your main loop.
 runner.add_periodic(toggle_led, period_ms=500)
 
@@ -48,7 +48,7 @@ while True:
     # tasks, and fires any that are due.
     runner.tick()
 
-    # In a real project, the rest of your main loop goes here —
+    # In a real project, the rest of your main loop goes here:
     # reading sensors, checking buttons, etc.
     # The sleep just keeps this demo from flooding the console.
     time.sleep(0.05)

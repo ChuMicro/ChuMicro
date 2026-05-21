@@ -1,7 +1,7 @@
 """Button-controlled LED: MicroPython gate pattern.
 
 Reads a button and toggles an LED using the runner's check/handle
-gate pattern.  The runner calls ``check()`` every tick; when the
+gate pattern.  The runner calls ``check()`` every tick.  When the
 button is pressed, ``handle()`` fires and toggles the LED.  Prints
 a startup banner and a line on every accepted press so a serial
 console (or a sweep harness) can verify the loop without a probe.
