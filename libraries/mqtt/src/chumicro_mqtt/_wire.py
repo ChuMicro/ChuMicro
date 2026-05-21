@@ -1,10 +1,11 @@
-"""MQTT 3.1.1 wire format: exceptions, constants, codecs, encoders, decoder.
+"""MQTT 3.1.1 wire format: exceptions, packet-type constants, codecs,
+encoders, and the incremental packet decoder.
 
-Consolidates what used to be ``_errors.py`` + ``_packets.py`` +
-``_encoder.py`` + ``_decoder.py`` into one module.  The pieces are
-intertwined (every encoder needs the constants and the codec, every
-decoder needs the constants and the protocol exceptions) and shipping
-them as four files cost ~16 KB of FAT cluster waste on Pi Pico W.
+These live in one module because the pieces are intertwined: every
+encoder uses the constants and the codec, every decoder state needs
+the constants and the protocol exceptions.  One file also keeps the
+FAT-cluster slack on a USB-mounted CIRCUITPY drive low, since each
+file costs a 4 KB cluster minimum on FAT16/32.
 """
 
 import struct
@@ -379,20 +380,14 @@ def encode_puback(*, packet_id):
 # Inbound-packet parser
 # ---------------------------------------------------------------------------
 
-#: Default pre-allocated steady-state buffer size (bytes).  Inbound PUBLISHes
-#: that fit within this size parse inline without any allocation.  Larger
-#: messages either get a one-shot intact buffer (tier 2) or drain via
-#: rolling discard (tier 3).  See :class:`PacketDecoder`.
+#: Default size (bytes) of the pre-allocated steady-state RX buffer.
+#: See :class:`PacketDecoder` for the size-tier model.
 DEFAULT_RX_BUFFER_SIZE = const(256)
 
-#: Default cap on intact-delivery for a single inbound PUBLISH.  Messages
-#: at or below this size are delivered to ``on_message`` with their full
-#: payload (allocated one-shot, freed after delivery).  Above this size
-#: the configured ``WhenOversized`` policy applies: the payload is dropped
-#: via rolling discard, with no heap allocation beyond the steady-state
-#: buffer.  Default sized for typical embedded-board payloads on the
-#: 256 KB-RAM minimum-tier board.  Raise for legitimately larger inbound
-#: messages.
+#: Default cap (bytes) on intact delivery for a single inbound PUBLISH.
+#: Sized for typical embedded-board payloads on a 256 KB-RAM
+#: minimum-tier board.  Raise for legitimately larger messages.  See
+#: :class:`PacketDecoder` for the size-tier model.
 DEFAULT_MAX_MESSAGE_BYTES = const(8 * 1024)
 
 
@@ -511,11 +506,9 @@ class PacketDecoder:
         self._buffer_length = 0
         self._read_offset = 0
         self._max_message_bytes = max_message_bytes
-        # In-flight oversized-PUBLISH drain state.  ``_DRAIN_NONE`` while
-        # the steady-state parse path is active.  ``_DRAIN_INTACT`` while
-        # filling a tier-2 payload buffer.  ``_DRAIN_OVERSIZED`` while
-        # rolling-discarding a tier-3 payload through the steady-state
-        # buffer.
+        # Drain state for an in-progress inbound PUBLISH that
+        # overflowed ``rx_buffer_size``.  See the ``_DRAIN_*`` constants
+        # above for what each value means.
         self._drain_mode = _DRAIN_NONE
         self._drain_payload_buffer = None
         self._drain_payload_view = None
@@ -582,10 +575,6 @@ class PacketDecoder:
         if live < 2:
             return None
 
-        # Use the cached view rather than constructing a fresh one
-        # per call.  ``_buffer`` is allocated once at construction
-        # and never resized, so the view is stable for the parser's
-        # lifetime.
         view = self._buffer_view
         fixed_byte = view[base]
         message_length, varlen_consumed = decode_varlen(view, base + 1)
@@ -688,7 +677,9 @@ class PacketDecoder:
     def _parse_connack(self, view, body_start, body_end):
         if body_end - body_start != 2:
             raise MQTTProtocolError("CONNACK body must be exactly 2 bytes")
-        # First byte = ack flags (we only check session-present bit on resume).
+        # Skip byte 0 (ack flags, including session-present).  The
+        # client doesn't act on session resumption, so only byte 1
+        # (return code) is parsed.
         return_code = view[body_start + 1]
         return ParsedAck(packet_type=PACKET_CONNACK, return_code=return_code)
 

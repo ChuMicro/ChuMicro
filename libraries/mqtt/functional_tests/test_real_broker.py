@@ -82,10 +82,10 @@ def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
 
 
 def _unique_topic_root() -> str:
-    """Per-run topic prefix to avoid colliding with other test instances.
+    """Per-run topic prefix that avoids colliding with parallel test runs.
 
-    Uses ``time.monotonic_ns`` (CP/MP/CPython all expose it) modded
-    so the suffix fits in a tidy string.
+    Suffix is the low six digits of ``ticks_ms()``, which the
+    cross-runtime tick contract guarantees on CP/MP/CPython.
     """
     return f"chumicro-test/run-{_ticks_ms() % 1_000_000}"
 

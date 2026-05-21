@@ -267,7 +267,7 @@ class TestDecoderEdgeCases:
         assert client.state == ProtocolState.CONNECTED  # silent drop, still connected
 
     def test_oversize_topic_with_drop_with_event_emits_none_topic(self) -> None:
-        """Topic > rx_buffer_size fires on_oversized with topic=None (deadlock-bug fix)."""
+        """A topic larger than rx_buffer_size fires on_oversized with topic=None."""
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()

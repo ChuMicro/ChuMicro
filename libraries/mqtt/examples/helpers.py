@@ -45,13 +45,10 @@ MicroPython::
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    # Pi Pico W (CYW43) only — disable aggressive idle power-save so
-    # connects don't take 30+ seconds.  Whitelist by os.uname().machine
-    # (see _CYW43_MACHINES below).  Constant 0xa11140 is defined as
-    # ``CYW43_PM_DISABLE`` in ``chumicro_wifi._adapters.mp``.  Other
-    # boards skip the call — ESP32 rejects the kwarg with
-    # ESP_ERR_INVALID_ARG (raised as RuntimeError, not OSError /
-    # ValueError) and has its own power-save defaults.
+    # Pi Pico W (CYW43) only: ``wlan.config(pm=...)`` disables an
+    # aggressive idle power-save that otherwise makes connect take
+    # 30+ seconds.  See _CYW43_MACHINES below for the full whitelist
+    # and rationale.
     if os.uname().machine in _CYW43_MACHINES:
         wlan.config(pm=0xA11140)
     wlan.connect("my-ssid", "my-password")
@@ -146,12 +143,14 @@ def ticks_diff(end, start):
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
 
 
-#: Known CYW43-based MicroPython board identifiers (``os.uname().machine``).
-#: The CYW43 chip's aggressive idle power-save makes wifi connects take
-#: 30+ seconds; ``wlan.config(pm=0xa11140)`` disables it.  Add new entries
-#: as CYW43-bearing boards land in upstream MP — match the exact string
-#: ``os.uname().machine`` returns on the board (visible in the REPL via
-#: ``import os; print(os.uname().machine)``).
+#: MicroPython board identifiers (``os.uname().machine``) whose wifi
+#: needs ``wlan.config(pm=0xa11140)`` before connect.  Without this
+#: call the CYW43 chip's aggressive idle power-save makes connects
+#: take 30+ seconds.  The hex constant is replicated from
+#: ``chumicro_wifi._adapters.mp.CYW43_PM_DISABLE``.  Add new entries
+#: when a CYW43-bearing MP board lands upstream and match the exact
+#: ``os.uname().machine`` string the board returns (visible in the
+#: REPL via ``import os; print(os.uname().machine)``).
 _CYW43_MACHINES = (
     "Raspberry Pi Pico W with RP2040",
 )
@@ -219,14 +218,11 @@ def wifi_up(default_ssid, default_password, *, timeout_s=15):
         import network  # noqa: PLC0415 — MP-only
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
-        # CYW43 boards (Pi Pico W today, list in _CYW43_MACHINES above)
-        # default to aggressive idle power-save which makes connects
-        # take 30+ seconds.  Disable it: 0xa11140 is defined as
-        # ``CYW43_PM_DISABLE`` in ``chumicro_wifi._adapters.mp`` and
-        # is replicated here because example helpers can't import
-        # their non-deps.  Other boards skip the call — ESP32 rejects
-        # the kwarg with ESP_ERR_INVALID_ARG (raised as RuntimeError,
-        # not OSError / ValueError) and has its own power-save defaults.
+        # Whitelisted CYW43 boards need ``wlan.config(pm=...)`` to skip
+        # aggressive idle power-save (see _CYW43_MACHINES above).  Other
+        # boards skip the call (ESP32 rejects the kwarg with
+        # ESP_ERR_INVALID_ARG raised as RuntimeError, not OSError /
+        # ValueError, and has its own power-save defaults).
         if os.uname().machine in _CYW43_MACHINES:
             wlan.config(pm=0xA11140)
         wlan.connect(ssid, password)
