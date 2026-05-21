@@ -1,9 +1,7 @@
 """Host-side fixture: register the merged runtime-config dict for staging.
 
-Mirrors ``libraries/wifi/functional_tests/conftest.py`` — see that
-file for the shared rationale.  chumicro-ntp's tests only need the
-``[wifi]`` section (the NTP server is a public hostname, no host-side
-counterparty fixture).
+chumicro-ntp's tests only need the ``[wifi]`` section (the NTP server
+is a public hostname, no host-side counterparty fixture).
 """
 
 from __future__ import annotations
@@ -17,7 +15,7 @@ from chumicro_workspace import compose_runtime_config
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _SECRETS_TOML = _REPO_ROOT / "secrets.toml"
-_LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
+_LIBRARY_CONFIG = _HERE / "config.toml"  # optional, absent means workspace defaults only
 
 
 def _merged_runtime_config() -> dict | None:
