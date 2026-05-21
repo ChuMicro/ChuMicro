@@ -1,7 +1,7 @@
 """Fixtures for chumicro-deploy hardware-gated tests.
 
 These tests drive real boards from the host through the public
-``chumicro_deploy`` API (``Device`` / ``Deployer``) — they are not
+``chumicro_deploy`` API (``Device`` / ``Deployer``).  They are not
 routed through the on-device test harness.  The
 ``chumicro-pytest-device`` plugin intentionally only intercepts
 ``libraries/<name>/functional_tests/`` paths, so this directory
@@ -9,7 +9,7 @@ runs as plain host-side pytest with a fixture-based gate on
 ``devices.yml``.
 
 Root ``conftest.py`` already excludes ``functional_tests/`` from
-default collection — run this suite explicitly with
+default collection.  Run this suite explicitly with
 ``pytest workbench/deploy/functional_tests/`` or via IDE targeting.
 """
 
@@ -41,7 +41,7 @@ def _check_fskit_wedge_at_session_start() -> None:
     out its budget on every call).  Detecting once at session start
     fails fast with the recovery command instead.
 
-    No-op on non-macOS — :func:`detect_fskit_wedge` returns False on
+    No-op on non-macOS, where :func:`detect_fskit_wedge` returns False on
     every other platform.
     """
     if detect_fskit_wedge():
@@ -104,7 +104,7 @@ def micropython_device() -> DeviceEntry:
 def circuitpython_device() -> DeviceEntry:
     """A CircuitPython DeviceEntry from devices.yml, or skip the test.
 
-    No drive-mount predicate — RAM-mode deploy reaches the board
+    No drive-mount predicate, since RAM-mode deploy reaches the board
     through the raw REPL alone and does not require a CIRCUITPY
     drive.  Flash-mode tests should use :func:`circuitpython_flash_device`
     instead.
@@ -117,8 +117,8 @@ def circuitpython_device() -> DeviceEntry:
 def circuitpython_flash_device() -> DeviceEntry:
     """A CircuitPython DeviceEntry suitable for flash-mode deploy.
 
-    Skips when no CIRCUITPY drive is currently mounted on the host —
-    flash-mode deploy needs somewhere to write files, and the
+    Skips when no CIRCUITPY drive is currently mounted on the host,
+    since flash-mode deploy needs somewhere to write files, and the
     transport resolves the drive at deploy time via
     :func:`_circuitpy_volume_candidates` plus UID-based auto-correction.
     """

@@ -3,7 +3,7 @@
 Run this against plugged-in hardware to see the coached failure
 output you get from ``chumicro-deploy`` when things go wrong.
 Unlike the pytest-based functional tests, this is an *interactive*
-script — it prompts you to physically create failure conditions
+script that prompts you to physically create failure conditions
 (unplug USB, eject the CIRCUITPY drive) and then shows you what
 the recovery-layer CLI prints in each case.
 
@@ -19,7 +19,7 @@ against real hardware.
 
 Why a script instead of a pytest?  The failures worth showing all
 require a human action (unplug the cable, tap RESET, eject the
-drive).  Pytest can't do those — it can only assert on outcomes.
+drive).  Pytest can't do those.  It can only assert on outcomes.
 This script is the thing to run when you want to *see* the
 hand-holding, not prove it works in CI.
 """
@@ -45,7 +45,7 @@ from chumicro_deploy import (
 )
 
 # ---------------------------------------------------------------------------
-# Terminal helpers — ANSI color when isatty, plain text otherwise
+# Terminal helpers: ANSI color when isatty, plain text otherwise
 # ---------------------------------------------------------------------------
 
 _IS_TTY = sys.stdout.isatty()
@@ -90,7 +90,7 @@ def _confirm(prompt_text: str, *, default_yes: bool = True) -> bool:
 
 
 def _pause(message: str = "Press Enter when ready…") -> None:
-    # Cyan rather than dim — terminal "dim" (\x1b[2m) renders as nearly
+    # Cyan rather than dim, because terminal "dim" (\x1b[2m) renders as nearly
     # unreadable dark gray on most dark themes, and these prompts are
     # the user's cue to take a physical action.  Match the cyan accent
     # the scenario headers and confirmation prompts use.
@@ -150,9 +150,9 @@ _MP_BLINK_SCRIPT = (
 def _blink_identify(context: BoardContext) -> None:
     """Best-effort onboard-LED blink so the user can spot the target.
 
-    Deploys a short RAM-mode script.  Silent on any failure — the
-    descriptive prompt is the primary identification signal; LED blink
-    is a bonus for boards that expose a plain onboard LED.
+    Deploys a short RAM-mode script.  Silent on any failure, since
+    the descriptive prompt is the primary identification signal.  LED
+    blink is a bonus for boards that expose a plain onboard LED.
     """
     device = _deploy_device_for(context)
     if device is None:
@@ -235,7 +235,7 @@ def _deploy_device_for(context: BoardContext) -> Device | None:
 
 
 def scenario_happy_path_ram(context: BoardContext) -> bool:
-    """Baseline — confirm the board is wired right before inducing failures."""
+    """Baseline scenario.  Confirm the board is wired right before inducing failures."""
     _print_step("Scenario: happy-path deploy (baseline)")
     _print_note(
         "Sanity check.  No hand-holding expected.  Deploys a single "
@@ -269,7 +269,7 @@ def scenario_happy_path_ram(context: BoardContext) -> bool:
 
 
 def scenario_traceback_returned(context: BoardContext) -> bool:
-    """Deploy code that raises — expect the traceback coaching block."""
+    """Deploy code that raises, then expect the traceback coaching block."""
     _print_step("Scenario: entrypoint raises (TRACEBACK_RETURNED)")
     _print_note(
         "Deploys an entrypoint that raises a ZeroDivisionError.  The "
@@ -303,8 +303,8 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
     #   traceback to stdout after the soft-reboot / exec returns.
     #   Deployer extracts it and returns a DeployResult(success=False,
     #   traceback=...).  RecoveringDeployer prints the
-    #   TRACEBACK_RETURNED plan once and returns the result — the
-    #   normal "source bug, not a transport failure" path.
+    #   TRACEBACK_RETURNED plan once and returns the result.  This is
+    #   the normal "source bug, not a transport failure" path.
     # - CP RAM mode: the raw REPL separates stdout / stderr with \x04
     #   markers, and a stderr-on-chunk gets raised as
     #   CircuitpythonTransportError containing the traceback inline.
@@ -351,7 +351,7 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
 
 
 def scenario_port_unavailable(context: BoardContext) -> bool:
-    """Walk the user through a physical unplug → retry → replug cycle."""
+    """Walk the user through a physical unplug, retry, replug cycle."""
     _print_step("Scenario: serial port unavailable (PORT_UNAVAILABLE)")
     _print_note(
         "This scenario requires you to PHYSICALLY UNPLUG the USB "
@@ -414,7 +414,7 @@ def scenario_port_unavailable(context: BoardContext) -> bool:
 
 
 def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
-    """CP flash only — walk the user through an eject → retry cycle."""
+    """CP flash only.  Walk the user through an eject, retry cycle."""
     _print_step("Scenario: CIRCUITPY drive missing (CIRCUITPY_DRIVE_MISSING)")
     if context.runtime != "circuitpython":
         _print_note("Skipped — this scenario is CircuitPython-only.")
@@ -488,7 +488,7 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
 
 
 def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
-    """CP only — verify intentional reset_into_bootloader emits no warnings on disconnect."""
+    """CP only.  Verify intentional reset_into_bootloader emits no warnings on disconnect."""
     _print_step(
         "Scenario: intentional bootloader reset emits no warnings",
     )
@@ -542,7 +542,7 @@ def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
 
 
 def scenario_flash_copy_failed(context: BoardContext) -> bool:
-    """CP flash only — force an oversized payload to trigger rsync failure."""
+    """CP flash only.  Force an oversized payload to trigger rsync failure."""
     _print_step("Scenario: flash copy fails (FLASH_COPY_FAILED)")
     if context.runtime != "circuitpython":
         _print_note("Skipped — this scenario is CircuitPython-only.")
@@ -721,7 +721,7 @@ def main() -> int:
         _print_warn("No scenarios selected; aborting.")
         return 1
 
-    # Teardown reminder — some scenarios leave the board in a non-
+    # Teardown reminder: some scenarios leave the board in a non-
     # happy state (UF2 bootloader) on purpose.  Remind the user
     # before we start so nothing is a surprise.
     _print_banner("Pre-flight")

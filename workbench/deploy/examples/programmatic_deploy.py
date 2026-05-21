@@ -97,8 +97,8 @@ def main() -> int:
         source = DirectorySource(
             source_dir, entrypoint="/main.py", resource_prefix="/",
         )
-        # Programmatic deploys typically want non-interactive behavior
-        # — surface failures as exceptions for the surrounding script
+        # Programmatic deploys typically want non-interactive behavior:
+        # surface failures as exceptions for the surrounding script
         # to handle, rather than coaching a human through retries.
         result = Deployer(_device_from_entry(board)).deploy_diff(source)
 

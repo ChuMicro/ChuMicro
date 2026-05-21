@@ -1,6 +1,6 @@
 """Programmatic deploy from an in-memory file map.
 
-Demonstrates :class:`~chumicro_deploy.FileMapSource` — the source you
+Demonstrates :class:`~chumicro_deploy.FileMapSource`, the source you
 reach for when the files you want to ship don't already live in a
 directory on disk.  Common cases: code generated from a template,
 config materialized at deploy time from environment variables, a
