@@ -42,9 +42,7 @@ except ImportError:
 #: Magic value disabling CYW43 idle power-save mode.  Applied by
 #: the adapter when ``WifiConfig.power_save`` is ``False`` (the
 #: default).  Wrapped in ``const(...)`` so MicroPython inlines
-#: the literal at the use site at compile time.  Public name
-#: (no leading underscore) so cross-runtime tests and on-device
-#: tests can import it.
+#: the literal at the use site at compile time.
 CYW43_PM_DISABLE = const(0xA11140)
 
 #: Known CYW43-based MicroPython board identifiers.
@@ -194,7 +192,7 @@ class MpWifiAdapter(WifiAdapter):
         return True
 
     def disconnect(self):
-        """Drop the active association.  Idempotent on the substrate."""
+        """Drop the active association.  Safe to call when no association is up."""
         self._wlan.disconnect()
 
     def is_linked(self):

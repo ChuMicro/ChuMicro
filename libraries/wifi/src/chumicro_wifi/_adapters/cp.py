@@ -56,9 +56,9 @@ class CpWifiAdapter(WifiAdapter):
 
         CircuitPython's ``wifi.radio.hostname`` must be set before
         ``connect()`` to advertise on the AP.  Power-save and
-        static-IP are not exposed by ``wifi.radio`` in 10.x.  We
-        accept the config field for cross-runtime parity but ignore
-        them here (documented in the adapter docstring).
+        static-IP are not exposed by ``wifi.radio`` in 10.x, so the
+        matching config fields are accepted for cross-runtime parity
+        but ignored here.
         """
         if config.hostname is not None:
             self.radio.hostname = config.hostname
