@@ -166,14 +166,12 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     safe: only missing template files are materialized, existing
     ones are left alone.
 
-    ``setup`` materializes ``workspace.yml`` on a fresh clone.  Every
-    other command requires it to already exist, so this is the one
-    place that *cannot* use :func:`_resolve_workspace`'s walk-up-
-    and-find-marker discovery; the marker isn't there yet.  Resolve
-    the workspace root directly from ``--workspace-dir`` or ``cwd``.
-    Every other command continues to use the marker-based discovery
-    so they keep working from any subdirectory inside an already-set-up
-    workspace.
+    ``setup`` materializes ``workspace.yml`` on a fresh clone, so it
+    cannot rely on :func:`_resolve_workspace`'s walk-up-and-find-marker
+    discovery — the marker isn't there yet.  Resolve the workspace
+    root directly from ``--workspace-dir`` or ``cwd``.  Every other
+    command keeps using marker-based discovery and works from any
+    subdirectory inside an already-set-up workspace.
     """
     starting_dir = (
         args.workspace_dir if args.workspace_dir is not None else Path.cwd()

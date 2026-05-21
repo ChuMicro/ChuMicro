@@ -133,17 +133,16 @@ def _cmd_lint(args: argparse.Namespace) -> int:
 def _cmd_preflight(args: argparse.Namespace) -> int:
     """Run lint + tests as a single sanity gate.
 
-    Composition of :func:`_cmd_lint` then :func:`_cmd_test`.  Same
-    workspace, same ``quality:`` knobs from ``workspace.yml``
-    (``lint.enabled`` / ``lint.select`` / ``coverage_threshold``),
-    no extra args forwarded.  Aimed at "all the fast static checks
-    I'd want before pushing"; without CI, this is the gate the
-    user runs by hand.
+    Runs :func:`_cmd_lint` then :func:`_cmd_test` against the same
+    workspace with no extra args, picking up the ``quality:`` knobs
+    from ``workspace.yml`` (``lint.enabled`` / ``lint.select`` /
+    ``coverage_threshold``).  Workspaces without CI use this as the
+    pre-push sanity gate.
 
-    Returns nonzero on the first failing step (short-circuit) so
-    a lint failure doesn't cost a test run.  Both steps respect
-    their disable knobs (``lint.enabled = false`` skips lint
-    silently, no equivalent disable for tests today).
+    Short-circuits on the first failing step so a lint failure
+    doesn't cost a test run.  Both steps respect their disable
+    knobs.  ``lint.enabled = false`` skips lint silently.  No
+    equivalent disable exists for tests today.
     """
     workspace = _resolve_workspace(args)
     print(f"preflight: {workspace.root}")
