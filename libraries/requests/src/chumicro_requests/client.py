@@ -234,19 +234,42 @@ class Response:
 class RequestHandle:
     """Caller-visible handle to an in-flight (or completed) request.
 
-    Returned from :meth:`HttpClient.get`.  The caller polls
-    :attr:`done`; when ``True``, :attr:`result` returns the
-    :class:`Response` (or raises the :class:`HttpError` that killed
-    the request).  :attr:`error` is the same exception, returned
-    instead of raised — useful when the caller wants to branch
-    rather than catch.
+    Returned from :meth:`HttpClient.get`.  Two ways to read the
+    outcome:
+
+    * Poll :attr:`done`; when ``True``, :attr:`result` returns the
+      :class:`Response` (or raises the :class:`HttpError` that killed
+      the request).  :attr:`error` is the same exception, returned
+      instead of raised — useful when the caller wants to branch
+      rather than catch.
+    * Pass ``on_done=`` to the request call.  The client invokes that
+      callback with this handle when the request finishes, success or
+      failure, so the response handling stays bound to the request
+      that produced it instead of polling a shared slot.  The callback
+      fires after the client returns to idle, so it may issue the next
+      request directly.
+
+    :attr:`url` records the requested URL (the original one, not the
+    final redirect target), so a completion callback can tell which
+    request it's handling.
     """
 
-    def __init__(self, *, url):
+    def __init__(self, *, url, on_done=None):
         self.url = url
         self.done = False
         self.response = None
         self.error = None
+        self._on_done = on_done
+
+    def _invoke_done(self):
+        """Fire the completion callback, if one was registered.
+
+        Called by the client once the request has finished and all
+        per-request state has been cleared, so a callback that issues
+        a follow-up request sees an idle client.
+        """
+        if self._on_done is not None:
+            self._on_done(self)
 
     @property
     def result(self):
@@ -506,17 +529,20 @@ class HttpClient:
         headers: object | None = None,
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
+        on_done: object | None = None,
     ) -> "RequestHandle":
         """Issue a GET request; return a :class:`RequestHandle`.
 
         Poll ``handle.done``, then read ``handle.result`` for the
-        :class:`Response`.  ``max_redirects=0`` returns a 3xx as-is.
-        Raises :class:`HttpBusyError` if a request is already in flight,
-        :class:`HttpURLError` if *url* doesn't parse.
+        :class:`Response`.  Alternatively pass ``on_done=callback`` to
+        have the client call ``callback(handle)`` when the request
+        finishes (see :class:`RequestHandle`).  ``max_redirects=0``
+        returns a 3xx as-is.  Raises :class:`HttpBusyError` if a request
+        is already in flight, :class:`HttpURLError` if *url* doesn't parse.
         """
         return self._start_request(
             "GET", url, headers=headers, timeout_ms=timeout_ms,
-            max_redirects=max_redirects,
+            max_redirects=max_redirects, on_done=on_done,
         )
 
     def post(
@@ -528,6 +554,7 @@ class HttpClient:
         headers: object | None = None,
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
+        on_done: object | None = None,
     ) -> "RequestHandle":
         """Issue a POST request; return a :class:`RequestHandle`.
 
@@ -535,13 +562,14 @@ class HttpClient:
         :func:`json.dumps` and sets ``Content-Type: application/json``
         unless the caller overrides it via *headers*.  *body* as ``str``
         is encoded UTF-8.  ``Content-Length`` is auto-added.  Passing
-        both *body* and *json* raises ``ValueError``.
+        both *body* and *json* raises ``ValueError``.  ``on_done`` is the
+        optional completion callback (see :class:`RequestHandle`).
         """
         return self._start_request(
             "POST", url,
             body=body, json_body=json,
             headers=headers, timeout_ms=timeout_ms,
-            max_redirects=max_redirects,
+            max_redirects=max_redirects, on_done=on_done,
         )
 
     def put(
@@ -553,13 +581,14 @@ class HttpClient:
         headers: object | None = None,
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
+        on_done: object | None = None,
     ) -> "RequestHandle":
         """Issue a PUT request.  Same body / json semantics as :meth:`post`."""
         return self._start_request(
             "PUT", url,
             body=body, json_body=json,
             headers=headers, timeout_ms=timeout_ms,
-            max_redirects=max_redirects,
+            max_redirects=max_redirects, on_done=on_done,
         )
 
     def patch(
@@ -571,13 +600,14 @@ class HttpClient:
         headers: object | None = None,
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
+        on_done: object | None = None,
     ) -> "RequestHandle":
         """Issue a PATCH request.  Same body / json semantics as :meth:`post`."""
         return self._start_request(
             "PATCH", url,
             body=body, json_body=json,
             headers=headers, timeout_ms=timeout_ms,
-            max_redirects=max_redirects,
+            max_redirects=max_redirects, on_done=on_done,
         )
 
     def delete(
@@ -587,11 +617,12 @@ class HttpClient:
         headers: object | None = None,
         timeout_ms: int | None = None,
         max_redirects: int | None = None,
+        on_done: object | None = None,
     ) -> "RequestHandle":
         """Issue a DELETE request.  No body — the verb is intransitive in v1."""
         return self._start_request(
             "DELETE", url, headers=headers, timeout_ms=timeout_ms,
-            max_redirects=max_redirects,
+            max_redirects=max_redirects, on_done=on_done,
         )
 
     # ------------------------------------------------------------------
@@ -640,7 +671,7 @@ class HttpClient:
 
     def _start_request(
         self, method, url, *, headers, timeout_ms,
-        body=None, json_body=None, max_redirects=None,
+        body=None, json_body=None, max_redirects=None, on_done=None,
     ):
         """Common path for GET / POST / PUT / PATCH / DELETE."""
         if self._state != _RequestState.IDLE:
@@ -665,7 +696,7 @@ class HttpClient:
         )
         timeout = timeout_ms if timeout_ms is not None else self._default_timeout_ms
         self._deadline_ticks = self._ticks.ticks_add(self._ticks.ticks_ms(), timeout)
-        self._handle = RequestHandle(url=url)
+        self._handle = RequestHandle(url=url, on_done=on_done)
         self._start_hop(url, method, encoded_body, headers, json_body is not None)
         return self._handle
 
@@ -878,8 +909,14 @@ class HttpClient:
         self._state = _RequestState.IDLE  # Brief — _start_hop flips back.
 
     def _reset_socket(self):
-        """Close the socket best-effort and clear all per-request state."""
+        """Close the socket best-effort and clear all per-request state.
+
+        Fires the finished handle's completion callback last, after the
+        client is fully idle, so a callback that issues the next request
+        doesn't trip :class:`HttpBusyError`.
+        """
         self._close_socket_only()
+        finished_handle = self._handle
         self._handle = None
         self.url = None
         self._original_url = None
@@ -889,3 +926,5 @@ class HttpClient:
         self._original_json_body = None
         self._deadline_ticks = None
         self._redirects_remaining = 0
+        if finished_handle is not None:
+            finished_handle._invoke_done()  # noqa: SLF001 — internal handoff

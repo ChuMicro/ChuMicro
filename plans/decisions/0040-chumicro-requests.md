@@ -127,6 +127,27 @@ Two constraints of the embedded TLS stack (not of `chumicro-requests` per se) th
 - **HTTPS requires flash deploy mode on Pi Pico W class boards.**  RAM-mode keeps the library bootstrap on the heap and leaves < 50 KB for the mbedTLS handshake → `OSError(12)`.  Flash-mode bootstraps from disk; ~150 KB free heap available.  ESP32-S3 with > 200 KB free heap after wifi can run HTTPS in RAM-mode.
 - **TLS context must be CA-pinned, RTC must be set.**  Neither MP nor CP ships a trust store; both need caller-supplied CAs.  Use `chumicro_sockets.ssl_context_with_ca(pem)` on both runtimes — it returns a `CERT_REQUIRED` context with the supplied CA loaded.  mbedTLS `CERT_REQUIRED` also rejects certs as "validity starts in the future" if the RTC is at boot default — NTP-sync before issuing HTTPS.
 
+### 10. Completion callback binds handling to the request
+
+`get` / `post` / etc. take an optional `on_done=callback`.  When the
+request finishes (success or failure) the client calls `callback(handle)`
+with the same `RequestHandle` the call returned.  Polling `handle.done`
+stays valid; the callback is an alternative, not a replacement.
+
+The reason it exists: without it, the runner-shaped flow forces the
+response handling away from the request that produced it.  You start a
+request in one place and, in another, poll a shared slot for *some*
+request to finish, with no binding between the two and no record of
+what was asked.  A completion callback keeps the two together — the
+fetch states what to do with its own response, and the handler reads
+`handle.url` to know which request it's serving.
+
+The callback fires *after* the client has reset to idle, so a handler
+that issues the next request sees `client.busy == False` and doesn't
+trip `HttpBusyError`.  This is request *completion*, distinct from the
+body-*streaming* callback deferred in point 5 — `on_done` hands over a
+finished `Response`, not chunks mid-flight.
+
 ## Consequences
 
 - A new device library, `libraries/requests/`, ships pure-Python source
