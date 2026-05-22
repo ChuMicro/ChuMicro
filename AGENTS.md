@@ -44,7 +44,7 @@ When instructions overlap:
 
 **Code shape (libraries, microcontroller only)**
 
-- Do not use `async` / `await` and ISRs. Use the tick-based runner pattern from [Decision 0014](plans/decisions/0014-runner-pattern.md). Every device library that owns time or I/O must be runner-shaped: no `time.sleep(N)` for `N > 0.005`, no `select.poll(timeout > 0)`.
+- Do not use `async` / `await` and ISRs. Use the tick-based runner pattern from [Decision 0014](plans/decisions/0014-runner-pattern.md). Every device library that owns time or I/O must be runner-shaped: no `time.sleep(N)` for `N > 0.005`, no `select.poll(timeout > 0)` in a leaf service. The runner's one central wait (`Runner.wait`) may block to the next deadline — that is the loop idling, not a service stalling it ([Decision 0080](plans/decisions/0080-runner-reactor.md)).
 - Constructor injection for time, I/O, network deps. Fakes go in the library's `testing.py` submodule.
 - Absolute imports only in code written in the `libraries/` folder. Relative imports break CircuitPython RAM-mode deploys. Workbench and scripts folder may use either. Enforced by ruff TID252.
 - Use PEP 604 / 585 syntax (`int | None`, `list[int]`). Don't import `typing` and don't write `from __future__ import annotations` in library code. MicroPython has no `__future__`. CPython-only trees may keep it.
@@ -107,13 +107,15 @@ When instructions overlap:
 
 ## Writing tone
 
+Write sentences with a concrete subject doing something. The clearest sign of bad prose is an abstraction in the subject slot ("the win is", "its floor is") joined by a weak verb (is, gives, provides) to a coined noun that hides an action ("the WFI-idle that `ipoll` gives"). Find the real actor and let it act, as in "a connected board idles the CPU between events, which is what `ipoll` does." The test: read every sentence the way you'd say it out loud to a colleague. If you would not say it that way to a person, rewrite it. The phrase bans below do not cover this, and it is the most common reason prose reads as sludge. No word is wrong, so no regex flags it, but that does not make it optional: you catch it by reading. Worked cases in [agent-style-guide.md](docs/contributing/agent-style-guide.md#concrete-subject-real-verb-the-structural-rule).
+
 Write in sentences. Don't use em-dashes, semicolons, or arrows as shortcuts that paper over missing connective tissue. If two ideas are linked, write them as two sentences or join with a comma and a connector. This applies to code comments, docstrings, and all markdown prose.
 
 Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. When you write "the X promise" or "the X pattern", name X concretely in the same sentence.
 
-Common phrase bans, applied every time you write:
+Common shapes to check by ear. The read-aloud test decides, and these just tell you what to listen for, so check each rather than find-replace it. When a flagged phrase reads fine out loud, keep it:
 
-- Avoid "the canonical X", "the one / single / sole X that…", and "this is the / this is a" as openers. State what X is or does directly.
+- Avoid "the canonical X" and "the one / single / sole X that…" as openers. State what X is or does directly.
 - Drop empty adjectives (`comprehensive`, `robust`, `seamlessly`, `cutting-edge`, `best-in-class`). Name what something covers or what it survives.
 - Don't open sentences with filler ("It is worth noting that", "Let's dive into", "In this section, we will", etc.). Start with the content.
 

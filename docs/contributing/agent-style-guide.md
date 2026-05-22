@@ -6,7 +6,15 @@ This guide is the long-form home for tone, phrasing, and writing-discipline rule
 
 ## Why an agent-specific guide
 
-AI-generated prose has a characteristic shape.  Dense em-dash chains.  Symbolic shortcuts where a sentence belongs.  Generic-sounding adjectives without a referent.  Pointer-back openers like "this is the X that…".  Humans typically don't reach for those constructions in the first place, so the human style guide doesn't need bans for them.  They show up specifically in agent output, and they get specific bans here.
+AI-generated prose has a characteristic shape.  Dense em-dash chains.  Symbolic shortcuts where a sentence belongs.  Generic-sounding adjectives without a referent.  Abstract nouns sitting where the actor should.  Humans usually don't reach for those, so the human style guide doesn't warn against them.  They show up in agent output, so this guide names them.
+
+## The one rule: say it out loud
+
+There is one rule.  Read each sentence the way you'd say it out loud to a colleague, and write it that way.  If you would not say it to a person, rewrite it.  Everything else in this guide is a list of shapes that tend to fail that test, collected so you know what to listen for.  They are suspects to check by ear, not commands to find-replace.
+
+The framing is load-bearing, because the find-replace reflex degrades prose.  Swapping a flagged phrase on sight, without reading the result aloud, trades a real sentence for a worse one and calls it a fix.  *"This is a required gate, not a soft check"* once became the flatter *"The gate is required, not a soft check"* exactly that way, a ban applied against the ear.  When a flagged phrase reads fine out loud, keep it.
+
+A few suspects almost never survive the read-aloud test, so you can remove them on sight without re-reading: the connective-tissue punctuation in [§ Sentence form](#sentence-form) (em-dashes, semicolons, arrows) and the empty adjectives in [§ Empty adjectives](#empty-adjectives).  The lint-backed rules are not negotiable because a check enforces them, the CHU-code ban (`CHU006`) and anything else marked "Enforced by CHU".  Everything else, the article tests, the "canonical X" framing, the soft hits, answers to the ear.  The structural rule below is the most important shape to listen for.
 
 ## Sentence form
 
@@ -18,13 +26,36 @@ Specific failure modes:
 - A semicolon joining two clauses is usually two sentences.
 - An arrow (→) is rendering a flow that wants verbs and a sentence.
 
+## Concrete subject, real verb (the structural rule)
+
+This is the deepest way a sentence fails the read-aloud test, and the one no word-level scan catches. A sentence can carry no banned word, no em-dash, no flagged phrase, and still be unreadable, because the damage is in the structure. It is the most common reason agent prose reads as sludge.
+
+The rule is not optional and it is not a lint. No word is wrong, so no regex can flag it. That does not soften it: the audit skills enforce it as a required pass over every rewrite, and a rewrite that still leads with an abstract subject is not done. It reshapes a sentence rather than lengthening it, so it sits with the "signal-to-noise, not byte count" rule, not against the subtractive passes.
+
+One sentence shape does most of the damage: an abstraction in the subject slot with a weak verb. Worked case, with no banned word in it:
+
+Before: *"Its floor is the WFI-idle that `ipoll` gives."*
+
+After: *"A connected board idles the CPU between events, which is what `ipoll` does."*
+
+The rewrite finds the real actor (a board) and lets it act (idles). Three faults turned the original opaque, and they travel together:
+
+- **An abstraction in the subject slot.** *"Its floor is…"*, *"The win is…"*, *"The cost is…"*, *"The goal is…"*. The sentence is about a thing, but an abstract noun sits where the actor should. Find who acts (the board, the runner, the request, `ipoll`) and put it in the subject.
+- **A nominalization carried by a weak verb.** An action frozen into a noun, propped up by a hollow verb. *"the WFI-idle that `ipoll` gives"* hides the plain sentence *"`ipoll` idles the CPU"*. The tell is a noun ending in -tion, -ment, -ing, or -al next to *is*, *gives*, *provides*, *performs*, *does*, or *has*.
+- **Coined compound jargon.** *"WFI-idle"* is a noun invented on the spot and never defined. Name the action (*"idle the CPU"*), do not stack a label.
+- **A trailing relative clause holding the real meaning.** *"the X that Y gives / delivers / provides"* hangs the point off the abstract noun. Lead with the point.
+
+The test: **read the sentence the way you'd say it out loud to a colleague.** If you would not say it that way to a person, rewrite it so someone or something concrete does something.
+
+You catch it by reading, not by grepping. The standing AI-tic regex cannot find an abstract subject or a nominalization, because no specific word is wrong. Catching it takes a per-sentence read, which is why the audit skills apply this rule as a required judgment pass and not a regex sweep.
+
 ## AI-tic phrases
 
 Cut AI-tic phrases.  They sound non-human, drop information, and make prose harder to skim.  The fix is usually structural, not vocabulary.  When you write "the X promise" or "the X pattern", name X concretely in the same sentence.  When you catch yourself writing one, rewrite the sentence to demonstrate the property concretely instead of asserting it abstractly.
 
 ## Phrase bans
 
-These apply to all writing: code comments, docstrings, markdown docs, ADR bodies, commit messages.  Tone guidance, not lints (except where noted at the end).
+Despite the section name, these are suspects the one rule flags for a listen, not commands, across all writing: code comments, docstrings, markdown docs, ADR bodies, commit messages.  Check each by ear, do not find-replace it.  When it reads fine out loud, keep it.  The on-sight and lint-backed exceptions are named in [§ The one rule](#the-one-rule-say-it-out-loud).
 
 ### "the canonical X" framing
 
@@ -56,12 +87,6 @@ Beyond the forward-reference test above, three common `the`-related shapes degra
 - **"X is the one that Y".**  Wordy.  *"`run.py` is the one that enforces coverage"* becomes *"`run.py` enforces coverage"*.  Same tic family as "the one X" framing, in mid-sentence form.
 - **Stacked definite articles.**  *"the X of the Y of the Z"* often has one too many.  Read each `the` against the forward-reference test and drop the one that does not earn its place.
 - **"The same X" at sentence-start.**  Sometimes *"Same X"* reads cleaner, sometimes not.  Judgment call.
-
-### "this is the / this is a" openers
-
-Don't open sentences with "this is the" or "this is a" to point back at what was just said.  Restate the subject directly, or drop the meta sentence entirely.
-
-For example, instead of "Run preflight before every commit.  This is the rule the recovery skill enforces", write "The recovery skill enforces preflight before every commit".
 
 ### Abstract opener, em-dash, concrete restatement
 
@@ -108,7 +133,7 @@ The operational anchor for the phrase bans above is a single grep regex.  The au
 grep -niE 'canonical|idempotent|comprehensive|seamless|robust|cutting-edge|best-in-class|leverage|intuitive|elegant|streamlined|battle-tested|first-class|one-stop|out of the box|worth noting|dive into|let.?s explore|effortless|painless|empowers|harness|unleash|by construction|under the hood|got you covered|simply put|in essence|magic|powerful' <file>
 ```
 
-**Handling a hit.**  Hard-ban hits (`canonical`, `idempotent`) almost always need rewriting.  Soft hits (`under the hood`) are case-by-case.  See the phrase-ban subsections above for per-word guidance.
+**Handling a hit.**  The regex surfaces candidates, it does not decide.  Hard-ban hits (`canonical`, `idempotent`) almost always need rewriting, soft hits (`under the hood`) are case-by-case, and either way the swap is not done until the new sentence reads right said out loud.  A regex hit cleared from a sentence that now reads worse is a regression, not a fix.  See the phrase-ban subsections above for per-word guidance.
 
 **Keep `the` for genuinely-specific singular nouns.**  *"the LED"*, *"the loop"*, *"the request"* refer to a specific instance in the example, and dropping the article reads wrong.  Only flag the genuinely-redundant ones.  Per-noun three-way test in [`feedback_the_forward_reference`](../../../.claude/projects/-Users-chuxor-circuitpython-chumicro/memory/feedback_the_forward_reference.md).
 
@@ -116,7 +141,7 @@ grep -niE 'canonical|idempotent|comprehensive|seamless|robust|cutting-edge|best-
 
 ## Degraded prose is rewritten, not trimmed again
 
-A passage rotted by repeated subtractive edits is not fixed by removing another word.  That only makes it shorter and no clearer.  Discard it and rewrite from a fresh read of what the thing is and why it exists.
+A passage rotted by repeated subtractive edits is not fixed by removing another word.  That only makes it shorter and no clearer.  Discard it and rewrite from a fresh read of what the thing is and why it exists.  The rewrite has a target shape, not just "fresh": the structural rule above (a concrete subject doing something, said the way you'd say it out loud).  A fresh draft that still leads with an abstract subject and a nominalization has rewritten the words and kept the defect.
 
 Several skills apply this rule in their scope:
 
