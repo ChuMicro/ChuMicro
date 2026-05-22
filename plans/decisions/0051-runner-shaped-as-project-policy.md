@@ -24,7 +24,7 @@ The contract is **duck-typed**.  Libraries do NOT need to import or subclass any
 Forbidden in library code (any of `libraries/*/src/`):
 
 - `time.sleep(N)` for `N > 0.005`.  Short sleeps (e.g., 1 ms USB-CDC settle) are acceptable when documented.
-- `select.poll(timeout > 0)`.  Use `timeout=0` and re-poll on the next tick.
+- `select.poll(timeout > 0)` in a leaf service.  A library's own `check`/`handle` code uses `timeout=0` and re-polls on the next tick; it must never block the loop.  The one exception is the runner's single central wait (`Runner.wait`, called once per loop iteration by the application), which *may* block until the next deadline — it is the loop idling, not a service stalling it.  See [Decision 0080](0080-runner-reactor.md).
 - Synchronous DNS resolution that doesn't yield (some MP DNS calls block ~5 s on timeout).
 - Any function that can wait on the network without a tick-bounded budget knob.
 
