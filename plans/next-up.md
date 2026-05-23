@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **MQTT subscription survival across reconnect** — A1+A2 negative bake on 2026-05-23 confirmed self-heal recovers the connection but the bake's inbound stream stayed at 60 (pre-outage count) for the rest of the run; the board does not re-subscribe after `_attempt_self_heal` re-issues CONNECT.  Matches A8 in [`mqtt-negative-testing-suite.md`](workstreams/mqtt-negative-testing-suite.md).  With `clean_session=True` (the bake default) the broker forgets the subscription on reconnect, so the client must replay SUBSCRIBE in its connect path.  Fix probably belongs in `_attempt_self_heal` or the post-self-heal CONNACK handler.
+(empty — pick the next item from `## Next` below.)
 
 ## Next
 

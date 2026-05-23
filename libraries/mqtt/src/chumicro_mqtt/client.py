@@ -410,6 +410,16 @@ class MQTTClient:
         self._in_flight = {}
         self._next_packet_id = 1
         self._pending_responses = []
+        # Topics the user has subscribed to (raw, post-prefixing) →
+        # requested QoS.  Eagerly maintained by subscribe_raw /
+        # unsubscribe_raw so the set always reflects "what the user
+        # wants subscribed right now".  Replayed on every CONNACK
+        # that lands in CONNECTED so self-heal-driven reconnects
+        # restore the inbound stream — broker with clean_session=True
+        # forgets subscriptions across reconnects; with
+        # clean_session=False the replay is harmless (broker
+        # idempotently ACKs already-subscribed filters).
+        self._subscriptions = {}
         # 64-slot headroom above the user cap so the QoS-1 retry path
         # and PINGREQ (neither of which checks for overrun) can't
         # silently lose protocol packets when the queue is at the user
@@ -751,6 +761,7 @@ class MQTTClient:
             packet_id=packet_id, subscriptions=[(topic, qos)],
         )
         self._enqueue_user_tx(packet)
+        self._subscriptions[topic] = qos
 
         def _wrapped(granted_qos):
             if on_subscribe is not None:
@@ -785,6 +796,7 @@ class MQTTClient:
         packet_id = self._allocate_packet_id()
         packet = encode_unsubscribe(packet_id=packet_id, topics=[topic])
         self._enqueue_user_tx(packet)
+        self._subscriptions.pop(topic, None)
 
         def _wrapped():
             if on_unsubscribe is not None:
@@ -1350,7 +1362,38 @@ class MQTTClient:
             return
         self.state = ProtocolState.CONNECTED
         self._next_ping_due_ticks = self._deadline(self._ping_interval_ms, now_ms=now_ms)
+        self._replay_subscriptions()
         self.on_connect()
+
+    def _replay_subscriptions(self):
+        """Re-issue SUBSCRIBE for every entry in ``_subscriptions``.
+
+        Runs as the last step of every successful CONNACK.  On the
+        first connect the set is empty and this is a no-op; on a
+        self-heal-driven reconnect it restores the inbound stream
+        the broker forgot (clean_session=True) or harmlessly
+        re-confirms the surviving subscriptions (clean_session=False).
+        The replay does not fire the per-topic ``on_subscribe``
+        callback: ``on_connect`` (called right after this) is the
+        signal that the client is back on the wire, and a spurious
+        per-topic notify on every reconnect would be noise.
+        """
+        if not self._subscriptions:
+            return
+        for topic, qos in self._subscriptions.items():
+            packet_id = self._allocate_packet_id()
+            packet = encode_subscribe(
+                packet_id=packet_id, subscriptions=[(topic, qos)],
+            )
+            self._enqueue_user_tx(packet)
+            self._pending_responses.append(
+                PendingResponse(
+                    awaiting=_AWAIT_SUBACK,
+                    deadline_ticks=self._deadline(self._ack_timeout_ms),
+                    packet_id=packet_id,
+                    callback=None,
+                ),
+            )
 
     def _discard_pending(self, awaiting, *, packet_id, callback_arg=None):
         """Find and remove the matching :class:`PendingResponse`, then fire its callback.
