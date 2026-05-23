@@ -69,14 +69,13 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 
 ### Tuning for tick-latency vs throughput
 
-Two `MQTTClient(...)` constructor knobs let you trade tick fairness for throughput:
+`handle()` does exactly one `recv_into` and one `send` per tick, so each call yields back to the runner after one socket syscall.  Three `MQTTClient(...)` constructor knobs let you trade tick fairness for throughput:
 
 | Knob | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` (bytes) | Soft cap on bytes drained from the socket in one `handle()` call.  Without this, a 100 KB blob in a fat kernel TCP buffer (lwIP on rp2 holds 16–32 KB) would monopolize the tick until drained — visibly stuttering a concurrent LED blink or sub-second control loop.  Raise for fast big-blob ingestion at the cost of LED smoothness. |
+| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call.  Without it, an intact-tier read of a multi-KB inbound PUBLISH would draw the whole payload in one syscall; the cap means the payload arrives across several ticks instead, keeping each tick short.  Raise for fast big-blob ingestion at the cost of per-syscall latency. |
 | `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for the runner-shaped sensor profile (publish every N seconds; queue stays near zero).  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
-
-A naive `recv_into` loop without `recv_budget_per_tick` can starve cooperative tasks when the kernel TCP buffer is full.
+| `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client transitions to `FAILED`.  Re-arms on every successful send -- a steady drip of small sends never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
 
 ## Where this fits
 
