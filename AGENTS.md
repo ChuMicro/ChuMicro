@@ -32,6 +32,8 @@ When instructions overlap:
 - Don't hard-code or commit secrets. Wifi passwords, MQTT credentials, API tokens belong only in the gitignored `secrets.toml`.
 - Pair lint suppressions with a brief explanation why so a reviewer can verify.
 - Before writing implementation code in `libraries/` or `workbench/`, skim [`plans/patterns.md`](plans/patterns.md) for an established shape.
+- Before creating or editing a file under `plans/decisions/`, read [`plans/decisions/README.md`](plans/decisions/README.md). New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill — invoke it, don't freehand. ADRs preserve **invariant and reasoning**, not mechanism. Class signatures, per-runtime substrate tables, state-machine migrations, phase plans, migration rosters, future-work checklists, and bake-validation logs do not belong in an ADR — they go to [`plans/workstreams/<name>.md`](plans/workstreams/) (see Decision 0081's slim-down at commit `4769706e` for a worked case). Equivalently: a decision, a rejected alternative, or a structural rule sitting inside a workstream belongs in `plans/decisions/`. The principle goes in the ADR; the mechanism goes in the workstream.
+- When you don't know a subcommand or flag on `python scripts/run.py`, `chumicro-workspace`, `chumicro-deploy`, or `chumicro-repl`, run the tool (and each subcommand) with `--help` before asking the user or giving up. The full subcommand inventory is discoverable. Treating a workbench tool or `scripts/run.py` as opaque is a process failure.
 - Never deploy `code.py` / `main.py` containing `microcontroller.reset()` (CircuitPython) or `machine.reset()` (MicroPython).
 
 **Testing**
