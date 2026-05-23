@@ -267,6 +267,16 @@ class WebSocketClient(_BaseSession):
         """
         return self._connect_called and self.state != WebSocketState.CLOSED
 
+    def _connecting_wants_read(self) -> bool:
+        """The client reads during the second handshake leg (waiting on
+        the server's HTTP 101 response)."""
+        return self._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE
+
+    def _connecting_wants_write(self) -> bool:
+        """The client writes during the first handshake leg (sending the
+        upgrade request bytes)."""
+        return self._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
+
     def handle(self, now_ms: int) -> None:
         """One tick of progress: drain bounded inbound through the
         framing parser, then bounded outbound from the TX queue.  All

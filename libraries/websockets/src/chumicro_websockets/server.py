@@ -137,6 +137,16 @@ class Connection(_BaseSession):
             return False
         return True
 
+    def _connecting_wants_read(self) -> bool:
+        """The server reads during the first handshake leg (waiting on
+        the client's upgrade request)."""
+        return self._handshake_phase == ServerHandshakePhase.READING_REQUEST
+
+    def _connecting_wants_write(self) -> bool:
+        """The server writes during the second handshake leg (sending the
+        HTTP 101 response bytes)."""
+        return self._handshake_phase == ServerHandshakePhase.SENDING_RESPONSE
+
     def handle(self, now_ms: int) -> None:
         """One tick of progress for this connection."""
         if self.state == WebSocketState.CLOSED:

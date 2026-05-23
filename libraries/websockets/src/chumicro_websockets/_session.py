@@ -214,6 +214,86 @@ class _BaseSession:
         self.on_close = _no_callback
         self.on_oversized = _no_callback
 
+    # -- Runner I/O interest (read by ``Runner.wait``) --------------------
+
+    @property
+    def io_socket(self):
+        """Underlying pollable socket while the session is live, else ``None``.
+
+        Returns ``None`` once the session reaches ``CLOSED`` (handle()
+        will no-op from then on, so the runner does not need to wake on
+        the socket).  Adapter wrappers from ``chumicro_sockets`` store
+        the pollable on ``_sock``; the property unwraps so ``select.poll``
+        registers the object the runtime's stream-poll ioctl knows.
+        """
+        if self._socket is None:
+            return None
+        if self.state == WebSocketState.CLOSED:
+            return None
+        return getattr(self._socket, "_sock", self._socket)
+
+    @property
+    def io_wants_read(self):
+        """``True`` while ``handle()`` would drain inbound bytes.
+
+        OPEN and CLOSING always read (the peer may send a data frame,
+        a CLOSE, or a PING at any time).  CONNECTING delegates to
+        :meth:`_connecting_wants_read` because client and server
+        differ on which handshake leg is the read phase.
+        """
+        if self.state in (WebSocketState.OPEN, WebSocketState.CLOSING):
+            return True
+        if self.state == WebSocketState.CONNECTING:
+            return self._connecting_wants_read()
+        return False
+
+    @property
+    def io_wants_write(self):
+        """``True`` when there are outbound bytes to send.
+
+        OPEN / CLOSING want write iff the tx queue or the partial-send
+        carryover is non-empty.  CONNECTING delegates to
+        :meth:`_connecting_wants_write` because client and server
+        differ on which handshake leg is the write phase.
+        """
+        if self.state in (WebSocketState.OPEN, WebSocketState.CLOSING):
+            return bool(self._tx_queue) or self._tx_partial is not None
+        if self.state == WebSocketState.CONNECTING:
+            return self._connecting_wants_write()
+        return False
+
+    def _connecting_wants_read(self) -> bool:
+        """Subclass hook: ``True`` if the CONNECTING phase reads from
+        the peer right now.  Default ``False`` (the base does not know
+        which side opens)."""
+        return False
+
+    def _connecting_wants_write(self) -> bool:
+        """Subclass hook: ``True`` if the CONNECTING phase writes to
+        the peer right now.  Default ``False``."""
+        return False
+
+    def next_deadline(self, now_ms):  # noqa: ARG002 - runner contract
+        """Earliest tick at which ``handle()`` must run on a quiet socket.
+
+        Reports the minimum across the handshake timeout, the close
+        timeout, the pending-pong watchdog, and the next auto-ping
+        (client only).  ``None`` when no deadline applies.
+        """
+        ticks_diff = self._ticks.ticks_diff
+        nearest = None
+        for candidate in (
+            self._handshake_deadline_ticks,
+            self._close_deadline_ticks,
+            self._pending_ping_deadline_ticks,
+            getattr(self, "_next_auto_ping_ticks", None),
+        ):
+            if candidate is None:
+                continue
+            if nearest is None or ticks_diff(candidate, nearest) < 0:
+                nearest = candidate
+        return nearest
+
     # -- public send / close ----------------------------------------------
 
     def send_text(self, text: str) -> None:
