@@ -1066,7 +1066,11 @@ class MQTTClient:
                     break  # EAGAIN: no data this tick.
                 raise
             if got == 0:
-                break  # Peer closed or no data this tick.
+                # Non-blocking ``recv_into`` returning 0 is a clean
+                # peer FIN; the no-data path raises ``OSError(EAGAIN)``
+                # and is handled above.  Raise so ``handle()`` transitions
+                # to FAILED and the next tick can self-heal.
+                raise MQTTProtocolError("broker closed connection")
             self._decoder.advance(got)
             consumed += got
 

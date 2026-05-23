@@ -208,6 +208,24 @@ class TestErrorPaths:
         _drive(client, ticks, count=1)
         assert client.state == ProtocolState.FAILED
 
+    def test_peer_close_marks_failed(self) -> None:
+        """A clean FIN from the broker (``recv_into() == 0``) transitions
+        the client to FAILED so the runner can self-heal.  The bug fixed
+        here was a silent ``break`` that left ``state == CONNECTED`` even
+        after the peer hung up; deadline detection couldn't recover the
+        connection on its own because nothing armed a deadline."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+        # Broker hangs up cleanly.
+        sock.simulate_peer_close()
+        _drive(client, ticks, count=1)
+        assert client.state == ProtocolState.FAILED
+
     def test_qos1_exceeds_retry_limit_marks_failed(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
