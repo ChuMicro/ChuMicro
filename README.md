@@ -238,12 +238,15 @@ runner.add_periodic(start_fetch, period_ms=30_000)      # fetch example.com ever
 runner.add_periodic(publish_telemetry, period_ms=5_000) # publish heartbeat every 5 s
 runner.add_periodic(toggle_led, period_ms=500)          # toggle LED every 500 ms
 
-# Each tick, Runner gives every registered task a turn:
+# Each tick, Runner gives every registered task a turn; runner.wait
+# then idles the CPU until the next socket is ready or the next
+# deadline arrives, so the loop draws microamps between events:
 while True:
-    runner.tick()
+    now_ms = runner.tick()
+    runner.wait(now_ms)
 ```
 
-Same cooperative loop, same per-tick advancement: every registered task still gets a turn each tick, still yields after one chunk of work.  **Four services + three periodic tasks** all sharing one `while True: runner.tick()` line. The dispatch lives in a handful of declarative registrations up front, instead of growing the loop body with another `if X.check(now): X.handle(now)` for every new service you add.  Add a button, a display, an NTP client. Each is one more `runner.add(...)`, not three more lines inside the loop.
+Same cooperative loop, same per-tick advancement: every registered task still gets a turn each tick, still yields after one chunk of work.  **Four services + three periodic tasks** all sharing one `while True:` loop. The dispatch lives in a handful of declarative registrations up front, instead of growing the loop body with another `if X.check(now): X.handle(now)` for every new service you add.  Add a button, a display, an NTP client. Each is one more `runner.add(...)`, not three more lines inside the loop.  `runner.wait(now_ms)` lets the CPU sleep between events — without it, the loop busy-polls and burns battery on a board that's mostly waiting.
 
 For more runnable patterns, see [`libraries/timing/examples/`](libraries/timing/examples/) (debounce, multi-heartbeat, timeout, periodic ticks), [`libraries/requests/examples/`](libraries/requests/examples/) (the fetch pattern), and [`libraries/runner/examples/`](libraries/runner/examples/) (the full runner-registration cookbook).
 

@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Runner reactor — resume from handoff (`Runner.wait` + `FakePoller` + all four services' `io_*` shipped; tracemalloc heap-drift test, hardware validation, and README `runner.wait` example next).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
+- [ ] **Runner reactor — resume from handoff (reactor + all four services' `io_*` + README `runner.wait` shipped; tracemalloc heap-drift test and hardware validation remain).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
 
 ## Next
 
