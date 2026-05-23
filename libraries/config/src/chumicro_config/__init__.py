@@ -39,9 +39,7 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Defragment compile-time scratch at the end of the package import so
-# downstream library imports land in a cleaner heap.  See
-# chumicro_mqtt/__init__.py docstring.
-import gc as _gc
+# End-of-package GC sweep; rationale: chumicro_mqtt/__init__.py.
+import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
 _gc.collect()
 del _gc

@@ -19,7 +19,7 @@ CPython the calls are benign (cycle collector runs a no-op pass for
 non-cyclic code).
 """
 
-import gc as _gc
+import gc as _gc  # noqa: I001 — gc.collect() interleaved with imports is intentional; see module docstring.
 
 from chumicro_mqtt._wire import (
     MQTTBackpressureError,
@@ -30,7 +30,7 @@ from chumicro_mqtt._wire import (
 )
 _gc.collect()
 
-from chumicro_mqtt.client import MQTTClient, MQTTPublisher, ProtocolState, WhenOversized
+from chumicro_mqtt.client import MQTTClient, MQTTPublisher, ProtocolState, WhenOversized  # noqa: E402, I001 — gc.collect() interleaved with imports is intentional.
 
 __all__ = [
     "MQTTClient",
