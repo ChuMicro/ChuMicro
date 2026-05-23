@@ -4,8 +4,6 @@
 
 ## Now
 
-- [ ] **Resume MQTT bake-harness work + chumicro defect inventory from session handoff.**  [handoffs/2026-05-23-mqtt-bake-harness-and-defects.md](handoffs/2026-05-23-mqtt-bake-harness-and-defects.md)
-
 ## Next
 
 - [ ] **chumicro_mqtt + chumicro_runner cooperative-tick convergence.**  [workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md](workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md)
