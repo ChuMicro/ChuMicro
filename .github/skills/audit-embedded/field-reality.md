@@ -24,6 +24,7 @@ A few cross-cutting incidents (kvstore guide doc cluster, chumicro_ntp staged-di
 - [Lazy import that deferred cost without saving it](#lazy-import-that-deferred-cost-without-saving-it)
 - [Wrong-host bug found by `print()`, not by theorising](#wrong-host-bug-found-by-print-not-by-theorising)
 - [Prior-art side-by-side compare](#prior-art-side-by-side-compare)
+- [gc.collect at import boundaries](#gccollect-at-import-boundaries)
 
 ## Useful snippets
 
@@ -134,3 +135,28 @@ A chumicro_mqtt bench session burned an hour theorising wifi-settle timing for a
 A chumicro_mqtt audit took 30 minutes for a side-by-side against `~/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` — a previous-generation implementation the user pointed at.  Surfaced: the missing intact-delivery tier (the current library treated every PUBLISH > rx_buffer_size as oversized; the reference distinguished "fits in heap, deliver intact" from "way too big, discard via rolling sink"), the missing fixed `DEGRADED_BUFFER_SIZE` constant, and the missing SUBACK 0x80-rejection auto-fault.  None of those had been flagged in three prior audit passes.
 
 **Pattern:** reference comparison is the single highest-yield move when prior art exists.  Read the reference top-to-bottom under the same audit lens; compare along three axes: (a) **missing concepts** — what tiers / modes / lifecycle phases does the reference distinguish that the current library has collapsed? (b) **buffer sizing** — what fixed-size buffers does the reference reserve where the current library allocates dynamically, and vice versa? (c) **error pathways** — does the reference raise / disconnect / fault on inputs the current library silently accepts?  Cite the reference path in punch-list findings so the user can verify the comparison.
+
+## gc.collect at import boundaries
+
+`projects/mqtt_tls_probe` on Pi Pico W MP failed every TLS handshake with `OSError(ENOMEM)` despite ~140 KB total free, because `max_free_sz` collapsed to ~490 16-byte blocks (~8 KB) — Swiss-cheese fragmentation, not exhaustion.  A 25-iteration hypothesis sweep (`.scratch/frag-iter-log.md`, commit `a99221b9`) bisected this to MicroPython's compile-time scratch staying resident after `chumicro_mqtt` and its dependencies finished loading.  Auto-GC only fires under allocation pressure; a successful import sequence never triggers it.  The scratch interleaves with the library's persistent objects (function / code / class / string heads), and the next big contiguous allocation request (the TLS handshake) fails.
+
+The fix is six `import gc as _gc; _gc.collect(); del _gc` blocks at strategic placement (see commit `a99221b9` for the diff):
+- `chumicro_mqtt/__init__.py` — between `_wire` and `client` imports (defragment _wire's scratch before client.py's persistent state lands) AND at end (defragment before downstream imports of `sockets_factory` and `runner`).  The end-of-init position is **load-bearing**: removing it drops `max_free_sz` by 1117 blocks (~18 KB).
+- `chumicro_mqtt/_wire.py` — before the `PacketDecoder` class body (+5 blocks, marginal but stable).
+- `chumicro_sockets/__init__.py` — at end, mainly to help the runtime-gated lazy `_adapters/mp` import inside `tls_client_socket`.
+- `chumicro_config/__init__.py`, `chumicro_runner/__init__.py`, `chumicro_timing/__init__.py` — at end, no measurable benefit in this particular probe chain but the pattern is the load-bearing one and applies symmetrically.
+
+Measured net win on Pi Pico W MP: post_import `max_free_sz` `4089 -> 6170` blocks (~+33 KB contiguous heap recovered), and the originally-failing `mqtt_tls_probe` TLS_NOVERIFY + TLS_CA legs both succeeded with 10/10 publish-echo cycles at 137 ms connect-to-echo.  Runtime is stable: `max_free_sz` holds across a 20-publish session.
+
+**Things that did NOT work** during the sweep (all reverted, full table in `.scratch/frag-iter-log.md` in the same commit):
+
+- **Trimming long docstrings:** -5 blocks `max_free_sz`.  Counter-intuitive: removing a large string left a gap that small allocations scattered into, *increasing* fragmentation.  Large contiguous allocations (multi-paragraph docstrings, big code objects) are NOT the fragmentation source — they're the *opposite* of fragmentation.  Don't propose docstring trimming as a fragmentation fix.
+- **Inlining a single-call helper function** (`_force_non_blocking`): -1 1-block but -8 max_free_sz blocks.  The structural-readability cost is real and the win is noise.
+- **Inlining a single-call method** (`_parse_connack`): same pattern, net negative.
+- **`gc.collect()` mid-class-body in `client.py`** (before the MQTTClient class): -17 blocks.  The `import gc` statement mid-file disrupted the class body's heap layout.
+- **Double `gc.collect()` calls at each kept site:** no improvement.  MP's single-pass collector is already fully effective for non-cyclic compile scratch.
+- **`gc.collect()` at start of `__init__.py`:** redundant with the probe's pre-import sweep.
+- **Eager import of `chumicro_timing`** in `chumicro_mqtt/client.py`: -11 blocks.  The lazy DI-fallback path was actually fine here.
+- **`gc.collect()` in small libraries that load LAST in the chain** (runner, timing): no measurable benefit because the consumer's next gc.collect catches it.  Kept for cross-chain defensive symmetry but don't expect measurement gains.
+
+**Building the harness.** `projects/frag_probe_runtime/app.py` is the reference shape — wifi connect, defer chumicro imports inside `run()`, call `dump("post_import")` etc. at each phase, use `chumicro-workspace deploy --tail 30 --non-interactive`, grep for `max free sz` from `micropython.mem_info(1)`.  Track iterations in `.scratch/frag-iter-<NN>-<slug>.log` + a markdown table.  Re-run any candidate twice before deciding — single-run variance is ±10 blocks at this scale.
