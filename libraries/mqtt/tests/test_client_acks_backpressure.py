@@ -293,6 +293,86 @@ class TestSocketFactorySelfHeal:
         assert client.state == ProtocolState.FAILED
         assert len(builds) == initial_build_count  # factory not called again
 
+    def test_subscription_replayed_on_self_heal_reconnect(self) -> None:
+        # After subscribe(), force FAILED, let self-heal rebuild the
+        # socket and re-issue CONNECT.  The new CONNACK should trigger
+        # a SUBSCRIBE replay so the inbound stream survives reconnect.
+        # Without this, the client comes back on the wire but the
+        # broker (with clean_session=True, the default) has forgotten
+        # the subscription and inbound goes silent — 2026-05-23 A1+A2
+        # bake on Pi Pico W CP custom firmware caught this.
+        ticks = FakeTicks()
+        sock_one = FakeSocket()
+        sock_two = FakeSocket()
+        sock_one.enqueue_recv(canned_connack_bytes(return_code=0))
+        sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
+        sockets = iter([sock_one, sock_two])
+
+        def factory() -> FakeSocket:
+            return next(sockets)
+
+        client = MQTTClient(
+            socket_factory=factory,
+            client_id="resub-test",
+            ticks=ticks,
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        client.subscribe_raw("sensors/+", qos=1)
+        _drive(client, ticks, count=1)
+        sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
+        _drive(client, ticks, count=1)
+
+        # Force FAILED to simulate broker death; self-heal rebuilds.
+        client.state = ProtocolState.FAILED
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        # Post-CONNACK replay enqueued a SUBSCRIBE and the
+        # post-read drain sent it.  0x82 = SUBSCRIBE control byte.
+        assert b"\x82" in bytes(sock_two.sent)
+
+    def test_unsubscribed_topic_not_replayed_on_reconnect(self) -> None:
+        # Subscribe then unsubscribe, then force a self-heal cycle.
+        # The unsubscribed topic must not be replayed — _subscriptions
+        # is eagerly maintained, so unsubscribe() removes it before
+        # the UNSUBACK round-trip completes.
+        ticks = FakeTicks()
+        sock_one = FakeSocket()
+        sock_two = FakeSocket()
+        sock_one.enqueue_recv(canned_connack_bytes(return_code=0))
+        sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
+        sockets = iter([sock_one, sock_two])
+
+        def factory() -> FakeSocket:
+            return next(sockets)
+
+        client = MQTTClient(
+            socket_factory=factory,
+            client_id="unsub-test",
+            ticks=ticks,
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        client.subscribe_raw("sensors/+", qos=1)
+        _drive(client, ticks, count=1)
+        sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
+        _drive(client, ticks, count=1)
+        client.unsubscribe_raw("sensors/+")
+        _drive(client, ticks, count=1)
+        sock_one.enqueue_recv(canned_unsuback_bytes(packet_id=2))
+        _drive(client, ticks, count=1)
+
+        # Force self-heal.
+        client.state = ProtocolState.FAILED
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        # No SUBSCRIBE on sock_two.
+        assert b"\x82" not in bytes(sock_two.sent)
+
 
 class TestBoundedRecvPerTick:
     """``_read_inbound`` honors ``recv_budget_per_tick``.
