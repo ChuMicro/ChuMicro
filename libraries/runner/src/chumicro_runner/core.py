@@ -13,6 +13,11 @@ shortcut.
 ``TaskHandle`` (returned from registration) carries runtime state
 and supports ``set_period`` / ``remove``.
 
+The optional ``Runner.wait(now_ms)`` companion idles the CPU between
+ticks, blocking on a ``select.poll`` over each service's exposed
+sockets (or sleeping until the next deadline when no socket is
+registered).  See ``Runner.wait`` for the contract.
+
 Cross-runtime: CPython, MicroPython, CircuitPython.
 """
 
@@ -20,7 +25,73 @@ Cross-runtime: CPython, MicroPython, CircuitPython.
 # ``Runner.__init__`` would add ~1 s to the first test on MP mount-mode
 # (each fresh import becomes an mpremote RPC).  Eager import pushes the
 # cost to module-import time, before the harness starts its timer.
+import time
+
 from chumicro_timing import ticks as _DEFAULT_TICKS
+
+# POSIX poll flags resolved once at import time so ``wait`` can translate
+# the duck-typed ``io_wants_read`` / ``io_wants_write`` bools into a
+# poll eventmask without an attribute lookup on every loop.  The
+# numeric fallbacks match POSIX (0x001 / 0x004) for runtimes whose
+# ``select`` module is unimportable at runner load time.
+try:
+    import select as _select
+
+    _POLLIN = _select.POLLIN
+    _POLLOUT = _select.POLLOUT
+    del _select
+except ImportError:
+    _POLLIN = 0x001
+    _POLLOUT = 0x004
+
+
+# Pick a millisecond sleep once at import.  ``time.sleep_ms`` exists on
+# MicroPython and CircuitPython; CPython falls back to seconds.
+_native_sleep_ms = getattr(time, "sleep_ms", None)
+
+
+def _sleep_ms(timeout_ms: int) -> None:
+    """Sleep approximately *timeout_ms* milliseconds across runtimes."""
+    if _native_sleep_ms is not None:
+        _native_sleep_ms(timeout_ms)
+    else:
+        time.sleep(timeout_ms / 1000.0)
+
+
+class _SelectPollAdapter:
+    """Wraps ``select.poll()`` so ``Runner.wait`` can call ``ipoll`` on
+    every runtime.
+
+    MicroPython and CircuitPython ship ``select.poll().ipoll`` which
+    reuses one internal tuple and allocates nothing steady-state.
+    CPython exposes only ``poll`` (returning a list of ``(fd, flags)``
+    pairs).  The adapter dispatches to ``ipoll`` when present and to
+    ``poll`` otherwise.  ``Runner.wait`` discards the iteration result
+    either way — ``check`` re-gates dispatch on the next ``tick``.
+
+    Built lazily inside ``Runner.wait`` so applications that never call
+    ``wait`` pay nothing.
+    """
+
+    def __init__(self) -> None:
+        import select
+
+        self._poller = select.poll()
+        self._ipoll = getattr(self._poller, "ipoll", None)
+
+    def register(self, obj: object, eventmask: int) -> None:
+        self._poller.register(obj, eventmask)
+
+    def modify(self, obj: object, eventmask: int) -> None:
+        self._poller.modify(obj, eventmask)
+
+    def unregister(self, obj: object) -> None:
+        self._poller.unregister(obj)
+
+    def ipoll(self, timeout_ms: int) -> object:
+        if self._ipoll is not None:
+            return self._ipoll(timeout_ms)
+        return self._poller.poll(timeout_ms)
 
 
 class TaskHandle:
@@ -35,7 +106,8 @@ class TaskHandle:
                  period_ms: int | None,
                  next_due_ms: int | None,
                  run_count: int | None,
-                 runner: "Runner") -> None:
+                 runner: "Runner",
+                 service: object | None = None) -> None:
         self.check_function = check_function
         self.handler_function = handler_function
         self.period_ms = period_ms
@@ -43,6 +115,11 @@ class TaskHandle:
         self.run_count = run_count
         self.active = True
         self._runner = runner
+        # Retained so ``Runner.wait`` can read the service's optional
+        # ``io_socket`` / ``io_wants_read`` / ``io_wants_write`` and
+        # ``next_deadline`` attributes each loop.  ``None`` for
+        # callable-based or handler-only registrations.
+        self.service = service
 
     def set_period(self, period_ms: int | None) -> None:
         """Add, change, or remove the period for this task.
@@ -92,13 +169,26 @@ class Runner:
             ``ticks_diff``, and ``ticks_add`` methods).
             Defaults to the ``chumicro_timing`` module-level functions.
             Tests pass ``FakeTicks`` from ``chumicro_timing.testing``.
+        poller: Optional poll-shaped object exposing
+            ``register(obj, eventmask)`` / ``modify(obj, eventmask)`` /
+            ``unregister(obj)`` / ``ipoll(timeout_ms)``.  Only consulted
+            by ``wait``; the default ``select.poll`` adapter is built
+            lazily on the first ``wait`` call that has a socket to
+            register.  Tests pass ``FakePoller`` from
+            ``chumicro_runner.testing``.
     """
 
-    def __init__(self, ticks: object | None = None) -> None:
+    def __init__(self, ticks: object | None = None,
+                 poller: object | None = None) -> None:
         self._entries = []
         self._pending = []
         self._ticking = False
         self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
+        self._poller = poller
+        # id(sock) -> (sock, eventmask) for sockets currently in the
+        # poll set.  ``_sync_poll_set`` diffs against this on every
+        # ``wait`` so register / modify / unregister fire only on change.
+        self._registered_interest: dict = {}
 
     def add(self, task: object | None = None,
             handler: object | None = None,
@@ -129,10 +219,17 @@ class Runner:
             run_count: Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
         """
+        # ``service`` is the originating task object when registration was
+        # object-based or "task-with-check + handler" — those are the
+        # shapes that may also expose ``io_*`` / ``next_deadline`` for
+        # ``Runner.wait``.  Pure callable / handler-only registrations
+        # have no service to read.
+        service: object | None = None
         if handler is not None:
             # Callable-based or handler-only.
             if task is not None and not callable(task):
                 check_function = task.check
+                service = task
             else:
                 check_function = task  # callable or None (handler-only)
             handler_function = handler
@@ -140,6 +237,7 @@ class Runner:
             # Object-based: must have .check() and .handle().
             check_function = task.check
             handler_function = task.handle
+            service = task
         else:
             raise ValueError(
                 "Provide a task object (with .check() and .handle()) "
@@ -155,7 +253,7 @@ class Runner:
 
         handle = TaskHandle(
             check_function, handler_function, period_ms, next_due_ms,
-            run_count, self,
+            run_count, self, service=service,
         )
         self._entries.append(handle)
         return handle
@@ -239,6 +337,138 @@ class Runner:
             return now_ms
         finally:
             self._ticking = False
+
+    def wait(self, now_ms: int) -> None:
+        """Idle until a registered socket is ready or the next deadline arrives.
+
+        Companion to ``tick()``.  The application calls it in its loop
+        right after ``tick()`` to let the CPU sleep between events::
+
+            while True:
+                now_ms = runner.tick()
+                runner.wait(now_ms)
+
+        On each call ``wait``:
+
+        1. Re-reads each entry's optional ``io_socket`` /
+           ``io_wants_read`` / ``io_wants_write`` attributes and syncs
+           the registered poll set on diff (register new sockets,
+           modify changed interest, unregister stale sockets).
+        2. Computes the wait timeout as the minimum of every entry's
+           ``next_due_ms`` and every service's
+           ``next_deadline(now_ms)``, minus *now_ms*.
+        3. Blocks in ``ipoll(timeout_ms)`` over the registered poll set
+           if any socket is registered, otherwise sleeps the timeout
+           via ``time.sleep_ms``.  Returns immediately if no timeout
+           source applies or the next deadline is already in the past.
+
+        Discards the ``ipoll`` iteration — ``check`` re-gates dispatch on
+        the next ``tick``.  Waking the loop and dispatching handlers are
+        two separate concerns.
+
+        Args:
+            now_ms: Current tick, typically the value returned by the
+                preceding ``tick()`` call.
+        """
+        self._sync_poll_set()
+        timeout_ms = self._compute_timeout(now_ms)
+        if timeout_ms is None or timeout_ms <= 0:
+            return
+
+        if self._registered_interest:
+            if self._poller is None:
+                # Lazy-build the default adapter and replay the current
+                # poll-set onto it so it lines up with the bookkeeping
+                # ``_sync_poll_set`` just produced.
+                self._poller = _SelectPollAdapter()
+                for sock, eventmask in self._registered_interest.values():
+                    self._poller.register(sock, eventmask)
+            for _ in self._poller.ipoll(timeout_ms):
+                pass
+        else:
+            _sleep_ms(timeout_ms)
+
+    def _sync_poll_set(self) -> None:
+        """Re-read each entry's ``io_*`` attributes and update the poll set.
+
+        Registers sockets newly wanted, modifies on changed interest,
+        unregisters sockets that have gone away or dropped to no
+        interest.  Idempotent: a no-change loop touches the poller
+        zero times.
+        """
+        registered = self._registered_interest
+        # IDs of sockets wanted this loop.  Second pass below diffs
+        # against the registered set to unregister anything that has
+        # gone away.
+        wanted_now = []
+        poller = self._poller
+        for entry in self._entries:
+            service = entry.service
+            if service is None:
+                continue
+            sock = getattr(service, "io_socket", None)
+            if sock is None:
+                continue
+            eventmask = 0
+            if getattr(service, "io_wants_read", False):
+                eventmask |= _POLLIN
+            if getattr(service, "io_wants_write", False):
+                eventmask |= _POLLOUT
+            if eventmask == 0:
+                continue
+            sock_id = id(sock)
+            wanted_now.append(sock_id)
+            previous = registered.get(sock_id)
+            if previous is None:
+                registered[sock_id] = (sock, eventmask)
+                if poller is not None:
+                    poller.register(sock, eventmask)
+            elif previous[1] != eventmask:
+                registered[sock_id] = (sock, eventmask)
+                if poller is not None:
+                    poller.modify(sock, eventmask)
+
+        # Drop sockets no service wants any more.
+        if len(registered) > len(wanted_now):
+            stale = [sid for sid in registered if sid not in wanted_now]
+            for sid in stale:
+                sock, _ = registered.pop(sid)
+                if poller is not None:
+                    try:
+                        poller.unregister(sock)
+                    except (KeyError, OSError):
+                        # Poll-set divergence (socket already closed at
+                        # the OS level, or unregistered out-of-band):
+                        # the registered_interest dict is the source of
+                        # truth, keep it consistent and move on.
+                        pass
+
+    def _compute_timeout(self, now_ms: int) -> int | None:
+        """Return ``min(every next_due_ms, every next_deadline) - now_ms``.
+
+        ``None`` when no entry contributes a deadline.  May be zero or
+        negative when the nearest deadline has already passed.
+        """
+        ticks_diff = self._ticks.ticks_diff
+        nearest = None
+        for entry in self._entries:
+            if entry.next_due_ms is not None:
+                delta = ticks_diff(entry.next_due_ms, now_ms)
+                if nearest is None or delta < nearest:
+                    nearest = delta
+            service = entry.service
+            if service is None:
+                continue
+            deadline_fn = getattr(service, "next_deadline", None)
+            if deadline_fn is None:
+                continue
+            deadline = deadline_fn(now_ms)
+            if deadline is None:
+                continue
+            delta = ticks_diff(deadline, now_ms)
+            if nearest is None or delta < nearest:
+                nearest = delta
+        return nearest
 
     def _initial_next_due_ms(self, start_after_ms: int | None,
                              period_ms: int | None) -> int | None:

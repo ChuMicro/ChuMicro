@@ -4,8 +4,10 @@ Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 (via chumicro_test_harness).
 """
 
+import select
+
 from chumicro_runner import Runner, TaskHandle
-from chumicro_runner.testing import CallRecorder
+from chumicro_runner.testing import CallRecorder, FakePoller
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
 
@@ -990,3 +992,236 @@ def test_ticking_flag_resets_after_handler_exception() -> None:
     # of the handler's ValueError.
     with raises(ValueError):
         runner.tick()
+
+
+# -- Runner.wait --
+
+
+class _IOService:
+    """Stub I/O service exposing the duck-typed ``io_*`` attributes
+    that ``Runner.wait`` reads each loop."""
+
+    def __init__(self, sock: object | None = None,
+                 wants_read: bool = False,
+                 wants_write: bool = False) -> None:
+        self.io_socket = sock
+        self.io_wants_read = wants_read
+        self.io_wants_write = wants_write
+        self.check_returns = False
+        self.handle_count = 0
+
+    def check(self, now_ms: int) -> bool:
+        return self.check_returns
+
+    def handle(self, now_ms: int) -> None:
+        self.handle_count += 1
+
+
+def test_wait_is_noop_when_no_entries() -> None:
+    """A runner with no tasks returns immediately and never touches the poller."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+
+    runner.wait(0)
+
+    assert poller.ipoll_calls == []
+    assert poller.register_calls == []
+
+
+def test_wait_default_poller_stays_unbuilt_when_no_socket() -> None:
+    """A runner with only timer-based entries never lazy-builds the poller."""
+    runner = Runner(ticks=FakeTicks())  # poller=None => lazy
+    runner.add_periodic(lambda now_ms: None, period_ms=100)
+
+    runner.wait(0)
+
+    assert runner._poller is None
+
+
+def test_wait_registers_service_socket() -> None:
+    """A service exposing io_socket + io_wants_read registers with POLLIN."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+
+    runner.wait(0)
+
+    assert (sock, select.POLLIN) in poller.register_calls
+    assert poller.ipoll_calls == [100]
+
+
+def test_wait_combines_read_and_write_into_one_eventmask() -> None:
+    """A service wanting both read and write registers with POLLIN | POLLOUT."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True, wants_write=True)
+    runner.add(service, period_ms=100)
+
+    runner.wait(0)
+
+    expected = select.POLLIN | select.POLLOUT
+    assert (sock, expected) in poller.register_calls
+
+
+def test_wait_modifies_when_interest_changes() -> None:
+    """Going from read-only to read+write fires modify, not a second register."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+    poller.register_calls.clear()
+
+    service.io_wants_write = True
+    runner.wait(0)
+
+    expected = select.POLLIN | select.POLLOUT
+    assert (sock, expected) in poller.modify_calls
+    assert poller.register_calls == []
+
+
+def test_wait_idempotent_when_interest_unchanged() -> None:
+    """A second wait() with the same io_* state touches the poller zero times."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+    poller.register_calls.clear()
+    poller.modify_calls.clear()
+    poller.unregister_calls.clear()
+
+    runner.wait(0)
+
+    assert poller.register_calls == []
+    assert poller.modify_calls == []
+    assert poller.unregister_calls == []
+
+
+def test_wait_unregisters_when_service_releases_socket() -> None:
+    """A service that goes io_socket=None drops out of the poll set."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    service.io_socket = None
+    runner.wait(0)
+
+    assert sock in poller.unregister_calls
+
+
+def test_wait_unregisters_when_service_drops_to_no_interest() -> None:
+    """io_wants_read=False and io_wants_write=False unregisters even when io_socket is still set."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    service.io_wants_read = False
+    runner.wait(0)
+
+    assert sock in poller.unregister_calls
+
+
+def test_wait_timeout_uses_nearest_next_due_ms() -> None:
+    """The wait timeout is the minimum across every entry's next_due_ms."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=500)
+    runner.add_periodic(lambda now_ms: None, period_ms=80)
+
+    runner.wait(0)
+
+    assert poller.ipoll_calls == [80]
+
+
+def test_wait_honors_next_deadline_hint() -> None:
+    """A service exposing next_deadline(now_ms) shortens the timeout when its
+    deadline is sooner than its next_due_ms."""
+
+    class _ServiceWithDeadline(_IOService):
+        def __init__(self, sock: object, deadline_ms: int) -> None:
+            super().__init__(sock=sock, wants_read=True)
+            self._deadline_ms = deadline_ms
+
+        def next_deadline(self, now_ms: int) -> int:
+            return now_ms + self._deadline_ms
+
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _ServiceWithDeadline(sock, deadline_ms=25)
+    runner.add(service, period_ms=500)
+
+    runner.wait(0)
+
+    assert poller.ipoll_calls == [25]
+
+
+def test_wait_returns_immediately_when_deadline_already_passed() -> None:
+    """A negative or zero timeout skips ipoll entirely."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+
+    class _OverdueService(_IOService):
+        def next_deadline(self, now_ms: int) -> int:
+            return now_ms - 5  # already in the past
+
+    service = _OverdueService(sock=sock, wants_read=True)
+    runner.add(service)
+
+    runner.wait(100)
+
+    assert poller.ipoll_calls == []
+
+
+def test_wait_drops_ipoll_iteration_result() -> None:
+    """Whatever ipoll yields is discarded — check re-gates on the next tick."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    poller.set_ready(sock, select.POLLIN)
+
+    runner.wait(0)
+
+    assert service.handle_count == 0  # wait does not invoke handle()
+
+
+def test_wait_callable_based_task_has_no_service_to_read() -> None:
+    """A check + handler callable registration sets service=None on the handle
+    so wait does not try to read io_* on a function."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    handle = runner.add(lambda now_ms: True, handler=lambda now_ms: None)
+
+    assert handle.service is None
+    runner.wait(0)  # must not raise
+
+    assert poller.register_calls == []
+
+
+def test_wait_handler_only_task_has_no_service() -> None:
+    """A handler-only registration has no service to read io_* from."""
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    handle = runner.add(handler=lambda now_ms: None)
+
+    assert handle.service is None
+    runner.wait(0)
+
+    assert poller.register_calls == []
