@@ -4,7 +4,7 @@
 
 ## Now
 
-_(nothing in flight)_
+- [ ] **Runner reactor — resume from handoff (option B ratified, `chumicro-sockets` raw-socket accessor next).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
 
 ## Next
 
@@ -13,7 +13,6 @@ _(nothing in flight)_
 - [ ] **`websockets` oversize-frame length on Lolin S2.**  [workstreams/websockets-oversize-frame-lolin-s2.md](workstreams/websockets-oversize-frame-lolin-s2.md)
 - [ ] **Expand the device test matrix beyond ESP32-S2.**
 - [ ] **Performance + resource benchmarking infrastructure** — heap + CPU per library op, regression gates, on-schedule CI.
-- [ ] **Runner reactor (sleep-until-work) + result composition (callbacks; futures rejected).**  [workstreams/runner-reactor-and-futures.md](workstreams/runner-reactor-and-futures.md)
 - [ ] **Deploy-path unification — one mechanism puts code on a board.**  [workstreams/deploy-path-unification.md](workstreams/deploy-path-unification.md)
 - [ ] **`_load_fallback_device` — stash sessionstart error.**  [workstreams/load-fallback-device-stash-sessionstart.md](workstreams/load-fallback-device-stash-sessionstart.md)
 - [ ] **Deploy walker fails on unresolved imports.**  [workstreams/walker-unresolved-import-failure.md](workstreams/walker-unresolved-import-failure.md)
