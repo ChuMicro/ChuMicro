@@ -447,6 +447,13 @@ _DRAIN_INTACT = const(1)
 _DRAIN_OVERSIZED = const(2)
 
 
+# Defragment compile-time scratch before the PacketDecoder class body —
+# see chumicro_mqtt/__init__.py docstring for the broader pattern.
+import gc as _gc
+_gc.collect()
+del _gc
+
+
 class PacketDecoder:
     """Incremental MQTT packet parser with a three-tier inbound size model.
 
