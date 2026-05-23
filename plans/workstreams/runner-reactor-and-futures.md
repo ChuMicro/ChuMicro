@@ -405,8 +405,9 @@ the next session ratifies. None reopens the design.
   Option A's event-driven registration misses it unless the service
   re-calls `modify`. B reads allocation-free (int and bool attributes, no
   fresh tuple), and the runner registers or modifies the poller only when
-  the read interest differs from what is registered. Ratify B in ADR 0080
-  and record the attribute names.
+  the read interest differs from what is registered. Ratified in ADR 0080
+  on 2026-05-22 (attribute names `io_socket`, `io_wants_read`,
+  `io_wants_write`).
 - **The runner must retain the service object. Confirmed.** `TaskHandle`
   stores only the bound `check`/`handle` methods (`runner/core.py:39-40`),
   not the service, and `add()` extracts those methods. `wait` needs to reach
@@ -630,7 +631,7 @@ and the four pre-code gaps are researched (see "Before code" above): the
 registration mechanism is recommended (option B, runner reads stable `io_*`
 attributes), the `TaskHandle`-retains-service change is confirmed, and the
 existing-service audit found no stalls. What remains is implementation:
-ratify option B in the ADR, the `chumicro-sockets` raw-socket accessor,
-then the Model 1 reactor (`Runner.wait` + service-interest reads +
-`next_deadline`). The `requests` callback (axis 1, rung 2) shipped in 0.10.0
+the `chumicro-sockets` raw-socket accessor, then the Model 1 reactor
+(`Runner.wait` + service-interest reads + `next_deadline`). Option B was
+ratified in ADR 0080 on 2026-05-22. The `requests` callback (axis 1, rung 2) shipped in 0.10.0
 ahead of this workstream.
