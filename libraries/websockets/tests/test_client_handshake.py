@@ -1,6 +1,10 @@
 """WebSocket client tests (chumicro_websockets.client): constructor,
 connect, opening-handshake send/receive."""
 
+import select
+
+from chumicro_runner import Runner
+from chumicro_runner.testing import FakePoller
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
@@ -278,3 +282,114 @@ class TestHandshakeReceive:
         client.handle(clock.ticks_ms())
         outbound = socket.peek_outbound()
         assert b"Origin: https://app.example.com\r\n" in outbound
+
+
+class TestRunnerReactorContract:
+    """``io_socket`` / ``io_wants_read`` / ``io_wants_write`` /
+    ``next_deadline`` let ``Runner.wait`` register the websocket socket
+    and idle the loop until readiness or the next deadline fires."""
+
+    def test_io_socket_none_before_connect(self):
+        client, _socket, _clock, _ = _make_client()
+        assert client.io_socket is None
+
+    def test_io_socket_returns_socket_while_connecting(self):
+        client, socket, _clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        # FakeConnection has no ``_sock`` wrapper, so the property
+        # returns it directly.
+        assert client.io_socket is socket
+
+    def test_io_socket_none_once_closed(self):
+        client, _socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        _drive_handshake(client, _socket, clock)
+        client._finalize_closed()  # force CLOSED
+        assert client.io_socket is None
+
+    def test_io_wants_write_during_sending_handshake(self):
+        client, _socket, _clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        assert client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
+        assert client.io_wants_write is True
+        assert client.io_wants_read is False
+
+    def test_io_wants_read_during_receiving_handshake(self):
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        # Drain the upgrade-request send.
+        while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
+            client.handle(clock.ticks_ms())
+        assert client._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE
+        assert client.io_wants_read is True
+        assert client.io_wants_write is False
+
+    def test_io_wants_read_when_open(self):
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        assert client.state == WebSocketState.OPEN
+        assert client.io_wants_read is True
+
+    def test_io_wants_write_tracks_tx_queue_when_open(self):
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        # Empty queue.
+        assert client.io_wants_write is False
+
+        client.send_text("hello")
+        assert client.io_wants_write is True
+
+        # Drive once to drain.
+        client.handle(clock.ticks_ms())
+        assert client.io_wants_write is False
+
+    def test_next_deadline_returns_handshake_deadline_when_connecting(self):
+        client, _socket, clock, _ = _make_client(
+            handshake_timeout_ms=3000,
+        )
+        start = clock.ticks_ms()
+        client.connect("ws://example.com/")
+        deadline = client.next_deadline(clock.ticks_ms())
+        assert deadline is not None
+        assert clock.ticks_diff(deadline, start) == 3000
+
+    def test_next_deadline_none_when_idle_and_open(self):
+        """OPEN with no auto-ping configured and no pending pong has no deadline."""
+        client, socket, clock, _ = _make_client()  # ping_interval_ms defaults to None
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        assert client.next_deadline(clock.ticks_ms()) is None
+
+    def test_runner_wait_registers_socket_for_handshake_then_open(self):
+        """End-to-end: a connect() registers POLLOUT during SENDING_HANDSHAKE,
+        modifies to POLLIN once the request bytes drain, and OPEN stays
+        registered for POLLIN."""
+        socket = FakeSocket()
+        clock = FakeTicks()
+        poller = FakePoller()
+        runner = Runner(ticks=clock, poller=poller)
+        factory, _record = _make_factory(socket)
+        client = WebSocketClient(connection_factory=factory, ticks=clock)
+        runner.add(client)
+
+        client.connect("ws://example.com/")
+        # First wait: SENDING_HANDSHAKE -> POLLOUT registered.
+        runner.wait(clock.ticks_ms())
+        first_marks = poller.register_calls
+        assert any(
+            eventmask & select.POLLOUT
+            for _sock, eventmask in first_marks
+        )
+
+        _drive_handshake(client, socket, clock)
+        # Now OPEN with empty tx queue -> POLLIN only on the next wait.
+        runner.wait(clock.ticks_ms())
+        last_event = (
+            poller.modify_calls[-1]
+            if poller.modify_calls
+            else poller.register_calls[-1]
+        )
+        _last_sock, last_mask = last_event
+        assert last_mask == select.POLLIN
