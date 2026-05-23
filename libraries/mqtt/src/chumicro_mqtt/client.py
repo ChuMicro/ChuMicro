@@ -4,9 +4,14 @@
 cooperative dispatch in the caller's tick loop.
 
 The connection-state classes (:class:`ProtocolState`,
-:class:`InFlightTable`, :class:`PendingResponse`,
-:class:`InFlightPublish`) and :class:`MQTTPublisher` live here.  The
-wire-format primitives live in :mod:`chumicro_mqtt._wire`.
+:class:`PendingResponse`, :class:`InFlightPublish`) and
+:class:`MQTTPublisher` live here.  The wire-format primitives live in
+:mod:`chumicro_mqtt._wire`.
+
+In-flight QoS-1 PUBLISHes are held in ``MQTTClient._in_flight``, a
+plain ``dict[int, InFlightPublish]`` keyed by packet-id.  Allocation
+goes through :meth:`MQTTClient._allocate_packet_id`, which handles
+1-65535 wraparound and refuses ids already in flight.
 """
 
 from collections import deque
@@ -89,57 +94,6 @@ class InFlightPublish:
         self.retry_count = 0
         self.deadline_ticks = deadline_ticks
         self.callback = callback
-
-
-class InFlightTable:
-    """Indexed collection of :class:`InFlightPublish`, keyed by packet_id.
-
-    Centralizes packet-id allocation: callers ask for the next free
-    id, the table picks the next 1-65535 wraparound that isn't already
-    in flight.  Packet-id 0 is reserved by the spec.  An exhausted
-    id-space (every 65535 ids in flight) raises :class:`OverflowError`
-    rather than silently reusing.
-    """
-
-    def __init__(self):
-        self._entries = {}
-        self._next_id = 1
-
-    def __len__(self):
-        return len(self._entries)
-
-    def __contains__(self, packet_id):
-        return packet_id in self._entries
-
-    def __iter__(self):
-        return iter(self._entries.values())
-
-    def allocate_id(self):
-        """Return the next free packet-id (1-65535)."""
-        for _attempt in range(65535):
-            candidate = self._next_id
-            self._next_id += 1
-            if self._next_id > 65535:
-                self._next_id = 1
-            if candidate not in self._entries:
-                return candidate
-        raise OverflowError(
-            "MQTT in-flight table is full (65535 packet-ids in use)",
-        )
-
-    def add(self, entry):
-        """Insert *entry*.  Raises :class:`KeyError` on packet_id collision."""
-        if entry.packet_id in self._entries:
-            raise KeyError(f"packet_id {entry.packet_id} already in flight")
-        self._entries[entry.packet_id] = entry
-
-    def get(self, packet_id):
-        """Return the in-flight entry for *packet_id* or ``None``."""
-        return self._entries.get(packet_id)
-
-    def discard(self, packet_id):
-        """Remove and return the in-flight entry for *packet_id*, or ``None``."""
-        return self._entries.pop(packet_id, None)
 
 
 class PendingResponse:
@@ -482,7 +436,11 @@ class MQTTClient:
         self._decoder = PacketDecoder(**decoder_kwargs)
 
         self.state = ProtocolState.DISCONNECTED
-        self._in_flight = InFlightTable()
+        # In-flight QoS-1 PUBLISHes keyed by packet-id.  Allocation
+        # goes through ``_allocate_packet_id`` (wraparound +
+        # collision-avoidance); the dict itself holds the entries.
+        self._in_flight = {}
+        self._next_packet_id = 1
         self._pending_responses = []
         # 64-slot headroom above the user cap so the QoS-1 retry path
         # and PINGREQ (neither of which checks for overrun) can't
@@ -683,7 +641,7 @@ class MQTTClient:
                 )
             return
 
-        packet_id = self._in_flight.allocate_id()
+        packet_id = self._allocate_packet_id()
         packet = encode_publish(
             topic=topic,
             payload=payload_bytes,
@@ -697,19 +655,24 @@ class MQTTClient:
                 on_publish(topic, payload_bytes)
             self.on_publish(topic, payload_bytes)
 
-        entry = InFlightPublish(
+        # ``_allocate_packet_id`` already refuses ids already in the
+        # in-flight table, so this assignment never overwrites a live
+        # entry — assert defensively so a future refactor doesn't lose
+        # the invariant silently.
+        if packet_id in self._in_flight:
+            raise KeyError(f"packet_id {packet_id} already in flight")
+        self._in_flight[packet_id] = InFlightPublish(
             packet_id=packet_id,
             packet_bytes=packet,
             deadline_ticks=self._deadline(self._ack_timeout_ms),
             callback=_wrapped_callback,
         )
-        self._in_flight.add(entry)
         try:
             self._enqueue_user_tx(packet)
         except MQTTBackpressureError:
             # Roll back the in-flight allocation so the caller can retry
             # cleanly without leaking a packet_id.
-            self._in_flight.discard(packet_id)
+            self._in_flight.pop(packet_id, None)
             raise
 
     def subscribe(
@@ -751,7 +714,7 @@ class MQTTClient:
             raise MQTTError(
                 f"subscribe() requires CONNECTED state, was {self.state}",
             )
-        packet_id = self._in_flight.allocate_id()  # Reuse the id pool.
+        packet_id = self._allocate_packet_id()  # Reuse the id pool.
         packet = encode_subscribe(
             packet_id=packet_id, subscriptions=[(topic, qos)],
         )
@@ -787,7 +750,7 @@ class MQTTClient:
             raise MQTTError(
                 f"unsubscribe() requires CONNECTED state, was {self.state}",
             )
-        packet_id = self._in_flight.allocate_id()
+        packet_id = self._allocate_packet_id()
         packet = encode_unsubscribe(packet_id=packet_id, topics=[topic])
         self._enqueue_user_tx(packet)
 
@@ -916,7 +879,7 @@ class MQTTClient:
             candidate = pending.deadline_ticks
             if nearest is None or ticks_diff(candidate, nearest) < 0:
                 nearest = candidate
-        for entry in self._in_flight:
+        for entry in self._in_flight.values():
             candidate = entry.deadline_ticks
             if nearest is None or ticks_diff(candidate, nearest) < 0:
                 nearest = candidate
@@ -1011,13 +974,36 @@ class MQTTClient:
         # dead socket and resets the degraded-buffer state.
         self._decoder = PacketDecoder(**self._decoder_kwargs)
         if self._clean_session:
-            self._in_flight = InFlightTable()
+            self._in_flight = {}
+            self._next_packet_id = 1
         self.state = ProtocolState.DISCONNECTED
         self.last_error = None
         # Re-issue connect: this transitions to CONNECTING and queues
         # the CONNECT packet that the next _drain_tx_queue() flushes.
         self.connect()
         return True
+
+    # ------------------------------------------------------------------
+    # Internal: in-flight packet-id allocation
+    # ------------------------------------------------------------------
+
+    def _allocate_packet_id(self):
+        """Return the next free QoS-1 packet-id in the 1-65535 cycle.
+
+        Wraps at 65535 back to 1 (id 0 is reserved by the spec).  Raises
+        :class:`OverflowError` when every id is already in flight rather
+        than silently reusing one.
+        """
+        for _attempt in range(65535):
+            candidate = self._next_packet_id
+            self._next_packet_id += 1
+            if self._next_packet_id > 65535:
+                self._next_packet_id = 1
+            if candidate not in self._in_flight:
+                return candidate
+        raise OverflowError(
+            "MQTT in-flight table is full (65535 packet-ids in use)",
+        )
 
     # ------------------------------------------------------------------
     # Internal: TX path
@@ -1184,7 +1170,7 @@ class MQTTClient:
             self._discard_pending(_AWAIT_PINGRESP, packet_id=None)
             return
         if packet.packet_type == PACKET_PUBACK:
-            in_flight = self._in_flight.discard(packet.packet_id)
+            in_flight = self._in_flight.pop(packet.packet_id, None)
             if in_flight is None:
                 raise MQTTProtocolError(
                     f"PUBACK for unknown packet_id {packet.packet_id}",
@@ -1210,7 +1196,7 @@ class MQTTClient:
                 packet_id=packet.packet_id,
                 callback_arg=packet.granted_qos,
             )
-            self._in_flight.discard(packet.packet_id)  # Free the id.
+            self._in_flight.pop(packet.packet_id, None)  # Free the id.
             if not matched:
                 raise MQTTProtocolError(
                     f"SUBACK for unknown packet_id {packet.packet_id}",
@@ -1220,7 +1206,7 @@ class MQTTClient:
             matched = self._discard_pending(
                 _AWAIT_UNSUBACK, packet_id=packet.packet_id, callback_arg=None,
             )
-            self._in_flight.discard(packet.packet_id)
+            self._in_flight.pop(packet.packet_id, None)
             if not matched:
                 raise MQTTProtocolError(
                     f"UNSUBACK for unknown packet_id {packet.packet_id}",
@@ -1288,11 +1274,11 @@ class MQTTClient:
         # copy when the underlying collection is empty (the common
         # steady-state on a sensor-profile publisher).
         if self._in_flight:
-            for entry in list(self._in_flight):
+            for entry in list(self._in_flight.values()):
                 if self._ticks.ticks_diff(entry.deadline_ticks, now_ms) > 0:
                     continue
                 if entry.retry_count >= self._publish_retry_max:
-                    self._in_flight.discard(entry.packet_id)
+                    self._in_flight.pop(entry.packet_id, None)
                     self.last_error = MQTTError(
                         f"PUBLISH packet_id {entry.packet_id} exceeded "
                         f"retry limit {self._publish_retry_max}",

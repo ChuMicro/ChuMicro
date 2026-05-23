@@ -1,14 +1,20 @@
-"""Tests for ProtocolState + InFlightTable + PendingResponse."""
+"""Tests for ProtocolState + packet-id allocation + PendingResponse."""
 
-from chumicro_mqtt import ProtocolState
+from chumicro_mqtt import MQTTClient, ProtocolState
 from chumicro_mqtt.client import (
     _AWAIT_PINGRESP,
     _AWAIT_SUBACK,
     InFlightPublish,
-    InFlightTable,
     PendingResponse,
 )
+from chumicro_sockets.testing import FakeSocket
 from chumicro_test_harness.assertions import raises
+
+
+def _new_client() -> MQTTClient:
+    """A minimal MQTTClient against a fake socket.  Tests don't drive
+    the protocol; they exercise the packet-id allocator directly."""
+    return MQTTClient(FakeSocket(), client_id="test")
 
 
 class TestProtocolState:
@@ -21,80 +27,43 @@ class TestProtocolState:
         assert ProtocolState.FAILED == "failed"
 
 
-class TestInFlightTable:
-    def test_allocate_id_starts_at_one(self) -> None:
-        table = InFlightTable()
-        assert table.allocate_id() == 1
-        assert table.allocate_id() == 2
+class TestAllocatePacketId:
+    """Exercises MQTTClient._allocate_packet_id + the inlined in-flight dict."""
 
-    def test_allocate_id_skips_in_use(self) -> None:
-        table = InFlightTable()
-        first = table.allocate_id()
-        table.add(InFlightPublish(packet_id=first, packet_bytes=b"", deadline_ticks=0))
-        # Next allocate should get a different id (2).
-        second = table.allocate_id()
+    def test_starts_at_one(self) -> None:
+        client = _new_client()
+        assert client._allocate_packet_id() == 1
+        assert client._allocate_packet_id() == 2
+
+    def test_skips_in_use(self) -> None:
+        client = _new_client()
+        first = client._allocate_packet_id()
+        client._in_flight[first] = InFlightPublish(
+            packet_id=first, packet_bytes=b"", deadline_ticks=0,
+        )
+        second = client._allocate_packet_id()
         assert second != first
 
-    def test_allocate_id_wraps_around(self) -> None:
-        """After 65535 ids allocated, the counter wraps back to 1."""
-        table = InFlightTable()
-        # Fast-forward via internal state.
-        table._next_id = 65534
-        assert table.allocate_id() == 65534
-        assert table.allocate_id() == 65535
-        # Wrap.
-        assert table.allocate_id() == 1
+    def test_wraps_around(self) -> None:
+        client = _new_client()
+        client._next_packet_id = 65534
+        assert client._allocate_packet_id() == 65534
+        assert client._allocate_packet_id() == 65535
+        assert client._allocate_packet_id() == 1
 
-    def test_allocate_id_raises_when_table_full(self) -> None:
-        """All 65535 ids in use -> OverflowError."""
-        table = InFlightTable()
-        # Allocating 65 535 real ``InFlightPublish`` entries blows the
-        # heap on the MP / CP unix-ports.  ``allocate_id`` only does a
-        # ``candidate not in self._entries`` membership probe, so a
-        # tiny mapping that claims every id is "in" exercises the same
-        # exhausted-id-space path without the per-entry overhead.
+    def test_raises_when_table_full(self) -> None:
+        """All 65535 ids in use -> OverflowError.  A tiny mapping that
+        claims every id is 'in' exercises the exhausted-id-space path
+        without the per-entry heap cost."""
+        client = _new_client()
+
         class _AlwaysFull:
             def __contains__(self, key: int) -> bool:
                 return True
 
-        table._entries = _AlwaysFull()  # noqa: SLF001 - testing the wraparound
+        client._in_flight = _AlwaysFull()
         with raises(OverflowError):
-            table.allocate_id()
-
-    def test_add_collision_raises(self) -> None:
-        table = InFlightTable()
-        entry = InFlightPublish(packet_id=42, packet_bytes=b"", deadline_ticks=0)
-        table.add(entry)
-        with raises(KeyError):
-            table.add(entry)
-
-    def test_get_returns_entry_or_none(self) -> None:
-        table = InFlightTable()
-        entry = InFlightPublish(packet_id=42, packet_bytes=b"x", deadline_ticks=99)
-        table.add(entry)
-        assert table.get(42) is entry
-        assert table.get(99) is None
-
-    def test_discard_removes_and_returns(self) -> None:
-        table = InFlightTable()
-        entry = InFlightPublish(packet_id=42, packet_bytes=b"x", deadline_ticks=99)
-        table.add(entry)
-        assert table.discard(42) is entry
-        assert 42 not in table
-        # Discarding a missing id is a no-op (returns None).
-        assert table.discard(42) is None
-
-    def test_in_operator_and_iteration(self) -> None:
-        table = InFlightTable()
-        first = InFlightPublish(packet_id=1, packet_bytes=b"a", deadline_ticks=0)
-        second = InFlightPublish(packet_id=2, packet_bytes=b"b", deadline_ticks=0)
-        table.add(first)
-        table.add(second)
-        assert 1 in table
-        assert 2 in table
-        assert len(table) == 2
-        entries = sorted(table, key=lambda entry: entry.packet_id)
-        assert entries == [first, second]
+            client._allocate_packet_id()
 
 
 class TestInFlightPublish:
