@@ -169,6 +169,10 @@ _MAX_DEPTH = 8
 _MALFORMED = "malformed msgpack: truncated or over-length framing"
 
 
+import gc as _gc  # noqa: E402, I001 — mid-file placement is intentional.
+_gc.collect()
+
+
 def _bounded_end(data: memoryview, start: int, length: int) -> int:
     """Return ``start + length``, or raise if it runs past *data*.
 
