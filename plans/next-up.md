@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Runner reactor — resume from handoff (reactor + all four services' `io_*` + README `runner.wait` shipped; tracemalloc heap-drift test and hardware validation remain).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
+- [ ] **Runner reactor — resume from handoff (host-side work complete: reactor + all four services' `io_*` + README + tracemalloc heap-drift test all shipped; only the wrapper-mediated hardware validation against `.scratch/{mp,cp}_ipoll_validate.template.py` remains).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
 
 ## Next
 
