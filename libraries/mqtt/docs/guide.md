@@ -95,6 +95,15 @@ client = MQTTClient(
 
 A clean `client.disconnect()` suppresses the will.
 
+To change the will after construction (e.g. swap "online" for "offline" before a graceful shutdown), use `set_will`:
+
+```python
+client.set_will("status/online", b"offline", qos=1, retain=True)
+# Next CONNECT (or self-heal reconnect) carries the new will.
+```
+
+`set_will(topic=None)` disables the will entirely.  Pass `prefixed=False` to opt out of the `root_topic` / `client_id` prefix scheme.  The change applies to the next CONNECT packet — the broker already has the will from the in-flight session and can't be modified mid-connection.
+
 ## TLS connections
 
 Build the socket with `tls_client_socket` instead of `tcp_client_socket`:
@@ -177,23 +186,23 @@ The constant accepts a family form (the bare stem, matches every `chumicro_*.soc
 
 ## Tuning for tick-latency vs throughput
 
-Two constructor knobs let you trade tick fairness for throughput:
+`handle()` does exactly one `recv_into` and one `send` per tick, so each call yields back to the runner after one socket syscall.  Three constructor knobs let you tune the trade-off:
 
 | Knob | Default | What it bounds |
 |---|---|---|
-| `recv_budget_per_tick` | `1024` (bytes) | Soft cap on bytes drained from the socket in one `handle()` call.  Without it, a large inbound payload would monopolize the tick until fully drained — visibly stuttering a concurrent LED blink or sub-second control loop.  Raise for faster big-payload ingestion at the cost of LED smoothness. |
+| `recv_budget_per_tick` | `1024` (bytes) | Cap on the single per-tick `recv_into` call.  An intact-tier read of a multi-KB inbound PUBLISH arrives across several ticks instead of monopolizing one tick on a single syscall.  Raise for faster big-payload ingestion at the cost of per-syscall latency. |
 | `max_tx_queue_size` | `20` packets | Hard cap on pending outbound packets.  Sized for the runner-shaped sensor profile (publish every N seconds; queue stays near zero).  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; each slot pins ~8 bytes long-lived on MP / CP. |
+| `send_timeout_seconds` | inherits `ack_timeout_seconds` (5 s) | Maximum time the socket can stay non-writable with a packet queued before the client transitions to `FAILED` and self-heal fires.  Re-arms on every successful send -- a steady drip never trips it, only a stalled socket does.  Catches NAT-style silent-drops on the outbound path that would otherwise let the queue grow until `MQTTBackpressureError`. |
 
 ```python
 client = MQTTClient(
     sock,
     client_id="my-thing",
-    recv_budget_per_tick=4096,             # faster big-blob ingestion
+    recv_budget_per_tick=4096,             # faster big-blob ingestion per syscall
     max_tx_queue_size=100,                 # bursty publisher
+    send_timeout_seconds=10.0,             # longer outbound-stall tolerance
 )
 ```
-
-Without `recv_budget_per_tick`, a "drain until EAGAIN" loop on a fat kernel recv buffer can blow tick latency past tens of milliseconds while it works through the backlog — long enough to skip a heartbeat on the same loop.
 
 ## Three-tier inbound size model
 
