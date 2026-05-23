@@ -73,6 +73,8 @@ Post-import `max_free_sz` on Pi Pico W MP: 4089 blocks → 6170 blocks (~+33 KB 
 - **`gc.collect()` at module-import boundaries is a chumicro pattern**, not a hot-path anti-pattern.  AGENTS.md / `/audit-library`'s ban is explicitly about *hot paths* (tick / handle / per-message callbacks).  Module-import time is housekeeping.  Captured in the `audit-embedded` skill (§4 and §10) + `field-reality.md` ("gc.collect at import boundaries").  Not promoted to an ADR — pattern lives in the skill where future audits will find it.
 - **The audit-embedded `InFlightTable` dissolution and the exploration's `gc.collect` placements are additive, not redundant.**  The audit dropped persistent-state class machinery (~16 KB contiguous recovered).  The exploration defragmented compile scratch (~33 KB more).  Different mechanisms.  Don't conflate them when explaining the win.
 - **The exploration's structural changes (helper-function inlining, docstring trimming, method consolidation) net-negative and were reverted.**  Counter-intuitive: removing a long docstring made fragmentation *worse* by ~5 blocks (the freed string-block became a hole that small allocations scattered into).  Inlining a single-call helper saved -1 1-block but cost -8 `max_free_sz` blocks.  *Large contiguous allocations are protective; small scattered allocations fragment.*  Full table in `.scratch/frag-iter-log.md`.
+- **mpy-cross frozen bytecode is deferred until the `.py`-side is as efficient as possible.**  User policy as of 2026-05-23: max out source-level efficiency first, then evaluate freezing.  Don't propose `prepare-mpy-cross` runs as the next RAM-saving lever until source-side per-change benches have plateaued.  mpy-cross is the standout untapped lever (~50-80 KB heap on Pi Pico W MP, RAM-neutral on fragmentation pattern), but only after `.py` source has captured its share.
+- **Trade-off model for source changes (worked out this session): three categories.**  (A) **Strict wins** — reduce RAM *and* fragmentation: dead-code removal, allocation consolidation (one big buffer vs N small), pre-allocation vs per-call churn.  (B) **Net-negative trades** — less RAM, *more* fragmentation: removing coherent large allocations (docstrings, long string literals), inlining helpers into scattered call sites, replacing big methods with many small ones.  This is the "moving the bump under the rug" failure mode and the exploration confirmed it.  (C) **RAM-neutral, fragmentation-positive** — dissolving class machinery into dict storage (audit's `InFlightTable` removal), gc.collect placement.  The rule for next session: a change qualifies as a strict win only when both `max_free_sz` AND 1-block count improve or hold; if either degrades the change is a B-class trade and revert.
 
 ## What was learned
 
@@ -84,19 +86,39 @@ Post-import `max_free_sz` on Pi Pico W MP: 4089 blocks → 6170 blocks (~+33 KB 
 
 ## Riskiest assumption
 
-That the `gc.collect()` placement pattern carries over cleanly from MicroPython to CircuitPython.  Both runtimes ship `gc.collect()` and both have the same auto-GC-only-on-pressure behavior, but CP's heap layout, mbedTLS build, and module-import allocation patterns differ — the same six placements may produce different deltas, or even introduce CP-specific regressions.
+That **structural per-change benches can find real additional wins
+beyond the audit + gc.collect work**.  The exploration's category-B
+result (5 of 5 structural-trim attempts went net-negative) was
+strong evidence that source-level structural intuition lies for
+fragmentation reduction.  The candidates listed in §5 below are
+plausible — but they're plausible the same way the docstring trim
+was plausible, and the docstring trim cost blocks.  The riskiest
+belief in the queued next-session plan is that 5-15 KB of further
+source-level RAM is recoverable without trading it back via
+fragmentation.  If the first 2-3 per-change benches all land
+net-negative or net-zero, that's the signal that source-side is
+exhausted and mpy-cross becomes the live question after all (despite
+the user's preference to defer it).
 
+[HYPOTHESIS: cheapest test = pick the highest-payoff candidate from
+§5 (MQTTClient instance attribute consolidation) and bench it
+in-isolation.  Expected wins: 5-15 fewer 1-blocks per MQTTClient
+instance, no `max_free_sz` regression at post_import.  If the
+candidate lands category-A, source-side has more juice; if it lands
+category-B with the same scatter pattern the audit saw, the exhaustion
+signal fires earlier.]
+
+**Secondary riskiest assumption (held over from prior handoff):**
+that the `gc.collect()` placement pattern carries over cleanly from
+MicroPython to CircuitPython.  Both runtimes ship `gc.collect()` and
+both have the same auto-GC-only-on-pressure behavior, but CP's heap
+layout, mbedTLS build, and module-import allocation patterns differ.
 [HYPOTHESIS: cheapest test = deploy `frag_probe_runtime` to
-`pi-pico-w-cp` (which is at `/dev/cu.usbmodem112301` per `devices.yml`)
-with the current committed state, capture `gc.mem_alloc()` /
-`gc.mem_free()` deltas at the same checkpoints.  CP's
-`micropython.mem_info(1)` equivalent: CP's `gc` module is more
-limited — but `gc.mem_free()` + `gc.mem_alloc()` exist.  CP also
-exposes `microcontroller.cpu.temperature` and other diagnostics; the
-ATB heap map is **not** available on CP.  So fragmentation has to be
-inferred from `mem_free` minus actual large-block allocation attempts.
-A pragmatic CP fragmentation test: try `bytearray(25_000)` between
-checkpoints and watch for `MemoryError`.]
+`pi-pico-w-cp` (at `/dev/cu.usbmodem112301` per `devices.yml`) with
+the current committed state.  CP's `micropython.mem_info(1)` does
+not exist — use `gc.mem_alloc()` / `gc.mem_free()` plus a
+`bytearray(N)` allocation probe at successive Ns (25_000, 16_384,
+8_192) to find the contiguous floor at each checkpoint.]
 
 ## To re-research / verify next session
 
@@ -122,20 +144,67 @@ checkpoints and watch for `MemoryError`.]
 4. **Re-run `mqtt_tls_probe` against Lolin S2 MP + Lolin S2 CP**
    to confirm the gc.collect changes don't regress the 3 boards that
    were already passing.  Quick sanity check.
-5. **Look for further RAM reduction opportunities the user explicitly
-   asked about.**  Quote: "we want to get the ram use in general down
-   as much as we can but we may already have done a lot there, the key
-   is if the refactor makes the code bloatier or harder to read."
-   Conservative-by-default — the exploration already revealed that
-   structural inlining and docstring trimming are net-negative for
-   fragmentation.  Worth exploring next: **`chumicro_msgpack`** (~10 KB
-   on disk, transitively loaded via `chumicro_config.runtime`), and
-   **`chumicro_runner.core`** (488 lines, the larger of the runner's
-   files — its `_SelectPollAdapter` and `Runner.wait` paths have
-   significant code).  [HYPOTHESIS: cheapest test = run the
-   frag_probe_runtime against pi-pico-w-mp after experimentally adding
-   `gc.collect()` between subsections of `chumicro_msgpack/_pure.py`,
-   measure delta.]
+5. **Per-change benching pass — the priority next session.**  User
+   explicitly: *"we should explore more per change benches in the next
+   session."*  Treat each candidate below as its own bench cycle:
+   apply → deploy → capture mem_info(1) → compare to baseline → re-run
+   to confirm (±10 block noise) → keep iff both `max_free_sz` AND
+   1-block count improve or hold (decision-rule category A above).
+   Maintain a running table in `.scratch/frag-iter-NN-<slug>.log` +
+   summary markdown.  Concrete candidates worth benching, in
+   estimated-payoff order:
+
+   - **MQTTClient instance attribute consolidation.**  `MQTTClient.
+     __init__` writes ~30 `self._foo = value` attributes.  Each is a
+     dict entry per instance, ~1 small allocation each.  Candidate:
+     consolidate into a single `_state` dict / tuple / dataclass-like
+     namespace.  Bench at `post_connect` after `client = MQTTClient(...)`.
+     Estimated win 5-15 1-blocks per client instance; tradeoff is
+     readability of `self._state["client_id"]` vs `self._client_id`.
+   - **`_decoder_kwargs` storage shape.**  Stored on the MQTTClient
+     instance only for `_attempt_self_heal` reconstruction.  Could
+     hold construction-time params in a single small tuple instead of
+     dict.  Bench: 1-block delta after `MQTTClient(...)`.
+   - **PacketDecoder drain-state attributes.**  12 `self._drain_*`
+     fields exist permanently but are all `None` / 0 when not draining.
+     Could be a single drain-state tuple swapped in on tier-2/3 entry.
+     Bench: 1-block count at `post_subscribe` (decoder allocated but
+     idle).  Readability cost: drain-mode accessors get uglier.
+   - **`chumicro_sockets` runtime-gated function tree.**  `tcp_client_socket`,
+     `tls_client_socket`, `udp_socket` etc. each branch on
+     `_runtime_name()` and lazy-import an adapter.  Could resolve the
+     adapter ONCE at module load and assign module-level function
+     references.  Bench: `post_import` `max_free_sz` + `post_connect`
+     delta.  Risk: changes when adapter imports fire (`_adapters/cp`
+     vs `_adapters/mp`), and the CP / MP build difference is a tested
+     surface.
+   - **`chumicro_msgpack._pure` mid-module gc.collect.**  407 lines.
+     The mid-class break that worked in `_wire.py` (iter 12, +5 blocks)
+     might apply here.  Bench: post_import after triggering a
+     `load_runtime_config()` call.  Low payoff but cheap to try.
+   - **WhenOversized class → module-level constants.**  Documented
+     public API but Decision 0061 framed it as a cross-library
+     contract.  3 string constants in a class body.  Audit declined
+     to touch this in the first pass.  Bench against module-level
+     constants with a class-attribute compatibility shim if API has
+     to stay stable.  Risk: 21 external consumers (libraries +
+     site-generated HTML) reference `WhenOversized.DROP_WITH_EVENT`.
+   - **`MQTTPublisher` retirement.**  Documented public API, zero
+     external usage (per audit).  Bench post_import after removing
+     the class.  Tradeoff: removes a documented ergonomic affordance.
+     If kept and unused, costs ~3-5 small allocations forever.
+
+   Each is a candidate, not a recommendation.  Bench-first, decide-
+   after.  The exploration's central lesson is that structural
+   intuition lies — every candidate above could plausibly land in
+   category A or B; the measurement is what tells you which.
+
+6. **Look at `chumicro_runner.core` and `chumicro_websockets`** as
+   broader RAM consumers worth a `/audit-embedded` pass once the
+   per-change bench loop is established.  Both are large libraries
+   (runner core.py 488 lines; websockets 1500+ lines across 6 files).
+   Future audit-embedded passes can use the bench harness instead
+   of static review for the structural-change calls.
 6. **Decide on the broader chumicro_runner test-coverage gap.**
    The runner package is at 90.29% coverage; the gap is in
    `_SelectPollAdapter` + `Runner.wait`'s select.poll path, which
@@ -149,6 +218,16 @@ checkpoints and watch for `MemoryError`.]
    for consistency** — the new bullet in §4 and the expanded §10 should
    match the existing tone.  Sanity re-read after the session-handoff
    ritual.
+
+8. **Bench the existing kept changes individually** as a sanity-check
+   on the audit + exploration's reported contributions.  The
+   `frag-iter-log.md` table shows per-change deltas but they were
+   measured cumulatively (each iter on top of the prior).  A fresh
+   bench from PRE-AUDIT baseline against the FINAL state, isolating
+   each change one-at-a-time, gives a defensible attribution.  Cheap
+   to run from `git stash` + `checkout`-by-file.  Not load-bearing
+   but useful for the per-change discipline the next session is
+   building.
 
 ## Dead ends
 
