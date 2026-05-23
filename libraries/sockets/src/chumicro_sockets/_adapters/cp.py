@@ -363,3 +363,77 @@ def ssl_context_no_verify():
     context.load_verify_locations(cadata="")
     context.check_hostname = False
     return context
+
+
+def tcp_connector(host, port, *, radio=None):
+    """Return a tick-driven TCP connector for CircuitPython.
+
+    CP's ``socketpool.SocketPool.socket().connect()`` is synchronous;
+    the connector splits the dial into per-phase ticks (DNS, then TCP)
+    but each phase blocks for its substrate-level call.  Honest
+    documented compromise: better than the all-blocking-in-one-call
+    synchronous factory, not yet truly non-blocking the way the
+    CPython adapter is.
+    """
+    return _CPConnector(host, port, tls=False, context=None, radio=radio)
+
+
+def tls_connector(host, port, *, context=None, radio=None):
+    """Return a tick-driven TLS connector for CircuitPython.
+
+    CP's TLS handshake happens inside ``wrapped_socket.connect()`` —
+    the substrate does not separate TCP and TLS.  The connector wraps
+    the socket before the TCP-connect phase and goes straight to
+    ``ready`` after that single blocking call; there is no separate
+    ``awaiting_tls`` phase on CP.
+    """
+    return _CPConnector(host, port, tls=True, context=context, radio=radio)
+
+
+from chumicro_sockets._connector import (  # noqa: E402
+    STATE_READY,
+    SocketConnector,
+)
+
+
+class _CPConnector(SocketConnector):
+    def __init__(self, host, port, *, tls=False, context=None, radio=None):
+        super().__init__(host, port, tls=tls, context=context)
+        self._radio = radio
+
+    def _resolve_dns(self, host, port):
+        # CP's ``socketpool.getaddrinfo`` is synchronous — blocks one
+        # phase tick for the lookup.  Returns the first address tuple
+        # in the same shape as stdlib's ``socket.getaddrinfo``.
+        pool = _pool_for(self._radio)
+        return pool.getaddrinfo(host, port, pool.AF_INET, pool.SOCK_STREAM)[0]
+
+    def _start_tcp_connect(self, addr_info):
+        # On CP, the ``connect`` call below does the TCP three-way
+        # handshake AND, when the socket is TLS-wrapped, the TLS
+        # handshake — all in one blocking call.  Wrap before connect
+        # so the substrate runs both in this single phase.
+        pool = _pool_for(self._radio)
+        sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
+        if self._tls:
+            if self._context is None:
+                import ssl  # noqa: PLC0415 — CP-only import
+
+                self._context = ssl.create_default_context()
+            sock = self._context.wrap_socket(sock, server_hostname=self._host)
+        sockaddr = addr_info[4]
+        sock.connect(sockaddr)
+        return sock
+
+    def _check_tcp_connect(self, sock):  # noqa: ARG002 - already connected
+        # Substrate-blocking connect completed inside
+        # ``_start_tcp_connect``; nothing to poll.
+        return True
+
+    def _enter_post_tcp(self):
+        # CP collapses TCP + TLS into one connect() call, so the
+        # connector skips the ``awaiting_tls`` phase — the socket is
+        # fully ready once ``_start_tcp_connect`` returns.
+        self.socket = self._inflight_socket
+        self._inflight_socket = None
+        self.state = STATE_READY

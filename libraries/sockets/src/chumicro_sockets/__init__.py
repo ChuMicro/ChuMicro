@@ -224,9 +224,9 @@ def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
-        raise NotImplementedError(
-            "CircuitPython connector adapter not yet implemented",
-        )
+        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated import
+
+        return cp.tcp_connector(host, port, radio=radio)
     if runtime == "micropython":
         raise NotImplementedError(
             "MicroPython connector adapter not yet implemented",
@@ -267,9 +267,9 @@ def tls_client_connector(
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
-        raise NotImplementedError(
-            "CircuitPython connector adapter not yet implemented",
-        )
+        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated import
+
+        return cp.tls_connector(host, port, context=context, radio=radio)
     if runtime == "micropython":
         raise NotImplementedError(
             "MicroPython connector adapter not yet implemented",
