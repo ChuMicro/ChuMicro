@@ -41,6 +41,7 @@ When instructions overlap:
 
 - Maintain coverage gates. Every `test` and `preflight` invocation must pass `--coverage-threshold 94`.
 - Test skips must be loud. Do not write a test with no assertions or validation. Use `chumicro_test_harness.skip(reason)`, declare `__chumicro_runtimes__` / `__chumicro_features__` markers, or `raise AssertionError(...)`.
+- A **cross-runtime test file** is any test file whose name does not end in `_pytest.py`. The `_pytest.py` suffix marks CPython-only tests (free to `import pytest`, use `monkeypatch`, simulate other runtimes). Test files without the suffix are loaded by `chumicro_test_harness` on MicroPython and CircuitPython directly. The file's top docstring must say which kind it is.
 - Cross-runtime test files must not `import pytest`. Use plain `assert` and constructor-injected fakes from each library's `testing.py`.
 - Every cross-runtime test file must run green on a freshly-reset Pi Pico W (264 KB) under both CircuitPython and MicroPython. A PSRAM-only pass does not validate the 256 KB HAL these libraries exist for. A file that OOMs there even with `--per-file` is a tracked defect.
 - Tests in any package may depend only on: the package's own `src/` + `testing.py`, stdlib, pytest + plugins, and `support/test_harness/`. Don't `import chumicro_<other-package>` for inputs or read sibling-repo filesystems.
@@ -58,7 +59,7 @@ When instructions overlap:
 - No pure-passthrough `@property` in `libraries/`. Properties that compute or transform values stay legitimate. Workbench packages are out of scope.
 - Use descriptive names. No single-letter variables except `_`. Expand abbreviations to full words. For example, write `environment` rather than `env`, `buffer` rather than `buf`, `source` rather than `src`, `command` rather than `cmd`, `message` rather than `msg`, `error` rather than `err`, `reference` rather than `ref`, `address` rather than `addr`, `exception` rather than `exc`, and `execute` rather than `exec`. The `for i in range(10)` exemption is humans-only. Enforced by `CHU001`. Suppress only when matching an upstream API.
 - Minimize dependencies. Prefer pure-Python implementations compatible with all three runtimes.
-- The rules above apply only inside `libraries/`. Do not apply them to `workbench/` or `scripts/`.
+- The rules above apply inside `libraries/`. They also apply to `support/<name>/src/` packages by default — `chumicro_test_harness` and other shared internals must stay cross-runtime unless a file marks itself `__chumicro_runtimes__ = ("cpython",)`. They do **not** apply to `workbench/` or `scripts/` (CPython-only trees).
 
 **Code shape (workbench, cpython only)**
 
@@ -88,8 +89,6 @@ When instructions overlap:
 - **Behavior, command, library, config, pattern, or rule changed?** Ask: *"If someone reads the docs tomorrow, will they find correct information?"* Update any doc your change made wrong, especially this file, ADR bodies, CI workflows, and scaffold templates. A drift class that *can* be deterministically linted must be, not just doc-fixed. A prose-only contract is exactly the drift class that ships wrong. See [Decision 0074](plans/decisions/0074-drift-mechanization-as-project-policy.md).
 - **Unit of work landed?** Remove the matching `## Now` / `## Next` bullet in [`plans/next-up.md`](plans/next-up.md) in the *same* edit. No `## Done` section, `git log` carries history. Items grow only by promotion to [`plans/workstreams/<name>.md`](plans/workstreams/) referenced from the bullet, never by adding sub-bullets. Enforced by `CHU011`.
 - **Open question resolved?** Update [`plans/open-questions.md`](plans/open-questions.md) the moment the answer lands. The file is not session-start reading. Consult on demand when working an area with a known open thread.
-- **Adding or changing an ADR?** See [`plans/decisions/README.md`](plans/decisions/README.md) for the rules (in-place edits, in-place correction of wrong reasoning, state the principle not the mechanism). New ADRs route through the [`new-decision`](.github/skills/new-decision/SKILL.md) skill.
-- **End of every unit of work.** Run the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill. It verifies preflight is green, plans-doc is updated, and docs are in sync, then commits and pushes. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial, and say so.
 
 ## Common pitfalls
 
@@ -162,7 +161,10 @@ When a library doesn't already exist for a job, check `plans/decisions/` for a p
 
 ## Commands
 
-Activate any virtual environment first. If one isn't installed yet, run `python scripts/prepare_workspace.py` to bootstrap.
+Activate any virtual environment first. Two distinct setup commands:
+
+- **First-clone bootstrap.** `python scripts/prepare_workspace.py` — creates `.venv`, installs deps, runs lint + host tests as a smoke check. Use exactly once per fresh clone, before any other command. The script self-re-execs into the new `.venv` so a system Python without `tomllib` still works.
+- **Steady-state refresh.** `python scripts/run.py setup` — reinstall deps, regenerate IDE configs against the current pyproject. Run after pulling dependency changes or adding a library. Already-active venv assumed.
 
 ### `python scripts/run.py <cmd>`: CI-mirror runner
 
@@ -202,5 +204,4 @@ For deeper implementation detail:
 - [docs/contributing/style-guide.md](docs/contributing/style-guide.md): naming, annotations, imports, layout, doc tone.
 - [docs/contributing/device-testing.md](docs/contributing/device-testing.md): functional tests, deploy modes, devices.yml.
 - [docs/contributing/releases.md](docs/contributing/releases.md) covers VERSION, SemVer, and experimental-to-stable promotion.
-- [docs/contributing/pull-requests.md](docs/contributing/pull-requests.md): PR conventions.
 - [docs/troubleshooting/](docs/troubleshooting/): hardware-issue recovery (FSKit wedge, read-only FAT, RingIO quirks).
