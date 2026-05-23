@@ -255,6 +255,7 @@ class MQTTClient:
         when_oversized: WhenOversized = WhenOversized.DROP_WITH_EVENT,
         recv_budget_per_tick: int = 1024,
         max_tx_queue_size: int = 20,
+        send_timeout_seconds: float | None = None,
         ticks: object | None = None,
     ) -> None:
         """Wire up the client.
@@ -333,6 +334,13 @@ class MQTTClient:
                 packets (default 20).  Appending past the cap raises
                 :class:`MQTTBackpressureError`.  Raise the cap for
                 bursty publishers.
+            send_timeout_seconds: Maximum time the socket can stay
+                non-writable with a packet queued before the client
+                transitions to ``FAILED``.  ``None`` (default) inherits
+                ``ack_timeout_seconds``.  Re-arms every time a send
+                makes progress, so a steady stream of small sends won't
+                trip it; only a stalled socket does.  Self-heal fires
+                on the next tick after the transition.
             ticks: Optional tick source.  Any object exposing
                 ``ticks_ms``, ``ticks_diff``, ``ticks_add`` (matches
                 the ``chumicro_timing.ticks`` submodule shape).
@@ -378,6 +386,10 @@ class MQTTClient:
         self._when_oversized = when_oversized
         self._recv_budget_per_tick = recv_budget_per_tick
         self._max_tx_queue_size = max_tx_queue_size
+        if send_timeout_seconds is None:
+            self._send_timeout_ms = self._ack_timeout_ms
+        else:
+            self._send_timeout_ms = int(send_timeout_seconds * 1000)
 
         if ticks is None:
             from chumicro_timing import ticks  # noqa: PLC0415 - DI fallback
@@ -405,6 +417,12 @@ class MQTTClient:
         # goes through ``append`` / ``appendleft`` directly.
         self._tx_queue = _new_tx_queue(max_tx_queue_size + 64)
         self._partial_send = None  # (bytes, offset) when last send was short.
+        # Deadline-tick value while a packet has been queued without any
+        # send progress.  ``None`` when the queue is empty or the last
+        # drain made progress (a successful send re-arms; an EAGAIN
+        # leaves the existing deadline ticking).  Surfaced via
+        # ``next_deadline`` so the runner wakes by it.
+        self._send_deadline_ticks = None
 
         self._next_ping_due_ticks = 0
         self._ping_interval_ms = max(1000, keep_alive_seconds * 1000 // 2)
@@ -812,9 +830,10 @@ class MQTTClient:
 
         Returns the minimum across the keepalive timer
         (``_next_ping_due_ticks`` while connected), each pending
-        response's ack deadline, and each in-flight QoS 1 publish's
-        retry deadline.  ``None`` when no deadline applies (the runner
-        falls back to the next periodic-task ``next_due_ms``).
+        response's ack deadline, each in-flight QoS 1 publish's retry
+        deadline, and the send timeout (when armed).  ``None`` when no
+        deadline applies (the runner falls back to the next periodic-
+        task ``next_due_ms``).
         """
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return None
@@ -828,6 +847,10 @@ class MQTTClient:
                 nearest = candidate
         for entry in self._in_flight.values():
             candidate = entry.deadline_ticks
+            if nearest is None or ticks_diff(candidate, nearest) < 0:
+                nearest = candidate
+        if self._send_deadline_ticks is not None:
+            candidate = self._send_deadline_ticks
             if nearest is None or ticks_diff(candidate, nearest) < 0:
                 nearest = candidate
         return nearest
@@ -924,6 +947,7 @@ class MQTTClient:
         # deque does not implement clear().
         self._tx_queue = _new_tx_queue(self._max_tx_queue_size + 64)
         self._partial_send = None
+        self._send_deadline_ticks = None
         self._pending_responses.clear()
         # Fresh decoder: discards any partial inbound packet from the
         # dead socket and resets the degraded-buffer state.
@@ -990,6 +1014,7 @@ class MQTTClient:
                 self._partial_send = None
             else:
                 self._partial_send = (packet, new_offset)
+            self._update_send_deadline(sent)
             return  # One I/O attempt per tick.
 
         # Drain leading QoS 0 callback markers (no I/O) up to the next
@@ -999,14 +1024,17 @@ class MQTTClient:
 
         # Send at most one real packet.
         if not self._tx_queue:
+            self._update_send_deadline(0)
             return
         packet = self._tx_queue[0]
         sent = self._send_raw(packet)
         if sent <= 0:  # pragma: no cover - non-blocking-EAGAIN backpressure path
+            self._update_send_deadline(0)
             return  # Socket would block, wait for next tick.
         if sent < len(packet):  # pragma: no cover - rare partial-send path
             self._partial_send = (packet, sent)
             self._tx_queue.popleft()
+            self._update_send_deadline(sent)
             return
         self._tx_queue.popleft()
 
@@ -1015,6 +1043,26 @@ class MQTTClient:
         # waiting for the next one.  Wire-ordering invariant intact:
         # markers carry no I/O.
         self._drain_callback_markers()
+        self._update_send_deadline(sent)
+
+    def _update_send_deadline(self, bytes_sent):
+        """Maintain ``_send_deadline_ticks`` after a drain step.
+
+        Invariants:
+        - Queue empty AND no partial send pending: deadline cleared.
+        - Otherwise some bytes still want to go out: arm the deadline.
+          If progress was made this step (``bytes_sent > 0``), re-arm
+          so a steady drip of sends doesn't false-fail.  If no progress
+          AND no deadline is armed yet, arm now so the timeout starts
+          counting down.  If no progress AND a deadline is already
+          armed, leave it alone -- it's the running timer that the
+          ``_check_deadlines`` step inspects.
+        """
+        if not self._tx_queue and self._partial_send is None:
+            self._send_deadline_ticks = None
+            return
+        if bytes_sent > 0 or self._send_deadline_ticks is None:
+            self._send_deadline_ticks = self._deadline(self._send_timeout_ms)
 
     def _drain_callback_markers(self):
         """Pop QoS 0 callback markers off the head of the tx queue, firing each.
@@ -1283,6 +1331,19 @@ class MQTTClient:
                 self._pending_responses.remove(pending)
                 self.last_error = MQTTError(
                     f"timed out awaiting {pending.awaiting}",
+                )
+                self.state = ProtocolState.FAILED
+                return
+
+        # Send timeout: the socket has been non-writable with a packet
+        # queued for longer than the configured limit.  Fires only when
+        # the deadline is armed (queue non-empty or partial-send pending)
+        # AND a previous drain failed to make progress for ``send_timeout_ms``.
+        if self._send_deadline_ticks is not None:
+            if self._ticks.ticks_diff(self._send_deadline_ticks, now_ms) <= 0:
+                self.last_error = MQTTError(
+                    "send timeout: tx queue made no progress for "
+                    f"{self._send_timeout_ms} ms",
                 )
                 self.state = ProtocolState.FAILED
                 return
