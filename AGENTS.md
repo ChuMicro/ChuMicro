@@ -18,8 +18,7 @@ When instructions overlap:
 - Preflight must pass before commit. If preflight is already red on `main` (not from your changes), surface and stop.
 - End-of-work invokes the [`task-checkpoint`](.github/skills/task-checkpoint/SKILL.md) skill. It owns preflight, `plans/next-up.md` refresh, durable-lesson lift, commit, and push. Don't yield with uncommitted changes or untested behavior unless the work is explicitly partial, and say so.
 - Anchor claims to evidence (file, symbol, test, or command). Verify by reading code, running tests, or checking command output. Training recall is not verification. For anything time-sensitive, version-specific, or newer than the model cutoff, web-search rather than asserting from memory.
-- **Sub-agent reports and session handoffs describe intent, not state.** Before building on a concrete claim from a sub-agent (Explore / audit-* / general-purpose) or a `plans/handoffs/` file — *especially* one marked `[VERIFIED]` — re-derive from code, tests, or commands. The writer was near a context limit; treat the doc as an index, not a boundary.
-- **Read the artifact, not the summary.** Never trust an exit code, "preflight passed" string, or sub-agent summary alone — re-read the file or re-run the smallest failing check. Re-assert `pwd` after any external change. A "modified externally" notice means re-read the file before editing it again.
+- **Verify from the artifact, not the summary.** Sub-agent reports (Explore / audit-* / general-purpose), `plans/handoffs/` files, exit codes, and "preflight passed" strings describe intent, not state — *especially* `[VERIFIED]` claims, since the writer was near a context limit. Re-read the file or re-run the smallest failing check before building on it. Re-assert `pwd` after any external change; a "modified externally" notice means re-read before editing.
 - Don't modify unrelated code when fixing a focused bug. Mention pre-existing issues separately.
 - Don't add features, abstractions, or speculative error handling beyond what was asked. Removing unnecessary complexity from code you're already touching is fine.
 - Clean up after yourself. If you make an import, variable, function, or test unused, remove it. If your change affects docs, update them. Do not fix pre-existing issues unless asked.
@@ -168,9 +167,31 @@ If a third-party library doesn't support CircuitPython or MicroPython, prefer a 
 | [`plans/`](plans/) | Decisions, work queue, workstreams | Not published |
 | [`docs/`](docs/) | Contributor + user docs | Published as the docs site |
 
-See [`libraries/README.md`](libraries/README.md) and [`workbench/README.md`](workbench/README.md) for the live inventory and per-package summaries.
-
 When a library doesn't already exist for a job, check `plans/decisions/` for `00NN-chumicro-<name>.md` files — libraries designed but not yet built.
+
+### Library inventory
+
+15 device libraries, dependency-tier ordered. Every library is runner-tick-shaped (`check(now_ms)` + `handle(now_ms)`) so `runner` drives them uniformly.
+
+| Tier | Library | What it provides |
+|---|---|---|
+| Primitives | `timing` | `ticks_ms` / `ticks_diff` / `ticks_add` / `Heartbeat` across CP/MP/CPython |
+| | `runner` | Cooperative tick scheduler (`Runner.add` / `tick` / `wait`) |
+| | `compat` | Stdlib backfills (`functools.partial`, etc.) |
+| | `logging` | Leveled logging, runner-friendly, zero chumicro deps |
+| | `events` | Bounded drop-oldest pub/sub bus |
+| Persistence | `msgpack` | Compact binary serialization (wire-compatible with PyPI msgpack) |
+| | `config` | Type-checked runtime config via `<Name>Config.from_config(...)` |
+| | `kvstore` | Persistent KV (NVM / NVS / LittleFS per board) |
+| Link / transport | `wifi` | WiFi state machine across CP, MP-ESP32, MP-RP2 |
+| | `sockets` | TCP / TLS / UDP factories + tick-driven connector ([Decision 0081](plans/decisions/0081-non-blocking-connect-via-tick-driven-connector.md)) |
+| App protocols | `ntp` | Runner-shaped SNTP over injected UDP |
+| | `requests` | Non-blocking HTTP/1.1 client |
+| | `http_server` | Non-blocking HTTP/1.1 server (`@route` + path params) |
+| | `mqtt` | Non-blocking MQTT 3.1.1 (QoS 0+1, retain, will, self-heal) |
+| | `websockets` | RFC 6455 WS client + server, composable with `http_server` |
+
+Per-library README + dependency graph: [`libraries/README.md`](libraries/README.md). Workbench tools: [`workbench/README.md`](workbench/README.md).
 
 ## Commands
 
@@ -190,6 +211,8 @@ Core commands for active development and troubleshooting:
 | `test` | CPython unit tests (changed packages by default; `--all` for full sweep) |
 | `lint` | Ruff across the workspace |
 | `test-all-runtimes` | CPython + MicroPython + CircuitPython unit tests (parallelized) |
+| `check-api` / `check-version` | Diff public API surface, confirm VERSION bump level matches |
+| `verify-examples` | Run each library's `examples/` against CPython (`--libraries <name>` or all) |
 | `new-library` | Scaffold a new device library (`--workbench` for a host-only tool) + regenerate IDE configs |
 | `sync-ide` | Regenerate IDE configs |
 
