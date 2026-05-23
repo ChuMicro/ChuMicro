@@ -792,11 +792,11 @@ class HttpServer:
     # HttpServer has more than one socket (the listener plus N in-flight
     # connections), but the runner contract registers a single socket
     # per service.  Pragmatic split: expose the listener as ``io_socket``
-    # so the loop wakes on accept-readiness; in-flight connection I/O
-    # rides on the periodic ``handle()`` tick and the ``next_deadline``
-    # report.  This matches the workstream's audit: the accept loop is
-    # the loop-wake-worthy source; per-connection sends complete in 1-3
-    # ticks for typical small responses.
+    # so the loop wakes on accept-readiness; in-flight connection sends
+    # drain on the periodic ``handle()`` tick rather than via per-
+    # connection poll registration.  Per-connection deadlines feed
+    # ``next_deadline`` so the loop still wakes for request-timeout
+    # enforcement on a quiet listener.
 
     @property
     def io_socket(self):
