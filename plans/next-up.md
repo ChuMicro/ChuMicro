@@ -4,10 +4,11 @@
 
 ## Now
 
-- [ ] **Validate Pi Pico W CP-side fragmentation behaviour on custom firmware.**  [handoffs/2026-05-23-pi-pico-w-cp-fragmentation-validation.md](handoffs/2026-05-23-pi-pico-w-cp-fragmentation-validation.md)
-
 ## Next
 
+- [ ] **mpy-cross frozen bytecode pass on chumicro_mqtt / chumicro_sockets chain** — source-side optimization is at the floor on Pi Pico W MP; the prior session's deferred mpy-cross lever is now live.  Prior estimate: 50-80 KB heap on rp2.
+- [ ] **Confirm whether Pi Pico W CP custom firmware (`10.2.0-dirty`) deliberately strips native `msgpack`** — iter-03 evidence on 2026-05-23 showed `_pure` was on the CP import path.  Restoring native `msgpack` to the custom build would replace ~407 lines of `_pure.py` with a C module in the firmware image (likely 5-15 KB heap, possibly better fragmentation).  Worth checking with the user before re-evaluating the chain.
+- [ ] **`/audit-embedded chumicro_runner.core` and `chumicro_websockets`** — both are large libraries left over from the prior session's "next session" list.  Per-change bench loop is now established; can use the harness instead of static review.
 - [ ] **CI infrastructure workstream (unscoped — fires when CI is re-enabled).**  [workstreams/archive/audit-remediation-and-drift-mechanization.md](workstreams/archive/audit-remediation-and-drift-mechanization.md)
 - [ ] **Workspace-template gap #4b — regular-mode README update.**  [workstreams/archive/workspace-template-dev-and-regular-mode-gaps.md](workstreams/archive/workspace-template-dev-and-regular-mode-gaps.md)
 - [ ] **`websockets` oversize-frame length on Lolin S2.**  [workstreams/websockets-oversize-frame-lolin-s2.md](workstreams/websockets-oversize-frame-lolin-s2.md)

@@ -160,3 +160,37 @@ Measured net win on Pi Pico W MP: post_import `max_free_sz` `4089 -> 6170` block
 - **`gc.collect()` in small libraries that load LAST in the chain** (runner, timing): no measurable benefit because the consumer's next gc.collect catches it.  Kept for cross-chain defensive symmetry but don't expect measurement gains.
 
 **Building the harness.** `projects/frag_probe_runtime/app.py` is the reference shape — wifi connect, defer chumicro imports inside `run()`, call `dump("post_import")` etc. at each phase, use `chumicro-workspace deploy --tail 30 --non-interactive`, grep for `max free sz` from `micropython.mem_info(1)`.  Track iterations in `.scratch/frag-iter-<NN>-<slug>.log` + a markdown table.  Re-run any candidate twice before deciding — single-run variance is ±10 blocks at this scale.
+
+## MicroPython instance attribute storage — one allocation, not N
+
+The intuition "each `self.foo = X` is one small allocation, so consolidating N attrs into a tuple saves N-1 allocations" is **wrong on MicroPython**.
+
+Source: `.tools/micropython-v1.26.0/py/objtype.h:33` defines `mp_obj_instance_t` as `{ mp_obj_base_t base; mp_map_t members; mp_obj_t subobj[] }`.  The `mp_map_t` (`py/obj.h:481`) is a hash map with **one** allocated table array (`mp_map_elem_t *table; size_t alloc`).  When `__init__` writes N attrs, MP allocates one instance struct + one members table sized for ~32 or ~64 slots (next power-of-2 above used).  Removing 5 attrs leaves the same table — slots become empty in the existing allocation, nothing frees.  Adding a tuple ADDS one object.  Net allocation count: same or slightly worse.
+
+Bench evidence: packing 6 connect-args (`username`, `password`, `will_topic`, `will_message`, `will_qos`, `will_retain`) from MQTTClient into a single `_connect_args` tuple — expected -5 1-blocks per instance, **measured 0**.  Free heap moved +64 bytes (noise).  Don't propose tuple consolidation as an MP/CP allocation-reduction pattern at small N.
+
+**The pattern that *does* save allocations**: removing an unused class entirely.  Eliminating `MQTTPublisher` (one class + one method + one `__all__` export) freed **7 1-blocks** and **+197 `max_free_sz` blocks (+3.15 KB contiguous)** on Pi Pico W MP.  Class machinery — the type object, qstr-interned name, method bytecode, `__init__` code object — costs far more per-class than per-attribute storage costs per-attr.  When auditing for footprint, **count classes and method counts, not attribute counts**.
+
+## Eager adapter import perturbs downstream heap layout
+
+Pattern that looked appealing: replace `chumicro_sockets`'s runtime-gated lazy `from chumicro_sockets._adapters import cp/mp/cpython` inside each entry-point function with a one-shot eager import at module load (`import sys; if sys.implementation.name == "circuitpython": from chumicro_sockets._adapters import cp as _eager_adapter`).  The hypothesis: the adapter's compile-scratch lands at post_import (where the end-of-init gc.collect can defragment it) instead of at post_connect (interleaved with connect-time transients).
+
+Bench result on Pi Pico W MP: post_import held (`max_free_sz` unchanged at 6173 blocks) but **post_connect dropped to 5262 blocks — `-911` blocks = `-14.5 KB` contiguous capacity** lost.  Same shape as the trimming-docstrings / inlining-helpers anti-pattern: **moving allocations earlier in the import chain perturbs where downstream allocations land**.  The pre-existing layout was load-bearing without the change being obvious.
+
+Don't propose eager adapter imports as a fragmentation fix.  The lazy pattern is the right one.
+
+## Mid-module gc.collect — caveat: the file has to be imported
+
+The pattern `import gc as _gc; _gc.collect()` inserted mid-file between two large blocks (e.g. between encoder and decoder sections of a 400-line module) extends the gc.collect-at-boundaries idea.  Iter 12 of the original chumicro_mqtt sweep showed +5 blocks on `_wire.py`; this session's iter 03 showed **+944 bytes free at post_import on Pi Pico W CP custom firmware** when applied mid-`chumicro_msgpack/_pure.py`.
+
+The catch: `_pure` is **not** always imported.  `chumicro_msgpack/__init__.py` tries `from msgpack import pack, unpack` first on CircuitPython and only falls back to `_pure` when the native module is absent.  On stock CP firmware that ships native `msgpack`, the mid-module gc.collect inside `_pure` never executes (the file isn't loaded).  On MP and on CP builds that strip native `msgpack` (e.g. custom builds), `_pure` is imported and the gc.collect fires.
+
+When evaluating "mid-module gc.collect as a defrag pattern", **verify the file is on the actual import path first** (deploy the probe with the change and check whether free/floor moves).  If a file isn't loaded in the test chain, the change is a no-op and the bench will show flat numbers regardless of how plausible the placement looks.
+
+## Measuring contiguous floor on CircuitPython — bytearray probe
+
+CircuitPython has no equivalent of MicroPython's `micropython.mem_info(1)` and no equivalent of `max_free_sz`.  `gc.mem_free()` only reports total free bytes — not how that free pool is split across the heap.  A 110 KB free pool with a 25 KB largest contiguous chunk and a 110 KB free pool with a 100 KB largest contiguous chunk are both "110 KB free" but the first will fail any single allocation above 25 KB.
+
+The diagnostic substitute: `bytearray(N)` allocation probes at a stepped set of sizes after `gc.collect`, report the **largest N that succeeded** as the contiguous floor.  `projects/frag_probe_runtime_cp/app.py` ships the reference shape with probe sizes `(100_000, 75_000, 60_000, 50_000, 40_000, 30_000, 25_000, 20_000, 16_384, 12_000, 8_192, 4_096)`.  Each probe `del`s its buffer + `gc.collect`s before trying the next size, so probe pressure doesn't stack.
+
+Set the probe ceiling tighter than free heap (probing at ~free-heap fails on bookkeeping overhead even with zero fragmentation and yields a misleading floor).  Set granularity finer near the load-bearing threshold for the upstream consumer — for TLS handshake stress on `mqtt_tls_probe`, ~25 KB is the make-or-break point, so include 25_000 / 30_000 / 40_000 in the step set.
