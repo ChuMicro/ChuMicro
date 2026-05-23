@@ -1,4 +1,4 @@
-"""mqtt client: unexpected acks, socket-factory self-heal, bounded
+"""mqtt client: unexpected acks, connector-factory self-heal, bounded
 recv per tick, tx-queue backpressure (uses _CountingSocket)."""
 
 from chumicro_mqtt import (
@@ -14,7 +14,7 @@ from chumicro_mqtt.testing import (
     canned_suback_bytes,
     canned_unsuback_bytes,
 )
-from chumicro_sockets.testing import FakeSocket
+from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
@@ -30,6 +30,24 @@ def _new_client(sock: FakeSocket, ticks: FakeTicks, **overrides) -> MQTTClient:
     }
     kwargs.update(overrides)
     return MQTTClient(sock, **kwargs)
+
+
+def _connector_factory(*socks: FakeSocket):
+    """Hand back successive scripted ``FakeSocketConnector``s.
+
+    Each invocation pops the next socket and wraps it in a connector
+    that runs ``dns_ok`` then ``tcp_ok`` — the shortest happy-path
+    script.  Tests that need to exercise pending / failure phases
+    build the connector directly.
+    """
+    iterator = iter(socks)
+
+    def factory():
+        sock = next(iterator)
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=sock)
+
+    return factory
+
 
 def _drive(client: MQTTClient, ticks: FakeTicks, count: int = 1) -> None:
     """Run *count* tick iterations of the client."""
@@ -111,17 +129,18 @@ class TestUnexpectedAcks:
         assert client.state == ProtocolState.CONNECTED
 
 
-class TestSocketFactorySelfHeal:
+class TestConnectorFactorySelfHeal:
     """The wifi-drop survivability story.
 
-    When ``MQTTClient`` is constructed with a ``socket_factory``, a tick
-    in ``FAILED`` state rebuilds the socket via the factory and re-issues
-    ``connect()`` automatically.  The caller's run loop sees mqtt come
-    back without writing any recovery code.
+    When ``MQTTClient`` is constructed with a ``connector_factory``, a
+    tick in ``FAILED`` state builds a fresh connector via the factory
+    and re-enters ``AWAITING_TRANSPORT``; subsequent ticks drive DNS /
+    TCP / TLS without blocking the runner.  The caller's run loop sees
+    mqtt come back without writing any recovery code.
     """
 
     def test_neither_socket_nor_factory_raises(self) -> None:
-        with raises(ValueError, match="socket or a socket_factory"):
+        with raises(ValueError, match="socket or a connector_factory"):
             MQTTClient(client_id="x")
 
     def test_factory_only_constructor_defers_socket_build_to_connect(self) -> None:
@@ -137,23 +156,26 @@ class TestSocketFactorySelfHeal:
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         builds: list[FakeSocket] = []
 
-        def factory() -> FakeSocket:
+        def factory():
             builds.append(sock)
-            return sock
+            return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=sock)
 
         client = MQTTClient(
-            socket_factory=factory,
+            connector_factory=factory,
             client_id="x",
             ticks=ticks,
         )
-        # No socket built at construction.
+        # No connector built at construction.
         assert len(builds) == 0
         assert client.state == ProtocolState.DISCONNECTED
 
         client.connect()
         # Factory invoked exactly once during connect().
         assert len(builds) == 1
-        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.AWAITING_TRANSPORT
+        # Two ticks advance the connector (dns_ok then tcp_ok+CONNECT-drain);
+        # third tick parses the CONNACK.
+        _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
         # Factory not called a second time.  The socket is healthy.
         assert len(builds) == 1
@@ -166,7 +188,7 @@ class TestSocketFactorySelfHeal:
             raise OSError(103, "ECONNABORTED")
 
         client = MQTTClient(
-            socket_factory=factory,
+            connector_factory=factory,
             client_id="x",
             ticks=ticks,
         )
@@ -185,26 +207,22 @@ class TestSocketFactorySelfHeal:
         sock_two = FakeSocket()
         sock_one.enqueue_recv(canned_connack_bytes(return_code=0))
         sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
-        sockets = iter([sock_one, sock_two])
-
-        def factory() -> FakeSocket:
-            return next(sockets)
 
         client = MQTTClient(
-            socket_factory=factory,
+            connector_factory=_connector_factory(sock_one, sock_two),
             client_id="heal-test",
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         # Force FAILED to simulate a wifi-drop that killed the socket.
         client.state = ProtocolState.FAILED
-        _drive(client, ticks, count=2)
+        _drive(client, ticks, count=3)
 
-        # Self-heal ran: factory built a new socket, connect re-issued,
-        # CONNACK arrived, back to CONNECTED on a different socket.
+        # Self-heal ran: factory built a new connector, drove it to
+        # ready, CONNACK arrived, back to CONNECTED on a different socket.
         assert client.state == ProtocolState.CONNECTED
         # The send on sock_two contains a CONNECT (post-self-heal handshake).
         assert b"\x10" in bytes(sock_two.sent)  # CONNECT first byte = 0x10
@@ -213,7 +231,7 @@ class TestSocketFactorySelfHeal:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)  # no socket_factory
+        client = _new_client(sock, ticks)  # no connector_factory
 
         client.connect()
         _drive(client, ticks, count=2)
@@ -233,23 +251,27 @@ class TestSocketFactorySelfHeal:
         recovery_sock.enqueue_recv(canned_connack_bytes(return_code=0))
         attempts: list[bool] = []
 
-        def factory() -> FakeSocket:
+        def factory():
             if not attempts:
-                attempts.append(True)  # initial __init__ build
-                return initial_sock
+                attempts.append(True)  # initial connect() build
+                return FakeSocketConnector(
+                    actions=["dns_ok", "tcp_ok"], socket=initial_sock,
+                )
             if len(attempts) < 4:
                 attempts.append(False)
                 raise OSError("wifi still down")
             attempts.append(True)
-            return recovery_sock
+            return FakeSocketConnector(
+                actions=["dns_ok", "tcp_ok"], socket=recovery_sock,
+            )
 
         client = MQTTClient(
-            socket_factory=factory,
+            connector_factory=factory,
             client_id="retry-test",
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         client.state = ProtocolState.FAILED
@@ -258,8 +280,8 @@ class TestSocketFactorySelfHeal:
         assert client.state == ProtocolState.FAILED
         assert "wifi still down" in str(client.last_error)
 
-        # 4th attempt: factory returns the recovery socket, self-heal succeeds.
-        _drive(client, ticks, count=2)
+        # 4th attempt: factory returns the recovery connector, self-heal succeeds.
+        _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
     def test_explicit_disconnect_disables_self_heal(self) -> None:
@@ -269,17 +291,17 @@ class TestSocketFactorySelfHeal:
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         builds: list[None] = []
 
-        def factory() -> FakeSocket:
+        def factory():
             builds.append(None)
-            return sock
+            return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=sock)
 
         client = MQTTClient(
-            socket_factory=factory,
+            connector_factory=factory,
             client_id="disconnect-test",
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
         initial_build_count = len(builds)
 
@@ -299,25 +321,20 @@ class TestSocketFactorySelfHeal:
         # a SUBSCRIBE replay so the inbound stream survives reconnect.
         # Without this, the client comes back on the wire but the
         # broker (with clean_session=True, the default) has forgotten
-        # the subscription and inbound goes silent — 2026-05-23 A1+A2
-        # bake on Pi Pico W CP custom firmware caught this.
+        # the subscription and inbound goes silent.
         ticks = FakeTicks()
         sock_one = FakeSocket()
         sock_two = FakeSocket()
         sock_one.enqueue_recv(canned_connack_bytes(return_code=0))
         sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
-        sockets = iter([sock_one, sock_two])
-
-        def factory() -> FakeSocket:
-            return next(sockets)
 
         client = MQTTClient(
-            socket_factory=factory,
+            connector_factory=_connector_factory(sock_one, sock_two),
             client_id="resub-test",
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         client.subscribe_raw("sensors/+", qos=1)
@@ -327,7 +344,7 @@ class TestSocketFactorySelfHeal:
 
         # Force FAILED to simulate broker death; self-heal rebuilds.
         client.state = ProtocolState.FAILED
-        _drive(client, ticks, count=2)
+        _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         # Post-CONNACK replay enqueued a SUBSCRIBE and the
@@ -344,18 +361,14 @@ class TestSocketFactorySelfHeal:
         sock_two = FakeSocket()
         sock_one.enqueue_recv(canned_connack_bytes(return_code=0))
         sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
-        sockets = iter([sock_one, sock_two])
-
-        def factory() -> FakeSocket:
-            return next(sockets)
 
         client = MQTTClient(
-            socket_factory=factory,
+            connector_factory=_connector_factory(sock_one, sock_two),
             client_id="unsub-test",
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        _drive(client, ticks, count=3)
         client.subscribe_raw("sensors/+", qos=1)
         _drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
@@ -367,7 +380,7 @@ class TestSocketFactorySelfHeal:
 
         # Force self-heal.
         client.state = ProtocolState.FAILED
-        _drive(client, ticks, count=2)
+        _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         # No SUBSCRIBE on sock_two.

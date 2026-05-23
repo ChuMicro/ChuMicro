@@ -1,6 +1,6 @@
 # Workstream: non-blocking-connect implementation
 
-Status: **proposed.**  Implements [Decision 0081](../decisions/0081-non-blocking-connect-via-tick-driven-connector.md).  Surfaced 2026-05-23 by the A1+A2 negative bake against the convergence-steps-1-7 fix set on Pi Pico W CP custom firmware: self-heal correctly detected broker death + reconnected, but each outage burned ~10 s of full-tick-rate ECONNRESET retries against the wifi radio, fully stalling the runner during the outage window.  Recovery worked; runner-shape was violated for ~10 s per outage.
+Status: **in-progress.**  Phases 1.1 (CPython adapter + connector base + Fake), 1.3 (CircuitPython socketpool adapter), and 2 (chumicro_mqtt migration to `connector_factory` + `AWAITING_TRANSPORT`) landed; phase 1.2 (MicroPython rp2 adapter) and phases 3-6 still ahead.  Implements [Decision 0081](../decisions/0081-non-blocking-connect-via-tick-driven-connector.md).  Surfaced 2026-05-23 by the A1+A2 negative bake against the convergence-steps-1-7 fix set on Pi Pico W CP custom firmware: self-heal correctly detected broker death + reconnected, but each outage burned ~10 s of full-tick-rate ECONNRESET retries against the wifi radio, fully stalling the runner during the outage window.  Recovery worked; runner-shape was violated for ~10 s per outage.
 
 ## Problem
 
@@ -78,7 +78,16 @@ Each of these currently calls the synchronous factory and must migrate to the co
 
 ## Validation history
 
-(Empty — phase 1 hasn't landed yet.)
+| Phase | Status | Commit(s) | Notes |
+|---|---|---|---|
+| 1.1 Connector base + CPython adapter + FakeSocketConnector | shipped | `2babeb68` | 4342 workspace tests / 95% cov / MP + CP green |
+| 1.2 MicroPython rp2 adapter | deferred | — | Skipped pending bake target on MP; not blocking phase 2 |
+| 1.3 CircuitPython socketpool adapter | shipped | `e1ca82fb` | Per-phase blocking is the substrate honest answer |
+| 2 chumicro_mqtt migration | shipped | (this commit) | `socket_factory` → `connector_factory`, `AWAITING_TRANSPORT` state, multi-tick connect via FakeSocketConnector |
+| 3 Bake-validate against A1+A2 | pending | — | Expected on CPython: <1 s recovery latency.  CP substrate-limited but ticks yield between phases |
+| 4 chumicro_requests migration | pending | — | Mechanical once phase 2 ships |
+| 5 chumicro_websockets migration | pending | — | Mechanical once phase 2 ships |
+| 6 chumicro_http_server | pending | — | Accept-side TLS analog; ADR scope may extend |
 
 ## What is not in scope
 

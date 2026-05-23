@@ -55,14 +55,24 @@ class ProtocolState:
 
     Transitions monotonically forward except after a fault::
 
-      DISCONNECTED -> CONNECTING -> CONNECTED -> DISCONNECTED
-                                              \\-> FAILED   -> DISCONNECTED
+      DISCONNECTED -> AWAITING_TRANSPORT -> CONNECTING -> CONNECTED
+                                                       \\-> FAILED -> AWAITING_TRANSPORT (self-heal)
+                                                                   -> DISCONNECTED
+                                          CONNECTED -> DISCONNECTED
+
+    ``AWAITING_TRANSPORT`` is when the underlying socket is being
+    brought up across multiple ticks by a :class:`SocketConnector`
+    (DNS / TCP / TLS handshake).  ``CONNECTING`` is the MQTT-protocol
+    phase: socket is up, CONNECT has been queued, waiting for CONNACK.
+    A client built with a pre-connected socket skips ``AWAITING_TRANSPORT``
+    and starts at ``CONNECTING`` directly.
 
     ``disconnect()`` is synchronous (DISCONNECT packet + close), so there
     is no intermediate "disconnecting" state to observe.
     """
 
     DISCONNECTED = "disconnected"
+    AWAITING_TRANSPORT = "awaiting_transport"
     CONNECTING = "connecting"
     CONNECTED = "connected"
     FAILED = "failed"
@@ -193,39 +203,39 @@ class MQTTClient:
         radio: object | None = None,
         ssl_context: object | None = None,
         socket: object | None = None,
-        socket_factory: object | None = None,
+        connector_factory: object | None = None,
     ) -> "MQTTClient":
         """Build an :class:`MQTTClient` from runtime config.
 
         Reads ``mqtt.broker.host`` / ``mqtt.broker.port`` (required when
-        no *socket* / *socket_factory* override), plus optional
+        no *socket* / *connector_factory* override), plus optional
         ``mqtt.client_id`` / ``mqtt.keep_alive_seconds`` / ``mqtt.username``
-        / ``mqtt.password``.  A *socket* or *socket_factory* override
+        / ``mqtt.password``.  A *socket* or *connector_factory* override
         bypasses the auto-built factory entirely.  Missing broker keys
         raise :class:`chumicro_config.MissingConfigKey`.
         """
-        if socket is None and socket_factory is None:
-            # Lazy import so users who pass their own socket / socket_factory
+        if socket is None and connector_factory is None:
+            # Lazy import so users who pass their own socket / connector_factory
             # don't pull chumicro_sockets into the deploy graph.  See
             # ``chumicro_mqtt.sockets_factory`` for the helper itself.
             try:
                 from chumicro_mqtt.sockets_factory import (  # noqa: PLC0415 - lazy
-                    chumicro_sockets_factory,
+                    chumicro_sockets_connector_factory,
                 )
             except ImportError as exception:
                 raise RuntimeError(
                     "chumicro_mqtt.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
-                    "not on the board) — pass socket_factory= or "
+                    "not on the board) — pass connector_factory= or "
                     "socket= explicitly.",
                 ) from exception
 
-            socket_factory = chumicro_sockets_factory(
+            connector_factory = chumicro_sockets_connector_factory(
                 config, radio=radio, ssl_context=ssl_context,
             )
         return cls(
             socket=socket,
-            socket_factory=socket_factory,
+            connector_factory=connector_factory,
             client_id=config.get("mqtt.client_id", "chumicro-mqtt"),
             keep_alive_seconds=config.get("mqtt.keep_alive_seconds", 60),
             username=config.get("mqtt.username"),
@@ -236,7 +246,7 @@ class MQTTClient:
         self,
         socket: object | None = None,
         *,
-        socket_factory: object | None = None,
+        connector_factory: object | None = None,
         client_id: str,
         root_topic: str | None = None,
         keep_alive_seconds: int = 60,
@@ -266,18 +276,22 @@ class MQTTClient:
                 See the user guide's "Bring your own transport" table
                 for the per-method contract.  The client takes
                 ownership.  :meth:`disconnect` closes it.  May be
-                ``None`` when *socket_factory* is provided.
-            socket_factory: Optional zero-arg callable returning an
-                object of the same shape as *socket*.  Used in two
-                paths: (1) when *socket* is ``None``, :meth:`connect`
-                invokes the factory to build the initial transport.
-                (2) when the client transitions to ``FAILED`` after a
-                wifi-drop / socket-death, the next ``handle()`` rebuilds
-                the socket and re-issues ``connect()`` automatically.
-                Without a factory, the caller must supply *socket* and
-                manage reconnect themselves.  Construction is always
-                side-effect free: the factory only fires from
-                ``connect()`` / self-heal, never from ``__init__``.
+                ``None`` when *connector_factory* is provided.
+            connector_factory: Optional zero-arg callable returning a
+                :class:`~chumicro_sockets.SocketConnector` — the
+                non-blocking connect state machine.  Used in two paths:
+                (1) when *socket* is ``None``, :meth:`connect` invokes
+                the factory to build the initial connector and enters
+                ``AWAITING_TRANSPORT``; subsequent ``handle()`` ticks
+                drive the connector through DNS / TCP / TLS without
+                blocking the runner.  (2) when the client transitions
+                to ``FAILED`` after a wifi-drop / socket-death, the
+                next ``handle()`` builds a fresh connector and re-enters
+                ``AWAITING_TRANSPORT``.  Without a factory, the caller
+                must supply *socket* and manage reconnect themselves.
+                Construction is always side-effect free: the factory
+                only fires from ``connect()`` / self-heal, never from
+                ``__init__``.
             client_id: MQTT client identifier.  Must be unique per broker.
                 Doubles as the per-device segment in the topic-prefix
                 scheme when *root_topic* is set.
@@ -347,10 +361,10 @@ class MQTTClient:
                 Defaults to that submodule (real clock).  Tests pass
                 ``FakeTicks`` from ``chumicro_timing.testing``.
         """
-        if socket is None and socket_factory is None:
+        if socket is None and connector_factory is None:
             raise ValueError(
                 "MQTTClient requires either a connected socket or a "
-                "socket_factory (or both — factory is used for self-heal "
+                "connector_factory (or both — factory is used for self-heal "
                 "after wifi-drop)."
             )
         if will_topic is not None and will_topic_raw is not None:
@@ -359,7 +373,8 @@ class MQTTClient:
                 "mutually exclusive — pass at most one."
             )
         self._socket = socket
-        self._socket_factory = socket_factory
+        self._connector_factory = connector_factory
+        self._connector = None
         if self._socket is not None:
             _force_non_blocking(self._socket)
         self._user_wants_connected = False
@@ -453,21 +468,31 @@ class MQTTClient:
     # ------------------------------------------------------------------
 
     def connect(self):
-        """Open the TCP socket (if needed) and queue a CONNECT packet.
+        """Begin the connect sequence — either bring up the transport via
+        the connector or queue CONNECT against the pre-built socket.
 
-        When the client was constructed with only a ``socket_factory``,
-        the factory is invoked here.  This is the first network I/O
-        the client does.  When the factory raises, the client
-        transitions to ``FAILED`` (``last_error`` carries the underlying
-        ``OSError``) instead of letting the exception propagate.  The
-        runner contract is to introspect ``state`` / ``last_error``,
-        not to wrap every ``connect()`` call in a try.
+        With a pre-built ``socket=`` (typical test idiom, or a caller
+        that already owns the connect): the MQTT CONNECT packet is
+        queued immediately and the state transitions to ``CONNECTING``.
 
-        After the socket is in hand, the MQTT CONNECT packet is queued
-        and the state transitions to ``CONNECTING``.  The actual MQTT
-        handshake completes on subsequent :meth:`handle` ticks.  Callers
-        loop ``while client.state in {DISCONNECTED, CONNECTING}: handle()``
-        or run under a Runner.
+        With a ``connector_factory=``: the factory is invoked to build
+        a :class:`~chumicro_sockets.SocketConnector`, the state
+        transitions to ``AWAITING_TRANSPORT``, and subsequent
+        :meth:`handle` ticks drive DNS / TCP / TLS without blocking the
+        runner.  When the connector reaches ``ready``, the socket is
+        promoted, the CONNECT packet is queued, and the state moves to
+        ``CONNECTING`` (all inside :meth:`handle`).  When the connector
+        fails, the state transitions to ``FAILED`` with ``last_error``
+        carrying the connector's error.
+
+        Factory errors raised synchronously from ``connector_factory()``
+        land as ``FAILED`` + ``last_error`` rather than propagating, so
+        the runner contract holds.  Self-heal retries on subsequent
+        ticks.
+
+        Callers loop ``while client.state not in
+        {CONNECTED, DISCONNECTED, FAILED}: handle()`` or run under a
+        Runner.
 
         Raises:
             MQTTError: Called in a non-DISCONNECTED state.
@@ -476,23 +501,29 @@ class MQTTClient:
             raise MQTTError(
                 f"connect() requires DISCONNECTED state, was {self.state}",
             )
+        self._user_wants_connected = True
         if self._socket is None:
-            # Without a pre-built socket, invoke the factory.  Factory
-            # errors land as ``FAILED`` + ``last_error`` rather than
-            # propagating, so the runner contract holds.  A follow-up
-            # tick (or the caller's reconnect strategy) can retry via
-            # self-heal.
             try:
-                new_socket = self._socket_factory()
+                self._connector = self._connector_factory()
             except OSError as factory_error:
                 self.last_error = MQTTError(
-                    f"socket factory failed: {factory_error}",
+                    f"connector factory failed: {factory_error}",
                 )
                 self.state = ProtocolState.FAILED
-                self._user_wants_connected = True
                 return
-            self._socket = new_socket
-            _force_non_blocking(self._socket)
+            self.state = ProtocolState.AWAITING_TRANSPORT
+            return
+        self._enqueue_connect_packet()
+        self.state = ProtocolState.CONNECTING
+
+    def _enqueue_connect_packet(self):
+        """Encode the CONNECT packet, append it to the tx queue, and
+        arm the CONNACK pending-response slot.
+
+        Called when the socket is already in hand — either at
+        :meth:`connect` time with a pre-built socket, or once the
+        connector reaches ``ready`` inside :meth:`handle`.
+        """
         packet = encode_connect(
             client_id=self._client_id,
             keep_alive_seconds=self._keep_alive_seconds,
@@ -511,8 +542,6 @@ class MQTTClient:
                 deadline_ticks=self._deadline(self._ack_timeout_ms),
             ),
         )
-        self.state = ProtocolState.CONNECTING
-        self._user_wants_connected = True
 
     def disconnect(self):
         """Queue a DISCONNECT packet, close the socket, mark DISCONNECTED.
@@ -521,17 +550,23 @@ class MQTTClient:
         DISCONNECTED state is a no-op (no extra ``on_disconnect`` fire,
         no socket re-close).  From CONNECTED / CONNECTING, attempts a
         best-effort DISCONNECT packet on the wire and then closes.
-        From FAILED, the socket is likely dead so the DISCONNECT
-        attempt is skipped; only the close + state transition happen.
-        ``on_disconnect`` fires exactly once on the
-        anything-to-DISCONNECTED transition.
+        From AWAITING_TRANSPORT, cancels the in-flight connector
+        (which closes any half-open socket); no DISCONNECT packet is
+        attempted because the MQTT layer never came up.  From FAILED,
+        the socket is likely dead so the DISCONNECT attempt is skipped;
+        only the close + state transition happen.  ``on_disconnect``
+        fires exactly once on the anything-to-DISCONNECTED transition.
 
         Best-effort: any exception during send/close is swallowed so
         the client always lands in a known DISCONNECTED state.
         """
         if self.state == ProtocolState.DISCONNECTED:
             return
-        if self.state != ProtocolState.FAILED:
+        if self.state == ProtocolState.AWAITING_TRANSPORT:
+            if self._connector is not None:
+                self._connector.cancel()
+                self._connector = None
+        elif self.state != ProtocolState.FAILED:
             try:
                 self._send_raw(PACKET_DISCONNECT)
             except Exception:  # noqa: BLE001 - disconnect is best-effort  # pragma: no cover - defensive
@@ -868,15 +903,19 @@ class MQTTClient:
 
     @property
     def io_socket(self):
-        """Underlying pollable socket while connected (or connecting), else ``None``.
+        """Underlying pollable socket while connected, connecting, or
+        bringing up transport, else ``None``.
 
-        Adapter wrappers from ``chumicro_sockets`` store the pollable on
-        ``_sock``; the property unwraps so ``Runner.wait`` registers the
-        object the runtime's stream-poll ioctl knows.  ``DISCONNECTED``
-        and ``FAILED`` return ``None`` even when a stale socket is
-        still held: the runner does not need to wake on a dead socket
-        before the self-heal in ``handle()`` swaps a fresh one in.
+        While in ``AWAITING_TRANSPORT`` this forwards to the connector's
+        in-flight pollable so ``Runner.wait`` parks correctly between
+        connect phases.  While in ``CONNECTING`` / ``CONNECTED`` it
+        unwraps the MQTT socket (adapter wrappers from
+        ``chumicro_sockets`` store the pollable on ``_sock``).
+        ``DISCONNECTED`` and ``FAILED`` return ``None`` so the runner
+        does not wake on a dead handle.
         """
+        if self.state == ProtocolState.AWAITING_TRANSPORT:
+            return self._connector.io_socket if self._connector is not None else None
         if self._socket is None:
             return None
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
@@ -885,16 +924,24 @@ class MQTTClient:
 
     @property
     def io_wants_read(self):
-        """``True`` while ``handle()`` would drain inbound packets.
+        """``True`` while ``handle()`` would consume inbound bytes.
 
-        Always true on a live connection: brokers send CONNACK / SUBACK
-        / PUBACK / PINGRESP / inbound PUBLISH at any time.
+        Live MQTT connections (``CONNECTING`` / ``CONNECTED``) always
+        want read — brokers send CONNACK / SUBACK / PUBACK / PINGRESP /
+        inbound PUBLISH at any time.  ``AWAITING_TRANSPORT`` forwards
+        to the connector (only the TLS-handshake phase consumes
+        inbound bytes).
         """
+        if self.state == ProtocolState.AWAITING_TRANSPORT:
+            return self._connector.io_wants_read if self._connector is not None else False
         return self.state in (ProtocolState.CONNECTING, ProtocolState.CONNECTED)
 
     @property
     def io_wants_write(self):
-        """``True`` when outbound bytes are queued for the broker."""
+        """``True`` when outbound bytes are queued (or a connect phase
+        needs writability)."""
+        if self.state == ProtocolState.AWAITING_TRANSPORT:
+            return self._connector.io_wants_write if self._connector is not None else False
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return False
         return len(self._tx_queue) > 0
@@ -905,17 +952,22 @@ class MQTTClient:
         Called by ``Runner.wait`` when ``ipoll`` reports an error or
         hangup on the socket this client registered.  Transitions to
         ``FAILED`` with ``last_error`` describing the event, so the
-        next ``handle()`` tick fires self-heal (rebuild socket via the
-        factory, re-issue connect).
+        next ``handle()`` tick fires self-heal (build a fresh connector,
+        re-enter AWAITING_TRANSPORT).  When the error fires during
+        AWAITING_TRANSPORT, the in-flight connector is cancelled before
+        the FAILED transition.
         """
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return
+        if self.state == ProtocolState.AWAITING_TRANSPORT and self._connector is not None:
+            self._connector.cancel()
+            self._connector = None
         self.last_error = MQTTError(
             f"socket error from runner.wait (poll eventmask 0x{eventmask:x})",
         )
         self.state = ProtocolState.FAILED
 
-    def next_deadline(self, now_ms):  # noqa: ARG002 - runner contract uses now_ms
+    def next_deadline(self, now_ms):
         """Earliest tick at which ``handle()`` must run even on a quiet socket.
 
         Returns the minimum across the keepalive timer
@@ -923,8 +975,12 @@ class MQTTClient:
         response's ack deadline, each in-flight QoS 1 publish's retry
         deadline, and the send timeout (when armed).  ``None`` when no
         deadline applies (the runner falls back to the next periodic-
-        task ``next_due_ms``).
+        task ``next_due_ms``).  ``AWAITING_TRANSPORT`` forwards to the
+        connector — which currently returns ``None`` (consumers wrap
+        with an outer deadline).
         """
+        if self.state == ProtocolState.AWAITING_TRANSPORT:
+            return self._connector.next_deadline(now_ms) if self._connector is not None else None
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return None
         ticks_diff = self._ticks.ticks_diff
@@ -957,14 +1013,20 @@ class MQTTClient:
         queued by the read, and any application packets enqueued
         between ticks).
 
-        When the client is in ``FAILED`` and a ``socket_factory`` is
+        When the client is in ``FAILED`` and a ``connector_factory`` is
         configured + the user originally called ``connect()``, this
-        tick attempts a self-heal: rebuild the socket via the factory,
-        reset internal queues, transition back to ``DISCONNECTED``,
-        and re-issue ``connect()``.  The factory failing (typically
-        because wifi is still down) leaves the client in ``FAILED``,
-        and the next tick retries, naturally rate-limited by the
-        runner's tick cadence.
+        tick attempts a self-heal: build a fresh connector and enter
+        ``AWAITING_TRANSPORT``.  Subsequent ticks drive the connector
+        through DNS / TCP / TLS without blocking the runner — exactly
+        the same path the initial :meth:`connect` takes.  Without a
+        factory the client stays in ``FAILED``.
+
+        ``AWAITING_TRANSPORT`` ticks call ``connector.tick(now_ms)``;
+        when the connector reaches ``ready`` the socket is promoted,
+        CONNECT is queued, and the state moves to ``CONNECTING``.
+        When the connector fails the state moves to ``FAILED`` with
+        ``last_error`` carrying the connector's error — self-heal
+        kicks in on the next tick.
 
         *now_ms* is the per-tick timestamp the runner captured once
         and passes to every registered service so they all see the
@@ -977,11 +1039,18 @@ class MQTTClient:
         the same.
         """
         if self.state == ProtocolState.FAILED:
-            if self._socket_factory is None or not self._user_wants_connected:
+            if self._connector_factory is None or not self._user_wants_connected:
                 return
             if not self._attempt_self_heal():
                 return
-            # Self-heal succeeded.  Fall through and tick the new connection.
+            # Self-heal succeeded — state is AWAITING_TRANSPORT.  Fall
+            # through to the connector-advance branch this same tick so
+            # the connector gets one tick of progress immediately.
+        if self.state == ProtocolState.AWAITING_TRANSPORT:
+            if not self._advance_connector(now_ms):
+                return
+            # Connector reached ready — state is CONNECTING with the
+            # CONNECT packet queued.  Fall through to drain it.
         if self.state == ProtocolState.DISCONNECTED:
             return
         try:
@@ -1003,15 +1072,17 @@ class MQTTClient:
             self.state = ProtocolState.FAILED
 
     def _attempt_self_heal(self):
-        """Rebuild the socket via ``socket_factory`` and re-issue connect.
+        """Reset transient state, build a fresh connector, enter AWAITING_TRANSPORT.
 
-        Best-effort: if the factory raises (typically because wifi is
-        still down) the client stays in ``FAILED`` and the next handle
-        tick retries.
+        Best-effort: if ``connector_factory()`` itself raises (typically
+        because wifi is still down) the client stays in ``FAILED`` and
+        the next handle tick retries.  The actual DNS / TCP / TLS work
+        happens across subsequent ticks in :meth:`_advance_connector`,
+        so this method does not block.
 
-        Returns ``True`` when self-heal succeeded and the client is
-        ready to tick (in ``CONNECTING``).  Returns ``False`` when the
-        factory failed and the client is still ``FAILED``.
+        Returns ``True`` when self-heal succeeded and the client is in
+        ``AWAITING_TRANSPORT``.  Returns ``False`` when building the
+        connector failed and the client is still ``FAILED``.
         """
         # Close the dead socket best-effort so we don't leak file descriptors
         # on long-running boards.
@@ -1020,15 +1091,7 @@ class MQTTClient:
                 self._socket.close()
         except OSError:  # pragma: no cover - defensive
             pass
-        try:
-            new_socket = self._socket_factory()
-        except OSError as factory_error:
-            self.last_error = MQTTError(
-                f"socket factory failed: {factory_error}",
-            )
-            return False
-        self._socket = new_socket
-        _force_non_blocking(self._socket)
+        self._socket = None
         # Reset transient state for the fresh connection.  Keep the
         # in-flight QoS 1 table intact when clean_session=False so a
         # broker that supports session resumption can pick up where we
@@ -1045,12 +1108,45 @@ class MQTTClient:
         if self._clean_session:
             self._in_flight = {}
             self._next_packet_id = 1
-        self.state = ProtocolState.DISCONNECTED
+        try:
+            self._connector = self._connector_factory()
+        except OSError as factory_error:
+            self.last_error = MQTTError(
+                f"connector factory failed: {factory_error}",
+            )
+            return False
+        self.state = ProtocolState.AWAITING_TRANSPORT
         self.last_error = None
-        # Re-issue connect: this transitions to CONNECTING and queues
-        # the CONNECT packet that the next _drain_tx_queue() flushes.
-        self.connect()
         return True
+
+    def _advance_connector(self, now_ms):
+        """Tick the connector one phase; promote socket when ``ready``.
+
+        Returns ``True`` when the connector reached ``ready`` this
+        tick — in which case the socket is promoted to ``self._socket``,
+        the CONNECT packet is enqueued, and ``state`` is now
+        ``CONNECTING`` (the caller falls through to drain CONNECT).
+
+        Returns ``False`` when the connector is still in flight (state
+        unchanged) or has failed (state is now ``FAILED``).
+        """
+        connector = self._connector
+        connector.tick(now_ms)
+        if connector.state == "ready":
+            self._socket = connector.socket
+            self._connector = None
+            _force_non_blocking(self._socket)
+            self._enqueue_connect_packet()
+            self.state = ProtocolState.CONNECTING
+            return True
+        if connector.state == "failed":
+            self.last_error = MQTTError(
+                f"connector failed: {connector.last_error}",
+            )
+            self._connector = None
+            self.state = ProtocolState.FAILED
+            return False
+        return False
 
     # ------------------------------------------------------------------
     # Internal: in-flight packet-id allocation

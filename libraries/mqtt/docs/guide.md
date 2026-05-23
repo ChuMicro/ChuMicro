@@ -131,21 +131,24 @@ A few platform realities:
 
 ## Wifi-drop self-heal
 
-Pass a `socket_factory` callable instead of a bare socket and the client will rebuild its socket automatically after a wifi-drop / socket-death:
+Pass a `connector_factory` callable instead of a bare socket and the client will rebuild its socket automatically after a wifi-drop / socket-death — without blocking the runner during DNS / TCP / TLS:
 
 ```python
-def make_socket():
-    sock = tcp_client_socket("broker.example.com", 1883, radio=wifi.radio)
-    sock.setblocking(False)
-    return sock
+from chumicro_sockets import tcp_client_connector
 
-client = MQTTClient(socket_factory=make_socket, client_id="my-thing")
+def make_connector():
+    return tcp_client_connector("broker.example.com", 1883, radio=wifi.radio)
+
+client = MQTTClient(connector_factory=make_connector, client_id="my-thing")
 client.connect()
 # … socket dies mid-session …
-# Next handle() after FAILED rebuilds the socket and re-issues connect().
+# Next handle() after FAILED enters AWAITING_TRANSPORT; subsequent ticks
+# drive a fresh connector through DNS / TCP / TLS one phase per tick.
 ```
 
 Without a factory the client transitions to `FAILED` on socket death and stays there until the caller manually tears down + reconstructs.
+
+The factory is also the recommended way to wire up the **initial** connect: the runner is not blocked for the round-trip, and the same code path serves both initial-connect and reconnect.  `MQTTClient.from_config(...)` builds the connector factory for you from `mqtt.broker.host` / `mqtt.broker.port` (and `ssl_context=` for TLS).
 
 ## Bring your own transport
 
@@ -164,14 +167,13 @@ Without a factory the client transitions to `FAILED` on socket death and stays t
 # Example: stdlib socket on CPython for a test or desktop demo.
 import socket
 
-def make_socket():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(("broker.example.com", 1883))
-    sock.setblocking(False)
-    return sock
-
-client = MQTTClient(socket_factory=make_socket, client_id="desktop-demo")
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(("broker.example.com", 1883))
+sock.setblocking(False)
+client = MQTTClient(sock, client_id="desktop-demo")
 ```
+
+This pre-built-socket form is the right shape for one-shot scripts or tests where the caller already owns the connect.  The runner-shape (no synchronous network I/O from a tick) only matters when the client lives inside a runner — and there the `connector_factory` form above is what you want.
 
 The library has no `isinstance` checks against `chumicro_sockets` types — the contract is the four methods above.  Runtime errors surface at first call, not at construction time, so a misshaped object fails on the first `recv_into` / `send` rather than silently misbehaving.
 
