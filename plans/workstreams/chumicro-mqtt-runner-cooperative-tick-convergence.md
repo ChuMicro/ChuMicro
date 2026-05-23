@@ -99,11 +99,11 @@ The reference satisfies all five against multi-week uptime tests.
 
 The defects don't all need to land together.  Suggested order to maximize signal-per-change:
 
-1. **`recv == 0` ⇒ FAILED** (HIGH, narrowest, one-line behavioural fix at `client.py:1060-1061`).  Bake-validate against broker graceful-disconnect from `plans/workstreams/mqtt-negative-testing-suite.md`.  Lowest-risk first step; per the handoff's "riskiest assumption" bullet, if even this is harder than expected, the bigger refactoring premise is shaky.
-2. **Reorder `handle()`: deadlines before I/O** (HIGH, behavioural-only).  Move `_check_deadlines` and `_check_keepalive` to the top of the try-block; keep TX drain at the end.  Bake-validate against NAT silent-drop.
+1. **`recv == 0` ⇒ FAILED** — **LANDED** as commit `bb702f64` (2026-05-23).  Required a paired correction to `chumicro_sockets.testing.FakeSocket` (commit `f91374fe`) so the test fake's `recv_into` matches real non-blocking socket semantics (EAGAIN on no-data, 0 only on FIN).  Regression test `test_peer_close_marks_failed` exercises the fix via the new `simulate_peer_close()` method.  Pending bake validation against the broker-graceful-disconnect test from `mqtt-negative-testing-suite.md`.
+2. **Reorder `handle()`: deadlines before I/O** — **LANDED** as commit `5fe9182d` (2026-05-23).  New order is `_check_deadlines → _check_keepalive → _read_inbound → _drain_tx_queue`, which also picks up MEDIUM divergence N (recv before send within the tick).  Pending bake validation against NAT silent-drop.
 3. **Send timeout (`_waiting_to_send_timeout`)** (HIGH, adds state + an entry in `next_deadline`).  Needs an ADR-level decision on what "no POLLOUT for X seconds" means in the runner contract.
 4. **POLLERR / POLLHUP surfacing** (HIGH, cross-library — runner + mqtt).  Needs runner API addition.  ADR scope.
-5. **Recv-first ordering, suppress-send-while-busy, one-chunk-per-tick** (MEDIUM, deeper refactor of `handle()`).  Land after the high-severity fixes have a green bake.
+5. **Remaining MEDIUM items: suppress-send-while-busy, one-chunk-per-tick, `_packet_count_that_must_send` discipline** (deeper refactor of `handle()`).  Land after the high-severity fixes have a green bake.
 6. **Self-heal cost sandboxing, idempotent `disconnect`, will-after-construct, etc.** (LOW polish).
 
 ## What is not in scope
