@@ -785,6 +785,56 @@ class HttpServer:
         """
         return True
 
+    # ------------------------------------------------------------------
+    # Runner I/O interest (read by ``Runner.wait``)
+    # ------------------------------------------------------------------
+    #
+    # HttpServer has more than one socket (the listener plus N in-flight
+    # connections), but the runner contract registers a single socket
+    # per service.  Pragmatic split: expose the listener as ``io_socket``
+    # so the loop wakes on accept-readiness; in-flight connection I/O
+    # rides on the periodic ``handle()`` tick and the ``next_deadline``
+    # report.  This matches the workstream's audit: the accept loop is
+    # the loop-wake-worthy source; per-connection sends complete in 1-3
+    # ticks for typical small responses.
+
+    @property
+    def io_socket(self):
+        """The listener socket once opened (``handle()`` lazy-opens it
+        on first tick), else ``None``."""
+        if self._listener is None:
+            return None
+        return getattr(self._listener, "_sock", self._listener)
+
+    @property
+    def io_wants_read(self):
+        """``True`` whenever the listener is open: an inbound accept can
+        arrive at any time."""
+        return self._listener is not None
+
+    @property
+    def io_wants_write(self):
+        """Always ``False``: the listener is not a write target.  In-
+        flight connection sends drain during the per-tick advance
+        rather than via poll readiness — see the section header above.
+        """
+        return False
+
+    def next_deadline(self, now_ms):  # noqa: ARG002 — runner contract
+        """Earliest per-connection deadline across in-flight connections.
+
+        Returns ``None`` when no connection is in flight.  Lets
+        ``Runner.wait`` shorten its central poll so the loop wakes for
+        request-timeout enforcement even on a quiet listener.
+        """
+        ticks_diff = self._ticks.ticks_diff
+        nearest = None
+        for connection in self._connections:
+            candidate = connection._deadline_ticks
+            if nearest is None or ticks_diff(candidate, nearest) < 0:
+                nearest = candidate
+        return nearest
+
     def handle(self, now_ms):
         """One tick of progress: lazy-open listener, accept, advance conns."""
         if self._listener is None:
