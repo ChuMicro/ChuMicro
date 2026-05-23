@@ -81,3 +81,11 @@ chumicro-dev-config.toml
 # workflow.
 .envrc
 
+# Firmware blobs.  `chumicro-deploy flash-firmware` and friends default
+# to `./firmware.bin` for the downloaded image; the file is build /
+# board artifact, not source.  Use `.scratch/` for one-off testing or
+# pass an explicit destination to keep blobs out of the working tree.
+/firmware.bin
+firmware-*.bin
+*.uf2
+

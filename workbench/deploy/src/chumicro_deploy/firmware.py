@@ -209,7 +209,12 @@ def _download_firmware(
         ) from error
 
     try:
-        total_bytes_header = response.getheader("Content-Length")  # type: ignore[attr-defined]
+        # file:// URLs return a response object without `getheader`; in
+        # that case we skip the size-known progress branch.
+        total_bytes_header = (
+            response.getheader("Content-Length")  # type: ignore[attr-defined]
+            if hasattr(response, "getheader") else None
+        )
         total_bytes = int(total_bytes_header) if total_bytes_header else None
         bytes_downloaded = 0
         with destination.open("wb") as output_file:
@@ -624,6 +629,15 @@ def _enter_esp32_rom_bootloader(
     if "cu.usbmodem01" in device.address or device.address.endswith("usbmodem01"):
         return device.address
 
+    # When the runtime CDC is gone and a usbmodem01-style port is
+    # already present, the user put the board in bootloader before
+    # invoking us.  Return that port without trying to dispatch a
+    # reset through the now-vanished runtime port.
+    if device.address not in baseline:
+        for port in baseline:
+            if "cu.usbmodem01" in port or port.endswith("usbmodem01"):
+                return port
+
     # Discard the dispatch result, because the serial-port baseline
     # poll below is the authoritative success signal regardless of
     # what the dispatch reports.
@@ -702,7 +716,19 @@ def _flash_firmware_esptool(
             messages carry recovery guidance (hold GPIO0 / press BOOT
             while re-plugging).
     """
-    esptool_binary = shutil.which("esptool") or shutil.which("esptool.py")
+    # Prefer ``esptool.py`` (esptool v4.x) over ``esptool`` (v5.x).
+    # esptool v5 has a regression with the ESP32-S2 USB-OTG ROM
+    # bootloader on macOS where the chip drops off the USB bus during
+    # port configuration, surfacing as "Could not configure port:
+    # Device not configured" before any flash command runs.  v4.x in
+    # the IDF python env still works.  ``CHUMICRO_ESPTOOL_BINARY`` is
+    # an env-var escape hatch for boards or hosts where the v4/v5
+    # preference should be inverted.
+    esptool_binary = (
+        os.environ.get("CHUMICRO_ESPTOOL_BINARY")
+        or shutil.which("esptool.py")
+        or shutil.which("esptool")
+    )
     if esptool_binary is None:
         raise FlashFirmwareError(
             "esptool not found on PATH.  Install it with "
@@ -736,6 +762,11 @@ def _flash_firmware_esptool(
                 f"while re-plugging the USB cable, then retry."
             )
 
+    # ``--before no_reset`` tells esptool the chip is already in ROM
+    # bootloader and to skip the DTR/RTS reset dance on port open.  On
+    # ESP32-S2 boards with native USB-OTG, the default DTR/RTS pulses
+    # can knock an already-in-bootloader chip back out of bootloader
+    # before esptool finishes its sync.
     if erase_flash:
         _report(on_progress, 0.0, f"esptool erase-flash via {esptool_binary}")
         _invoke(
@@ -743,6 +774,7 @@ def _flash_firmware_esptool(
                 esptool_binary,
                 "--port", device.address,
                 "--baud", "460800",
+                "--before", "no_reset",
                 "--after", "no_reset",
                 "erase-flash",
             ],
@@ -764,6 +796,7 @@ def _flash_firmware_esptool(
             esptool_binary,
             "--port", device.address,
             "--baud", "460800",
+            "--before", "no_reset",
             "write-flash", flash_offset, str(firmware_path),
         ],
         step_name="write-flash",
