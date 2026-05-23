@@ -8,12 +8,12 @@
 
 ```python
 from chumicro_websockets import WebSocketClient, WebSocketState
-from chumicro_websockets.sockets_factory import chumicro_sockets_factory
+from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_timing import ticks_ms
 from chumicro_wifi import wifi
 
 client = WebSocketClient(
-    connection_factory=chumicro_sockets_factory(radio=wifi.adapter.radio),
+    connector_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
 )
 client.on_text = lambda text: print(f"got: {text}")
 client.on_close = lambda code, reason: print(f"closed {code} {reason}")
@@ -107,7 +107,7 @@ Same shape as the client's callbacks; semantically identical.
 
 ## Bring your own transport
 
-`WebSocketClient` and `WebSocketServer` don't care which library produces their sockets.  The `connection_factory` you pass to the client (and the `listener` you hand to the server) return any object exposing the four-method TCP contract:
+`WebSocketClient` and `WebSocketServer` don't care which library produces their sockets.  The `connector_factory` you pass to the client (and the `listener` you hand to the server) return any object matching the `SocketConnector` contract on the client side or the listener contract on the server side.  The connector advances DNS / TCP / TLS across multiple ticks; once `connector.state == "ready"`, the underlying socket must expose the four-method TCP contract:
 
 | Method | Contract |
 |---|---|
@@ -116,19 +116,7 @@ Same shape as the client's callbacks; semantically identical.
 | `close() -> None` | Releases the connection. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.tcp_client_socket` / `tls_client_socket` is one valid producer.  Stdlib `socket.socket` after `setblocking(False)` is another:
-
-```python
-import socket as stdlib_socket
-
-def make_connection(host, port, use_tls):
-    sock = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_STREAM)
-    sock.connect((host, port))
-    sock.setblocking(False)
-    return sock
-
-client = WebSocketClient(connection_factory=make_connection)
-```
+`chumicro_sockets.tcp_client_connector` / `tls_client_connector` is one valid producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`) — any tick-driven state machine with that surface works as a custom factory.
 
 If you supply your own factory and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
 
@@ -184,7 +172,7 @@ MCU RAM, 4 MB flash):
 `wss://` client connections reuse `chumicro_sockets.tls_client_socket` + `chumicro_sockets.ssl_context_with_ca`, with the same live-board constraints HTTPS clients have:
 
 - **Device RTC must be set before `wss://`.**  mbedTLS rejects every cert as "validity starts in the future" if the RTC is at boot default.  Use [`chumicro-ntp`](https://chumicro.github.io/ChuMicro/ntp/stable/) to set the clock first.
-- **CA pinning is required.**  Build the `ssl_context` with `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through `chumicro_sockets_factory(radio=..., ssl_context=ctx)`.
+- **CA pinning is required.**  Build the `ssl_context` with `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through `chumicro_sockets_connector_factory(radio=..., ssl_context=ctx)`.
 - **Pi Pico W needs flash deploy mode for `wss://`** — RAM-mode leaves <50 KB free for the mbedTLS handshake.
 
 ## Per-tick knobs

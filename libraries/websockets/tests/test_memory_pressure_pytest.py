@@ -33,6 +33,7 @@ import gc
 import struct
 import tracemalloc
 
+from chumicro_sockets.testing import FakeSocketConnector
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     OPCODE_BINARY,
@@ -52,7 +53,9 @@ from chumicro_websockets.testing import FakeConnection, FakeListener
 
 def _make_client(socket: FakeConnection, clock: FakeTicks) -> WebSocketClient:
     return WebSocketClient(
-        connection_factory=lambda *_args, **_kwargs: socket,
+        connector_factory=lambda *_args, **_kwargs: FakeSocketConnector(
+            actions=["dns_ok", "tcp_ok"], socket=socket,
+        ),
         ticks=clock,
     )
 

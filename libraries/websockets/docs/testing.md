@@ -12,6 +12,7 @@ Bidirectional in-memory pipe satisfying the `TCPClientSocket` shape:
 
 ```python
 from chumicro_timing.testing import FakeTicks
+from chumicro_sockets.testing import FakeSocketConnector
 from chumicro_websockets import WebSocketClient
 from chumicro_websockets.testing import FakeConnection
 
@@ -19,12 +20,16 @@ def test_client_handshake():
     socket = FakeConnection()
     clock = FakeTicks()
     client = WebSocketClient(
-        connection_factory=lambda *_args, **_kwargs: socket,
+        connector_factory=lambda *_args, **_kwargs: FakeSocketConnector(
+            actions=["dns_ok", "tcp_ok"], socket=socket,
+        ),
         ticks=clock,
     )
     client.connect("ws://example.com/")
+    # First two ticks drive the connector; third sends the upgrade request.
     client.handle(clock.ticks_ms())
-    # Inspect what the client wrote.
+    client.handle(clock.ticks_ms())
+    client.handle(clock.ticks_ms())
     assert b"GET / HTTP/1.1\r\n" in socket.peek_outbound()
 ```
 
@@ -83,7 +88,9 @@ from chumicro_websockets.testing import FakeConnection
 
 clock = FakeTicks()
 client = WebSocketClient(
-    connection_factory=lambda *_args, **_kwargs: FakeConnection(),
+    connector_factory=lambda *_args, **_kwargs: FakeSocketConnector(
+        actions=["dns_ok", "tcp_ok"], socket=FakeConnection(),
+    ),
     handshake_timeout_ms=1000,
     ticks=clock,
 )

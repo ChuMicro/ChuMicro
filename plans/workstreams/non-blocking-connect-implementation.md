@@ -86,7 +86,7 @@ Each of these currently calls the synchronous factory and must migrate to the co
 | 2 chumicro_mqtt migration | shipped | (this commit) | `socket_factory` → `connector_factory`, `AWAITING_TRANSPORT` state, multi-tick connect via FakeSocketConnector |
 | 3 Bake-validate against A1 (broker hard-kill + restart) on Pi Pico W CP | shipped | (this commit) | Pre-Phase-2 ref: ~10 s of full-tick-rate ECONNRESET stall.  Post-Phase-2: max_tick_ms 63 ms during the 10 s window containing the outage + recovery — ~160× drop in worst-case runner-stall time.  Bake metrics: 286 sent / 286 PUBACKs / 0 in-flight leak / 0 pending leak / 0 tx_queue leak / 0 inbound gaps / heap flat across the 5-min cycle.  31 awaiting_transport → failed cycles during the broker-down window — each one yielded to the runner instead of tight-looping the wifi radio.  3 outbound publishes lost during the outage (expected with clean_session=True).  Logs: `.scratch/bake-phase3-a1-{board,mac}.log` |
 | 4 chumicro_requests migration | shipped | (this commit) | `connection_factory` → `connector_factory`, `AWAITING_TRANSPORT` state, FakeSocketConnector test idiom mirrors phase 2 |
-| 5 chumicro_websockets migration | pending | — | Mechanical once phase 2 ships |
+| 5 chumicro_websockets migration | shipped | (this commit) | `connection_factory` → `connector_factory`, new `AWAITING_TRANSPORT` ConnectingPhase, FakeSocketConnector test idiom; same shape as Phase 4 |
 | 6 chumicro_http_server | pending | — | Accept-side TLS analog; ADR scope may extend |
 
 ## What is not in scope

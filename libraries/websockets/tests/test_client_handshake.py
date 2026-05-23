@@ -5,6 +5,7 @@ import select
 
 from chumicro_runner import Runner
 from chumicro_runner.testing import FakePoller
+from chumicro_sockets.testing import FakeSocketConnector
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
@@ -27,14 +28,15 @@ from chumicro_websockets.testing import FakeConnection
 FakeSocket = FakeConnection
 
 def _make_factory(socket: FakeConnection, *, expected_use_tls: bool | None = None):
-    """Connection-factory closure that records its args + returns *socket*."""
+    """Connector-factory closure that records its args + returns a
+    scripted ``FakeSocketConnector`` wrapping *socket*."""
     record = {"calls": []}
 
     def factory(host, port, use_tls):
         record["calls"].append((host, port, use_tls))
         if expected_use_tls is not None:
             assert use_tls is expected_use_tls
-        return socket
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
     return factory, record
 
@@ -48,9 +50,10 @@ def _drive_handshake(
     Returns the request bytes the client wrote so callers can assert on
     them (``Sec-WebSocket-Key`` etc.).  Leaves the client OPEN.
     """
-    # Drain handshake send.
+    # Drain AWAITING_TRANSPORT (connector ticks) + SENDING_HANDSHAKE.
     while client.state == WebSocketState.CONNECTING and (
-        client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
+        client._connecting_phase
+        in (ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE)
     ):
         client.handle(clock.ticks_ms())
     request_bytes = socket.read_outbound()
@@ -83,7 +86,7 @@ def _make_client(
         clock = FakeTicks()
     factory, record = _make_factory(socket)
     client = WebSocketClient(
-        connection_factory=factory,
+        connector_factory=factory,
         ticks=clock,
         **kwargs,
     )
@@ -128,7 +131,7 @@ class TestConnect:
         clock = FakeTicks()
         factory, record = _make_factory(socket, expected_use_tls=True)
         client = WebSocketClient(
-            connection_factory=factory,
+            connector_factory=factory,
             ticks=clock,
         )
         client.connect("wss://secure.example.com/")
@@ -160,7 +163,9 @@ class TestHandshakeSend:
     def test_handle_pushes_request_bytes(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
-        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())  # dns_ok
+        client.handle(clock.ticks_ms())  # tcp_ok → ready → SENDING_HANDSHAKE
+        client.handle(clock.ticks_ms())  # send handshake bytes
         outbound = socket.peek_outbound()
         assert outbound.startswith(b"GET / HTTP/1.1\r\n")
         assert b"Upgrade: websocket\r\n" in outbound
@@ -171,11 +176,13 @@ class TestHandshakeSend:
         socket.send_chunk_cap = 16  # only 16 bytes per send
         client, _socket, clock, _ = _make_client(socket=socket)
         client.connect("ws://example.com/")
-        # Multiple handles needed to drain handshake.
+        # Multiple handles needed to drain AWAITING_TRANSPORT + handshake send.
         seen_phases = []
         for _tick in range(40):
             seen_phases.append(client._connecting_phase)
-            if client._connecting_phase != ConnectingPhase.SENDING_HANDSHAKE:
+            if client._connecting_phase not in (
+                ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE,
+            ):
                 break
             client.handle(clock.ticks_ms())
         assert client._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE
@@ -185,6 +192,10 @@ class TestHandshakeSend:
         socket.raise_on_send = OSError(11, "would block")
         client, _socket, clock, _ = _make_client(socket=socket)
         client.connect("ws://example.com/")
+        # First two ticks drive the connector through dns_ok + tcp_ok;
+        # third tick attempts the handshake send and hits EAGAIN.
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
         # State unchanged.  No bytes were consumed.
         assert client.state == WebSocketState.CONNECTING
@@ -197,6 +208,9 @@ class TestHandshakeSend:
         closes = []
         client.on_close = lambda code, reason: closes.append((code, reason))
         client.connect("ws://example.com/")
+        # Connector phases first, then the send raises a fatal OSError.
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CLOSED
         assert isinstance(client.last_error, WebSocketHandshakeError)
@@ -217,7 +231,9 @@ class TestHandshakeReceive:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         # Drain SEND phase first.
-        while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
+        while client._connecting_phase in (
+            ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE,
+        ):
             client.handle(clock.ticks_ms())
         socket.read_outbound()
         socket.feed_inbound(
@@ -230,7 +246,9 @@ class TestHandshakeReceive:
     def test_peer_eof_mid_handshake_is_failure(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
-        while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
+        while client._connecting_phase in (
+            ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE,
+        ):
             client.handle(clock.ticks_ms())
         socket.close_inbound()
         client.handle(clock.ticks_ms())
@@ -241,7 +259,9 @@ class TestHandshakeReceive:
     def test_eagain_during_receive_keeps_state(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
-        while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
+        while client._connecting_phase in (
+            ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE,
+        ):
             client.handle(clock.ticks_ms())
         # No inbound bytes, no EOF.  recv_into raises EAGAIN.
         client.handle(clock.ticks_ms())
@@ -255,7 +275,9 @@ class TestHandshakeReceive:
         client.on_text = lambda text: texts.append(text)
         client.connect("ws://example.com/")
         # Drive handshake send.
-        while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
+        while client._connecting_phase in (
+            ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE,
+        ):
             client.handle(clock.ticks_ms())
         request = socket.read_outbound()
         parser = HandshakeRequestParser()
@@ -279,6 +301,9 @@ class TestHandshakeReceive:
             "ws://example.com/",
             extra_headers={"Origin": "https://app.example.com"},
         )
+        # Drive past AWAITING_TRANSPORT + send the handshake bytes.
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
         outbound = socket.peek_outbound()
         assert b"Origin: https://app.example.com\r\n" in outbound
@@ -308,8 +333,12 @@ class TestRunnerReactorContract:
         assert client.io_socket is None
 
     def test_io_wants_write_during_sending_handshake(self):
-        client, _socket, _clock, _ = _make_client()
+        client, _socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
+        # Drive past AWAITING_TRANSPORT (dns_ok + tcp_ok) so the
+        # client lands in SENDING_HANDSHAKE.
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         assert client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
         assert client.io_wants_write is True
         assert client.io_wants_read is False
@@ -318,7 +347,9 @@ class TestRunnerReactorContract:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         # Drain the upgrade-request send.
-        while client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
+        while client._connecting_phase in (
+            ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE,
+        ):
             client.handle(clock.ticks_ms())
         assert client._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE
         assert client.io_wants_read is True
@@ -363,19 +394,23 @@ class TestRunnerReactorContract:
         assert client.next_deadline(clock.ticks_ms()) is None
 
     def test_runner_wait_registers_socket_for_handshake_then_open(self):
-        """End-to-end: a connect() registers POLLOUT during SENDING_HANDSHAKE,
-        modifies to POLLIN once the request bytes drain, and OPEN stays
-        registered for POLLIN."""
+        """End-to-end: connect() registers POLLOUT during AWAITING_TRANSPORT
+        (the connector's TCP-connect phase wants writability), keeps it
+        through SENDING_HANDSHAKE, modifies to POLLIN once the request
+        bytes drain, and OPEN stays registered for POLLIN."""
         socket = FakeSocket()
         clock = FakeTicks()
         poller = FakePoller()
         runner = Runner(ticks=clock, poller=poller)
         factory, _record = _make_factory(socket)
-        client = WebSocketClient(connection_factory=factory, ticks=clock)
+        client = WebSocketClient(connector_factory=factory, ticks=clock)
         runner.add(client)
 
         client.connect("ws://example.com/")
-        # First wait: SENDING_HANDSHAKE -> POLLOUT registered.
+        # Connector starts in awaiting_dns where io_wants_write is
+        # False; one tick advances to awaiting_tcp where the runner
+        # parks on POLLOUT.
+        runner.tick()
         runner.wait(clock.ticks_ms())
         first_marks = poller.register_calls
         assert any(

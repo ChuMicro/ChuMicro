@@ -1,6 +1,7 @@
 """WebSocket client tests (chumicro_websockets.client): auto-ping,
 recv errors, client edges, request shape, from_config."""
 
+from chumicro_sockets.testing import FakeSocketConnector
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
     CLOSE_NORMAL,
@@ -24,14 +25,15 @@ from chumicro_websockets.testing import FakeConnection
 FakeSocket = FakeConnection
 
 def _make_factory(socket: FakeConnection, *, expected_use_tls: bool | None = None):
-    """Connection-factory closure that records its args + returns *socket*."""
+    """Connector-factory closure that records its args + returns a
+    scripted ``FakeSocketConnector`` wrapping *socket*."""
     record = {"calls": []}
 
     def factory(host, port, use_tls):
         record["calls"].append((host, port, use_tls))
         if expected_use_tls is not None:
             assert use_tls is expected_use_tls
-        return socket
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
     return factory, record
 
@@ -40,14 +42,15 @@ def _drive_handshake(
     socket: FakeSocket,
     clock: FakeTicks,
 ) -> bytes:
-    """Push ticks until SENDING_HANDSHAKE finishes, then craft + feed a 101.
+    """Push ticks until AWAITING_TRANSPORT + SENDING_HANDSHAKE finish, then craft + feed a 101.
 
     Returns the request bytes the client wrote so callers can assert on
     them (``Sec-WebSocket-Key`` etc.).  Leaves the client OPEN.
     """
-    # Drain handshake send.
+    # Drain AWAITING_TRANSPORT (connector ticks) + SENDING_HANDSHAKE.
     while client.state == WebSocketState.CONNECTING and (
-        client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
+        client._connecting_phase
+        in (ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE)
     ):
         client.handle(clock.ticks_ms())
     request_bytes = socket.read_outbound()
@@ -80,7 +83,7 @@ def _make_client(
         clock = FakeTicks()
     factory, record = _make_factory(socket)
     client = WebSocketClient(
-        connection_factory=factory,
+        connector_factory=factory,
         ticks=clock,
         **kwargs,
     )
@@ -208,6 +211,10 @@ class TestClientEdges:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         socket.send = lambda _data: 0
+        # Drive past AWAITING_TRANSPORT (dns_ok + tcp_ok), then the
+        # third tick attempts the send and gets sent==0 back.
+        client.handle(clock.ticks_ms())
+        client.handle(clock.ticks_ms())
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.CONNECTING
         assert client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
@@ -248,7 +255,7 @@ class TestClientFromConfig:
         factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
         client = WebSocketClient.from_config(
             {"websockets.client.max_message_bytes": 4096},
-            connection_factory=factory,
+            connector_factory=factory,
         )
         assert client._max_message_bytes == 4096  # noqa: SLF001
 
@@ -262,7 +269,7 @@ class TestClientFromConfig:
         from chumicro_websockets._wire import DEFAULT_MAX_MESSAGE_BYTES
         sock = FakeSocket()
         factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
-        client = WebSocketClient.from_config({}, connection_factory=factory)
+        client = WebSocketClient.from_config({}, connector_factory=factory)
         assert client._max_message_bytes == DEFAULT_MAX_MESSAGE_BYTES  # noqa: SLF001
 
     def test_runtime_config_wrapper_works_too(self) -> None:
@@ -273,7 +280,7 @@ class TestClientFromConfig:
         config = RuntimeConfig(
             {"websockets.client.max_message_bytes": 8192},
         )
-        client = WebSocketClient.from_config(config, connection_factory=factory)
+        client = WebSocketClient.from_config(config, connector_factory=factory)
         assert client._max_message_bytes == 8192  # noqa: SLF001
 
     def test_connect_url_not_consumed_by_from_config(self) -> None:
@@ -285,17 +292,17 @@ class TestClientFromConfig:
         # not call connect or otherwise act on it.
         client = WebSocketClient.from_config(
             {"websockets.client.connect_url": "ws://ignored.test/"},
-            connection_factory=factory,
+            connector_factory=factory,
         )
         assert client.url == ""
         assert not client._connect_called  # noqa: SLF001
 
-    def test_explicit_connection_factory_bypasses_auto_factory(self) -> None:
-        """Passing connection_factory= skips the chumicro_sockets wiring."""
+    def test_explicit_connector_factory_bypasses_auto_factory(self) -> None:
+        """Passing connector_factory= skips the chumicro_sockets wiring."""
         sock = FakeSocket()
         factory = lambda host, port, use_tls: sock  # noqa: ARG005,E731
-        client = WebSocketClient.from_config({}, connection_factory=factory)
-        assert client._connection_factory is factory  # noqa: SLF001
+        client = WebSocketClient.from_config({}, connector_factory=factory)
+        assert client._connector_factory is factory  # noqa: SLF001
 
     def test_skipped_factory_module_raises_runtime_error(self) -> None:
         """When ``chumicro_websockets.sockets_factory`` is excluded via
@@ -318,7 +325,7 @@ class TestClientFromConfig:
             try:
                 WebSocketClient.from_config({})
             except RuntimeError as exception:
-                assert "connection_factory=" in str(exception)
+                assert "connector_factory=" in str(exception)
                 assert "__chumicro_skip_factories__" in str(exception)
             else:
                 raise AssertionError("expected RuntimeError")
@@ -330,26 +337,26 @@ class TestClientFromConfig:
 
     def test_default_factory_threads_radio_and_ssl_context(self) -> None:
         """When no connection_factory is passed, ``from_config`` builds
-        one via ``chumicro_websockets.sockets_factory.chumicro_sockets_factory``
+        one via ``chumicro_websockets.sockets_factory.chumicro_sockets_connector_factory``
         with the radio + ssl_context kwargs threaded through."""
         import chumicro_websockets.sockets_factory as sf
 
         captured: dict = {}
         sentinel_factory = lambda host, port, use_tls: FakeSocket()  # noqa: ARG005,E731
 
-        def fake_chumicro_sockets_factory(*, radio=None, ssl_context=None):
+        def fake_chumicro_sockets_connector_factory(*, radio=None, ssl_context=None):
             captured["radio"] = radio
             captured["ssl_context"] = ssl_context
             return sentinel_factory
 
-        original = sf.chumicro_sockets_factory
-        sf.chumicro_sockets_factory = fake_chumicro_sockets_factory
+        original = sf.chumicro_sockets_connector_factory
+        sf.chumicro_sockets_connector_factory = fake_chumicro_sockets_connector_factory
         try:
             client = WebSocketClient.from_config(
                 {}, radio="fake-radio", ssl_context="fake-ctx",
             )
         finally:
-            sf.chumicro_sockets_factory = original
+            sf.chumicro_sockets_connector_factory = original
 
         assert captured == {"radio": "fake-radio", "ssl_context": "fake-ctx"}
-        assert client._connection_factory is sentinel_factory  # noqa: SLF001
+        assert client._connector_factory is sentinel_factory  # noqa: SLF001
