@@ -363,3 +363,118 @@ class FakeUDPSocket:
     def _raise_if_closed(self) -> None:
         if self._closed:
             raise OSError(9, "socket closed")
+
+
+class FakeSocketConnector:
+    """Scriptable test double for :class:`SocketConnector`.
+
+    Same observable surface as the real connector — ``state``,
+    ``socket``, ``last_error``, ``io_*``, ``check`` / ``handle`` /
+    ``tick`` / ``next_deadline`` / ``cancel`` — but transitions are
+    driven by an in-test script instead of real network I/O.
+
+    Construct with a list of step actions; each call to ``tick`` (or
+    ``handle``) consumes one action.  Actions are short strings:
+
+    * ``"dns_ok"`` — ``awaiting_dns`` → ``awaiting_tcp``.
+    * ``"tcp_pending"`` — stay in ``awaiting_tcp`` (simulates an
+      EINPROGRESS round-trip).
+    * ``"tcp_ok"`` — ``awaiting_tcp`` → ``awaiting_tls`` (if ``tls``)
+      or ``ready``.
+    * ``"tls_pending"`` — stay in ``awaiting_tls`` (simulates a
+      handshake round that wants more data).
+    * ``"tls_ok"`` — ``awaiting_tls`` → ``ready``.
+    * ``"fail:<message>"`` — transition to ``failed`` with the given
+      message as ``last_error``.
+
+    The fake's ``socket`` attribute is set to the :class:`FakeSocket`
+    passed in at construction (or a fresh one if none given) when the
+    connector reaches ``ready``.
+
+    Use this in consumer-side unit tests (``MQTTClient`` against the
+    multi-tick connect path).  Real-network tests live in the adapter
+    test files.
+    """
+
+    def __init__(
+        self,
+        host: str = "test.example",
+        port: int = 1883,
+        *,
+        tls: bool = False,
+        actions: list[str] | None = None,
+        socket: FakeSocket | None = None,
+    ) -> None:
+        self._host = host
+        self._port = port
+        self._tls = tls
+        self._actions = list(actions) if actions is not None else []
+        self._target_socket = socket if socket is not None else FakeSocket()
+
+        self.state = "awaiting_dns"
+        self.socket: FakeSocket | None = None
+        self.last_error: Exception | None = None
+
+    @property
+    def io_socket(self) -> object | None:
+        if self.state in ("ready", "failed"):
+            return None
+        return self._target_socket
+
+    @property
+    def io_wants_read(self) -> bool:
+        return self.state == "awaiting_tls"
+
+    @property
+    def io_wants_write(self) -> bool:
+        return self.state in ("awaiting_tcp", "awaiting_tls")
+
+    def check(self, now_ms: int) -> bool:  # noqa: ARG002 (runner contract)
+        return self.state not in ("ready", "failed")
+
+    def handle(self, now_ms: int) -> None:
+        self.tick(now_ms)
+
+    def next_deadline(self, now_ms: int) -> int | None:  # noqa: ARG002
+        return None
+
+    def tick(self, now_ms: int) -> None:  # noqa: ARG002
+        if self.state in ("ready", "failed"):
+            return
+        if not self._actions:
+            return  # No script left; stay where we are (useful for
+            # exercising "wait one more tick" idioms in consumers).
+        action = self._actions.pop(0)
+        if action.startswith("fail:"):
+            self.last_error = OSError(action[5:])
+            self.state = "failed"
+            return
+        if action == "dns_ok" and self.state == "awaiting_dns":
+            self.state = "awaiting_tcp"
+            return
+        if action == "tcp_pending" and self.state == "awaiting_tcp":
+            return
+        if action == "tcp_ok" and self.state == "awaiting_tcp":
+            if self._tls:
+                self.state = "awaiting_tls"
+            else:
+                self.socket = self._target_socket
+                self.state = "ready"
+            return
+        if action == "tls_pending" and self.state == "awaiting_tls":
+            return
+        if action == "tls_ok" and self.state == "awaiting_tls":
+            self.socket = self._target_socket
+            self.state = "ready"
+            return
+        raise AssertionError(
+            f"FakeSocketConnector: action {action!r} not valid in "
+            f"state {self.state!r}",
+        )
+
+    def cancel(self) -> None:
+        if self.state in ("ready", "failed"):
+            return
+        if self.last_error is None:
+            self.last_error = OSError("connector cancelled")
+        self.state = "failed"
