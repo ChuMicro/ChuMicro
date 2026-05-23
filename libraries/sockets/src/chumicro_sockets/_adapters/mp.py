@@ -534,3 +534,118 @@ def ssl_context_no_verify():  # pragma: no cover - device only
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.verify_mode = ssl.CERT_NONE
     return context
+
+
+def tcp_connector(host, port):  # pragma: no cover - device only
+    """Return a tick-driven TCP :class:`SocketConnector` for MicroPython.
+
+    Uses non-blocking ``socket.connect`` (raises ``OSError(EINPROGRESS)``
+    on rp2 + esp32 ports) + ``select.poll(POLLOUT)`` for completion.
+    DNS is synchronous (one phase tick); TCP is truly per-tick
+    non-blocking — the connector yields between the dial and the
+    POLLOUT-ready check, matching the CPython adapter's shape.
+    """
+    return _MpConnector(host, port, tls=False, context=None)
+
+
+def tls_connector(host, port, *, context=None):  # pragma: no cover - device only
+    """Return a tick-driven TLS :class:`SocketConnector` for MicroPython.
+
+    Same per-tick shape as :func:`tcp_connector` for the DNS + TCP
+    phases.  The TLS handshake itself happens **inside** MP's
+    ``ssl.SSLContext.wrap_socket`` and BLOCKS for the round-trip:
+    rp2 / esp32 mbedTLS builds do not expose a non-blocking handshake
+    surface (no ``do_handshake_on_connect=False``).  Documented
+    substrate limit; the ``awaiting_tls`` phase is a single blocking
+    tick on this runtime.  Application traffic is non-blocking
+    post-handshake.
+    """
+    return _MpConnector(host, port, tls=True, context=context)
+
+
+from chumicro_sockets._connector import SocketConnector  # noqa: E402
+
+
+class _MpConnector(SocketConnector):  # pragma: no cover - device only
+    def _resolve_dns(self, host, port):
+        # MP's ``socket.getaddrinfo`` is synchronous — one phase tick.
+        # First tuple is enough; multi-AF fallback can be added if a
+        # consumer needs it.
+        import socket  # noqa: PLC0415 — MP-only import
+
+        return socket.getaddrinfo(host, port)[0]
+
+    def _start_tcp_connect(self, addr_info):
+        import socket  # noqa: PLC0415 — MP-only import
+
+        sock = socket.socket(addr_info[0], addr_info[1])
+        sock.setblocking(False)
+        try:
+            sock.connect(addr_info[-1])
+        except OSError as connect_exception:
+            # EINPROGRESS (115 on rp2 lwIP, also 115 on esp32 lwIP) is
+            # the expected "connect started, poll for completion"
+            # signal — fall through and let _check_tcp_connect drive
+            # the poll loop.  Any other errno is a real failure.
+            if connect_exception.errno != 115:
+                sock.close()
+                raise
+        return sock
+
+    def _check_tcp_connect(self, sock):
+        # ``select.poll(POLLOUT)`` is the cross-port readiness check on
+        # MP — SO_ERROR via ``getsockopt`` is not exposed reliably on
+        # rp2 plain sockets, but POLLOUT firing indicates the connect
+        # has completed (success or failure).  A subsequent send
+        # surfacing OSError is how we'd see a delayed failure.
+        import select  # noqa: PLC0415 — MP-only import
+
+        poll = select.poll()
+        poll.register(sock, select.POLLOUT)
+        events = poll.poll(0)  # 0 ms — non-blocking probe
+        if not events:
+            return False  # Still pending — retry next tick.
+        # Any returned event means the kernel has resolved the connect.
+        # POLLERR / POLLHUP would also surface here; let downstream
+        # code (the first send) raise the underlying errno.
+        return True
+
+    def _wrap_tls(self, sock, host, context):
+        # MP's ``ssl.SSLContext.wrap_socket`` performs the full TLS
+        # handshake synchronously — substrate limit documented in the
+        # public ``tls_client_connector`` factory.  The wrap call
+        # blocks for this single phase tick; on the next tick
+        # ``_step_tls_handshake`` confirms completion and the
+        # connector promotes to ``ready``.
+        if context is None:
+            context = _default_context()
+        return context.wrap_socket(sock, server_hostname=host)
+
+    def _step_tls_handshake(self, sock):
+        # ``wrap_socket`` already drove the handshake to completion
+        # under MP-mbedTLS; nothing more to do.  Wrap the inflight
+        # SSLSocket in ``_MpSocketWrapper`` so the connector's
+        # eventual promotion ``self.socket = self._inflight_socket``
+        # lands a chumicro-protocol-shaped object on consumers.
+        self._inflight_socket = _MpSocketWrapper(sock)
+        return True
+
+    def _enter_post_tcp(self):
+        # Override the base hook so the non-TLS path also wraps the
+        # raw socket in ``_MpSocketWrapper`` before promotion — the
+        # consumer expects ``recv_into`` semantics that plain MP
+        # sockets lack.
+        from chumicro_sockets._connector import (  # noqa: PLC0415 - lazy
+            STATE_AWAITING_TLS,
+            STATE_READY,
+        )
+
+        if not self._tls:
+            self.socket = _MpSocketWrapper(self._inflight_socket)
+            self._inflight_socket = None
+            self.state = STATE_READY
+            return
+        self._inflight_socket = self._wrap_tls(
+            self._inflight_socket, self._host, self._context,
+        )
+        self.state = STATE_AWAITING_TLS
