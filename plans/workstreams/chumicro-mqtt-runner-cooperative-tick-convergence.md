@@ -83,6 +83,16 @@ These came up during the read but are not yet diagnosed as defects vs design cho
 
 - **PUBACK ordering vs PING injection.**  Reference increments `_packet_count_that_must_send` when queuing a PUBACK reply for an inbound QoS-1 (`mqtt_client.py:810`).  This prevents `loop()` from queueing a PINGREQ between the PUBACK enqueue and its send.  Chumicro `appendleft`s the PUBACK (`client.py:1087, 1103`) and `_check_keepalive` would `append` a PINGREQ — so PUBACK still goes first by virtue of left/right placement.  Same on-wire behaviour, different mechanism.  Confirm before refactoring either side.
 
+## Bake validation history
+
+| Date | Steps active | Outcome |
+|---|---|---|
+| 2026-05-23 | Pre-convergence baseline | 5-min PLAIN bake, 290 publishes / 290 PUBACKs / 0 gaps -- happy path was always green; the defects only show on negative tests. |
+| 2026-05-23 | Steps 1 + 2 (recv-zero + handle reorder) | 5-min PLAIN bake, 289 publishes / 289 PUBACKs / 0 gaps / heap steady -- confirmed no regression on the happy path. |
+| 2026-05-23 | Steps 1–6 (recv-zero, reorder, send-timeout, POLLERR/POLLHUP, one-per-tick, polish) | 5-min PLAIN bake, 290 publishes / 290 PUBACKs / 0 inbound gaps / 0 outbound gaps / in_flight_final 0 / pending_final 0 / tx_queue_final 0 / duration_ms 300010 -- all six steps land without regression. |
+
+The negative-bake scenarios (broker hard-kill, broker graceful disconnect, NAT-style silent drop, etc.) from [`mqtt-negative-testing-suite.md`](mqtt-negative-testing-suite.md) are the remaining validation surface; the happy-path bake validates only that the convergence fixes don't break normal operation.
+
 ## How to verify the convergence
 
 The bake harness (`projects/mqtt_bake_diag/` in workspace-template, gitignored) is the load test.  After fixes, the bake should:
