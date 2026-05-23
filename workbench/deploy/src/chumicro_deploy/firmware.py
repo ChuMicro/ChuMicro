@@ -251,9 +251,9 @@ def _poll_until_deadline(
     """Poll *probe* every *interval* seconds until it returns a value.
 
     Returns the first non-``None`` value *probe* yields, or ``None`` if
-    *timeout* seconds elapse first.  *interval* and *timeout* are
-    passed in so each wait-for use carries its own hardware-tuned
-    budget.
+    *timeout* seconds elapse first.  Each caller passes its own
+    *interval* and *timeout* because bootloader polling and drive-gone
+    polling have different hardware-tuned budgets.
     """
     deadline = monotonic() + timeout
     while monotonic() < deadline:
@@ -410,8 +410,8 @@ def _copy_uf2_to_drive(
 
     The UF2 bootloader reads the copied file and writes it to flash
     itself; our job is just to land the bytes on the mount point.
-    A file-level flush is emitted before returning so the OS pushes
-    the buffer through before we start polling for re-enumeration.
+    Then fsync the file so the OS pushes the buffer to the drive
+    before we start polling for re-enumeration.
 
     Args:
         firmware_path: Local .uf2 file downloaded earlier.
@@ -503,8 +503,9 @@ def _flash_firmware_uf2(
 
 
 #: Glob pattern for macOS / Linux serial ports that typically host
-#: an ESP32 ROM bootloader.  Diffing snapshots of this set detects a
-#: bootloader-mode re-enumeration.
+#: an ESP32 ROM bootloader.  Comparing the set before and after a
+#: reset catches a board entering bootloader mode (a new port appears,
+#: an old one disappears, or both).
 _SERIAL_PORT_GLOBS: tuple[str, ...] = (
     "/dev/cu.usbmodem*",
     "/dev/ttyACM*",

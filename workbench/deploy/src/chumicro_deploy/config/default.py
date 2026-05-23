@@ -71,11 +71,10 @@ _KNOWN_KEYS: frozenset[str] = ALL_TOP_LEVEL_ENTRY_FIELDS | _DEPLOY_ONLY_FIELDS
 # ---------------------------------------------------------------------------
 # Validated registry shape
 #
-# Sits one level above :class:`Device`: a registry record with
-# description and arbitrary extra metadata alongside the
-# deploy-relevant fields.  :class:`Device` is the transport-
-# construction primitive.  :class:`DeviceEntry` is the devices.yml
-# record.
+# :class:`DeviceEntry` is the devices.yml record: a description and
+# any extra metadata alongside the deploy-relevant fields.
+# :class:`Device`, one level below, carries only what
+# ``create_transport`` needs.
 # ---------------------------------------------------------------------------
 
 
@@ -210,8 +209,8 @@ def load_device_registry(
 ) -> tuple[list[DeviceEntry], DeviceDefaults]:
     """Load and validate ``devices.yml`` into ``(entries, defaults)``.
 
-    The full validated registry, exposed as the rich
-    :class:`DeviceEntry` shape with descriptions and extra metadata.
+    Each entry is a :class:`DeviceEntry` carrying the description and
+    any extra keys from the YAML alongside the deploy-relevant fields.
 
     Args:
         path: Explicit path to ``devices.yml``.  When ``None``,
@@ -302,11 +301,11 @@ def load_raw_entries(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Parse a ``devices.yml`` into raw entries + defaults dict.
 
-    The schema-shape primitive that ``chumicro-deploy`` owns: read
-    the YAML, return the ``devices:`` list and the ``defaults:``
-    mapping verbatim — no field validation, no Device construction,
-    no normalization.  Richer schemas layer their own validation on
-    top, so the YAML shape lives in one place.
+    Reads the YAML and returns the ``devices:`` list and the
+    ``defaults:`` mapping verbatim: no field validation, no
+    :class:`Device` construction, no normalization.  Richer schemas
+    layer their own validation on top of this, so the on-disk shape
+    is defined in one place.
 
     Args:
         path: Filesystem path to the YAML file.

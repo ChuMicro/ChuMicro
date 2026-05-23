@@ -92,11 +92,10 @@ HARDWARE_BLOCK_ZONES: dict[str, str] = {
     "firmware_source": "hardware-once",
 }
 
-#: Every top-level entry key the writer knows about.  The single
-#: source of truth for "is this a recognized devices.yml field?".
-#: Reader and writer share this set so adding a field in one place
-#: keeps both in sync automatically.  ``"hardware"`` is the nested
-#: block, and its leaves are classified by :data:`HARDWARE_BLOCK_ZONES`.
+#: Every top-level entry key the writer knows about.  Reader and
+#: writer share this set so adding a field in one place keeps both
+#: in sync.  ``"hardware"`` is the nested block; its leaves are
+#: classified by :data:`HARDWARE_BLOCK_ZONES`.
 ALL_TOP_LEVEL_ENTRY_FIELDS: frozenset[str] = (
     USER_OWNED_FIELDS
     | PROBED_ALWAYS_FIELDS

@@ -46,7 +46,9 @@ _SOFT_REBOOT_MARKER = b"soft reboot"
 
 
 class PostStageStep(Enum):
-    """What a context does after the rsync.  Names the post-rsync fork.
+    """Which of the two post-rsync steps a deploy context runs: soft-
+    reboot into the freshly-staged ``code.py``, or keep the live raw-
+    REPL session for the harness to drive.
 
     Every context stages through the same clean-slate rsync +
     :data:`flash_drive.DEVICE_KEEP_SET`, so the bytes reach the board
@@ -134,7 +136,8 @@ _WIPE_RECONNECT_POLL_SECONDS = 0.5
 _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS = 10.0
 
 
-# RAM-mode inline scripts are chunked based on live free-heap measurements.
+# The RAM-mode chunker reads gc.mem_free() on the board and sizes each
+# inline script at half the free heap, clamped to this floor and ceiling.
 _MIN_INLINE_SCRIPT_BUDGET_BYTES = 8 * 1024
 _MAX_INLINE_SCRIPT_BUDGET_BYTES = 48 * 1024
 
@@ -299,9 +302,10 @@ class CircuitpythonTransport:
     The CIRCUITPY drive (``mode="flash"``) is auto-resolved at deploy
     time via :func:`_circuitpy_volume_candidates` and verified against
     the connected board's identity by :meth:`_verify_drive_for_board`.
-    No per-transport drive path is stored.  Multi-board hosts get the
-    correct mount picked from the board's UID rather than from a
-    pinned-at-registration-time path that mount-order can invalidate.
+    No per-transport drive path is stored.  Resolving by board UID at
+    deploy time lets a host with two boards pick the right drive even
+    when the OS gives the same mount name to a different board across
+    reboots.
     """
 
     def __init__(
@@ -808,8 +812,8 @@ class CircuitpythonTransport:
         xattrs, rsync, post-cleanup, flush.
 
         What happens after the rsync is named by the *post_stage*
-        argument — a :class:`PostStageStep`, not a hidden coupling.
-        Both values invalidate CP's in-RAM FAT cache so the rsynced
+        argument, a :class:`PostStageStep`.  Both values invalidate
+        CP's in-RAM FAT cache so the rsynced
         files are visible.  The helper records the chosen step on
         ``self._post_stage_step`` so the "identical bytes path, named
         fork" invariant is assertable, and the post-stage action
@@ -845,9 +849,8 @@ class CircuitpythonTransport:
             CircuitpythonTransportError: Drive can't be resolved /
                 verified, or the rsync subprocess fails / times out.
         """
-        # Record the named post-stage fork: everything
-        # below is identical across contexts; only what the caller does
-        # after this returns diverges, and only into these two values.
+        # Record which fork the caller will run after this returns; the
+        # body below is identical across contexts.
         self._post_stage_step = post_stage
 
         # ``_enter_raw_repl`` resends Ctrl-C / Ctrl-A on every call,

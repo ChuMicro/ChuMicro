@@ -648,8 +648,9 @@ class MicropythonTransport:
         successful entry surfaces as a new ROM-bootloader serial
         port visible to whatever polls for one, and an unsuccessful
         entry surfaces as no-new-port.  Don't add board-specific
-        branching here.  The try-and-poll architecture is the right
-        abstraction.
+        branching here: firing ``machine.bootloader()`` blindly and
+        letting the caller's drive-poll be the success signal handles
+        every port the same way.
         """
         try:
             self._ensure_serial()
@@ -1070,14 +1071,14 @@ class MicropythonTransport:
     def _trigger_soft_reboot_and_read(self) -> str:
         """Exit raw REPL, soft-reboot, read main.py output, return user text.
 
-        Survives entrypoints that may be a ``while True`` body that
-        never returns.  The raw-REPL ``exec_raw`` path
-        (``follow="exec"``) works for return-bounded scripts because
-        raw REPL emits the EOF (``\\x04``) marker when the script
-        returns; for an infinite-loop body the EOF never fires and the
-        deploy hangs.  Soft-reboot bypasses raw REPL and reads serial
-        directly with a wall-clock timeout, returning whatever
-        accumulated.
+        Handles ``main.py`` bodies that never return (a ``while True``
+        loop) by reading serial directly with a wall-clock timeout
+        instead of waiting for the raw-REPL EOF marker.  The raw-REPL
+        ``exec_raw`` path (``follow="exec"``) works for return-bounded
+        scripts because raw REPL emits the EOF (``\\x04``) marker when
+        the script returns; for an infinite-loop body the EOF never
+        fires and the deploy hangs.  Soft-reboot bypasses raw REPL and
+        returns whatever serial output accumulated before the timeout.
 
         Sequence:
 
@@ -1196,11 +1197,10 @@ class MicropythonTransport:
         ``boot_out.txt`` / ``_chu_kv.msgpack``) is removed
         recursively; the subsequent ``fs cp -r`` repopulates the
         payload.  A board ``settings.toml`` is *not* in the keep set
-        and is evicted (competing wifi authority).
+        and is evicted: its wifi credentials would compete with the
+        runtime config we deploy.
 
-        One device-side script (one round trip, authoritative),
-        best-effort per entry.  A stray leftover is cleaned next
-        deploy and the post-``fs cp`` free space is the real guard.
+        One device-side script, one round trip, best-effort per entry.
         A hard failure here would mask the staging it precedes.
         """
         keep = sorted(DEVICE_KEEP_SET)
