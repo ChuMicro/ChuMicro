@@ -111,6 +111,7 @@ When instructions overlap:
 - **Surface tradeoffs early.** When multiple reasonable approaches exist, name them. When ambiguity affects correctness, ask. When a simpler approach would work, say so.
 - **Default to action on reversible local work.** File edits, tests, refactors, plans-doc updates: execute, don't ask. Surface before destructive ops (deletions, force-pushes, breaking API changes), anything visible outside this repo, or unasked scope expansion. Auto mode amplifies *lean toward action*, not *skip the destructive-op check*.
 - **A named successor is a directive, not an off-ramp.** When a skill or doc points at another step as the owner of what comes next, follow the pointer. Words like *"defer"*, *"later"*, *"elsewhere"* describe where to go, not that you're done.
+- **Same writing checks for user-facing responses.** Concise, direct, concrete, professional (from [Writing tone](#writing-tone)) applies to your replies and status updates, not only to prose written into files. A wordy abstract status update wastes attention the same way a wordy abstract docstring does. Read aloud before sending — if you wouldn't say it that way to a colleague at the next desk, rewrite.
 - **Quality bar.** Small focused diffs, preflight green, commit messages that name the rule / decision / pattern applied.
 
 ## Writing tone
