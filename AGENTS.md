@@ -191,7 +191,31 @@ Core commands for active development and troubleshooting:
 
 ### Workbench CLIs
 
-`chumicro-workspace`, `chumicro-deploy`, and `chumicro-repl` are invocable directly from the mono-repo.  See [`workbench/README.md`](workbench/README.md) and each tool's `--help` for the live subcommand inventory.
+Three CLIs, each invocable directly from the mono-repo:
+
+| CLI | What it's for | When to reach |
+|---|---|---|
+| `chumicro-workspace` | Project deploys, `devices.yml` management, firmware install/upgrade, scaffolding, workspace health | Default front door for anything project-shaped or workspace-level — most agent work routes here |
+| `chumicro-deploy` | Low-level transports: probe a board, flash firmware, raw file-push by directory or file-map | Non-project file trees staged by hand, or firmware flashing outside a workspace context |
+| `chumicro-repl` | Interactive serial REPL with traceback highlighting and `--tail` follow mode | Driving a board interactively, watching deploy output, post-deploy smoke check |
+
+**Common `chumicro-workspace` subcommands** (full list: `chumicro-workspace --help`, 27 subcommands at last count):
+
+| Subcommand | What it does |
+|---|---|
+| `deploy [<name>]` | Push a project to a board. Auto-detects boot-shim + import-graph for `app.py` + `run()` projects |
+| `deploy-example` | Push a `libraries/<lib>/examples/<name>.py` example to a registered device |
+| `demo` | Push a built-in hello-world to the active device (~5s; cross-runtime smoke test) |
+| `add-device` | Probe a board and register it in `devices.yml` |
+| `devices` | List every entry in `devices.yml` |
+| `probe` | Print the runtime identity reported by the selected board |
+| `new` | Scaffold `projects/<path>/` from a template or example tree |
+| `status` / `doctor` | Workspace health snapshot (workspace.yml, devices.yml, projects tree; `doctor` adds Python-version + per-project `run()` AST scan) |
+| `reset-board --yes` | Destructive: wipe and re-prep a board (FSKit-wedge remediation; only command authorized to manipulate CIRCUITPY mount state) |
+| `install-firmware` / `upgrade-firmware` | Firmware flash / version-bump for a registered device |
+| `library` | Manage the workspace's local library copies (sync from mono-repo, list, etc.) |
+
+Each subcommand's `--help` shows its flags. The CLI rejects the wrong runtime / project-shape combinations with actionable error messages — read them, don't paper over with `chumicro-deploy --directory`.
 
 ## Reference implementations
 
