@@ -209,6 +209,16 @@ def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -
     socket is available on ``connector.socket``.  See
     :mod:`chumicro_sockets._connector` for the state diagram.
 
+    Per-runtime substrate honesty (TCP phase):
+
+    * **CPython** — truly non-blocking via ``BlockingIOError``
+      (EINPROGRESS) + ``select.select(POLLOUT)`` + ``SO_ERROR``.
+    * **MicroPython rp2 / esp32** — truly non-blocking via
+      ``OSError(EINPROGRESS)`` + ``select.poll(POLLOUT)``.
+    * **CircuitPython** — per-phase blocking: ``socketpool`` does not
+      expose a non-blocking connect, so the TCP phase blocks for the
+      kernel's handshake duration.  Honest documented compromise.
+
     Args:
         host: DNS name or IP literal.
         port: Remote port.
@@ -217,10 +227,6 @@ def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -
     Returns:
         :class:`SocketConnector` in ``"awaiting_dns"`` — call ``tick``
         until terminal.
-
-    Raises:
-        NotImplementedError: MicroPython / CircuitPython adapters not
-            yet implemented.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -228,9 +234,9 @@ def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -
 
         return cp.tcp_connector(host, port, radio=radio)
     if runtime == "micropython":
-        raise NotImplementedError(
-            "MicroPython connector adapter not yet implemented",
-        )
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated import
+
+        return mp.tcp_connector(host, port)
     from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
 
     return cpython.tcp_connector(host, port)
@@ -251,6 +257,19 @@ def tls_client_connector(
     ticks.  *context=None* uses the runtime's default trust store
     (same semantics as :func:`tls_client_socket`).
 
+    Per-runtime substrate honesty (TLS phase):
+
+    * **CPython** — truly non-blocking via
+      ``do_handshake_on_connect=False`` + ``do_handshake()`` looped
+      across ticks.
+    * **MicroPython rp2 / esp32** — the TLS handshake blocks inline
+      in ``ssl.wrap_socket``: a single substrate-blocking phase tick.
+      MP's mbedTLS builds do not expose a non-blocking handshake
+      surface.  Documented compromise.
+    * **CircuitPython** — CP collapses TCP + TLS into one
+      ``wrapped_socket.connect()`` call; the connector skips
+      ``awaiting_tls`` and lands ready after the (blocking) TCP phase.
+
     Args:
         host: DNS name or IP literal; used as ``server_hostname`` for
             the TLS handshake (SNI + cert verification).
@@ -260,10 +279,6 @@ def tls_client_connector(
 
     Returns:
         :class:`SocketConnector` in ``"awaiting_dns"``.
-
-    Raises:
-        NotImplementedError: MicroPython / CircuitPython adapters not
-            yet implemented.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -271,9 +286,9 @@ def tls_client_connector(
 
         return cp.tls_connector(host, port, context=context, radio=radio)
     if runtime == "micropython":
-        raise NotImplementedError(
-            "MicroPython connector adapter not yet implemented",
-        )
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated import
+
+        return mp.tls_connector(host, port, context=context)
     from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
 
     return cpython.tls_connector(host, port, context=context)
