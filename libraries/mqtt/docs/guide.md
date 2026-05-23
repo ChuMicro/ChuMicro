@@ -262,18 +262,6 @@ The last-will follows the same pattern: `will_topic="online"` is prefixed; `will
 
 Inbound topics in `on_message` and pattern handlers (`add_pattern_handler`) are **not** prefix-stripped — what the broker put on the wire is what your callback gets.  Pattern handlers are also not auto-prefixed; pass the prefixed pattern if you want per-device-only routing.
 
-## Repeated publishes — `MQTTPublisher`
-
-For a topic you publish to repeatedly with the same QoS / retain settings, bind once:
-
-```python
-temperature = client.publisher("sensors/temperature", qos=1, retain=False)
-temperature.publish(b"21.5")
-temperature.publish("22.1")  # str auto-encoded as UTF-8
-```
-
-The bound topic resolves through `root_topic` exactly like `client.publish` — for raw publishing use `client.publish_raw` directly.
-
 ## Backpressure
 
 When `max_tx_queue_size` is reached, user-initiated publish/subscribe calls raise `MQTTBackpressureError`:
