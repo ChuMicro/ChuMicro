@@ -32,17 +32,25 @@ from chumicro_timing import ticks as _DEFAULT_TICKS
 # POSIX poll flags resolved once at import time so ``wait`` can translate
 # the duck-typed ``io_wants_read`` / ``io_wants_write`` bools into a
 # poll eventmask without an attribute lookup on every loop.  The
-# numeric fallbacks match POSIX (0x001 / 0x004) for runtimes whose
-# ``select`` module is unimportable at runner load time.
+# numeric fallbacks match POSIX (0x001 / 0x004 / 0x008 / 0x010) for
+# runtimes whose ``select`` module is unimportable at runner load time.
+# POLLERR + POLLHUP are surfaced to services via the ``io_error`` hook
+# from ``Runner.wait``; see the docstring there.
 try:
     import select as _select
 
     _POLLIN = _select.POLLIN
     _POLLOUT = _select.POLLOUT
+    _POLLERR = _select.POLLERR
+    _POLLHUP = _select.POLLHUP
     del _select
 except ImportError:
     _POLLIN = 0x001
     _POLLOUT = 0x004
+    _POLLERR = 0x008
+    _POLLHUP = 0x010
+
+_POLL_ERROR_MASK = _POLLERR | _POLLHUP
 
 
 # Pick a millisecond sleep once at import.  ``time.sleep_ms`` exists on
@@ -362,9 +370,17 @@ class Runner:
            via ``time.sleep_ms``.  Returns immediately if no timeout
            source applies or the next deadline is already in the past.
 
-        Discards the ``ipoll`` iteration — ``check`` re-gates dispatch on
-        the next ``tick``.  Waking the loop and dispatching handlers are
-        two separate concerns.
+        For each ipoll event whose mask carries POLLERR or POLLHUP
+        (socket error / hangup), looks up the registered service whose
+        ``io_socket`` matches the polled object and calls its optional
+        ``io_error(now_ms, eventmask)`` hook so the service can transition
+        cleanly to a failure state.  Services without ``io_error``
+        receive no notification; the runner ignores the error event
+        and ``check`` re-gates dispatch on the next ``tick`` as usual.
+
+        POLLIN / POLLOUT events are wake signals only -- ``check`` and
+        ``next_deadline`` decide what runs.  Waking the loop and
+        dispatching handlers stay separate concerns.
 
         Args:
             now_ms: Current tick, typically the value returned by the
@@ -383,10 +399,43 @@ class Runner:
                 self._poller = _SelectPollAdapter()
                 for sock, eventmask in self._registered_interest.values():
                     self._poller.register(sock, eventmask)
-            for _ in self._poller.ipoll(timeout_ms):
-                pass
+            for item in self._poller.ipoll(timeout_ms):
+                # MicroPython / CircuitPython ipoll yields a reused
+                # tuple ``(sock, eventmask)``; CPython poll().poll()
+                # yields ``(fileno, eventmask)``.  Unpack into locals
+                # before the next iteration in case the buffer rotates.
+                obj = item[0]
+                eventmask = item[1]
+                if eventmask & _POLL_ERROR_MASK:
+                    self._dispatch_io_error(obj, eventmask, now_ms)
         else:
             _sleep_ms(timeout_ms)
+
+    def _dispatch_io_error(self, obj: object, eventmask: int, now_ms: int) -> None:
+        """Find the registered service whose ``io_socket`` is *obj* and
+        call its optional ``io_error(now_ms, eventmask)`` hook.
+
+        No-op when no service matches (a stale poll registration we
+        haven't observed yet) or the matched service doesn't expose
+        ``io_error`` (it opted out of error notifications, the runner
+        leaves it alone).
+        """
+        for entry in self._entries:
+            service = entry.service
+            if service is None:
+                continue
+            sock = getattr(service, "io_socket", None)
+            if sock is None:
+                continue
+            if sock is obj or (
+                isinstance(obj, int)
+                and hasattr(sock, "fileno")
+                and sock.fileno() == obj
+            ):
+                handler = getattr(service, "io_error", None)
+                if handler is not None:
+                    handler(now_ms, eventmask)
+                return
 
     def _sync_poll_set(self) -> None:
         """Re-read each entry's ``io_*`` attributes and update the poll set.

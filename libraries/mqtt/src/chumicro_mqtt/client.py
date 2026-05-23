@@ -883,6 +883,22 @@ class MQTTClient:
             return False
         return len(self._tx_queue) > 0
 
+    def io_error(self, now_ms, eventmask):  # noqa: ARG002 - runner contract uses now_ms
+        """Runner hook: POLLERR / POLLHUP surfaced on the registered socket.
+
+        Called by ``Runner.wait`` when ``ipoll`` reports an error or
+        hangup on the socket this client registered.  Transitions to
+        ``FAILED`` with ``last_error`` describing the event, so the
+        next ``handle()`` tick fires self-heal (rebuild socket via the
+        factory, re-issue connect).
+        """
+        if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
+            return
+        self.last_error = MQTTError(
+            f"socket error from runner.wait (poll eventmask 0x{eventmask:x})",
+        )
+        self.state = ProtocolState.FAILED
+
     def next_deadline(self, now_ms):  # noqa: ARG002 - runner contract uses now_ms
         """Earliest tick at which ``handle()`` must run even on a quiet socket.
 
