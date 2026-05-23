@@ -4,8 +4,12 @@
 
 ## Now
 
+- [ ] **Resume MQTT bake-harness work + chumicro defect inventory from session handoff.**  [handoffs/2026-05-23-mqtt-bake-harness-and-defects.md](handoffs/2026-05-23-mqtt-bake-harness-and-defects.md)
+
 ## Next
 
+- [ ] **chumicro_mqtt + chumicro_runner cooperative-tick convergence.**  [workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md](workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md)
+- [ ] **MQTT negative-testing suite.**  [workstreams/mqtt-negative-testing-suite.md](workstreams/mqtt-negative-testing-suite.md)
 - [ ] **mpy-cross frozen bytecode pass on chumicro_mqtt / chumicro_sockets chain** — source-side optimization is at the floor on Pi Pico W MP; the prior session's deferred mpy-cross lever is now live.  Prior estimate: 50-80 KB heap on rp2.
 - [ ] **Confirm whether Pi Pico W CP custom firmware (`10.2.0-dirty`) deliberately strips native `msgpack`** — iter-03 evidence on 2026-05-23 showed `_pure` was on the CP import path.  Restoring native `msgpack` to the custom build would replace ~407 lines of `_pure.py` with a C module in the firmware image (likely 5-15 KB heap, possibly better fragmentation).  Worth checking with the user before re-evaluating the chain.
 - [ ] **`/audit-embedded chumicro_runner.core` and `chumicro_websockets`** — both are large libraries left over from the prior session's "next session" list.  Per-change bench loop is now established; can use the harness instead of static review.
