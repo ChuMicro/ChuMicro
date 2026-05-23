@@ -110,28 +110,30 @@ When instructions overlap:
 
 ## Writing tone
 
-Aim for prose that reads aloud like one colleague explaining something to another. Four checks per sentence:
+Read each sentence the way you'd say it out loud to a colleague. If you wouldn't say it that way to a person, rewrite it. Everything below is a shape that tends to fail that test; the test is the gate, the list is what to listen for. Lint-backed rules (`Enforced by CHU…`) are absolute; everything else answers to the ear.
+
+Four checks per sentence:
 
 - **Concise.** Cut connectors that just restate what structure already implies.
-- **Direct.** Lead with the load-bearing fact. Skip stage-setting ("in this section we will", "it is worth noting that").
-- **Concrete.** Name actual classes, functions, files, identifiers. Avoid abstract stand-ins like *shape*, *surface*, *the algorithm*, *the implementation* when a specific name exists.
+- **Direct.** Lead with the load-bearing fact, not stage-setting.
+- **Concrete.** Name actual classes, functions, files. Avoid abstract stand-ins (*shape*, *surface*, *the algorithm*, *the implementation*) when a specific name exists.
 - **Professional.** No colloquialisms (*feeds through*, *wires up*, *punts to*, *hooks into*). No implicit objects (*the caller is about to route* — route what?). No ambiguous pronouns.
 
-One structural fault no regex catches: an abstraction in the subject slot ("the win is", "its floor is") joined by a weak verb (is, gives, provides) to a coined noun that hides an action ("the WFI-idle that `ipoll` gives"). Find the real actor and let it act, as in "a connected board idles the CPU between events, which is what `ipoll` does." The test: read each sentence the way you'd say it out loud to a colleague. If you would not say it that way to a person, rewrite it. Worked cases in [agent-style-guide.md](docs/contributing/agent-style-guide.md#concrete-subject-real-verb-the-structural-rule).
+The deepest fault no regex catches: an abstract subject (*"the win is"*, *"its floor is"*) joined by a weak verb to a coined noun that hides an action (*"the WFI-idle that `ipoll` gives"*). Find the real actor and let it act: *"a connected board idles the CPU between events, which is what `ipoll` does."* Per-sentence judgment pass, not a sweep — worked cases in [agent-style-guide.md § Concrete subject, real verb](docs/contributing/agent-style-guide.md#concrete-subject-real-verb-the-structural-rule).
 
-Verify domain terminology before using it as if authoritative. Code identifiers are not canonical domain vocabulary — a method named `addCommand` does not make what's added a "command" in the domain sense. Engineers name things for code-local convenience and the names drift. Check sibling code, prior usage, or ask before promoting an engineer-named identifier into prose.
+Em-dashes, semicolons, arrows, AI-tic framings (*"the X promise"*, *"the X pattern"*), empty adjectives (`comprehensive`, `robust`, `seamlessly`, `cutting-edge`, `best-in-class`), and filler openers (*"It is worth noting"*, *"Let's dive into"*, *"In this section we will"*) are suspects. Empty adjectives almost always fail (replace with what something covers or survives); the rest are case-by-case. Verify domain terminology before promoting a code identifier into authoritative prose — `addCommand` does not make what's added a "command" in the domain sense; check sibling code or ask.
 
-Em-dashes, semicolons, and arrows are suspects, not bans. They often paper over missing connective tissue, in which case two sentences or a comma-and-connector reads better. When the connective tissue is there and the sentence reads well out loud, keep them.
+Standing AI-tic regex, consumed by `/audit-docs`, `/audit-comments`, `/audit-skill`:
 
-AI-tic phrases are suspects too. They sound non-human, drop information, make prose harder to skim. When you reach for "the X promise" or "the X pattern", either name X concretely in the same sentence or rephrase.
+```bash
+grep -niE 'canonical|idempotent|comprehensive|seamless|robust|cutting-edge|best-in-class|leverage|intuitive|elegant|streamlined|battle-tested|first-class|one-stop|out of the box|worth noting|dive into|let.?s explore|effortless|painless|empowers|harness|unleash|by construction|under the hood|got you covered|simply put|in essence|magic|powerful' <file>
+```
 
-Other shapes to listen for, all subject to the read-aloud test (keep when it reads fine):
+A hit is a candidate, not a verdict. A swap that produces a worse sentence is a regression — read the rewrite aloud before accepting it.
 
-- "The canonical X", "the one / single / sole X that…" as openers. Say what X is or does directly.
-- Empty adjectives (`comprehensive`, `robust`, `seamlessly`, `cutting-edge`, `best-in-class`). Name what something covers or what it survives.
-- Filler sentence-openers ("It is worth noting that", "Let's dive into", "In this section, we will"). Start with the content.
+**Degraded prose is rewritten, not trimmed again.** A passage rotted by repeated subtractive edits doesn't get fixed by removing another word. Discard, then rewrite from a fresh read of what the thing is and why it exists, with a concrete subject doing something. Applied by [`audit-comments`](.github/skills/audit-comments/SKILL.md), [`audit-docs`](.github/skills/audit-docs/SKILL.md), [`audit-skill`](.github/skills/audit-skill/SKILL.md), and the in-place-edit rule in [`plans/decisions/README.md`](plans/decisions/README.md).
 
-Full reference, including the `the X` forward-reference test, the CHU-codes-in-prose lint, and the rewrite-don't-trim discipline the audit skills apply, lives in [docs/contributing/agent-style-guide.md](docs/contributing/agent-style-guide.md).
+Full reference (per-noun `the X` article test, full phrase-ban subsections, CHU-codes-in-prose lint): [docs/contributing/agent-style-guide.md](docs/contributing/agent-style-guide.md).
 
 ## Project overview
 
@@ -200,7 +202,7 @@ python scripts/run.py prepare-circuitpython
 For deeper implementation detail:
 
 - [plans/patterns.md](plans/patterns.md): implementation cookbooks. Service pattern, recv-buffer + memoryview, lazy adapter selection, FIFO deque, mpremote internals, and more.
-- [docs/contributing/agent-style-guide.md](docs/contributing/agent-style-guide.md): full phrase bans, the `the X` forward-reference test, the rewrite-not-trim discipline.
+- [docs/contributing/agent-style-guide.md](docs/contributing/agent-style-guide.md): per-phrase subsections with worked before/after, the per-noun `the X` article test, CHU-codes-in-prose lint (`CHU006`).
 - [docs/contributing/style-guide.md](docs/contributing/style-guide.md): naming, annotations, imports, layout, doc tone.
 - [docs/contributing/device-testing.md](docs/contributing/device-testing.md): functional tests, deploy modes, devices.yml.
 - [docs/contributing/releases.md](docs/contributing/releases.md) covers VERSION, SemVer, and experimental-to-stable promotion.
