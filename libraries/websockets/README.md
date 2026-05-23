@@ -30,10 +30,10 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ```python
 from chumicro_websockets import WebSocketClient, WebSocketState
-from chumicro_websockets.sockets_factory import chumicro_sockets_factory
+from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_timing import ticks_ms
 
-client = WebSocketClient(connection_factory=chumicro_sockets_factory())
+client = WebSocketClient(connector_factory=chumicro_sockets_connector_factory())
 client.on_text = lambda text: print(f"got: {text}")
 client.connect("ws://api.example.com/stream")
 

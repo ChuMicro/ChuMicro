@@ -3,6 +3,7 @@ frames, close handshake, oversize and frame-level oversize."""
 
 import struct
 
+from chumicro_sockets.testing import FakeSocketConnector
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
@@ -34,14 +35,15 @@ from chumicro_websockets.testing import FakeConnection
 FakeSocket = FakeConnection
 
 def _make_factory(socket: FakeConnection, *, expected_use_tls: bool | None = None):
-    """Connection-factory closure that records its args + returns *socket*."""
+    """Connector-factory closure that records its args + returns a
+    scripted ``FakeSocketConnector`` wrapping *socket*."""
     record = {"calls": []}
 
     def factory(host, port, use_tls):
         record["calls"].append((host, port, use_tls))
         if expected_use_tls is not None:
             assert use_tls is expected_use_tls
-        return socket
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
     return factory, record
 
@@ -50,14 +52,15 @@ def _drive_handshake(
     socket: FakeSocket,
     clock: FakeTicks,
 ) -> bytes:
-    """Push ticks until SENDING_HANDSHAKE finishes, then craft + feed a 101.
+    """Push ticks until AWAITING_TRANSPORT + SENDING_HANDSHAKE finish, then craft + feed a 101.
 
     Returns the request bytes the client wrote so callers can assert on
     them (``Sec-WebSocket-Key`` etc.).  Leaves the client OPEN.
     """
-    # Drain handshake send.
+    # Drain AWAITING_TRANSPORT (connector ticks) + SENDING_HANDSHAKE.
     while client.state == WebSocketState.CONNECTING and (
-        client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
+        client._connecting_phase
+        in (ConnectingPhase.AWAITING_TRANSPORT, ConnectingPhase.SENDING_HANDSHAKE)
     ):
         client.handle(clock.ticks_ms())
     request_bytes = socket.read_outbound()
@@ -90,7 +93,7 @@ def _make_client(
         clock = FakeTicks()
     factory, record = _make_factory(socket)
     client = WebSocketClient(
-        connection_factory=factory,
+        connector_factory=factory,
         ticks=clock,
         **kwargs,
     )

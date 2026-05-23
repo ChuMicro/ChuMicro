@@ -59,6 +59,7 @@ class ConnectingPhase:
     or read.
     """
 
+    AWAITING_TRANSPORT = "awaiting_transport"
     SENDING_HANDSHAKE = "sending_handshake"
     RECEIVING_HANDSHAKE = "receiving_handshake"
 
@@ -71,13 +72,15 @@ class ConnectingPhase:
 class WebSocketClient(_BaseSession):
     """Non-blocking RFC 6455 WebSocket client.
 
-    Construct with a *connection_factory*: a ``(host: str, port: int,
-    use_tls: bool) -> socket`` callable that returns any object
-    matching the four-method TCP contract (``recv_into`` / ``send`` /
-    ``close`` / ``setblocking``; full shape documented on the
-    *connection_factory* parameter below).  ``chumicro_sockets``-based
-    factories work; so does anything else of the same shape.  Configure
-    callbacks, then call :meth:`connect`.  Drive via :meth:`check` / :meth:`handle`
+    Construct with a *connector_factory*: a ``(host: str, port: int,
+    use_tls: bool) -> SocketConnector`` callable that hands back a
+    tick-driven non-blocking connect state machine.  Once the
+    connector reports ``ready``, the promoted socket must expose the
+    four-method TCP contract (``recv_into`` / ``send`` / ``close`` /
+    ``setblocking``; full shape documented on the *connector_factory*
+    parameter below).  ``chumicro_sockets``-based factories work; so
+    does anything else of the same shape.  Configure callbacks, then
+    call :meth:`connect`.  Drive via :meth:`check` / :meth:`handle`
     from a runner tick or hand-rolled loop.  Callbacks fire from
     :meth:`handle`, never from a thread or interrupt.
 
@@ -114,35 +117,35 @@ class WebSocketClient(_BaseSession):
         *,
         radio: object | None = None,
         ssl_context: object | None = None,
-        connection_factory: object | None = None,
+        connector_factory: object | None = None,
     ) -> "WebSocketClient":
         """Build a :class:`WebSocketClient` from runtime config.
 
         Reads optional ``websockets.client.max_message_bytes``.  No
         key is required — host / port / use_tls live on each
-        :meth:`connect` URL, not on the client.  A *connection_factory*
+        :meth:`connect` URL, not on the client.  A *connector_factory*
         override bypasses the auto-built factory entirely.
         ``websockets.client.connect_url`` is declared in the manifest
         but consumed by your app on the :meth:`connect` call, not by
         ``from_config``.
         """
-        if connection_factory is None:
+        if connector_factory is None:
             try:
                 from chumicro_websockets.sockets_factory import (  # noqa: PLC0415
-                    chumicro_sockets_factory,
+                    chumicro_sockets_connector_factory,
                 )
             except ImportError as exception:
                 raise RuntimeError(
                     "chumicro_websockets.sockets_factory not "
                     "available (excluded via __chumicro_skip_factories__ "
-                    "or not on the board) — pass connection_factory= "
+                    "or not on the board) — pass connector_factory= "
                     "explicitly.",
                 ) from exception
-            connection_factory = chumicro_sockets_factory(
+            connector_factory = chumicro_sockets_connector_factory(
                 radio=radio, ssl_context=ssl_context,
             )
         return cls(
-            connection_factory=connection_factory,
+            connector_factory=connector_factory,
             max_message_bytes=config.get(
                 "websockets.client.max_message_bytes",
                 DEFAULT_MAX_MESSAGE_BYTES,
@@ -151,7 +154,7 @@ class WebSocketClient(_BaseSession):
 
     def __init__(
         self,
-        connection_factory,
+        connector_factory,
         *,
         max_message_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,
@@ -180,7 +183,8 @@ class WebSocketClient(_BaseSession):
             ticks=ticks,
         )
 
-        self._connection_factory = connection_factory
+        self._connector_factory = connector_factory
+        self._connector = None
         self._ping_interval_ms = ping_interval_ms
 
         # Set on the first connect() call.  Before then state stays
@@ -189,6 +193,16 @@ class WebSocketClient(_BaseSession):
         self._connect_called = False
         self._connecting_phase = None
         self.url = ""
+
+        # Handshake parameters captured at :meth:`connect` time and
+        # consumed by :meth:`_on_transport_ready` once the connector
+        # promotes the socket.  Held as separate attributes (vs a
+        # tuple / dataclass) because the four-attribute count beats
+        # one allocation on the import-time RAM ledger.
+        self._pending_handshake_host = None
+        self._pending_handshake_port = None
+        self._pending_handshake_path = None
+        self._pending_handshake_extra_headers = None
 
         self._handshake_response_parser = None
 
@@ -209,12 +223,13 @@ class WebSocketClient(_BaseSession):
     ) -> None:
         """Initiate the opening handshake against *url*.
 
-        Non-blocking modulo the *connection_factory* call (which may
-        block briefly through DNS + TCP + TLS, same contract as
-        :func:`chumicro_sockets.tcp_client_socket`).  After
-        :meth:`connect` returns, the client is in
-        :data:`WebSocketState.CONNECTING`.  Subsequent :meth:`handle`
-        ticks finish the upgrade and transition to OPEN.
+        Returns immediately after arming the connector — no network
+        I/O on the caller's thread.  After :meth:`connect` returns,
+        the client is in :data:`WebSocketState.CONNECTING` with the
+        AWAITING_TRANSPORT phase, and subsequent :meth:`handle` ticks
+        drive DNS / TCP / TLS via the connector.  Once the connector
+        reaches ``ready``, the client transitions to SENDING_HANDSHAKE
+        and the WebSocket upgrade exchange begins.
 
         *extra_headers* (iterable / ``dict`` / :class:`CaseInsensitiveDict`)
         is useful for ``Cookie`` / ``Authorization`` / ``Origin``.
@@ -232,21 +247,15 @@ class WebSocketClient(_BaseSession):
         scheme, host, port, path = parse_ws_url(url)
         use_tls = scheme == "wss"
 
-        self._socket = self._connection_factory(host, port, use_tls)
-        _force_non_blocking(self._socket)
-
-        client_key = make_websocket_key()
-        self._handshake_send_buffer = encode_client_handshake(
-            host,
-            port,
-            path,
-            client_key,
-            extra_headers=extra_headers,
-        )
-        self._handshake_send_offset = 0
-        self._handshake_response_parser = HandshakeResponseParser(
-            derive_accept_key(client_key),
-        )
+        self._connector = self._connector_factory(host, port, use_tls)
+        # Capture the handshake parameters now; the actual encoding
+        # happens once the connector hands back a live socket so the
+        # send buffer doesn't sit around mutated-but-unsent for the
+        # duration of the connect.
+        self._pending_handshake_host = host
+        self._pending_handshake_port = port
+        self._pending_handshake_path = path
+        self._pending_handshake_extra_headers = extra_headers
 
         budget_ms = self._handshake_timeout_ms if timeout_ms is None else timeout_ms
         self._handshake_deadline_ticks = self._ticks.ticks_add(
@@ -255,6 +264,37 @@ class WebSocketClient(_BaseSession):
         )
 
         self.state = WebSocketState.CONNECTING
+        self._connecting_phase = ConnectingPhase.AWAITING_TRANSPORT
+
+    def _on_transport_ready(self, now_ms: int) -> None:  # noqa: ARG002 - hook signature
+        """Promote the connector's socket and encode the upgrade request.
+
+        Called when the connector reaches ``ready``.  Encodes the HTTP
+        upgrade request now (deferred from :meth:`connect`), arms the
+        response parser, and transitions to SENDING_HANDSHAKE.
+        """
+        self._socket = self._connector.socket
+        self._connector = None
+        _force_non_blocking(self._socket)
+
+        client_key = make_websocket_key()
+        self._handshake_send_buffer = encode_client_handshake(
+            self._pending_handshake_host,
+            self._pending_handshake_port,
+            self._pending_handshake_path,
+            client_key,
+            extra_headers=self._pending_handshake_extra_headers,
+        )
+        self._handshake_send_offset = 0
+        self._handshake_response_parser = HandshakeResponseParser(
+            derive_accept_key(client_key),
+        )
+        # Release the captured parameters now that they've been consumed.
+        self._pending_handshake_host = None
+        self._pending_handshake_port = None
+        self._pending_handshake_path = None
+        self._pending_handshake_extra_headers = None
+
         self._connecting_phase = ConnectingPhase.SENDING_HANDSHAKE
 
     # ------------------------------------------------------------------
@@ -269,13 +309,40 @@ class WebSocketClient(_BaseSession):
 
     def _connecting_wants_read(self) -> bool:
         """The client reads during the second handshake leg (waiting on
-        the server's HTTP 101 response)."""
+        the server's HTTP 101 response) and during AWAITING_TRANSPORT
+        forwards the connector's read interest (TLS handshake rounds
+        that consume inbound bytes)."""
+        if self._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT:
+            return self._connector.io_wants_read if self._connector is not None else False
         return self._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE
 
     def _connecting_wants_write(self) -> bool:
         """The client writes during the first handshake leg (sending the
-        upgrade request bytes)."""
+        upgrade request bytes) and during AWAITING_TRANSPORT forwards
+        the connector's write interest (TCP-connect / TLS-handshake
+        phases that need writability)."""
+        if self._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT:
+            return self._connector.io_wants_write if self._connector is not None else False
         return self._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
+
+    @property
+    def io_socket(self):
+        """During AWAITING_TRANSPORT, forward to the in-flight connector
+        so ``Runner.wait`` parks on the right pollable; otherwise return
+        the live session's socket (or ``None`` when CLOSED).
+
+        Base-class behaviour is inlined here rather than chained via
+        ``super().io_socket`` because CircuitPython's property /
+        super() descriptor interaction raises ``AttributeError`` on
+        the base attribute lookup at runtime.
+        """
+        if self._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT:
+            return self._connector.io_socket if self._connector is not None else None
+        if self._socket is None:
+            return None
+        if self.state == WebSocketState.CLOSED:
+            return None
+        return getattr(self._socket, "_sock", self._socket)
 
     def handle(self, now_ms: int) -> None:
         """One tick of progress: drain bounded inbound through the
@@ -291,7 +358,9 @@ class WebSocketClient(_BaseSession):
             return
 
         if self.state == WebSocketState.CONNECTING:
-            if self._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
+            if self._connecting_phase == ConnectingPhase.AWAITING_TRANSPORT:
+                self._advance_connector(now_ms)
+            elif self._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE:
                 self._send_handshake_chunk(now_ms)
             elif self._connecting_phase == ConnectingPhase.RECEIVING_HANDSHAKE:
                 self._receive_handshake_chunk(now_ms)
@@ -304,6 +373,27 @@ class WebSocketClient(_BaseSession):
 
         if self.state == WebSocketState.OPEN:
             self._maybe_emit_auto_ping(now_ms)
+
+    def _advance_connector(self, now_ms: int) -> None:
+        """Tick the in-flight connector one phase.
+
+        On ``ready`` promotes the socket via :meth:`_on_transport_ready`
+        — the next handle() tick picks up at SENDING_HANDSHAKE.  On
+        ``failed`` closes the session via :meth:`_fail_with_error` with
+        the connector's error wrapped in
+        :class:`WebSocketStateError`.
+        """
+        connector = self._connector
+        connector.tick(now_ms)
+        if connector.state == "ready":
+            self._on_transport_ready(now_ms)
+            return
+        if connector.state == "failed":
+            error = connector.last_error
+            self._connector = None
+            self._fail_with_error(
+                WebSocketStateError(f"connector failed: {error}"),
+            )
 
     # ------------------------------------------------------------------
     # Subclass hooks

@@ -39,7 +39,7 @@ import sys
 import time
 
 from chumicro_config import config
-from chumicro_sockets import tcp_client_socket, tcp_listening_socket
+from chumicro_sockets import tcp_client_connector, tcp_listening_socket
 from chumicro_test_harness import skip
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_websockets import WebSocketClient, WebSocketServer, WebSocketState
@@ -156,10 +156,10 @@ def test_real_websocket_loopback_round_trip() -> None:
     client_observed_text = []
     client_open_ticks = []
 
-    def make_socket(host, port, use_tls):  # noqa: ARG001 - protocol
-        return tcp_client_socket(host, port, radio=wifi.adapter.radio)
+    def make_connector(host, port, use_tls):  # noqa: ARG001 - protocol
+        return tcp_client_connector(host, port, radio=wifi.adapter.radio)
 
-    client = WebSocketClient(connection_factory=make_socket)
+    client = WebSocketClient(connector_factory=make_connector)
     client.on_open = lambda: client_open_ticks.append(_ticks_ms())
     client.on_text = lambda text: client_observed_text.append(text)
 
