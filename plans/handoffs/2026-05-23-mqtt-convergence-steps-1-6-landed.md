@@ -88,6 +88,16 @@ Not yet in any canonical home (sits here):
     Initial `connect()` is also blocking but **not a runner-contract violation** — by convention it's called before the runner loop starts (or between loop runs), the same way the reference's `start_connect` is.  No fix needed for the initial path.  Tracked in next-up — needs an ADR to pick between (a) and (b) before code lands.
 6. **The 26-test negative-bake suite** (A1-E3 in `mqtt-negative-testing-suite.md`).  This is the BIG remaining work — happy-path bakes can't see the bugs these fixes were designed to catch.  A1 / A2 / B1 / B2 are the foundational ones; the rest are deeper edges and TLS-specific paths.  Will take multiple sessions.
 
+## Bloat-trim opportunities surfaced this session
+
+User raised the size/behavior mismatch at handoff time: chumicro_mqtt is ~2× the reference (2172 lines vs 1043) but had WORSE runner-friendliness on the connect path until Decision 0081 lands.  That's a priorities-inversion problem.  Concrete trim candidates:
+
+- **Collapse `publish` / `publish_raw` (and `subscribe` / `subscribe_raw`, `unsubscribe` / `unsubscribe_raw`) into one method each with a `prefixed=True` kwarg.**  ~100 lines of `client.py` plus ~30 of docs + tests.  Same shape `set_will` already uses (prefixed=False opts out).  Tracked as a standalone next-up bullet.
+- **`from_config` + sockets-factory plumbing** could move to a separate helper module — ~100 lines.
+- The broader `/audit-library libraries/mqtt` pass (also in next-up) is the structured way to find the rest.
+
+These are real wins but separate from Decision 0081.  Sequencing: Decision 0081 first (it's the runner-shape gap the user prioritised), then the bloat-trim passes.
+
 ## Dead ends
 
 - **Strict one-parse-per-tick (just one packet dispatched per tick) for step 5.**  Initial implementation broke 4 tests because chumicro's runner doesn't fire on a tight loop like the reference's `main` does — buffered packets would stall up to 30 s waiting for the next keepalive deadline.  Reverted to "one I/O per tick + multi-parse from buffered decoder" which is the right shape for chumicro's runner model.  Took ~10 min to diagnose the test failures and arrive at the corrected design.

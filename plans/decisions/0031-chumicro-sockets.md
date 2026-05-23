@@ -34,11 +34,18 @@ chumicro_sockets/
   testing.py            # FakeSocket for unit tests
 ```
 
-Adapter selection via `sys.implementation.name` + board probe, wrapped in two sibling factories — one per transport kind:
+Adapter selection via `sys.implementation.name` + board probe, wrapped in two pairs of sibling factories — one synchronous, one tick-driven (added by [Decision 0081](0081-non-blocking-connect-via-tick-driven-connector.md)):
 
 ```python
+# Synchronous factories — returned socket is already connected.
+# For one-shot scripts, REPL, tests, code that owns the loop.
 tcp_client_socket(host, port, *, radio=None) -> TCPClientSocket
 tls_client_socket(host, port, *, context=None, radio=None) -> TCPClientSocket
+
+# Connector factories — non-blocking, returns a tick-driven state machine.
+# For runner-shaped libraries (chumicro-mqtt, chumicro-requests, etc.).
+tcp_client_connector(host, port, *, radio=None) -> SocketConnector
+tls_client_connector(host, port, *, context=None, radio=None) -> SocketConnector
 ```
 
 **Protocol surface** (minimum that downstream libs touch):
@@ -50,7 +57,9 @@ tls_client_socket(host, port, *, context=None, radio=None) -> TCPClientSocket
 - `settimeout(seconds: float | None) -> None`
 - `fileno() -> int` (for `select.poll()` registration)
 
-`connect()` happens inside the factory — the returned socket is already connected.  Callers do not see a disconnected socket or a separate connect step.
+Synchronous factory behaviour: `connect()` happens inside the factory — the returned socket is already connected.  Callers do not see a disconnected socket or a separate connect step.  Suitable when the caller controls the timing (e.g. `main` before entering the runner loop, or a one-shot script).
+
+Connector behaviour: factory returns immediately with a `SocketConnector` whose `tick(now_ms)` advances DNS → TCP → TLS one phase per tick.  See [Decision 0081](0081-non-blocking-connect-via-tick-driven-connector.md) for the connector contract and the per-runtime substrate caveats (CP blocks per phase; MP+CPython are truly non-blocking).
 
 No `recv()`.  Downstream code allocates its own buffer and uses `recv_into()` — the CP-compatible idiom.  MP + CPython adapters implement `recv_into()` using stdlib `sock.recv_into()` directly.  Older MP ports without `recv_into` fall back to `recv()` + memcpy internally.
 
