@@ -80,7 +80,7 @@ class Connection(_BaseSession):
     ``on_ping`` / ``on_pong`` / ``on_close`` / ``on_oversized``.
     """
 
-    _role_label = "client"  # error messages describe what the *peer* sent
+    _peer_label = "client"  # label names the peer in error messages
     _inbound_mask_required = True  # clients MUST mask outbound
 
     def __init__(
