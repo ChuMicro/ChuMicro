@@ -105,6 +105,37 @@ class TestDownloadFirmware:
         assert mid_events, "expected incremental progress events"
         assert 0.0 < mid_events[-1][0] <= 1.0
 
+    def test_file_url_response_without_getheader(self, tmp_path: Path) -> None:
+        """`file://` URLs return a response lacking ``getheader``; the
+        download should still complete and just skip progress reporting."""
+        payload = b"local-file-bytes"
+        destination = tmp_path / "fw.uf2"
+
+        class _BareResponse:
+            def __init__(self) -> None:
+                self._stream = io.BytesIO(payload)
+                self.closed = False
+
+            def read(self, size: int = -1) -> bytes:
+                return self._stream.read(size)
+
+            def close(self) -> None:
+                self.closed = True
+
+        events: list[tuple[float, str]] = []
+
+        def fake_urlopen(_url: str) -> _BareResponse:
+            return _BareResponse()
+
+        _download_firmware(
+            "file:///x/fw.uf2", destination,
+            on_progress=lambda fraction, message: events.append((fraction, message)),
+            urlopen=fake_urlopen,
+        )
+        assert destination.read_bytes() == payload
+        assert events[0] == (0.0, "downloading file:///x/fw.uf2")
+        assert events[-1] == (1.0, "download complete")
+
     def test_url_error_wraps_with_recovery_hint(self, tmp_path: Path) -> None:
         from urllib.error import URLError
 
@@ -328,6 +359,59 @@ class TestEsptoolPath:
         with pytest.raises(FlashFirmwareError, match="Install it with"):
             _flash_firmware_esptool(firmware, device, on_progress=None)
 
+    def test_prefers_esptool_py_over_esptool(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        """When both names resolve, the ``.py`` flavor (esptool v4.x)
+        wins.  esptool v5 has a regression with the ESP32-S2 USB-OTG
+        ROM bootloader on macOS, so v4 is the safer default."""
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: {
+                "esptool.py": "/fake/idf-env/esptool.py",
+                "esptool": "/fake/homebrew/esptool",
+            }.get(name),
+        )
+        monkeypatch.delenv("CHUMICRO_ESPTOOL_BINARY", raising=False)
+        runner_calls: list[list[str]] = []
+
+        def fake_runner(command, **_kwargs):  # noqa: ANN001
+            runner_calls.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        device = Device(transport="micropython", address="/dev/ttyUSB0")
+        firmware = tmp_path / "fw.bin"
+        firmware.write_bytes(b"x")
+        _flash_firmware_esptool(
+            firmware, device, on_progress=None, erase_flash=False,
+            runner=fake_runner,
+        )
+        assert runner_calls[0][0] == "/fake/idf-env/esptool.py"
+
+    def test_env_override_wins_over_both(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        """``CHUMICRO_ESPTOOL_BINARY`` overrides path discovery."""
+        monkeypatch.setenv("CHUMICRO_ESPTOOL_BINARY", "/explicit/esptool")
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: f"/path/{name}",
+        )
+        runner_calls: list[list[str]] = []
+
+        def fake_runner(command, **_kwargs):  # noqa: ANN001
+            runner_calls.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        device = Device(transport="micropython", address="/dev/ttyUSB0")
+        firmware = tmp_path / "fw.bin"
+        firmware.write_bytes(b"x")
+        _flash_firmware_esptool(
+            firmware, device, on_progress=None, erase_flash=False,
+            runner=fake_runner,
+        )
+        assert runner_calls[0][0] == "/explicit/esptool"
+
     def test_successful_invocation(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     ) -> None:
@@ -390,12 +474,16 @@ class TestEsptoolPath:
     ) -> None:
         """Erase and write are separate esptool calls.
 
-        esptool v5 dropped chained sub-commands.  Each sub-command
-        is its own invocation.  The erase call must pass
-        ``--after no_reset`` so the chip stays in ROM bootloader
-        for the write call.  Otherwise esptool's default hard_reset
-        strands the (now empty-flash) board until the user holds
-        GPIO0 and re-plugs.
+        Both calls pass ``--before no_reset`` because the caller put
+        the chip in ROM bootloader before we got here; esptool's
+        default DTR/RTS reset dance on port open can knock an
+        already-in-bootloader chip back out of bootloader, especially
+        on ESP32-S2 with native USB-OTG.
+
+        Only the erase call passes ``--after no_reset`` so the chip
+        stays in ROM bootloader for the write that follows; the write
+        call uses esptool's default hard_reset so the board boots the
+        new firmware once writing completes.
         """
         monkeypatch.setattr(
             "shutil.which",
@@ -418,10 +506,19 @@ class TestEsptoolPath:
 
         assert len(invocations) == 2
         erase_command, write_command = invocations
+
+        def _flag_value(command: list[str], flag: str) -> str | None:
+            try:
+                return command[command.index(flag) + 1]
+            except ValueError:
+                return None
+
         assert "erase-flash" in erase_command
-        assert "no_reset" in erase_command
+        assert _flag_value(erase_command, "--before") == "no_reset"
+        assert _flag_value(erase_command, "--after") == "no_reset"
         assert "write-flash" in write_command
-        assert "no_reset" not in write_command
+        assert _flag_value(write_command, "--before") == "no_reset"
+        assert _flag_value(write_command, "--after") is None
 
     def test_erase_flash_failure_surfaces_step_name(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
@@ -479,6 +576,24 @@ class TestEnterEsp32RomBootloader:
         result = _enter_esp32_rom_bootloader(
             device, interactive=False,
         )
+        assert result == "/dev/cu.usbmodem01"
+
+    def test_already_in_bootloader_via_baseline(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """User pressed BOOT+RESET before invoking us: the runtime CDC is
+        gone from the baseline and a usbmodem01-style port is present.
+        Return that port without trying to dispatch a reset through the
+        vanished runtime port."""
+        device = Device(
+            transport="circuitpython",
+            address="/dev/cu.usbmodem84722E7490C31",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.firmware._list_candidate_serial_ports",
+            lambda *_args, **_kwargs: {"/dev/cu.usbmodem01"},
+        )
+        result = _enter_esp32_rom_bootloader(device, interactive=False)
         assert result == "/dev/cu.usbmodem01"
 
     def test_programmatic_entry_detects_new_port(
