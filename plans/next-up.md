@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Resume MQTT convergence work from session handoff** — see [`handoffs/2026-05-23-mqtt-convergence-steps-1-6-landed.md`](handoffs/2026-05-23-mqtt-convergence-steps-1-6-landed.md).  Steps 1-6 landed + happy-path bake-validated; next-up cycle is negative-bake validation (A1 / A2 first) + the 7 strays + connect-path sandboxing ADR.
+- [ ] **MQTT subscription survival across reconnect** — A1+A2 negative bake on 2026-05-23 confirmed self-heal recovers the connection but the bake's inbound stream stayed at 60 (pre-outage count) for the rest of the run; the board does not re-subscribe after `_attempt_self_heal` re-issues CONNECT.  Matches A8 in [`mqtt-negative-testing-suite.md`](workstreams/mqtt-negative-testing-suite.md).  With `clean_session=True` (the bake default) the broker forgets the subscription on reconnect, so the client must replay SUBSCRIBE in its connect path.  Fix probably belongs in `_attempt_self_heal` or the post-self-heal CONNACK handler.
 
 ## Next
 

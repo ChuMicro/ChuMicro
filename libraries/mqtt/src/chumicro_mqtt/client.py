@@ -842,9 +842,13 @@ class MQTTClient:
 
         The recv path is cooperative: ``handle()`` always attempts a
         non-blocking recv and bails on EAGAIN, so any non-terminal
-        state is worth a tick.
+        state is worth a tick.  ``FAILED`` qualifies — ``handle()``'s
+        FAILED branch is where ``_attempt_self_heal`` lives, and that
+        has to keep firing until the broker is reachable again.  Only
+        ``DISCONNECTED`` (a terminal state the user explicitly asked
+        for) is gated out.
         """
-        return self.state not in (ProtocolState.DISCONNECTED, ProtocolState.FAILED)
+        return self.state is not ProtocolState.DISCONNECTED
 
     # ------------------------------------------------------------------
     # Runner I/O interest (read by ``Runner.wait``)

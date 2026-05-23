@@ -176,6 +176,24 @@ class TestErrorPaths:
         client = _new_client(sock, ticks)
         assert client.check(ticks.ticks_ms()) is False
 
+    def test_check_returns_true_when_failed(self) -> None:
+        # The runner gates handle() on check(); _attempt_self_heal
+        # only fires from inside handle()'s FAILED branch.  If check()
+        # gates FAILED out, self-heal is unreachable and broker-outage
+        # recovery never runs.  Pi Pico W CP bake on 2026-05-23 caught
+        # this: the convergence-steps-1-6 client correctly transitioned
+        # to FAILED on broker hard-kill, then stayed FAILED for 240 s
+        # because the runner never called handle() again.
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state is ProtocolState.CONNECTED
+        client.state = ProtocolState.FAILED
+        assert client.check(ticks.ticks_ms()) is True
+
     def test_oserror_during_send_marks_failed(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
