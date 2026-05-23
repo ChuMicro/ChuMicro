@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Runner reactor — resume from handoff (`Runner.wait` + `FakePoller` shipped; service-side `io_*` on requests / mqtt / websockets / http_server next, then heap-drift tracemalloc test and README example).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
+- [ ] **Runner reactor — resume from handoff (`Runner.wait` + `FakePoller` + requests `io_*` shipped; mqtt / websockets / http_server `io_*` next, then heap-drift tracemalloc test and README example).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
 
 ## Next
 
