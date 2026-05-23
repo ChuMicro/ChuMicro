@@ -14,15 +14,6 @@ from chumicro_mqtt._wire import (
     MQTTError,
     MQTTProtocolError,
     UnsupportedQoSError,
-    decode_varlen,
-    encode_connect,
-    encode_puback,
-    encode_publish,
-    encode_string,
-    encode_subscribe,
-    encode_unsubscribe,
-    encode_varlen,
-    topic_matches,
 )
 from chumicro_mqtt.client import MQTTClient, MQTTPublisher, ProtocolState, WhenOversized
 
@@ -36,13 +27,4 @@ __all__ = [
     "ProtocolState",
     "UnsupportedQoSError",
     "WhenOversized",
-    "decode_varlen",
-    "encode_connect",
-    "encode_puback",
-    "encode_publish",
-    "encode_string",
-    "encode_subscribe",
-    "encode_unsubscribe",
-    "encode_varlen",
-    "topic_matches",
 ]
