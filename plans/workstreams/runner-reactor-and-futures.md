@@ -630,8 +630,16 @@ on one reused poller, the combined socket-or-timer wake) on all four boards,
 and the four pre-code gaps are researched (see "Before code" above): the
 registration mechanism is recommended (option B, runner reads stable `io_*`
 attributes), the `TaskHandle`-retains-service change is confirmed, and the
-existing-service audit found no stalls. What remains is implementation:
-the `chumicro-sockets` raw-socket accessor, then the Model 1 reactor
-(`Runner.wait` + service-interest reads + `next_deadline`). Option B was
-ratified in ADR 0080 on 2026-05-22. The `requests` callback (axis 1, rung 2) shipped in 0.10.0
-ahead of this workstream.
+existing-service audit found no stalls. Option B was ratified in ADR 0080
+on 2026-05-22. The `chumicro-sockets` `pollable_of` helper shipped the
+same day, and the Model 1 reactor on `Runner` (`Runner.wait` + service-
+interest read loop + optional `next_deadline` + `FakePoller` host-test
+seam) landed alongside. What remains: each I/O service expose its
+`io_socket` / `io_wants_read` / `io_wants_write` (and optional
+`next_deadline`) — `requests`, `mqtt`, `websockets`, `http_server` —
+followed by the wrapper-mediated hardware validation against the
+`.scratch/{mp,cp}_ipoll_validate.template.py` templates, the
+tracemalloc heap-drift test on `tick` + `wait` cycles, and the README
+MQTT example update to demonstrate `runner.wait(now_ms)`. The
+`requests` callback (axis 1, rung 2) shipped in 0.10.0 ahead of this
+workstream.
