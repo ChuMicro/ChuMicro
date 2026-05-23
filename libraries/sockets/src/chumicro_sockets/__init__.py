@@ -199,6 +199,86 @@ def tls_client_socket(
     return cpython.connect_tls(host, port, context=context)
 
 
+def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -> object:
+    """Return a non-blocking TCP connector — the runner-shaped sibling of
+    :func:`tcp_client_socket`.
+
+    Library methods that perform network I/O don't block.  The returned
+    :class:`SocketConnector` advances DNS → TCP across multiple
+    ``tick(now_ms)`` calls; once ``state == "ready"``, the connected
+    socket is available on ``connector.socket``.  See
+    :mod:`chumicro_sockets._connector` for the state diagram.
+
+    Args:
+        host: DNS name or IP literal.
+        port: Remote port.
+        radio: CP-only radio object; ignored on MP and CPython.
+
+    Returns:
+        :class:`SocketConnector` in ``"awaiting_dns"`` — call ``tick``
+        until terminal.
+
+    Raises:
+        NotImplementedError: MicroPython / CircuitPython adapters not
+            yet implemented.
+    """
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        raise NotImplementedError(
+            "CircuitPython connector adapter not yet implemented",
+        )
+    if runtime == "micropython":
+        raise NotImplementedError(
+            "MicroPython connector adapter not yet implemented",
+        )
+    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
+
+    return cpython.tcp_connector(host, port)
+
+
+def tls_client_connector(
+    host: str,
+    port: int,
+    *,
+    context: object | None = None,
+    radio: object | None = None,
+) -> object:
+    """Return a non-blocking TLS connector — the runner-shaped sibling of
+    :func:`tls_client_socket`.
+
+    Same shape as :func:`tcp_client_connector`, plus an
+    ``"awaiting_tls"`` phase that runs the handshake across multiple
+    ticks.  *context=None* uses the runtime's default trust store
+    (same semantics as :func:`tls_client_socket`).
+
+    Args:
+        host: DNS name or IP literal; used as ``server_hostname`` for
+            the TLS handshake (SNI + cert verification).
+        port: Remote port.
+        context: SSLContext to use.  ``None`` = runtime default.
+        radio: CP-only radio object; ignored on MP and CPython.
+
+    Returns:
+        :class:`SocketConnector` in ``"awaiting_dns"``.
+
+    Raises:
+        NotImplementedError: MicroPython / CircuitPython adapters not
+            yet implemented.
+    """
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        raise NotImplementedError(
+            "CircuitPython connector adapter not yet implemented",
+        )
+    if runtime == "micropython":
+        raise NotImplementedError(
+            "MicroPython connector adapter not yet implemented",
+        )
+    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
+
+    return cpython.tls_connector(host, port, context=context)
+
+
 def tcp_listening_socket(
     host: str,
     port: int,

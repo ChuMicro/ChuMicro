@@ -1,0 +1,157 @@
+"""SocketConnector — base state machine + CPython adapter against loopback.
+
+The cross-runtime fake-driven tests live in :file:`test_connector.py`
+(no pytest), exercising the state machine via :class:`FakeSocketConnector`.
+This file is CPython-only because the real-loopback tests need stdlib
+``socket`` / ``ssl`` / pytest fixtures.
+"""
+
+from __future__ import annotations
+
+#: CPython-only lane (pytest fixtures + stdlib socket / ssl).
+__chumicro_runtimes__ = ("cpython",)
+
+import select
+import socket
+
+import pytest
+from chumicro_sockets import (
+    tcp_client_connector,
+    tls_client_connector,
+)
+from chumicro_sockets._connector import (
+    STATE_AWAITING_DNS,
+    STATE_AWAITING_TCP,
+    STATE_FAILED,
+    STATE_READY,
+)
+
+
+def _drive(connector, *, max_ticks: int = 50, now_ms: int = 0) -> None:
+    """Tick the connector up to *max_ticks* times or until terminal.
+
+    Between ticks, ``select.select`` parks briefly on the connector's
+    ``io_socket`` — same shape as ``Runner.wait`` in production, gives
+    the kernel time to complete the in-flight connect / handshake.
+    Without this, the test driver spins faster than the connect can
+    complete and bursts through ``max_ticks`` before the kernel marks
+    the socket writable.
+    """
+    for _ in range(max_ticks):
+        if not connector.check(now_ms):
+            return
+        io_sock = connector.io_socket
+        if io_sock is not None:
+            read_list = [io_sock] if connector.io_wants_read else []
+            write_list = [io_sock] if connector.io_wants_write else []
+            select.select(read_list, write_list, [], 0.05)
+        connector.tick(now_ms)
+    raise AssertionError(
+        f"connector did not reach terminal state in {max_ticks} ticks "
+        f"(state {connector.state!r})",
+    )
+
+
+@pytest.fixture
+def listener():
+    """Loopback TCP listener; yield (host, port)."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    host, port = server.getsockname()
+    yield host, port
+    server.close()
+
+
+class TestCPythonTCPConnector:
+    def test_connects_to_loopback(self, listener) -> None:
+        host, port = listener
+        connector = tcp_client_connector(host, port)
+        assert connector.state == STATE_AWAITING_DNS
+        _drive(connector)
+        assert connector.state == STATE_READY
+        assert connector.socket is not None
+        # Connected socket has a non-trivial fileno.
+        assert connector.socket.fileno() > 0
+        connector.socket.close()
+
+    def test_state_progresses_through_phases(self, listener) -> None:
+        # First tick should resolve DNS and land in awaiting_tcp.
+        # Subsequent ticks complete the TCP connect.
+        host, port = listener
+        connector = tcp_client_connector(host, port)
+        connector.tick(0)
+        assert connector.state == STATE_AWAITING_TCP
+        # io_wants_write is True during awaiting_tcp.
+        assert connector.io_wants_write is True
+        assert connector.io_wants_read is False
+        _drive(connector)
+        assert connector.state == STATE_READY
+        connector.socket.close()
+
+    def test_io_socket_none_after_ready(self, listener) -> None:
+        host, port = listener
+        connector = tcp_client_connector(host, port)
+        _drive(connector)
+        # Once terminal, io_socket returns None so the runner stops
+        # polling the connector's socket — the consumer has picked it up.
+        assert connector.io_socket is None
+        connector.socket.close()
+
+    def test_check_returns_false_when_ready(self, listener) -> None:
+        host, port = listener
+        connector = tcp_client_connector(host, port)
+        _drive(connector)
+        assert connector.check(0) is False
+        connector.socket.close()
+
+    def test_next_deadline_is_none(self, listener) -> None:
+        # Connector itself does not time out; consumers wrap with
+        # an outer deadline.
+        host, port = listener
+        connector = tcp_client_connector(host, port)
+        assert connector.next_deadline(0) is None
+        _drive(connector)
+        assert connector.next_deadline(0) is None
+        connector.socket.close()
+
+    def test_dns_failure_lands_in_failed(self) -> None:
+        # RFC2606 invalid TLD; never resolves.
+        connector = tcp_client_connector("no-such-host.invalid", 1)
+        _drive(connector)
+        assert connector.state == STATE_FAILED
+        assert connector.last_error is not None
+
+    def test_connect_refused_lands_in_failed(self) -> None:
+        # Loopback with no listener — kernel returns ECONNREFUSED.
+        connector = tcp_client_connector("127.0.0.1", 1)
+        _drive(connector)
+        assert connector.state == STATE_FAILED
+        assert connector.last_error is not None
+
+    def test_cancel_transitions_to_failed(self, listener) -> None:
+        host, port = listener
+        connector = tcp_client_connector(host, port)
+        connector.tick(0)  # awaiting_dns -> awaiting_tcp
+        connector.cancel()
+        assert connector.state == STATE_FAILED
+        assert connector.last_error is not None
+        # Cancel is idempotent.
+        connector.cancel()
+        assert connector.state == STATE_FAILED
+
+
+class TestCPythonTLSConnector:
+    # Real TLS handshake exercise lives in the consumer test path
+    # (``chumicro_mqtt`` over a real TLS broker) once the connector is
+    # wired into MQTTClient.  Local TLS-only fixtures need a paired
+    # server-side TLS listener with a mint-cert dance — the existing
+    # ``test_factories_pytest.py`` has that machinery.  The cross-
+    # runtime state-machine coverage for the TLS phase is in
+    # ``test_connector.py`` via ``FakeSocketConnector(tls=True)``.
+
+    def test_constructs_in_awaiting_dns(self, listener) -> None:
+        host, port = listener
+        connector = tls_client_connector(host, port)
+        assert connector.state == STATE_AWAITING_DNS

@@ -50,6 +50,96 @@ def connect_tls(host, port, *, context=None):
     return resolved_context.wrap_socket(raw, server_hostname=host)
 
 
+def tcp_connector(host, port):
+    """Return a non-blocking TCP :class:`SocketConnector` for CPython.
+
+    See :class:`chumicro_sockets._connector.SocketConnector` for the
+    contract.  Uses stdlib ``socket.getaddrinfo`` + non-blocking
+    ``socket.connect`` (``BlockingIOError`` / EINPROGRESS + SO_ERROR
+    poll) for a truly per-tick non-blocking dial.
+    """
+    return _CPythonConnector(host, port, tls=False, context=None)
+
+
+def tls_connector(host, port, *, context=None):
+    """Return a non-blocking TLS :class:`SocketConnector` for CPython.
+
+    Same shape as :func:`tcp_connector` plus a TLS handshake phase
+    driven by ``ssl.SSLContext.wrap_socket(do_handshake_on_connect=False)``
+    + ``sock.do_handshake()`` looped across ticks until done.
+    *context=None* uses :func:`ssl.create_default_context`.
+    """
+    return _CPythonConnector(host, port, tls=True, context=context)
+
+
+# The base ``SocketConnector`` is sibling-module pure Python and safe
+# to import at module top on any runtime that loads this file.  The
+# CP staging concern from the module docstring only applies to
+# ``socket`` / ``ssl`` — those stay lazy in the method bodies.
+from chumicro_sockets._connector import SocketConnector  # noqa: E402
+
+
+class _CPythonConnector(SocketConnector):
+    def _resolve_dns(self, host, port):
+        # First address family that getaddrinfo returns.  Good enough
+        # for the embedded targets we care about; a multi-AF fallback
+        # (try IPv6, fall back to IPv4) can be added if a consumer
+        # needs it.
+        import socket  # noqa: PLC0415 — runtime-gated
+
+        return socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)[0]
+
+    def _start_tcp_connect(self, addr_info):
+        import socket  # noqa: PLC0415 — runtime-gated
+
+        af, socktype, proto, _, sockaddr = addr_info
+        sock = socket.socket(af, socktype, proto)
+        sock.setblocking(False)
+        try:
+            sock.connect(sockaddr)
+        except BlockingIOError:
+            pass  # Expected — connect in progress.
+        return sock
+
+    def _check_tcp_connect(self, sock):
+        # SO_ERROR alone is unreliable right after a non-blocking
+        # connect() — on macOS it reads 0 while the connect is still
+        # in flight.  Use ``select.select`` to wait for writability
+        # first; once the socket is writable, SO_ERROR is meaningful
+        # (0 = connected, non-zero = errno of the connect failure).
+        import select  # noqa: PLC0415 — runtime-gated
+        import socket  # noqa: PLC0415 — runtime-gated
+
+        _, writable, _ = select.select([], [sock], [], 0)
+        if sock not in writable:
+            return False  # Still pending — retry next tick.
+        error = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        if error == 0:
+            return True
+        raise OSError(error, "TCP connect failed")
+
+    def _wrap_tls(self, sock, host, context):
+        import ssl  # noqa: PLC0415 — runtime-gated
+
+        resolved_context = (
+            context if context is not None else ssl.create_default_context()
+        )
+        return resolved_context.wrap_socket(
+            sock,
+            server_hostname=host,
+            do_handshake_on_connect=False,
+        )
+
+    def _step_tls_handshake(self, sock):
+        import ssl  # noqa: PLC0415 — runtime-gated
+
+        try:
+            sock.do_handshake()
+        except (ssl.SSLWantReadError, ssl.SSLWantWriteError):
+            return False
+        return True
+
+
 def listen_tcp(host, port, *, backlog=4):
     """Open a non-blocking TCP listening socket.
 
