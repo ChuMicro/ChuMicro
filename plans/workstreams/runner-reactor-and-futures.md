@@ -646,7 +646,15 @@ workstream; the optional `.on_reply` fluent skin on `RequestHandle`
 remains unbuilt and is intentionally not on the punch list — `on_done`
 covers the same use case.
 
-What remains: wrapper-mediated hardware validation against the
-`.scratch/{mp,cp}_ipoll_validate.template.py` templates, to confirm
-`pollable_of(wrapper)` reports readiness identically to the raw-socket
-runs from 2026-05-21.  Needs a board in hand.
+Wrapper-mediated hardware validation closed 2026-05-22 across all four
+boards (Pi Pico W + Lolin S2, MicroPython + CircuitPython).  A
+``runner_reactor_probe`` project deployed via the workspace-template
+exercises ``chumicro_sockets.tcp_client_socket(...)`` with
+``select.poll().register(pollable_of(wrapper), ...)``: an idle wrapper
+blocks the full 400 ms cap with zero ready (timer wins), a live wrapper
+becomes ready in 22-28 ms (socket wins), and 20 register/poll/recv
+cycles report drift of 0-160 bytes — within the 48-448 band the
+2026-05-21 raw-socket runs produced, so the wrapper layer adds nothing
+the poller can see.
+
+Workstream closed.
