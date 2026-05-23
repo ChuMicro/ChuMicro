@@ -145,6 +145,83 @@ class TestDisconnect:
         assert client.state == ProtocolState.DISCONNECTED
         assert sock.closed
 
+    def test_idempotent_second_disconnect_does_not_refire_callback(self) -> None:
+        """A second ``disconnect()`` against an already-DISCONNECTED
+        client is a no-op: no extra on_disconnect fire, no second
+        DISCONNECT packet on the wire, no double socket close."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        fired: list[bool] = []
+        client.on_disconnect = lambda: fired.append(True)
+        client.connect()
+        _drive(client, ticks, count=2)
+
+        client.disconnect()
+        assert fired == [True]
+        bytes_after_first = bytes(sock.sent)
+
+        # Second disconnect: should be a no-op.
+        client.disconnect()
+        assert fired == [True]
+        assert bytes(sock.sent) == bytes_after_first
+
+    def test_disconnect_from_failed_skips_disconnect_packet(self) -> None:
+        """Disconnecting from FAILED still cleans up but doesn't try to
+        send a DISCONNECT packet (the socket is likely dead)."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        sock.sent = bytearray()  # Reset after CONNECT bytes.
+        client.state = ProtocolState.FAILED
+
+        client.disconnect()
+        # No DISCONNECT packet sent on a presumed-dead socket.
+        assert bytes(sock.sent) == b""
+        assert client.state == ProtocolState.DISCONNECTED
+
+
+class TestSetWill:
+    def test_set_will_updates_topic_for_next_connect(self) -> None:
+        """set_will modifies the will the next CONNECT packet carries."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks, root_topic="devices")
+        client.set_will("status", b"offline", retain=True)
+        client.connect()
+        _drive(client, ticks, count=1)
+        # Prefix scheme applied: devices/<client_id>/status.
+        assert b"devices/test-client/status" in bytes(sock.sent)
+        assert b"offline" in bytes(sock.sent)
+
+    def test_set_will_none_topic_disables_will(self) -> None:
+        """set_will(topic=None) clears the will entirely."""
+        ticks = FakeTicks()
+        sock = FakeSocket()
+        client = _new_client(sock, ticks, root_topic="devices")
+        client.set_will("status", b"offline")
+        client.set_will(None)
+        # Internal state is back to no-will.
+        assert client._will_topic is None
+
+    def test_set_will_unprefixed_bypasses_root_topic(self) -> None:
+        """set_will(prefixed=False) sends the topic verbatim."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks, root_topic="devices")
+        client.set_will("$SYS/bridge/dead", b"x", prefixed=False)
+        client.connect()
+        _drive(client, ticks, count=1)
+        # Verbatim topic on the wire.
+        assert b"$SYS/bridge/dead" in bytes(sock.sent)
+        assert b"devices/" not in bytes(sock.sent)
+
 
 class TestPublishQos0:
     def test_qos0_writes_packet_immediately(self) -> None:
