@@ -43,7 +43,7 @@ RSYNC_TIMEOUT_MIN_SECONDS = 240.0
 RSYNC_TIMEOUT_BASE_SECONDS = 120.0
 
 #: Per-MB allowance for rsync.  600 s/MB ≈ 1.7 KB/s, sized for the
-#: slowest sustained USB-MSC FAT12 write rate.
+#: slowest sustained USB-MSC FAT32 write rate.
 #: Generous on purpose: a false-positive timeout surfaces as "wedge!"
 #: recovery noise, while a real wedge is a clear failure regardless
 #: of how long we waited.
@@ -93,8 +93,8 @@ def compute_rsync_timeout_seconds(staging_size_bytes: int) -> float:
         max(RSYNC_TIMEOUT_BASE_SECONDS + size_mb * RSYNC_TIMEOUT_PER_MB_SECONDS,
             RSYNC_TIMEOUT_MIN_SECONDS)
 
-    Keeps fast boards on a tight leash while giving slow boards
-    enough headroom to finish without false-positive timeouts.
+    Scales the deadline so fast boards fail fast on a real wedge
+    while slow boards still have headroom to finish.
 
     Args:
         staging_size_bytes: Sum of file sizes in the local staging
@@ -164,6 +164,10 @@ def merge_packages(
             are skipped (in addition to ``__pycache__`` / ``*.pyc``).
             ``None`` (the default) keeps every ``.py`` file regardless
             of its marker.
+        include_test_support: When ``False`` (the default), ``.py``
+            files marked with ``__chumicro_test_support__ = True`` are
+            skipped.  Pass ``True`` to merge them too, e.g. when
+            staging a test-fake bundle for on-device test runs.
     """
     if not source_directory.is_dir():
         return
@@ -188,8 +192,6 @@ def merge_packages(
             if is_test_support_module(
                 Path(directory) / name,
             ) and not include_test_support:
-                # Test-support fakes are excluded unless explicitly
-                # opted in via include_test_support.
                 ignored.add(name)
         return ignored
 
@@ -208,10 +210,10 @@ def merge_packages(
         )
 
 
-#: Excludes every CP rsync uses — build artifacts, macOS file-level
-#: detritus, and the macOS volume-level noise dirs + skip-sentinels
-#: planted in the staging tree.  See the docstring on each block in
-#: :func:`rsync` for the rationale.
+#: Patterns excluded from every CP rsync: build artifacts, macOS
+#: file-level detritus, and the macOS volume-level noise dirs plus
+#: the skip-sentinels planted in the staging tree.  The inline
+#: comments inside the tuple explain each block.
 _BASE_RSYNC_EXCLUDES: tuple[str, ...] = (
     "__pycache__",
     "*.pyc",

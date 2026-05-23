@@ -27,12 +27,9 @@ from xml.etree import ElementTree
 #: parameters, so we hit the bucket directly for listing.
 CIRCUITPYTHON_S3_BUCKET_URL = "https://adafruit-circuit-python.s3.amazonaws.com/"
 
-#: Adafruit's CDN download URL — used for the actual firmware
-#: download (lower latency than the bucket URL).  Listing happens on
-#: the bucket, and download happens on the CDN.  Single source of
-#: truth for the CP firmware URL shape, and
-#: ``firmware.resolve_firmware_url`` also formats against this
-#: constant.
+#: URL template for the CircuitPython firmware download.  Adafruit's
+#: CDN serves the firmware blobs with lower latency than the S3
+#: bucket the listing comes from.
 CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE = (
     "https://downloads.circuitpython.org/bin/{board_id}/{language}/"
     "adafruit-circuitpython-{board_id}-{language}-{version}.uf2"
@@ -531,8 +528,8 @@ def _parse_circuitpython_versions(body: bytes, *, prefix: str) -> list[str]:
 
     Walks every ``Contents/Key`` element, filters to keys that
     start with *prefix* and end in ``.uf2``, extracts the version
-    via :data:`_CIRCUITPYTHON_FILENAME_VERSION`.  Duplicates are
-    de-duplicated while preserving first-seen order.
+    via :data:`_CIRCUITPYTHON_FILENAME_VERSION`.  Drops duplicate
+    version strings while preserving first-seen order.
 
     Raises XML parse errors back to the caller as-is so a malformed
     bucket response is loud rather than silently empty.

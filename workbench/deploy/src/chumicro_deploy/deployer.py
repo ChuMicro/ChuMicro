@@ -11,14 +11,11 @@ The transport-level primitive this builds on is
 Per-file iteration and per-group resets are exposed through the
 richer ``stage()`` / ``execute()`` flow instead.
 
-:meth:`Deployer.deploy_diff` runs a pre-flight pass before transport
-setup: when the device's ``deploy_mode == "ram"`` and the source
-exposes ``host_paths()`` referencing any library with
-``[tool.chumicro] requires_flash = true``, the deploy auto-switches
-to flash mode for this run only and emits a human-readable
-explanation through the optional ``on_preflight_message`` callback
-(or stderr by default).  The explicit ``force_deploy_mode`` parameter
-bypasses pre-flight entirely.
+Before each deploy, a pre-flight pass auto-promotes a RAM-mode device
+to flash when the source ships a library marked
+``[tool.chumicro] requires_flash = true``.  The promotion is announced
+through ``on_preflight_message`` (stderr by default).  Pass
+``force_deploy_mode`` to bypass pre-flight.
 """
 
 from __future__ import annotations
@@ -121,15 +118,14 @@ class Deployer:
     ) -> Device:
         """Return the effective :class:`Device` for deploying *source*.
 
-        The configured device is the starting point, but the deploy
-        *mode* is a policy decision that depends on the source, hence
-        the name takes ``_for_source``.  This method computes the
-        policy inputs (the staged file set, and the ``requires_flash``
-        closure when *source* exposes ``host_paths()``) and delegates
-        the decision to :func:`chumicro_deploy.resolve_deploy_mode`,
-        the shared deploy-mode policy.  An app deploy has no single
-        owning library, so passes ``resolution_unit=None`` (no
-        "declare requires_flash" recommendation) and the default
+        The deploy mode depends on what *source* ships: a RAM-mode
+        device deploying a library marked ``requires_flash = true`` is
+        promoted to flash for this run.  This method gathers the staged
+        file set and the ``requires_flash`` closure (when *source*
+        exposes ``host_paths()``) and hands the decision to
+        :func:`chumicro_deploy.resolve_deploy_mode`.  An app deploy has
+        no single owning library, so passes ``resolution_unit=None``
+        (no "declare requires_flash" recommendation) and the default
         :class:`DeviceCaps`.
 
         Returns a :class:`Device` whose ``deploy_mode`` is the

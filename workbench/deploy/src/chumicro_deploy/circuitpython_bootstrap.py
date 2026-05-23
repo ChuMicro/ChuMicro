@@ -227,13 +227,13 @@ def _build_shared_prelude(
     staged_sources: list[tuple[str, str]],
     max_chunk_size_bytes: int,
 ) -> list[str]:
-    """Return the helper + stub + population scripts shared by every
-    CircuitPython RAM-mode bootstrap builder.
+    """Return the helper + stub + population scripts every CircuitPython
+    RAM-mode bootstrap builder runs first.
 
-    The prelude (class-as-module helper definitions, stub-registration
-    pass, population pass) is identical regardless of which final
-    exec script ships on top of it, so the class-as-module machinery
-    has one definition site.
+    Test and deploy bootstraps share these three setup steps verbatim:
+    helper definitions, then stub registration, then module population.
+    Building them here once keeps the class-as-module machinery out of
+    each builder.
     """
     helper_script = _build_helper_script()
     _validate_script_size(

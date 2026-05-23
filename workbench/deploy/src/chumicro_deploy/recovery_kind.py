@@ -14,7 +14,7 @@ from enum import Enum
 class DeployFailureKind(Enum):
     """Broad categories of deploy failures, keyed to recovery guidance.
 
-    The ~20 distinct ``CircuitpythonTransportError`` sites and MP
+    The dozens of ``CircuitpythonTransportError`` sites and MP
     transport errors all collapse into these buckets.  Each bucket
     has a canned :class:`RecoveryPlan` in
     :mod:`chumicro_deploy.recovery_plans` whose ``retryable`` flag

@@ -1,18 +1,13 @@
 """Deploy-time mode resolution and the inputs it reads.
 
-:func:`resolve_deploy_mode` is pure policy.  Given the configured
-mode and the resolution unit's inputs, it returns the effective mode
-plus an optional human-readable message when a requested RAM mode
-was overridden to flash.  One rule across every shape: the
-unit/functional distinction is expressed by how ``staged_files`` and
-``resolution_unit`` are scoped, never by a branch in the policy.
-
 Public API:
 
 * :func:`resolve_deploy_mode` — pure policy: given the configured mode
   and the resolution unit's inputs, return the effective mode plus an
   optional human-readable message when a requested RAM mode was
-  overridden to flash.
+  overridden to flash.  One rule across every shape: the
+  unit/functional distinction is expressed by how ``staged_files`` and
+  ``resolution_unit`` are scoped, never by a branch in the policy.
 * :class:`DeviceCaps` — static board capabilities the policy reads.
 * :func:`find_libraries_requiring_flash` — walks a list of host paths
   to find every unique containing ``pyproject.toml``, reads

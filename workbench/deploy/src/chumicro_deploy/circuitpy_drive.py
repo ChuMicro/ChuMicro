@@ -212,8 +212,6 @@ def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
 def _list_scope_on_drive(drive: Path, *, clean_slate: bool = False) -> list[str]:
     """Walk a CIRCUITPY drive and return the diff's in-scope paths.
 
-    Flash-mode scope walker.
-
     ``clean_slate=True`` (the deploy default) puts *every* drive file
     in scope except the closed keep set
     (:data:`flash_drive.DEVICE_KEEP_SET`) and macOS-managed noise, so

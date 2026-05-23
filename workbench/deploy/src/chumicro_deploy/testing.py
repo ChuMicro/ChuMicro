@@ -229,13 +229,11 @@ class FakeSerialPort:
 class FakeTransport:
     """In-memory fake that records transport calls and returns canned output.
 
-    Implements both :class:`TransportProtocol` and the
-    :class:`ExtendedTransportProtocol` (CircuitPython chunked-execution
-    helpers) so a single fake covers either path.  The chunked
-    methods default to delegating to ``execute`` so the chunked
-    behavior is not required up front.
-
-    See the per-field ``#:`` comments below for each attribute's role.
+    Satisfies both :class:`TransportProtocol` and
+    :class:`ExtendedTransportProtocol`, so the same fake stands in
+    for either a MicroPython or CircuitPython transport.  The
+    chunked-execute helpers fall back to :meth:`execute` when no
+    chunked-specific behavior is configured.
     """
 
     #: Fallback string returned by ``execute()`` when :attr:`outputs`
@@ -468,8 +466,8 @@ class FakeTransport:
         tests can assert the capture-window override.
         """
         self.calls.append(("deploy_files", (dict(files), entrypoint, follow)))
-        # `clean` rides on the kwarg surface and is recorded for
-        # later inspection.
+        # Record `clean` and `tail_seconds` so a test can assert the
+        # kwargs the transport actually received.
         self.last_clean = clean  # type: ignore[attr-defined]
         self.last_tail_seconds = tail_seconds  # type: ignore[attr-defined]
         # Update simulated on-device state so a subsequent
