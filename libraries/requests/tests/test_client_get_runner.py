@@ -9,22 +9,24 @@ from chumicro_requests import (
 )
 from chumicro_runner import Runner
 from chumicro_runner.testing import FakePoller
-from chumicro_sockets.testing import FakeSocket
+from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 
 def make_factory(socket_or_factory):
-    """Return a connection_factory that hands out *socket_or_factory*.
+    """Return a connector_factory that hands out a FakeSocketConnector
+    wrapping *socket_or_factory* on ``ready``.
 
     *socket_or_factory* can be either a single :class:`FakeSocket`
-    (returned every call) or a zero-arg callable that builds a fresh
-    one on demand.
+    (wrapped every call) or a zero-arg callable that builds a fresh
+    one on demand.  Each call scripts a ``["dns_ok", "tcp_ok"]``
+    happy-path connector — exactly one extra tick per request hop
+    versus the pre-Phase-2 synchronous-factory shape.
     """
     def factory(host, port, use_tls):  # noqa: ARG001 — fake ignores args
-        if callable(socket_or_factory):
-            return socket_or_factory()
-        return socket_or_factory
+        socket = socket_or_factory() if callable(socket_or_factory) else socket_or_factory
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
     return factory
 
@@ -54,7 +56,7 @@ def make_client(*, socket_or_factory=None, **kwargs):
     ticks = FakeTicks()
     socket = socket_or_factory if socket_or_factory is not None else FakeSocket()
     client = HttpClient(
-        connection_factory=make_factory(socket),
+        connector_factory=make_factory(socket),
         ticks=ticks,
         **kwargs,
     )
@@ -195,7 +197,7 @@ class TestHttpClientGet:
         assert b"User-Agent: custom-agent/9\r\n" in socket.sent
 
     def test_https_url_dispatches_with_use_tls_true(self):
-        """``https://`` URLs route to the connection_factory with
+        """``https://`` URLs route to the connector_factory with
         ``use_tls=True`` and skip the port in the Host header when
         it equals 443 (the scheme default)."""
         socket = FakeSocket()
@@ -204,11 +206,11 @@ class TestHttpClientGet:
 
         def factory(host, port, use_tls):
             captured.append((host, port, use_tls))
-            return socket
+            return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=factory,
+            connector_factory=factory,
             ticks=ticks,
         )
         handle = client.get("https://example.test/secret")
@@ -225,11 +227,11 @@ class TestHttpClientGet:
 
         def factory(host, port, use_tls):
             captured.append((host, port, use_tls))
-            return socket
+            return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=factory,
+            connector_factory=factory,
             ticks=ticks,
         )
         handle = client.get("https://example.test:8443/")
@@ -313,7 +315,10 @@ class TestRunnerReactorContract:
         socket.enqueue_eagain_for_recv(99)
         client, ticks, _ = make_client(socket_or_factory=socket)
         client.get("http://example.test/")
-        client.handle(ticks.ticks_ms())  # drive SENDING, then RECEIVING
+        # First handle ticks the connector through dns_ok; second
+        # through tcp_ok → promote → SENDING → drain → RECEIVING.
+        client.handle(ticks.ticks_ms())
+        client.handle(ticks.ticks_ms())
 
         assert client.io_wants_read is True
         assert client.io_wants_write is False
@@ -361,7 +366,7 @@ class TestRunnerReactorContract:
         poller = FakePoller()
         runner = Runner(ticks=ticks, poller=poller)
         client = HttpClient(
-            connection_factory=make_factory(socket), ticks=ticks,
+            connector_factory=make_factory(socket), ticks=ticks,
         )
         runner.add(client)
 
@@ -445,7 +450,7 @@ class TestOnDoneCallback:
         sockets = iter((first, second))
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=make_factory(lambda: next(sockets)),
+            connector_factory=make_factory(lambda: next(sockets)),
             ticks=ticks,
         )
 

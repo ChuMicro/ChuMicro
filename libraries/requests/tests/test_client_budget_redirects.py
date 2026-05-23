@@ -7,21 +7,21 @@ from chumicro_requests import (
     HttpURLError,
     WhenOversized,
 )
-from chumicro_sockets.testing import FakeSocket
+from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_timing.testing import FakeTicks
 
 
 def make_factory(socket_or_factory):
-    """Return a connection_factory that hands out *socket_or_factory*.
+    """Return a connector_factory that hands out a FakeSocketConnector
+    wrapping *socket_or_factory* on ``ready``.
 
     *socket_or_factory* can be either a single :class:`FakeSocket`
-    (returned every call) or a zero-arg callable that builds a fresh
+    (wrapped every call) or a zero-arg callable that builds a fresh
     one on demand.
     """
     def factory(host, port, use_tls):  # noqa: ARG001 — fake ignores args
-        if callable(socket_or_factory):
-            return socket_or_factory()
-        return socket_or_factory
+        socket = socket_or_factory() if callable(socket_or_factory) else socket_or_factory
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
     return factory
 
@@ -60,7 +60,7 @@ def make_client(*, socket_or_factory=None, **kwargs):
     ticks = FakeTicks()
     socket = socket_or_factory if socket_or_factory is not None else FakeSocket()
     client = HttpClient(
-        connection_factory=make_factory(socket),
+        connector_factory=make_factory(socket),
         ticks=ticks,
         **kwargs,
     )
@@ -80,13 +80,14 @@ class _CountingSocket(FakeSocket):
         return result
 
 def _factory_for_socket_sequence(sockets):
-    """Return a connection_factory that hands out *sockets* FIFO."""
+    """Return a connector_factory that hands out *sockets* FIFO,
+    wrapped in scripted FakeSocketConnectors."""
     cursor = {"index": 0}
 
     def factory(host, port, use_tls):  # noqa: ARG001
         socket = sockets[cursor["index"]]
         cursor["index"] += 1
-        return socket
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
     return factory
 
@@ -219,7 +220,7 @@ class TestHttpClientRedirects:
         ], final_body=b"widget-list")
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=_factory_for_socket_sequence(sockets),
+            connector_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.get("http://example.test/v1/widgets")
@@ -234,7 +235,7 @@ class TestHttpClientRedirects:
         sockets = self._make_redirect_chain([(302, "/relocated")])
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=_factory_for_socket_sequence(sockets),
+            connector_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.get("http://example.test/orig")
@@ -249,7 +250,7 @@ class TestHttpClientRedirects:
         sockets = self._make_redirect_chain([(303, "/result")])
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=_factory_for_socket_sequence(sockets),
+            connector_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.post("http://example.test/submit", body=b"payload")
@@ -266,7 +267,7 @@ class TestHttpClientRedirects:
         sockets = self._make_redirect_chain([(307, "/replay")])
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=_factory_for_socket_sequence(sockets),
+            connector_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.post("http://example.test/orig", body=b"replay-me")
@@ -281,7 +282,7 @@ class TestHttpClientRedirects:
         sockets = self._make_redirect_chain([(308, "/permanent")])
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=_factory_for_socket_sequence(sockets),
+            connector_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.post(
@@ -314,7 +315,7 @@ class TestHttpClientRedirects:
         ], final_body=b"reached")
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=_factory_for_socket_sequence(sockets),
+            connector_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.get("http://example.test/orig")  # default budget = 5
@@ -331,7 +332,7 @@ class TestHttpClientRedirects:
         ])
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=_factory_for_socket_sequence(sockets),
+            connector_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
         )
         handle = client.get("http://example.test/orig", max_redirects=5)
@@ -370,7 +371,7 @@ class TestHttpClientRedirects:
         ], final_body=b"got-here")
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=_factory_for_socket_sequence(sockets),
+            connector_factory=_factory_for_socket_sequence(sockets),
             ticks=ticks,
             default_max_redirects=1,  # default would block the chain
         )
@@ -381,7 +382,7 @@ class TestHttpClientRedirects:
         assert handle.result.body == b"got-here"
 
     def test_redirect_factory_failure_propagates(self):
-        """If the connection_factory raises during a redirect hop the
+        """If the connector_factory raises during a redirect hop the
         request fails cleanly with the wrapped error."""
         sockets = [FakeSocket()]
         sockets[0].enqueue_recv(canned_redirect(
@@ -394,11 +395,11 @@ class TestHttpClientRedirects:
                 raise OSError(99, "factory boom on redirect")
             socket = sockets[cursor["index"]]
             cursor["index"] += 1
-            return socket
+            return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
         ticks = FakeTicks()
         client = HttpClient(
-            connection_factory=factory,
+            connector_factory=factory,
             ticks=ticks,
         )
         handle = client.get("http://example.test/orig")

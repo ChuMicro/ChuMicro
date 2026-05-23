@@ -8,10 +8,10 @@
 
 ```python
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_factory
+from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_timing import ticks_ms
 
-client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
+client = HttpClient(connector_factory=chumicro_sockets_connector_factory(radio=wifi.radio))
 handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
 while not handle.done:
@@ -63,7 +63,7 @@ handle = client.get(url, max_redirects=0)
 handle = client.get(url, max_redirects=20)
 
 # Per-client default
-client = HttpClient(connection_factory=..., default_max_redirects=10)
+client = HttpClient(connector_factory=..., default_max_redirects=10)
 ```
 
 Method handling follows long-standing browser + RFC 7231 §6.4 rules:
@@ -115,9 +115,9 @@ print(response.text)
 `Response.json()` decodes via `text` first, then runs `json.loads`,
 so charset overrides apply to JSON responses too.
 
-The `connection_factory` argument is a callable
+The `connector_factory` argument is a callable
 `(host, port, use_tls) -> TCPClientSocket`. The bundled
-`chumicro_requests.sockets_factory.chumicro_sockets_factory(radio=..., ssl_context=...)`
+`chumicro_requests.sockets_factory.chumicro_sockets_connector_factory(radio=..., ssl_context=...)`
 returns one wired to `chumicro-sockets`. The helper lives in an opt-in
 submodule so users with a custom transport never trigger the
 `chumicro-sockets` deploy. Tests typically pass a hand-rolled factory
@@ -125,7 +125,7 @@ that returns a `chumicro_sockets.testing.FakeSocket`.
 
 ## Bring your own transport
 
-`HttpClient` does not care which library produces its sockets.  The `connection_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> socket` that returns any object exposing the four-method contract:
+`HttpClient` does not care which library produces its sockets.  The `connector_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector` — the connector advances DNS / TCP / TLS across multiple ticks so the runner is not blocked.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
 
 | Method | Contract |
 |---|---|
@@ -134,19 +134,7 @@ that returns a `chumicro_sockets.testing.FakeSocket`.
 | `close() -> None` | Releases the connection. |
 | `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
 
-`chumicro_sockets.tcp_client_socket` / `tls_client_socket` is one producer.  Stdlib `socket.socket` after `setblocking(False)` is another.  Hand-rolled wrappers around any upstream library work the same way:
-
-```python
-import socket as stdlib_socket
-
-def make_connection(host, port, use_tls):
-    sock = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_STREAM)
-    sock.connect((host, port))
-    sock.setblocking(False)
-    return sock  # use_tls handled by caller's wrapper if needed
-
-client = HttpClient(connection_factory=make_connection)
-```
+`chumicro_sockets.tcp_client_connector` / `tls_client_connector` is one producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`) — any tick-driven state machine with that surface works as a custom factory.
 
 If you supply your own factory and want `chumicro_sockets` dropped from the deploy, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
 
@@ -166,9 +154,9 @@ LED-heartbeat task:
 ```python
 from chumicro_runner import Runner
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_factory
+from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 
-http_client = HttpClient(connection_factory=chumicro_sockets_factory(radio=radio))
+http_client = HttpClient(connector_factory=chumicro_sockets_connector_factory(radio=radio))
 runner = Runner([http_client, blink_task])
 while True:
     runner.tick(ticks_ms())
@@ -187,7 +175,7 @@ runner tasks (LED blink, control loop) keep getting CPU time even mid-large-body
 Pure Python, no third-party deps beyond `chumicro-sockets` and `chumicro-timing`.
 Works identically on CPython, MicroPython, and CircuitPython once the
 connection factory is wired up. HTTPS uses the same
-`chumicro_requests.sockets_factory.chumicro_sockets_factory(ssl_context=...)`
+`chumicro_requests.sockets_factory.chumicro_sockets_connector_factory(ssl_context=...)`
 pattern as plain HTTP.
 
 ### HTTPS heap headroom on minimum-class boards
@@ -206,7 +194,7 @@ handshake.
 
 ### TLS context — bring your own CA
 
-`chumicro_requests.sockets_factory.chumicro_sockets_factory(ssl_context=...)`
+`chumicro_requests.sockets_factory.chumicro_sockets_connector_factory(ssl_context=...)`
 accepts an SSL context built via `chumicro_sockets.ssl_context_with_ca(pem)`.
 CA-pinning is required
 on both supported embedded runtimes — but for different reasons:

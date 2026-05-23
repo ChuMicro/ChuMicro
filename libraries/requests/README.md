@@ -30,10 +30,10 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ```python
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_factory
+from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_timing import ticks_ms
 
-client = HttpClient(connection_factory=chumicro_sockets_factory())
+client = HttpClient(connector_factory=chumicro_sockets_connector_factory())
 handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
 while not handle.done:
@@ -57,7 +57,7 @@ print(response.json())            # parsed JSON when Content-Type is application
 | `Response` | Status code, reason, headers, raw body, URL; `.text`, `.json()`, `.encoding`. |
 | `CaseInsensitiveDict` | Header dict with case-insensitive lookups. |
 | `WhenOversized` | Policy enum for responses past `max_body_bytes`. |
-| `chumicro_requests.sockets_factory.chumicro_sockets_factory(...)` | Opt-in submodule: convenience connection-factory wired to chumicro-sockets. |
+| `chumicro_requests.sockets_factory.chumicro_sockets_connector_factory(...)` | Opt-in submodule: convenience connection-factory wired to chumicro-sockets. |
 | `parse_url(url)` | URL → `(scheme, host, port, path)`. |
 | `parse_charset(content_type)` | Extract charset from a Content-Type header value. |
 | `encode_request(...)` | Build raw HTTP request bytes. |
@@ -81,7 +81,7 @@ Works on CPython, MicroPython, and CircuitPython.  Pure Python — no native ext
 
 ## Wiring wifi credentials for examples and functional tests
 
-The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths.  The library itself never reads TOML — it takes a `connection_factory` and goes; config wiring is application-layer.
+The hardware-prefixed examples + real-network suites in `functional_tests/test_real_*.py` need wifi credentials.  See [`docs/wiring-wifi-credentials.md`](https://github.com/ChuMicro/ChuMicro/blob/main/docs/wiring-wifi-credentials.md) for the workspace-based and raw single-file paths.  The library itself never reads TOML — it takes a `connector_factory` and goes; config wiring is application-layer.
 
 ## Contributing
 

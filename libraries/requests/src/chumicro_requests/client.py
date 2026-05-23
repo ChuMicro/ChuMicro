@@ -9,7 +9,7 @@ Single-in-flight in v1: :meth:`HttpClient.get` / ``post`` / etc.
 while a request is still running raises :class:`HttpBusyError`.  The
 user pattern::
 
-    client = HttpClient(connection_factory=...)
+    client = HttpClient(connector_factory=...)
     handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
     while not handle.done:
@@ -307,9 +307,21 @@ class RequestHandle:
 
 
 class _RequestState:
-    """Internal request-pipeline states."""
+    """Internal request-pipeline states.
+
+    Lifecycle for one in-flight request::
+
+        IDLE -> AWAITING_TRANSPORT -> SENDING -> RECEIVING -> IDLE
+
+    ``AWAITING_TRANSPORT`` is the phase during which a
+    :class:`~chumicro_sockets.SocketConnector` is driving DNS / TCP /
+    TLS across multiple ticks.  On ``ready`` the socket is promoted
+    and the state moves to ``SENDING``.  On ``failed`` the handle is
+    set to error and the state returns to ``IDLE``.
+    """
 
     IDLE = "idle"
+    AWAITING_TRANSPORT = "awaiting_transport"
     SENDING = "sending"
     RECEIVING = "receiving"
 
@@ -317,21 +329,29 @@ class _RequestState:
 class HttpClient:
     """Non-blocking HTTP/1.1 client.
 
-    Construct with a *connection_factory* callable; then issue requests
+    Construct with a *connector_factory* callable; then issue requests
     via :meth:`get` and drive via :meth:`check` / :meth:`handle` from a
     runner tick or hand-rolled loop.
 
     The factory signature is::
 
-        connection_factory(host: str, port: int, use_tls: bool) -> TCPClientSocket
+        connector_factory(host: str, port: int, use_tls: bool) -> SocketConnector
 
     For a board with WiFi + chumicro-sockets, use
-    :func:`chumicro_requests.sockets_factory.chumicro_sockets_factory`
+    :func:`chumicro_requests.sockets_factory.chumicro_sockets_connector_factory`
     to wire up the default::
 
         from chumicro_requests import HttpClient
-        from chumicro_requests.sockets_factory import chumicro_sockets_factory
-        client = HttpClient(connection_factory=chumicro_sockets_factory())
+        from chumicro_requests.sockets_factory import (
+            chumicro_sockets_connector_factory,
+        )
+        client = HttpClient(
+            connector_factory=chumicro_sockets_connector_factory(),
+        )
+
+    The connector advances DNS / TCP / TLS across multiple ticks rather
+    than blocking the runner during the round-trip — see
+    :class:`chumicro_sockets.SocketConnector` for the contract.
 
     For config-driven construction, see :meth:`from_config` —
     one-line factory that reads the per-call defaults
@@ -346,7 +366,7 @@ class HttpClient:
         *,
         radio: object | None = None,
         ssl_context: object | None = None,
-        connection_factory: object | None = None,
+        connector_factory: object | None = None,
     ) -> "HttpClient":
         """Build an :class:`HttpClient` from runtime config.
 
@@ -363,29 +383,30 @@ class HttpClient:
           :data:`DEFAULT_MAX_BODY_BYTES`.
 
         No key is required; empty ``config`` is valid input.  When
-        *connection_factory* is supplied, the caller owns the
+        *connector_factory* is supplied, the caller owns the
         connection-opening behavior and *radio* / *ssl_context* are
         ignored.  Otherwise an auto-built factory wires through
-        :func:`chumicro_sockets_factory` using *radio* / *ssl_context*.
+        :func:`chumicro_sockets_connector_factory` using *radio* /
+        *ssl_context*.
         """
-        if connection_factory is None:
+        if connector_factory is None:
             try:
                 from chumicro_requests.sockets_factory import (  # noqa: PLC0415 - lazy
-                    chumicro_sockets_factory,
+                    chumicro_sockets_connector_factory,
                 )
             except ImportError as exception:
                 raise RuntimeError(
                     "chumicro_requests.sockets_factory not available "
                     "(excluded via __chumicro_skip_factories__ or "
-                    "not on the board) — pass connection_factory= "
+                    "not on the board) — pass connector_factory= "
                     "explicitly.",
                 ) from exception
 
-            connection_factory = chumicro_sockets_factory(
+            connector_factory = chumicro_sockets_connector_factory(
                 radio=radio, ssl_context=ssl_context,
             )
         return cls(
-            connection_factory=connection_factory,
+            connector_factory=connector_factory,
             default_timeout_ms=config.get(
                 "requests.default_timeout_ms", DEFAULT_TIMEOUT_MS,
             ),
@@ -401,7 +422,7 @@ class HttpClient:
     def __init__(
         self,
         *,
-        connection_factory: object,
+        connector_factory: object,
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,
         max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
         when_oversized: str = WhenOversized.DROP_WITH_EVENT,
@@ -413,10 +434,13 @@ class HttpClient:
         """Wire up the client.
 
         Args:
-            connection_factory: Callable ``(host: str, port: int,
-                use_tls: bool) -> socket`` that opens and returns a
-                connected, non-blocking TCP-shaped object.  The
-                returned object must expose:
+            connector_factory: Callable ``(host: str, port: int,
+                use_tls: bool) -> SocketConnector`` invoked per request
+                hop to bring up the underlying socket without blocking
+                the runner.  The connector is ticked across multiple
+                ``handle()`` calls during ``AWAITING_TRANSPORT``; once
+                ``connector.state == "ready"`` the underlying socket is
+                promoted and must expose:
 
                 * ``recv_into(buffer: memoryview, nbytes: int) -> int``
                   — raises ``OSError(EAGAIN | EWOULDBLOCK)`` on no
@@ -430,10 +454,10 @@ class HttpClient:
                 * ``setblocking(flag: bool) -> None`` — best-effort;
                   absence is tolerated.
 
-                :func:`chumicro_sockets_factory` is one valid
-                producer; stdlib ``socket.socket`` after
-                ``setblocking(False)`` or an upstream-library
-                wrapper are others.
+                :func:`chumicro_sockets_connector_factory` is one
+                valid producer; any zero-network-side fake or wrapper
+                that returns a :class:`SocketConnector`-shaped object
+                works too.
             recv_budget_per_tick: Soft cap on bytes drained from the
                 socket in a single :meth:`handle` call.  Default 1024.
                 Bounds tick latency so concurrent runner tasks (LED
@@ -458,7 +482,8 @@ class HttpClient:
                 Defaults to that submodule (real clock); tests pass
                 ``FakeTicks`` from ``chumicro_timing.testing``.
         """
-        self._connection_factory = connection_factory
+        self._connector_factory = connector_factory
+        self._connector = None
         self._recv_budget_per_tick = recv_budget_per_tick
         # Pre-allocated recv scratch reused on every tick — _drive_recv
         # passes a memoryview into this buffer to socket.recv_into
@@ -527,10 +552,15 @@ class HttpClient:
         """Underlying pollable socket while in flight, else ``None``.
 
         ``Runner.wait`` registers this object with ``select.poll``.
-        Adapter wrappers from ``chumicro_sockets`` store the underlying
+        While in ``AWAITING_TRANSPORT`` this forwards to the
+        connector's in-flight pollable so the runner parks on the
+        right handle between connect phases.  Once promoted, adapter
+        wrappers from ``chumicro_sockets`` store the underlying
         pollable on ``_sock``; bare CPython sockets and CircuitPython
         TCP / TLS clients pass through unchanged.
         """
+        if self._state == _RequestState.AWAITING_TRANSPORT:
+            return self._connector.io_socket if self._connector is not None else None
         sock = self._socket
         if sock is None:
             return None
@@ -538,12 +568,18 @@ class HttpClient:
 
     @property
     def io_wants_read(self):
-        """``True`` while waiting on response bytes from the server."""
+        """``True`` while waiting on response bytes from the server (or
+        TLS-handshake inbound during connect)."""
+        if self._state == _RequestState.AWAITING_TRANSPORT:
+            return self._connector.io_wants_read if self._connector is not None else False
         return self._state == _RequestState.RECEIVING
 
     @property
     def io_wants_write(self):
-        """``True`` while there are request bytes still to send."""
+        """``True`` while there are request bytes still to send (or a
+        TCP / TLS handshake phase needs writability)."""
+        if self._state == _RequestState.AWAITING_TRANSPORT:
+            return self._connector.io_wants_write if self._connector is not None else False
         return self._state == _RequestState.SENDING
 
     def next_deadline(self, now_ms):
@@ -552,7 +588,10 @@ class HttpClient:
         Lets ``Runner.wait`` shorten its central poll so the loop wakes
         for timeout enforcement even on a quiescent socket.  *now_ms*
         is the runner's tick and is accepted for the contract; the
-        deadline is an absolute tick captured at request start.
+        deadline is an absolute tick captured at request start.  The
+        request-level deadline supersedes the connector's ``None``
+        deadline during ``AWAITING_TRANSPORT`` so a stuck handshake
+        gets timed out by the same per-request budget.
         """
         if self._state == _RequestState.IDLE:
             return None
@@ -676,13 +715,16 @@ class HttpClient:
     def handle(self, now_ms):
         """One tick of progress on the in-flight request.
 
-        Sends queued request bytes, drains inbound bytes (up to
-        ``recv_budget_per_tick``), feeds the parser, and finishes
-        the handle when the response is complete.
+        Advances the connector while ``AWAITING_TRANSPORT``, sends
+        queued request bytes, drains inbound bytes (up to
+        ``recv_budget_per_tick``), feeds the parser, and finishes the
+        handle when the response is complete.
 
-        Per-request ``timeout_ms`` is checked at the top of each tick.
-        On expiry the request fails with :class:`HttpTimeoutError`
-        and the socket is closed.
+        Per-request ``timeout_ms`` is checked at the top of each tick
+        and applies during ``AWAITING_TRANSPORT`` too — a stuck
+        handshake fails the same way a stuck recv would.  On expiry
+        the request fails with :class:`HttpTimeoutError` and the
+        socket / connector is closed.
         """
         if self._state == _RequestState.IDLE:
             return
@@ -696,6 +738,10 @@ class HttpClient:
             return
 
         try:
+            if self._state == _RequestState.AWAITING_TRANSPORT:
+                if not self._advance_connector(now_ms):
+                    return
+                # Connector reached ``ready`` — fall through and start sending.
             if self._state == _RequestState.SENDING:
                 self._drive_send()
             if self._state == _RequestState.RECEIVING:
@@ -704,6 +750,31 @@ class HttpClient:
             self._fail(protocol_error)
         except OSError as socket_error:
             self._fail(HttpError(f"socket error: {socket_error}"))
+
+    def _advance_connector(self, now_ms):
+        """Tick the in-flight connector one phase; promote socket when ``ready``.
+
+        Returns ``True`` when the connector reached ``ready`` this tick
+        — in which case the socket is promoted to ``self._socket``,
+        forced non-blocking, and the state moves to ``SENDING``.
+        Returns ``False`` when the connector is still in flight (state
+        unchanged) or has failed (state is now ``IDLE`` with the
+        handle marked errored).
+        """
+        connector = self._connector
+        connector.tick(now_ms)
+        if connector.state == "ready":
+            self._socket = connector.socket
+            self._connector = None
+            _force_non_blocking(self._socket)
+            self._state = _RequestState.SENDING
+            return True
+        if connector.state == "failed":
+            error = connector.last_error
+            self._connector = None
+            self._fail(HttpError(f"connector failed: {error}"))
+            return False
+        return False
 
     # ------------------------------------------------------------------
     # Internal — request lifecycle
@@ -767,8 +838,7 @@ class HttpClient:
             body=encoded_body,
             user_agent=self._user_agent,
         )
-        self._socket = self._connection_factory(host, port, use_tls)
-        _force_non_blocking(self._socket)
+        self._connector = self._connector_factory(host, port, use_tls)
         self.url = url
         self._tx_buffer = request_bytes
         self._tx_offset = 0
@@ -779,7 +849,11 @@ class HttpClient:
             body_buffer=self._body_buffer,
             body_buffer_view=self._body_buffer_view,
         )
-        self._state = _RequestState.SENDING
+        # Defer the SENDING transition until the connector reaches
+        # ``ready`` inside :meth:`_advance_connector`; until then the
+        # tick path stays in AWAITING_TRANSPORT and yields between
+        # connect phases.
+        self._state = _RequestState.AWAITING_TRANSPORT
 
     def _drive_send(self):
         """Push queued request bytes onto the socket; transition on completion."""
@@ -891,7 +965,7 @@ class HttpClient:
             )
         except OSError as factory_error:
             self._handle._set_error(  # noqa: SLF001
-                HttpError(f"socket factory failed during redirect: {factory_error}"),
+                HttpError(f"connector factory failed during redirect: {factory_error}"),
             )
             self._reset_socket()
         except HttpError as redirect_error:
@@ -930,9 +1004,12 @@ class HttpClient:
         self._reset_socket()
 
     def _close_socket_only(self):
-        """Close the socket but leave the handle + deadline + redirect
-        bookkeeping intact.  Used between redirect hops where the
-        request as a whole is still in flight."""
+        """Close the socket / connector but leave the handle + deadline
+        + redirect bookkeeping intact.  Used between redirect hops
+        where the request as a whole is still in flight."""
+        if self._connector is not None:
+            self._connector.cancel()
+            self._connector = None
         if self._socket is not None:
             try:
                 self._socket.close()
