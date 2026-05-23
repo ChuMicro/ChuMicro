@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Runner reactor — resume from handoff (option B ratified, `chumicro-sockets` raw-socket accessor next).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
+- [ ] **Runner reactor — resume from handoff (`pollable_of` shipped, host-test fake-poller seam on `Runner` next).**  [handoffs/2026-05-22-runner-reactor-ready-to-iterate.md](handoffs/2026-05-22-runner-reactor-ready-to-iterate.md)
 
 ## Next
 

@@ -38,6 +38,7 @@ __all__ = [
     "UDPSocket",
     "UnsupportedSSLConfigError",
     "is_eagain",
+    "pollable_of",
     "set_default_ca_bundle",
     "ssl_context_no_verify",
     "ssl_context_with_ca",
@@ -49,6 +50,24 @@ __all__ = [
     "tls_listening_socket",
     "udp_socket",
 ]
+
+
+def pollable_of(sock: object) -> object:
+    """Return the underlying pollable socket inside a chumicro-sockets adapter.
+
+    Pass the result to ``select.poll().register(...)``.  Both target
+    runtimes' ``poll.register()`` accepts the socket *object*, which
+    the runtime polls through its C-level stream ``ioctl`` —
+    ``fileno()`` is the wrong primitive, returning ``-1`` on CP radio
+    sockets and on rp2 MP sockets even though the object is still
+    pollable.
+
+    Adapter wrappers that hold their socket on ``_sock``
+    (``_MpSocketWrapper``, ``_CPUDPWrapper``, ``_CPTLSListenerWrapper``)
+    unwrap to it; bare sockets (CP TCP / TLS client, CP TCP listener,
+    MP TLS, CPython stdlib ``socket.socket``) pass through unchanged.
+    """
+    return getattr(sock, "_sock", sock)
 
 
 def is_eagain(exception: BaseException) -> bool:
