@@ -859,6 +859,68 @@ class MQTTClient:
         """
         return self.state not in (ProtocolState.DISCONNECTED, ProtocolState.FAILED)
 
+    # ------------------------------------------------------------------
+    # Runner I/O interest (read by ``Runner.wait``)
+    # ------------------------------------------------------------------
+
+    @property
+    def io_socket(self):
+        """Underlying pollable socket while connected (or connecting), else ``None``.
+
+        Adapter wrappers from ``chumicro_sockets`` store the pollable on
+        ``_sock``; the property unwraps so ``Runner.wait`` registers the
+        object the runtime's stream-poll ioctl knows.  ``DISCONNECTED``
+        and ``FAILED`` return ``None`` even when a stale socket is
+        still held: the runner does not need to wake on a dead socket
+        before the self-heal in ``handle()`` swaps a fresh one in.
+        """
+        if self._socket is None:
+            return None
+        if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
+            return None
+        return getattr(self._socket, "_sock", self._socket)
+
+    @property
+    def io_wants_read(self):
+        """``True`` while ``handle()`` would drain inbound packets.
+
+        Always true on a live connection: brokers send CONNACK / SUBACK
+        / PUBACK / PINGRESP / inbound PUBLISH at any time.
+        """
+        return self.state in (ProtocolState.CONNECTING, ProtocolState.CONNECTED)
+
+    @property
+    def io_wants_write(self):
+        """``True`` when outbound bytes are queued for the broker."""
+        if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
+            return False
+        return len(self._tx_queue) > 0
+
+    def next_deadline(self, now_ms):  # noqa: ARG002 - runner contract uses now_ms
+        """Earliest tick at which ``handle()`` must run even on a quiet socket.
+
+        Returns the minimum across the keepalive timer
+        (``_next_ping_due_ticks`` while connected), each pending
+        response's ack deadline, and each in-flight QoS 1 publish's
+        retry deadline.  ``None`` when no deadline applies (the runner
+        falls back to the next periodic-task ``next_due_ms``).
+        """
+        if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
+            return None
+        ticks_diff = self._ticks.ticks_diff
+        nearest = None
+        if self.state == ProtocolState.CONNECTED:
+            nearest = self._next_ping_due_ticks
+        for pending in self._pending_responses:
+            candidate = pending.deadline_ticks
+            if nearest is None or ticks_diff(candidate, nearest) < 0:
+                nearest = candidate
+        for entry in self._in_flight:
+            candidate = entry.deadline_ticks
+            if nearest is None or ticks_diff(candidate, nearest) < 0:
+                nearest = candidate
+        return nearest
+
     def handle(self, now_ms):
         """One tick of progress.
 
