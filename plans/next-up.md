@@ -4,6 +4,7 @@
 
 ## Now
 
+- [ ] **Resume Pi Pico W MP fragmentation hunt + MQTT+TLS follow-up from session handoff.**  [handoffs/2026-05-22-mqtt-tls-validated-pico-mp-fragmentation.md](handoffs/2026-05-22-mqtt-tls-validated-pico-mp-fragmentation.md)
 
 ## Next
 
