@@ -139,7 +139,7 @@ class TestPublishQos1NoLeak:
             client.publish("topic/qos1", b"payload", qos=1)
             client.handle(ticks.ticks_ms())
             # Find the just-allocated packet_id and synthesize its PUBACK.
-            in_flight_ids = list(client._in_flight._entries.keys())
+            in_flight_ids = list(client._in_flight.keys())
             assert len(in_flight_ids) == 1
             sock.enqueue_recv(canned_puback_bytes(packet_id=in_flight_ids[0]))
             client.handle(ticks.ticks_ms())

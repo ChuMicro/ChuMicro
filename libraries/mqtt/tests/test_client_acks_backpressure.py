@@ -423,14 +423,14 @@ class TestTxQueueBackpressure:
 
         # First QoS 1 publish fills the cap.
         client.publish("topic/a", b"one", qos=1)
-        in_flight_after_first = list(client._in_flight)  # noqa: SLF001
+        in_flight_after_first = list(client._in_flight.values())  # noqa: SLF001
         assert len(in_flight_after_first) == 1
 
         # Second publish overflows.  Expect the packet_id allocation to
         # be discarded along with the raise.
         with raises(MQTTBackpressureError):
             client.publish("topic/a", b"two", qos=1)
-        in_flight_after_failed = list(client._in_flight)  # noqa: SLF001
+        in_flight_after_failed = list(client._in_flight.values())  # noqa: SLF001
         assert len(in_flight_after_failed) == 1  # rolled back, not leaked
         assert in_flight_after_failed[0].packet_id == in_flight_after_first[0].packet_id
 
