@@ -210,24 +210,19 @@ mqtt = MQTTClient.from_config({
 mqtt.on_message = lambda topic, payload: print(f"command: {topic} <- {payload!r}")
 mqtt.connect()                                    # non-blocking, runner drives handshake + retry
 
-# Periodic HTTP fetch, state held in a module-level slot:
-request = None
+# Runner calls this when a fetch completes (success or failure):
+def on_fetch_done(handle):
+    if handle.error is None:
+        print("fetch:", handle.response.status_code)
+    else:
+        print("fetch failed:", handle.error)
 
-# Runner calls this every 30 s. If no fetch is in flight and wifi is up, queue a new one:
+# Runner calls this every 30 s. If wifi is up and the client is idle, queue a fetch.
+# on_done binds the response handling to the request that produced it — no shared slot,
+# no separate "is the reply ready yet?" task:
 def start_fetch(now):
-    global request
-    if request is None and wifi.connected:
-        request = http.get("http://example.com")
-
-# Runner asks this every tick. True once a queued fetch has finished receiving its response:
-def response_ready(now):
-    return request is not None and request.done
-
-# Runner calls this when response_ready() returns True. Print the status, clear the slot:
-def print_response(now):
-    global request
-    print("fetch:", request.result.status_code)
-    request = None
+    if wifi.connected and not http.busy:
+        http.get("http://example.com", on_done=on_fetch_done)
 
 # Runner calls this every 5 s. If MQTT is connected, publish a telemetry heartbeat (else skip this tick):
 def publish_telemetry(now):
@@ -240,7 +235,6 @@ runner.add(wifi)                                        # wifi state machine + r
 runner.add(http)                                        # advance any in-flight HTTP request
 runner.add(mqtt)                                        # advance MQTT (handshake, publish, recv)
 runner.add_periodic(start_fetch, period_ms=30_000)      # fetch example.com every 30 s
-runner.add(response_ready, handler=print_response)      # print + clear when each response lands
 runner.add_periodic(publish_telemetry, period_ms=5_000) # publish heartbeat every 5 s
 runner.add_periodic(toggle_led, period_ms=500)          # toggle LED every 500 ms
 
@@ -249,7 +243,7 @@ while True:
     runner.tick()
 ```
 
-Same cooperative loop, same per-tick advancement: every registered task still gets a turn each tick, still yields after one chunk of work.  **Four services + four periodic / conditional tasks** all sharing one `while True: runner.tick()` line. The dispatch lives in a handful of declarative registrations up front, instead of growing the loop body with another `if X.check(now): X.handle(now)` for every new service you add.  Add a button, a display, an NTP client. Each is one more `runner.add(...)`, not three more lines inside the loop.
+Same cooperative loop, same per-tick advancement: every registered task still gets a turn each tick, still yields after one chunk of work.  **Four services + three periodic tasks** all sharing one `while True: runner.tick()` line. The dispatch lives in a handful of declarative registrations up front, instead of growing the loop body with another `if X.check(now): X.handle(now)` for every new service you add.  Add a button, a display, an NTP client. Each is one more `runner.add(...)`, not three more lines inside the loop.
 
 For more runnable patterns, see [`libraries/timing/examples/`](libraries/timing/examples/) (debounce, multi-heartbeat, timeout, periodic ticks), [`libraries/requests/examples/`](libraries/requests/examples/) (the fetch pattern), and [`libraries/runner/examples/`](libraries/runner/examples/) (the full runner-registration cookbook).
 
