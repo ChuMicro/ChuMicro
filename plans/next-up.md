@@ -4,7 +4,7 @@
 
 ## Now
 
-(none — Pi Pico W MP MQTT+TLS fragmentation hunt landed in commit a99221b9.)
+- [ ] **Validate Pi Pico W CP-side fragmentation behaviour on custom firmware.**  [handoffs/2026-05-23-pi-pico-w-cp-fragmentation-validation.md](handoffs/2026-05-23-pi-pico-w-cp-fragmentation-validation.md)
 
 ## Next
 
