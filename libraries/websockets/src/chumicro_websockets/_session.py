@@ -121,8 +121,9 @@ class _BaseSession:
 
     Subclass contract:
 
-    * Override :attr:`_role_label` for error messages (``"client"`` /
-      ``"server"``).
+    * Override :attr:`_peer_label` for error messages — the label
+      names what the *peer* is (``"server"`` on the client side,
+      ``"client"`` on the server side).
     * Override :attr:`_inbound_mask_required` (``False`` for client —
       server frames must NOT be masked; ``True`` for server — client
       frames MUST be masked).
@@ -133,7 +134,7 @@ class _BaseSession:
       transport is ready.
     """
 
-    _role_label: str = ""
+    _peer_label: str = ""
     _inbound_mask_required: bool = False
 
     # -- shared state setup ------------------------------------------------
@@ -454,9 +455,9 @@ class _BaseSession:
 
         if had_mask != self._inbound_mask_required:
             if self._inbound_mask_required:
-                message = f"{self._role_label} frame must be masked"
+                message = f"{self._peer_label} frame must be masked"
             else:
-                message = f"{self._role_label} frame must not be masked"
+                message = f"{self._peer_label} frame must not be masked"
             self._send_close(CLOSE_PROTOCOL_ERROR, message, now_ms)
             return
 

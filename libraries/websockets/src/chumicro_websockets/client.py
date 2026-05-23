@@ -107,7 +107,7 @@ class WebSocketClient(_BaseSession):
       ``FakeTicks`` from :mod:`chumicro_timing.testing`.
     """
 
-    _role_label = "server"  # error messages describe what the *peer* sent
+    _peer_label = "server"  # label names the peer in error messages
     _inbound_mask_required = False  # servers MUST NOT mask outbound
 
     @classmethod
