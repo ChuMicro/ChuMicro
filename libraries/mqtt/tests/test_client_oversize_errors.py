@@ -208,6 +208,50 @@ class TestErrorPaths:
         _drive(client, ticks, count=1)
         assert client.state == ProtocolState.FAILED
 
+    def test_send_timeout_marks_failed(self) -> None:
+        """When the socket has been non-writable with a packet queued
+        for longer than ``send_timeout_seconds``, the client transitions
+        to FAILED so self-heal can rebuild the socket.  Without this
+        timeout a NAT-style silent-drop on the outbound path would let
+        the tx queue grow until ``MQTTBackpressureError`` -- the
+        publisher sees the error, the client never noticed."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks, send_timeout_seconds=2.0)
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+        # Stuck socket: every send returns EAGAIN for the foreseeable future.
+        sock.enqueue_eagain_for_send(1_000)
+        client.publish("topic", b"hello", qos=0)
+        # First drain attempts the send (EAGAIN), arms the deadline.
+        _drive(client, ticks, count=1)
+        assert client.state == ProtocolState.CONNECTED
+        # Skip past the send timeout.
+        ticks.advance(2_500)
+        _drive(client, ticks, count=1)
+        assert client.state == ProtocolState.FAILED
+        assert "send timeout" in str(client.last_error)
+
+    def test_send_timeout_clears_when_drain_makes_progress(self) -> None:
+        """A steady drip of sends shouldn't trip the send timeout.  The
+        deadline re-arms every successful drain."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks, send_timeout_seconds=2.0)
+        client.connect()
+        _drive(client, ticks, count=2)
+        # Publish then drive past the timeout window with successful sends
+        # in between; deadline should never trip because every drain
+        # re-arms.
+        for _ in range(5):
+            client.publish("topic", b"x", qos=0)
+            _drive(client, ticks, count=2)  # send + callback drain
+            ticks.advance(1_500)  # under the 2s timeout
+        assert client.state == ProtocolState.CONNECTED
+
     def test_peer_close_marks_failed(self) -> None:
         """A clean FIN from the broker (``recv_into() == 0``) transitions
         the client to FAILED so the runner can self-heal.  The bug fixed
