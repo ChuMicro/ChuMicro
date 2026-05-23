@@ -26,6 +26,7 @@ Forbidden in library code (any of `libraries/*/src/`):
 - `time.sleep(N)` for `N > 0.005`.  Short sleeps (e.g., 1 ms USB-CDC settle) are acceptable when documented.
 - `select.poll(timeout > 0)` in a leaf service.  A library's own `check`/`handle` code uses `timeout=0` and re-polls on the next tick; it must never block the loop.  The one exception is the runner's single central wait (`Runner.wait`, called once per loop iteration by the application), which *may* block until the next deadline — it is the loop idling, not a service stalling it.  See [Decision 0080](0080-runner-reactor.md).
 - Synchronous DNS resolution that doesn't yield (some MP DNS calls block ~5 s on timeout).
+- Synchronous TCP connect or TLS handshake from a library method that callers may invoke inside a runner-tick handler.  The runner-shaped library exposes a tick-driven connector ([Decision 0081](0081-non-blocking-connect-via-tick-driven-connector.md)) and consumes it across multiple ticks; the synchronous `chumicro_sockets` factories are the carve-out for non-runner callers (one-shot scripts, REPL, `main` before the loop starts).
 - Any function that can wait on the network without a tick-bounded budget knob.
 
 These rules apply to libraries.  Workbench packages (`workbench/*/`) run on CPython and have looser constraints — a `chumicro-deploy` flash-mode rsync legitimately blocks for seconds.
