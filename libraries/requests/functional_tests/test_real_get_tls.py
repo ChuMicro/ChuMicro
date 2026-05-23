@@ -58,7 +58,7 @@ import time
 
 from chumicro_config import config
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_factory
+from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_sockets import ssl_context_with_ca
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
@@ -171,7 +171,7 @@ def test_real_https_get_completes_runner_shaped() -> None:
 
     ssl_context = ssl_context_with_ca(_CA_PEM)
     client = HttpClient(
-        connection_factory=chumicro_sockets_factory(
+        connector_factory=chumicro_sockets_connector_factory(
             radio=wifi.adapter.radio,
             ssl_context=ssl_context,
         ),

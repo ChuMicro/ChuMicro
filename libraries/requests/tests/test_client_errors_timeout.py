@@ -7,22 +7,22 @@ from chumicro_requests import (
     HttpProtocolError,
     HttpTimeoutError,
 )
-from chumicro_sockets.testing import FakeSocket
+from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 
 def make_factory(socket_or_factory):
-    """Return a connection_factory that hands out *socket_or_factory*.
+    """Return a connector_factory that hands out a FakeSocketConnector
+    wrapping *socket_or_factory* on ``ready``.
 
     *socket_or_factory* can be either a single :class:`FakeSocket`
-    (returned every call) or a zero-arg callable that builds a fresh
+    (wrapped every call) or a zero-arg callable that builds a fresh
     one on demand.
     """
     def factory(host, port, use_tls):  # noqa: ARG001 — fake ignores args
-        if callable(socket_or_factory):
-            return socket_or_factory()
-        return socket_or_factory
+        socket = socket_or_factory() if callable(socket_or_factory) else socket_or_factory
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
 
     return factory
 
@@ -52,7 +52,7 @@ def make_client(*, socket_or_factory=None, **kwargs):
     ticks = FakeTicks()
     socket = socket_or_factory if socket_or_factory is not None else FakeSocket()
     client = HttpClient(
-        connection_factory=make_factory(socket),
+        connector_factory=make_factory(socket),
         ticks=ticks,
         **kwargs,
     )

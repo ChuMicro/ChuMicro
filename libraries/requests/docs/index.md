@@ -7,10 +7,10 @@ An LED keeps blinking on the same board while a request is in flight, in a TLS h
 ## Quick example
 
 ```python
-from chumicro_requests import HttpClient, chumicro_sockets_factory
+from chumicro_requests import HttpClient, chumicro_sockets_connector_factory
 from chumicro_timing import ticks_ms
 
-client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
+client = HttpClient(connector_factory=chumicro_sockets_connector_factory(radio=wifi.radio))
 handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
 while not handle.done:

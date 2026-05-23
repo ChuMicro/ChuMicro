@@ -81,11 +81,11 @@ Each of these currently calls the synchronous factory and must migrate to the co
 | Phase | Status | Commit(s) | Notes |
 |---|---|---|---|
 | 1.1 Connector base + CPython adapter + FakeSocketConnector | shipped | `2babeb68` | 4342 workspace tests / 95% cov / MP + CP green |
-| 1.2 MicroPython rp2 adapter | deferred | — | Skipped pending bake target on MP; not blocking phase 2 |
+| 1.2 MicroPython rp2 adapter | shipped | `425c59fa` | Truly non-blocking TCP via EINPROGRESS + POLLOUT; TLS substrate-blocking (one-tick inline wrap_socket) |
 | 1.3 CircuitPython socketpool adapter | shipped | `e1ca82fb` | Per-phase blocking is the substrate honest answer |
 | 2 chumicro_mqtt migration | shipped | (this commit) | `socket_factory` → `connector_factory`, `AWAITING_TRANSPORT` state, multi-tick connect via FakeSocketConnector |
 | 3 Bake-validate against A1+A2 | pending | — | Expected on CPython: <1 s recovery latency.  CP substrate-limited but ticks yield between phases |
-| 4 chumicro_requests migration | pending | — | Mechanical once phase 2 ships |
+| 4 chumicro_requests migration | shipped | (this commit) | `connection_factory` → `connector_factory`, `AWAITING_TRANSPORT` state, FakeSocketConnector test idiom mirrors phase 2 |
 | 5 chumicro_websockets migration | pending | — | Mechanical once phase 2 ships |
 | 6 chumicro_http_server | pending | — | Accept-side TLS analog; ADR scope may extend |
 
