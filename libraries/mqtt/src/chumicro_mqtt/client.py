@@ -835,11 +835,14 @@ class MQTTClient:
     def handle(self, now_ms):
         """One tick of progress.
 
-        Drains the TX queue first, then pulls inbound bytes into the
-        decoder and processes any complete packets, then checks ack
-        deadlines + keepalive timer.  Drains TX again at the end
-        because deadline-retry PUBLISHes and PINGREQs queued by the
-        deadline + keepalive checks would otherwise wait an extra tick.
+        Checks ack deadlines + keepalive timer first (so a wedged recv
+        can't block timeout detection), then pulls inbound bytes into
+        the decoder and processes any complete packets (PUBACKs free
+        in-flight slots and inbound QoS-1 publishes append a PUBACK
+        to the queue), then drains the TX queue (sends the DUP
+        retransmits and PINGREQ queued by the checks above, the PUBACK
+        queued by the read, and any application packets enqueued
+        between ticks).
 
         When the client is in ``FAILED`` and a ``socket_factory`` is
         configured + the user originally called ``connect()``, this
@@ -869,10 +872,15 @@ class MQTTClient:
         if self.state == ProtocolState.DISCONNECTED:
             return
         try:
-            self._drain_tx_queue()
-            self._read_inbound(now_ms)
+            # Order: timeouts first so a wedged recv can't block deadline
+            # detection.  Then read (PUBACKs free in-flight slots and
+            # PUBACK-for-inbound is appended).  Then drain (sends the DUP
+            # retransmits and PINGREQ queued by the checks above, the
+            # PUBACK queued by the read, and any application packets
+            # enqueued between ticks).
             self._check_deadlines(now_ms)
             self._check_keepalive(now_ms)
+            self._read_inbound(now_ms)
             self._drain_tx_queue()
         except MQTTError as error:
             self.last_error = error
