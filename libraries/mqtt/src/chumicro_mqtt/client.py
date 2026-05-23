@@ -507,20 +507,78 @@ class MQTTClient:
     def disconnect(self):
         """Queue a DISCONNECT packet, close the socket, mark DISCONNECTED.
 
+        Idempotent: a second call against a client that's already in
+        DISCONNECTED state is a no-op (no extra ``on_disconnect`` fire,
+        no socket re-close).  From CONNECTED / CONNECTING, attempts a
+        best-effort DISCONNECT packet on the wire and then closes.
+        From FAILED, the socket is likely dead so the DISCONNECT
+        attempt is skipped; only the close + state transition happen.
+        ``on_disconnect`` fires exactly once on the
+        anything-to-DISCONNECTED transition.
+
         Best-effort: any exception during send/close is swallowed so
-        the client always returns in a known DISCONNECTED state.
+        the client always lands in a known DISCONNECTED state.
         """
+        if self.state == ProtocolState.DISCONNECTED:
+            return
+        if self.state != ProtocolState.FAILED:
+            try:
+                self._send_raw(PACKET_DISCONNECT)
+            except Exception:  # noqa: BLE001 - disconnect is best-effort  # pragma: no cover - defensive
+                pass
         try:
-            self._send_raw(PACKET_DISCONNECT)
-        except Exception:  # noqa: BLE001 - disconnect is best-effort  # pragma: no cover - defensive
-            pass
-        try:
-            self._socket.close()
+            if self._socket is not None:
+                self._socket.close()
         except Exception:  # noqa: BLE001 - disconnect is best-effort  # pragma: no cover - defensive
             pass
         self.state = ProtocolState.DISCONNECTED
         self._user_wants_connected = False
         self.on_disconnect()
+
+    def set_will(
+        self,
+        topic: str | None,
+        message: bytes | None = None,
+        *,
+        qos: int = 0,
+        retain: bool = False,
+        prefixed: bool = True,
+    ):
+        """Update the Last Will + Testament, taking effect on the next CONNECT.
+
+        Args:
+            topic: Will topic.  ``None`` disables the will entirely.
+            message: Will payload (bytes).  ``None`` becomes empty bytes.
+            qos: Will QoS (0 or 1).
+            retain: ``True`` retains the will on the broker.
+            prefixed: When ``True`` (default), *topic* is resolved
+                through the ``root_topic`` / ``client_id`` prefix scheme
+                the same way :meth:`publish` would.  Pass ``False`` to
+                set the will to a verbatim topic (system topics,
+                bridges).
+
+        The change applies to the next CONNECT packet the client
+        sends -- either an initial :meth:`connect` or a self-heal
+        reconnect after FAILED.  The current connection already
+        registered its will with the broker at CONNECT time and
+        cannot be modified in flight.
+
+        Raises:
+            UnsupportedQoSError: ``qos > 1``.
+        """
+        if qos > 1:
+            raise UnsupportedQoSError(
+                "will_qos must be 0 or 1; QoS 2 is reserved-not-implemented",
+            )
+        if topic is None:
+            self._will_topic = None
+        elif prefixed:
+            self._will_topic = self._prefixed_topic(topic)
+        else:
+            self._will_topic = topic
+        self._will_message = message
+        self._will_qos = qos
+        self._will_retain = retain
 
     # ------------------------------------------------------------------
     # Public publish / subscribe / unsubscribe
