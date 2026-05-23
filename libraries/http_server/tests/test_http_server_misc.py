@@ -1,12 +1,16 @@
 """http_server: respond method, accept variants, body state
 transition, charset parsing."""
 
+import select
+
 from chumicro_http_server import (
     HttpServer,
     build_response,
     parse_charset,
 )
 from chumicro_http_server.testing import FakeListener
+from chumicro_runner import Runner
+from chumicro_runner.testing import FakePoller
 from chumicro_sockets.testing import FakeSocket
 from chumicro_timing.testing import FakeTicks
 
@@ -124,3 +128,87 @@ class TestParseCharset:
 
     def test_blank_charset_value_defaults_utf8(self):
         assert parse_charset("text/plain; charset=") == "utf-8"
+
+
+class TestRunnerReactorContract:
+    """``io_socket`` / ``io_wants_read`` / ``io_wants_write`` /
+    ``next_deadline`` let ``Runner.wait`` register the listener socket
+    and idle the loop until accept readiness or the earliest in-flight
+    connection deadline.  In-flight per-connection I/O is driven on the
+    periodic ``handle()`` tick, not via per-socket poll registration."""
+
+    def test_io_socket_none_before_first_tick(self):
+        """Listener is lazy-opened in handle()."""
+        server, _ticks, _ = _make_server(sockets=[])
+        assert server.io_socket is None
+
+    def test_io_socket_returns_listener_after_first_tick(self):
+        server, ticks, _ = _make_server(sockets=[])
+        server.handle(ticks.ticks_ms())
+        # FakeListener has no ``_sock`` wrapper, so the property returns
+        # it directly; production adapters expose ``_sock`` and unwrap.
+        assert server.io_socket is server._listener
+
+    def test_io_wants_read_after_listener_open(self):
+        server, ticks, _ = _make_server(sockets=[])
+        assert server.io_wants_read is False  # listener still None
+        server.handle(ticks.ticks_ms())
+        assert server.io_wants_read is True
+
+    def test_io_wants_write_is_always_false(self):
+        """The listener is not a write target."""
+        server, ticks, _ = _make_server(sockets=[])
+        server.handle(ticks.ticks_ms())
+        assert server.io_wants_write is False
+
+    def test_next_deadline_none_with_no_in_flight_connections(self):
+        server, ticks, _ = _make_server(sockets=[])
+        server.handle(ticks.ticks_ms())
+        assert server.next_deadline(ticks.ticks_ms()) is None
+
+    def test_next_deadline_returns_earliest_connection_deadline(self):
+        """Accept a connection, observe next_deadline as the
+        request-timeout deadline armed at accept time."""
+        peer = FakeSocket()
+        # Stall the recv so the connection stays mid-request without
+        # being treated as a peer close.  Without this the empty queue
+        # returns 0 bytes and the connection finalizes on first tick.
+        peer.enqueue_eagain_for_recv(99)
+        server, ticks, _ = _make_server(
+            sockets=[(peer, ("peer", 1234))],
+            request_timeout_ms=1500,
+        )
+        accept_tick = ticks.ticks_ms()
+        server.handle(accept_tick)  # lazy-open listener + accept
+        assert server.in_flight == 1
+
+        deadline = server.next_deadline(ticks.ticks_ms())
+        assert deadline is not None
+        # request_timeout_ms is 1500 from the accept tick.
+        assert ticks.ticks_diff(deadline, accept_tick) == 1500
+
+    def test_runner_wait_registers_listener_for_accept_readiness(self):
+        """End-to-end: drop HttpServer into a Runner with a FakePoller
+        and observe the listener registered for POLLIN once handle()
+        lazy-opens it."""
+        ticks = FakeTicks()
+        poller = FakePoller()
+        runner = Runner(ticks=ticks, poller=poller)
+        server, _, _ = _make_server(sockets=[])
+        # Override the server's ticks with the runner's so they share clock.
+        server._ticks = ticks
+        runner.add(server)
+
+        # First wait: listener still None, no socket registered.
+        runner.wait(ticks.ticks_ms())
+        assert poller.register_calls == []
+
+        # tick() runs handle() -> opens the listener.  wait() then
+        # registers it for POLLIN.
+        runner.tick()
+        runner.wait(ticks.ticks_ms())
+
+        assert any(
+            eventmask == select.POLLIN
+            for _sock, eventmask in poller.register_calls
+        )
