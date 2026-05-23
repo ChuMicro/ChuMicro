@@ -1133,6 +1133,106 @@ def test_wait_unregisters_when_service_drops_to_no_interest() -> None:
     assert sock in poller.unregister_calls
 
 
+class _IOServiceWithErrorHook(_IOService):
+    """``_IOService`` plus an ``io_error`` hook that records calls."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.io_error_calls: list[tuple[int, int]] = []
+
+    def io_error(self, now_ms: int, eventmask: int) -> None:
+        self.io_error_calls.append((now_ms, eventmask))
+
+
+def test_wait_dispatches_io_error_on_pollerr() -> None:
+    """POLLERR on a registered socket fires the service's ``io_error`` hook."""
+    import select
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOServiceWithErrorHook(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)  # First wait registers the socket.
+
+    # Now script a POLLERR event for the next wait.
+    poller.set_ready(sock, select.POLLERR)
+    runner.wait(0)
+
+    assert service.io_error_calls == [(0, select.POLLERR)]
+
+
+def test_wait_dispatches_io_error_on_pollhup() -> None:
+    """POLLHUP on a registered socket fires the service's ``io_error`` hook."""
+    import select
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOServiceWithErrorHook(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    poller.set_ready(sock, select.POLLHUP)
+    runner.wait(50)
+
+    assert service.io_error_calls == [(50, select.POLLHUP)]
+
+
+def test_wait_combined_pollin_pollerr_still_fires_io_error() -> None:
+    """A combined POLLIN | POLLERR mask still triggers io_error.
+
+    POLLIN alone is a wake signal only -- runner doesn't dispatch
+    anything for it.  POLLERR on the SAME event has to surface so
+    the service learns the socket faulted."""
+    import select
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOServiceWithErrorHook(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    combined = select.POLLIN | select.POLLERR
+    poller.set_ready(sock, combined)
+    runner.wait(0)
+
+    assert service.io_error_calls == [(0, combined)]
+
+
+def test_wait_pollin_only_does_not_fire_io_error() -> None:
+    """Plain POLLIN (wake signal) doesn't fire io_error -- only error masks do."""
+    import select
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOServiceWithErrorHook(sock=sock, wants_read=True)
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    poller.set_ready(sock, select.POLLIN)
+    runner.wait(0)
+
+    assert service.io_error_calls == []
+
+
+def test_wait_pollerr_on_service_without_io_error_hook_is_silent() -> None:
+    """A service that doesn't expose ``io_error`` is opted out -- runner
+    doesn't crash, just skips it."""
+    import select
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    service = _IOService(sock=sock, wants_read=True)  # no io_error.
+    runner.add(service, period_ms=100)
+    runner.wait(0)
+
+    poller.set_ready(sock, select.POLLERR)
+    runner.wait(0)  # Should not raise.
+
+    # Sanity: the opted-out service didn't sprout an io_error attribute
+    # along the way (would mean the runner stored something on it).
+    assert not hasattr(service, "io_error")
+
+
 def test_wait_timeout_uses_nearest_next_due_ms() -> None:
     """The wait timeout is the minimum across every entry's next_due_ms."""
     poller = FakePoller()

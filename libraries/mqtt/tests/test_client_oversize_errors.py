@@ -3,6 +3,7 @@ paths, decoder edge cases, suback rejection."""
 
 from chumicro_mqtt import (
     MQTTClient,
+    MQTTError,
     ProtocolState,
     WhenOversized,
 )
@@ -251,6 +252,36 @@ class TestErrorPaths:
             _drive(client, ticks, count=2)  # send + callback drain
             ticks.advance(1_500)  # under the 2s timeout
         assert client.state == ProtocolState.CONNECTED
+
+    def test_io_error_marks_failed(self) -> None:
+        """The runner's POLLERR / POLLHUP dispatch via io_error transitions
+        the client to FAILED with a meaningful last_error so self-heal
+        fires on the next tick."""
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        # Simulate Runner.wait dispatching POLLERR.
+        client.io_error(ticks.ticks_ms(), 0x08)  # POLLERR
+        assert client.state == ProtocolState.FAILED
+        assert "0x8" in str(client.last_error)
+
+    def test_io_error_noop_when_already_failed(self) -> None:
+        """A second io_error against an already-FAILED client is a no-op."""
+        sock = FakeSocket()
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)
+        client.state = ProtocolState.FAILED
+        first_error = MQTTError("first")
+        client.last_error = first_error
+
+        client.io_error(ticks.ticks_ms(), 0x08)
+        # last_error not overwritten by the no-op call.
+        assert client.last_error is first_error
 
     def test_peer_close_marks_failed(self) -> None:
         """A clean FIN from the broker (``recv_into() == 0``) transitions
