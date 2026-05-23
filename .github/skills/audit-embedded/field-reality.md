@@ -25,6 +25,7 @@ A few cross-cutting incidents (kvstore guide doc cluster, chumicro_ntp staged-di
 - [Wrong-host bug found by `print()`, not by theorising](#wrong-host-bug-found-by-print-not-by-theorising)
 - [Prior-art side-by-side compare](#prior-art-side-by-side-compare)
 - [gc.collect at import boundaries](#gccollect-at-import-boundaries)
+- [publish / publish_raw wrapper-doubling](#publish--publish_raw-wrapper-doubling)
 
 ## Useful snippets
 
@@ -194,3 +195,13 @@ CircuitPython has no equivalent of MicroPython's `micropython.mem_info(1)` and n
 The diagnostic substitute: `bytearray(N)` allocation probes at a stepped set of sizes after `gc.collect`, report the **largest N that succeeded** as the contiguous floor.  `projects/frag_probe_runtime_cp/app.py` ships the reference shape with probe sizes `(100_000, 75_000, 60_000, 50_000, 40_000, 30_000, 25_000, 20_000, 16_384, 12_000, 8_192, 4_096)`.  Each probe `del`s its buffer + `gc.collect`s before trying the next size, so probe pressure doesn't stack.
 
 Set the probe ceiling tighter than free heap (probing at ~free-heap fails on bookkeeping overhead even with zero fragmentation and yields a misleading floor).  Set granularity finer near the load-bearing threshold for the upstream consumer — for TLS handshake stress on `mqtt_tls_probe`, ~25 KB is the make-or-break point, so include 25_000 / 30_000 / 40_000 in the step set.
+
+## publish / publish_raw wrapper-doubling
+
+chumicro_mqtt's `client.py` exposed six methods where three would have sufficed: `publish` + `publish_raw`, `subscribe` + `subscribe_raw`, `unsubscribe` + `unsubscribe_raw`.  Each `_raw` variant has the identical signature, identical docstring shape, identical body — except the unsuffixed version makes one extra `self._prefixed_topic(topic)` call before delegating.  ~100 lines of `client.py` were pure duplication; three extra class-dict entries on every `MQTTClient` instance; three extra qstr-interned method names + bytecode objects in flash.
+
+Four prior `/audit-embedded mqtt` passes (commits `3444f9e1`, `061c5850`, `423cbc31`, `ddcf2b9f`) caught real flash + RAM issues (InFlightTable→dict, Awaiting→strings, `__all__` trim, import-time fragmentation) but walked past the wrapper-doubling.  The skill's §1 *"Cargo-cult class methods"* bullet checks for *un-called* methods — `publish_raw` IS called by external consumers (system-topic publishes that need to bypass the `root_topic` prefix scheme), so it didn't trip that check.  Static lint doesn't flag it either — both methods have callers.  The pattern only shows up when you specifically diff each `*_raw` body against its unsuffixed sibling and notice the delta is a single helper call.
+
+**Pattern:** when a library exposes a method pair where one calls the other after applying a single transform (prefix-resolver, normalizer, default-applier, encoder/decoder), the pair is wrapper-doubling.  Each pair costs N lines of duplicated body, N lines of duplicated docstring, and one extra class-dict entry on every instance.  Default fix: collapse to one method with a binary kwarg — `prefixed=True` / `normalize=False` / `encoded=True`.  The chumicro_mqtt `set_will(..., prefixed=False)` method already uses this shape; the public surface stays minimal.
+
+**Audit move:** `grep -rE 'def \w+_raw\(|def \w+_unencoded\(|def \w+_unprefixed\(|def raw_\w+\('` across `libraries/<name>/src/`.  For every match, diff the body against the unsuffixed sibling — single-helper-call delta = collapse candidate.  Same gap likely applies to other libraries audit-embedded has previously cleared, so include the grep in any audit re-pass on a previously-audited library.
