@@ -74,7 +74,7 @@ When instructions overlap:
 
 **Plans-doc brevity**
 
-- [`plans/next-up.md`](plans/next-up.md) is the single source of truth for what's in flight. One bullet per item, no sub-bullets. Anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. No `## Done` section. Enforced by `CHU011`.
+- [`plans/next-up.md`](plans/next-up.md) tracks everything in flight. One bullet per item, no sub-bullets. Anything bigger gets a [`plans/workstreams/<name>.md`](plans/workstreams/) file. No `## Done` section. Enforced by `CHU011`.
 - `Phase N` / `Slice N` references in commit subjects must carry a sentence topic (`Phase 6. Implement circuitpython and micropython transport seams`, not bare `Phase 6`).
 
 ## Keeping plans and docs current
@@ -107,19 +107,28 @@ When instructions overlap:
 
 ## Writing tone
 
-Write sentences with a concrete subject doing something. The clearest sign of bad prose is an abstraction in the subject slot ("the win is", "its floor is") joined by a weak verb (is, gives, provides) to a coined noun that hides an action ("the WFI-idle that `ipoll` gives"). Find the real actor and let it act, as in "a connected board idles the CPU between events, which is what `ipoll` does." The test: read every sentence the way you'd say it out loud to a colleague. If you would not say it that way to a person, rewrite it. The phrase bans below do not cover this, and it is the most common reason prose reads as sludge. No word is wrong, so no regex flags it, but that does not make it optional: you catch it by reading. Worked cases in [agent-style-guide.md](docs/contributing/agent-style-guide.md#concrete-subject-real-verb-the-structural-rule).
+Aim for prose that reads aloud like one colleague explaining something to another. Four checks per sentence:
 
-Write in sentences. Don't use em-dashes, semicolons, or arrows as shortcuts that paper over missing connective tissue. If two ideas are linked, write them as two sentences or join with a comma and a connector. This applies to code comments, docstrings, and all markdown prose.
+- **Concise.** Cut connectors that just restate what structure already implies.
+- **Direct.** Lead with the load-bearing fact. Skip stage-setting ("in this section we will", "it is worth noting that").
+- **Concrete.** Name actual classes, functions, files, identifiers. Avoid abstract stand-ins like *shape*, *surface*, *the algorithm*, *the implementation* when a specific name exists.
+- **Professional.** No colloquialisms (*feeds through*, *wires up*, *punts to*, *hooks into*). No implicit objects (*the caller is about to route* — route what?). No ambiguous pronouns.
 
-Cut AI-tic phrases. They sound non-human, drop information, and make prose harder to skim. When you write "the X promise" or "the X pattern", name X concretely in the same sentence.
+One structural fault no regex catches: an abstraction in the subject slot ("the win is", "its floor is") joined by a weak verb (is, gives, provides) to a coined noun that hides an action ("the WFI-idle that `ipoll` gives"). Find the real actor and let it act, as in "a connected board idles the CPU between events, which is what `ipoll` does." The test: read each sentence the way you'd say it out loud to a colleague. If you would not say it that way to a person, rewrite it. Worked cases in [agent-style-guide.md](docs/contributing/agent-style-guide.md#concrete-subject-real-verb-the-structural-rule).
 
-Common shapes to check by ear. The read-aloud test decides, and these just tell you what to listen for, so check each rather than find-replace it. When a flagged phrase reads fine out loud, keep it:
+Verify domain terminology before using it as if authoritative. Code identifiers are not canonical domain vocabulary — a method named `addCommand` does not make what's added a "command" in the domain sense. Engineers name things for code-local convenience and the names drift. Check sibling code, prior usage, or ask before promoting an engineer-named identifier into prose.
 
-- Avoid "the canonical X" and "the one / single / sole X that…" as openers. State what X is or does directly.
-- Drop empty adjectives (`comprehensive`, `robust`, `seamlessly`, `cutting-edge`, `best-in-class`). Name what something covers or what it survives.
-- Don't open sentences with filler ("It is worth noting that", "Let's dive into", "In this section, we will", etc.). Start with the content.
+Em-dashes, semicolons, and arrows are suspects, not bans. They often paper over missing connective tissue, in which case two sentences or a comma-and-connector reads better. When the connective tissue is there and the sentence reads well out loud, keep them.
 
-Full phrase-ban reference, including the `the X` forward-reference test, the CHU-codes-in-prose ban, and the degraded-prose rewrite discipline that the audit skills apply, lives in [docs/contributing/agent-style-guide.md](docs/contributing/agent-style-guide.md).
+AI-tic phrases are suspects too. They sound non-human, drop information, make prose harder to skim. When you reach for "the X promise" or "the X pattern", either name X concretely in the same sentence or rephrase.
+
+Other shapes to listen for, all subject to the read-aloud test (keep when it reads fine):
+
+- "The canonical X", "the one / single / sole X that…" as openers. Say what X is or does directly.
+- Empty adjectives (`comprehensive`, `robust`, `seamlessly`, `cutting-edge`, `best-in-class`). Name what something covers or what it survives.
+- Filler sentence-openers ("It is worth noting that", "Let's dive into", "In this section, we will"). Start with the content.
+
+Full reference, including the `the X` forward-reference test, the CHU-codes-in-prose lint, and the rewrite-don't-trim discipline the audit skills apply, lives in [docs/contributing/agent-style-guide.md](docs/contributing/agent-style-guide.md).
 
 ## Project overview
 

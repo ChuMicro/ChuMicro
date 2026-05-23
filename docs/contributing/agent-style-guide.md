@@ -8,23 +8,25 @@ This guide is the long-form home for tone, phrasing, and writing-discipline rule
 
 AI-generated prose has a characteristic shape.  Dense em-dash chains.  Symbolic shortcuts where a sentence belongs.  Generic-sounding adjectives without a referent.  Abstract nouns sitting where the actor should.  Humans usually don't reach for those, so the human style guide doesn't warn against them.  They show up in agent output, so this guide names them.
 
-## The one rule: say it out loud
+## Say it out loud
 
-There is one rule.  Read each sentence the way you'd say it out loud to a colleague, and write it that way.  If you would not say it to a person, rewrite it.  Everything else in this guide is a list of shapes that tend to fail that test, collected so you know what to listen for.  They are suspects to check by ear, not commands to find-replace.
+Read each sentence the way you'd say it out loud to a colleague, and write it that way.  If you would not say it to a person, rewrite it.  Everything else in this guide is a list of shapes that tend to fail that test, collected so you know what to listen for.  They are suspects to check by ear, not commands to find-replace.
 
 The framing is load-bearing, because the find-replace reflex degrades prose.  Swapping a flagged phrase on sight, without reading the result aloud, trades a real sentence for a worse one and calls it a fix.  *"This is a required gate, not a soft check"* once became the flatter *"The gate is required, not a soft check"* exactly that way, a ban applied against the ear.  When a flagged phrase reads fine out loud, keep it.
 
-A few suspects almost never survive the read-aloud test, so you can remove them on sight without re-reading: the connective-tissue punctuation in [§ Sentence form](#sentence-form) (em-dashes, semicolons, arrows) and the empty adjectives in [§ Empty adjectives](#empty-adjectives).  The lint-backed rules are not negotiable because a check enforces them, the CHU-code ban (`CHU006`) and anything else marked "Enforced by CHU".  Everything else, the article tests, the "canonical X" framing, the soft hits, answers to the ear.  The structural rule below is the most important shape to listen for.
+The only non-negotiable rules are lint-backed: a check enforces them, so the agent's opinion is not part of the gate.  The CHU-code ban (`CHU006`) is one; anything marked "Enforced by CHU" is another.  Everything else answers to the ear — the article tests, the "canonical X" framing, the connective-tissue punctuation, the empty adjectives, all of it.  Some shapes fail the read-aloud test most of the time (the empty adjectives in [§ Empty adjectives](#empty-adjectives) and the connective-tissue punctuation in [§ Sentence form](#sentence-form)) and most of the time you can fix them quickly; even those go through the read-aloud check, because a deleted em-dash that leaves a worse sentence is a regression, not a fix.  The structural rule below is the most important shape to listen for.
 
 ## Sentence form
 
-Write in sentences.  Don't use em-dashes, semicolons, or arrows as shortcuts that paper over missing connective tissue.  If two ideas are linked, write them as two sentences or join with a comma and a connector.  This applies to code comments, docstrings, and all markdown prose.
+Write in sentences.  Em-dashes, semicolons, and arrows are suspects, not bans — they often paper over missing connective tissue, in which case two sentences or a comma-and-connector reads better.  When the connective tissue is there and the sentence reads well out loud, keep them.  Applies to code comments, docstrings, and all markdown prose.
 
-Specific failure modes:
+Specific shapes that usually fail the read-aloud test:
 
 - An em-dash introducing a definition is usually a colon or a `which` clause in disguise.
 - A semicolon joining two clauses is usually two sentences.
-- An arrow (→) is rendering a flow that wants verbs and a sentence.
+- An arrow (→) is usually rendering a flow that wants verbs and a sentence.
+
+Em-dashes that earn their place — pacing a parenthetical so a comma would mis-pace, or connecting two real ideas where a sentence break would be choppy — stay.  Read aloud, then decide.
 
 ## Concrete subject, real verb (the structural rule)
 
@@ -51,11 +53,22 @@ You catch it by reading, not by grepping. The standing AI-tic regex cannot find 
 
 ## AI-tic phrases
 
-Cut AI-tic phrases.  They sound non-human, drop information, and make prose harder to skim.  The fix is usually structural, not vocabulary.  When you write "the X promise" or "the X pattern", name X concretely in the same sentence.  When you catch yourself writing one, rewrite the sentence to demonstrate the property concretely instead of asserting it abstractly.
+Watch for AI-tic phrases.  They sound non-human, drop information, and make prose harder to skim.  The fix is usually structural, not vocabulary.  When you write "the X promise" or "the X pattern", name X concretely in the same sentence or rewrite the sentence to demonstrate the property concretely instead of asserting it abstractly.  When the phrase carries real content and reads fine out loud, keep it.
+
+## Verify domain terminology
+
+Code identifiers are not canonical domain vocabulary.  A method named `addCommand` does not make the thing being added a "command" in the domain sense.  A class named `XYZRenderer` does not make its output a "render" in the domain sense.  Method names are written by engineers for code-local convenience and drift from the domain over time.
+
+Before promoting a code identifier into authoritative prose (a docstring's first sentence, a README claim, a PR description):
+
+1. Check sibling code, prior usage in the same file or package, or related ADRs / PRs / docs for what the team actually calls this thing.
+2. If you cannot verify, either hedge explicitly ("I'm using 'command' because the API is `addCommand`; please verify") or ask before drafting.
+
+The failure mode this prevents: confident prose using wrong domain terms slips through review because the surrounding text reads fluent.  Worse than visible uncertainty.
 
 ## Phrase bans
 
-Despite the section name, these are suspects the one rule flags for a listen, not commands, across all writing: code comments, docstrings, markdown docs, ADR bodies, commit messages.  Check each by ear, do not find-replace it.  When it reads fine out loud, keep it.  The on-sight and lint-backed exceptions are named in [§ The one rule](#the-one-rule-say-it-out-loud).
+The "ban" framing is shorthand.  These are suspects the read-aloud test flags for a listen, not commands, across all writing: code comments, docstrings, markdown docs, ADR bodies, commit messages.  Check each by ear, do not find-replace it.  When it reads fine out loud, keep it.  The lint-backed exceptions are named in [§ Say it out loud](#say-it-out-loud).
 
 ### "the canonical X" framing
 
@@ -100,24 +113,26 @@ Hard to spot because each half reads fine alone.  Catch it by asking whether the
 
 ### Empty adjectives
 
-Drop adjectives that don't carry information.  The standing list: `comprehensive`, `robust`, `seamless` / `seamlessly`, `cutting-edge`, `best-in-class`, `first-class`, `one-stop`, `out of the box`, `effortless`, `painless`, `intuitive`, `elegant`, `streamlined`, `battle-tested`, `magic`, `powerful`, and marketing phrasings like `got you covered`.
+Watch for adjectives that don't carry information.  The standing list: `comprehensive`, `robust`, `seamless` / `seamlessly`, `cutting-edge`, `best-in-class`, `first-class`, `one-stop`, `out of the box`, `effortless`, `painless`, `intuitive`, `elegant`, `streamlined`, `battle-tested`, `magic`, `powerful`, and marketing phrasings like `got you covered`.
 
-If you'd reach for `comprehensive`, list what it covers.  If you'd reach for `robust`, name what it survives.  If you'd reach for `first-class`, name the commands that make a workflow first-class.
+If you'd reach for `comprehensive`, list what it covers.  If you'd reach for `robust`, name what it survives.  If you'd reach for `first-class`, name the commands that make a workflow first-class.  These almost always fail the read-aloud test, but they still go through it — when the word carries real content in context (`first-class` describing a citizenship the API genuinely confers), keep it.
 
 ### Filler verbs and abstract-property claims
 
-A small set of verbs and abstract properties show up as filler in agent prose.  Replace each with the plain alternative, or demonstrate the property concretely if it is real.
+A small set of verbs and abstract properties tend to show up as filler.  Listen for them, and reach for the plain alternative or demonstrate the property concretely if it is real.
 
-- `leverage` becomes `use`.
-- `harness` is usually filler ("harnesses X to do Y").  Drop or replace with a plain verb.
-- `idempotent` is often filler.  When the property is real (a retried operation reaches the same end state), demonstrate concretely instead of asserting abstractly.
-- `under the hood` should be rephrased concretely.  *"These tools execute the deploy"* beats *"this is what was happening under the hood"*.
-- `by construction` is math jargon in casual prose.  Drop.  *"One codebase, three runtimes"* beats *"cross-runtime by construction"*.
-- `empowers` and `unleash` are marketing verbs.  Drop or replace with the plain verb.
+- `leverage` is usually `use`.
+- `harness` is usually filler ("harnesses X to do Y").
+- `idempotent` is often filler.  When the property is real (a retried operation reaches the same end state), demonstrate it concretely instead of asserting it abstractly.
+- `under the hood` reads better rephrased concretely.  *"These tools execute the deploy"* beats *"this is what was happening under the hood"*.
+- `by construction` is math jargon in casual prose.  *"One codebase, three runtimes"* beats *"cross-runtime by construction"*.
+- `empowers` and `unleash` are marketing verbs.
+
+When the original word IS the right one in context, keep it.  The check is the read-aloud test, not a substitution table.
 
 ### Filler sentence-openers
 
-Don't open sentences with filler like "It is worth noting that", "It should be noted that", "Note that", "Let's dive into", "Let's explore", "In this section, we will", "Simply put", or "In essence".  Start with the content.
+Sentence-opener filler usually adds nothing.  "It is worth noting that", "It should be noted that", "Note that", "Let's dive into", "Let's explore", "In this section, we will", "Simply put", "In essence".  Start with the content.  Keep when the opener is genuinely orienting the reader and a cold read needs it.
 
 ### CHU lint codes in prose
 

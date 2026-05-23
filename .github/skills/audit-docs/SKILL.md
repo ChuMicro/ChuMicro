@@ -7,7 +7,7 @@ description: Audit a user-facing markdown doc (README, INSTALL, library guides) 
 
 Audit one human-curated markdown doc (`README.md`, `libraries/<name>/docs/guide.md`, `INSTALL.md`, or a similar shape) for things that make a doc unreadable to a cold reader.  Output a prioritized punch-list.  After the user gives the go-ahead, execute the high-confidence batch.  Surface medium-confidence and low-confidence items as questions so the user can answer them instead of guessing.
 
-> **About this skill's own prose.**  This SKILL.md lives in `.github/skills/`, which makes it internal documentation.  Internal docs are out of scope for the audit itself (see "Defer / out of scope" at the bottom), so this body cites `Decision NNNN`, `CHU0NN`, and `plans/` paths freely.  The tone rules in [`docs/contributing/agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md) still apply, including the em-dash ban, the AI-tic phrase list, the per-noun `the X` forward-reference test, and the degraded-passage rewrite discipline.  The body below is written to demonstrate those rules in practice.
+> **About this skill's own prose.**  This SKILL.md lives in `.github/skills/`, which makes it internal documentation.  Internal docs are out of scope for the audit itself (see "Defer / out of scope" at the bottom), so this body cites `Decision NNNN`, `CHU0NN`, and `plans/` paths freely.  The tone rules in [`docs/contributing/agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md) still apply, including the connective-tissue suspects (em-dashes, semicolons, arrows), the AI-tic phrase list, the per-noun `the X` forward-reference test, and the degraded-passage rewrite discipline.  The body below is written to demonstrate those rules in practice.
 
 ## Scope
 
@@ -78,10 +78,10 @@ Read top-to-bottom three times, one per reader (see philosophy above for who bai
 
 The phrase bans, the standing regex, and the per-word handling all live in [`docs/contributing/agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md).  One source, every audit skill cites it.  Do not carry a private copy in this skill.
 
-**Run the regex from [§ Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex)** over the target file.  Treat hits per [§ Phrase bans](../../../docs/contributing/agent-style-guide.md#phrase-bans):
+**Run the regex from [§ Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex)** over the target file.  The regex surfaces candidates, it does not decide.  Treat hits per [§ Phrase bans](../../../docs/contributing/agent-style-guide.md#phrase-bans):
 
-* Hard-ban hits (`canonical`, `idempotent`, the empty adjectives) almost always need a rewrite.
-* Soft hits (`under the hood`, definite-article tics) are case-by-case.
+* Words that almost always fail the read-aloud test (`canonical`, `idempotent`, the empty adjectives) almost always need a rewrite — but they still go through the read.  A swap that leaves a worse sentence is a regression.
+* Soft hits (`under the hood`, definite-article tics, em-dashes, semicolons, arrows) are case-by-case.  An em-dash that earns its pacing stays.
 
 **Read for the grammar tics that no regex catches.**  Definite-article shapes (forward-reference test, brand names, stacked articles, "X is the one that Y", "The same X" at sentence-start) and the abstract-opener-em-dash-restate pattern.  See agent-style-guide.md § Phrase bans for the worked examples.
 
@@ -414,6 +414,7 @@ When the same patterns recur across audits, ask rather than acting.
 * **Don't golf for word count.**  Sometimes longer prose is clearer.  User framing: *"you don't have to be so compact, these one-liners don't say much."*  Add words when they help comprehension.
 * **Don't re-trim a degraded passage.  Rewrite it.**  If a paragraph is already rotted from prior subtractive passes (illegible, says nothing, survived three audits a word lighter each time), removing another word is the wrong fix.  Discard it and rewrite from a fresh read of what the thing is.  See "Audit philosophy" above for the rule.  A `rewrite` finding shows the proposed replacement text inline, same as `/audit-comments`.
 * **Don't strip every "the".**  *"the LED"*, *"the loop"*, *"the request"* are specific singular nouns.  Dropping the article reads wrong.  Only flag the genuinely-redundant ones.  Apply the per-noun three-way test from [`feedback_the_forward_reference`](../../../../.claude/projects/-Users-chuxor-circuitpython-chumicro/memory/feedback_the_forward_reference.md).
+* **Don't strip every em-dash.**  Em-dashes that earn their place — pacing a parenthetical so a comma would mis-pace, connecting two real ideas where a sentence break would be choppy — stay.  Only flag the ones papering over missing connective tissue.  Same posture for semicolons and arrows.  Read each aloud before flagging.
 * **Don't restructure based on taste alone.**  The three-reader walk gives an objective lens.  *"I'd write it differently"* is not a reason to move things.
 
 **Verification don'ts** (what not to skip before flagging).
