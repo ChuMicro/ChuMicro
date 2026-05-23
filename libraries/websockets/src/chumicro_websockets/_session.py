@@ -754,9 +754,10 @@ class _BaseSession:
         """Trip an expired handshake / close / pong deadline.  Returns
         ``True`` if a deadline tripped (caller should yield the tick).
         """
+        ticks_diff = self._ticks.ticks_diff
         if (
             self._handshake_deadline_ticks is not None
-            and self._ticks.ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0
+            and ticks_diff(self._handshake_deadline_ticks, now_ms) <= 0
         ):
             self._fail_with_error(
                 WebSocketTimeoutError(
@@ -764,15 +765,9 @@ class _BaseSession:
                 ),
             )
             return True
-        return self._check_close_and_pong_timeouts(now_ms)
-
-    def _check_close_and_pong_timeouts(self, now_ms: int) -> bool:
-        """Trip an expired close-deadline or pong-deadline.  Returns
-        ``True`` if a deadline tripped (caller should yield the tick).
-        """
         if (
             self._close_deadline_ticks is not None
-            and self._ticks.ticks_diff(self._close_deadline_ticks, now_ms) <= 0
+            and ticks_diff(self._close_deadline_ticks, now_ms) <= 0
         ):
             # Force closed even though peer didn't echo CLOSE.
             self.last_error = WebSocketTimeoutError(
@@ -782,7 +777,7 @@ class _BaseSession:
             return True
         if (
             self._pending_ping_deadline_ticks is not None
-            and self._ticks.ticks_diff(self._pending_ping_deadline_ticks, now_ms) <= 0
+            and ticks_diff(self._pending_ping_deadline_ticks, now_ms) <= 0
         ):
             self._fail_with_error(
                 WebSocketTimeoutError(
