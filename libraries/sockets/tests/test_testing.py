@@ -48,10 +48,27 @@ class TestRecvScripting:
         assert nbytes_second == 3
         assert bytes(buffer[:3]) == b"def"
 
-    def test_empty_queue_returns_zero(self) -> None:
+    def test_empty_queue_raises_eagain(self) -> None:
+        """No data on a still-connected socket matches real non-blocking
+        ``recv_into`` semantics on every runtime — raises EAGAIN, never
+        returns 0.  Returning 0 is reserved for a peer FIN."""
         sock = FakeSocket()
         buffer = bytearray(4)
-        assert sock.recv_into(buffer, 4) == 0
+        with raises(OSError) as caught:
+            sock.recv_into(buffer, 4)
+        assert caught.value.args[0] == EAGAIN
+
+    def test_simulate_peer_close_returns_zero_when_queue_drained(self) -> None:
+        """``simulate_peer_close`` flips the contract: once the queue
+        drains, ``recv_into`` returns 0 (clean peer FIN)."""
+        sock = FakeSocket()
+        sock.enqueue_recv(b"last bytes before FIN")
+        sock.simulate_peer_close()
+        buffer = bytearray(64)
+        first = sock.recv_into(buffer, 64)
+        assert first == len(b"last bytes before FIN")
+        # Queue drained; FIN signaled.
+        assert sock.recv_into(buffer, 64) == 0
 
     def test_nbytes_zero_uses_buffer_length(self) -> None:
         sock = FakeSocket()

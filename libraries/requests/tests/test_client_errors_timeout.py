@@ -179,11 +179,15 @@ class TestHttpClientErrors:
 
     def test_peer_close_completes_unknown_length_body(self):
         socket = FakeSocket()
-        # No Content-Length means a length-unknown body.  FakeSocket
-        # returns 0 once the recv queue drains, which mirrors a clean
-        # peer close; the production client calls feed_eof() and the
-        # parser transitions BODY -> DONE.
+        # No Content-Length means a length-unknown body.  The body
+        # ends on a clean peer FIN, which the production client
+        # detects via ``recv_into() == 0`` and turns into
+        # ``parser.feed_eof()``; the parser then transitions
+        # BODY -> DONE.  ``simulate_peer_close`` signals the FIN once
+        # the queue drains, matching real non-blocking socket
+        # semantics (an empty queue without a FIN raises EAGAIN).
         socket.enqueue_recv(b"HTTP/1.1 200 OK\r\n\r\nstreamed-bytes")
+        socket.simulate_peer_close()
         client, ticks, _ = make_client(socket_or_factory=socket)
         handle = client.get("http://example.test/")
         drive_until_done(client, handle, ticks)

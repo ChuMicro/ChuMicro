@@ -64,6 +64,13 @@ class FakeSocket:
         # so any future MP-specific deque quirks surface here too.
         self._recv_queue: deque[bytes] = deque((), _FAKE_SOCKET_QUEUE_MAXLEN)
         self._closed: bool = False
+        # Peer-close (clean FIN) is separate from own-side ``close()``.
+        # Set by :meth:`simulate_peer_close`.  When True, ``recv_into``
+        # returns 0 once the queue drains — matching real non-blocking
+        # ``recv_into`` semantics on CPython / MicroPython / CircuitPython
+        # where a connected non-blocking socket returns 0 only on a
+        # peer FIN, never on a quiet line (which raises EAGAIN).
+        self._peer_closed: bool = False
         self._blocking: bool = True
         self._timeout: float | None = None
         self._send_eagains: int = 0
@@ -95,6 +102,18 @@ class FakeSocket:
         """Script the next *count* :meth:`recv_into` calls to raise EAGAIN."""
         self._recv_eagains += int(count)
 
+    def simulate_peer_close(self) -> None:
+        """Simulate a clean peer FIN — once the recv queue drains,
+        :meth:`recv_into` returns 0 instead of raising EAGAIN.
+
+        Separate from :meth:`close` (which models own-side close and
+        makes every subsequent operation raise ``OSError(EBADF)``).
+        Use this to exercise the broker-graceful-disconnect / peer-FIN
+        path without losing the ability to script remaining bytes
+        (e.g. a final DISCONNECT packet) before the FIN.
+        """
+        self._peer_closed = True
+
     def set_fileno(self, fd: int) -> None:
         """Override the integer fd :meth:`fileno` returns."""
         self._fileno = int(fd)
@@ -114,17 +133,24 @@ class FakeSocket:
     def recv_into(self, buffer: bytearray, nbytes: int = 0) -> int:
         """Pop the queue head, copy into *buffer*, return bytes written.
 
-        Returns 0 when the queue is empty AND the socket isn't closed —
-        that's the "peer sent nothing this tick" idiom.  When the
-        socket is closed and the queue is exhausted, also returns 0
-        (clean peer close).
+        Matches real non-blocking ``recv_into`` semantics on CPython,
+        MicroPython lwIP, and CircuitPython lwIP:
+
+        * Queue non-empty: return ``min(capacity, chunk_length)`` bytes.
+        * Queue empty AND :meth:`simulate_peer_close` was called: return
+          0 (clean peer FIN).
+        * Queue empty otherwise: raise ``OSError(EAGAIN)`` (no data this
+          tick on a still-connected socket).
+        * Socket :meth:`close`'d: raise ``OSError(EBADF)``.
         """
         self._raise_if_closed()
         if self._recv_eagains > 0:
             self._recv_eagains -= 1
             raise OSError(EAGAIN, "would block")
         if not self._recv_queue:
-            return 0
+            if self._peer_closed:
+                return 0
+            raise OSError(EAGAIN, "would block")
         capacity = nbytes if nbytes > 0 else len(buffer)
         if capacity <= 0:
             return 0
