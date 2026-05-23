@@ -4,7 +4,7 @@
 cooperative dispatch in the caller's tick loop.
 
 The connection-state classes (:class:`ProtocolState`,
-:class:`Awaiting`, :class:`InFlightTable`, :class:`PendingResponse`,
+:class:`InFlightTable`, :class:`PendingResponse`,
 :class:`InFlightPublish`) and :class:`MQTTPublisher` live here.  The
 wire-format primitives live in :mod:`chumicro_mqtt._wire`.
 """
@@ -64,14 +64,15 @@ class ProtocolState:
     FAILED = "failed"
 
 
-class Awaiting:
-    """Tags identifying which broker response a pending work-item expects."""
-
-    CONNACK = "connack"
-    PINGRESP = "pingresp"
-    PUBACK = "puback"
-    SUBACK = "suback"
-    UNSUBACK = "unsuback"
+# Tags identifying which broker response a pending work-item expects.
+# Module-level so the import allocates 5 small string bindings instead
+# of a class object + its type machinery (~5-7 fewer small heap pins
+# on Pi Pico W MP).  Underscore-prefixed: not re-exported.
+_AWAIT_CONNACK = "connack"
+_AWAIT_PINGRESP = "pingresp"
+_AWAIT_PUBACK = "puback"
+_AWAIT_SUBACK = "suback"
+_AWAIT_UNSUBACK = "unsuback"
 
 
 class InFlightPublish:
@@ -144,10 +145,10 @@ class InFlightTable:
 class PendingResponse:
     """A non-publish response (CONNACK / SUBACK / UNSUBACK / PINGRESP) we're waiting for.
 
-    Each carries an :class:`Awaiting` tag, a deadline, an optional
-    packet_id, and an optional callback that fires once on receipt.
-    Multiple pending responses can coexist: tracking is per-entry
-    rather than via a single broad waiting-state lock.
+    Each carries an ``_AWAIT_*`` tag, a deadline, an optional packet_id,
+    and an optional callback that fires once on receipt.  Multiple
+    pending responses can coexist: tracking is per-entry rather than
+    via a single broad waiting-state lock.
     """
 
     def __init__(self, awaiting, deadline_ticks, packet_id=None, callback=None):
@@ -564,7 +565,7 @@ class MQTTClient:
         self._enqueue_user_tx(packet)
         self._pending_responses.append(
             PendingResponse(
-                awaiting=Awaiting.CONNACK,
+                awaiting=_AWAIT_CONNACK,
                 deadline_ticks=self._deadline(self._ack_timeout_ms),
             ),
         )
@@ -763,7 +764,7 @@ class MQTTClient:
 
         self._pending_responses.append(
             PendingResponse(
-                awaiting=Awaiting.SUBACK,
+                awaiting=_AWAIT_SUBACK,
                 deadline_ticks=self._deadline(self._ack_timeout_ms),
                 packet_id=packet_id,
                 callback=_wrapped,
@@ -797,7 +798,7 @@ class MQTTClient:
 
         self._pending_responses.append(
             PendingResponse(
-                awaiting=Awaiting.UNSUBACK,
+                awaiting=_AWAIT_UNSUBACK,
                 deadline_ticks=self._deadline(self._ack_timeout_ms),
                 packet_id=packet_id,
                 callback=_wrapped,
@@ -1180,7 +1181,7 @@ class MQTTClient:
             self._handle_connack(packet, now_ms)
             return
         if packet.packet_type == PACKET_PINGRESP:
-            self._discard_pending(Awaiting.PINGRESP, packet_id=None)
+            self._discard_pending(_AWAIT_PINGRESP, packet_id=None)
             return
         if packet.packet_type == PACKET_PUBACK:
             in_flight = self._in_flight.discard(packet.packet_id)
@@ -1205,7 +1206,7 @@ class MQTTClient:
                     "one or more subscription filters"
                 )
             matched = self._discard_pending(
-                Awaiting.SUBACK,
+                _AWAIT_SUBACK,
                 packet_id=packet.packet_id,
                 callback_arg=packet.granted_qos,
             )
@@ -1217,7 +1218,7 @@ class MQTTClient:
             return
         if packet.packet_type == PACKET_UNSUBACK:
             matched = self._discard_pending(
-                Awaiting.UNSUBACK, packet_id=packet.packet_id, callback_arg=None,
+                _AWAIT_UNSUBACK, packet_id=packet.packet_id, callback_arg=None,
             )
             self._in_flight.discard(packet.packet_id)
             if not matched:
@@ -1228,7 +1229,7 @@ class MQTTClient:
 
     def _handle_connack(self, packet, now_ms):
         """CONNACK return-code 0 = success, anything else = failure."""
-        self._discard_pending(Awaiting.CONNACK, packet_id=None)
+        self._discard_pending(_AWAIT_CONNACK, packet_id=None)
         if packet.return_code != 0:
             # Codes 1-5 are the rejection codes a broker may send
             # (MQTT 3.1.1 §3.2.2.3).  Built inline so the dict only
@@ -1324,12 +1325,12 @@ class MQTTClient:
             return
         # Already awaiting a PINGRESP?  Don't double-send.
         for pending in self._pending_responses:
-            if pending.awaiting == Awaiting.PINGRESP:
+            if pending.awaiting == _AWAIT_PINGRESP:
                 return
         self._tx_queue.append(PACKET_PINGREQ)
         self._pending_responses.append(
             PendingResponse(
-                awaiting=Awaiting.PINGRESP,
+                awaiting=_AWAIT_PINGRESP,
                 deadline_ticks=self._deadline(self._ack_timeout_ms, now_ms=now_ms),
             ),
         )

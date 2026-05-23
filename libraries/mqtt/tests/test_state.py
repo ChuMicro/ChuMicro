@@ -2,7 +2,8 @@
 
 from chumicro_mqtt import ProtocolState
 from chumicro_mqtt.client import (
-    Awaiting,
+    _AWAIT_PINGRESP,
+    _AWAIT_SUBACK,
     InFlightPublish,
     InFlightTable,
     PendingResponse,
@@ -115,13 +116,13 @@ class TestInFlightPublish:
 
 class TestPendingResponse:
     def test_default_packet_id_none(self) -> None:
-        pending = PendingResponse(awaiting=Awaiting.PINGRESP, deadline_ticks=42)
+        pending = PendingResponse(awaiting=_AWAIT_PINGRESP, deadline_ticks=42)
         assert pending.packet_id is None
 
     def test_carries_callback(self) -> None:
         captured: list[object] = []
         pending = PendingResponse(
-            awaiting=Awaiting.SUBACK,
+            awaiting=_AWAIT_SUBACK,
             deadline_ticks=42,
             packet_id=7,
             callback=lambda granted: captured.append(granted),
