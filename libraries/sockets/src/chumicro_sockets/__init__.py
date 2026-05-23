@@ -588,3 +588,12 @@ def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
 
         mp.set_default_ca_bundle(pem_bytes)
     # CP + CPython: trust comes from elsewhere — silently ignore.
+
+
+# Defragment compile-time scratch at the end of the package import so
+# downstream library imports (and the runtime-gated lazy adapter loads
+# inside ``tcp_client_socket`` / ``tls_client_socket``) land in a
+# cleaner heap.  See chumicro_mqtt/__init__.py docstring.
+import gc as _gc
+_gc.collect()
+del _gc
