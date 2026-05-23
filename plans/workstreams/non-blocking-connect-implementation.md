@@ -1,6 +1,8 @@
 # Workstream: non-blocking-connect implementation
 
-Status: **in-progress.**  Phases 1.1 (CPython adapter + connector base + Fake), 1.3 (CircuitPython socketpool adapter), and 2 (chumicro_mqtt migration to `connector_factory` + `AWAITING_TRANSPORT`) landed; phase 1.2 (MicroPython rp2 adapter) and phases 3-6 still ahead.  Implements [Decision 0081](../decisions/0081-non-blocking-connect-via-tick-driven-connector.md).  Surfaced 2026-05-23 by the A1+A2 negative bake against the convergence-steps-1-7 fix set on Pi Pico W CP custom firmware: self-heal correctly detected broker death + reconnected, but each outage burned ~10 s of full-tick-rate ECONNRESET retries against the wifi radio, fully stalling the runner during the outage window.  Recovery worked; runner-shape was violated for ~10 s per outage.
+Status: **shipped.**  Implements [Decision 0081](../decisions/0081-non-blocking-connect-via-tick-driven-connector.md).  Surfaced 2026-05-23 by the A1+A2 negative bake against the convergence-steps-1-7 fix set on Pi Pico W CP custom firmware: self-heal correctly detected broker death + reconnected, but each outage burned ~10 s of full-tick-rate ECONNRESET retries against the wifi radio, fully stalling the runner during the outage window.  Recovery worked; runner-shape was violated for ~10 s per outage.
+
+All client-side phases shipped; A1 bake-validated on Pi Pico W CP (max_tick_ms 63 ms during outage + recovery, ~160× drop from the pre-Phase-2 ~10 s stall).  Phase 6 (server-side accept-connector analog) closed out of scope — see the Phase-6 row in the validation history for the deferral rationale.  A future bake observation can reopen it as a separate workstream.
 
 ## Problem
 
@@ -87,7 +89,7 @@ Each of these currently calls the synchronous factory and must migrate to the co
 | 3 Bake-validate against A1 (broker hard-kill + restart) on Pi Pico W CP | shipped | (this commit) | Pre-Phase-2 ref: ~10 s of full-tick-rate ECONNRESET stall.  Post-Phase-2: max_tick_ms 63 ms during the 10 s window containing the outage + recovery — ~160× drop in worst-case runner-stall time.  Bake metrics: 286 sent / 286 PUBACKs / 0 in-flight leak / 0 pending leak / 0 tx_queue leak / 0 inbound gaps / heap flat across the 5-min cycle.  31 awaiting_transport → failed cycles during the broker-down window — each one yielded to the runner instead of tight-looping the wifi radio.  3 outbound publishes lost during the outage (expected with clean_session=True).  Logs: `.scratch/bake-phase3-a1-{board,mac}.log` |
 | 4 chumicro_requests migration | shipped | (this commit) | `connection_factory` → `connector_factory`, `AWAITING_TRANSPORT` state, FakeSocketConnector test idiom mirrors phase 2 |
 | 5 chumicro_websockets migration | shipped | (this commit) | `connection_factory` → `connector_factory`, new `AWAITING_TRANSPORT` ConnectingPhase, FakeSocketConnector test idiom; same shape as Phase 4 |
-| 6 chumicro_http_server | pending | — | Accept-side TLS analog; ADR scope may extend |
+| 6 chumicro_http_server | scope-closed | (this commit) | Server-side accept path is already non-blocking for plain HTTP (`accept()` returns EAGAIN when no client queued).  TLS handshake DOES block inline on `tls_listening_socket.accept()` (~100-500 ms per new client on Pi Pico W), but the blast radius is bounded — fires once per accepted connection, not repeatedly during outage like the connect-side ECONNRESET loop the workstream was built to fix.  An accept-side connector analog would be its own ADR + workstream when bake observation justifies the complexity (server's typical `max_connections=1` makes accept-stalls infrequent in practice).  Closed out of scope for Decision 0081. |
 
 ## What is not in scope
 
