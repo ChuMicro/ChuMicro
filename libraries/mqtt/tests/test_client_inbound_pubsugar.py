@@ -123,7 +123,8 @@ class TestInboundPublish:
 
         sock.enqueue_recv(canned_publish_bytes("a/x", b"", qos=0))
         sock.enqueue_recv(canned_publish_bytes("b/y/z", b"", qos=0))
-        _drive(client, ticks, count=1)
+        # One recv per tick: two FakeSocket chunks need two ticks to drain.
+        _drive(client, ticks, count=2)
         # Only the b/# registration survived.
         assert fires == ["b/y/z"]
 

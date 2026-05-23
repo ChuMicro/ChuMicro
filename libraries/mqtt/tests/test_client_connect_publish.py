@@ -250,12 +250,14 @@ class TestPublishQos1:
             qos=1,
             on_publish=lambda topic, payload: second_called.append(True),
         )
-        _drive(client, ticks, count=1)  # Send both.
+        # One send per tick: two queued PUBLISHes need two ticks.
+        _drive(client, ticks, count=2)  # Send both.
 
         # Broker pubacks them out of order.
         sock.enqueue_recv(canned_puback_bytes(packet_id=2))
         sock.enqueue_recv(canned_puback_bytes(packet_id=1))
-        _drive(client, ticks, count=1)
+        # One recv per tick: two FakeSocket PUBACK chunks need two ticks.
+        _drive(client, ticks, count=2)
 
         assert first_called == [True]
         assert second_called == [True]

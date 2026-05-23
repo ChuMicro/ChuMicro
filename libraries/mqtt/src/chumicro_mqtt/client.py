@@ -965,13 +965,23 @@ class MQTTClient:
     # ------------------------------------------------------------------
 
     def _drain_tx_queue(self):
-        """Send queued packets until the socket would block.
+        """Send at most one packet (or resume one partial send) this tick.
+
+        One ``send`` per tick keeps the tick short so other runner-
+        registered services (LED, buttons, LCD) get CPU time between
+        MQTT sends.  QoS-0 callback markers are not I/O and fire
+        immediately as they reach the head of the queue, so a burst
+        of pure-callback markers doesn't waste ticks; the loop returns
+        as soon as it sends one real packet or hits EAGAIN.
 
         Each item is either ``bytes`` (a packet) or a
         ``("__qos0_callback__", callback, topic, payload)`` tuple
         (a deferred QoS 0 on_publish hook).
         """
-        # Resume a previous partial send first.
+        # Resume a previous partial send first.  Wire-ordering invariant:
+        # the remainder of a partial packet lands before any new packet
+        # this client appends, so this branch returns immediately after
+        # one send attempt regardless of outcome.
         if self._partial_send is not None:  # pragma: no cover - rare partial-send recovery path
             packet, offset = self._partial_send
             sent = self._send_raw(packet[offset:])
@@ -980,26 +990,48 @@ class MQTTClient:
                 self._partial_send = None
             else:
                 self._partial_send = (packet, new_offset)
-                return  # Socket would block, retry next tick.
+            return  # One I/O attempt per tick.
 
+        # Drain leading QoS 0 callback markers (no I/O) up to the next
+        # real packet.  These fire on dequeue and don't consume the
+        # one-send-per-tick budget.
+        self._drain_callback_markers()
+
+        # Send at most one real packet.
+        if not self._tx_queue:
+            return
+        packet = self._tx_queue[0]
+        sent = self._send_raw(packet)
+        if sent <= 0:  # pragma: no cover - non-blocking-EAGAIN backpressure path
+            return  # Socket would block, wait for next tick.
+        if sent < len(packet):  # pragma: no cover - rare partial-send path
+            self._partial_send = (packet, sent)
+            self._tx_queue.popleft()
+            return
+        self._tx_queue.popleft()
+
+        # Drain trailing QoS 0 callback markers so the on_publish hook
+        # for the just-sent QoS 0 PUBLISH fires this tick instead of
+        # waiting for the next one.  Wire-ordering invariant intact:
+        # markers carry no I/O.
+        self._drain_callback_markers()
+
+    def _drain_callback_markers(self):
+        """Pop QoS 0 callback markers off the head of the tx queue, firing each.
+
+        Returns once the head is no longer a marker (or queue is empty).
+        Markers carry no I/O so this doesn't consume the per-tick send
+        budget.
+        """
         while self._tx_queue:
             head = self._tx_queue[0]
-            if isinstance(head, tuple) and head[0] == "__qos0_callback__":
-                _, callback, topic, payload = head
-                self._tx_queue.popleft()
-                if callback is not None:
-                    callback(topic, payload)
-                self.on_publish(topic, payload)
-                continue
-            packet = head
-            sent = self._send_raw(packet)
-            if sent <= 0:  # pragma: no cover - non-blocking-EAGAIN backpressure path
-                return  # Socket would block, wait for next tick.
-            if sent < len(packet):  # pragma: no cover - rare partial-send path
-                self._partial_send = (packet, sent)
-                self._tx_queue.popleft()
+            if not (isinstance(head, tuple) and head[0] == "__qos0_callback__"):
                 return
+            _, callback, topic, payload = head
             self._tx_queue.popleft()
+            if callback is not None:
+                callback(topic, payload)
+            self.on_publish(topic, payload)
 
     def _send_raw(self, payload):
         """Send *payload*.  Returns bytes sent (may be 0 on EAGAIN)."""
@@ -1033,51 +1065,44 @@ class MQTTClient:
     # ------------------------------------------------------------------
 
     def _read_inbound(self, now_ms):
-        """Pull bytes off the socket and process complete packets.
+        """Pull at most one chunk off the socket and dispatch buffered packets.
 
-        Doesn't short-circuit on "got < capacity" because TCP can
-        fragment a single broker burst across multiple recv calls.
-        But the pull loop *is* bounded per tick by
-        ``recv_budget_per_tick`` (default 1024 B): a 100 KB inbound
-        PUBLISH would otherwise monopolize the tick while the kernel
-        TCP buffer drains, and side tasks like LED blink / LCD update
-        would stutter.  With the cap, a big blob takes more ticks to
-        ingest but every tick stays short.
-
-        The cap applies whether we're in the steady-state RX path or
-        the degraded-buffer (oversized) path.  Both feed through the
-        same ``recv_into`` calls.
+        ONE ``recv_into`` per tick (the syscall is the expensive part
+        and the one that needs to yield back to the runner); ALL
+        complete packets already in the decoder buffer dispatch in
+        the same call (parsing is CPU-bound and allocation-light, and
+        without a wake event the next tick may not fire until the
+        keepalive 30 s away, so leaving buffered packets undispatched
+        would stall inbound delivery).  The recv is capped at
+        ``recv_budget_per_tick`` so an intact-tier read of a multi-KB
+        PUBLISH doesn't draw the whole payload in one syscall.
         """
-        consumed = 0
-        budget = self._recv_budget_per_tick
-        while consumed < budget:
-            buffer_view = self._decoder.fill_buffer()
-            capacity = self._decoder.fill_capacity()
-            if capacity <= 0:
-                break  # pragma: no cover - decoder full, parser drains on next call.
-            # Don't read past the per-tick budget.
-            if capacity > budget - consumed:
-                capacity = budget - consumed
-                buffer_view = buffer_view[:capacity]
+        buffer_view = self._decoder.fill_buffer()
+        capacity = self._decoder.fill_capacity()
+        if capacity > self._recv_budget_per_tick:
+            capacity = self._recv_budget_per_tick
+            buffer_view = buffer_view[:capacity]
+        if capacity > 0:
             try:
                 got = self._socket.recv_into(buffer_view, capacity)
             except OSError as error:
                 if _is_eagain(error):  # pragma: no cover - EAGAIN handling
-                    break  # EAGAIN: no data this tick.
-                raise
-            if got == 0:
-                # Non-blocking ``recv_into`` returning 0 is a clean
-                # peer FIN; the no-data path raises ``OSError(EAGAIN)``
-                # and is handled above.  Raise so ``handle()`` transitions
-                # to FAILED and the next tick can self-heal.
-                raise MQTTProtocolError("broker closed connection")
-            self._decoder.advance(got)
-            consumed += got
+                    got = 0  # No bytes this tick; fall through to dispatch.
+                else:
+                    raise
+            else:
+                if got == 0:
+                    # Non-blocking ``recv_into`` returning 0 is a clean
+                    # peer FIN; the no-data path raises ``OSError(EAGAIN)``
+                    # and is handled above.  Raise so ``handle()`` transitions
+                    # to FAILED and the next tick can self-heal.
+                    raise MQTTProtocolError("broker closed connection")
+                self._decoder.advance(got)
 
         while True:
             packet = self._decoder.read_next()
             if packet is None:
-                break
+                return
             if isinstance(packet, ParsedPublish):
                 self._handle_inbound_publish(packet)
             elif isinstance(packet, _OversizedMessage):
