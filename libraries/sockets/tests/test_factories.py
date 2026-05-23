@@ -20,6 +20,7 @@ import chumicro_sockets
 from chumicro_sockets import (
     UnsupportedSSLConfigError,
     is_eagain,
+    pollable_of,
     set_default_ca_bundle,
     ssl_context_no_verify,
     ssl_context_with_ca,
@@ -768,6 +769,41 @@ class TestIsEagain:
     def test_non_oserror_returns_false(self) -> None:
         # Defensive: any exception missing ``errno`` falls through to False.
         assert is_eagain(RuntimeError("not a socket error")) is False
+
+
+class TestPollableOf:
+    """``pollable_of`` returns the object ``select.poll().register()`` should see.
+
+    Wrappers store the underlying socket on ``_sock``; bare sockets
+    have no ``_sock`` and pass through.  ``getattr(sock, "_sock", sock)``
+    is the whole implementation — the tests pin both branches.
+    """
+
+    def test_wrapper_returns_underlying_socket(self) -> None:
+        class _Wrapper:
+            def __init__(self, sock):
+                self._sock = sock
+
+        underlying = object()
+        wrapper = _Wrapper(underlying)
+        assert pollable_of(wrapper) is underlying
+
+    def test_bare_socket_passes_through(self) -> None:
+        class _BareSocket:
+            pass
+
+        sock = _BareSocket()
+        assert pollable_of(sock) is sock
+
+    def test_object_with_other_attributes_passes_through(self) -> None:
+        # Only the literal ``_sock`` attribute unwraps — incidental
+        # private attributes don't trigger the unwrap.
+        class _OtherPrivate:
+            def __init__(self):
+                self._buffer = bytearray(8)
+
+        sock = _OtherPrivate()
+        assert pollable_of(sock) is sock
 
 
 # TestCpListenTlsRefusesOnRp2 lives in test_factories_pytest.py — the

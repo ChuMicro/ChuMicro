@@ -62,13 +62,15 @@ sock = tls_client_socket("api.example.com", 443, context=context, radio=None)
 ```python
 import select
 
+from chumicro_sockets import pollable_of, tcp_client_socket
+
 sock = tcp_client_socket("host", 1883, radio=None)
 sock.setblocking(False)
 poller = select.poll()
-poller.register(sock.fileno(), select.POLLIN)
+poller.register(pollable_of(sock), select.POLLIN)
 
 while True:
-    for fd, event in poller.poll(timeout=100):
+    for ready_obj, event in poller.poll(100):
         if event & select.POLLIN:
             buffer = bytearray(256)
             try:
@@ -80,7 +82,9 @@ while True:
             handle(bytes(buffer[:nbytes]))
 ```
 
-`OSError(errno=11)` (`EAGAIN`) is the cross-runtime "would block" signal.  `fileno()` returns `-1` on adapters whose socket has no real fd (CP-radio fakes); callers that need polling should fall back to `settimeout`-based polling when `fileno() == -1`.
+Register the socket *object* with `poller.register`, not its `fileno()`.  CircuitPython radio sockets and rp2 MicroPython sockets have no usable POSIX `fileno()` but their objects implement the runtime's stream-poll ioctl, so the runtime polls them directly.  `pollable_of(sock)` returns the underlying pollable for adapter wrappers and the socket itself for bare ones — register the result and the same code runs on every runtime.
+
+`OSError(errno=11)` (`EAGAIN`) is the cross-runtime "would block" signal — a `recv_into` call after a `POLLIN` may still raise it on an edge wakeup, so consumers re-loop rather than re-raise.
 
 ## Runner pattern
 
@@ -120,7 +124,7 @@ Live-AP acceptance runs against the supported boards surfaced four limitations t
 |---|---|---|
 | CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) — TLS *server* | `tls_listening_socket` raises `UnsupportedSSLConfigError` up-front. The CYW43 TLS handshake path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state until you unplug-and-replug USB power. | Use an ESP32-family board for HTTPS server, or run MicroPython on the same Pi Pico W (verified working). TLS *client* on CircuitPython rp2 is unaffected. |
 | MicroPython on rp2 (Pi Pico W) | mbedTLS build rejects self-signed certs entirely (`ValueError('invalid cert')`) | Use a CA-signed cert.  For dev, skip TLS testing on this combo or use a real CA chain. |
-| MicroPython SSLSocket on some ports | Wrapped TLS socket lacks `settimeout` / `setblocking` / `fileno` | Wrapper falls back to no-op + `fileno() = -1`; non-blocking semantics still hold via the TLS layer. |
+| MicroPython SSLSocket on some ports | Wrapped TLS socket lacks `settimeout` / `setblocking` / `fileno` | Wrapper forwards `settimeout` / `setblocking` to no-ops; non-blocking semantics still hold via the TLS layer.  Use `pollable_of(sock)` rather than `fileno()` to register the socket with `select.poll`. |
 | Stricter mbedTLS builds | Reject IP-only SAN certs | Generate certs with at least one DNS SAN.  On a LAN, `<hostname>.local` works via mDNS; set `server_hostname=` to that DNS name. |
 
 Tested on real CircuitPython and MicroPython boards for both plain TCP and TLS before each release.
