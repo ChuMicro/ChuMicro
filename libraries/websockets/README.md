@@ -28,6 +28,8 @@ For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and det
 
 ## Quick example
 
+Client:
+
 ```python
 from chumicro_websockets import WebSocketClient, WebSocketState
 from chumicro_websockets.sockets_factory import chumicro_sockets_connector_factory
@@ -42,22 +44,40 @@ while client.state != WebSocketState.CLOSED:
         client.handle(ticks_ms())
 ```
 
-Framing primitives (`FrameParser`, `encode_frame`, the handshake parsers, the `DEFAULT_*` knob constants) live in `chumicro_websockets._wire` for advanced users + tests; the public top-level surface stays small to keep flash + RAM lean on the device.
+Server:
+
+```python
+from chumicro_websockets import WebSocketServer
+from chumicro_sockets import tcp_listening_socket
+from chumicro_timing import ticks_ms
+
+def on_connection(connection):
+    connection.on_text = lambda text: connection.send_text(f"echo: {text}")
+
+server = WebSocketServer(
+    listener=tcp_listening_socket("0.0.0.0", 8765),
+    on_connection=on_connection,
+)
+
+while True:
+    if server.check(ticks_ms()):
+        server.handle(ticks_ms())
+```
 
 ## What's included
 
 | Component | Purpose |
 |---|---|
+| `WebSocketClient` | Non-blocking RFC 6455 client; runner-shaped `check(now_ms)` / `handle(now_ms)`. |
+| `WebSocketServer` + `Connection` | Standalone WebSocket server owning a listening socket; one `Connection` per accepted client. |
+| `WhenOversized` | Policy for inbound messages above `max_message_bytes`: `DROP_SILENT`, `DROP_WITH_EVENT`, `DISCONNECT`. |
+| `WebSocketState` | Lifecycle constants (`CONNECTING` / `OPEN` / `CLOSING` / `CLOSED`). |
 | `parse_ws_url(url)` | Split `ws://` / `wss://` URLs into `(scheme, host, port, path)`. |
 | `make_websocket_key()` / `derive_accept_key(key)` | RFC 6455 §4.2.2 nonce + accept-token derivation. |
-| `encode_client_handshake(...)` / `encode_server_handshake_response(...)` | Build the HTTP/1.1 opening-handshake bytes. |
-| `HandshakeResponseParser` / `HandshakeRequestParser` | Streaming validators for the opening handshake from each side. |
-| `FrameParser` | Streaming RFC 6455 §5 binary-frame parser; one frame at a time. |
-| `encode_frame(opcode, payload, *, fin, mask)` | Build one outbound frame; clients pass `mask=`, servers don't. |
-| `encode_close_payload(code, reason)` / `parse_close_payload(body)` | CLOSE-frame body codec. |
-| `validate_text_payload(bytes)` | RFC 6455 §8.1 UTF-8 validation for text frames. |
-| `WebSocketState` | Lifecycle constants (`CONNECTING` / `OPEN` / `CLOSING` / `CLOSED`). |
-| `WebSocketError` + subclasses | Exception hierarchy: protocol, handshake, URL, timeout, backpressure, oversized, state. |
+| `WebSocketError` + subclasses | Exception hierarchy: protocol, handshake, URL, timeout, backpressure, state. |
+| `OPCODE_*` / `CLOSE_*` constants | RFC 6455 opcode and close-code values. |
+
+Wire-format primitives (`FrameParser`, `encode_frame`, the handshake parsers and encoders, the close-payload codec, `validate_text_payload`, the `DEFAULT_*` knob constants) live in `chumicro_websockets._wire` for advanced users and tests; the public top-level surface stays small to keep flash + RAM lean on the device.
 
 ## Where this fits
 
