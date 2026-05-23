@@ -1,7 +1,7 @@
 """Tests for the packet encoders."""
 
-from chumicro_mqtt import (
-    UnsupportedQoSError,
+from chumicro_mqtt import UnsupportedQoSError
+from chumicro_mqtt._wire import (
     encode_connect,
     encode_puback,
     encode_publish,
