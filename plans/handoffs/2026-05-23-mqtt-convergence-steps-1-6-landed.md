@@ -98,6 +98,8 @@ User raised the size/behavior mismatch at handoff time: chumicro_mqtt is ~2× th
 
 These are real wins but separate from Decision 0081.  Sequencing: Decision 0081 first (it's the runner-shape gap the user prioritised), then the bloat-trim passes.
 
+**audit-embedded skill gap.**  User flagged 2026-05-23 that the publish/publish_raw split should have been caught by audit-embedded — method-count bloat costs flash bytecode + import-time class-dict RAM, both within audit-embedded's named focus.  Four prior audit-embedded passes on libraries/mqtt (commits `3444f9e1`, `061c5850`, `423cbc31`, `ddcf2b9f`) caught other real issues but missed this whole category.  The skill's checklist needs a "look for prefix-sugar / wrapper-doubling" pass.  Tracked in next-up as `/audit-skill audit-embedded`; the same gap likely applies symmetrically to other libraries audited by it, so a sweep after the skill update lands is part of the same item.
+
 ## Dead ends
 
 - **Strict one-parse-per-tick (just one packet dispatched per tick) for step 5.**  Initial implementation broke 4 tests because chumicro's runner doesn't fire on a tight loop like the reference's `main` does — buffered packets would stall up to 30 s waiting for the next keepalive deadline.  Reverted to "one I/O per tick + multi-parse from buffered decoder" which is the right shape for chumicro's runner model.  Took ~10 min to diagnose the test failures and arrive at the corrected design.
