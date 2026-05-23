@@ -519,6 +519,46 @@ class HttpClient:
         return self._state != _RequestState.IDLE
 
     # ------------------------------------------------------------------
+    # Runner I/O interest (read by ``Runner.wait``)
+    # ------------------------------------------------------------------
+
+    @property
+    def io_socket(self):
+        """Underlying pollable socket while in flight, else ``None``.
+
+        ``Runner.wait`` registers this object with ``select.poll``.
+        Adapter wrappers from ``chumicro_sockets`` store the underlying
+        pollable on ``_sock``; bare CPython sockets and CircuitPython
+        TCP / TLS clients pass through unchanged.
+        """
+        sock = self._socket
+        if sock is None:
+            return None
+        return getattr(sock, "_sock", sock)
+
+    @property
+    def io_wants_read(self):
+        """``True`` while waiting on response bytes from the server."""
+        return self._state == _RequestState.RECEIVING
+
+    @property
+    def io_wants_write(self):
+        """``True`` while there are request bytes still to send."""
+        return self._state == _RequestState.SENDING
+
+    def next_deadline(self, now_ms):
+        """Return the per-request timeout deadline, or ``None`` when idle.
+
+        Lets ``Runner.wait`` shorten its central poll so the loop wakes
+        for timeout enforcement even on a quiescent socket.  *now_ms*
+        is the runner's tick and is accepted for the contract; the
+        deadline is an absolute tick captured at request start.
+        """
+        if self._state == _RequestState.IDLE:
+            return None
+        return self._deadline_ticks
+
+    # ------------------------------------------------------------------
     # Public request API
     # ------------------------------------------------------------------
 
