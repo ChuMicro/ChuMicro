@@ -188,6 +188,11 @@ class _StubPool:
         self.sockets.append(sock)
         return sock
 
+    def getaddrinfo(self, host, port, family, kind):
+        # Stub: return a single addrinfo tuple in the same shape
+        # stdlib uses — (family, socktype, proto, canonname, sockaddr).
+        return [(family, kind, 0, "", (host, port))]
+
 
 def _install_socketpool_stub():
     """Stub ``sys.modules['socketpool']`` with a module exposing ``SocketPool``.
@@ -833,3 +838,71 @@ class TestSslContextNoVerify:
         # to VERIFY_NONE".  See shared-module/ssl/SSLSocket.c.
         assert context.cadata == ""
         assert context.check_hostname is False
+
+
+class TestCPConnector:
+    def test_tcp_connector_phases_dns_then_tcp_then_ready(self) -> None:
+        # CP substrate blocks per phase, but the connector still
+        # splits DNS from TCP: tick 1 resolves, tick 2 connects.
+        from chumicro_sockets._adapters import cp as cp_adapter
+        _clear_pool_cache()
+        radio = object()
+        pool_swap, fake_pool_module = _install_socketpool_stub()
+        with pool_swap:
+            connector = cp_adapter.tcp_connector(
+                "broker.example.com", 1883, radio=radio,
+            )
+            assert connector.state == "awaiting_dns"
+            connector.tick(0)
+            assert connector.state == "awaiting_tcp"
+            # DNS resolved but no socket created yet.
+            pool = fake_pool_module.created_pools[0]
+            assert pool.sockets == []
+            connector.tick(0)
+            assert connector.state == "ready"
+            # Socket created on the TCP tick.
+            assert len(pool.sockets) == 1
+            assert connector.socket is pool.sockets[0]
+            assert connector.socket.connected_to == ("broker.example.com", 1883)
+
+    def test_tls_connector_skips_awaiting_tls_phase(self) -> None:
+        # CP collapses TCP + TLS handshake into one connect() call —
+        # the connector goes straight to ready, skipping awaiting_tls.
+        from chumicro_sockets._adapters import cp as cp_adapter
+        _clear_pool_cache()
+        radio = object()
+        context = _StubContext()
+        pool_swap, fake_pool_module = _install_socketpool_stub()
+        with pool_swap:
+            connector = cp_adapter.tls_connector(
+                "broker.example.com", 8883,
+                context=context, radio=radio,
+            )
+            connector.tick(0)  # awaiting_dns -> awaiting_tcp
+            assert connector.state == "awaiting_tcp"
+            connector.tick(0)  # awaiting_tcp -> ready (no awaiting_tls phase)
+            assert connector.state == "ready"
+            # Wrap happened before connect.
+            assert len(context.wrap_calls) == 1
+            wrapped_sock, server_hostname = context.wrap_calls[0]
+            assert server_hostname == "broker.example.com"
+            # Wrapped socket received the connect call.
+            assert wrapped_sock.connected_to == ("broker.example.com", 8883)
+            assert connector.socket is wrapped_sock
+
+    def test_tls_connector_builds_default_context_when_none(self) -> None:
+        # context=None routes through ssl.create_default_context — same
+        # path as connect_tls (sync) but exercised via the connector.
+        from chumicro_sockets._adapters import cp as cp_adapter
+        _clear_pool_cache()
+        radio = object()
+        pool_swap, _ = _install_socketpool_stub()
+        ssl_swap, fake_ssl = _install_ssl_stub()
+        with pool_swap, ssl_swap:
+            connector = cp_adapter.tls_connector(
+                "secure.example.com", 443, radio=radio,
+            )
+            connector.tick(0)
+            connector.tick(0)
+        assert connector.state == "ready"
+        assert len(fake_ssl.contexts_built) == 1
