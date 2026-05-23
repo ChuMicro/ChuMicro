@@ -824,11 +824,11 @@ class FrameParser:
         self._max_payload_bytes = max_payload_bytes
         self.state = FrameParseState.READING_HEADER
         self._buffer = bytearray()
-        self.fin =False
+        self.fin = False
         self.rsv = 0
         self.opcode = 0
         self.had_mask = False
-        self._payload_length = 0
+        self.reported_length = 0
         self._mask_key = b""
         # Cache the memoryview slice over the steady-state buffer so
         # per-write indexing doesn't construct a fresh view object every
@@ -865,13 +865,6 @@ class FrameParser:
         """
         return bytes(self._payload_view[:self._payload_write_offset])
 
-    @property
-    def reported_length(self):
-        """Frame length the peer declared (load-bearing on tier-3
-        frames where :attr:`payload` was drained without being stored).
-        """
-        return self._payload_length
-
     # ------------------------------------------------------------------
     # Driving
     # ------------------------------------------------------------------
@@ -886,11 +879,11 @@ class FrameParser:
         """
         self.state = FrameParseState.READING_HEADER
         self._buffer = bytearray()
-        self.fin =False
+        self.fin = False
         self.rsv = 0
         self.opcode = 0
         self.had_mask = False
-        self._payload_length = 0
+        self.reported_length = 0
         self._mask_key = b""
         self._payload = self._payload_buffer
         self._payload_view = self._payload_buffer_view
@@ -941,7 +934,7 @@ class FrameParser:
             if state == FrameParseState.READING_PAYLOAD:
                 payload = self._payload
                 write_offset = self._payload_write_offset
-                need = self._payload_length - write_offset
+                need = self.reported_length - write_offset
                 take = need if need <= remaining else remaining
                 if self.had_mask:
                     mask_key = self._mask_key
@@ -957,7 +950,7 @@ class FrameParser:
                 consumed += take
                 write_offset += take
                 self._payload_write_offset = write_offset
-                if write_offset >= self._payload_length:
+                if write_offset >= self.reported_length:
                     self.state = FrameParseState.FRAME_READY
                 continue
 
@@ -991,11 +984,11 @@ class FrameParser:
             if state == FrameParseState.READING_HEADER:
                 self._dispatch_header()
             elif state == FrameParseState.READING_LEN16:
-                self._payload_length = struct.unpack("!H", self._buffer)[0]
+                self.reported_length = struct.unpack("!H", self._buffer)[0]
                 self._buffer = bytearray()
                 self._after_length()
             elif state == FrameParseState.READING_LEN64:
-                self._payload_length = struct.unpack("!Q", self._buffer)[0]
+                self.reported_length = struct.unpack("!Q", self._buffer)[0]
                 self._buffer = bytearray()
                 self._after_length()
             else:  # READING_MASK
@@ -1007,7 +1000,7 @@ class FrameParser:
     def _dispatch_header(self) -> None:
         first_byte = self._buffer[0]
         second_byte = self._buffer[1]
-        self.fin =bool(first_byte & 0x80)
+        self.fin = bool(first_byte & 0x80)
         self.rsv = (first_byte >> 4) & 0x07
         self.opcode = first_byte & 0x0F
         self.had_mask = bool(second_byte & 0x80)
@@ -1027,7 +1020,7 @@ class FrameParser:
 
         self._buffer = bytearray()
         if length_marker < 126:
-            self._payload_length = length_marker
+            self.reported_length = length_marker
             self._after_length()
             return
         if length_marker == 126:
@@ -1040,19 +1033,19 @@ class FrameParser:
         # RFC 6455 §5.5: control frames MUST be ≤ 125 bytes.  This is
         # a protocol violation regardless of ``max_payload_bytes``, so
         # it still raises and the connection must close with 1002.
-        if self.opcode in CONTROL_OPCODES and self._payload_length > MAX_CONTROL_PAYLOAD_BYTES:
+        if self.opcode in CONTROL_OPCODES and self.reported_length > MAX_CONTROL_PAYLOAD_BYTES:
             raise self._fail(
                 f"control frame opcode 0x{self.opcode:x} payload "
-                f"{self._payload_length} > {MAX_CONTROL_PAYLOAD_BYTES}",
+                f"{self.reported_length} > {MAX_CONTROL_PAYLOAD_BYTES}",
             )
         # Data frame > max_payload_bytes: enter tier-3 drain instead
         # of raising.  The session layer's ``WhenOversized`` policy
         # decides whether to stay connected.  Mask state must still
         # be consumed off the wire if MASK was set, since the 4 mask
         # bytes precede the payload bytes.
-        if self._payload_length > self._max_payload_bytes:
+        if self.reported_length > self._max_payload_bytes:
             self.oversized = True
-            self._drain_remaining = self._payload_length
+            self._drain_remaining = self.reported_length
             if self.had_mask:
                 self.state = FrameParseState.READING_MASK
                 return
@@ -1073,14 +1066,14 @@ class FrameParser:
                 return
             self.state = FrameParseState.DRAINING_PAYLOAD
             return
-        if self._payload_length == 0:
+        if self.reported_length == 0:
             self.state = FrameParseState.FRAME_READY
             return
         # Reuse the steady-state payload buffer when the frame fits
         # (tier 1).  Only tier 2 pays a per-frame allocation, and that
         # one-shot bytearray is released on the next :meth:`reset`.
-        if self._payload_length > self._payload_capacity:
-            self._payload = bytearray(self._payload_length)
+        if self.reported_length > self._payload_capacity:
+            self._payload = bytearray(self.reported_length)
             self._payload_view = memoryview(self._payload)
         # else: ``_payload`` / ``_payload_view`` already alias the
         # steady-state buffer from :meth:`__init__` / :meth:`reset`.
