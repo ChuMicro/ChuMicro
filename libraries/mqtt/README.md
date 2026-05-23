@@ -59,7 +59,6 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 | `client.publish_raw(topic, payload, ...)` | Publish to *topic* verbatim — bypasses `root_topic` prefixing. |
 | `client.subscribe(topic, qos=0, *, on_subscribe=None)` / `client.subscribe_raw(...)` | Single-topic subscribe.  Same prefix-vs-raw split as `publish`. |
 | `client.unsubscribe(topic, ...)` / `client.unsubscribe_raw(...)` | Same prefix-vs-raw split. |
-| `client.publisher(topic, *, qos=0, retain=False)` | Return an `MQTTPublisher` bound to that topic — `publisher.publish(payload)` reuses the binding for repeated publishes. |
 | `client.add_pattern_handler(pattern, handler)` / `client.remove_pattern_handler(handler, pattern=None)` | Route inbound messages by topic pattern. |
 | `client.connect() / .disconnect()` | Lifecycle. |
 | `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound payloads above `max_message_bytes`. |

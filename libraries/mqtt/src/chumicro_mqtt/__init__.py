@@ -30,11 +30,10 @@ from chumicro_mqtt._wire import (
 )
 _gc.collect()
 
-from chumicro_mqtt.client import MQTTClient, MQTTPublisher, ProtocolState, WhenOversized  # noqa: E402, I001 — gc.collect() interleaved with imports is intentional.
+from chumicro_mqtt.client import MQTTClient, ProtocolState, WhenOversized  # noqa: E402, I001 — gc.collect() interleaved with imports is intentional.
 
 __all__ = [
     "MQTTClient",
-    "MQTTPublisher",
     "MQTTBackpressureError",
     "MQTTConnectError",
     "MQTTError",

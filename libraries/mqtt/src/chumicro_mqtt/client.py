@@ -4,9 +4,8 @@
 cooperative dispatch in the caller's tick loop.
 
 The connection-state classes (:class:`ProtocolState`,
-:class:`PendingResponse`, :class:`InFlightPublish`) and
-:class:`MQTTPublisher` live here.  The wire-format primitives live in
-:mod:`chumicro_mqtt._wire`.
+:class:`PendingResponse`, :class:`InFlightPublish`) live here.
+The wire-format primitives live in :mod:`chumicro_mqtt._wire`.
 
 In-flight QoS-1 PUBLISHes are held in ``MQTTClient._in_flight``, a
 plain ``dict[int, InFlightPublish]`` keyed by packet-id.  Allocation
@@ -135,49 +134,6 @@ class WhenOversized:
 def _no_callback(*_args, **_kwargs):
     """Default no-op callback so handlers can be stored unconditionally."""
     return None
-
-
-# ---------------------------------------------------------------------------
-# MQTTPublisher
-# ---------------------------------------------------------------------------
-
-
-class MQTTPublisher:
-    """A topic-, qos-, retain-bound publisher.
-
-    Construct via :meth:`MQTTClient.publisher` rather than directly so
-    the publisher inherits the client reference and the client's
-    ``root_topic`` resolution.
-
-    Usage::
-
-        publisher = client.publisher("temperature", qos=1, retain=False)
-        publisher.publish(b"23.4")        # bytes
-        publisher.publish("23.4")          # str auto-encoded
-        publisher.publish(b"23.4", on_publish=callback)
-
-    The bound topic resolves through the client's ``root_topic`` /
-    ``client_id`` prefixing scheme if configured.  For unprefixed
-    publishing, use :meth:`MQTTClient.publish_raw` directly.
-    """
-
-    def __init__(self, client, topic, *, qos=0, retain=False):
-        self._client = client
-        self._topic = topic
-        self._qos = qos
-        self._retain = retain
-
-    def publish(self, payload, *, on_publish=None):
-        """Publish *payload* under the bound topic / qos / retain.
-
-        Delegates to :meth:`MQTTClient.publish` for str auto-encoding,
-        ``root_topic`` prefixing, and (for QoS 1) packet_id allocation.
-        """
-        self._client.publish(
-            self._topic, payload,
-            qos=self._qos, retain=self._retain,
-            on_publish=on_publish,
-        )
 
 
 def _new_tx_queue(maxlen):
@@ -767,15 +723,6 @@ class MQTTClient:
                 callback=_wrapped,
             ),
         )
-
-    def publisher(self, topic, *, qos=0, retain=False):
-        """Return an :class:`MQTTPublisher` bound to *topic* / *qos* / *retain*.
-
-        The bound topic resolves through :meth:`_prefixed_topic` on
-        each publish.  The same as :meth:`publish` itself.  For
-        unprefixed publishing, call :meth:`publish_raw` directly.
-        """
-        return MQTTPublisher(self, topic, qos=qos, retain=retain)
 
     def add_pattern_handler(self, pattern, handler):
         """Register *handler* ``(topic, payload_bytes)`` for inbound messages matching *pattern*.

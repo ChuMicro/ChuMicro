@@ -1,5 +1,5 @@
-"""mqtt client: inbound publish, topic-prefix sugar, MQTTPublisher,
-last-will prefix, keepalive."""
+"""mqtt client: inbound publish, topic-prefix sugar, last-will
+prefix, keepalive."""
 
 from chumicro_mqtt import (
     MQTTClient,
@@ -227,42 +227,6 @@ class TestTopicPrefixSugar:
         client.unsubscribe("commands/+")
         _drive(client, ticks, count=1)
         assert b"myapp/thing-42/commands/+" in bytes(sock.sent)
-
-
-class TestMQTTPublisher:
-    def test_publisher_publishes_under_bound_topic(self) -> None:
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = _new_client(sock, ticks)
-        client.connect()
-        _drive(client, ticks, count=2)
-        sock.sent = bytearray()
-        pub = client.publisher("temperature", qos=0)
-        pub.publish(b"21")
-        _drive(client, ticks, count=1)
-        wire = bytes(sock.sent)
-        assert b"temperature" in wire
-        assert wire.endswith(b"21")
-
-    def test_publisher_respects_root_topic_prefix(self) -> None:
-        sock = FakeSocket()
-        sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        ticks = FakeTicks()
-        client = _new_client(
-            sock, ticks,
-            client_id="mainLightSwitch",
-            root_topic="livingRoom",
-        )
-        client.connect()
-        _drive(client, ticks, count=2)
-        sock.sent = bytearray()
-        pub = client.publisher("switchState", qos=0)
-        pub.publish("on")  # str auto-encoded
-        _drive(client, ticks, count=1)
-        wire = bytes(sock.sent)
-        assert b"livingRoom/mainLightSwitch/switchState" in wire
-        assert wire.endswith(b"on")
 
 
 class TestLastWillPrefix:
