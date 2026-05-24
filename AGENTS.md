@@ -49,7 +49,7 @@ When instructions overlap:
 - A **cross-runtime test file** is any test file whose name does not end in `_pytest.py`. The `_pytest.py` suffix marks CPython-only tests (free to `import pytest`, use `monkeypatch`, simulate other runtimes). Test files without the suffix are loaded by `chumicro_test_harness` on MicroPython and CircuitPython directly. The file's top docstring must always say which kind it is.
 - Cross-runtime test files must never `import pytest`. Always use plain `assert` and constructor-injected fakes from each library's `testing.py`.
 - **Every cross-runtime test file must run green on a freshly-reset Pi Pico W (264 KB) under both CircuitPython and MicroPython.** A PSRAM-only pass does not validate the 256 KB HAL these libraries exist for. A file that OOMs there even with `--per-file` is a tracked defect.
-- Tests in any package may depend only on: the package's own `src/` + `testing.py`, stdlib, pytest + plugins, and `support/test_harness/`. Never `import chumicro_<other-package>` for inputs and never read sibling-repo filesystems.
+- Tests in any package may depend only on: the package's own `src/` + `testing.py`, stdlib, pytest + plugins, and `chumicro_test_harness` (including its submodules — see [Decision 0082](plans/decisions/0082-test-harness-as-infrastructure-library.md)). Never `import chumicro_<other-package>` for inputs and never read sibling-repo filesystems.
 
 **Code shape (libraries, microcontroller only)**
 
