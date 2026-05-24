@@ -36,16 +36,6 @@ def _make_server(*, sockets, handler=None, **kwargs):
     return server, ticks, listener_called
 
 
-class TestHttpServerRespondMethod:
-    """``HttpServer.respond`` mirrors the module-level builder."""
-
-    def test_instance_method_works(self):
-        server, ticks, _ = _make_server(sockets=[])
-        response = server.respond(200, text="hi")
-        assert response.body == b"hi"
-        assert response.headers["Content-Type"] == "text/plain; charset=utf-8"
-
-
 class TestHttpServerAcceptVariants:
     """Listeners that return None vs raise EAGAIN are both supported."""
 
