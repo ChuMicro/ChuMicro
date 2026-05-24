@@ -650,8 +650,7 @@ class HttpServer:
 
         Detects ``<name>``-style trailing parameters and routes to the
         pattern dict; everything else lands in the explicit dict.
-        Re-registering the same (method, path) overrides — last-wins,
-        same as Flask / FastAPI.
+        Re-registering the same (method, path) is last-write-wins.
         """
         last_slash = path.rfind("/")
         last_segment = path[last_slash + 1:] if last_slash != -1 else path
