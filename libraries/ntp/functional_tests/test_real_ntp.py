@@ -117,4 +117,3 @@ def test_real_ntp_query_returns_plausible_timestamp() -> None:
 
     finally:
         sock.close()
-    print("NTP_SKIP no creds")

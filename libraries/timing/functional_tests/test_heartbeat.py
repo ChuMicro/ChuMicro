@@ -4,23 +4,9 @@ Validates that Heartbeat works with the actual runtime clock: both
 the default (real ticks) and constructor-injected tick sources.
 """
 
-import time
-
 from chumicro_timing.heartbeat import Heartbeat
+from chumicro_timing.testing import sleep_ms
 from chumicro_timing.ticks import ticks_ms
-
-
-def _sleep_ms(duration_ms: int) -> None:
-    """Sleep for the requested duration using the best available API.
-
-    Args:
-        duration_ms: Duration in milliseconds.
-    """
-    runtime_sleep_ms = getattr(time, "sleep_ms", None)
-    if callable(runtime_sleep_ms):
-        runtime_sleep_ms(duration_ms)
-        return
-    time.sleep(duration_ms / 1000)
 
 
 def test_heartbeat_not_due_immediately() -> None:
@@ -33,7 +19,7 @@ def test_heartbeat_not_due_immediately() -> None:
 def test_heartbeat_poll_fires_and_resets() -> None:
     """poll should return True once, then False until the period elapses."""
     heartbeat = Heartbeat(period_ms=30)
-    _sleep_ms(50)
+    sleep_ms(50)
     now = ticks_ms()
     assert heartbeat.poll(now) is True
     # Immediately after poll, should not be due again.
@@ -44,7 +30,7 @@ def test_heartbeat_poll_fires_and_resets() -> None:
 def test_heartbeat_reset_restarts_countdown() -> None:
     """Resetting the heartbeat should make it not-due again."""
     heartbeat = Heartbeat(period_ms=30)
-    _sleep_ms(50)
+    sleep_ms(50)
     now = ticks_ms()
     heartbeat.reset(now)
     # Re-reading now without sleeping means the period hasn't elapsed

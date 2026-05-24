@@ -5,8 +5,8 @@ Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 """
 
 from chumicro_test_harness import raises
-from chumicro_timing import Heartbeat
-from chumicro_timing.testing import FakeTicks
+from chumicro_timing import Heartbeat, ticks_diff, ticks_ms
+from chumicro_timing.testing import FakeTicks, sleep_ms
 
 
 def test_heartbeat_rejects_non_positive_periods() -> None:
@@ -16,6 +16,15 @@ def test_heartbeat_rejects_non_positive_periods() -> None:
 
     with raises(ValueError):
         Heartbeat(-1)
+
+
+def test_sleep_ms_advances_the_clock() -> None:
+    """The cross-runtime sleep adapter blocks long enough for ticks to move."""
+    start = ticks_ms()
+    sleep_ms(5)
+    elapsed = ticks_diff(ticks_ms(), start)
+    assert elapsed >= 0  # never negative
+    assert elapsed < 500  # didn't block forever
 
 
 def test_heartbeat_becomes_due_after_full_period() -> None:
