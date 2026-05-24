@@ -432,8 +432,8 @@ class MQTTClient:
         # that lands in CONNECTED so self-heal-driven reconnects
         # restore the inbound stream — broker with clean_session=True
         # forgets subscriptions across reconnects; with
-        # clean_session=False the replay is harmless (broker
-        # idempotently ACKs already-subscribed filters).
+        # clean_session=False the replay is harmless (broker re-acks
+        # already-subscribed filters).
         self._subscriptions = {}
         # 64-slot headroom above the user cap so the QoS-1 retry path
         # and PINGREQ (neither of which checks for overrun) can't
