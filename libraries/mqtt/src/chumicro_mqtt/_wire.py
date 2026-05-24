@@ -167,18 +167,24 @@ def _topic_levels_match(topic_levels, pattern_levels):
     the pattern splits at registration time and the topic split once
     per inbound message, then matches each stored pattern against
     the cached topic split through this helper.
-    """
-    for index, pattern_level in enumerate(pattern_levels):
-        if pattern_level == "#":
-            return index == len(pattern_levels) - 1
-        if pattern_level == "+":
-            if index >= len(topic_levels):
-                return False
-            continue
-        if index >= len(topic_levels) or pattern_level != topic_levels[index]:
-            return False
 
-    return len(pattern_levels) == len(topic_levels)
+    Hand-indexed because this is the per-inbound-message dispatch
+    inner loop; ``enumerate`` allocates an iterator object per call.
+    """
+    pattern_count = len(pattern_levels)
+    topic_count = len(topic_levels)
+    index = 0
+    while index < pattern_count:
+        pattern_level = pattern_levels[index]
+        if pattern_level == "#":
+            return index == pattern_count - 1
+        if pattern_level == "+":
+            if index >= topic_count:
+                return False
+        elif index >= topic_count or pattern_level != topic_levels[index]:
+            return False
+        index += 1
+    return pattern_count == topic_count
 
 
 def topic_matches(topic, pattern):
