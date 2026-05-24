@@ -36,6 +36,9 @@ from chumicro_timing import ticks as _DEFAULT_TICKS
 # runtimes whose ``select`` module is unimportable at runner load time.
 # POLLERR + POLLHUP are surfaced to services via the ``io_error`` hook
 # from ``Runner.wait``; see the docstring there.
+# pragma below: CPython, MicroPython, and CircuitPython all ship
+# ``select``.  The fallback covers hypothetical embedded runtimes
+# that don't, so no test runtime reaches it.
 try:
     import select as _select
 
@@ -44,7 +47,7 @@ try:
     _POLLERR = _select.POLLERR
     _POLLHUP = _select.POLLHUP
     del _select
-except ImportError:  # pragma: no cover — CPython/MicroPython/CircuitPython all ship `select`; this is the fallback for hypothetical embedded runtimes that don't.
+except ImportError:  # pragma: no cover
     _POLLIN = 0x001
     _POLLOUT = 0x004
     _POLLERR = 0x008
@@ -97,7 +100,10 @@ class _SelectPollAdapter:
         self._poller.unregister(obj)
 
     def ipoll(self, timeout_ms: int) -> object:
-        if self._ipoll is not None:  # pragma: no cover — MicroPython/CircuitPython expose `ipoll`; CPython does not.
+        # pragma below: MicroPython and CircuitPython expose ``ipoll``
+        # (allocation-free reused tuple); CPython does not, so the
+        # ipoll-preferring branch is unreachable on the test runtime.
+        if self._ipoll is not None:  # pragma: no cover
             return self._ipoll(timeout_ms)
         return self._poller.poll(timeout_ms)
 
