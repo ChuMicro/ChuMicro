@@ -1,4 +1,4 @@
-"""``SocketConnector`` — tick-driven non-blocking connect state machine.
+"""Advance a non-blocking TCP/TLS connect across multiple ``tick(now_ms)`` calls.
 
 The non-blocking counterpart to ``tcp_client_socket`` / ``tls_client_socket``.
 Library methods that perform network I/O do not block: a runner-shaped
@@ -12,25 +12,20 @@ Each call to :meth:`SocketConnector.tick` advances one phase:
 * ``awaiting_dns`` — resolve ``host`` to an address.
 * ``awaiting_tcp`` — non-blocking TCP connect; first tick issues the
   connect, subsequent ticks poll for completion (POLLOUT + SO_ERROR).
-* ``awaiting_tls`` — TLS handshake step; loops until done or `WantRead` /
-  `WantWrite` (the connector yields between handshake rounds).
+* ``awaiting_tls`` — TLS handshake step; loops until done or ``WantRead`` /
+  ``WantWrite`` (the connector yields between handshake rounds).
 * ``ready`` — terminal; :attr:`socket` is set.
 * ``failed`` — terminal; :attr:`last_error` is set.
 
-The base class implements the runtime-agnostic state-machine driving,
-the runner-contract surface (``check`` / ``handle`` / ``io_*`` /
-``next_deadline`` / ``cancel``), and the OSError → ``failed`` trapping.
+``SocketConnector`` drives the state machine, exposes the runner-contract
+surface (``check``, ``handle``, ``io_socket``, ``io_wants_read``,
+``io_wants_write``, ``next_deadline``, ``cancel``), and transitions to
+``failed`` on any unexpected ``OSError`` from the subclass overrides.
 Per-runtime subclasses override :meth:`_resolve_dns`,
 :meth:`_start_tcp_connect`, :meth:`_check_tcp_connect`,
 :meth:`_wrap_tls`, and :meth:`_step_tls_handshake` with the
-runtime-specific calls.  ``next_deadline`` returns ``None`` — the
-connector does not time out on its own; consumers wrap the connect in
-an outer deadline.
+runtime-specific calls.
 """
-
-#: Source bundle.  Pure-Python state machine; runs on every runtime.
-#  (No ``__chumicro_runtimes__`` marker — adapter subclasses carry
-#  their own runtime markers in ``_adapters/<runtime>.py``.)
 
 
 STATE_AWAITING_DNS = "awaiting_dns"
@@ -44,12 +39,14 @@ _TERMINAL = (STATE_READY, STATE_FAILED)
 
 
 class SocketConnector:
-    """Tick-driven non-blocking connect.
+    """Drive a non-blocking connect across DNS, TCP, and optional TLS phases.
 
-    Constructor stores the dial parameters; ``tick(now_ms)`` advances
-    one phase per call.  Subclasses provide the runtime-specific
-    advance methods (DNS resolve, async TCP connect, TLS handshake
-    step).  See module docstring for the state diagram and rationale.
+    One phase per ``tick(now_ms)`` call.  ``__init__`` records ``host``,
+    ``port``, ``tls``, and optional ``context``.  Runtime-specific
+    subclasses (``_CPythonConnector``, ``_MpConnector``, ``_CPConnector``
+    in ``_adapters/``) supply ``_resolve_dns``, ``_start_tcp_connect``,
+    ``_check_tcp_connect``, ``_wrap_tls``, and ``_step_tls_handshake``.
+    See the module docstring for the state diagram.
     """
 
     def __init__(self, host, port, *, tls=False, context=None):
@@ -119,10 +116,9 @@ class SocketConnector:
     def next_deadline(self, now_ms):  # noqa: ARG002 (runner contract)
         """Connector does not time out on its own.
 
-        Consumers wrap the connect attempt in an outer deadline (e.g.
-        ``ack_timeout_seconds`` for MQTT CONNECT).  ``None`` here lets
-        the runner's ``wait`` park indefinitely until ``io_*`` fires or
-        another service's deadline elapses.
+        Consumers wrap the connect attempt in an outer deadline.
+        ``None`` here lets the runner's ``wait`` park indefinitely
+        until ``io_*`` fires or another service's deadline elapses.
         """
         return None
 
@@ -161,7 +157,12 @@ class SocketConnector:
             self._fail(error)
 
     def _enter_post_tcp(self):
-        """TCP done — either wrap for TLS or land in ``ready``."""
+        """Wrap the connected socket for TLS, or land in ``ready``.
+
+        For a plain-TCP connect, promotes the socket to ``self.socket``
+        and enters ``ready``.  For TLS, wraps the socket and enters
+        ``awaiting_tls``.
+        """
         if not self._tls:
             self.socket = self._inflight_socket
             self._inflight_socket = None
@@ -186,8 +187,7 @@ class SocketConnector:
         """Close any in-flight socket and transition to ``failed``.
 
         No-op when already terminal.  Used by consumers that need to
-        abort a connect attempt (e.g. ``MQTTClient.disconnect()``
-        called while in ``AWAITING_TRANSPORT``).
+        abort a connect attempt.
         """
         if self.state in _TERMINAL:
             return
