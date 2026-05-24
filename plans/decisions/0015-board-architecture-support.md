@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-03`
+Summary: Hardware baseline is 256 KB MCU RAM + 4 MB flash; libraries require `collections.deque` and therefore full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython.
 Related: Decision 0011 (platform targeting), Decision 0039 (firmware version floor)
 
 ## Context
