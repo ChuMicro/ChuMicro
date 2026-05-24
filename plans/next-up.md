@@ -4,8 +4,6 @@
 
 ## Now
 
-- [ ] **ADR Summary-field workstream — Phase 3 (CHU lint) + Phase 4 (SessionStart hook surface).**  [workstreams/adr-summary-field-and-hook.md](workstreams/adr-summary-field-and-hook.md) — Phases 1 + 2 done (template + skill + full 82-ADR backfill); CHU lint + hook switch pending.
-
 ## Next
 
 - [ ] **chumicro_mqtt + chumicro_runner cooperative-tick convergence.**  [workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md](workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md)

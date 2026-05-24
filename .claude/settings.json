@@ -27,17 +27,6 @@
   "enabledPlugins": {
     "pyright-lsp@claude-plugins-official": false
   },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "{ printf '## Recent commits\\n'; git --no-pager log --oneline -10; printf '\\n## plans/next-up.md\\n'; cat plans/next-up.md; printf '\\n## plans/decisions/ (ADR slugs)\\n'; ls plans/decisions/; } | jq -Rs '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:.}}'",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {},
+  "includeGitInstructions": false
 }
