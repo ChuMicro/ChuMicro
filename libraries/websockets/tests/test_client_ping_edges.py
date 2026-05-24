@@ -336,7 +336,7 @@ class TestClientFromConfig:
                 sys.modules["chumicro_websockets.sockets_factory"] = original
 
     def test_default_factory_threads_radio_and_ssl_context(self) -> None:
-        """When no connection_factory is passed, ``from_config`` builds
+        """When no connector_factory is passed, ``from_config`` builds
         one via ``chumicro_websockets.sockets_factory.chumicro_sockets_connector_factory``
         with the radio + ssl_context kwargs threaded through."""
         import chumicro_websockets.sockets_factory as sf

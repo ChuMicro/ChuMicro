@@ -23,7 +23,7 @@ import time
 from chumicro_config import config
 from chumicro_http_server import HttpServer, build_response
 from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_factory
+from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_sockets import tcp_listening_socket
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
@@ -94,7 +94,7 @@ def test_real_serve_and_self_request_round_trip() -> None:
 
     # Hit it from the same device — wifi loopback.
     client = HttpClient(
-        connection_factory=chumicro_sockets_factory(radio=wifi.adapter.radio),
+        connector_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
     )
     target = f"http://{wifi.ip}:{_LISTEN_PORT}/ping"
     request = client.get(target, timeout_ms=_REQUEST_TIMEOUT_MS)

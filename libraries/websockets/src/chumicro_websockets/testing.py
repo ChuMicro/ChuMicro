@@ -28,7 +28,7 @@ __chumicro_test_support__ = True
 class FakeConnection:
     """Bidirectional in-memory pipe modeling :class:`TCPClientSocket`.
 
-    Inject into :class:`WebSocketClient` via ``connection_factory=lambda
+    Inject into :class:`WebSocketClient` via ``connector_factory=lambda
     *_args, **_kwargs: FakeConnection()``, or hand into a
     :class:`Connection` directly.  The two halves of the pipe are
     addressable distinctly:
