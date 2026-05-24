@@ -24,18 +24,10 @@ def _sleep_ms(duration_ms: int) -> None:
 
 
 def test_heartbeat_not_due_immediately() -> None:
-    """A freshly created heartbeat should not be due right away."""
+    """A freshly created heartbeat should not fire right away."""
     heartbeat = Heartbeat(period_ms=500)
     now = ticks_ms()
-    assert heartbeat.is_due(now) is False
-
-
-def test_heartbeat_becomes_due_after_period() -> None:
-    """Heartbeat should become due after its period elapses."""
-    heartbeat = Heartbeat(period_ms=30)
-    _sleep_ms(50)
-    now = ticks_ms()
-    assert heartbeat.is_due(now) is True
+    assert heartbeat.poll(now) is False
 
 
 def test_heartbeat_poll_fires_and_resets() -> None:
@@ -54,10 +46,11 @@ def test_heartbeat_reset_restarts_countdown() -> None:
     heartbeat = Heartbeat(period_ms=30)
     _sleep_ms(50)
     now = ticks_ms()
-    assert heartbeat.is_due(now) is True
     heartbeat.reset(now)
+    # Re-reading now without sleeping means the period hasn't elapsed
+    # since reset — poll must not fire.
     now = ticks_ms()
-    assert heartbeat.is_due(now) is False
+    assert heartbeat.poll(now) is False
 
 
 def test_heartbeat_period_property() -> None:

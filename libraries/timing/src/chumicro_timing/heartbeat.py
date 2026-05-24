@@ -11,9 +11,9 @@ from chumicro_timing import ticks as _DEFAULT_TICKS
 class Heartbeat:
     """Track whether a periodic heartbeat is due based on monotonic ticks.
 
-    Pass a shared ``now_ms`` timestamp to ``poll()`` and ``is_due()`` on
-    each loop iteration.  The timestamp should be captured once per loop
-    and shared across all components to avoid time drift.
+    Pass a shared ``now_ms`` timestamp to ``poll()`` on each loop
+    iteration.  The timestamp should be captured once per loop and
+    shared across all components to avoid time drift.
 
     Pass a *ticks* object with ``ticks_ms`` and ``ticks_diff`` methods
     to override the real clock (e.g. for tests).
@@ -43,14 +43,11 @@ class Heartbeat:
         """
         self._last_beat_ms = now_ms
 
-    def is_due(self, now_ms: int) -> bool:
+    def _is_due(self, now_ms: int) -> bool:
         """Return whether the heartbeat period has elapsed since the last beat.
 
-        Args:
-            now_ms: Current tick value.
-
-        Returns:
-            ``True`` if the period has elapsed.
+        Internal predicate split out so :meth:`poll` reads as
+        "if due, advance" rather than carrying the tick math inline.
         """
         return self._ticks.ticks_diff(now_ms, self._last_beat_ms) >= self.period_ms
 
@@ -63,8 +60,7 @@ class Heartbeat:
         Returns:
             ``True`` if the period elapsed and the heartbeat advanced.
         """
-        if not self.is_due(now_ms):
+        if not self._is_due(now_ms):
             return False
-
         self._last_beat_ms = now_ms
         return True
