@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-06`
+Summary: Single-branch model: `main` is the only long-lived branch; stable releases are git tags; experimental releases auto-fire on VERSION bump; release branches only for older-stable hotfixes.
 Related: none
 
 ## Context

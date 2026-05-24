@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-09`
+Summary: `CHU001` lint forbids single-letter variables (except `_`) and banned abbreviations (`env`, `buf`, `src`, `cmd`, `msg`, etc.); for-loop targets exempt for humans only.
 Related: none
 
 ## Context

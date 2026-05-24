@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-07`
+Summary: Use PEP 604/585 annotations on signatures (no `typing` import in library code, no `from __future__ import annotations`); docstrings are Google-style, descriptions only.
 Related: Decision 0022 (naming conventions)
 
 ## Context
