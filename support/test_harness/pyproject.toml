@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chumicro-test-harness"
-version = "0.0.0"
+version = "0.1.0"
 description = "Minimal cross-runtime test runner for ChuMicro libraries (workspace-internal)."
 readme = "README.md"
 requires-python = ">=3.11"
