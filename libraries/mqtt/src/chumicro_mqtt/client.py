@@ -1414,7 +1414,6 @@ class MQTTClient:
                 packet_id=packet.packet_id,
                 callback_arg=packet.granted_qos,
             )
-            self._in_flight.pop(packet.packet_id, None)  # Free the id.
             if not matched:
                 raise MQTTProtocolError(
                     f"SUBACK for unknown packet_id {packet.packet_id}",
@@ -1424,7 +1423,6 @@ class MQTTClient:
             matched = self._discard_pending(
                 _AWAIT_UNSUBACK, packet_id=packet.packet_id, callback_arg=None,
             )
-            self._in_flight.pop(packet.packet_id, None)
             if not matched:
                 raise MQTTProtocolError(
                     f"UNSUBACK for unknown packet_id {packet.packet_id}",
