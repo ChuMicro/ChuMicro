@@ -12,9 +12,20 @@ Status: **proposed.**  Accepts [Decision 0082](../decisions/0082-test-harness-as
 
 Add `support/test_harness/src/chumicro_test_harness/network.py` with `wifi_up(config) -> (radio, ip)` + `runtime_config() -> dict`.  Source-of-truth is the canonical `examples/helpers.py` body (currently duplicated across 5 networking libraries' `examples/`).  Uses only runtime built-ins (CP `wifi`, MP `network`, `struct`).  Cross-runtime test file covers the helper at the harness level.  Bump `support/test_harness/VERSION` accordingly.
 
-### Phase 2 — Networking functional tests switch to the helper
+### Phase 2 — Networking functional tests switch to the helper + align to [Decision 0083](../decisions/0083-functional-test-endpoint-taxonomy.md) categories
 
-Five libraries: `requests`, `sockets`, `mqtt`, `ntp`, `http_server`.  Each `functional_tests/test_real_*.py` drops `chumicro_wifi` / `chumicro_config` / `chumicro_timing` imports for the wifi-bringup body and switches to `from chumicro_test_harness.network import wifi_up, runtime_config`.  `test_real_serve.py` additionally drops `chumicro_requests` and drives the request with stdlib `socket` (separate from this workstream's scope — covered by the endpoint-taxonomy workstream, but the unblocking is here).
+Five libraries: `requests`, `sockets`, `mqtt`, `ntp`, `http_server`.  Per file:
+
+1. Drop `chumicro_wifi` / `chumicro_config` / `chumicro_timing` imports for the wifi-bringup body and switch to `from chumicro_test_harness.network import wifi_up, runtime_config`.
+2. Add a one-line category declaration in the module docstring (`"""... Category 1 — host-side Mosquitto fixture."""` / `"""... Category 2 — public NTP pool; interop check."""`).
+3. Where the file is currently mis-categorized, re-shape:
+   - `http_server/test_real_serve.py` → Category 1: board runs the server (no change), host runs a stdlib socket client driver (new); no more self-loopback through the router.  Drops the `chumicro_requests` import in the same edit.
+   - `mqtt/test_real_broker.py` → already Category 1; add declaration only.
+   - `sockets/test_real_udp.py` (+ `test_real_tcp.py` if present) → already Category 1; add declaration only.
+   - `requests/test_real_get.py`, `requests/test_real_get_tls.py` → Category 2; declaration names `example.com` interop as the rationale.
+   - `ntp/test_real_ntp.py` → Category 2; declaration names `pool.ntp.org` interop as the rationale.
+
+Host-side fixtures (Mosquitto, UDP echo, the new HTTP client driver for `http_server`) move from per-library `functional_tests/conftest.py` to a shared home at `workbench/pytest-device/src/chumicro_pytest_device/fixtures/`.  One canonical fixture per endpoint type; per-library conftests import.
 
 On-device re-run per library after the rewrite, against `devices.yml` defaults (Pi Pico W CP + MP).
 
