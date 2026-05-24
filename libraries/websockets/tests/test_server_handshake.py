@@ -130,6 +130,24 @@ class TestAccept:
         assert server.connection_count == 0
         listener.accept = original_accept
 
+    def test_listener_error_recorded_on_last_error(self):
+        server, listener, clock = _make_server()
+        assert server.last_error is None
+        boom = OSError(99, "listener dead")
+
+        def _raise(*_args, **_kwargs):
+            raise boom
+
+        listener.accept = _raise
+        server.handle(clock.ticks_ms())
+        assert server.last_error is boom
+
+    def test_eagain_does_not_set_last_error(self):
+        server, _listener, clock = _make_server()
+        # No queued accepts → FakeListener.accept raises OSError(EAGAIN).
+        server.handle(clock.ticks_ms())
+        assert server.last_error is None
+
 
 class TestHandshake:
     def test_full_handshake_reaches_open(self):
