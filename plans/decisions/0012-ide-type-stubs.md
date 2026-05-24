@@ -1,4 +1,4 @@
-# Decision 0012 — IDE type stubs for platform-specific modules
+# Decision 0012: IDE type stubs for platform-specific modules
 
 Status: `accepted`
 Date: `2026-04-02`

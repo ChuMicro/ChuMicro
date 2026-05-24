@@ -1,4 +1,4 @@
-# Decision 0011 — Per-library platform targeting
+# Decision 0011: Per-library platform targeting
 
 Status: `accepted`
 Date: `2026-04-02`

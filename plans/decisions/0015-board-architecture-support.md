@@ -1,4 +1,4 @@
-# Decision 0015 — Board architecture support tiers
+# Decision 0015: Board architecture support tiers
 
 Status: `accepted`
 Date: `2026-04-03`
