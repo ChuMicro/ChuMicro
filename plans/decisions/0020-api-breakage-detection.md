@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-05`
+Summary: `griffe check` runs per-library in CI; breakage + patch bump fails; breakage + minor bump passes on 0.x libraries (SemVer 0.x semantics) and fails on 1.x+.
 Related: Decision 0002 (per-library version files)
 
 ## Context

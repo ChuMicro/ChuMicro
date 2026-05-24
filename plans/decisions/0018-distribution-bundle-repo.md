@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-04`
+Summary: Two bundle repos (`ChuMicro-Bundle` stable + `ChuMicro-Bundle-Experimental`) ship both `.py` and `.mpy` per library; `mip` and `circup` install from there; PyPI is independent.
 Related: Decision 0007 (cross-platform deps), Decision 0023 (promote workflow), Decision 0024 (mip folder serving)
 
 ## Context

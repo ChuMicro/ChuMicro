@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-09`
+Summary: `promote.yml` runs standalone from `main` and downloads the experimental release's source archive; no `workflow_call` from `release.yml`, so CI improvements always apply to promotions.
 Related: Decision 0018
 
 ## Context
