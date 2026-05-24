@@ -30,9 +30,9 @@ Backfill works as an audit-shaped pass:
 
 Estimate: ~8–10 cluster commits, ~70 ADRs total.  No code change; lint stays advisory until Phase 3.
 
-### Phase 3 — CHU lint enforcement
+### Phase 3 — CHU lint enforcement (DONE — `CHU029`)
 
-`workbench/checks/src/chumicro_checks/chuXXX.py` (next free CHU number — currently 029, so likely CHU030 or whatever the next-free check is): assert that every `plans/decisions/[0-9]*.md` file has a non-empty `Summary:` line in the first ten lines.  Hooks into `python scripts/run.py lint`.  Drift-mechanization policy per Decision 0074 — make the rule self-enforcing rather than dependent on review discipline.
+`workbench/checks/src/chumicro_checks/rules/chu029.py` asserts that every `plans/decisions/[0-9]*.md` file (excluding `README.md` and non-numbered files) has a `Summary:` line in the first ten lines, that the value is non-empty, and that it is ≤200 chars.  Hooks into `python scripts/run.py lint` via the existing rule registry.  Suppression: `<!-- noqa: CHU029 -->`.  Drift-mechanization per Decision 0074 — the contract no longer depends on review discipline.
 
 ### Phase 4 — SessionStart hook surface
 
@@ -62,6 +62,7 @@ Output ~10–12 KB total at ~150-char average across 77 active ADRs, one-time-pe
 - **2026-05-24** Phase 2 cluster 4 — distribution + workflow + standards (0018–0023, 6 ADRs).
 - **2026-05-24** Phase 2 cluster 5 — mpy serving, coverage, deploy, workspace, config (0024–0030, 7 ADRs).
 - **2026-05-24** Phase 2 final sweep — 0031–0083 in one commit (52 ADRs, batched 8 at a time during drafting).  All 82 ADRs now carry a `Summary:` field, range 125–197 chars (cap 200).
+- **2026-05-24** Phase 3.  `CHU029` lands in `chumicro-checks` — asserts every `plans/decisions/NNNN*.md` carries a non-empty `Summary:` line in the first 10 lines, ≤200 chars.  Zero violations on the current corpus.
 
 ## Out of scope
 
