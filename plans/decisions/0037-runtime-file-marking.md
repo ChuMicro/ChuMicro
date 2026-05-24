@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
+Summary: Module-level `__chumicro_runtimes__ = (...)` marker declares which runtimes a file ships to; bundle pipeline AST-reads it to filter `_adapters/` and `_backends/` files per target.
 Related: Decision 0015 (supported board class), Decision 0018 (distribution bundle repo), Decision 0021 (annotations), Decision 0010 (testing fakes), Decision 0044 (deploy-time runtime filtering)
 
 ## Context

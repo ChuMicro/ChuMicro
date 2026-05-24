@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-12`
+Summary: Transport-injecting libraries' factory parameters are duck-typed contracts (object with documented method shape); no `typing.Protocol`, no ABC; `chumicro_sockets` is one valid producer.
 Related: [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0042](0042-library-dependency-policy.md) (factory-helper sub-rule), [Decision 0062](0062-entrypoint-factory-skip.md) (deploy-time skip), [Decision 0021](0021-docstring-type-policy.md) (type-policy precedent).
 
 ## Context

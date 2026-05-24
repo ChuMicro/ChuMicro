@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-25`
+Summary: `chumicro-config` library ships flat-key `RuntimeConfig` + `load_section` factory; libraries expose `from_config` / `try_from_config` classmethods on their value-object or client-with-injection class.
 Related: Decision 0030 (config vs persisted state), Decision 0035 (runtime config structure), Decision 0029 (project workspace), Decision 0010 (constructor injection + `testing.py`).
 
 ## Context

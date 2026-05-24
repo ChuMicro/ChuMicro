@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
+Summary: Firmware floors codified in `chumicro_workspace.firmware_support`: MicroPython ≥1.27.0, CircuitPython ≥10.1.0; `add-device` warns on `OLD` but never blocks.
 Related: [Decision 0015](0015-board-architecture-support.md) (board support tiers), [Decision 0029](0029-project-workspace.md) (project workspace architecture), [`plans/workstreams/archive/beginner-onramp.md`](../workstreams/archive/beginner-onramp.md)
 
 ## Context

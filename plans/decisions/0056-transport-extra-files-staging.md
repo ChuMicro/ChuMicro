@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
+Summary: `TransportProtocol.stage()` adds `extra_files: dict[str, bytes]` for binary file staging; CP RAM mode raises `UnsupportedExtraFilesError`; other modes write bytes to the device path.
 Related: Decision 0035 (runtime-config structure — `/runtime_config.msgpack` is the canonical on-device path), Decision 0036 (`chumicro-config` library — `load_runtime_config` reads from that path), Decision 0044 (deploy-time runtime-file filtering — host-side filter applied uniformly), Decision 0047 (`deploy_mode: flash` default — flash is the production-shaped path), Decision 0055 (config pipeline unification — `workspace.yml` + per-project `config.toml` flow into `runtime_config.msgpack` at deploy time), Decision 0057 (two-file config — collapsed Decision 0055's input layers from three files to two; this transport-API decision is unaffected).
 
 ## Context

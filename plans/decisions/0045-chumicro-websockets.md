@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-02`
+Summary: `chumicro-websockets` library ships `WebSocketClient` + `WebSocketServer`: runner-shaped, RFC 6455 framing, oversized-frame rolling drain, `chumicro-sockets` substrate.
 Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), [Decision 0040](0040-chumicro-requests.md) (HttpClient + factory pattern), [Decision 0041](0041-chumicro-http-server.md) (HttpServer + WS-deserves-its-own-library framing), [Decision 0042](0042-library-dependency-policy.md) (Class 1 / Class 2 dep policy + factory-helper sub-rule).
 
 ## Context

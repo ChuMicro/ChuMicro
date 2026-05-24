@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-24`
+Summary: Functional tests default to Category 1 (controlled endpoint = host fixture); Category 2 (public endpoint) is an exception for interop verification; self-loopback is not a category.
 Related: Decision [0082](0082-test-harness-as-infrastructure-library.md) (the device-side `chumicro_test_harness.network` helper that brings wifi up for both sides), Decision [0043](0043-chumicro-sockets-udp.md) (already uses a host-side echo fixture — the original Category 1 instance), Decision [0058](0058-test-skips-must-be-loud.md) (skip semantics for when an endpoint is unreachable), `plans/workstreams/test-harness-promotion-and-network-helper.md` (the implementation roster that aligns existing tests).
 
 ## Context

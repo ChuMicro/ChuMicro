@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-07`
+Summary: Test skips must use `chumicro_test_harness.skip(reason)`; CHU009 forbids bare-return skips, CHU010 forbids tests with no assertions; runtime/feature markers replace silent guards.
 Related: Decision 0009 (testing strategy), Decision 0010 (constructor injection + per-library `testing.py`), Decision 0014 (runner-shaped functional contract), Decision 0027 (`devices.yml` schema), Decision 0036 (chumicro-config — runtime-config keys).
 
 ## Context

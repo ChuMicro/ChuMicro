@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-12`
+Summary: `__chumicro_skip_factories__ = (...)` entrypoint constant tells the deploy walker to skip factory submodules; `from_config` raises a clear error when the skipped module is missing.
 Related: [Decision 0042](0042-library-dependency-policy.md) (the sub-rule this corrects), [Decision 0029](0029-project-workspace.md) (the AST walker this extends), [Decision 0037](0037-runtime-file-marking.md) (precedent for entrypoint-level marker constants).
 
 ## Context

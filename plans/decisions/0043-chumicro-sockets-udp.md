@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-27`
+Summary: UDP support extends `chumicro-sockets` with `UDPSocket` protocol + `udp_socket()` factory + `FakeUDPSocket`; broadcast optional; multicast, IPv6, connected-UDP deferred.
 Related: [Decision 0031](0031-chumicro-sockets.md) (chumicro-sockets scope), `plans/workstreams/library-pipeline.md` (Tier-A NTP requires UDP).
 
 ## Context

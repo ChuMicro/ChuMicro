@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-17`
+Summary: Chunked test-module exec bounds compile peak; opt-in `--per-file` reset gives each file a fresh VM; every cross-runtime test file must fit on a freshly-reset Pi Pico W under both CP and MP.
 Related: [Decision 0071](0071-per-library-soft-reset-flash-sweep.md) (per-library reset — this extends it to opt-in per-file granularity; its "Not closed" per-file thread resolves here), [Decision 0068](0068-unified-deploy-mode-resolution.md) (the on-device unit sweep), [Decision 0027](0027-device-testing-infrastructure.md) (persistent raw-REPL execution model), [Decision 0028](0028-deploy-modes.md) (transport `soft_reset()`), [Decision 0016](0016-cross-runtime-unit-tests.md) (cross-runtime discovery — the forcing function), [Decision 0015](0015-board-architecture-support.md) (256 KB minimum board).
 
 ## Context

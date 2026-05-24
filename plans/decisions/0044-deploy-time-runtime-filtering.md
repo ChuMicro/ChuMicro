@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-02`
+Summary: `__chumicro_runtimes__` marker filters every host-side deploy boundary (workspace, deploy CLI, pytest-device, examples); transports own the target runtime; PyPI sdist ships everything.
 Related: [Decision 0037](0037-runtime-file-marking.md) (per-runtime file marking + bundle filtering), Decision 0027 / 0028 (transport protocols), Decision 0029 (workspace deploy layouts), Decision 0042 (library dependency policy).
 
 ## Context

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-02`
+Summary: Default deploy mode flips to `flash` (was `ram`); `[tool.chumicro] requires_flash = true` flag in heavy library `pyproject.toml` triggers auto-switch with explanation.
 Related: Decision 0029 (workspace shape), Decision 0033 (macOS CIRCUITPY
 deploy hardening), Decision 0046 (workspace folder shape)
 

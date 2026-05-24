@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
+Summary: Every workbench package that touches hardware ships `<package>.recovery`: closed-set failure-kind enum, classifier, per-kind recovery plans, CLI coaching loop wrapping entry points.
 Related: Decision 0032 (workbench host tools), Decision 0033 (macOS CIRCUITPY hardening — concrete instance), Decision 0039 (firmware version floor — concrete instance).
 
 ## Context

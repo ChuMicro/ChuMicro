@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-16`
+Summary: `__chumicro_host_only__ = True` marks tests that run on every host interpreter but never real silicon; `__chumicro_runtimes__ = ("cpython",)` marks pytest-only tests; `_pytest` suffix retired.
 Related: [Decision 0016](0016-cross-runtime-unit-tests.md) (cross-runtime unit suite + the `_pytest` filename convention this retires — amended on acceptance), [Decision 0058](0058-test-skips-must-be-loud.md) (owns `__chumicro_runtimes__` — this decision reuses it for the cpython-only case and adds an orthogonal axis), [Decision 0069](0069-test-support-module-marker.md) (the test-support marker — `__chumicro_host_only__` is its boolean sibling; this decision preserves 0069's collect-vs-ship split), [Decision 0037](0037-runtime-file-marking.md) §2 (path-inference rejected — same principle), [Decision 0044](0044-deploy-time-runtime-filtering.md) (the deploy filter that exposes the gap), [Decision 0068](0068-unified-deploy-mode-resolution.md) (the on-device unit sweep that surfaced this — resolves its Phase 4b.2 issue (i)).
 
 ## Context

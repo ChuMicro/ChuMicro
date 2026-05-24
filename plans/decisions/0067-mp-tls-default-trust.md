@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-14`
+Summary: `chumicro-sockets` ships a curated DER CA bundle for MicroPython; `tls_client_socket(host, port)` is secure-by-default on every runtime; `ssl_context_no_verify()` is the explicit opt-out.
 Related: [Decision 0031](0031-chumicro-sockets.md) (chumicro-sockets charter — the substrate this decision modifies), [Decision 0042](0042-library-dependency-policy.md) (every consumer of TLS routes through chumicro_sockets), [Decision 0015](0015-board-architecture-support.md) (256 KB RAM / 4 MB flash minimum — informs the bundle's flash-cost ceiling).
 
 ## Context

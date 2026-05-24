@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-12`
+Summary: `WhenOversized` converges across mqtt/requests/websockets: values copy-pasted, cap name `max_<noun>_bytes`, callback first-arg `reported_length`, `DROP_WITH_EVENT` stays connected.
 Related: Decision [0040](0040-chumicro-requests.md) (`chumicro-requests`), Decision [0045](0045-chumicro-websockets.md) (`chumicro-websockets`).
 
 ## Context

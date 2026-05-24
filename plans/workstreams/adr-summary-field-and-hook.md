@@ -57,6 +57,11 @@ Output ~10–12 KB total at ~150-char average across 77 active ADRs, one-time-pe
 
 - **2026-05-24** Phase 1.  `new-decision` SKILL template gains required `Summary:` frontmatter field + verify checklist.  Commit `4bf6aa4d`.
 - **2026-05-24** Phase 2 pilot (5 ADRs: 0001, 0002, 0003, 0004, 0005).  Riskiest-assumption gate cleared — 4 strong disambiguations + 1 mild (0005 slug already half-answers).  Dead-ADR scope resolved: backfill all 82 (uniform CHU lint), hook filters `INERT|SUPERSEDED` filename markers (Phase 4 snippet updated).
+- **2026-05-24** Phase 2 cluster 2 — workspace + test + project standards (0006–0013, 8 ADRs).
+- **2026-05-24** Phase 2 cluster 3 — runtime foundations (0014–0017, 4 ADRs); 0015 correction surfaced + landed separately (`2 MB physical / ~800 KB usable flash`, not `4 MB`).
+- **2026-05-24** Phase 2 cluster 4 — distribution + workflow + standards (0018–0023, 6 ADRs).
+- **2026-05-24** Phase 2 cluster 5 — mpy serving, coverage, deploy, workspace, config (0024–0030, 7 ADRs).
+- **2026-05-24** Phase 2 final sweep — 0031–0083 in one commit (52 ADRs, batched 8 at a time during drafting).  All 82 ADRs now carry a `Summary:` field, range 125–197 chars (cap 200).
 
 ## Out of scope
 

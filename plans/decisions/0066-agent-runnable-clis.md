@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-14`
+Summary: Agent-runnable CLIs auto-detect interactivity via TTY; `--non-interactive` is the meta-flag override; never prompt or tail in non-interactive mode; distinct exit codes per failure.
 Related: [Decision 0054](0054-streaming-output-and-status-modes.md) (TTY auto-detection for output dispatcher selection — same detection signal, different decision), [Decision 0053](0053-recovery-layer-philosophy.md) (failure classification + recovery — distinct exit codes turn classified failures into machine-readable ones).
 
 ## Context

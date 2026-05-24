@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-09`
+Summary: New `chumicro-checks` workbench package owns CHU lint rules; each rule self-scopes (walks nothing where targets don't exist); per-repo opt-out via `[tool.chumicro-checks] ignore`.
 Related: Decision 0032 (workbench host tools), Decision 0052 (workbench packages don't import library packages), Decision 0058 (CHU009 / CHU010), and the workspace-template starter at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template).
 
 ## Context

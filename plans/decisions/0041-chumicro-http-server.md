@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
+Summary: Runner-shaped HTTP server with per-connection state machine, bounded `max_connections` (default 4), `@server.route` two-dict router; new `tcp_listening_socket` helper in `chumicro-sockets`.
 Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), [Decision 0040](0040-chumicro-requests.md) (sibling client library), `plans/workstreams/archive/beginner-onramp.md` Step 7.
 
 ## Context

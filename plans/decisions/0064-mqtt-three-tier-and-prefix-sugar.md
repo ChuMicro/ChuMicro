@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-12`
+Summary: MQTT inbound has three tiers (steady ≤ `rx_buffer_size`, intact ≤ `max_message_bytes`, oversized = policy); `root_topic` + `prefixed=` sugar; SUBACK 0x80 faults loudly.
 Related: [Decision 0061](0061-whenoversized-cross-library-contract.md) (`WhenOversized` cross-library contract), [Decision 0010](0010-library-testability.md) (constructor injection), [Decision 0014](0014-runner-pattern.md) (tick-based runner).
 
 ## Context

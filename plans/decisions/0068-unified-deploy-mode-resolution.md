@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-15`
+Summary: Single `resolve_deploy_mode` shared by `Deployer` + `chumicro-pytest-device`; `supports_ram_mode` per-device capability; on-device unit sweep is first-class via `--with-device-unit`.
 Related: [Decision 0047](0047-deploy-mode-flash-default.md) (flash default + `requires_flash`; this decision unifies and extends its §3 auto-switch), [Decision 0028](0028-deploy-modes.md) (RAM/flash transport semantics), [Decision 0027](0027-device-testing-infrastructure.md) (device-test infra + `devices.yml` schema), [Decision 0016](0016-cross-runtime-unit-tests.md) (the cross-runtime unit suite this lets run on hardware).
 
 ## Context

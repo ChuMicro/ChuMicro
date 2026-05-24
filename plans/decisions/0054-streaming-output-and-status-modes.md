@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
+Summary: `stream_subprocess` line-streams child output; phase callables are `(sink) -> int`; four dispatchers (quiet/interleave/status/raw); auto-detected by TTY + `CHUMICRO_RAW_OUTPUT` env.
 Related: [Decision 0048](0048-preflight-phase-level-parallel.md)
 (supersedes §3 — "Mechanism: subprocess re-invocation" — and refines §1 — output capture)
 

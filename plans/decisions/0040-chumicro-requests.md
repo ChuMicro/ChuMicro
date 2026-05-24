@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
+Summary: Runner-shaped single-in-flight `HttpClient`: `check`/`handle` contract; `connection_factory` injected; per-tick recv budget caps body drain at `max_body_bytes`; `WhenOversized` policy.
 Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), `plans/workstreams/archive/beginner-onramp.md` Step 6.
 
 ## Context

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-24`
+Summary: CP flash deploy on macOS strips xattrs + dot-clean + Spotlight-off, `os.sync` + settle, polls device-side `os.stat`, detects the FSKit wedge, and EACCES-probes the drive before staging.
 Related: Decision 0028 (deploy modes), Decision 0029 (project workspace).
 
 ## Context

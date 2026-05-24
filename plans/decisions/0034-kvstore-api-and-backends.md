@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-25`
+Summary: `KVStore` selects backend by runtime (CP NVM / MP NVS / MP LittleFS / Memory); CP NVM frames as `MAGIC|LEN|CRC32|MSGPACK`; explicit `commit` lifecycle (no per-setitem write).
 Related: Decision 0030 (config vs persisted state), Decision 0010 (constructor injection + `testing.py`), Decision 0021 (annotations), Decision 0014 (tick-based runner).
 
 ## Context
