@@ -81,12 +81,6 @@ PACKET_PINGREQ = b"\xc0\x00"
 #: Pre-encoded DISCONNECT (no payload, two bytes total).
 PACKET_DISCONNECT = b"\xe0\x00"
 
-# Reserved for QoS 2.  The constants are kept though QoS 2 handlers
-# are not implemented.
-PACKET_PUBREC = const(0x50)
-PACKET_PUBREL = const(0x62)
-PACKET_PUBCOMP = const(0x70)
-
 
 # ---------------------------------------------------------------------------
 # Codec helpers
