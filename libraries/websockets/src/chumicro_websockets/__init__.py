@@ -6,14 +6,9 @@ follow the runner contract — :meth:`check(now_ms)` reports work
 pending and :meth:`handle(now_ms)` does one slice of progress per
 call, so an LED keeps blinking through the opening handshake, frame
 I/O, control-frame interleave, and the close handshake.
-
-End-of-module GC sweep follows the pattern documented in
-:mod:`chumicro_mqtt`'s module docstring — the submodule chain here
-(``_wire`` / ``_session`` / ``client`` / ``server``) wins the same
-TLS-handshake headroom on Pi Pico W MP.
 """
 
-import gc as _gc  # noqa: I001 — see chumicro_mqtt.__init__ docstring.
+import gc as _gc  # noqa: I001 — interleaved gc.collect() between the submodule imports below.
 
 from chumicro_websockets._wire import (
     CLOSE_BAD_DATA,
@@ -42,10 +37,10 @@ from chumicro_websockets._wire import (
 )
 _gc.collect()
 
-from chumicro_websockets.client import WebSocketClient, WhenOversized  # noqa: E402, I001 — gc.collect() interleaved with imports is intentional.
+from chumicro_websockets.client import WebSocketClient, WhenOversized  # noqa: E402, I001 — preceded by gc.collect().
 _gc.collect()
 
-from chumicro_websockets.server import Connection, WebSocketServer  # noqa: E402, I001 — gc.collect() interleaved with imports is intentional.
+from chumicro_websockets.server import Connection, WebSocketServer  # noqa: E402, I001 — preceded by gc.collect().
 
 __all__ = [
     "CLOSE_BAD_DATA",

@@ -6,20 +6,9 @@ reports whether work is pending and :meth:`handle(now_ms)` does one
 slice of progress per call.
 
 QoS 0 and QoS 1 are supported.  QoS 2 raises :class:`UnsupportedQoSError`.
-
-This module sweeps the GC between and after its submodule imports.
-On MicroPython, compile-time scratch (AST nodes, transient tuples,
-interned-name artifacts) from loading ``_wire.py`` and ``client.py``
-stays resident until auto-GC fires under allocation pressure — which
-a successful import never triggers, leaving the scratch interleaved
-with the persistent module state.  The explicit collects defragment
-that pattern, recovering ~33 KB of contiguous heap on Pi Pico W MP and
-restoring TLS handshake headroom that the chain otherwise loses.  On
-CPython the calls are benign (cycle collector runs a no-op pass for
-non-cyclic code).
 """
 
-import gc as _gc  # noqa: I001 — gc.collect() interleaved with imports is intentional; see module docstring.
+import gc as _gc  # noqa: I001 — interleaved gc.collect() between the submodule imports below.
 
 from chumicro_mqtt._wire import (
     MQTTBackpressureError,
@@ -30,7 +19,7 @@ from chumicro_mqtt._wire import (
 )
 _gc.collect()
 
-from chumicro_mqtt.client import MQTTClient, ProtocolState, WhenOversized  # noqa: E402, I001 — gc.collect() interleaved with imports is intentional.
+from chumicro_mqtt.client import MQTTClient, ProtocolState, WhenOversized  # noqa: E402, I001 — preceded by gc.collect().
 
 __all__ = [
     "MQTTClient",
