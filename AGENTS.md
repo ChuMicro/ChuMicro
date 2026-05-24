@@ -221,8 +221,8 @@ Core commands for active development and troubleshooting:
 | Command | Purpose |
 |---------|---------|
 | `setup` | Install deps + regenerate IDE configs |
-| `preflight` | Full CI mirror (lint + build + docs + all-runtime unit tests + checks). `--with-functional` adds hardware-gated tests; `--with-device-unit` appends the on-device sweep |
-| `test` | CPython unit tests (changed packages by default; `--all` for full sweep) |
+| `preflight --coverage-threshold 94` | Full CI mirror (lint + build + docs + all-runtime unit tests + checks). The coverage flag is non-negotiable — bare `preflight` skips the gate and is never the right invocation. `--with-functional` adds hardware-gated tests; `--with-device-unit` appends the on-device sweep |
+| `test --coverage-threshold 94` | CPython unit tests (changed packages by default; `--all` for full sweep). Coverage flag required — same rule as `preflight` |
 | `lint` | Ruff across the workspace |
 | `test-all-runtimes` | CPython + MicroPython + CircuitPython unit tests (parallelized) |
 | `check-api` / `check-version` | Diff public API surface, confirm VERSION bump level matches |
