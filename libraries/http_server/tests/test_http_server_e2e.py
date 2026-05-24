@@ -2,7 +2,6 @@
 body, timeout, EAGAIN paths."""
 
 from chumicro_http_server import (
-    DEFAULT_BODY_BUFFER_SIZE,
     HttpServer,
     build_response,
 )
@@ -249,14 +248,14 @@ class TestHttpServerOversizedBody:
             captured["body"] = request.body
             return build_response(200, text="ok")
 
-        body = b"x" * (DEFAULT_BODY_BUFFER_SIZE * 2)  # > steady buffer, < cap
+        body = b"x" * 2048
         sock, peer = _connection(request_bytes(
             method="POST", path="/upload", body=body,
         ))
         server, ticks, _ = _make_server(
             sockets=[(sock, peer)],
             handler=handler,
-            max_request_body_bytes=DEFAULT_BODY_BUFFER_SIZE * 4,
+            max_request_body_bytes=4096,
         )
         _drive_until_idle(server, ticks)
         assert sock.sent.startswith(b"HTTP/1.1 200 OK\r\n")

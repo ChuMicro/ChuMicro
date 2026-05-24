@@ -14,7 +14,6 @@ helpers, multipart upload, sub-app mounting, async handlers.
 """
 
 from chumicro_http_server._wire import (
-    DEFAULT_BODY_BUFFER_SIZE,
     DEFAULT_MAX_CONNECTIONS,
     DEFAULT_MAX_REQUEST_BODY_BYTES,
     DEFAULT_RECV_BUDGET_PER_TICK,
@@ -39,7 +38,6 @@ from chumicro_http_server.server import (
 )
 
 __all__ = [
-    "DEFAULT_BODY_BUFFER_SIZE",
     "DEFAULT_MAX_CONNECTIONS",
     "DEFAULT_MAX_REQUEST_BODY_BYTES",
     "DEFAULT_RECV_BUDGET_PER_TICK",

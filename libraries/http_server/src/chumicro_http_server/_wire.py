@@ -40,14 +40,6 @@ DEFAULT_SEND_BUDGET_PER_TICK = const(4096)
 #: at headers-complete time with a 413 response — no body allocation.
 DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
 
-#: Suggested default size for callers that pre-allocate a steady-state
-#: body buffer to pass into :class:`RequestParser`.  The in-tree
-#: ``_Connection`` does not use this today: every response emits
-#: ``Connection: close``, so a per-connection body buffer would have
-#: a use-once lifetime that fragments worse than allocating
-#: sized-to-fit on demand.  Reserved for the future keep-alive path.
-DEFAULT_BODY_BUFFER_SIZE = const(1024)
-
 #: Default per-connection deadline.
 DEFAULT_REQUEST_TIMEOUT_MS = const(10000)
 
@@ -663,11 +655,8 @@ def parse_query(raw_query: str) -> "CaseInsensitiveDict":
     return result
 
 
-# Re-export the shared primitive so server-side callers don't need to
-# also import from chumicro_requests.
 __all__ = [
     "CRLF",
-    "DEFAULT_BODY_BUFFER_SIZE",
     "DEFAULT_MAX_CONNECTIONS",
     "DEFAULT_MAX_REQUEST_BODY_BYTES",
     "DEFAULT_RECV_BUDGET_PER_TICK",
