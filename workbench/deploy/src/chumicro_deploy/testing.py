@@ -344,19 +344,35 @@ class FakeTransport:
             for device_path, content in extra_files.items():
                 self.staged_extra_files[device_path] = content
 
-    def execute(self, bootstrap_script: str) -> str:
+    def execute(
+        self,
+        bootstrap_script: str,
+        *,
+        on_line: Callable[[str], None] | None = None,
+    ) -> str:
         """Record an execute call and return canned output.
 
         Returns the head of :attr:`outputs` when non-empty (popped),
         otherwise :attr:`execute_output`.  Raises :attr:`execute_raises`
         after recording when set.
+
+        When *on_line* is provided, dispatches one call per line of the
+        returned string (split via :meth:`str.splitlines`) before
+        returning — same shape the real transports use, so a test can
+        drive marker-style stdout coordination against the fake without
+        wiring a real serial stream.
         """
         self.calls.append(("execute", (bootstrap_script,)))
         if self.execute_raises is not None:
             raise self.execute_raises
         if self.outputs:
-            return self.outputs.pop(0)
-        return self.execute_output
+            output = self.outputs.pop(0)
+        else:
+            output = self.execute_output
+        if on_line is not None and output:
+            for output_line in output.splitlines():
+                on_line(output_line)
+        return output
 
     def run_script(self, script: str, *, timeout: float = 10.0) -> str:
         """Record a run_script call and return canned output.
@@ -376,7 +392,12 @@ class FakeTransport:
         self.calls.append(("run_script", (script, timeout)))
         return self.execute_output
 
-    def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
+    def execute_scripts(
+        self,
+        bootstrap_scripts: list[str],
+        *,
+        on_line: Callable[[str], None] | None = None,
+    ) -> str:
         """Record a chunked-execute call and return the configured output.
 
         Raises :attr:`execute_raises` after recording when set.
@@ -386,15 +407,23 @@ class FakeTransport:
         operation, with no synthetic per-script ``execute`` entries.
         Otherwise records synthetic per-script ``execute`` entries (one
         per chunk) and returns :attr:`execute_output`.
+
+        *on_line* mirrors the real-transport pass-through: the batched
+        head dispatches one call per line; the per-script branch threads
+        the callback into each :meth:`execute` call.
         """
         self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
         if self.execute_raises is not None:
             raise self.execute_raises
         if self.outputs:
-            return self.outputs.pop(0)
+            output = self.outputs.pop(0)
+            if on_line is not None and output:
+                for output_line in output.splitlines():
+                    on_line(output_line)
+            return output
         last_output = self.execute_output
         for bootstrap_script in bootstrap_scripts:
-            last_output = self.execute(bootstrap_script)
+            last_output = self.execute(bootstrap_script, on_line=on_line)
         return last_output
 
     def probe_free_memory(self) -> int:

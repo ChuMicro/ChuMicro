@@ -477,6 +477,84 @@ class TestExecute:
             transport.execute("print('hello')")
 
 
+class TestExecuteOnLineDispatch:
+    """``on_line`` dispatches stdout lines live, as raw-REPL bytes arrive."""
+
+    def test_execute_dispatches_each_line_as_bytes_land(
+        self, tmp_path: Path,
+    ) -> None:
+        """Two serial read chunks each carrying their own line dispatches
+        on_line for each, in arrival order, with the ``OK`` envelope and
+        ``\\x04`` terminator both stripped from the callback's view."""
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                b"OKline-a\n",
+                b"line-b\nline-c\n\x04\x04>",
+            ],
+        )
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=port,
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+
+        lines: list[str] = []
+        output = transport.execute(
+            "print('streaming')", on_line=lines.append,
+        )
+
+        assert lines == ["line-a", "line-b", "line-c"]
+        assert output == "line-a\nline-b\nline-c\n"
+
+        transport.disconnect()
+
+    def test_execute_scripts_dispatches_lines_across_chunks(
+        self, tmp_path: Path,
+    ) -> None:
+        """A two-script chunked execute threads ``on_line`` through each
+        execute call, dispatching every script's stdout in order."""
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                b"OKfrom-chunk-one\n\x04\x04>",
+                b"OK\x04\x04>",
+                b"OKfrom-chunk-two\n\x04\x04>",
+            ],
+        )
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=port,
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+
+        lines: list[str] = []
+        transport.execute_scripts(
+            ["print('chunk one')", "print('chunk two')"],
+            on_line=lines.append,
+        )
+
+        assert lines == ["from-chunk-one", "from-chunk-two"]
+
+        transport.disconnect()
+
+
 class TestExecuteScripts:
     """Tests for chunked raw-REPL execution."""
 

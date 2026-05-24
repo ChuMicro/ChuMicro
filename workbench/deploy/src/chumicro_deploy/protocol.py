@@ -309,8 +309,28 @@ class TransportProtocol(Protocol):
         """
         ...
 
-    def execute(self, bootstrap_script: str) -> str:
-        """Run *bootstrap_script* on the device and return captured stdout."""
+    def execute(
+        self,
+        bootstrap_script: str,
+        *,
+        on_line: Callable[[str], None] | None = None,
+    ) -> str:
+        """Run *bootstrap_script* on the device and return captured stdout.
+
+        When *on_line* is provided, each captured stdout line is
+        dispatched to the callback as it arrives over the serial link,
+        before :meth:`execute` returns.  Lines are dispatched without
+        their trailing newline; ``\\r\\n`` is normalized to ``\\n``.
+        When *on_line* is ``None`` (the default), behaviour is the
+        request/response shape every existing call site assumes —
+        captured stdout still comes back as the return value.
+
+        Streaming dispatch lets a host-side consumer react mid-execute
+        — for example, a test fixture that opens a TCP connection only
+        once the board prints a "server ready" line, or a long-running
+        bake harness that surfaces board output as it lands instead of
+        after the bootstrap finishes.
+        """
         ...
 
     def run_script(self, script: str, *, timeout: float = 10.0) -> str:
@@ -510,8 +530,19 @@ class ExtendedTransportProtocol(TransportProtocol, Protocol):
     #: ``None`` before ``stage()`` has been called.
     staged_sources: list[tuple[str, str]] | None
 
-    def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
-        """Run multiple bootstrap scripts in one interpreter session."""
+    def execute_scripts(
+        self,
+        bootstrap_scripts: list[str],
+        *,
+        on_line: Callable[[str], None] | None = None,
+    ) -> str:
+        """Run multiple bootstrap scripts in one interpreter session.
+
+        *on_line* threads through each per-script
+        :meth:`TransportProtocol.execute` call, so a chunked CP RAM-mode
+        deploy dispatches stdout lines across all scripts in arrival
+        order under a single callback.
+        """
         ...
 
     def probe_free_memory(self) -> int:

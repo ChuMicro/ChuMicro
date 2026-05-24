@@ -26,6 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from ._line_dispatcher import StreamingLineDispatcher
 from .flash_drive import DEVICE_KEEP_SET
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
@@ -492,7 +493,12 @@ class MicropythonTransport:
             self._serial.mount_local(str(staging_path))
             self._mounted = True
 
-    def execute(self, bootstrap_script: str) -> str:
+    def execute(
+        self,
+        bootstrap_script: str,
+        *,
+        on_line: Callable[[str], None] | None = None,
+    ) -> str:
         """Execute a bootstrap script on the device and return captured output.
 
         Uses the persistent serial transport's ``exec_raw`` so each call
@@ -502,6 +508,15 @@ class MicropythonTransport:
 
         Args:
             bootstrap_script: Python code to execute on the device.
+            on_line: Optional callback invoked with each stdout line as
+                it arrives over the serial link, before this method
+                returns.  Lines are delivered without their trailing
+                newline; ``\\r\\n`` is normalized to ``\\n``.  Wires
+                straight into mpremote's ``data_consumer`` hook on
+                ``exec_raw``, which fires per byte during the stdout
+                read phase and stops at the ``\\x04`` end-of-stdout
+                marker — the dispatcher discards that terminator byte
+                so callbacks only see board content.
 
         Returns:
             Captured stdout from the device.
@@ -511,14 +526,28 @@ class MicropythonTransport:
                 "stage() must be called before execute()"
             )
         self._ensure_serial()
+        line_dispatcher = (
+            StreamingLineDispatcher(on_line, terminator=b"\x04")
+            if on_line is not None
+            else None
+        )
         try:
-            result = self._serial.exec_raw(
-                bootstrap_script, timeout=_EXECUTE_IDLE_TIMEOUT,
-            )
+            if line_dispatcher is not None:
+                result = self._serial.exec_raw(
+                    bootstrap_script,
+                    timeout=_EXECUTE_IDLE_TIMEOUT,
+                    data_consumer=line_dispatcher.feed,
+                )
+            else:
+                result = self._serial.exec_raw(
+                    bootstrap_script, timeout=_EXECUTE_IDLE_TIMEOUT,
+                )
         except Exception as error:
             raise MicropythonTransportError(
                 f"Device exec failed: {error}"
             ) from error
+        if line_dispatcher is not None:
+            line_dispatcher.flush()
         return _decode_exec_result(result)
 
     def run_script(self, script: str, *, timeout: float = 10.0) -> str:

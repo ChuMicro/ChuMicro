@@ -91,16 +91,33 @@ class FakeSerialTransport:
     def umount_local(self) -> None:
         self.calls.append(("umount_local", ()))
 
-    def exec_raw(self, command: str, timeout: int = 10) -> tuple[bytes, bytes]:
+    def exec_raw(
+        self,
+        command: str,
+        timeout: int = 10,
+        data_consumer=None,
+    ) -> tuple[bytes, bytes]:
+        # Keep the recorded tuple two-wide so existing tests that unpack
+        # ``(command, timeout)`` from the calls log remain valid.
         self.calls.append(("exec_raw", (command, timeout)))
         if self.raise_on_execute is not None:
             raise self.raise_on_execute
         if self.exec_outputs:
             value = self.exec_outputs.pop(0)
             if isinstance(value, tuple):
-                return value
-            return (value, b"")
-        return (b"", b"")
+                stdout_bytes, stderr_bytes = value
+            else:
+                stdout_bytes, stderr_bytes = value, b""
+        else:
+            stdout_bytes, stderr_bytes = b"", b""
+        if data_consumer is not None:
+            # Mirror mpremote's read_until loop: stdout bytes arrive one
+            # at a time, then the terminator ``\x04`` byte is also fed
+            # before the loop breaks on the next iteration.
+            for byte_offset in range(len(stdout_bytes)):
+                data_consumer(stdout_bytes[byte_offset : byte_offset + 1])
+            data_consumer(b"\x04")
+        return (stdout_bytes, stderr_bytes)
 
     def read_until(
         self,
@@ -653,6 +670,74 @@ class TestExecute:
 
         with pytest.raises(MicropythonTransportError, match="device disconnected"):
             transport.execute("import test_example")
+
+        transport.disconnect()
+
+
+class TestExecuteOnLineDispatch:
+    """``on_line`` rides mpremote's ``data_consumer`` per-byte hook."""
+
+    def test_execute_dispatches_each_line_via_data_consumer(
+        self, tmp_path: Path,
+    ) -> None:
+        """The dispatcher receives stdout one byte at a time (mpremote's
+        ``read_until`` shape) and assembles complete lines before
+        execute() returns."""
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(
+            address="/dev/ttyUSB0",
+            exec_outputs=[b"first\nsecond\nthird\n"],
+        )
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([source_dir], [], harness_dir)
+
+        lines: list[str] = []
+        output = transport.execute(
+            "print('streaming')", on_line=lines.append,
+        )
+
+        assert lines == ["first", "second", "third"]
+        assert output == "first\nsecond\nthird\n"
+
+        transport.disconnect()
+
+    def test_execute_without_on_line_skips_data_consumer(
+        self, tmp_path: Path,
+    ) -> None:
+        """Omitting ``on_line`` keeps the call shape backwards-compatible
+        — ``exec_raw`` is invoked without ``data_consumer`` and nothing
+        is dispatched."""
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(
+            address="/dev/ttyUSB0",
+            exec_outputs=[b"only-line\n"],
+        )
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([source_dir], [], harness_dir)
+
+        output = transport.execute("import test_example")
+
+        assert output == "only-line\n"
 
         transport.disconnect()
 
