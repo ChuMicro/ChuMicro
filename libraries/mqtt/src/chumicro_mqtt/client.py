@@ -256,7 +256,7 @@ class MQTTClient:
         password: str | None = None,
         clean_session: bool = True,
         will_topic: str | None = None,
-        will_topic_raw: str | None = None,
+        will_prefixed: bool = True,
         will_message: bytes | None = None,
         will_qos: int = 0,
         will_retain: bool = False,
@@ -300,9 +300,9 @@ class MQTTClient:
                 When set, every prefixed topic becomes
                 ``<root_topic>/<client_id>/<topic>``.  ``None`` (default)
                 disables prefixing.  Topics go on the wire as written.
-                Use :meth:`publish_raw` / :meth:`subscribe_raw` /
-                :meth:`unsubscribe_raw` to bypass prefixing on individual
-                calls (system topics, bridge topics, etc.).
+                Individual :meth:`publish` / :meth:`subscribe` /
+                :meth:`unsubscribe` calls can opt out per-call with
+                ``prefixed=False`` (system topics, bridges, etc.).
             keep_alive_seconds: Broker idle timeout.  PINGREQ runs at
                 half this interval client-side.
             ack_timeout_seconds: Per-PUBACK / SUBACK / etc. deadline.
@@ -314,14 +314,12 @@ class MQTTClient:
             clean_session: ``False`` resumes persistent broker session
                 state for QoS 1+ retransmit-across-reconnects.
             will_topic: Topic for the broker's last-will message.
-                Published on uncleanly-dropped connection.  Resolves
+                Published on uncleanly-dropped connection.  ``None``
+                disables the will.
+            will_prefixed: When True (default), *will_topic* resolves
                 through the ``root_topic`` / ``client_id`` prefix
-                scheme if set.  ``None`` disables the will.  Mutually
-                exclusive with *will_topic_raw*.
-            will_topic_raw: Last-will topic without prefix resolution.
-                Use when the will needs to land outside the per-device
-                topic hierarchy (system topics, bridges).  Mutually
-                exclusive with *will_topic*.
+                scheme.  Pass False to set a verbatim will topic
+                (system topics, bridges).
             will_message: Payload for the broker's last-will message.
             will_qos: QoS for the will message (0 or 1).
             will_retain: ``True`` retains the will on the broker.
@@ -367,11 +365,6 @@ class MQTTClient:
                 "connector_factory (or both — factory is used for self-heal "
                 "after wifi-drop)."
             )
-        if will_topic is not None and will_topic_raw is not None:
-            raise ValueError(
-                "will_topic (prefixed) and will_topic_raw (verbatim) are "
-                "mutually exclusive — pass at most one."
-            )
         self._socket = socket
         self._connector_factory = connector_factory
         self._connector = None
@@ -386,15 +379,15 @@ class MQTTClient:
         self._username = username
         self._password = password
         self._clean_session = clean_session
-        # Resolve the will topic once at construction.  ``will_topic``
-        # gets the root_topic/client_id prefix.  ``will_topic_raw``
-        # goes verbatim.
-        if will_topic_raw is not None:
-            self._will_topic = will_topic_raw
-        elif will_topic is not None:
+        # Resolve the will topic once at construction.  ``will_prefixed``
+        # (default True) runs *will_topic* through the root_topic /
+        # client_id scheme; False sends it verbatim.
+        if will_topic is None:
+            self._will_topic = None
+        elif will_prefixed:
             self._will_topic = self._prefixed_topic(will_topic)
         else:
-            self._will_topic = None
+            self._will_topic = will_topic
         self._will_message = will_message
         self._will_qos = will_qos
         self._will_retain = will_retain
@@ -425,10 +418,10 @@ class MQTTClient:
         self._in_flight = {}
         self._next_packet_id = 1
         self._pending_responses = []
-        # Topics the user has subscribed to (raw, post-prefixing) →
-        # requested QoS.  Eagerly maintained by subscribe_raw /
-        # unsubscribe_raw so the set always reflects "what the user
-        # wants subscribed right now".  Replayed on every CONNACK
+        # Topics the user has subscribed to (post-prefixing) →
+        # requested QoS.  Eagerly maintained by :meth:`subscribe` /
+        # :meth:`unsubscribe` so the set always reflects "what the
+        # user wants subscribed right now".  Replayed on every CONNACK
         # that lands in CONNECTED so self-heal-driven reconnects
         # restore the inbound stream — broker with clean_session=True
         # forgets subscriptions across reconnects; with
@@ -647,12 +640,15 @@ class MQTTClient:
         qos: int = 0,
         retain: bool = False,
         on_publish: object | None = None,
+        prefixed: bool = True,
     ) -> None:
-        """Queue a PUBLISH packet to a prefix-resolved topic.
+        """Queue a PUBLISH packet for *topic*.
 
-        *topic* is resolved through ``root_topic`` / ``client_id``
-        before going on the wire.  See :meth:`_prefixed_topic`.  Use
-        :meth:`publish_raw` to bypass prefixing.
+        With ``prefixed=True`` (default), *topic* is resolved through
+        the ``root_topic`` / ``client_id`` prefix scheme — see
+        :meth:`_prefixed_topic`.  Pass ``prefixed=False`` to publish
+        verbatim (system topics, bridge topics, anything outside the
+        per-device hierarchy).
 
         QoS 0: queued and considered delivered once it reaches the wire
         (the optional *on_publish* fires from the next :meth:`handle`).
@@ -662,34 +658,21 @@ class MQTTClient:
         exactly once.  Retries up to *publish_retry_max* on ack timeout.
 
         Args:
-            topic: Publish topic (will be prefixed).
+            topic: Publish topic.  Prefixed when *prefixed* is True.
             payload: ``bytes`` / ``str``.  ``str`` is auto-encoded as UTF-8.
             qos: 0 or 1.  QoS 2 raises :class:`UnsupportedQoSError`.
             retain: True for retained messages.
             on_publish: Callback ``(topic, payload_bytes)`` fired on
                 successful delivery.
+            prefixed: When True (default), *topic* is resolved through
+                the ``root_topic`` / ``client_id`` prefix scheme before
+                going on the wire.
 
         Raises:
             MQTTError: Client not in CONNECTED state.
         """
-        self.publish_raw(
-            self._prefixed_topic(topic), payload,
-            qos=qos, retain=retain, on_publish=on_publish,
-        )
-
-    def publish_raw(
-        self,
-        topic: str,
-        payload: bytes | str,
-        *,
-        qos: int = 0,
-        retain: bool = False,
-        on_publish: object | None = None,
-    ) -> None:
-        """Queue a PUBLISH to *topic* verbatim.  No ``root_topic`` prefix.
-
-        See :meth:`publish` for QoS / callback semantics.
-        """
+        if prefixed:
+            topic = self._prefixed_topic(topic)
         if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"publish() requires CONNECTED state, was {self.state}",
@@ -758,35 +741,29 @@ class MQTTClient:
         qos: int = 0,
         *,
         on_subscribe: object | None = None,
+        prefixed: bool = True,
     ) -> None:
-        """Queue a SUBSCRIBE for *topic*, prefix-resolved.
+        """Queue a SUBSCRIBE for *topic*.
 
-        *topic* is resolved through ``root_topic`` / ``client_id``
-        before going on the wire.  Use :meth:`subscribe_raw` for
-        topics outside the per-device hierarchy (system topics,
-        bridges, wildcard pattern subscriptions).
+        With ``prefixed=True`` (default), *topic* is resolved through
+        the ``root_topic`` / ``client_id`` prefix scheme before going
+        on the wire.  Pass ``prefixed=False`` for topics outside the
+        per-device hierarchy (system topics, bridges, wildcard
+        pattern subscriptions).
 
         Args:
             topic: Topic filter (may include ``+`` / ``#`` wildcards).
-                Will be prefixed.
+                Prefixed when *prefixed* is True.
             qos: 0 or 1.
             on_subscribe: Callback ``(topic, granted_qos)`` fired on SUBACK.
+            prefixed: When True (default), *topic* is resolved through
+                the ``root_topic`` / ``client_id`` prefix scheme.
 
         Raises:
             MQTTError: Client not in CONNECTED state.
         """
-        self.subscribe_raw(
-            self._prefixed_topic(topic), qos=qos, on_subscribe=on_subscribe,
-        )
-
-    def subscribe_raw(
-        self,
-        topic: str,
-        qos: int = 0,
-        *,
-        on_subscribe: object | None = None,
-    ) -> None:
-        """Queue a SUBSCRIBE for *topic* verbatim.  No ``root_topic`` prefix."""
+        if prefixed:
+            topic = self._prefixed_topic(topic)
         if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"subscribe() requires CONNECTED state, was {self.state}",
@@ -812,18 +789,16 @@ class MQTTClient:
             ),
         )
 
-    def unsubscribe(self, topic, *, on_unsubscribe=None):
-        """Queue an UNSUBSCRIBE for *topic*, prefix-resolved.
+    def unsubscribe(self, topic, *, on_unsubscribe=None, prefixed=True):
+        """Queue an UNSUBSCRIBE for *topic*.
 
-        Mirror of :meth:`subscribe`.  Use :meth:`unsubscribe_raw` to
-        bypass prefixing.
+        Mirror of :meth:`subscribe`.  With ``prefixed=True`` (default),
+        *topic* is resolved through the ``root_topic`` / ``client_id``
+        prefix scheme.  Pass ``prefixed=False`` to unsubscribe a
+        verbatim topic.
         """
-        self.unsubscribe_raw(
-            self._prefixed_topic(topic), on_unsubscribe=on_unsubscribe,
-        )
-
-    def unsubscribe_raw(self, topic, *, on_unsubscribe=None):
-        """Queue an UNSUBSCRIBE for *topic* verbatim.  No ``root_topic`` prefix."""
+        if prefixed:
+            topic = self._prefixed_topic(topic)
         if self.state != ProtocolState.CONNECTED:
             raise MQTTError(
                 f"unsubscribe() requires CONNECTED state, was {self.state}",

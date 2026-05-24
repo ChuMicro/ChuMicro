@@ -55,10 +55,9 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 | Symbol | Purpose |
 |---|---|
 | `MQTTClient(socket, *, client_id, root_topic=None, ...)` | Main client.  Runner-shaped (`check(now_ms)`/`handle(now_ms)`).  Set `root_topic` to enable automatic per-device prefixing. |
-| `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None)` | QoS 0 or 1.  Topic resolves through `root_topic`/`client_id` prefix scheme. |
-| `client.publish_raw(topic, payload, ...)` | Publish to *topic* verbatim — bypasses `root_topic` prefixing. |
-| `client.subscribe(topic, qos=0, *, on_subscribe=None)` / `client.subscribe_raw(...)` | Single-topic subscribe.  Same prefix-vs-raw split as `publish`. |
-| `client.unsubscribe(topic, ...)` / `client.unsubscribe_raw(...)` | Same prefix-vs-raw split. |
+| `client.publish(topic, payload, *, qos=0, retain=False, on_publish=None, prefixed=True)` | QoS 0 or 1.  Topic resolves through `root_topic`/`client_id` prefix scheme.  Pass `prefixed=False` to publish verbatim. |
+| `client.subscribe(topic, qos=0, *, on_subscribe=None, prefixed=True)` | Single-topic subscribe.  Same `prefixed` opt-out. |
+| `client.unsubscribe(topic, *, on_unsubscribe=None, prefixed=True)` | Same `prefixed` opt-out. |
 | `client.add_pattern_handler(pattern, handler)` / `client.remove_pattern_handler(handler, pattern=None)` | Route inbound messages by topic pattern. |
 | `client.connect() / .disconnect()` | Lifecycle. |
 | `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound payloads above `max_message_bytes`. |

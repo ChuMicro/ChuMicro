@@ -50,7 +50,7 @@ A PUBLISH whose topic alone exceeds `rx_buffer_size` minus the small fixed-heade
 
 This fixes a latent deadlock where the decoder kept returning `None` waiting for a prelude that would never fit.
 
-### 4. Topic-prefix sugar: `root_topic` + `*_raw` escape hatches
+### 4. Topic-prefix sugar: `root_topic` + per-call `prefixed=` opt-out
 
 `MQTTClient` gains a `root_topic: str | None = None` constructor kwarg.  When set, every `publish` / `subscribe` / `unsubscribe` call automatically prefixes the topic:
 
@@ -59,13 +59,11 @@ This fixes a latent deadlock where the decoder kept returning `None` waiting for
 | `None` | `<topic>` | `publish("temperature", v)` → `temperature` |
 | Set | `<root_topic>/<client_id>/<topic>` | `MQTTClient(client_id="mainLightSwitch", root_topic="livingRoom")` + `publish("switchState", v)` → `livingRoom/mainLightSwitch/switchState` |
 
-The escape hatches `publish_raw`, `subscribe_raw`, `unsubscribe_raw` skip the prefix entirely — useful for system topics (`$SYS/...`), bridge topics, or anything outside the per-device hierarchy.
+Each `publish` / `subscribe` / `unsubscribe` accepts `prefixed: bool = True` (default).  Pass `prefixed=False` to send a verbatim topic — system topics (`$SYS/...`), bridge topics, or anything outside the per-device hierarchy.
 
-The will message has the same split: `will_topic` (prefixed) and `will_topic_raw` (verbatim) are mutually exclusive constructor kwargs.  The resolved bytes are computed once in `__init__`.
+The will message uses the same shape: `will_topic` + `will_prefixed: bool = True` constructor kwargs.  The resolved bytes are computed once in `__init__`.
 
 Pattern handlers (`add_pattern_handler`) and the inbound topic delivered to `on_message` are **not** prefix-aware: patterns are intentional, and inbound topics from the wire are delivered exactly as received.  If the user wants per-device routing on receipt, they pass the prefixed pattern to `add_pattern_handler` directly.
-
-No `include_client_id` flag.  The "include client_id or not" decision is a property of the topic, not a property of every call site — the `*_raw` methods carry the same intent more cleanly.  Three method pairs vs. four boolean kwargs scattered through publish/subscribe/unsubscribe/will signatures.
 
 ### 5. `MQTTPublisher` topic-binder helper
 
@@ -103,7 +101,9 @@ Additionally, SUBACK with any `granted_qos` byte equal to `0x80` (subscription r
 
 **Tier-3 truncated-payload delivery.**  Earlier in the design pass we considered tier 3 allocating `bytearray(max_message_bytes)`, filling it with the first chunk of payload, and firing `on_oversized(reported_length, topic, truncated_payload)`.  Rejected: conflicts with Decision 0061 §4's "drop the oversized payload" semantic shared across `chumicro-mqtt` / `chumicro-requests` / `chumicro-websockets`.  Diagnostic value of the first 8 KB is real but recoverable other ways (broker logs, wireshark) when needed; the cost of re-diverging the cross-library contract for it isn't worth paying.  If a future use case needs it, add it as a separate policy value (`TRUNCATE_WITH_EVENT`) or an opt-in kwarg without disturbing the existing three.
 
-**`include_client_id` boolean kwarg on publish / subscribe / unsubscribe.**  The reference implementation we audited has this; we considered copying it.  Rejected in favor of `publish_raw` / `subscribe_raw` / `unsubscribe_raw`.  A per-call flag scatters the prefix-vs-raw decision across every callsite; a separate method names the intent at the API surface.
+**Separate `publish_raw` / `subscribe_raw` / `unsubscribe_raw` methods.**  Initially chosen on the argument that a separate method names the prefix-vs-raw intent at the API surface, where a per-call boolean kwarg scatters the decision across every callsite.  Reversed after the audit-embedded skill grew a wrapper-doubling check ([SKILL.md §1](../../.github/skills/audit-embedded/SKILL.md) + [field-reality.md](../../.github/skills/audit-embedded/field-reality.md#publish--publish_raw-wrapper-doubling)): six methods where three would suffice cost ~100 lines of duplicated body + duplicated docstring + extra qstr-interned method names + extra class-dict entries on every instance, all for one helper call's worth of difference.  The boolean-kwarg shape matches `set_will`'s existing `prefixed=` opt-out and stays consistent across the four prefix-aware entry points (publish, subscribe, unsubscribe, will).
+
+**`include_client_id` boolean kwarg.**  The reference implementation we audited has this; we considered copying it on the initial design pass.  Rejected then in favor of `*_raw` methods, and still rejected against today's `prefixed=` kwarg only because the *name* is wrong: `include_client_id` describes one piece of the prefix scheme (the `<client_id>` segment) but not the `<root_topic>` segment.  `prefixed=True/False` names the binary decision actually being made.
 
 **Required `client_id` floor for `rx_buffer_size`.**  Considered enforcing `rx_buffer_size ≥ 64` at construction.  Rejected: anyone setting it lower will get a clear `MQTTProtocolError` on the first inbound packet whose fixed-header + varlen exceeds their cap.  A constructor-time floor over-engineers a self-correcting failure mode.
 
@@ -113,8 +113,8 @@ Additionally, SUBACK with any `granted_qos` byte equal to `0x80` (subscription r
 
 - **Public API:**
   - `MQTTClient(root_topic=...)` — new optional constructor kwarg.
-  - `MQTTClient(will_topic=...)` — semantic change: now prefixed when `root_topic` is set.  `MQTTClient(will_topic_raw=...)` is the new bypass.  Mutually exclusive with `will_topic`.
-  - `MQTTClient.publish_raw / subscribe_raw / unsubscribe_raw` — new methods.
+  - `MQTTClient(will_topic=..., will_prefixed=True)` — semantic change: prefixed by default when `root_topic` is set; pass `will_prefixed=False` to bypass.
+  - `MQTTClient.publish / subscribe / unsubscribe` — gain `prefixed: bool = True` kwarg (default preserves prefix-aware behavior; `prefixed=False` is the verbatim opt-out).
   - `MQTTClient.publisher(topic, qos=0, retain=False) -> MQTTPublisher` — new factory method.
   - `MQTTClient.remove_pattern_handler(handler, pattern=None)` — new method.
   - `MQTTPublisher` — new class exported from the package.
@@ -126,6 +126,6 @@ Additionally, SUBACK with any `granted_qos` byte equal to `0x80` (subscription r
   - SUBACK with rejection code `0x80` now faults to FAILED instead of silently passing the rejection to the user callback.  Apps that were silently ignoring failed subscriptions will start surfacing them.
 - **No backwards-compatibility shims.**  Pre-1.0 (current VERSION 0.9.0 → 0.10.0, minor).  Edit forward.
 - **Decision 0061 contract preserved.**  `on_oversized(reported_length, topic)` signature unchanged; `WhenOversized.DROP_WITH_EVENT` semantic ("drop the payload, stay connected") matches the shared cross-library contract.
-- **Tests:** `test_decoder.py` gains intact-tier coverage + per-policy oversized-tier coverage + oversize-topic coverage.  `test_client.py` gains coverage for prefix resolution, `*_raw` methods, `MQTTPublisher`, `remove_pattern_handler`, SUBACK 0x80 fault, unexpected-PUBACK/SUBACK/UNSUBACK fault, unexpected-PINGRESP toleration.
+- **Tests:** `test_decoder.py` gains intact-tier coverage + per-policy oversized-tier coverage + oversize-topic coverage.  `test_client.py` gains coverage for prefix resolution, the `prefixed=False` opt-out, `MQTTPublisher`, `remove_pattern_handler`, SUBACK 0x80 fault, unexpected-PUBACK/SUBACK/UNSUBACK fault, unexpected-PINGRESP toleration.
 - **Docs:** README's "What's included" table + `docs/guide.md`'s Oversized-message policy section + Memory-notes section + Tuning section are rewritten for the three-tier model and the new defaults.  The 256 KB number in those docs is wrong everywhere; this pass corrects it.
 - **Version bump:** `chumicro-mqtt` `0.9.0` → `0.10.0`.  Minor bump — three public-method additions, one constructor-kwarg addition (`root_topic`), one will-kwarg rename (`will_topic` semantic change + new `will_topic_raw`), one behavior change in the steady-state-vs-oversized boundary.  All within the pre-1.0 SemVer policy.

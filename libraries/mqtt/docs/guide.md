@@ -262,14 +262,14 @@ client.subscribe("commands/+")
 # → subscribes to "livingRoom/mainLightSwitch/commands/+"
 ```
 
-Use `publish_raw` / `subscribe_raw` / `unsubscribe_raw` for topics outside the per-device hierarchy (system topics, bridges):
+Pass `prefixed=False` to publish, subscribe, or unsubscribe a verbatim topic — system topics, bridge topics, anything outside the per-device hierarchy:
 
 ```python
-client.publish_raw("$SYS/broker/dead", b"true")
+client.publish("$SYS/broker/dead", b"true", prefixed=False)
 # → publishes verbatim to "$SYS/broker/dead", no prefix
 ```
 
-The last-will follows the same pattern: `will_topic="online"` is prefixed; `will_topic_raw="$SYS/x/y"` is verbatim.  Pass at most one of them.
+The last-will follows the same shape: `will_topic="online"` is prefixed by default; pass `will_prefixed=False` to set a verbatim will topic.
 
 Inbound topics in `on_message` and pattern handlers (`add_pattern_handler`) are **not** prefix-stripped — what the broker put on the wire is what your callback gets.  Pattern handlers are also not auto-prefixed; pass the prefixed pattern if you want per-device-only routing.
 
