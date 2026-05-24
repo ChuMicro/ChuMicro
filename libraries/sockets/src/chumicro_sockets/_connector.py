@@ -129,9 +129,10 @@ class SocketConnector:
     def tick(self, now_ms):
         """Advance the state machine by one phase.
 
-        Any exception other than ``BlockingIOError`` / EAGAIN-style
-        soft errors transitions to ``failed`` with the error captured
-        in ``last_error``.
+        Any exception raised by a subclass override transitions to
+        ``failed`` with the error in ``last_error``.  Subclass overrides
+        must therefore convert want-read / want-write conditions to a
+        ``False`` return — never raise them.
         """
         if self.state in _TERMINAL:
             return
@@ -250,9 +251,10 @@ class SocketConnector:
     def _step_tls_handshake(self, sock):
         """Run one TLS handshake step.
 
-        Return ``True`` when the handshake is complete.  Return
-        ``False`` (or raise the runtime's want-read / want-write
-        sentinel and let :meth:`tick` swallow it as a non-terminal
-        condition) when the handshake needs another round.
+        Return ``True`` when the handshake is complete, ``False`` when
+        it needs another round.  Do not raise want-read / want-write
+        sentinels — :meth:`tick` treats every raised exception as
+        terminal, so the override catches and converts them to
+        ``False``.
         """
         raise NotImplementedError
