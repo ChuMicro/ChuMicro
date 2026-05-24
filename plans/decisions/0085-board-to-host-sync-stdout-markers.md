@@ -17,9 +17,13 @@ Three constraints shape the design. (1) The host fixture evaluates *before* the 
 
 ### Marker syntax
 
-One marker per line, at the start of the line, format `<MARKER_NAME> key=value key=value ...`. Keys are ASCII identifiers (`[a-z_][a-z0-9_]*`); values are URL-safe (no spaces, no `=`). Mixed-case marker names; the parser splits on the first space and treats anything after as `key=value` pairs.
+One marker per line, at the start of the line, format `<MARKER_NAME> key=value key=value ...`. Marker names are uppercase identifiers (`[A-Z][A-Z0-9_]*`); keys are ASCII identifiers (`[a-z_][a-z0-9_]*`); values are URL-safe (no spaces, no `=`). The parser splits on the first space and treats each remaining whitespace-separated token as a `key=value` pair. A bare marker name with no values (e.g. `READY`) is valid.
 
 Example: `SERVER_READY ip=192.168.1.50 port=8765`.
+
+### Reserved names
+
+`PASS`, `FAIL`, `SKIP`, `SUMMARY`, and `HEAP` are reserved by `result_parser` and never parse as markers, even when they look syntactically valid. The collision is real, not theoretical: `SUMMARY total=N failed=N time=N.Ns` matches the `<NAME> key=value ...` shape exactly, and a marker parser without the reservation would silently swallow every summary line. Future marker names must not overlap with anything `result_parser` reads off the same stdout stream.
 
 ### Defined markers (initial set)
 

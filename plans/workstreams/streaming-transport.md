@@ -69,6 +69,7 @@ The streaming hook unlocks live stdout for long-running deploys outside the test
 <!-- One line per phase as it lands. Format: `- **YYYY-MM-DD** Phase N. <short summary> + commit hash.` -->
 
 - **2026-05-24** Phase 1. `TransportProtocol.execute` + `ExtendedTransportProtocol.execute_scripts` gain `on_line: Callable[[str], None] | None` parameter; cp `_read_until` gains `on_chunk` hook plumbing the `StreamingLineDispatcher` (skip `OK` prefix, stop at `\x04`); mp wires mpremote's native `data_consumer`; `FakeTransport` mirrors the shape. 19 new unit tests; preflight green at coverage 94 across CPython + MP + CP runtimes.
+- **2026-05-24** Phase 2. New `chumicro_pytest_device.markers` submodule — `Marker` dataclass, `parse_marker(line) -> Marker | None` (rejects the result-parser reserved set `{PASS, FAIL, SKIP, SUMMARY, HEAP}` — `SUMMARY total=N failed=N time=N.Ns` collides with the marker shape exactly, so the reserved-name filter is load-bearing, not belt-and-suspenders), `MarkerQueue.wait_for(name, timeout_s)` blocking primitive with thread-safe push. `execute_device_bootstrap` gains a `marker_queue` kwarg that builds the `on_line` closure internally; default `None` keeps the existing call shape. 26 new unit tests including a concurrent producer (background thread) + consumer pair. Preflight green at coverage 94.
 
 ## Out of scope
 
