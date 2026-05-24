@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import circuitpy_drive, flash_drive
+from ._line_dispatcher import StreamingLineDispatcher
 from .circuitpython_bootstrap import build_circuitpython_deploy_scripts
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
@@ -996,11 +997,23 @@ class CircuitpythonTransport:
             ),
         )
 
-    def execute(self, bootstrap_script: str) -> str:
+    def execute(
+        self,
+        bootstrap_script: str,
+        *,
+        on_line: Callable[[str], None] | None = None,
+    ) -> str:
         """Send a code block through raw REPL and return captured stdout.
 
         Args:
             bootstrap_script: Python code to execute on the device.
+            on_line: Optional callback invoked with each stdout line as
+                it arrives over the serial link, before this method
+                returns.  Lines are delivered without their trailing
+                newline; ``\\r\\n`` is normalized to ``\\n``.  When
+                ``None``, no streaming dispatch happens — the captured
+                stdout is still returned in the usual request/response
+                shape.
 
         Returns:
             Captured stdout from the device.
@@ -1021,14 +1034,32 @@ class CircuitpythonTransport:
         self._port.write(bootstrap_script.encode("utf-8"))
         self._port.write(_CTRL_D)
 
-        # Raw REPL response format: OK<stdout>\x04<stderr>\x04>
-        raw_response = self._read_until(
-            b"\x04>", idle_timeout=_EXECUTE_IDLE_TIMEOUT,
+        # The raw REPL response framing is ``OK<stdout>\x04<stderr>\x04>``.
+        # The streaming dispatcher skips the leading ``OK`` and stops at
+        # the first ``\x04`` so callbacks only see stdout content.
+        line_dispatcher = (
+            StreamingLineDispatcher(
+                on_line, prefix_bytes_to_skip=2, terminator=b"\x04",
+            )
+            if on_line is not None
+            else None
         )
+        raw_response = self._read_until(
+            b"\x04>",
+            idle_timeout=_EXECUTE_IDLE_TIMEOUT,
+            on_chunk=line_dispatcher.feed if line_dispatcher is not None else None,
+        )
+        if line_dispatcher is not None:
+            line_dispatcher.flush()
 
         return self._parse_raw_repl_response(raw_response)
 
-    def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
+    def execute_scripts(
+        self,
+        bootstrap_scripts: list[str],
+        *,
+        on_line: Callable[[str], None] | None = None,
+    ) -> str:
         """Execute multiple raw-REPL scripts in one interpreter session.
 
         Large CircuitPython RAM-mode payloads are more reliable when split into
@@ -1037,6 +1068,9 @@ class CircuitpythonTransport:
 
         Args:
             bootstrap_scripts: Ordered raw-REPL scripts to execute.
+            on_line: Optional callback threaded through each per-script
+                :meth:`execute` call.  Lines from all scripts are
+                delivered in arrival order under a single callback.
 
         Returns:
             Stdout from the final script.
@@ -1045,7 +1079,7 @@ class CircuitpythonTransport:
         total_script_count = len(bootstrap_scripts)
         for script_index, bootstrap_script in enumerate(bootstrap_scripts, start=1):
             try:
-                last_output = self.execute(bootstrap_script)
+                last_output = self.execute(bootstrap_script, on_line=on_line)
             except CircuitpythonTransportError as execute_error:
                 raise CircuitpythonTransportError(
                     "CircuitPython inline bootstrap chunk "
@@ -1826,7 +1860,13 @@ class CircuitpythonTransport:
         """Return the staged module sources, or None if not staged."""
         return self._staged_sources
 
-    def _read_until(self, marker: bytes, idle_timeout: float | None = None) -> bytes:
+    def _read_until(
+        self,
+        marker: bytes,
+        idle_timeout: float | None = None,
+        *,
+        on_chunk: Callable[[bytes], None] | None = None,
+    ) -> bytes:
         """Read from serial until *marker* is found or the link goes silent.
 
         Uses an **idle timeout** rather than a wall-clock deadline: bytes
@@ -1845,6 +1885,11 @@ class CircuitpythonTransport:
             marker: Byte sequence to look for.
             idle_timeout: Seconds of consecutive silence that end the
                 wait.  ``None`` means use ``self.timeout``.
+            on_chunk: Optional callback invoked with each freshly-read
+                byte chunk before it is appended to the accumulator.
+                The hook is intentionally raw — protocol-aware
+                consumers (e.g. :meth:`execute`'s per-line dispatcher)
+                wrap it with their own envelope-stripping logic.
 
         Returns:
             All bytes read, including the marker if found.  When the
@@ -1858,6 +1903,8 @@ class CircuitpythonTransport:
             waiting = self._port.in_waiting
             if waiting > 0:
                 chunk = self._port.read(waiting)
+                if on_chunk is not None:
+                    on_chunk(chunk)
                 accumulated += chunk
                 last_progress = self._time.monotonic()
                 if marker in accumulated:

@@ -68,6 +68,8 @@ The streaming hook unlocks live stdout for long-running deploys outside the test
 
 <!-- One line per phase as it lands. Format: `- **YYYY-MM-DD** Phase N. <short summary> + commit hash.` -->
 
+- **2026-05-24** Phase 1. `TransportProtocol.execute` + `ExtendedTransportProtocol.execute_scripts` gain `on_line: Callable[[str], None] | None` parameter; cp `_read_until` gains `on_chunk` hook plumbing the `StreamingLineDispatcher` (skip `OK` prefix, stop at `\x04`); mp wires mpremote's native `data_consumer`; `FakeTransport` mirrors the shape. 19 new unit tests; preflight green at coverage 94 across CPython + MP + CP runtimes.
+
 ## Out of scope
 
 - Reworking the marker syntax Decision 0085 established. The protocol is fixed; this workstream lands the substrate that runs it.

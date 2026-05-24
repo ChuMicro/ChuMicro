@@ -51,6 +51,48 @@ class TestFakeTransportExecuteScripts:
             transport.execute_scripts(["c"])
 
 
+class TestFakeTransportOnLineDispatch:
+    """``on_line`` mirrors the real-transport hook on the fake."""
+
+    def test_execute_dispatches_one_call_per_output_line(self) -> None:
+        transport = FakeTransport(execute_output="first\nsecond\nthird\n")
+        lines: list[str] = []
+        result = transport.execute("ignored", on_line=lines.append)
+        assert lines == ["first", "second", "third"]
+        assert result == "first\nsecond\nthird\n"
+
+    def test_execute_with_outputs_head_dispatches_lines(self) -> None:
+        transport = FakeTransport(outputs=["a\nb\n"])
+        lines: list[str] = []
+        transport.execute("script", on_line=lines.append)
+        assert lines == ["a", "b"]
+
+    def test_execute_without_on_line_omits_dispatch(self) -> None:
+        transport = FakeTransport(execute_output="first\nsecond\n")
+        # Smoke test: omitting on_line must not raise and the canned
+        # return value is unaffected.
+        assert transport.execute("script") == "first\nsecond\n"
+
+    def test_execute_scripts_threads_on_line_through_each_call(self) -> None:
+        # With outputs empty, execute_scripts calls execute() per chunk
+        # — each one dispatches execute_output's lines.
+        transport = FakeTransport(execute_output="per-chunk\n")
+        lines: list[str] = []
+        transport.execute_scripts(
+            ["chunk-a", "chunk-b"], on_line=lines.append,
+        )
+        assert lines == ["per-chunk", "per-chunk"]
+
+    def test_execute_scripts_batched_head_dispatches_lines(self) -> None:
+        transport = FakeTransport(outputs=["batch1\nbatch2\n"])
+        lines: list[str] = []
+        transport.execute_scripts(
+            ["chunk-a", "chunk-b"], on_line=lines.append,
+        )
+        # One batched head pop covers both chunks, dispatched per line.
+        assert lines == ["batch1", "batch2"]
+
+
 class TestFakeTransportRecoverFailure:
     def test_recover_raises_attribute_propagates(self) -> None:
         boom = RuntimeError("unrecoverable")

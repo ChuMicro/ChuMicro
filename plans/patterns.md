@@ -781,6 +781,27 @@ floor from seconds to milliseconds.  Commits `9e6174c` + `cb4efa9`.
 Related: Decision 0027 (device testing infrastructure), Decision 0028
 (deploy modes).
 
+### 5. `exec_raw(data_consumer=...)` fires per single byte, including the `\x04` terminator
+
+`SerialTransport.exec_raw(command, timeout=N, data_consumer=callback)`
+threads the callback into mpremote's internal `read_until` loop,
+which reads stdout **one byte at a time** from pyserial and calls
+`callback(single_byte)` on each.  The `\x04` end-of-stdout marker is
+fed to the callback **before** the loop breaks on the next iteration's
+`endswith(b"\x04")` check — so a consumer that just buffers bytes
+ends up with the terminator byte in its tail.
+
+Per-line stdout dispatch via `data_consumer`: feed the byte stream
+into a buffer that splits on `\n` and strips trailing `\r`; pass a
+`terminator=b"\x04"` knob so the dispatcher stops emitting once the
+terminator arrives and discards the trailing terminator byte.  The
+second `read_until` inside `follow()` (for stderr) does **not** get
+the same `data_consumer`, so the callback only ever sees stdout
+bytes — `data_consumer` is naturally scoped to the stdout segment.
+
+Reference implementation: `_line_dispatcher.StreamingLineDispatcher`
++ `MicropythonTransport.execute` (`on_line` kwarg).
+
 ## Subprocess binary resolution (host tools)
 
 Rule + code shape live in [Style Guide § Subprocess binary resolution](../docs/contributing/style-guide.md#subprocess-binary-resolution-host-tools).
