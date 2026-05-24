@@ -63,6 +63,7 @@ Networking libraries that rely on `chumicro_test_harness.network` in their shipp
 - **2026-05-24** Phase 2 / Slice 1. Eight functional-test files (mqtt + sockets x4 + ntp + requests x2) swapped to `chumicro_test_harness.network`; Category 1 / 2 declarations added per [Decision 0083](../decisions/0083-functional-test-endpoint-taxonomy.md); `test_assertions.py` self-circular `raises` cleanup. Commit `8c3c109f`.
 - **2026-05-24** Phase 2 / blocking ADR. [Decision 0085](../decisions/0085-board-to-host-sync-stdout-markers.md) names the stdout-marker sync protocol Category 1 server-side tests need. Commit `11ff6a5f`.
 - **2026-05-24** Phase 2 / Slice 2 deferred. `http_server/test_real_serve.py` rewrite blocked on `TransportProtocol.execute` becoming streaming-capable; pulled into [`workstreams/streaming-transport.md`](streaming-transport.md). Re-enters this workstream as a follow-up slice once that lands.
+- **2026-05-24** Phase 2 / Slice 3. Host-side fixtures consolidated under `chumicro_pytest_device.fixtures` (`lan.py` / `mosquitto.py` / `udp_echo.py`); mqtt + sockets conftests import from the shared home. pytest-device `0.10.1` → `0.11.0` for the new public API. Preflight green at coverage 94.
 
 ## Out of scope
 
