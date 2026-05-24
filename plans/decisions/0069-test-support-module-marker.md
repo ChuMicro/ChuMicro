@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-15`
+Summary: `__chumicro_test_support__ = True` boolean replaces the false `("cpython",)` runtime marker on `testing.py` fakes; filters bundles + product deploys; device-unit staging includes them.
 Related: [Decision 0037](0037-runtime-file-marking.md) (per-runtime file marking — this splits one concern out of it), [Decision 0044](0044-deploy-time-runtime-filtering.md) (deploy-time filtering — gains a test-support rule + a unit-sweep exception), [Decision 0010](0010-library-testability.md) (`testing.py` fakes), [Decision 0016](0016-cross-runtime-unit-tests.md) (cross-runtime unit suite), [Decision 0068](0068-unified-deploy-mode-resolution.md) (the on-device unit sweep that surfaced this).
 
 ## Context

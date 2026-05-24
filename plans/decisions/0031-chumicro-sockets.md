@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-21`
+Summary: `chumicro-sockets` is a thin protocol + per-runtime adapters; `tcp_client_socket()` and `tls_client_socket()` are sibling factories; `recv_into()` only, no `recv()` (CP idiom).
 Related: Decision 0029 (project workspace), Decision 0042 (library dependency policy), Decision 0043 (UDP), Decision 0040 (requests), Decision 0041 (http_server), Decision 0045 (websockets)
 
 ## Context

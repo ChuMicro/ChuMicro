@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-27`
+Summary: Two dep classes: core infrastructure as hard-deps + factory helpers in separate submodules; decoration/observability libraries (logging/events/presence) are callbacks only, never imported.
 Related: [Decision 0010](0010-library-testability.md) (constructor injection + fakes), [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (sockets), [Decision 0040](0040-chumicro-requests.md) (requests + factory helper pattern), [Decision 0062](0062-entrypoint-factory-skip.md) (the deploy-time opt-out that makes this ADR's factory sub-rule actually fire), [Decision 0063](0063-duck-typed-factory-contract.md) (duck-typed factory contract built on the same sub-rule), `plans/workstreams/library-pipeline.md` §"Dependency policy".
 
 ## Context

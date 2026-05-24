@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
+Summary: Every library that owns time or I/O must be runner-shaped (`check(now_ms) -> bool` + `handle(now_ms)` or per-tick chunked progression); `time.sleep(>0.005)` forbidden in library code.
 Related: Decision 0014 (runner pattern as the contract), Decision 0010 (constructor injection), Decision 0042 (library dependency policy).
 
 ## Context

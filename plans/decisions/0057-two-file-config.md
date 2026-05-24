@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
+Summary: Three workspace config files: `workspace.yml` (host machinery), `secrets.toml` (device-bound defaults), `<project>/project_config.toml` (per-project overrides); `!secret` retired.
 Related: Decision 0029 (project workspace — three-zone shape), Decision 0030 (config-and-state — host TOML / device msgpack split), Decision 0035 (runtime-config structure — section-namespaced shape, original `!secret` introduction in §5), Decision 0036 (`chumicro-config` library — flat-key `RuntimeConfig` + `from_config`/`load_section`), Decision 0038 (workspace bootstrap via clone — gitignored files materialized on first setup), Decision 0055 (config pipeline unification).
 
 ## Context

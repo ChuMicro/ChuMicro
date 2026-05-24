@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
+Summary: ChuMicro targets three runtimes: CircuitPython + MicroPython are deployment runtimes (on-board); CPython is the host-test seam, not a deployment target.
 Related: Decision 0003 (test boundaries), Decision 0011 (per-library platform targeting), Decision 0016 (cross-runtime unit tests), Decision 0010 (testability + `testing.py` fakes), Decision 0037 (runtime file marking).
 
 ## Context

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-22`
+Summary: Add a third top-level folder `workbench/` for publishable CPython-only host packages; `libraries/` is cross-runtime + bundles, `workbench/` is PyPI-only, `support/` is internal.
 Related: 0029 (project workspace), 0030 (config and state), 0031 (chumicro-sockets)
 
 ## Context

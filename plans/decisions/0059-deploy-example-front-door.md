@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-07`
+Summary: `deploy-example <lib> <name>` is the mono-repo front-door command: full precheck on every run, handles four first-touch board states, distinct exit codes for non-interactive use.
 Related: Decision [0032](0032-workbench-host-tools.md) (libraries vs workbench split), Decision [0038](0038-workspace-bootstrap-via-clone.md) (workspace bootstrap via clone — sibling onboarding path), Decision [0044](0044-deploy-time-runtime-filtering.md) (`__chumicro_runtimes__` filter on every deploy path), Decision [0047](0047-deploy-mode-flash-default.md) (functional tests default to flash), Decision [0053](0053-recovery-layer-philosophy.md) (recovery layer philosophy — extended here with `NO_PYTHON_RUNTIME`), Decision [0055](0055-config-pipeline-unification.md) (`WithRuntimeConfig` deploy-time merge + validation), Decision [0077](0077-one-device-staging-path.md) (the one device-staging path — partially supersedes §1's separate-`example_source` framing; the rest of this ADR stands), Decision [0078](0078-library-acquisition-is-host-local.md) (host-local library acquisition — the sibling command-collapse in the same phase), Workstream `library-config-aware-refactor` Phase 3, Workstream [`deploy-path-unification`](../workstreams/deploy-path-unification.md) Phase 3.
 
 ## Context

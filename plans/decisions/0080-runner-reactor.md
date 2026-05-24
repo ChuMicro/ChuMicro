@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-21`
+Summary: `Runner.wait(now_ms)` is the sole sanctioned blocking point in the loop; services expose `io_*` attributes the runner re-reads each wait, plus an optional `next_deadline` for dynamic deadlines.
 Related: Decision 0014 (runner contract), Decision 0051 (runner-shaped policy and the `poll(timeout > 0)` ban this re-scopes), Decision 0010 (constructor injection), Decision 0031 (chumicro-sockets protocol).
 
 ## Context

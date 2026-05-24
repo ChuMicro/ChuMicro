@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
+Summary: Workspace template lives as a separate Git repo; bootstrap is `git clone` + `python3 run.py setup`; `chumicro-workspace-runtime` renamed to `chumicro-workspace`.
 Related: Decision 0029 (project workspace shape — restores §1's intent), Decision 0032 (libraries vs workbench split), Decision 0029 §9 (three-zone ownership model).
 
 ## Context

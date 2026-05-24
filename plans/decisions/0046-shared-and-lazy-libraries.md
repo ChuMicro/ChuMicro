@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-02`
+Summary: Workspace template: `libs/` renames to `shared/`; `libraries/` lazy-materializes via `new --library <name>`; `packages/` unchanged in name + lifecycle.
 Related: Decision 0029 (workspace shape — supersedes §1 default layout
 and §7 resolution order)
 

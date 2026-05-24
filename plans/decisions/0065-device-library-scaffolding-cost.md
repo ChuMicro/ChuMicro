@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-12`
+Summary: Device libraries (`libraries/*/src/`) forbid `__slots__` (MP/CP no-op, pure CPython-test payoff) and pure-passthrough `@property` (descriptor cost for no value); workbench out of scope.
 Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0042](0042-library-dependency-policy.md) (library dependency policy), [Decision 0051](0051-runner-shaped-as-project-policy.md) (runner-shape as project policy).
 
 ## Context

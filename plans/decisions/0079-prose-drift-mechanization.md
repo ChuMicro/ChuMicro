@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-19`
+Summary: Closed-set prose drift mechanized through two CHU engines: `LeakRule` pattern matcher (Engine B) and normalized-block dedup (Engine A); semantic prose stays with `/audit-*` + AGENTS.md.
 Related: [Decision 0074](0074-drift-mechanization-as-project-policy.md) (lintable drift must be mechanized), [Decision 0060](0060-chu-rules-home.md) (`chumicro-checks` package home), [`plans/workstreams/archive/chu-prose-isolation-lint-gaps.md`](../workstreams/archive/chu-prose-isolation-lint-gaps.md) (archived after this ADR landed).
 
 ## Context

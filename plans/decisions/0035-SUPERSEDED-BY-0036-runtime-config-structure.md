@@ -2,6 +2,7 @@
 
 Status: `superseded`
 Date: `2026-04-25`
+Summary: Runtime config decodes to a section-namespaced dict; section key = library basename without `chumicro-` prefix; each library ships `<Name>Config` + `from_dict` classmethod.
 Related: Decision 0029 (project workspace), Decision 0030 (config vs persisted state), Decision 0034 (kvstore API).
 Superseded by: [Decision 0036](0036-chumicro-config-library.md)
 

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-23`
+Summary: Library methods that do network I/O don't block; tick-driven connector factories advance DNS → TCP → TLS one phase per tick; synchronous factories remain for non-runner contexts (REPL, scripts).
 Related: Decision 0014 (runner contract), Decision 0031 (chumicro-sockets factories — partially superseded), Decision 0051 (runner-shaped as project policy), Decision 0080 (runner reactor / central wait)
 
 ## Context

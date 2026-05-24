@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-16`
+Summary: pytest-device issues `transport.soft_reset()` before staging each library in flash mode; new `clear_entrypoints()` clears `code.py`/`main.py` once per session; MP copy mode deletes per-library.
 Related: [Decision 0068](0068-unified-deploy-mode-resolution.md) (the on-device unit sweep — this resolves its Phase 4b.2 issue (ii)), [Decision 0028](0028-deploy-modes.md) (RAM/flash transport semantics — `soft_reset()` already exists on both transports), [Decision 0070](0070-host-only-test-marker.md) (issue (i), the *other* half of the 4b.2 split — disentangled from this by experiment), [Decision 0044](0044-deploy-time-runtime-filtering.md).
 
 ## Context

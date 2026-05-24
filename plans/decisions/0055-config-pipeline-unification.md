@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
+Summary: Mono-repo dogfoods the workspace-template's config flow: shared `devices.yml` template, library `[tool.chumicro.config.sections.*]` manifests, functional tests use `compose_runtime_config()`.
 Related: Decision 0027 (device-testing infrastructure — `devices.yml` schema origin), Decision 0029 (project workspace — three-zone shape, workspace-template's source), Decision 0030 (config-and-state — host TOML / device msgpack split), Decision 0032 (workbench host tools — what can live in `workbench/`), Decision 0035 (runtime-config structure — section-namespaced shape), Decision 0036 (`chumicro-config` library — `load_runtime_config` + `load_section`), Decision 0044 (deploy-time runtime-file filtering — workbench-owned filter applied uniformly), Decision 0047 (`deploy_mode: flash` default — shared default flowed via workbench constant rather than duplicated per-repo template).
 
 ## Context

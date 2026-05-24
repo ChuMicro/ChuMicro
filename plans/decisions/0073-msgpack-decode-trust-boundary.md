@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-17`
+Summary: `chumicro_msgpack.unpackb` is a trusting decoder hardened against truncation, over-length, trailing-garbage, and unbounded recursion; CRC framing stays per-substrate per Decision 0034.
 Related: [Decision 0009](0009-per-library-test-runs.md), [Decision 0034](0034-kvstore-api-and-backends.md)
 
 ## Context

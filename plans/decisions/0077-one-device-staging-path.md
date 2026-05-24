@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-18`
+Summary: Exactly one device-staging path (deploy stage + `rsync --delete`); clean-slate default + closed keep set + `--no-wipe` opt-out; `settings.toml` never preserved (second wifi authority).
 Related: Decision [0059](0059-deploy-example-front-door.md) (deploy-example front door — its §1 separate `example_source` staging path is partially superseded by this ADR; 0059 §1 edited in place to cross-link), Decision [0028](0028-deploy-modes.md) / [0068](0068-unified-deploy-mode-resolution.md) / [0072](0072-large-test-modules-on-constrained-boards.md) (flash-vs-RAM *mode* — an orthogonal axis, not absorbed here), Decision [0074](0074-drift-mechanization-as-project-policy.md) (the lint that makes this invariant durable), Decision [0078](0078-library-acquisition-is-host-local.md) (retires the last out-of-band `/lib` writer this ADR names — library acquisition made host-local), Decision [0075](0075-retire-init-creation-is-clone-only.md) / [0038](0038-workspace-bootstrap-via-clone.md) (the divergence-by-convenience drift class this invariant exists to stop), Decision [0057](0057-two-file-config.md) (why a board-resident `settings.toml` is a competing authority), Decision [0071](0071-per-library-soft-reset-flash-sweep.md) (its MP copy-mode per-library tracked-delete is the orthogonal axis; this ADR's keep-set rule replaced that path's first-stage `lfs mkfs` with the keep-set-preserving clean-slate), Workstream [`deploy-path-unification`](../workstreams/deploy-path-unification.md).
 
 ## Context

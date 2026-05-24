@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-24`
+Summary: `chumicro_test_harness` lives at `libraries/test_harness/` as an infrastructure library (`[tool.chumicro] kind = "infrastructure"`); ships through snapshot channel; hidden from browsable catalogue.
 Related: Decision [0016](0016-cross-runtime-unit-tests.md) (cross-runtime test runner that lives in this package), Decision [0058](0058-test-skips-must-be-loud.md) (`chumicro_test_harness.skip` primitive), Decision [0070](0070-host-only-test-marker.md) (host-only marker the harness honours), Decision [0078](0078-library-acquisition-is-host-local.md) (snapshot channel that ships `libraries/`), Decision [0042](0042-library-dependency-policy.md) (dep-declaration model the snapshot walker reads).
 
 ## Context

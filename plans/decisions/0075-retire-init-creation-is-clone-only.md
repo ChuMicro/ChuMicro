@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-18`
+Summary: Workspace creation is clone-only (`git clone` of `ChuMicro-Workspace-Template` + `python3 run.py setup`); `chumicro-workspace init` removed; ownership zones collapse from three to two.
 Related: [Decision 0038](0038-workspace-bootstrap-via-clone.md) (§3 partially superseded — `init` retired, `update` retained), [Decision 0029](0029-project-workspace.md) §9 (ownership zones — now two, not three).
 
 ## Context

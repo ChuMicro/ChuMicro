@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-18`
+Summary: Dead ADRs announce in their filename: `NNNN-SUPERSEDED-BY-MMMM-<slug>.md` (replaced) or `NNNN-INERT-<slug>.md` (spent); CHU019 mechanizes status/marker/header agreement.
 Related: Decision 0074 (lintable drift must be mechanized — CHU019 enforces this), `plans/decisions/README.md` (the supersession / edit-in-place rules this extends), `plans/workstreams/archive/adr-corpus-hygiene.md` (the audit that surfaced it).
 
 ## Context

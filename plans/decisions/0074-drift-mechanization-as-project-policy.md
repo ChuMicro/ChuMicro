@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-17`
+Summary: A drift class detectable by a deterministic check must be linted (CHU-rule philosophy extended from code shape to docs / CLI / coverage / API); judgement-bound prose stays out of scope.
 Related: [Decision 0058](0058-test-skips-must-be-loud.md), [Decision 0025](0025-dual-coverage-thresholds.md), [Decision 0079](0079-prose-drift-mechanization.md) (prose-drift consumer of this policy), the `chumicro-checks` CHU-rule family in `workbench/checks/`.
 
 ## Context

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-03`
+Summary: `preflight`'s 11 phases fan out as parallel subprocesses; host-aware workers (`--phase-workers` / `--package-workers` override); `--with-functional` stays serial for hardware contention.
 Related: Decision 0025 (coverage threshold), [Decision 0054](0054-streaming-output-and-status-modes.md)
 (supersedes §3 — output capture switched from `subprocess.run(capture_output=True)` to `Popen` + line-streaming dispatcher; subprocess re-invocation persists for resource isolation, not output capture), commit `ffe50bc`
 (Bucket 3 — per-package fan-out for `build` and `docs`),

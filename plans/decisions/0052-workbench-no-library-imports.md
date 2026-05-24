@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
+Summary: Workbench packages must not `import chumicro_<libname>` from `libraries/`; consume PyPI equivalents (`msgpack`, `ruamel.yaml`, `pyserial`, `requests`) instead.
 Related: Decision 0032 (workbench host tools), Decision 0049 (three runtimes — CPython is the testing seam, not a production target for workbench).
 
 ## Context
