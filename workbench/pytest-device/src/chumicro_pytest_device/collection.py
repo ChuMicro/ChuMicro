@@ -786,13 +786,16 @@ def pytest_collection_modifyitems(
     """Three passes:
 
     1. Belt-and-suspenders: deselect any non-device items under
-       functional tests.  The :func:`pytest_pycollect_makemodule` hook
-       already prevents the default Module factory from importing
-       files under ``libraries/<name>/functional_tests/``, so duplicate
-       items should never be produced in practice.  This sweep exists
-       as a safety net in case another plugin re-introduces a
-       non-:class:`DeviceRuntimeItem` for one of these paths. The
-       device transport remains the sole execution surface.
+       functional tests UNLESS the file is marked
+       ``__chumicro_host_only__ = True`` (the Category 1 host-driver
+       shape).  The :func:`pytest_pycollect_makemodule` hook already
+       prevents the default Module factory from importing
+       device-target files under ``libraries/<name>/functional_tests/``,
+       so duplicate items for those should never be produced in
+       practice.  A host-only file is a regular pytest test that
+       drives a paired board file via fixtures — its
+       :class:`pytest.Function` items are exactly the right shape and
+       must survive this sweep.
     2. Deselect every :class:`DeviceRuntimeItem` whose test file
        declares :data:`__chumicro_features__` requirements that the
        target device doesn't satisfy.  Lazy-probes each device only
@@ -816,6 +819,7 @@ def pytest_collection_modifyitems(
             "functional_tests" in item.nodeid
             and "libraries/" in item.nodeid
             and not isinstance(item, DeviceRuntimeItem)
+            and not is_host_only_test(Path(str(item.fspath)))
         ):
             deselected.append(item)
         else:

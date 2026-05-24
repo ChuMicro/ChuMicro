@@ -1523,6 +1523,93 @@ class TestDeviceTestItemRuntest:
         assert batch_invocations == 1
 
 
+class TestPytestCollectionModifyItemsDeselectSweep:
+    """The non-:class:`DeviceRuntimeItem` deselect sweep keeps host-only
+    Category 1 host-driver items, drops anything else under
+    ``libraries/<name>/functional_tests/``."""
+
+    def test_keeps_host_only_functional_test_item(
+        self, tmp_path,
+    ) -> None:
+        """A pytest.Function under a host-only functional-test file must
+        survive the deselect sweep — without this exception every
+        Category 1 host-driver test silently disappears."""
+        from unittest.mock import Mock
+
+        host_file = (
+            tmp_path / "libraries" / "foo" / "functional_tests"
+            / "test_real_serve_host.py"
+        )
+        host_file.parent.mkdir(parents=True)
+        host_file.write_text("__chumicro_host_only__ = True\n")
+
+        host_item = Mock(spec=pytest.Item)
+        host_item.nodeid = (
+            "libraries/foo/functional_tests/test_real_serve_host.py::test_x"
+        )
+        host_item.fspath = str(host_file)
+
+        deselected_items: list[object] = []
+
+        class _Config:
+            stash: dict = {}
+            hook = SimpleNamespace(
+                pytest_deselected=lambda **kwargs: deselected_items.extend(
+                    kwargs["items"],
+                ),
+            )
+
+            def getoption(self, _name, default=None):  # noqa: ANN001
+                return default
+
+        items = [host_item]
+        collection.pytest_collection_modifyitems(_Config(), items)
+
+        assert deselected_items == []
+        assert items == [host_item]
+
+    def test_drops_non_host_only_non_device_functional_test_item(
+        self, tmp_path,
+    ) -> None:
+        """A non-:class:`DeviceRuntimeItem` under a regular (non-host-only)
+        functional-test file is still dropped — the device transport is
+        the only execution surface for those, so a stray pytest.Function
+        means another plugin re-introduced one and must be deselected."""
+        from unittest.mock import Mock
+
+        board_file = (
+            tmp_path / "libraries" / "foo" / "functional_tests"
+            / "test_real_serve.py"
+        )
+        board_file.parent.mkdir(parents=True)
+        board_file.write_text("def test_serve():\n    pass\n")
+
+        stray_item = Mock(spec=pytest.Item)
+        stray_item.nodeid = (
+            "libraries/foo/functional_tests/test_real_serve.py::test_serve"
+        )
+        stray_item.fspath = str(board_file)
+
+        deselected_items: list[object] = []
+
+        class _Config:
+            stash: dict = {}
+            hook = SimpleNamespace(
+                pytest_deselected=lambda **kwargs: deselected_items.extend(
+                    kwargs["items"],
+                ),
+            )
+
+            def getoption(self, _name, default=None):  # noqa: ANN001
+                return default
+
+        items = [stray_item]
+        collection.pytest_collection_modifyitems(_Config(), items)
+
+        assert deselected_items == [stray_item]
+        assert items == []
+
+
 class TestPytestCollectionModifyItemsRequiredKeys:
     """Skip-marker behavior for missing required runtime-config keys.
 
