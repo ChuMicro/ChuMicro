@@ -79,7 +79,8 @@ runner = Runner()
 runner.add(sensor, period_ms=5000)
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()
+    runner.wait(now_ms)
 ```
 
 ## Shared timestamps
@@ -93,7 +94,71 @@ while True:
     now = runner.tick()
     if some_heartbeat.poll(now):
         do_something()
+    runner.wait(now)
 ```
+
+## Idling between ticks
+
+`Runner.wait(now_ms)` is the loop's idle path and the runner's one sanctioned blocking point.  Call it right after `tick()`:
+
+```python
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)
+```
+
+Each call to `wait`:
+
+1. **Syncs the poll set** from each service's optional `io_socket` / `io_wants_read` / `io_wants_write` attributes — register newly wanted sockets, modify changed interest, unregister sockets that have gone away.  Idempotent: a no-change loop touches the poller zero times.
+2. **Computes the timeout** as the minimum across every entry's `next_due_ms` and every service's optional `next_deadline(now_ms)`, minus `now_ms`.
+3. **Blocks** in `ipoll(timeout_ms)` over the registered sockets when any are registered; otherwise sleeps the timeout via `time.sleep_ms`.  Returns immediately when the nearest deadline has already passed or no deadline applies.
+
+Errors on a registered socket (`POLLERR` / `POLLHUP`) are routed to the owning service's optional `io_error(now_ms, eventmask)` hook so the service can transition cleanly to a failure state.  `POLLIN` / `POLLOUT` are wake signals only — `check` and `next_deadline` decide what runs on the next `tick`.
+
+### Writing a service that participates in `wait`
+
+A socket-owning service exposes the duck-typed attributes the runner reads each loop.  All are optional — services without them work the same way they always did; the runner just won't wake for their I/O:
+
+| Attribute | Type | Purpose |
+|---|---|---|
+| `io_socket` | pollable object or `None` | The socket whose readiness should wake the loop |
+| `io_wants_read` | `bool` | Register `POLLIN` interest |
+| `io_wants_write` | `bool` | Register `POLLOUT` interest |
+| `next_deadline(now_ms)` | `int` or `None` | The next tick the service must run even if no I/O arrives (timeouts, keepalives) |
+| `io_error(now_ms, eventmask)` | callable | Notified when the registered socket reports `POLLERR` or `POLLHUP` |
+
+The runner re-reads these every `wait()`, so a service can flip `io_wants_read` ↔ `io_wants_write` (or set `io_socket = None`) between ticks and the poll set follows on the next call.  Reads are attribute lookups on already-allocated state — no per-loop allocation.
+
+A minimal sketch:
+
+```python
+class EchoClient:
+    """Read bytes from a connected socket, echo them back."""
+
+    def __init__(self, sock) -> None:
+        self.io_socket = sock
+        self.io_wants_read = True
+        self.io_wants_write = False
+        self._outbox = bytearray()
+
+    def check(self, now_ms: int) -> bool:
+        return self.io_wants_read or self.io_wants_write
+
+    def handle(self, now_ms: int) -> None:
+        # Drain whatever is ready; flip interest based on what's left.
+        ...
+
+    def io_error(self, now_ms: int, eventmask: int) -> None:
+        self.io_socket = None  # drops out of the poll set on next wait()
+```
+
+Every networked library in ChuMicro (`wifi`, `sockets`, `requests`, `http_server`, `mqtt`, `websockets`) implements this protocol — that is why their handlers share fairly with the rest of your loop.
+
+### Injecting a poller for tests
+
+`Runner(poller=...)` accepts any object exposing `register(obj, eventmask)` / `modify(obj, eventmask)` / `unregister(obj)` / `ipoll(timeout_ms)`.  The default poller is built lazily on the first `wait()` that has a socket to register, so applications that never register an `io_socket` never pay for it.
+
+`chumicro_runner.testing.FakePoller` is the test stand-in — see [Testing tasks](#testing-tasks).
 
 ## Registration patterns
 
@@ -233,7 +298,8 @@ runner.add_periodic(toggle_led, period_ms=500)
 runner.add_periodic(log_status, period_ms=10000)
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()
+    runner.wait(now_ms)
 ```
 
 ## Batch firing
@@ -257,7 +323,12 @@ tick():
 
 ## Testing tasks
 
-The `chumicro_runner.testing` module provides `CallRecorder` — a callable that records handler invocations for assertions in host-side tests:
+The `chumicro_runner.testing` module provides two host-test helpers:
+
+- `CallRecorder` — a callable that records handler invocations for assertion in host-side tests.
+- `FakePoller` — a stand-in for `select.poll().ipoll` so unit tests can drive `Runner.wait()` without real file descriptors (CPython's `select.poll` needs real fds that in-memory fake sockets do not have).  Records every `register` / `modify` / `unregister` / `ipoll` call so tests can assert on what the runner did with the poll set; `set_ready(obj, eventmask)` queues a ready pair for the next `ipoll` return.
+
+### `CallRecorder`
 
 ```python
 from chumicro_runner.testing import CallRecorder
@@ -274,6 +345,33 @@ assert len(recorder) == 0  # not due yet
 fake.advance(100)
 runner.tick()
 assert recorder.calls == [100]
+```
+
+### `FakePoller`
+
+```python
+import select
+from chumicro_runner import Runner
+from chumicro_runner.testing import FakePoller
+from chumicro_timing.testing import FakeTicks
+
+poller = FakePoller()
+runner = Runner(ticks=FakeTicks(), poller=poller)
+
+class _Service:
+    def __init__(self, sock):
+        self.io_socket = sock
+        self.io_wants_read = True
+        self.io_wants_write = False
+    def check(self, now_ms): return False
+    def handle(self, now_ms): pass
+
+sock = object()
+runner.add(_Service(sock), period_ms=100)
+runner.wait(0)
+
+assert (sock, select.POLLIN) in poller.register_calls
+assert poller.ipoll_calls == [100]
 ```
 
 See the [testing helpers](testing.md) page for detailed usage.

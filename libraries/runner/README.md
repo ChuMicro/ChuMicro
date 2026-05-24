@@ -37,8 +37,11 @@ runner = Runner()
 runner.add_periodic(lambda now_ms: print("blink!"), period_ms=500)
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()
+    runner.wait(now_ms)
 ```
+
+`tick()` fires every due handler.  `wait()` then idles the CPU until the next deadline (or until a registered socket is ready, for networked services — see [Idling between ticks](#idling-between-ticks)).  Together they give every service a fair share of every tick without burning the loop.
 
 That's all you need for simple tasks. For services with conditional logic (only do something when a condition is met), implement `check()` and `handle()`:
 
@@ -87,7 +90,8 @@ runner.add(sensor, period_ms=5000)  # check every 5 seconds
 
 
 while True:
-    runner.tick()
+    now_ms = runner.tick()
+    runner.wait(now_ms)
 ```
 
 ## What's included
@@ -96,10 +100,11 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `Runner(ticks=None)` | Tick-based service loop with shared timestamps |
+| `Runner(ticks=None, poller=None)` | Tick-based service loop with shared timestamps.  `poller` is an injectable `select.poll`-shaped object consulted by `wait()`; the default is built lazily on the first wait that has a socket to register |
 | `Runner.add(task, handler=None, period_ms=None, start_after_ms=None, run_count=None)` | Register a task; returns a `TaskHandle` |
 | `Runner.add_periodic(handler, period_ms, start_after_ms=None, run_count=None)` | Register a periodic handler; returns a `TaskHandle` |
 | `Runner.tick()` | Capture time, check services, batch-fire handlers; returns `now_ms` |
+| `Runner.wait(now_ms)` | Idle until the next deadline or a registered socket is ready.  Companion to `tick()`; see [Idling between ticks](#idling-between-ticks) |
 | `TaskHandle` | Opaque handle for runtime mutation of a registered service |
 | `TaskHandle.set_period(period_ms)` | Add, change, or remove the period (`None` to remove) |
 | `TaskHandle.remove()` | Remove this service from the runner |
@@ -113,6 +118,7 @@ while True:
 |---|---|
 | `CallRecorder()` | Callable that records handler invocations for test assertions |
 | `CallRecorder.calls` | Direct access to the list of recorded `now_ms` values |
+| `FakePoller()` | Host-test stand-in for `select.poll().ipoll`.  Pass as `Runner(poller=FakePoller())` so tests can drive `wait()` without real file descriptors; records `register` / `modify` / `unregister` / `ipoll` calls for assertion, and `set_ready(obj, eventmask)` queues a ready pair for the next `ipoll` return |
 
 ## Registration patterns
 
@@ -182,6 +188,40 @@ No service check needed — the handler fires on schedule:
 handle = runner.add_periodic(toggle_led, period_ms=500)
 handle.set_period(1000)  # change rate at runtime
 ```
+
+## Idling between ticks
+
+`Runner.wait(now_ms)` is the loop's idle path.  Call it right after `tick()`:
+
+```python
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)
+```
+
+Each call to `wait`:
+
+1. **Syncs the poll set** from each service's optional `io_socket` / `io_wants_read` / `io_wants_write` attributes (register newly wanted sockets, modify changed interest, unregister sockets that have gone away).
+2. **Computes the timeout** as the minimum across every entry's `next_due_ms` and every service's optional `next_deadline(now_ms)`, minus `now_ms`.
+3. **Blocks** in `ipoll(timeout_ms)` over the registered sockets when any are registered; otherwise sleeps the timeout via `time.sleep_ms`.  Returns immediately if the nearest deadline has already passed or no deadline applies.
+
+Errors on a registered socket (`POLLERR` / `POLLHUP`) are routed to the owning service's optional `io_error(now_ms, eventmask)` hook so the service can transition cleanly to a failure state.  `POLLIN` / `POLLOUT` are wake signals only — `check` and `next_deadline` decide what runs on the next `tick`.
+
+### Writing a service that participates in `wait`
+
+A service that owns a socket exposes the duck-typed attributes the runner reads each loop.  All are optional — services without them work the same way they always did, the runner just won't wake for their I/O:
+
+| Attribute | Type | Purpose |
+|---|---|---|
+| `io_socket` | pollable object or `None` | The socket whose readiness should wake the loop |
+| `io_wants_read` | `bool` | Register `POLLIN` interest |
+| `io_wants_write` | `bool` | Register `POLLOUT` interest |
+| `next_deadline(now_ms)` | `int` or `None` | The next tick the service must run even if no I/O arrives (timeouts, keepalives) |
+| `io_error(now_ms, eventmask)` | callable | Notified when the registered socket reports `POLLERR` or `POLLHUP` |
+
+The runner re-reads these every `wait()`, so a service can flip `io_wants_read` ↔ `io_wants_write` (or set `io_socket = None`) between ticks and the poll set follows on the next call.  Reads are attribute lookups on already-allocated state — no per-loop allocation.
+
+Every networked library in ChuMicro (`wifi`, `sockets`, `requests`, `http_server`, `mqtt`, `websockets`) implements this protocol, which is why their handlers share fairly with the rest of your loop.
 
 ## Runtime mutation
 

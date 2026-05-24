@@ -44,7 +44,7 @@ try:
     _POLLERR = _select.POLLERR
     _POLLHUP = _select.POLLHUP
     del _select
-except ImportError:
+except ImportError:  # pragma: no cover — CPython/MicroPython/CircuitPython all ship `select`; this is the fallback for hypothetical embedded runtimes that don't.
     _POLLIN = 0x001
     _POLLOUT = 0x004
     _POLLERR = 0x008
@@ -97,7 +97,7 @@ class _SelectPollAdapter:
         self._poller.unregister(obj)
 
     def ipoll(self, timeout_ms: int) -> object:
-        if self._ipoll is not None:
+        if self._ipoll is not None:  # pragma: no cover — MicroPython/CircuitPython expose `ipoll`; CPython does not.
             return self._ipoll(timeout_ms)
         return self._poller.poll(timeout_ms)
 
