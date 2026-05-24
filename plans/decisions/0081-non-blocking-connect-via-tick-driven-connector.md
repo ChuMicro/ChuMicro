@@ -1,6 +1,6 @@
 # Decision 0081: Library network I/O is non-blocking
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-05-23`
 Related: Decision 0014 (runner contract), Decision 0031 (chumicro-sockets factories — partially superseded), Decision 0051 (runner-shaped as project policy), Decision 0080 (runner reactor / central wait)
 
@@ -35,5 +35,5 @@ Same shape Decision 0080 took for blocking poll: the leaf rule bans `poll(timeou
 
 - **Decision 0031 §2 is edited in place.**  The promise *"`connect()` happens inside the factory — the returned socket is already connected"* now applies only to the synchronous factories; the new non-blocking forms are non-blocking by contract.  §2 names both forms and which is appropriate when.
 - **Decision 0051's runner-shaped rule list grows by one bullet.**  In addition to `time.sleep(N > 0.005)` and `select.poll(timeout > 0)`, library methods that perform network I/O don't block — including connect.  The carve-out is the synchronous factories under `chumicro_sockets` for non-runner contexts.
-- **Implementation is tracked separately** in [`plans/workstreams/non-blocking-connect-implementation.md`](../workstreams/non-blocking-connect-implementation.md).  The workstream covers the connector contract, per-runtime substrate handling (CPython EINPROGRESS / MP rp2 / CP socketpool's blocking compromise), `MQTTClient`'s state-machine migration, the `chumicro-requests` / `chumicro-websockets` / `chumicro-http-server` migrations, and the negative-bake validation plan.
+- **Implementation is tracked separately** in [`plans/workstreams/archive/non-blocking-connect-implementation.md`](../workstreams/archive/non-blocking-connect-implementation.md).  The workstream covered the connector contract, per-runtime substrate handling (CPython EINPROGRESS / MP rp2 / CP socketpool's blocking compromise), `MQTTClient`'s state-machine migration, and the `chumicro-requests` / `chumicro-websockets` migrations.  Phases 1.1, 1.2, 1.3, 2, 4, and 5 shipped; Phase 6 (http-server) was deferred.
 - **The runner-shaped policy clarification cascades.**  Library audits (`/audit-embedded chumicro_mqtt`, `/audit-library chumicro_sockets`) should flag any other library method that does synchronous network I/O.  Likely candidates: chumicro-ntp's `query`, chumicro-wifi's `connect` (separate ADR scope; not in this one).
