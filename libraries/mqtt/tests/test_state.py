@@ -18,7 +18,7 @@ def _new_client() -> MQTTClient:
 
 
 class TestProtocolState:
-    def test_canonical_values(self) -> None:
+    def test_known_values(self) -> None:
         # The five lifecycle values.  Tests pin them in case a future
         # refactor renames silently.
         assert ProtocolState.DISCONNECTED == "disconnected"

@@ -11,7 +11,7 @@ from chumicro_test_harness.assertions import raises
 
 
 class TestEncodeVarlen:
-    def test_canonical_encodings(self) -> None:
+    def test_known_encodings(self) -> None:
         cases = [
             (0, b"\x00"),
             (1, b"\x01"),
