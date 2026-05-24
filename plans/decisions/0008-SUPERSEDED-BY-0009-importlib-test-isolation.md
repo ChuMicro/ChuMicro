@@ -2,6 +2,7 @@
 
 Status: `superseded`
 Date: `2026-04-01`
+Summary: Used pytest's `--import-mode=importlib` to dodge `ImportPathMismatchError` between sibling-library `tests/` directories; introduced no-`__init__.py` constraints.
 Related: Decision 0001 (mono-workspace layout)
 Superseded by: [Decision 0009](0009-per-library-test-runs.md)
 

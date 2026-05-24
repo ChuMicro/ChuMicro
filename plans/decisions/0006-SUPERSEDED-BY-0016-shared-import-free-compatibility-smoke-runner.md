@@ -2,6 +2,7 @@
 
 Status: `superseded`
 Date: `2026-03-29`
+Summary: Used a single tiny import-free smoke runner at `support/test_harness/run_device_smoke.py` for all three runtimes during the early workspace phase.
 Related: Decision 0003 (test boundaries)
 Superseded by: [Decision 0016](0016-cross-runtime-unit-tests.md)
 

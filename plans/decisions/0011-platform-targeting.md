@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-02`
+Summary: Each library declares supported runtimes in `pyproject.toml`'s `[tool.chumicro] platforms` list; absent key defaults to all three runtimes.
 Related: Decision 0007 (cross-platform deps), Decision 0015 (board support tiers), Decision 0037 (per-runtime file marking)
 
 ## Context

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-02`
+Summary: Each library ships `README.md` + `docs/` + `examples/`; examples import only the owning lib, declared deps, and sibling files; `verify-examples` is AST-only, not execution.
 Related: Decision 0011 (platform targeting determines doc-publishing), Decision 0021 (docstring type policy)
 
 ## Context

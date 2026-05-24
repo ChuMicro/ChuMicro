@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-02`
+Summary: Install upstream `circuitpython-stubs` and `micropython-esp32-stubs` (version-pinned via `target-runtimes.toml`) for IDE completions; no hand-written `.pyi`.
 Related: Decision 0007 (cross-platform deps — §3 prefigures this)
 
 ## Context

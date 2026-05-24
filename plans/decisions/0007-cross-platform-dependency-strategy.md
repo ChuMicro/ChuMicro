@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-01`
+Summary: External deps must be cross-runtime, lean (no Blinka), and per-channel-publishable; chumicro libraries publish to PyPI, mip, and circup.
 Related: Decision 0011 (platform targeting), Decision 0012 (IDE type stubs), Decision 0018 (distribution channels)
 
 ## Context
