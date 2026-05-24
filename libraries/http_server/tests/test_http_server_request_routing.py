@@ -131,6 +131,20 @@ class TestRequestObject:
         )
         assert request.text() == "café"
 
+    def test_text_honors_content_type_charset(self):
+        # latin-1-encoded body decoded with the latin-1 charset declared
+        # on Content-Type; utf-8 would mojibake "café" here.
+        from chumicro_http_server import Request
+        headers = CaseInsensitiveDict()
+        headers["Content-Type"] = "text/plain; charset=latin-1"
+        request = Request(
+            method="POST", target="/", http_version="HTTP/1.1",
+            headers=headers,
+            body="café".encode("latin-1"),
+            peer=("127.0.0.1", 1),
+        )
+        assert request.text() == "café"
+
     def test_json_decodes(self):
         from chumicro_http_server import Request
         request = Request(
