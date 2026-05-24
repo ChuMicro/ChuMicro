@@ -392,6 +392,11 @@ class WebSocketServer:
 
         self._connections: list[Connection] = []
         self.closed = False
+        #: Most recent non-EAGAIN ``listener.accept()`` failure.  Stays
+        #: ``None`` while the listener is healthy.  Set by the accept
+        #: loop; the caller decides whether to rebuild the listener
+        #: or shut down.
+        self.last_error: BaseException | None = None
 
     # ------------------------------------------------------------------
     # Public observation
@@ -467,7 +472,12 @@ class WebSocketServer:
     # ------------------------------------------------------------------
 
     def _accept_pending(self, now_ms: int) -> None:
-        """Drain any pending accepts up to the connection cap."""
+        """Drain any pending accepts up to the connection cap.
+
+        A non-EAGAIN ``accept()`` failure is recorded on
+        :attr:`last_error` and the loop yields; the caller decides
+        whether to rebuild the listener or shut down.
+        """
         while True:
             if len(self._connections) >= self._max_connections:
                 return
@@ -476,8 +486,7 @@ class WebSocketServer:
             except Exception as accept_error:  # noqa: BLE001 - narrow below
                 if _is_eagain(accept_error):
                     return
-                # Listener errors are fatal-ish.  Caller decides
-                # whether to rebuild the listener.
+                self.last_error = accept_error
                 return
             if accepted is None:
                 return
