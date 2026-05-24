@@ -9,28 +9,11 @@ from chumicro_mqtt.testing import (
     canned_connack_bytes,
     canned_pingresp_bytes,
     canned_publish_bytes,
+    drive,
+    new_client,
 )
 from chumicro_sockets.testing import FakeSocket
 from chumicro_timing.testing import FakeTicks
-
-
-def _new_client(sock: FakeSocket, ticks: FakeTicks, **overrides) -> MQTTClient:
-    """Build a client with FakeTicks injected."""
-    kwargs = {
-        "client_id": "test-client",
-        "keep_alive_seconds": 60,
-        "ack_timeout_seconds": 5.0,
-        "publish_retry_max": 2,
-        "ticks": ticks,
-    }
-    kwargs.update(overrides)
-    return MQTTClient(sock, **kwargs)
-
-def _drive(client: MQTTClient, ticks: FakeTicks, count: int = 1) -> None:
-    """Run *count* tick iterations of the client."""
-    for _ in range(count):
-        now = ticks.ticks_ms()
-        client.handle(now)
 
 
 class TestInboundPublish:
@@ -38,27 +21,27 @@ class TestInboundPublish:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
 
         captured: list[tuple[str, bytes]] = []
         client.on_message = lambda topic, payload: captured.append((topic, payload))
         sock.enqueue_recv(canned_publish_bytes("temp", b"99", qos=0))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert captured == [("temp", b"99")]
 
     def test_qos1_publish_triggers_puback_send(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.sent = bytearray()  # MP bytearray lacks .clear()
 
         sock.enqueue_recv(canned_publish_bytes("temp", b"99", qos=1, packet_id=42))
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
 
         # PUBACK 42 should be on the wire.
         assert b"\x40\x02\x00\x2a" in bytes(sock.sent)
@@ -67,9 +50,9 @@ class TestInboundPublish:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
 
         captured: list[str] = []
         client.add_pattern_handler(
@@ -78,7 +61,7 @@ class TestInboundPublish:
         )
         sock.enqueue_recv(canned_publish_bytes("sensors/back-porch/temperature", b"21", qos=0))
         sock.enqueue_recv(canned_publish_bytes("other/topic", b"x", qos=0))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert captured == ["sensors/back-porch/temperature"]
 
     def test_remove_pattern_handler_by_handler_only(self) -> None:
@@ -86,9 +69,9 @@ class TestInboundPublish:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
 
         fires: list[str] = []
         def handler(topic, _payload):
@@ -100,7 +83,7 @@ class TestInboundPublish:
 
         sock.enqueue_recv(canned_publish_bytes("a/x", b"", qos=0))
         sock.enqueue_recv(canned_publish_bytes("b/y/z", b"", qos=0))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert fires == []
 
     def test_remove_pattern_handler_by_handler_and_pattern(self) -> None:
@@ -108,9 +91,9 @@ class TestInboundPublish:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
 
         fires: list[str] = []
         def handler(topic, _payload):
@@ -123,7 +106,7 @@ class TestInboundPublish:
         sock.enqueue_recv(canned_publish_bytes("a/x", b"", qos=0))
         sock.enqueue_recv(canned_publish_bytes("b/y/z", b"", qos=0))
         # One recv per tick: two FakeSocket chunks need two ticks to drain.
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         # Only the b/# registration survived.
         assert fires == ["b/y/z"]
 
@@ -133,28 +116,28 @@ class TestTopicPrefixSugar:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(
+        client = new_client(
             sock, ticks,
             client_id="mainLightSwitch",
             root_topic="livingRoom",
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.sent = bytearray()
         client.publish("switchState", b"on", qos=0)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert b"livingRoom/mainLightSwitch/switchState" in bytes(sock.sent)
 
     def test_publish_without_root_topic_is_verbatim(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)  # default root_topic=None
+        client = new_client(sock, ticks)  # default root_topic=None
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.sent = bytearray()
         client.publish("temp", b"42", qos=0)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         wire = bytes(sock.sent)
         assert b"temp" in wire
         # No prefix was injected.
@@ -164,16 +147,16 @@ class TestTopicPrefixSugar:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(
+        client = new_client(
             sock, ticks,
             client_id="mainLightSwitch",
             root_topic="livingRoom",
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.sent = bytearray()
         client.publish("$SYS/bridge/status", b"online", qos=0, prefixed=False)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         wire = bytes(sock.sent)
         assert b"$SYS/bridge/status" in wire
         assert b"livingRoom" not in wire
@@ -182,32 +165,32 @@ class TestTopicPrefixSugar:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(
+        client = new_client(
             sock, ticks,
             client_id="thing-42",
             root_topic="myapp",
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.sent = bytearray()
         client.subscribe("commands/+")
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert b"myapp/thing-42/commands/+" in bytes(sock.sent)
 
     def test_subscribe_prefixed_false_bypasses_prefix(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(
+        client = new_client(
             sock, ticks,
             client_id="thing-42",
             root_topic="myapp",
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.sent = bytearray()
         client.subscribe("$SYS/broker/uptime", prefixed=False)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         wire = bytes(sock.sent)
         assert b"$SYS/broker/uptime" in wire
         assert b"myapp" not in wire
@@ -216,16 +199,16 @@ class TestTopicPrefixSugar:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(
+        client = new_client(
             sock, ticks,
             client_id="thing-42",
             root_topic="myapp",
         )
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.sent = bytearray()
         client.unsubscribe("commands/+")
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert b"myapp/thing-42/commands/+" in bytes(sock.sent)
 
 
@@ -242,7 +225,7 @@ class TestLastWillPrefix:
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         # CONNECT packet starts with 0x10.  Look for the prefixed will topic.
         wire = bytes(sock.sent)
         assert b"livingRoom/mainLightSwitch/online" in wire
@@ -260,7 +243,7 @@ class TestLastWillPrefix:
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         wire = bytes(sock.sent)
         assert b"$SYS/bridge/dead" in wire
         # Prefix should NOT have been applied.
@@ -272,27 +255,27 @@ class TestKeepalive:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks, keep_alive_seconds=30)
+        client = new_client(sock, ticks, keep_alive_seconds=30)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.sent = bytearray()  # MP bytearray lacks .clear()
 
         # Just past the 15-second mark (half of keepalive).
         ticks.advance(15_500)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert b"\xc0\x00" in bytes(sock.sent)  # PINGREQ wire bytes
 
     def test_pingresp_clears_pending(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks, keep_alive_seconds=30)
+        client = new_client(sock, ticks, keep_alive_seconds=30)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         ticks.advance(15_500)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         sock.enqueue_recv(canned_pingresp_bytes())
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         # PINGRESP arriving means the pending entry got cleared and
         # a PINGRESP timeout doesn't trip.
         assert client.state == ProtocolState.CONNECTED

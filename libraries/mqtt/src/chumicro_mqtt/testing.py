@@ -1,18 +1,22 @@
-"""Pre-baked broker responses for unit tests.
+"""Pre-baked broker responses and client fixtures for unit tests.
 
-Tests typically drive :class:`MQTTClient` via a
+Tests typically drive an MQTTClient via a
 :class:`chumicro_sockets.testing.FakeSocket`.  Script broker responses
 with ``sock.enqueue_recv(canned_connack_bytes())`` etc., let the
 client tick, then assert the wire format on ``sock.sent``.
 
-These canned-bytes helpers stay in sync with the encoder/decoder so a
+The canned-bytes helpers stay in sync with the encoder/decoder so a
 hand-rolled byte literal in a test doesn't drift when the wire format
-gets a tweak.
+gets a tweak.  ``new_client`` + ``drive`` package the common
+"FakeSocket + FakeTicks + sensible defaults" construction so cross-
+runtime test files don't each carry their own copy.
 """
 
 __chumicro_test_support__ = True
 
 import struct
+
+from chumicro_mqtt.client import MQTTClient
 
 
 def canned_connack_bytes(*, return_code: int = 0, session_present: bool = False) -> bytes:
@@ -79,3 +83,27 @@ def canned_publish_bytes(topic, payload, *, qos=0, retain=False, packet_id=None)
         if value == 0:
             break
     return bytes((fixed_byte_one,)) + bytes(remaining_bytes) + body
+
+
+def new_client(sock, ticks, **overrides):
+    """Build an MQTTClient against *sock* and *ticks* with test defaults.
+
+    Defaults: ``client_id="test-client"``, ``keep_alive_seconds=60``,
+    ``ack_timeout_seconds=5.0``, ``publish_retry_max=2``.  Any keyword
+    in *overrides* wins over the default of the same name.
+    """
+    kwargs = {
+        "client_id": "test-client",
+        "keep_alive_seconds": 60,
+        "ack_timeout_seconds": 5.0,
+        "publish_retry_max": 2,
+        "ticks": ticks,
+    }
+    kwargs.update(overrides)
+    return MQTTClient(sock, **kwargs)
+
+
+def drive(client, ticks, count=1):
+    """Call ``client.handle(ticks.ticks_ms())`` *count* times in a row."""
+    for _ in range(count):
+        client.handle(ticks.ticks_ms())

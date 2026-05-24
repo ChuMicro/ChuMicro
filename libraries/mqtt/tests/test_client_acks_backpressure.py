@@ -13,23 +13,12 @@ from chumicro_mqtt.testing import (
     canned_publish_bytes,
     canned_suback_bytes,
     canned_unsuback_bytes,
+    drive,
+    new_client,
 )
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
-
-
-def _new_client(sock: FakeSocket, ticks: FakeTicks, **overrides) -> MQTTClient:
-    """Build a client with FakeTicks injected."""
-    kwargs = {
-        "client_id": "test-client",
-        "keep_alive_seconds": 60,
-        "ack_timeout_seconds": 5.0,
-        "publish_retry_max": 2,
-        "ticks": ticks,
-    }
-    kwargs.update(overrides)
-    return MQTTClient(sock, **kwargs)
 
 
 def _connector_factory(*socks: FakeSocket):
@@ -48,12 +37,6 @@ def _connector_factory(*socks: FakeSocket):
 
     return factory
 
-
-def _drive(client: MQTTClient, ticks: FakeTicks, count: int = 1) -> None:
-    """Run *count* tick iterations of the client."""
-    for _ in range(count):
-        now = ticks.ticks_ms()
-        client.handle(now)
 
 class _CountingSocket(FakeSocket):
     """FakeSocket that counts bytes received via recv_into.
@@ -80,34 +63,34 @@ class TestUnexpectedAcks:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         # PUBACK with no matching in-flight entry.
         sock.enqueue_recv(canned_puback_bytes(packet_id=999))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert client.state == ProtocolState.FAILED
 
     def test_unexpected_suback_marks_failed(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.enqueue_recv(canned_suback_bytes(packet_id=999, granted_qos=0))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert client.state == ProtocolState.FAILED
 
     def test_unexpected_unsuback_marks_failed(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         sock.enqueue_recv(canned_unsuback_bytes(packet_id=999))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert client.state == ProtocolState.FAILED
 
     def test_unexpected_pingresp_silently_tolerated(self) -> None:
@@ -120,12 +103,12 @@ class TestUnexpectedAcks:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)
+        client = new_client(sock, ticks)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         # PINGRESP with no pending tracker.
         sock.enqueue_recv(canned_pingresp_bytes())
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         assert client.state == ProtocolState.CONNECTED
 
 
@@ -175,7 +158,7 @@ class TestConnectorFactorySelfHeal:
         assert client.state == ProtocolState.AWAITING_TRANSPORT
         # Two ticks advance the connector (dns_ok then tcp_ok+CONNECT-drain);
         # third tick parses the CONNACK.
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
         # Factory not called a second time.  The socket is healthy.
         assert len(builds) == 1
@@ -214,12 +197,12 @@ class TestConnectorFactorySelfHeal:
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         # Force FAILED to simulate a wifi-drop that killed the socket.
         client.state = ProtocolState.FAILED
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
 
         # Self-heal ran: factory built a new connector, drove it to
         # ready, CONNACK arrived, back to CONNECTED on a different socket.
@@ -231,14 +214,14 @@ class TestConnectorFactorySelfHeal:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)  # no connector_factory
+        client = new_client(sock, ticks)  # no connector_factory
 
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
 
         client.state = ProtocolState.FAILED
-        _drive(client, ticks, count=5)
+        drive(client, ticks, count=5)
         # Without a factory there's no self-heal: client stays FAILED.
         assert client.state == ProtocolState.FAILED
 
@@ -271,17 +254,17 @@ class TestConnectorFactorySelfHeal:
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         client.state = ProtocolState.FAILED
         # Factory raises on the next 3 attempts.  Client stays FAILED.
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.FAILED
         assert "wifi still down" in str(client.last_error)
 
         # 4th attempt: factory returns the recovery connector, self-heal succeeds.
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
     def test_explicit_disconnect_disables_self_heal(self) -> None:
@@ -301,7 +284,7 @@ class TestConnectorFactorySelfHeal:
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
         initial_build_count = len(builds)
 
@@ -311,7 +294,7 @@ class TestConnectorFactorySelfHeal:
         # Force FAILED.  Even with the factory present, the user-driven
         # disconnect should keep self-heal off.
         client.state = ProtocolState.FAILED
-        _drive(client, ticks, count=5)
+        drive(client, ticks, count=5)
         assert client.state == ProtocolState.FAILED
         assert len(builds) == initial_build_count  # factory not called again
 
@@ -334,17 +317,17 @@ class TestConnectorFactorySelfHeal:
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         client.subscribe("sensors/+", qos=1, prefixed=False)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
 
         # Force FAILED to simulate broker death; self-heal rebuilds.
         client.state = ProtocolState.FAILED
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         # Post-CONNACK replay enqueued a SUBSCRIBE and the
@@ -368,19 +351,19 @@ class TestConnectorFactorySelfHeal:
             ticks=ticks,
         )
         client.connect()
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         client.subscribe("sensors/+", qos=1, prefixed=False)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         client.unsubscribe("sensors/+", prefixed=False)
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_unsuback_bytes(packet_id=2))
-        _drive(client, ticks, count=1)
+        drive(client, ticks, count=1)
 
         # Force self-heal.
         client.state = ProtocolState.FAILED
-        _drive(client, ticks, count=3)
+        drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
         # No SUBSCRIBE on sock_two.
@@ -397,9 +380,9 @@ class TestBoundedRecvPerTick:
 
     def _connected_client(self, sock: _CountingSocket, ticks: FakeTicks, **kwargs):
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
-        client = _new_client(sock, ticks, **kwargs)
+        client = new_client(sock, ticks, **kwargs)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
         # Reset counters after the CONNACK consume so the budget tests
         # only measure inbound-publish reads.
@@ -456,7 +439,7 @@ class TestBoundedRecvPerTick:
         # Drive until the payload arrives (~9 ticks at 1024 B/tick
         # for 8192 + small header bytes total).
         for _ in range(20):
-            _drive(client, ticks, count=1)
+            drive(client, ticks, count=1)
             if received_payloads:
                 break
         assert received_payloads == [big_payload]
@@ -483,16 +466,16 @@ class TestTxQueueBackpressure:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks)  # default cap
+        client = new_client(sock, ticks)  # default cap
         assert client._max_tx_queue_size == 20  # noqa: SLF001 - pin the default
 
     def test_publish_raises_when_cap_exceeded(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks, max_tx_queue_size=3)
+        client = new_client(sock, ticks, max_tx_queue_size=3)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
         # Queue is empty post-CONNECT.  Three publishes fill it.  The
         # fourth should raise.  Don't drive between publishes so the
@@ -509,9 +492,9 @@ class TestTxQueueBackpressure:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks, max_tx_queue_size=1)
+        client = new_client(sock, ticks, max_tx_queue_size=1)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
 
         # First QoS 1 publish fills the cap.
@@ -534,9 +517,9 @@ class TestTxQueueBackpressure:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
-        client = _new_client(sock, ticks, max_tx_queue_size=1)
+        client = new_client(sock, ticks, max_tx_queue_size=1)
         client.connect()
-        _drive(client, ticks, count=2)
+        drive(client, ticks, count=2)
         assert client.state == ProtocolState.CONNECTED
 
         # Fill the user cap.
