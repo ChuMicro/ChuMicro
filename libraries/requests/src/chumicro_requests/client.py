@@ -491,8 +491,7 @@ class HttpClient:
         # generous recv_budget_per_tick (say 64K) doesn't pin a 64K
         # resident buffer for what's only ever a sliced-down working
         # window.
-        recv_scratch_size = recv_budget_per_tick if recv_budget_per_tick <= 512 else 512
-        self._recv_buffer = bytearray(recv_scratch_size)
+        self._recv_buffer = bytearray(min(recv_budget_per_tick, 512))
         self._recv_view = memoryview(self._recv_buffer)
         self._max_body_bytes = max_body_bytes
         self._when_oversized = when_oversized
