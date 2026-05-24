@@ -180,10 +180,7 @@ class TestErrorPaths:
         # The runner gates handle() on check(); _attempt_self_heal
         # only fires from inside handle()'s FAILED branch.  If check()
         # gates FAILED out, self-heal is unreachable and broker-outage
-        # recovery never runs.  Pi Pico W CP bake on 2026-05-23 caught
-        # this: the convergence-steps-1-6 client correctly transitioned
-        # to FAILED on broker hard-kill, then stayed FAILED for 240 s
-        # because the runner never called handle() again.
+        # recovery never runs.
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()

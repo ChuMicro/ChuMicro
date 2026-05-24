@@ -42,13 +42,13 @@ class TestCannedSuback:
 
 
 class TestCannedUnsuback:
-    def test_canonical_shape(self) -> None:
+    def test_known_encoding(self) -> None:
         packet = canned_unsuback_bytes(packet_id=42)
         assert packet == b"\xb0\x02\x00\x2a"
 
 
 class TestCannedPingresp:
-    def test_canonical_shape(self) -> None:
+    def test_known_encoding(self) -> None:
         assert canned_pingresp_bytes() == b"\xd0\x00"
 
 

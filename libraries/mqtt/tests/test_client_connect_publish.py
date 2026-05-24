@@ -337,7 +337,7 @@ class TestDisconnect:
         assert client.state == ProtocolState.DISCONNECTED
         assert sock.closed
 
-    def test_idempotent_second_disconnect_does_not_refire_callback(self) -> None:
+    def test_second_disconnect_does_not_refire_callback(self) -> None:
         """A second ``disconnect()`` against an already-DISCONNECTED
         client is a no-op: no extra on_disconnect fire, no second
         DISCONNECT packet on the wire, no double socket close."""
