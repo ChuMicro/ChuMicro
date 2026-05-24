@@ -22,14 +22,11 @@ def chumicro_sockets_connector_factory(config, *, radio=None, ssl_context=None):
     in ``"awaiting_dns"``.  :class:`MQTTClient` drives it across ticks
     so the runner is not blocked for the DNS / TCP / TLS round-trip.
     """
-    if "mqtt.broker.host" not in config:
-        raise MissingConfigKey(
-            "required config key 'mqtt.broker.host' is missing",
-        )
-    if "mqtt.broker.port" not in config:
-        raise MissingConfigKey(
-            "required config key 'mqtt.broker.port' is missing",
-        )
+    for required_key in ("mqtt.broker.host", "mqtt.broker.port"):
+        if required_key not in config:
+            raise MissingConfigKey(
+                f"required config key {required_key!r} is missing",
+            )
     host = config["mqtt.broker.host"]
     port = config["mqtt.broker.port"]
 
