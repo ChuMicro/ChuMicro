@@ -1,42 +1,36 @@
 """Real-network TLS smoke test for chumicro-sockets.
 
-Companion to ``test_real_tcp.py``: opens a TLS connection to a
-public HTTPS endpoint and verifies the handshake completes + a
-minimal request round-trips.  Catches handshake regressions
-(missing PEM-parse path on rp2, mismatched verify-mode defaults,
-silent EAGAIN-on-recv conflations) at the transport layer where
-the diagnostic message is unambiguous.
+Category 2 — public endpoint, `valid-isrgrootx1.letsencrypt.org:443`
+interop.
 
-Skipped at collection time when no credentials are configured —
-the conftest's ``set_runtime_config(..., required_keys=...)`` declares
-``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
-applies ``pytest.mark.skip`` with a clear message before deploy.
+Companion to `test_real_tcp.py`: opens a TLS connection to a stable
+Let's Encrypt purpose-built host whose chain terminates at ISRG Root
+X1 (shipped in both the MP bundle and the CP firmware bundle),
+verifies the handshake completes and a minimal request round-trips.
+Catches regressions (missing PEM-parse path on rp2, mismatched
+verify-mode defaults, silent EAGAIN-on-recv conflations) at the
+transport layer where the diagnostic message is unambiguous.
 
-Endpoint: ``valid-isrgrootx1.letsencrypt.org:443`` — a stable
-purpose-built Let's Encrypt endpoint whose chain terminates at
-ISRG Root X1, which is in both the MP shipped bundle and the CP
-firmware bundle.  This keeps the test a *transport / recv-drain*
-smoke test rather than an accidental trust-coverage test (trust
-breadth is owned by ``test_real_tls_matrix.py``).  Body is ~4 KB
-— enough to exercise the multi-iteration recv loop, small enough
-to buffer on a 256 KB board.
+Why public endpoint? A controlled TLS server would chain through our
+own bundle, not the real CA tree the runtime ships — green wouldn't
+prove the trust set actually anchors a real cert. Trust-breadth
+coverage is owned separately by `test_real_tls_matrix.py`.
 
-Known platform gap: Pi Pico W CircuitPython hits a
-post-handshake EPIPE on the rp2-port mbedTLS build.  This test
-will fail on that combination; the failure documents the issue
-rather than hiding it.
+Skipped at collection time when wifi credentials are missing.
+
+Known platform gap: Pi Pico W CircuitPython hits a post-handshake
+EPIPE on the rp2-port mbedTLS build. The test will fail on that
+combination; the failure documents the gap rather than hiding it.
 """
 
 import time
 
-from chumicro_config import config
 from chumicro_sockets import tls_client_socket
-from chumicro_timing import ticks_ms as _ticks_ms
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_test_harness.network import runtime_config, wifi_up
+from chumicro_timing import ticks_ms
 
 _TARGET_HOST = "valid-isrgrootx1.letsencrypt.org"
 _TARGET_PORT = 443
-_WIFI_CONNECT_TIMEOUT_MS = 15_000
 _RECV_DEADLINE_MS = 15_000
 
 
@@ -49,14 +43,14 @@ def _sleep_ms(duration_ms: int) -> None:
 
 
 def _send_all(socket: object, data: bytes) -> None:
-    """Write every byte via the protocol's non-blocking ``send``.
+    """Write every byte through `send`, re-offering the tail on EAGAIN or short writes.
 
-    ``chumicro_sockets`` only guarantees ``send(data) -> int`` with
-    partial writes allowed (see ``TCPClientSocket.send``); there is no
-    ``sendall``.  Real consumers loop on ``send`` and re-offer the
-    unsent tail — these tests model that rather than assuming the
-    stdlib-only convenience that happens to exist on the CPython
-    test backend but not on device SSLSocket / socketpool wrappers.
+    `chumicro_sockets` only guarantees `send(data) -> int` with partial
+    writes allowed; there is no `sendall`. Real consumers loop on
+    `send` and re-offer the unsent tail — these tests model that
+    rather than assuming the stdlib-only convenience that happens to
+    exist on the CPython test backend but not on device SSLSocket /
+    socketpool wrappers.
     """
     view = memoryview(data)
     sent = 0
@@ -75,13 +69,13 @@ def _send_all(socket: object, data: bytes) -> None:
 
 
 def _seed_rtc(now_utc_tuple: tuple) -> None:
-    """Set the device RTC so cert validity-time checks pass.
+    """Set the device RTC from `now_utc_tuple` so cert validity-time checks pass.
 
     Boot RTC on most ports is epoch / 2021; without seeding, mbedTLS
     rejects the target's valid cert with "validity starts in the
-    future" once the MP default context verifies.  Real
-    deployments NTP-sync; conftest bakes the host clock so the test
-    stays off the network for time.
+    future" once the MP default context verifies. Real deployments
+    NTP-sync; conftest bakes the host clock so the test stays off the
+    network for time.
     """
     try:
         import machine  # noqa: PLC0415 — MP-only
@@ -108,44 +102,28 @@ def _seed_rtc(now_utc_tuple: tuple) -> None:
         pass
 
 
-def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
-    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
-    wifi = WifiService(wifi_config)
-    deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
-    while wifi.state != WifiState.CONNECTED:
-        if _ticks_ms() > deadline:
-            raise AssertionError(
-                f"wifi did not link within "
-                f"{_WIFI_CONNECT_TIMEOUT_MS} ms; state={wifi.state}",
-            )
-        if wifi.check(_ticks_ms()):
-            wifi.handle(_ticks_ms())
-        _sleep_ms(50)
-    return wifi
-
-
 def test_real_tls_handshake_and_recv() -> None:
-    """Open TLS, send HTTPS GET, read response."""
-    wifi_cfg = WifiConfig.try_from_config(config)
-    if wifi_cfg is None:
+    """Open TLS to the Let's Encrypt host, send HTTPS GET, read the response."""
+    config = runtime_config()
+    ssid = config.get("wifi.ssid", "")
+    password = config.get("wifi.password", "")
+    if not ssid:
         raise AssertionError(
             "wifi runtime config missing — the conftest's "
             "`set_runtime_config(..., required_keys=...)` should have "
-            "skipped this test at collection time.  Reaching this body "
+            "skipped this test at collection time. Reaching this body "
             "means the conftest's required_keys list is incomplete.",
         )
 
     _seed_rtc(config["sockets.now_utc_tuple"])
-    wifi = _bring_wifi_up(wifi_cfg)
-    print(f"WIFI_OK ip={wifi.ip}")
+    radio, ip = wifi_up(ssid, password)
+    print(f"WIFI_OK ip={ip}")
 
-    # Default TLS context (CA-validated against the runtime's
-    # trust store).  Catches the most common regression: a
-    # cert/hostname-validation breakage that would otherwise show
-    # up as "request failed" three layers up.
-    socket = tls_client_socket(
-        _TARGET_HOST, _TARGET_PORT, radio=wifi.adapter.radio,
-    )
+    # Default TLS context (CA-validated against the runtime's trust
+    # store). Catches the most common regression: a cert / hostname-
+    # validation breakage that would otherwise surface as "request
+    # failed" three layers up.
+    socket = tls_client_socket(_TARGET_HOST, _TARGET_PORT, radio=radio)
     print(f"TLS_OK host={_TARGET_HOST}:{_TARGET_PORT}")
 
     request = (
@@ -159,9 +137,9 @@ def test_real_tls_handshake_and_recv() -> None:
     received = bytearray()
     led_counter = 0
     buffer = bytearray(256)
-    deadline = _ticks_ms() + _RECV_DEADLINE_MS
+    deadline = ticks_ms() + _RECV_DEADLINE_MS
     while True:
-        if _ticks_ms() > deadline:
+        if ticks_ms() > deadline:
             raise AssertionError(
                 f"TLS recv loop did not see EOF within "
                 f"{_RECV_DEADLINE_MS} ms; received {len(received)} bytes",
@@ -187,12 +165,7 @@ def test_real_tls_handshake_and_recv() -> None:
     assert b"HTTP/1." in received[:16], (
         f"response should start with HTTP version; got {received[:32]!r}"
     )
-    # Reaching here means the recv loop broke on a clean EOF before the
-    # deadline (the deadline path raises above) — i.e. the TLS transport
-    # delivered the whole response.  We deliberately do NOT assert a
-    # minimum `led_counter`: a small fast response legitimately drains
-    # in a handful of non-blocking iterations, so a tick-count floor is
-    # a flaky proxy.  The rigorous "recv_into must not block-call"
-    # invariant is covered by the dedicated chumicro-requests /
-    # chumicro-http-server fragmentation tests.
+    # No led_counter floor: same rationale as test_real_tcp.py — a
+    # small fast response legitimately drains in a handful of
+    # non-blocking iterations.
     assert led_counter >= 1, "recv loop did not iterate"

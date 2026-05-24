@@ -1,46 +1,46 @@
-"""TLS trust matrix — real network, four-board matrix.
+"""TLS trust-matrix smoke test for chumicro-sockets.
 
-Three legs, one file, run on Lolin S2 + Pi Pico W × CP/MP:
+Category 2 — public endpoint, `expired.badssl.com:443` +
+`valid-isrgrootx1.letsencrypt.org:443` interop.
 
-1. **no-verify** — ``ssl_context_no_verify()`` against an expired
-   cert host *succeeds*: the explicit opt-out really disables
-   validation on every runtime.
-2. **default rejects** — ``context=None`` against the same expired
-   host *raises*: default validation rejects a bad chain
-   (CP firmware bundle / MP shipped bundle / CPython store).
-3. **default accepts** — ``context=None`` against a live
-   Let's-Encrypt-signed host *handshakes*: the trust set actually
-   validates a real cert.  The endpoint
-   (``valid-isrgrootx1.letsencrypt.org``) is purpose-built by Let's
-   Encrypt to chain to ISRG Root X1 — which the MP bundle ships and
-   the CP firmware bundle includes — so this exercises the real
-   anchor, not an incidental one.
+Three legs in one file, run on Lolin S2 + Pi Pico W × CP / MP:
 
-All three seed the device RTC from the host clock first
-(``sockets.now_utc_tuple``, published by conftest).  Legs 1-2 don't
+1. **no-verify** — `ssl_context_no_verify()` against an expired-cert
+   host succeeds: the explicit opt-out really disables validation on
+   every runtime.
+2. **default rejects** — `context=None` against the same expired host
+   raises: default validation rejects a bad chain (CP firmware
+   bundle / MP shipped bundle / CPython store).
+3. **default accepts** — `context=None` against the Let's Encrypt
+   ISRG-Root-X1 endpoint handshakes: the trust set actually validates
+   a real cert.
+
+Why public endpoints? Trust-set coverage is the point — a controlled
+fixture would chain through our own CA bundle and prove nothing about
+whether the runtime's shipped trust set anchors a real public cert.
+
+All three legs seed the device RTC from the host clock first
+(`sockets.now_utc_tuple`, published by conftest). Legs 1-2 don't
 strictly need it (no-check / reject-regardless-of-skew), but leg 3
-does, because default validation rejects a valid cert as "validity
-starts in the future" when the board boots at epoch.  Real
-deployments NTP-sync instead.
+does — default validation rejects a valid cert as "validity starts in
+the future" when the board boots at epoch. Real deployments NTP-sync
+instead.
 
-Skipped at collection time when no wifi credentials are configured.
+Skipped at collection time when wifi credentials are missing.
 """
 
 import time
 
-from chumicro_config import config
 from chumicro_sockets import ssl_context_no_verify, tls_client_socket
-from chumicro_timing import ticks_ms as _ticks_ms
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_test_harness.network import runtime_config, wifi_up
 
 _EXPIRED_HOST = "expired.badssl.com"
 _EXPIRED_PORT = 443
 #: Let's Encrypt's purpose-built endpoint whose chain terminates at
-#: ISRG Root X1 — the anchor shipped in chumicro_sockets._ca_bundle
+#: ISRG Root X1 — the anchor in chumicro_sockets' bundled trust set
 #: and present in CircuitPython's firmware bundle.
 _VALID_LE_HOST = "valid-isrgrootx1.letsencrypt.org"
 _VALID_LE_PORT = 443
-_WIFI_CONNECT_TIMEOUT_MS = 15_000
 
 
 def _sleep_ms(duration_ms: int) -> None:
@@ -52,13 +52,13 @@ def _sleep_ms(duration_ms: int) -> None:
 
 
 def _seed_rtc(now_utc_tuple: tuple) -> None:
-    """Set the device RTC so cert validity-time checks pass.
+    """Set the device RTC from `now_utc_tuple` so cert validity-time checks pass.
 
     Boot RTC on most ports lands at epoch / 2021; without seeding,
     mbedTLS rejects every valid cert with "validity starts in the
-    future".  Real deployments NTP-sync; this bakes the host clock
-    from session start (conftest) so the test stays off the network
-    for time.  MP exposes ``machine.RTC``; CP exposes ``rtc.RTC``.
+    future". Real deployments NTP-sync; conftest bakes the host clock
+    from session start so the test stays off the network for time.
+    MP exposes `machine.RTC`; CP exposes `rtc.RTC`.
     """
     try:
         import machine  # noqa: PLC0415 — MP-only
@@ -85,43 +85,28 @@ def _seed_rtc(now_utc_tuple: tuple) -> None:
         pass
 
 
-def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
-    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
-    wifi = WifiService(wifi_config)
-    deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
-    while wifi.state != WifiState.CONNECTED:
-        if _ticks_ms() > deadline:
-            raise AssertionError(
-                f"wifi did not link within "
-                f"{_WIFI_CONNECT_TIMEOUT_MS} ms; state={wifi.state}",
-            )
-        if wifi.check(_ticks_ms()):
-            wifi.handle(_ticks_ms())
-        _sleep_ms(50)
-    return wifi
-
-
-def _prepare() -> WifiService:
-    wifi_cfg = WifiConfig.try_from_config(config)
-    if wifi_cfg is None:
+def _prepare() -> object:
+    """Read runtime config, seed the RTC, bring wifi up, return the radio."""
+    config = runtime_config()
+    ssid = config.get("wifi.ssid", "")
+    password = config.get("wifi.password", "")
+    if not ssid:
         raise AssertionError(
             "wifi runtime config missing — conftest should have "
             "skipped this test at collection time.",
         )
     _seed_rtc(config["sockets.now_utc_tuple"])
-    wifi = _bring_wifi_up(wifi_cfg)
-    print(f"WIFI_OK ip={wifi.ip}")
-    return wifi
+    radio, ip = wifi_up(ssid, password)
+    print(f"WIFI_OK ip={ip}")
+    return radio
 
 
 def test_no_verify_accepts_expired_cert() -> None:
-    """Leg 1 — ``ssl_context_no_verify()`` disables validation, so a
-    handshake to an expired-cert host completes."""
-    wifi = _prepare()
+    """Leg 1: `ssl_context_no_verify()` opts out of validation; expired-cert handshake completes."""
+    radio = _prepare()
     context = ssl_context_no_verify()
     socket = tls_client_socket(
-        _EXPIRED_HOST, _EXPIRED_PORT, context=context,
-        radio=wifi.adapter.radio,
+        _EXPIRED_HOST, _EXPIRED_PORT, context=context, radio=radio,
     )
     print(f"NO_VERIFY_OK host={_EXPIRED_HOST}")
     assert socket is not None, (
@@ -132,15 +117,12 @@ def test_no_verify_accepts_expired_cert() -> None:
 
 
 def test_default_context_rejects_expired_cert() -> None:
-    """Leg 2 — ``context=None`` validates and rejects the expired
-    chain on every runtime."""
-    wifi = _prepare()
+    """Leg 2: `context=None` validates and rejects the expired chain on every runtime."""
+    radio = _prepare()
     rejected: BaseException | None = None
     socket = None
     try:
-        socket = tls_client_socket(
-            _EXPIRED_HOST, _EXPIRED_PORT, radio=wifi.adapter.radio,
-        )
+        socket = tls_client_socket(_EXPIRED_HOST, _EXPIRED_PORT, radio=radio)
     except Exception as error:  # noqa: BLE001 — mbedTLS surface varies
         rejected = error
         print(f"REJECTED expected={type(error).__name__} {error!r}")
@@ -158,13 +140,14 @@ def test_default_context_rejects_expired_cert() -> None:
 
 
 def test_default_context_accepts_real_letsencrypt_host() -> None:
-    """Leg 3 — ``context=None`` validates a live ISRG-Root-X1 chain
-    and completes the handshake.  Proves the shipped/firmware trust
-    set actually anchors a real public cert (RTC seeded above)."""
-    wifi = _prepare()
-    socket = tls_client_socket(
-        _VALID_LE_HOST, _VALID_LE_PORT, radio=wifi.adapter.radio,
-    )
+    """Leg 3: `context=None` validates the live ISRG-Root-X1 chain and completes the handshake.
+
+    Proves the shipped / firmware trust set anchors a real public cert
+    (the RTC is seeded by `_prepare` so cert validity-time checks
+    pass).
+    """
+    radio = _prepare()
+    socket = tls_client_socket(_VALID_LE_HOST, _VALID_LE_PORT, radio=radio)
     print(f"VALID_OK host={_VALID_LE_HOST}")
     assert socket is not None, (
         "default context should validate the ISRG-Root-X1 chain and "

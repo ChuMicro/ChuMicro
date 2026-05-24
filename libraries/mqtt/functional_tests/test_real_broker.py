@@ -1,47 +1,30 @@
 """Real-network acceptance for chumicro-mqtt.
 
-End-to-end: bring wifi up on the device, connect to a configured
-MQTT broker, publish + subscribe to a unique topic, verify the
-inbound PUBLISH round-trips back via QoS 1.
+Category 1 — host-side Mosquitto fixture.
 
-Skipped at collection time when no credentials are configured.
-The conftest's ``set_runtime_config(..., required_keys=...)`` declares
-``wifi.ssid`` / ``wifi.password`` / ``mqtt.broker.host`` /
-``mqtt.broker.port`` as required, so the host plugin applies
-``pytest.mark.skip`` with a clear message before deploy.  Credentials +
-the broker host/port ship from the host conftest as
-``/runtime_config.msgpack`` and are read here via
-``chumicro_config.load_runtime_config()``.
+Brings wifi up on the device, connects to the Mosquitto broker the
+conftest spawned on the LAN, publishes + subscribes on a unique
+topic, asserts the QoS 1 PUBLISH round-trips back. Cooperates with
+an LED-blink counter on the same loop to verify the publish path
+doesn't block the runner.
 
-Verifies the LED-blink invariant on a real board: an LED-style
-counter keeps incrementing on the same loop while the publish is
-in flight and waiting for PUBACK.
-
-Broker
-======
-
-The conftest spawns a host-side Mosquitto broker on the LAN when
-``mosquitto`` is on ``PATH``.  Otherwise the test uses whatever
-``mqtt.broker.host`` / ``mqtt.broker.port`` the user has set in
-``secrets.toml`` / per-library ``config.toml``.  Topics are
-namespaced ``chumicro-test/<unique>/...`` so we don't collide with
-anyone else's experiments.
-
-If the broker is unreachable from the device's network, the test
-fails with a clear timeout.  That's a real network issue, not a
-test bug.
+Skipped at collection time when no credentials are configured. The
+conftest's `set_runtime_config(..., required_keys=...)` declares
+`wifi.ssid` / `wifi.password` / `mqtt.broker.host` /
+`mqtt.broker.port` as required; the host plugin applies
+`pytest.mark.skip` before deploy when any are missing. Credentials +
+broker host/port ship as `/runtime_config.msgpack`, read on-device
+through the harness helper.
 """
 
 import time
 
-from chumicro_config import config
 from chumicro_mqtt import MQTTClient
 from chumicro_sockets import tcp_client_socket
-from chumicro_timing import ticks_ms as _chumicro_ticks_ms
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_test_harness.network import runtime_config, wifi_up
+from chumicro_timing import ticks_ms
 
 _DEADLINE_MS = 30_000
-_WIFI_CONNECT_TIMEOUT_MS = 15_000
 
 
 def _sleep_ms(duration_ms: int) -> None:
@@ -52,77 +35,46 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-#: Use chumicro-timing's ``ticks_ms`` rather than a per-test-file
-#: shim so the value we feed into ``MQTTClient.handle(now_ms)`` is in
-#: the same time domain as the deadlines the client computes
-#: internally.  On CircuitPython, ``time.ticks_ms`` does not exist.
-#: A naive ``time.monotonic() * 1000`` shim returns an unwrapped
-#: float-derived ms count, while ``chumicro-timing`` resolves to
-#: ``supervisor.ticks_ms`` which is 29-bit-wrapped (the portable
-#: tick contract ``chumicro-timing`` exposes).  Mixing the two on CP makes
-#: ``ticks_diff(deadline, now_ms)`` go negative on the first tick
-#: and the client immediately reports "timed out awaiting connack".
-_ticks_ms = _chumicro_ticks_ms
-
-
-def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
-    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
-    wifi = WifiService(wifi_config)
-    deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
-    while wifi.state != WifiState.CONNECTED:
-        if _ticks_ms() > deadline:
-            raise AssertionError(
-                f"wifi did not link within "
-                f"{_WIFI_CONNECT_TIMEOUT_MS} ms; state={wifi.state}",
-            )
-        if wifi.check(_ticks_ms()):
-            wifi.handle(_ticks_ms())
-        _sleep_ms(50)
-    return wifi
-
-
 def _unique_topic_root() -> str:
     """Per-run topic prefix that avoids colliding with parallel test runs.
 
-    Suffix is the low six digits of ``ticks_ms()``, which the
-    cross-runtime tick contract guarantees on CP/MP/CPython.
+    Suffix is the low six digits of `ticks_ms`, which the cross-runtime
+    tick contract guarantees on CP / MP / CPython.
     """
-    return f"chumicro-test/run-{_ticks_ms() % 1_000_000}"
+    return f"chumicro-test/run-{ticks_ms() % 1_000_000}"
 
 
 def test_real_mqtt_publish_subscribe_round_trip() -> None:
-    """Connect to a real broker, publish QoS 1, confirm receipt."""
-    wifi_cfg = WifiConfig.try_from_config(config)
-    if wifi_cfg is None:
+    """Connect to the broker, publish QoS 1, confirm the same payload comes back."""
+    config = runtime_config()
+    ssid = config.get("wifi.ssid", "")
+    password = config.get("wifi.password", "")
+    broker_host = config.get("mqtt.broker.host")
+    broker_port = config.get("mqtt.broker.port")
+    if not ssid or broker_host is None or broker_port is None:
         raise AssertionError(
-            "wifi runtime config missing — the conftest's "
+            "wifi or broker runtime config missing — the conftest's "
             "`set_runtime_config(..., required_keys=...)` should have "
-            "skipped this test at collection time.  Reaching this body "
+            "skipped this test at collection time. Reaching this body "
             "means the conftest's required_keys list is incomplete.",
         )
-    broker_host = config["mqtt.broker.host"]
-    broker_port = config["mqtt.broker.port"]
 
-    wifi = _bring_wifi_up(wifi_cfg)
-    print(f"WIFI_OK ip={wifi.ip}")
+    radio, ip = wifi_up(ssid, password)
+    print(f"WIFI_OK ip={ip}")
 
-    sock = tcp_client_socket(
-        broker_host,
-        broker_port,
-        radio=wifi.adapter.radio,
-    )
+    sock = tcp_client_socket(broker_host, broker_port, radio=radio)
     client = MQTTClient(
         sock,
-        client_id=f"chumicro-test-{_ticks_ms() % 1_000_000_000}",
+        client_id=f"chumicro-test-{ticks_ms() % 1_000_000_000}",
         keep_alive_seconds=30,
     )
 
     received: list[tuple[str, bytes]] = []
 
     def remember(topic, payload):
-        # MP/CP MQTT delivers topic as ``str`` and payload as
-        # ``bytes`` / ``bytearray``.  Coerce to uniform (str, bytes)
-        # so assertions don't have to handle either form.
+        # MP / CP MQTT deliver topic as `str` and payload as `bytes` /
+        # `bytearray`. Coerce to (str, bytes) so assertions don't have
+        # to handle either form.
         topic_str = topic.decode() if isinstance(topic, (bytes, bytearray)) else topic
         payload_bytes = (
             payload if isinstance(payload, bytes)
@@ -137,17 +89,16 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
     topic = f"{topic_root}/echo"
     payload = b"hello from chumicro acceptance"
 
-    # Connect.  Emit a heartbeat print every ~1 s so the host's
-    # idle-timeout doesn't fire during legitimate slow CONNACK waits
-    # on CP boards (where the wifi, TCP, and MQTT CONNECT-CONNACK
-    # chain can spend several seconds in non-blocking recv polls
-    # before the broker's reply arrives).
+    # Connect. Heartbeat-print every ~1 s so the host's idle-timeout
+    # doesn't fire during legitimate slow CONNACK waits on CP boards
+    # (the wifi + TCP + MQTT CONNECT-CONNACK chain can spend several
+    # seconds in non-blocking recv polls before the broker replies).
     print("MQTT_CONNECTING")
     client.connect()
-    deadline = _ticks_ms() + _DEADLINE_MS
+    deadline = ticks_ms() + _DEADLINE_MS
     poll_count = 0
     while client.state != "connected":
-        if _ticks_ms() > deadline:
+        if ticks_ms() > deadline:
             raise AssertionError(
                 f"MQTT CONNECT did not complete in time; "
                 f"state={client.state} last_error={client.last_error!r}",
@@ -156,18 +107,16 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
             raise AssertionError(
                 f"MQTT CONNECT failed; last_error={client.last_error!r}",
             )
-        if client.check(_ticks_ms()):
-            client.handle(_ticks_ms())
+        if client.check(ticks_ms()):
+            client.handle(ticks_ms())
         poll_count += 1
         if poll_count % 50 == 0:
             print(f"MQTT_POLL count={poll_count} state={client.state}")
         _sleep_ms(20)
     print(f"MQTT_CONNECTED after {poll_count} polls")
 
-    # Subscribe.
     client.subscribe(topic, qos=1)
 
-    # Publish QoS 1.
     publish_complete = [False]
 
     def on_publish_done(_topic, _payload):
@@ -177,18 +126,16 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
 
     # Drive both round-trips with the LED-blink invariant.
     led_counter = 0
-    deadline = _ticks_ms() + _DEADLINE_MS
+    deadline = ticks_ms() + _DEADLINE_MS
     while not (publish_complete[0] and received):
-        if _ticks_ms() > deadline:
+        if ticks_ms() > deadline:
             raise AssertionError(
                 f"publish/subscribe round-trip did not complete in "
                 f"{_DEADLINE_MS} ms; published={publish_complete[0]}, "
                 f"received_count={len(received)}",
             )
-        if wifi.check(_ticks_ms()):
-            wifi.handle(_ticks_ms())
-        if client.check(_ticks_ms()):
-            client.handle(_ticks_ms())
+        if client.check(ticks_ms()):
+            client.handle(ticks_ms())
         led_counter += 1
         _sleep_ms(20)
 

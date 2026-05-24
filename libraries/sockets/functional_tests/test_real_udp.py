@@ -1,36 +1,32 @@
-"""Real-network UDP smoke tests for chumicro-sockets.
+"""Real-network UDP smoke test for chumicro-sockets.
 
-End-to-end transport verification: bring wifi up, open a UDP socket,
-exchange one datagram with the host-side echo server materialized by
-``conftest.py``, and assert the echoed payload matches what we sent.
+Category 1 — host-side UDP echo fixture.
 
-Skipped at collection time when no credentials are configured —
-the conftest's ``set_runtime_config(..., required_keys=...)`` declares
-``wifi.ssid`` / ``wifi.password`` as required.  When the host echo-
-server fixture didn't come up (running outside the LAN fixture
-machine), the test body itself calls ``chumicro_test_harness.skip``
-so the run reports a visible SKIP instead of a fake PASS.
-Credentials + the dynamic echo host/port ship
-from the host conftest as ``/runtime_config.msgpack`` and are read
-here via the lazy-loaded ``chumicro_config.config`` attribute.
+Brings wifi up on the device, opens a UDP socket, sends one datagram
+to the host echo server the conftest brought up on the LAN, asserts
+the echoed payload + sender address match what was sent.
 
-Why a sockets-direct UDP test even though chumicro-ntp will exercise
-UDP transitively?  Same rationale as ``test_real_tcp.py``: when an
-NTP run fails, "could not parse response" is ambiguous between "UDP
-broken" and "NTP wire-format wrong".  A direct UDP echo test catches
-the transport-layer regression at the layer where the message is
-unambiguous.
+Skipped at collection time when wifi credentials are missing. The
+test body itself calls `chumicro_test_harness.skip` when the host
+echo-server fixture didn't come up (running outside the LAN fixture
+machine) so the run reports a visible SKIP instead of a fake PASS.
+Credentials + the dynamic echo host/port ship as
+`/runtime_config.msgpack`.
+
+Why a sockets-direct UDP test even though chumicro-ntp exercises
+UDP transitively? When an NTP run fails, "could not parse response"
+is ambiguous between "UDP broken" and "NTP wire-format wrong". A
+direct UDP echo test catches the transport-layer regression at the
+layer where the message is unambiguous.
 """
 
 import time
 
-from chumicro_config import config
 from chumicro_sockets import udp_socket
 from chumicro_test_harness import skip
-from chumicro_timing import ticks_ms as _ticks_ms
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_test_harness.network import runtime_config, wifi_up
+from chumicro_timing import ticks_ms
 
-_WIFI_CONNECT_TIMEOUT_MS = 15_000
 _RECV_DEADLINE_MS = 5_000
 _PAYLOAD = b"chumicro-udp-echo"
 
@@ -43,44 +39,31 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
-    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
-    wifi = WifiService(wifi_config)
-    deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
-    while wifi.state != WifiState.CONNECTED:
-        if _ticks_ms() > deadline:
-            raise AssertionError(
-                f"wifi did not link within "
-                f"{_WIFI_CONNECT_TIMEOUT_MS} ms; state={wifi.state}",
-            )
-        if wifi.check(_ticks_ms()):
-            wifi.handle(_ticks_ms())
-        _sleep_ms(50)
-    return wifi
-
-
 def test_real_udp_echo_round_trip() -> None:
     """Send one datagram to the host echo server, read it back."""
-    wifi_cfg = WifiConfig.try_from_config(config)
-    if wifi_cfg is None:
+    config = runtime_config()
+    ssid = config.get("wifi.ssid", "")
+    password = config.get("wifi.password", "")
+    if not ssid:
         raise AssertionError(
             "wifi runtime config missing — the conftest's "
             "`set_runtime_config(..., required_keys=...)` should have "
-            "skipped this test at collection time.  Reaching this body "
+            "skipped this test at collection time. Reaching this body "
             "means the conftest's required_keys list is incomplete.",
         )
-    echo_host = config["sockets.echo.host"]
-    echo_port = config["sockets.echo.port"]
+    echo_host = config.get("sockets.echo.host")
+    echo_port = config.get("sockets.echo.port")
     if echo_host is None or echo_port is None:
-        # Conftest registers `None` for sockets.echo.host/port when the
-        # host isn't on a LAN or echo-server bind failed.  `required_keys`
-        # treats `None` as present, so we surface the skip here instead.
+        # Conftest registers `None` for sockets.echo.host / .port when
+        # the host isn't on a LAN or the echo-server bind failed.
+        # `required_keys` treats `None` as present, so the skip surfaces
+        # here instead of at collection time.
         skip("host UDP echo fixture not available (LAN detection or bind failed)")
 
-    wifi = _bring_wifi_up(wifi_cfg)
-    print(f"WIFI_OK ip={wifi.ip}")
+    radio, ip = wifi_up(ssid, password)
+    print(f"WIFI_OK ip={ip}")
 
-    sock = udp_socket(radio=wifi.adapter.radio)
+    sock = udp_socket(radio=radio)
     print(f"UDP_OK bound={sock.getsockname()}")
 
     try:
@@ -90,14 +73,14 @@ def test_real_udp_echo_round_trip() -> None:
         print(f"SENT bytes={len(_PAYLOAD)} dst={echo_host}:{echo_port}")
 
         # Drain with a recv loop so a slow echo doesn't time out the
-        # tick budget.  An LED-blink counter increments alongside so
-        # we can verify recvfrom_into doesn't block-call on the device.
+        # tick budget. An LED-blink counter increments alongside to
+        # verify recvfrom_into doesn't block-call on the device.
         buffer = bytearray(64)
         led_counter = 0
-        deadline = _ticks_ms() + _RECV_DEADLINE_MS
+        deadline = ticks_ms() + _RECV_DEADLINE_MS
         received_count = 0
         sender_address = None
-        while _ticks_ms() < deadline:
+        while ticks_ms() < deadline:
             try:
                 received_count, sender_address = sock.recvfrom_into(buffer)
             except OSError as error:
