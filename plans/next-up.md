@@ -6,6 +6,7 @@
 
 ## Next
 
+- [ ] **Streaming-transport `execute(on_line=...)`.**  [workstreams/streaming-transport.md](workstreams/streaming-transport.md) — blocks [Decision 0085](decisions/0085-board-to-host-sync-stdout-markers.md) protocol going live + http_server Category 1 rewrite.
 - [ ] **chumicro_mqtt + chumicro_runner cooperative-tick convergence.**  [workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md](workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md)
 - [ ] **MQTT negative-testing suite.**  [workstreams/mqtt-negative-testing-suite.md](workstreams/mqtt-negative-testing-suite.md)
 - [ ] **Wifi-recovery bake — gated on `chumicro_wifi.WifiService` adoption in the bake.**  Today's `projects/mqtt_bake_diag_plain/app.py` calls a raw `wlan.connect()` / `wifi.radio.connect()` at boot and never reconnects.  A router-reboot test against that harness would mostly measure the substrate's auto-rejoin behaviour, not our library.  When the bake (or any real project) starts driving `chumicro_wifi.WifiService` from the runner, re-queue: reboot the router mid-bake, confirm `WifiService` re-associates + the MQTT connector resumes from FAILED.

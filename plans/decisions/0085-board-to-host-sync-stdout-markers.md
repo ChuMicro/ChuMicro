@@ -65,6 +65,10 @@ The host fixture's `wait_for(name, timeout_s)` raises `TimeoutError` on the host
 - **Block the host fixture on `subprocess.PIPE.readline()` synchronously inside the fixture body.** Pytest fixture evaluation happens *before* the device backend runs; there is no stdout to read yet. A callback-on-arrival model is the only correct shape.
 - **A second log channel (UART2, named pipe, side socket).** Real boards mostly have one serial line out. Reusing the existing stdout stream is the only path that doesn't require additional hardware-side wiring.
 
+## Substrate prerequisite
+
+The protocol assumes the host receives board stdout incrementally — the `wait_for(name, timeout_s)` primitive blocks until a matching line arrives, which only works if lines arrive one at a time. `TransportProtocol.execute(bootstrap) -> str` today is request/response: the board runs the bootstrap to completion, then the host receives the full captured stdout. Implementing this ADR requires lifting that interface to streaming — an `on_line` callback on `execute`, plumbed through the mpremote subprocess and pyserial transports (both already read line-by-line internally; the current sync interface buffers and returns at end). The implementation is tracked under [`plans/workstreams/streaming-transport.md`](../workstreams/streaming-transport.md). Until that lands, this ADR's protocol is `accepted` as the design but not yet active — no Category 1 server-side test uses it.
+
 ## Consequences
 
 - `chumicro_pytest_device.result_parser` gains a `parse_marker(line)` path that recognises the `<NAME> key=value ...` shape, in parallel to the existing `PASS` / `FAIL` / etc. parser. Backwards-compatible: a line that doesn't start with a known marker name is passed through to stdout verbatim, same as today.

@@ -60,6 +60,9 @@ Networking libraries that rely on `chumicro_test_harness.network` in their shipp
 <!-- One line per phase as it lands.  Format: `- **YYYY-MM-DD** Phase N. <short summary> + commit hash.` -->
 
 - **2026-05-24** Phase 1. `chumicro_test_harness.network` submodule (`wifi_up` + `runtime_config` + inline msgpack decoder) landed in-place with cross-runtime test coverage; preflight green at coverage 94 across CPython + MP + CP. Commit `4613ff0d`.
+- **2026-05-24** Phase 2 / Slice 1. Eight functional-test files (mqtt + sockets x4 + ntp + requests x2) swapped to `chumicro_test_harness.network`; Category 1 / 2 declarations added per [Decision 0083](../decisions/0083-functional-test-endpoint-taxonomy.md); `test_assertions.py` self-circular `raises` cleanup. Commit `8c3c109f`.
+- **2026-05-24** Phase 2 / blocking ADR. [Decision 0085](../decisions/0085-board-to-host-sync-stdout-markers.md) names the stdout-marker sync protocol Category 1 server-side tests need. Commit `11ff6a5f`.
+- **2026-05-24** Phase 2 / Slice 2 deferred. `http_server/test_real_serve.py` rewrite blocked on `TransportProtocol.execute` becoming streaming-capable; pulled into [`workstreams/streaming-transport.md`](streaming-transport.md). Re-enters this workstream as a follow-up slice once that lands.
 
 ## Out of scope
 
