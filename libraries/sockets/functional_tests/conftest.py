@@ -1,25 +1,26 @@
-"""Host-side fixtures for sockets functional tests.
+"""Host-side fixtures for chumicro-sockets functional tests.
 
 Two responsibilities:
 
-1. Register the merged runtime-config dict (secrets.toml +
-   per-library overrides) with pytest-device so it stages at
-   ``/runtime_config.msgpack`` on the device — on-device tests read
-   wifi creds + the dynamic ``sockets.echo`` host/port from there.
+1. Register the merged runtime-config dict (secrets.toml + per-library
+   overrides) with pytest-device so it stages at
+   `/runtime_config.msgpack` on the device — on-device tests read wifi
+   creds + the dynamic `sockets.echo` host/port from there.
 2. Start a host-side UDP echo server on the LAN interface so the
-   board's UDP smoke test has a counterparty.  The server runs in a
-   daemon thread for the duration of the pytest session and echoes
-   any datagram it receives straight back to the sender.
+   board's UDP smoke test has a counterparty. The server runs in a
+   daemon thread for the duration of the pytest session and echoes any
+   datagram it receives straight back to the sender.
 """
 
 from __future__ import annotations
 
-import socket
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from chumicro_pytest_device.fixtures.lan import detect_lan_ip
+from chumicro_pytest_device.fixtures.udp_echo import start_udp_echo_server
 from chumicro_pytest_device.runtime_config import set_runtime_config
 from chumicro_workspace import compose_runtime_config
 
@@ -28,14 +29,9 @@ _REPO_ROOT = _HERE.parents[2]
 _SECRETS_TOML = _REPO_ROOT / "secrets.toml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent means workspace defaults only
 
-#: Maximum datagram size the echo server accepts.  Generous for any
-#: chumicro library traffic (NTP is 48 bytes, mDNS/SSDP query
-#: payloads stay well under 1 KB).
-_MAX_DATAGRAM = 1500
-
 
 def _merged_runtime_config_with_creds() -> dict | None:
-    """Return the deep-merged + flattened runtime-config dict, or ``None``.
+    """Return the deep-merged + flattened runtime-config dict, or `None`.
 
     Returns the dict only when wifi credentials are configured —
     matches the pre-migration behavior where the on-device tests
@@ -43,10 +39,10 @@ def _merged_runtime_config_with_creds() -> dict | None:
     """
     if not _SECRETS_TOML.is_file():
         return None
-    # Any exception from ``compose_runtime_config`` propagates — a
-    # malformed ``secrets.toml`` is a real bug to surface, not the
-    # same shape as a fresh-clone "user hasn't filled it in yet."
-    # The missing-file path above is the only silent-skip case.
+    # Any exception from `compose_runtime_config` propagates — a
+    # malformed `secrets.toml` is a real bug to surface, not the same
+    # shape as a fresh-clone "user hasn't filled it in yet." The
+    # missing-file path above is the only silent-skip case.
     merged = compose_runtime_config(
         secrets_toml=_SECRETS_TOML,
         project_config=_LIBRARY_CONFIG,
@@ -58,67 +54,15 @@ def _merged_runtime_config_with_creds() -> dict | None:
     if ssid == "replace-with-your-ap-ssid":
         return None
     # Bake the host's UTC clock so the TLS matrix test can seed the
-    # device RTC — default validation rejects valid certs as
-    # "validity starts in the future" when the board boots at epoch.
-    # Real deployments NTP-sync; baking the host clock keeps the test
-    # off the network for time.  Mirrors requests.now_utc_tuple.
+    # device RTC — default validation rejects valid certs as "validity
+    # starts in the future" when the board boots at epoch. Real
+    # deployments NTP-sync; baking the host clock keeps the test off
+    # the network for time. Mirrors requests.now_utc_tuple.
     now = datetime.now(UTC)
     merged["sockets.now_utc_tuple"] = (
         now.year, now.month, now.day, now.hour, now.minute, now.second,
     )
     return merged
-
-
-def _detect_lan_ip() -> str | None:
-    """Return the host's primary LAN IPv4, or ``None`` if undetectable.
-
-    Trick: open a UDP socket and "connect" it to a public IP — no
-    packet is sent, but the kernel selects the local address it would
-    use to route there.  ``getsockname`` then exposes that address.
-    Works on macOS and Linux multi-interface setups.
-    """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.connect(("8.8.8.8", 80))
-        host, _port = sock.getsockname()
-        if host.startswith("127."):
-            return None
-        return host
-    except OSError:
-        return None
-    finally:
-        sock.close()
-
-
-def _start_echo_server(bind_host: str) -> tuple[str, int, threading.Event]:
-    """Bind a UDP echo socket on *bind_host*; return (host, port, stop_event).
-
-    Echoes every received datagram straight back to its sender on a
-    daemon thread.  The stop event lets the session-finish hook
-    signal a clean shutdown.
-    """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((bind_host, 0))
-    sock.settimeout(0.25)
-    host, port = sock.getsockname()
-    stop = threading.Event()
-
-    def _serve() -> None:
-        while not stop.is_set():
-            try:
-                data, peer = sock.recvfrom(_MAX_DATAGRAM)
-            except (TimeoutError, OSError):
-                continue
-            try:
-                sock.sendto(data, peer)
-            except OSError:
-                # Best effort — drop on send failure (peer rebooted, etc.).
-                continue
-        sock.close()
-
-    thread = threading.Thread(target=_serve, name="udp-echo-server", daemon=True)
-    thread.start()
-    return host, port, stop
 
 
 _ECHO_STOP: threading.Event | None = None
@@ -127,11 +71,10 @@ _ECHO_STOP: threading.Event | None = None
 def pytest_configure(config: pytest.Config) -> None:
     """Spin up the host UDP echo server; register the runtime-config payload.
 
-    Always emits ``sockets.echo.host`` / ``sockets.echo.port`` keys when
-    a payload is registered — values are ``None`` when the fixture
-    didn't spawn, so on-device test code can read
-    ``config["sockets.echo.host"]`` directly without defensive ``.get()``
-    chaining.
+    Always emits `sockets.echo.host` / `sockets.echo.port` keys when a
+    payload is registered — values are `None` when the fixture didn't
+    spawn, so on-device test code can read `config["sockets.echo.host"]`
+    directly without defensive `.get()` chaining.
     """
     global _ECHO_STOP
 
@@ -140,9 +83,9 @@ def pytest_configure(config: pytest.Config) -> None:
     if merged is not None:
         echo_host: str | None = None
         echo_port: int | None = None
-        lan_ip = _detect_lan_ip()
+        lan_ip = detect_lan_ip()
         if lan_ip is not None:
-            echo_host, echo_port, _ECHO_STOP = _start_echo_server(lan_ip)
+            echo_host, echo_port, _ECHO_STOP = start_udp_echo_server(lan_ip)
         merged["sockets.echo.host"] = echo_host
         merged["sockets.echo.port"] = echo_port
 
