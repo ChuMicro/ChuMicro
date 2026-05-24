@@ -21,7 +21,6 @@ import os
 import select
 
 import pytest
-
 from chumicro_runner import Runner
 from chumicro_runner.core import _SelectPollAdapter
 from chumicro_runner.testing import FakePoller
