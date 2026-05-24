@@ -49,20 +49,6 @@ while True:
 
 On a slow microcontroller, calling `ticks_ms()` separately for each component would return slightly different values. A heartbeat that should fire at the same moment as another might not. Sharing the timestamp eliminates this class of bug.
 
-### Checking without consuming
-
-`is_due(now_ms)` tells you whether the period has elapsed without advancing the timer. This is useful when you need to check timing state without committing to an action:
-
-```python
-now = ticks_ms()
-if heartbeat.is_due(now):
-    # Period has elapsed, but the timer hasn't been reset yet.
-    # Calling is_due(now) again will still return True.
-    pass
-```
-
-Call `poll(now)` when you're ready to consume the beat and start the next period.
-
 ### Resetting
 
 `reset(now_ms)` restarts the timer from the given timestamp:

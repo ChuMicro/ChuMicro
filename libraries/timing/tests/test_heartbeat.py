@@ -24,19 +24,17 @@ def test_heartbeat_becomes_due_after_full_period() -> None:
     heartbeat = Heartbeat(period_ms=100, ticks=fake)
 
     now = fake.ticks_ms()
-    assert heartbeat.is_due(now) is False
     assert heartbeat.poll(now) is False
 
     fake.advance(99)
     now = fake.ticks_ms()
-    assert heartbeat.is_due(now) is False
     assert heartbeat.poll(now) is False
 
     fake.advance(1)
     now = fake.ticks_ms()
-    assert heartbeat.is_due(now) is True
     assert heartbeat.poll(now) is True
-    assert heartbeat.is_due(now) is False
+    # poll() consumed the beat; the next call with the same now_ms is False.
+    assert heartbeat.poll(now) is False
 
 
 def test_heartbeat_reset_restarts_the_schedule() -> None:

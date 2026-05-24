@@ -56,7 +56,6 @@ while True:
 |---|---|
 | `Heartbeat(period_ms, ticks=None)` | Periodic timer that fires once per elapsed period |
 | `Heartbeat.poll(now_ms)` | Returns `True` once per period and advances the timer |
-| `Heartbeat.is_due(now_ms)` | Check whether the period has elapsed (without advancing) |
 | `Heartbeat.reset(now_ms)` | Restart the timer from the given timestamp |
 | `Heartbeat.period_ms` | The configured period (read-only property) |
 
@@ -116,7 +115,7 @@ assert heartbeat.poll(now) is True
 |---|---|
 | `heartbeat_blink.py` | Basic periodic timer loop |
 | `multiple_heartbeats.py` | Multiple heartbeats at different rates |
-| `timeout_check.py` | One-shot timeout using `is_due` |
+| `timeout_check.py` | One-shot deadline check using `ticks_diff` |
 | `debounce.py` | Simulated button debounce |
 | `periodic_tick.py` | Manual periodic loop (the same logic `Heartbeat` wraps internally) |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
