@@ -1,36 +1,33 @@
-"""Real-network SNTP smoke tests for chumicro-ntp.
+"""Real-network SNTP smoke test for chumicro-ntp.
 
-End-to-end: bring wifi up, open a UDP socket, query a public NTP
-server, verify the returned Unix-epoch seconds is plausibly close to
-the host's clock.  Exercises chumicro-ntp's SNTP wire format,
-chumicro-sockets' UDP path, and the ``sockets_factory`` submodule
-end-to-end on real hardware.
+Category 2 — public endpoint, `pool.ntp.org` interop.
 
-Skipped at collection time when no credentials are configured —
-the conftest's ``set_runtime_config(..., required_keys=...)`` declares
-``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
-applies ``pytest.mark.skip`` with a clear message before deploy.
-Credentials ship from the host conftest as ``/runtime_config.msgpack``
-and are read here via ``chumicro_config.config`` — the same API user
-code uses.
+Brings wifi up, opens a UDP socket via the chumicro_sockets factory,
+queries a public NTP server, asserts the returned Unix-epoch seconds
+is plausibly close to the host clock. Exercises chumicro-ntp's SNTP
+wire format, chumicro-sockets' UDP path, and the `sockets_factory`
+submodule end-to-end on real hardware.
+
+Why public endpoint? Our own controlled SNTP responder would be the
+chumicro-ntp encoder talking to the chumicro-ntp decoder — green
+proves nothing about whether the wire format interoperates with the
+real SNTP universe. `pool.ntp.org` rotates across many stratum-2
+providers so a single down server doesn't break the test.
+
+Skipped at collection time when wifi credentials are missing.
 """
 
 import time
 
-from chumicro_config import config
 from chumicro_ntp import NTPClient
 from chumicro_ntp.sockets_factory import chumicro_sockets_factory
-from chumicro_timing import ticks_ms as _ticks_ms
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_test_harness.network import runtime_config, wifi_up
+from chumicro_timing import ticks_ms
 
-#: Public NTP server used for validation.  pool.ntp.org rotates
-#: across many providers so a single down stratum-2 doesn't break
-#: the test.
 _NTP_SERVER = "pool.ntp.org"
-_WIFI_CONNECT_TIMEOUT_MS = 15_000
 _NTP_TIMEOUT_MS = 8_000
 
-#: Plausibility window for the returned timestamp.  Anything between
+#: Plausibility window for the returned timestamp. Anything between
 #: 2024-01-01 and 2030-01-01 (Unix seconds) is "current" enough to
 #: indicate the SNTP exchange was real and the parser worked.
 _MIN_PLAUSIBLE = 1_704_067_200  # 2024-01-01T00:00:00Z
@@ -45,37 +42,23 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
-    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
-    wifi = WifiService(wifi_config)
-    deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
-    while wifi.state != WifiState.CONNECTED:
-        if _ticks_ms() > deadline:
-            raise AssertionError(
-                f"wifi did not link within "
-                f"{_WIFI_CONNECT_TIMEOUT_MS} ms; state={wifi.state}",
-            )
-        if wifi.check(_ticks_ms()):
-            wifi.handle(_ticks_ms())
-        _sleep_ms(50)
-    return wifi
-
-
 def test_real_ntp_query_returns_plausible_timestamp() -> None:
     """SNTP exchange against pool.ntp.org returns a recent timestamp."""
-    wifi_cfg = WifiConfig.try_from_config(config)
-    if wifi_cfg is None:
+    config = runtime_config()
+    ssid = config.get("wifi.ssid", "")
+    password = config.get("wifi.password", "")
+    if not ssid:
         raise AssertionError(
             "wifi runtime config missing — the conftest's "
             "`set_runtime_config(..., required_keys=...)` should have "
-            "skipped this test at collection time.  Reaching this body "
+            "skipped this test at collection time. Reaching this body "
             "means the conftest's required_keys list is incomplete.",
         )
 
-    wifi = _bring_wifi_up(wifi_cfg)
-    print(f"WIFI_OK ip={wifi.ip}")
+    radio, ip = wifi_up(ssid, password)
+    print(f"WIFI_OK ip={ip}")
 
-    sock = chumicro_sockets_factory(radio=wifi.adapter.radio)
+    sock = chumicro_sockets_factory(radio=radio)
     sock.setblocking(False)
     print(f"UDP_OK bound={sock.getsockname()}")
 
@@ -90,8 +73,8 @@ def test_real_ntp_query_returns_plausible_timestamp() -> None:
 
         led_counter = 0
         while not request.done:
-            if client.check(_ticks_ms()):
-                client.handle(_ticks_ms())
+            if client.check(ticks_ms()):
+                client.handle(ticks_ms())
             led_counter += 1
             _sleep_ms(20)
 
