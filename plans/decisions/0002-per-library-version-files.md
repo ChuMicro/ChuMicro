@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-03-31`
+Summary: Each publishable library owns a checked-in `VERSION` file in its root; the same PR that changes its released surface must bump it.
 Related: Decision 0020 (API breakage detection enforces level)
 
 ## Context

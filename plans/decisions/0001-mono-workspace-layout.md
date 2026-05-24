@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-03-28`
+Summary: Mono-workspace with shared root tooling and per-package directories; each library keeps its own packaging metadata and publishes independently.
 Related: none
 
 ## Context

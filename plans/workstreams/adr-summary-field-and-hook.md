@@ -12,7 +12,7 @@ A new frontmatter field — `Summary:` — captures one machine-extractable sent
 
 ## Implementation phases
 
-### Phase 1 — Template + skill update (DONE — commit pending)
+### Phase 1 — Template + skill update (DONE in `4bf6aa4d`)
 
 `.github/skills/new-decision/SKILL.md`:
 
@@ -41,16 +41,22 @@ Estimate: ~8–10 cluster commits, ~70 ADRs total.  No code change; lint stays a
 ```sh
 for f in plans/decisions/[0-9]*.md; do
   base=$(basename "$f" .md)
+  case "$base" in *INERT*|*SUPERSEDED*) continue ;; esac
   summary=$(grep -m1 '^Summary:' "$f" | sed -E 's/^Summary:[[:space:]]*//')
   printf '%s — %s\n' "$base" "$summary"
 done
 ```
 
-Output ~6–8 KB total (depending on summary length distribution), one-time-per-session cost.  Filename markers (`SUPERSEDED-BY-`, `INERT-`) stay visible via the slug; status is implicit in the marker.
+Dead ADRs (`INERT-` per Decision 0076, `SUPERSEDED-BY-` per the supersession rule) are filtered from the hook — their filenames already announce dead-ness, and surfacing each at session start spends context on records the reader will skip.  They still carry `Summary:` fields (backfill is corpus-wide, CHU lint applies uniformly) so `grep ^Summary plans/decisions/` remains a complete corpus index for anyone who asks.
+
+Output ~10–12 KB total at ~150-char average across 77 active ADRs, one-time-per-session cost.
 
 ## Validation history
 
 <!-- One line per phase as it lands.  Format: `- **YYYY-MM-DD** Phase N. <short summary> + commit hash.` -->
+
+- **2026-05-24** Phase 1.  `new-decision` SKILL template gains required `Summary:` frontmatter field + verify checklist.  Commit `4bf6aa4d`.
+- **2026-05-24** Phase 2 pilot (5 ADRs: 0001, 0002, 0003, 0004, 0005).  Riskiest-assumption gate cleared — 4 strong disambiguations + 1 mild (0005 slug already half-answers).  Dead-ADR scope resolved: backfill all 82 (uniform CHU lint), hook filters `INERT|SUPERSEDED` filename markers (Phase 4 snippet updated).
 
 ## Out of scope
 

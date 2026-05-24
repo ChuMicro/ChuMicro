@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-03-29`
+Summary: Windows is a supported CPython dev host but WSL2 is the path for MicroPython/CircuitPython unix-port validation; native-Windows unix-port builds are out of scope.
 Related: Decision 0003 (test boundaries), Decision 0016 (cross-runtime unit tests)
 Archived: inert — an explicitly provisional early-phase Windows-host intent that was never operationalized: no live setup doc adopted the "native CPython + WSL2" path it predicted, and the current posture moved past it (the deploy tool hard-refuses native Windows; the docs state Windows is not currently supported). No successor ADR. Historical record only; see [Decision 0076](0076-archive-dead-decisions-in-filename.md).
 

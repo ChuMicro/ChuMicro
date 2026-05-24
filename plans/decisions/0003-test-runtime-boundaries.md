@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-03-28`
+Summary: CPython-hosted `pytest` is the default test seam; cross-runtime unit tests run on MP/CP unix-ports via `UnixPortBackend`; real-device tests are opt-in via `DeviceBackend`.
 Related: Decision 0049 (three-runtime trinity — the founding principle this pyramid rests on), Decision 0010 (testability), Decision 0016 (cross-runtime unit tests), Decision 0027 (device tests)
 
 ## Context
