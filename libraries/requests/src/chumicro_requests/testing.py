@@ -79,7 +79,7 @@ class FakeHttpClient:
         status: int = 200,
         reason: str = "OK",
         http_version: str = "HTTP/1.1",
-        headers: object | None = None,
+        headers: CaseInsensitiveDict | dict | list | tuple | None = None,
         body: bytes = b"",
         oversized_dropped: bool = False,
     ) -> None:
@@ -131,7 +131,7 @@ class FakeHttpClient:
         self,
         url: str,
         *,
-        headers: object | None = None,
+        headers: CaseInsensitiveDict | dict | list | tuple | None = None,
         timeout_ms: int | None = None,
     ) -> RequestHandle:
         """Mirror :meth:`HttpClient.get` against the scripted queue.
