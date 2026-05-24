@@ -4,6 +4,8 @@
 
 ## Now
 
+- [ ] **Resume test-harness Phase 2 + streaming-substrate design** — see [`handoffs/2026-05-24-test-harness-phase-2-and-streaming-substrate.md`](handoffs/2026-05-24-test-harness-phase-2-and-streaming-substrate.md).
+
 ## Next
 
 - [ ] **Streaming-transport `execute(on_line=...)`.**  [workstreams/streaming-transport.md](workstreams/streaming-transport.md) — blocks [Decision 0085](decisions/0085-board-to-host-sync-stdout-markers.md) protocol going live + http_server Category 1 rewrite.
