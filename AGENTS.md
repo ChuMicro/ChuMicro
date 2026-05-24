@@ -88,13 +88,14 @@ When instructions overlap:
 
 **Code comments**
 
-- A code comment first states, in plain words, what the function, method, or class does or returns, written so a reader who has not read the code is oriented. Then state the non-obvious why.
-- A private helper's comment must not name its callers. The helper has no business knowing them.
-- A comment must not point outside this code's world: no "mirrors the reference impl", no upstream-repo / sibling-project names.
-- A comment documents the why of current code, nothing else. No history ("previously this did X"), no dated incidents ("2026-05-09 ESP32-S2 bake"), no removed-code explanations ("we used to also send Ctrl-C, dropped because…"), no workstream pointers ("Step 2 of workbench-deploy-reliability"). Defer to the commit message instead, or update the relevant ADR or workstream file. Applies to docstrings and test-body comments too.
-- **When a comment / docstring / doc disagrees with the code, the code is the source of truth by default — fix the prose.** Exception: when the prose plausibly encodes intent the code lost (a regressed feature, an aspirational claim never implemented), don't silently delete documented behavior — ask the user which side is correct.
-- Audit-pass commits may add general "what this work is doing" framing, but never per-change justification ("bench-validated -25% allocation", "skips the bytes() copy") and never the same comment repeated across many sites. Per-change rationale goes in the commit message body.
-- A comment so degraded that trimming it again only makes it less legible gets rewritten from a fresh read of the code, not subtracted further.
+- Always open a code comment with a plain-words statement of what the function, method, or class does or returns, written for a reader who has not read the code. State the non-obvious why after that, never before. Never lead with the why.
+- Never name a private helper's callers in its comment. A helper does not know who calls it. No exceptions.
+- **Every comment must stand alone for a cold reader of this file.** Do not write "see ``module``'s docstring", ":mod:`other` documents the rationale", "follows the pattern in X", or any upstream-repo / sibling-library name. No exceptions — not for brevity, not for elegance, not "obviously the reader knows."
+- Never duplicate rationale prose across modules. When the same rationale applies to more than one module, it is project policy — fix AGENTS.md or the relevant ADR and delete every per-module copy. Do not consolidate to one module and cross-reference from the rest.
+- **A comment documents the why of current code. Nothing else.** Do not write history ("previously this did X"), dated incidents ("2026-05-09 ESP32-S2 bake"), removed-code explanations ("we used to also send Ctrl-C, dropped because…"), or workstream pointers ("Step 2 of workbench-deploy-reliability"). History belongs in the commit message. Rationale that outlives a commit belongs in the relevant ADR or workstream file. Applies to docstrings and test-body comments without exception.
+- **When a comment / docstring / doc disagrees with the code, the code is the source of truth. Fix the prose.** Sole exception: when the prose plausibly encodes intent the code lost (a regressed feature, an aspirational claim never implemented), do not silently delete documented behavior — stop and ask the user which side is correct.
+- Never write a comment to record an audit-pass finding. Per-change justification ("bench-validated -25% allocation", "skips the bytes() copy"), sweep narratives, before/after numbers, and the same comment repeated across many sites all go in the commit message body. No exceptions for "general framing" — if it describes the pass and not the code, it belongs in the commit, not the source.
+- Never trim a degraded comment further. A comment that loses legibility each time it is trimmed is deleted and rewritten from a fresh read of the code. Subtracting one more word is not the fix.
 
 **Plans-doc brevity**
 

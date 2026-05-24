@@ -10,7 +10,6 @@ __all__ = [
     "TaskHandle",
 ]
 
-# End-of-package import GC sweep — chumicro_mqtt/__init__.py docstring.
-import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
+import gc as _gc  # noqa: E402, I001 — end-of-module gc.collect() placement is deliberate.
 _gc.collect()
 del _gc
