@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-03`
-Summary: Hardware baseline is 256 KB MCU RAM + 4 MB flash; libraries require `collections.deque` and therefore full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython.
+Summary: Hardware baseline is 256 KB MCU RAM + 2 MB physical / ~800 KB usable flash; libraries require `collections.deque` and therefore full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython.
 Related: Decision 0011 (platform targeting), Decision 0039 (firmware version floor)
 
 ## Context
@@ -72,7 +72,7 @@ Beyond compile-time feature availability, boards vary widely in RAM and flash.  
 
 ### Hardware resource baseline
 
-ChuMicro libraries are tested and supported on boards with at least **256 KB of MCU RAM** and at least **4 MB of flash**.  Libraries may still run on boards below this baseline, but those boards are not tested, and issues specific to them will not be investigated.
+ChuMicro libraries are tested and supported on boards with at least **256 KB of MCU RAM** and at least **2 MB of physical flash (~800 KB usable after CircuitPython firmware on Pi Pico W; MicroPython leaves more headroom)**.  Libraries may still run on boards below this baseline, but those boards are not tested, and issues specific to them will not be investigated.
 
 Boards with PSRAM are preferred — especially for networking, TLS, displays, and larger buffers.  Boards in the 256–512 KB range without PSRAM are supported but may be constrained for memory-intensive workloads like MQTT + TLS.
 
@@ -110,7 +110,7 @@ ChuMicro libraries require `collections.deque` and therefore require a full-buil
 
 ## Consequences
 
-- Library READMEs and guides should state the minimum board requirements (256 KB RAM, 4 MB flash, full-build CircuitPython or `EXTRA_FEATURES` MicroPython).  Libraries with heavier memory needs (networking, TLS) should note when Tier 1 boards are recommended.
+- Library READMEs and guides should state the minimum board requirements (256 KB RAM, 2 MB physical flash / ~800 KB usable, full-build CircuitPython or `EXTRA_FEATURES` MicroPython).  Libraries with heavier memory needs (networking, TLS) should note when Tier 1 boards are recommended.
 - The cross-runtime compatibility runners test against the unix port, which exceeds all hardware baselines.
 - Future board transport tooling and `devices.yml` entries should target Tier 1 or Tier 2 boards.
 - If users report issues on unsupported boards, the answer is "not tested or supported on that hardware" — not necessarily a bug, and not something we will investigate.
