@@ -413,7 +413,7 @@ def encode_request(
     host: str,
     path: str,
     *,
-    headers: object | None = None,
+    headers: CaseInsensitiveDict | dict | list | tuple | None = None,
     body: bytes | None = None,
     user_agent: str | None = None,
 ) -> bytes:
