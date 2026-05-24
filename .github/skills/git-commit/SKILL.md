@@ -9,6 +9,10 @@ Pass the commit message inline via a **single-quoted heredoc** consumed by `git 
 
 Earlier versions of this skill required writing the message to `.scratch/commit-msg.txt` first.  That rule was a workaround for a different agent harness (GitHub Copilot's terminal truncated multi-line input); it doesn't apply here.  The scratch-file path still works if you prefer it, but the heredoc form is the canonical pattern.
 
+## Prerequisite
+
+This skill is the commit-mechanics layer.  The discipline that gates the commit — preflight + `plans/next-up.md` refresh + durable-lesson lift — lives in [`task-checkpoint`](../task-checkpoint/SKILL.md), which invokes this skill at its commit step.  Calling `git-commit` directly without `task-checkpoint` having just run is a procedural gap, not an option (per AGENTS.md "always invoke task-checkpoint at end of work" — applies per coherent unit of work, including doc / plans / handoff units).  The only valid direct entry is re-staging after a commit-time failure where preflight already ran in the prior `task-checkpoint` cycle (e.g. a hook rejected the message and the fix is purely textual).
+
 ## Procedure
 
 ### Step 1 — Compose and run the commit
