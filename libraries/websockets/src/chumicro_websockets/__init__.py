@@ -7,18 +7,13 @@ pending and :meth:`handle(now_ms)` does one slice of progress per
 call, so an LED keeps blinking through the opening handshake, frame
 I/O, control-frame interleave, and the close handshake.
 
-This module sweeps the GC between and after its submodule imports.
-On MicroPython, compile-time scratch (AST nodes, transient tuples,
-interned-name artifacts) from loading ``_wire.py`` / ``_session.py``
-/ ``client.py`` / ``server.py`` stays resident until auto-GC fires
-under allocation pressure — which a successful import never triggers,
-leaving the scratch interleaved with the persistent module state.
-The explicit collects defragment that pattern, restoring TLS
-handshake headroom on Pi Pico W MP that the chain otherwise loses.
-On CPython the calls are benign.
+End-of-module GC sweep follows the pattern documented in
+:mod:`chumicro_mqtt`'s module docstring — the submodule chain here
+(``_wire`` / ``_session`` / ``client`` / ``server``) wins the same
+TLS-handshake headroom on Pi Pico W MP.
 """
 
-import gc as _gc  # noqa: I001 — gc.collect() interleaved with imports is intentional; see module docstring.
+import gc as _gc  # noqa: I001 — see chumicro_mqtt.__init__ docstring.
 
 from chumicro_websockets._wire import (
     CLOSE_BAD_DATA,
