@@ -131,11 +131,9 @@ class Connection(_BaseSession):
     # Server-driven runner (called by WebSocketServer)
     # ------------------------------------------------------------------
 
-    def check(self, now_ms: int) -> bool:
+    def check(self, now_ms: int) -> bool:  # noqa: ARG002 - runner contract
         """Return ``True`` if there's work to do for this connection."""
-        if self.state == WebSocketState.CLOSED:
-            return False
-        return True
+        return self.state != WebSocketState.CLOSED
 
     def _connecting_wants_read(self) -> bool:
         """The server reads during the first handshake leg (waiting on
@@ -444,13 +442,14 @@ class WebSocketServer:
     # Runner contract
     # ------------------------------------------------------------------
 
-    def check(self, now_ms: int) -> bool:
-        """Return ``True`` if there's work to do this tick."""
-        if self.closed:
-            return False
-        # Always True.  Accept loop must run, and any active connection
-        # may need attention.  Conservative, cheap enough.
-        return True
+    def check(self, now_ms: int) -> bool:  # noqa: ARG002 - runner contract
+        """Return ``True`` if there's work to do this tick.
+
+        Always ``True`` until :meth:`close`: the accept loop must run,
+        and any active connection may need attention.  Conservative
+        and cheap.
+        """
+        return not self.closed
 
     def handle(self, now_ms: int) -> None:
         """Accept new connections + advance every active connection one tick."""
