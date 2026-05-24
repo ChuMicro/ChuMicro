@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-01`
+Summary: Libraries use constructor injection for time/I/O/network; each ships its own `testing.py` fakes in `src/`; shared fakes are duplicated, never hoisted.
 Related: Decision 0014 (runner pattern uses injected ticks), Decision 0042 (library dependency policy), Decision 0044 (deploy-time runtime filtering keeps fakes out of bundles), Decision 0052 (workbench-no-library-imports — the same self-contained instinct in the opposite direction)
 
 ## Context

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-01`
+Summary: `scripts/run.py test` runs one pytest subprocess per library with per-library coverage; root config keeps `importlib` mode for workbench packages sharing test-module names.
 Related: Decision 0001 (mono-workspace layout), Decision 0025 (coverage thresholds)
 Supersedes: [Decision 0008](0008-SUPERSEDED-BY-0009-importlib-test-isolation.md)
 
