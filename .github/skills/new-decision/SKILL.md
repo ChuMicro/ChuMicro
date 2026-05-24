@@ -130,7 +130,7 @@ The README is the source of truth for these rules; mirror its language when in d
 - [ ] Number is sequential (no gaps, no duplicates)
 - [ ] Has all three sections: Context, Decision, Consequences
 - [ ] Status, date, Summary, and Related fields are present
-- [ ] Summary is one sentence, ≤200 chars, no line wraps, machine-extractable
+- [ ] Summary is one sentence, ≤200 chars, no line wraps, machine-extractable (enforced by `CHU029`)
 - [ ] `AGENTS.md` updated if the decision adds hard rules or pitfalls
 - [ ] Referenced from related decisions if applicable
 - [ ] If the decision resolves an open question, update `plans/open-questions.md`
