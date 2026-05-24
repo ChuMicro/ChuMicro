@@ -131,7 +131,7 @@ NO_BODY_STATUS_CODES = frozenset({204, 304})
 # ---------------------------------------------------------------------------
 
 
-def parse_charset(content_type: str | None) -> str:  # noqa: CHU027  docstring shared with chumicro-http-server _wire.parse_charset — candidate for shared http-wire library
+def parse_charset(content_type: str | None) -> str:  # noqa: CHU027 — duplication intentional, no shared dependency yet
     """Extract the ``charset=...`` parameter from a Content-Type header.
 
     Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
@@ -321,8 +321,7 @@ class CaseInsensitiveDict:
     the embedded footprint small.
     """
 
-    def __init__(self):
-        # noqa: CHU027 — sibling impl in chumicro-http_server _wire.py; candidate for shared http-wire library hoist
+    def __init__(self):  # noqa: CHU027 — duplication intentional, no shared dependency yet
         # Lowercase key -> (original_name, value).  Paired with
         # ``_order`` (list of lowercase keys) so iteration preserves
         # insertion order on every runtime — MicroPython and
@@ -381,7 +380,7 @@ class CaseInsensitiveDict:
         for lower in self._order:
             yield self._entries[lower]
 
-    def add(self, name, value):  # noqa: CHU027  docstring shared with chumicro-http_server _wire.add — candidate for shared http-wire library
+    def add(self, name, value):  # noqa: CHU027 — duplication intentional, no shared dependency yet
         """Append *value* to the existing header, joining with ``, ``.
 
         New keys behave like :meth:`__setitem__`.  Used by the parser
@@ -618,9 +617,8 @@ class ResponseParser:
         """Advance the read cursor by *count* bytes; compact when the cursor
         passes the halfway mark.
 
-        Compaction uses slice-assign-empty (``self._buffer[:offset] = b""``)
-        — in-place memmove on CPython, MicroPython, and CircuitPython
-        (``mp_seq_replace_slice_no_grow``).  No allocation, no realloc.
+        Compaction uses slice-assign-empty (``self._buffer[:offset] = b""``),
+        an in-place memmove on every runtime — no allocation, no realloc.
         """
         self._read_offset += count
         if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
@@ -770,7 +768,7 @@ class ResponseParser:
         self.state = ParseState.HEADERS
         return True
 
-    def _try_parse_headers(self):  # noqa: CHU027  docstring shared with chumicro-http_server _wire._try_parse_headers — candidate for shared http-wire library
+    def _try_parse_headers(self):  # noqa: CHU027 — duplication intentional, no shared dependency yet
         """Consume one header line; return True if state advanced or
         another header was parsed."""
         crlf_index = self._live_find(CRLF)

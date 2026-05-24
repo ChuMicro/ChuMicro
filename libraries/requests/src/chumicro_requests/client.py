@@ -509,7 +509,6 @@ class HttpClient:
         self._socket = None
         self._handle = None  # current RequestHandle
         self.url = None
-        self._original_url = None  # URL the user called get/post with
         self._tx_buffer = b""  # request bytes pending send
         self._tx_offset = 0
         self._parser = None
@@ -797,7 +796,6 @@ class HttpClient:
         # Capture the user's request shape for 307/308 redirect replay
         # — we need method + body + headers + the json-default-content-
         # type flag to rebuild the on-the-wire bytes for the next hop.
-        self._original_url = url
         self._original_method = method
         self._original_headers = headers
         self._original_body = encoded_body
@@ -1036,7 +1034,6 @@ class HttpClient:
         finished_handle = self._handle
         self._handle = None
         self.url = None
-        self._original_url = None
         self._original_method = None
         self._original_headers = None
         self._original_body = None

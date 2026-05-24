@@ -11,7 +11,6 @@ multi-in-flight requests on the same client.
 """
 
 from chumicro_requests._wire import (
-    DEFAULT_RECV_BUDGET_PER_TICK,
     CaseInsensitiveDict,
     HttpBusyError,
     HttpError,
@@ -34,7 +33,6 @@ from chumicro_requests.client import (
 )
 
 __all__ = [
-    "DEFAULT_RECV_BUDGET_PER_TICK",
     "CaseInsensitiveDict",
     "HttpBusyError",
     "HttpClient",

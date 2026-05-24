@@ -37,6 +37,7 @@ from chumicro_http_server._wire import (
     RequestParseState,
     ServerError,
     ServerOversizedError,
+    parse_charset,
     parse_query,
     split_target,
 )
@@ -136,8 +137,15 @@ class Request:
         self.path_params = {}
 
     def text(self) -> str:
-        """Return :attr:`body` decoded as ``str`` using utf-8."""
-        return self.body.decode("utf-8")
+        """Return :attr:`body` decoded with the request's Content-Type charset.
+
+        Looks up the ``charset`` parameter on the request's
+        ``Content-Type`` header (e.g. ``text/plain; charset=latin-1``)
+        and decodes the body with it.  Falls back to ``utf-8`` when no
+        Content-Type / no charset is present — matches RFC 8259 §8.1
+        for JSON and the web's current text default.
+        """
+        return self.body.decode(parse_charset(self.headers.get("Content-Type")))
 
     def json(self) -> object:
         """Parse :attr:`body` as JSON; raises ``ValueError`` on bad data."""
