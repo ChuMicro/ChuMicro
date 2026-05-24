@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-04`
+Summary: Build CircuitPython unix-port as `VARIANT=standard` with `-DMICROPY_PY_MICROPYTHON_RINGIO=0` to dodge the upstream RingIO build bug; the workaround is self-removing on upstream fix.
 Related: Decision 0014 (runner — heartbeat consumes the timing slice this affects)
 
 ## Context

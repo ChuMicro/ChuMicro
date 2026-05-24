@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-02`
+Summary: Gate-based runner: services expose `check(now_ms) -> bool` + `handle(now_ms)` (duck-typed); `Runner` captures `ticks_ms()` once per tick and shares the timestamp.
 Related: Decision 0010 (testability — `CallRecorder` in `testing.py`), Decision 0042 (library dependency policy)
 
 ## Context
