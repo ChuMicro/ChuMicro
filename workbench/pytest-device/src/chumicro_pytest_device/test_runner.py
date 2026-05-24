@@ -22,6 +22,8 @@ from chumicro_deploy import (
     TransportProtocol,
 )
 
+from .markers import MarkerQueue, parse_marker
+
 #: PEP 508 version specifiers, environment markers, and extras.
 _DEPENDENCY_VERSION_SPLITTER = re.compile(r"[><=!;~\[]")
 
@@ -292,6 +294,8 @@ def build_device_bootstrap(
 def execute_device_bootstrap(
     transport: TransportProtocol,
     bootstrap: str | list[str],
+    *,
+    marker_queue: MarkerQueue | None = None,
 ) -> str:
     """Execute either a single bootstrap script or a chunked sequence.
 
@@ -302,7 +306,30 @@ def execute_device_bootstrap(
     with ``hasattr``) surfaces a clear ``AttributeError`` if a future
     code path passes a list bootstrap to a transport that doesn't
     support chunking.
+
+    When *marker_queue* is provided, captured stdout is dispatched
+    line-by-line through :func:`markers.parse_marker`; any matching
+    markers are pushed onto the queue as they arrive over the serial
+    link.  Lines that aren't markers (free-form board prose,
+    result-parser ``PASS`` / ``FAIL`` / ``SUMMARY`` lines) are ignored
+    by the marker layer — they still ride the captured-stdout return
+    value, so the existing result-parser path consumes them unchanged.
+
+    When *marker_queue* is :data:`None` (the default), no streaming
+    hook is wired and the call shape is identical to the previous
+    request/response behaviour.
     """
+    transport_kwargs: dict[str, Any] = {}
+    if marker_queue is not None:
+
+        def push_marker_if_present(line: str) -> None:
+            marker = parse_marker(line)
+            if marker is not None:
+                marker_queue.push(marker)
+
+        transport_kwargs["on_line"] = push_marker_if_present
     if isinstance(bootstrap, list):
-        return cast(ExtendedTransportProtocol, transport).execute_scripts(bootstrap)
-    return transport.execute(bootstrap)
+        return cast(ExtendedTransportProtocol, transport).execute_scripts(
+            bootstrap, **transport_kwargs,
+        )
+    return transport.execute(bootstrap, **transport_kwargs)

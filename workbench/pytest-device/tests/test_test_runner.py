@@ -512,6 +512,87 @@ class TestExecuteDeviceBootstrap:
         assert FakeTransport.captured_bootstrap == "single bootstrap"
 
 
+class TestExecuteDeviceBootstrapMarkerDispatch:
+    """``marker_queue`` wires on_line through the transport and parses markers."""
+
+    def test_default_call_omits_on_line_kwarg(self) -> None:
+        """No marker_queue → call shape matches the pre-Phase-2 sync API
+        (the inline FakeTransport's execute takes only bootstrap_script,
+        no on_line kwarg, and must not error)."""
+
+        class FakeTransport:
+            received_kwargs: dict[str, object] = {}
+
+            @staticmethod
+            def execute(bootstrap_script: str, **kwargs: object) -> str:
+                FakeTransport.received_kwargs = dict(kwargs)
+                return "ok"
+
+        device_testing.execute_device_bootstrap(FakeTransport(), "boot")
+
+        assert FakeTransport.received_kwargs == {}
+
+    def test_marker_queue_receives_parsed_markers_in_arrival_order(self) -> None:
+        """The on_line callback parses each captured stdout line and
+        pushes matching markers onto the supplied queue.  Non-marker
+        lines are silently dropped at the parser level."""
+        from chumicro_pytest_device.markers import MarkerQueue
+
+        class StreamingFakeTransport:
+            @staticmethod
+            def execute(
+                bootstrap_script: str,
+                *,
+                on_line=None,
+            ) -> str:
+                # Mimic what the real transports do: dispatch each
+                # captured stdout line as it lands.
+                if on_line is not None:
+                    for line in [
+                        "boot output prose",  # not a marker
+                        "SERVER_READY ip=10.0.0.1 port=8000",  # marker
+                        "PASS test_x (0.001s)",  # reserved name → skipped
+                        "SERVER_REQUEST_OBSERVED route=/",  # marker
+                    ]:
+                        on_line(line)
+                return "captured-stdout"
+
+        queue = MarkerQueue()
+        result = device_testing.execute_device_bootstrap(
+            StreamingFakeTransport(), "boot", marker_queue=queue,
+        )
+
+        assert result == "captured-stdout"
+        first = queue.wait_for("SERVER_READY", timeout_s=1.0)
+        assert first.values == {"ip": "10.0.0.1", "port": "8000"}
+        second = queue.wait_for("SERVER_REQUEST_OBSERVED", timeout_s=1.0)
+        assert second.values == {"route": "/"}
+
+    def test_marker_queue_threads_through_chunked_execute_scripts(self) -> None:
+        """A list bootstrap routes to execute_scripts with on_line."""
+        from chumicro_pytest_device.markers import MarkerQueue
+
+        class StreamingFakeTransport:
+            @staticmethod
+            def execute_scripts(
+                bootstrap_scripts: list[str],
+                *,
+                on_line=None,
+            ) -> str:
+                if on_line is not None:
+                    on_line("SERVER_READY ip=10.0.0.1 port=9001")
+                return "chunked-output"
+
+        queue = MarkerQueue()
+        result = device_testing.execute_device_bootstrap(
+            StreamingFakeTransport(), ["chunk-1", "chunk-2"], marker_queue=queue,
+        )
+
+        assert result == "chunked-output"
+        marker = queue.wait_for("SERVER_READY", timeout_s=1.0)
+        assert marker.values["port"] == "9001"
+
+
 class TestResolveEffectiveDeployMode:
     """Tests for resolve_effective_deploy_mode: deploy-mode precedence."""
 
