@@ -1,0 +1,206 @@
+"""Background-thread bootstrap runner that lets a host fixture overlap with a device run.
+
+For Category 1 host-driver tests, the board prints checkpoint markers
+on its stdout (``SERVER_READY ip=... port=...``) and the host fixture
+has to react mid-execute — open a TCP connection, fire a request,
+wait for the next marker.  That overlap requires the board's bootstrap
+to run concurrently with the test body.
+
+:class:`DeviceBootstrapRunner` spawns a daemon thread that calls
+``transport.execute(bootstrap, on_line=...)``; the ``on_line`` callback
+parses each captured stdout line and pushes any markers onto the
+internal :class:`MarkerQueue`.  The test body, on the pytest main
+thread, calls :meth:`wait_for` to block on a specific marker, then
+later :meth:`wait_for_completion` to join the thread and read the
+captured stdout (which still feeds :mod:`result_parser` for board-side
+PASS / FAIL / SUMMARY reporting).
+
+The board side stays single-threaded cooperative — this module adds
+no constraints to what runs on the device.  All concurrency is
+host-side.
+"""
+
+from __future__ import annotations
+
+import threading
+from types import TracebackType
+
+from chumicro_deploy import ExtendedTransportProtocol, TransportProtocol
+
+from .markers import Marker, MarkerQueue, parse_marker
+
+
+class RunnerNotStartedError(RuntimeError):
+    """Raised when :meth:`DeviceBootstrapRunner.wait_for_completion` is
+    called before :meth:`DeviceBootstrapRunner.start`."""
+
+
+class DeviceBootstrapRunner:
+    """Runs a device bootstrap on a background thread and exposes its output.
+
+    Usage:
+
+        runner = DeviceBootstrapRunner(transport, bootstrap)
+        runner.start()
+        marker = runner.wait_for("SERVER_READY", timeout_s=10)
+        # ... do host-side work using marker.values ...
+        captured_stdout = runner.wait_for_completion(timeout_s=30)
+        runner.shutdown()
+
+    Or as a context manager — :meth:`shutdown` is called on exit even
+    if the body raises::
+
+        with DeviceBootstrapRunner(transport, bootstrap) as runner:
+            runner.start()
+            ...
+
+    :meth:`start` is callable only once per instance; a second call
+    raises :class:`RuntimeError` rather than silently spawning a
+    second thread that would race the first.
+    """
+
+    def __init__(
+        self,
+        transport: TransportProtocol,
+        bootstrap: str | list[str],
+    ) -> None:
+        self._transport = transport
+        self._bootstrap = bootstrap
+        self._marker_queue: MarkerQueue = MarkerQueue()
+        self._thread: threading.Thread | None = None
+        self._captured_output: str | None = None
+        self._error: BaseException | None = None
+        self._started = False
+
+    @property
+    def marker_queue(self) -> MarkerQueue:
+        """The marker queue the on_line callback pushes into.
+
+        Exposed so tests and future fixtures can inspect or drive the
+        queue directly when the wait_for / push surface isn't enough.
+        """
+        return self._marker_queue
+
+    def start(self) -> None:
+        """Spawn the background thread that runs the bootstrap on the device.
+
+        Raises:
+            RuntimeError: :meth:`start` has already been called on this
+                instance.
+        """
+        if self._started:
+            raise RuntimeError(
+                "DeviceBootstrapRunner.start() may only be called once "
+                "per instance; create a new runner for a new bootstrap.",
+            )
+        self._started = True
+        self._thread = threading.Thread(
+            target=self._run, name="DeviceBootstrapRunner", daemon=True,
+        )
+        self._thread.start()
+
+    def wait_for(self, name: str, *, timeout_s: float) -> Marker:
+        """Block until a marker named *name* arrives on the device's stdout.
+
+        Forwards to :meth:`MarkerQueue.wait_for`.  Non-matching markers
+        that arrive while waiting are dropped; on timeout, raises
+        :class:`MarkerTimeoutError` from the marker module.
+
+        It is fine to call this before :meth:`start` (the queue is
+        already constructed; the bg thread will start pushing as soon
+        as the bootstrap begins printing).
+        """
+        return self._marker_queue.wait_for(name, timeout_s=timeout_s)
+
+    def wait_for_completion(self, *, timeout_s: float) -> str:
+        """Join the background thread and return captured stdout.
+
+        Args:
+            timeout_s: Seconds to wait for the bootstrap to finish.
+                A board that hangs (e.g. host failed to hit its
+                endpoint, board's own deadline is longer than this one)
+                surfaces here as :class:`TimeoutError` rather than
+                hanging the test process indefinitely.
+
+        Returns:
+            The full captured stdout string the bootstrap produced.
+            Re-raises any exception the underlying
+            ``transport.execute`` raised on the bg thread.
+
+        Raises:
+            RunnerNotStartedError: :meth:`start` was never called.
+            TimeoutError: The bootstrap did not complete within
+                *timeout_s* seconds.
+        """
+        if self._thread is None:
+            raise RunnerNotStartedError(
+                "wait_for_completion() called before start().",
+            )
+        self._thread.join(timeout=timeout_s)
+        if self._thread.is_alive():
+            raise TimeoutError(
+                f"Device bootstrap did not finish within {timeout_s:.3f}s",
+            )
+        if self._error is not None:
+            raise self._error
+        assert self._captured_output is not None
+        return self._captured_output
+
+    def shutdown(self) -> None:
+        """Best-effort join the bg thread.  Idempotent; safe to call any time.
+
+        Does not interrupt the bootstrap — the board is expected to
+        carry its own deadline and exit on its own.  When called
+        before the thread has finished, this method joins without a
+        timeout, so callers that want a bounded wait should use
+        :meth:`wait_for_completion` first.
+        """
+        thread = self._thread
+        if thread is None:
+            return
+        if thread.is_alive():
+            thread.join()
+        self._thread = None
+
+    def __enter__(self) -> DeviceBootstrapRunner:
+        return self
+
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.shutdown()
+
+    def _run(self) -> None:
+        """Background-thread body.  Calls transport.execute with the marker
+        dispatcher wired to on_line, captures stdout and any error."""
+
+        def on_line(line: str) -> None:
+            marker = parse_marker(line)
+            if marker is not None:
+                self._marker_queue.push(marker)
+
+        try:
+            if isinstance(self._bootstrap, list):
+                # Chunked CP RAM-mode bootstrap; cast to the extended
+                # protocol so the type checker sees execute_scripts.
+                extended_transport = self._transport
+                assert isinstance(extended_transport, ExtendedTransportProtocol)
+                self._captured_output = extended_transport.execute_scripts(
+                    self._bootstrap, on_line=on_line,
+                )
+            else:
+                self._captured_output = self._transport.execute(
+                    self._bootstrap, on_line=on_line,
+                )
+        except BaseException as error:
+            # Stash any exception for wait_for_completion to re-raise on
+            # the main thread; otherwise a transport failure on the bg
+            # thread would silently disappear.
+            self._error = error
+            # An empty captured-stdout placeholder so wait_for_completion's
+            # assertion holds if the caller swallows the re-raise.
+            if self._captured_output is None:
+                self._captured_output = ""

@@ -50,9 +50,35 @@ New `chumicro_pytest_device.markers` submodule. Owns:
 
 Coverage: tests that exercise `MarkerQueue.wait_for` with concurrent producers (the stdout dispatcher thread) and consumers (the fixture call).
 
-### Phase 3 — `chumicro_pytest_device.fixtures.http_client_against_board`
+### Phase 3 — Concurrent runner + `http_client_against_board` fixture
 
-First inhabitant of the `fixtures/` directory named by Decision 0083. A pytest fixture that returns a callable; the callable blocks on `markers.wait_for("SERVER_READY")`, then opens a stdlib `http.client.HTTPConnection` to the marker's `ip:port`, fires the request, returns the response. Tests register the fixture in their function signature; the fixture handles teardown.
+The host fixture has to interleave with a running board bootstrap: the test body calls `hit("/")`, which blocks on `MarkerQueue.wait_for("SERVER_READY")`, then opens an HTTP connection to the marker's `ip:port`. For that overlap to exist, the board's bootstrap must run concurrently with the test body. Today's `device_backend.runtest` is synchronous on pytest's main thread, so Phase 3 lands the concurrent-execution shape underneath the fixture.
+
+Concurrency is host-side only. The board stays single-threaded cooperative — a standard `while True: runner.tick(...)` loop on the device, printing markers and handling one TCP accept. The host runs two threads: the pytest main thread (test body + `http.client.HTTPConnection`) and a serial-read background thread (`transport.execute` + `on_line` + `MarkerQueue.push`).
+
+Phase 3 splits into a load-bearing infrastructure slice landing here and a follow-up integration slice that waits on Phase 4's file-layout decisions:
+
+**This slice (one commit):**
+
+1. **`chumicro_pytest_device.concurrent_runner.DeviceBootstrapRunner`** — pure-Python, no pytest dependency. Owns the background thread, the `MarkerQueue`, the captured-stdout future. Surface: `start()` spawns the thread and wires `on_line` to push parsed markers; `wait_for(name, timeout_s)` forwards to the queue; `wait_for_completion(timeout_s)` joins the thread and returns captured stdout; `shutdown()` is idempotent and joins-if-alive. Context-manager support so test teardown reliably joins on errors.
+
+2. **`fixtures/host_driver.py` — `http_client_against_board`** — pytest fixture returning a factory: `bind_to(runner)` returns the actual `hit(path, *, timeout_s=10)` callable. The callable calls `runner.wait_for("SERVER_READY", timeout_s=timeout_s)`, then opens `http.client.HTTPConnection(marker.values["ip"], int(marker.values["port"]), timeout=timeout_s)` and returns the response. The two-step shape lets a Phase 4 fixture or test directly hand the runner in without yet committing to *how* the runner gets created from the session.
+
+3. **End-to-end integration test** — `FakeTransport` printing a `SERVER_READY ip=127.0.0.1 port=<n>` marker, against a real stdlib `http.server` running on the same port. Proves runner + fixture compose against real HTTP.
+
+**Deferred to Phase 4** (depends on file-layout decisions):
+
+- A `device_bootstrap_runner` pytest fixture that grabs the cached transport from `_TransportCache`, picks a device from the session, builds the bootstrap from a board-side file (location convention TBD: `<host_file>_board.py` sibling, an explicit marker, a discrete subdirectory), calls `runner.start()`, and teardown-feeds captured stdout into `result_parser` so board-side PASS / FAIL / SUMMARY still rejoins the existing pipeline.
+- A `device_backend.runtest` dispatch fork that skips synchronous execute when a host-driver fixture is in `item.fixturenames`.
+- A collection-layer rule that prevents the existing `DeviceRuntimeItem` collector from treating a host-driver test file as a device test.
+
+**On host-side failure**, the board self-times-out (Decision 0085 specifies the board has its own deadline). The host fixture raises fast, the test fails fast on the host side, the runner joins on fixture teardown after the board exits ~10 s later. Slower than mid-exec interrupt but keeps the raw-REPL session consistent for the next test. Revisit if test-iteration speed becomes painful.
+
+Coverage: `DeviceBootstrapRunner` unit tests against a `FakeTransport` (start + wait_for + completion happy path; wait_for_completion timeout; shutdown idempotency; context-manager exit on exception); a fixture-integration test using a fake transport that prints `SERVER_READY ip=127.0.0.1 port=<n>` and a stdlib `http.server` running in-process as the HTTP target.
+
+**On host-side failure**, the board self-times-out (Decision 0085 specifies the board has its own deadline). The host fixture raises fast, the test fails fast on the host side, the runner joins on fixture teardown after the board exits ~10 s later. Slower than mid-exec interrupt but keeps the raw-REPL session consistent for the next test. Revisit if test-iteration speed becomes painful.
+
+Coverage: `DeviceBootstrapRunner` unit tests against a `FakeTransport` (start + wait_for + completion happy path; wait_for_completion timeout; shutdown idempotency; context-manager exit on exception); a fixture-integration test using a fake transport that prints `SERVER_READY ip=127.0.0.1 port=<n>` and a stdlib `http.server` running in-process as the HTTP target.
 
 ### Phase 4 — Rewrite `libraries/http_server/functional_tests/test_real_serve.py`
 
@@ -70,6 +96,7 @@ The streaming hook unlocks live stdout for long-running deploys outside the test
 
 - **2026-05-24** Phase 1. `TransportProtocol.execute` + `ExtendedTransportProtocol.execute_scripts` gain `on_line: Callable[[str], None] | None` parameter; cp `_read_until` gains `on_chunk` hook plumbing the `StreamingLineDispatcher` (skip `OK` prefix, stop at `\x04`); mp wires mpremote's native `data_consumer`; `FakeTransport` mirrors the shape. 19 new unit tests; preflight green at coverage 94 across CPython + MP + CP runtimes.
 - **2026-05-24** Phase 2. New `chumicro_pytest_device.markers` submodule — `Marker` dataclass, `parse_marker(line) -> Marker | None` (rejects the result-parser reserved set `{PASS, FAIL, SKIP, SUMMARY, HEAP}` — `SUMMARY total=N failed=N time=N.Ns` collides with the marker shape exactly, so the reserved-name filter is load-bearing, not belt-and-suspenders), `MarkerQueue.wait_for(name, timeout_s)` blocking primitive with thread-safe push. `execute_device_bootstrap` gains a `marker_queue` kwarg that builds the `on_line` closure internally; default `None` keeps the existing call shape. 26 new unit tests including a concurrent producer (background thread) + consumer pair. Preflight green at coverage 94.
+- **2026-05-24** Phase 3 (infra slice). New `chumicro_pytest_device.concurrent_runner.DeviceBootstrapRunner` — daemon-thread wrapper around `transport.execute(bootstrap, on_line=...)` with `start` / `wait_for` / `wait_for_completion` / `shutdown` and context-manager support. Re-raises bg-thread transport errors on the main thread; routes list bootstraps to `execute_scripts` for CP RAM mode. New `chumicro_pytest_device.fixtures.host_driver` — `bind_to(runner) -> hit(...)` plain function plus the `http_client_against_board` fixture wrapping it; returns an `HttpResponseSnapshot` (status / reason / headers / body) after closing the underlying connection so callers carry no socket lifetime. 16 new tests including an end-to-end integration that drives a stdlib `http.server.HTTPServer` on 127.0.0.1 with a `FakeTransport`-printed marker — proves the runner + fixture + dispatcher chain composes against real TCP, not just fakes. Preflight green. Phase 3 follow-up (the `device_bootstrap_runner` session-cache fixture + `device_backend.runtest` dispatch fork + collection-layer host-vs-device file rule) waits on Phase 4's file-layout decisions.
 
 ## Out of scope
 
