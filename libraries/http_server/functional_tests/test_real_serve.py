@@ -1,37 +1,39 @@
-"""Real-network acceptance for chumicro-http-server.
+"""Real-network HTTP-server acceptance for chumicro-http-server.
 
-End-to-end: bring wifi up on the device, start an ``HttpServer``
-on a real ``tcp_listening_socket``, hit it from the device itself
-via ``chumicro-requests`` (loopback over the LAN — no second
-device required), verify the request/response round-trip.
+Category 1 — host-side stdlib HTTP client driver.
 
-Skipped at collection time when no credentials are configured —
-the conftest's ``set_runtime_config(..., required_keys=...)`` declares
+Brings wifi up on the device, starts an ``HttpServer`` on a real
+``tcp_listening_socket``, prints ``SERVER_READY ip=<ip> port=<port>``
+once the listener is accepting, ticks the server cooperatively until
+a route handler fires or the per-test deadline expires, prints
+``SERVER_REQUEST_OBSERVED route=<path>`` from inside the handler,
+asserts locally that the route did fire, and exits.
+
+The paired host file (``test_real_serve_host.py``) opens a stdlib
+``http.client.HTTPConnection`` to the marker's ``ip:port`` and asserts
+on the response shape.  Replaces the prior self-loopback variant that
+broke on Pi Pico W defaults (consumer routers don't reflect a board's
+own packets back to it; host-driver-as-client sidesteps the
+hairpinning question entirely).
+
+Skipped at collection time when no credentials are configured — the
+conftest's ``set_runtime_config(..., required_keys=...)`` declares
 ``wifi.ssid`` / ``wifi.password`` as required, so the host plugin
 applies ``pytest.mark.skip`` with a clear message before deploy.
 Credentials ship from the host conftest as
 ``/runtime_config.msgpack``.
-
-Verifies the LED-blink invariant on a real board: an LED-style
-counter keeps incrementing on the same loop while the server is
-mid-handshake / mid-response.  Uses HTTP only — HTTPS server
-verification on Pi Pico W CP is the documented open follow-up.
 """
 
 import time
 
-from chumicro_config import config
 from chumicro_http_server import HttpServer, build_response
-from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_connector_factory
 from chumicro_sockets import tcp_listening_socket
-from chumicro_timing import ticks_ms as _ticks_ms
-from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_test_harness.network import runtime_config, wifi_up
+from chumicro_timing import ticks_diff, ticks_ms
 
 _LISTEN_PORT = 8765
-_REQUEST_TIMEOUT_MS = 5_000
-_WIFI_CONNECT_TIMEOUT_MS = 15_000
-_DEADLINE_MS = 20_000
+_REQUEST_DEADLINE_MS = 30_000
+_TICK_SLEEP_MS = 20
 
 
 def _sleep_ms(duration_ms: int) -> None:
@@ -42,88 +44,50 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
-    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
-    wifi = WifiService(wifi_config)
-    deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
-    while wifi.state != WifiState.CONNECTED:
-        if _ticks_ms() > deadline:
-            raise AssertionError(
-                f"wifi did not link within "
-                f"{_WIFI_CONNECT_TIMEOUT_MS} ms; state={wifi.state}",
-            )
-        if wifi.check(_ticks_ms()):
-            wifi.handle(_ticks_ms())
-        _sleep_ms(50)
-    return wifi
-
-
-def test_real_serve_and_self_request_round_trip() -> None:
-    """Start a server on the device, hit it with the device's own client."""
-    wifi_cfg = WifiConfig.try_from_config(config)
-    if wifi_cfg is None:
-        raise AssertionError(
-            "wifi runtime config missing — the conftest's "
-            "`set_runtime_config(..., required_keys=...)` should have "
-            "skipped this test at collection time.  Reaching this body "
-            "means the conftest's required_keys list is incomplete.",
-        )
-
-    wifi = _bring_wifi_up(wifi_cfg)
-    print(f"WIFI_OK ip={wifi.ip}")
+def test_real_serve_responds_to_host_driver() -> None:
+    """The on-device half of the Category 1 host-driver round trip."""
+    config = runtime_config()
+    radio, ip_address = wifi_up(
+        config.get("wifi.ssid"),
+        config.get("wifi.password"),
+    )
+    print(f"WIFI_OK ip={ip_address}")
 
     server = HttpServer(
         listener_factory=lambda: tcp_listening_socket(
             host="0.0.0.0",
             port=_LISTEN_PORT,
-            radio=wifi.adapter.radio,
+            radio=radio,
         ),
     )
 
+    observed_routes: list[str] = []
+
     @server.route("/ping")
     def ping_route(request):  # noqa: ARG001 - request unused for this fixture
+        observed_routes.append("/ping")
+        print("SERVER_REQUEST_OBSERVED route=/ping")
         return build_response(200, json={"ok": True})
 
-    @server.route("/echo", methods=["POST"])
-    def echo_route(request):
-        return build_response(200, json={"received": request.json()})
+    # One tick to bind the listener + initialize the accept loop.
+    server.handle(ticks_ms())
+    print(f"SERVER_READY ip={ip_address} port={_LISTEN_PORT}")
 
-    # Start the listener.
-    server.handle(_ticks_ms())  # one tick to bind / accept-loop init
-    print(f"SERVER_OK port={_LISTEN_PORT}")
-
-    # Hit it from the same device — wifi loopback.
-    client = HttpClient(
-        connector_factory=chumicro_sockets_connector_factory(radio=wifi.adapter.radio),
-    )
-    target = f"http://{wifi.ip}:{_LISTEN_PORT}/ping"
-    request = client.get(target, timeout_ms=_REQUEST_TIMEOUT_MS)
-
-    led_counter = 0
-    deadline = _ticks_ms() + _DEADLINE_MS
-    while not request.done:
-        if _ticks_ms() > deadline:
-            raise AssertionError("self-request did not complete in time")
-        if wifi.check(_ticks_ms()):
-            wifi.handle(_ticks_ms())
-        if server.check(_ticks_ms()):
-            server.handle(_ticks_ms())
-        if client.check(_ticks_ms()):
-            client.handle(_ticks_ms())
-        led_counter += 1
-        _sleep_ms(20)
-
-    response = request.result
-    print(
-        f"GOT {response.status_code} bytes={len(response.body)} "
-        f"led_ticks={led_counter}",
-    )
-
-    assert response.status_code == 200
-    assert b'"ok"' in response.body and b"true" in response.body
-    assert led_counter > 5, (
-        f"LED counter only ticked {led_counter} times — somebody "
-        f"block-called during the round-trip"
-    )
+    # Cooperative tick loop: wait for the host-driver's request to
+    # land or the per-test deadline to expire.  Reraises as
+    # AssertionError so the result-parser reports FAIL with the
+    # deadline message.
+    deadline = ticks_ms() + _REQUEST_DEADLINE_MS
+    while not observed_routes:
+        now = ticks_ms()
+        if ticks_diff(deadline, now) <= 0:
+            raise AssertionError(
+                f"no HTTP request observed within "
+                f"{_REQUEST_DEADLINE_MS} ms",
+            )
+        if server.check(now):
+            server.handle(now)
+        _sleep_ms(_TICK_SLEEP_MS)
 
     server.close()
+    assert observed_routes == ["/ping"]

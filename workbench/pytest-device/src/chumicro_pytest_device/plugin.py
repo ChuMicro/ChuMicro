@@ -80,6 +80,11 @@ from .session import (
 )
 from .transport_cache import _TransportCache
 
+# Sub-plugin: registers device_bootstrap_runner + http_client_against_board
+# fixtures so Category 1 host-driver tests can pick them up without each
+# consumer wiring a conftest import.
+pytest_plugins = ("chumicro_pytest_device.fixtures.host_driver",)
+
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Register ChuMicro command-line options on the pytest CLI.
@@ -362,6 +367,21 @@ def _apply_reported_duration(
         return
 
     report.duration = max(report.duration - reported_test_total_duration, 0.0)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register pytest markers this plugin recognises.
+
+    Required under ``--strict-markers`` (set in the workspace's
+    ``pyproject.toml``); without registration, a test that uses
+    ``@pytest.mark.device_bootstrap(...)`` would fail to collect.
+    """
+    config.addinivalue_line(
+        "markers",
+        "device_bootstrap(board_file): override the sibling-name rule for "
+        "device_bootstrap_runner — name the board-side bootstrap file "
+        "(resolved relative to the host test file's directory).",
+    )
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:

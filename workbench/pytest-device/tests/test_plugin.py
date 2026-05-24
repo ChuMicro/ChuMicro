@@ -799,6 +799,46 @@ class TestPytestCollectFile:
         )
         assert collection.pytest_collect_file(parent, host_only) is None
 
+    def test_excludes_host_only_functional_test_file(
+        self, tmp_path: Path,
+    ) -> None:
+        """A ``__chumicro_host_only__`` file under
+        ``libraries/<name>/functional_tests/`` is the Category 1
+        host-driver shape: it carries a regular pytest test that drives
+        a paired board file.  ``pytest_collect_file`` returns ``None``
+        for it so pytest's default Module factory collects it as
+        ordinary host-side pytest.
+        """
+        host_driver_file = (
+            tmp_path / "libraries" / "foo" / "functional_tests"
+            / "test_real_serve_host.py"
+        )
+        host_driver_file.parent.mkdir(parents=True)
+        host_driver_file.write_text("__chumicro_host_only__ = True\n")
+        assert collection.pytest_collect_file(None, host_driver_file) is None
+
+    def test_collects_non_host_only_functional_test_file_as_device(
+        self, tmp_path: Path,
+    ) -> None:
+        """A functional-test file without the host-only marker is the
+        usual Category 2 board test — the host-only-skip predicate
+        gating the new branch must return False so the file falls
+        through to :class:`DeviceTestFile` collection (today's path)."""
+        board_file = (
+            tmp_path / "libraries" / "foo" / "functional_tests"
+            / "test_real_serve.py"
+        )
+        board_file.parent.mkdir(parents=True)
+        board_file.write_text(
+            "def test_real_serve_responds():\n    assert True\n",
+        )
+        # ``DeviceTestFile.from_parent`` needs a real parent collector;
+        # we verify the routing decision via the same predicate the
+        # production hook checks: is_host_only_test False ⇒ fall
+        # through to the device-collection branch.
+        from chumicro_deploy.runtime_marker import is_host_only_test
+        assert is_host_only_test(board_file) is False
+
 
 class TestIsLibraryUnitTest:
     """Tests for _is_library_unit_test path-shape classification."""
