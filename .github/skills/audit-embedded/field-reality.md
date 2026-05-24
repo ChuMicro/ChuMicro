@@ -26,6 +26,7 @@ A few cross-cutting incidents (kvstore guide doc cluster, chumicro_ntp staged-di
 - [Prior-art side-by-side compare](#prior-art-side-by-side-compare)
 - [gc.collect at import boundaries](#gccollect-at-import-boundaries)
 - [publish / publish_raw wrapper-doubling](#publish--publish_raw-wrapper-doubling)
+- [Wrapper-doubling workspace re-pass](#wrapper-doubling-workspace-re-pass)
 
 ## Useful snippets
 
@@ -205,3 +206,20 @@ Four prior `/audit-embedded mqtt` passes (commits `3444f9e1`, `061c5850`, `423cb
 **Pattern:** when a library exposes a method pair where one calls the other after applying a single transform (prefix-resolver, normalizer, default-applier, encoder/decoder), the pair is wrapper-doubling.  Each pair costs N lines of duplicated body, N lines of duplicated docstring, and one extra class-dict entry on every instance.  Default fix: collapse to one method with a binary kwarg — `prefixed=True` / `normalize=False` / `encoded=True`.  The chumicro_mqtt `set_will(..., prefixed=False)` method already uses this shape; the public surface stays minimal.
 
 **Audit move:** `grep -rE 'def \w+_raw\(|def \w+_unencoded\(|def \w+_unprefixed\(|def raw_\w+\('` across `libraries/<name>/src/`.  For every match, diff the body against the unsuffixed sibling — single-helper-call delta = collapse candidate.  Same gap likely applies to other libraries audit-embedded has previously cleared, so include the grep in any audit re-pass on a previously-audited library.
+
+## Wrapper-doubling workspace re-pass
+
+2026-05-23 re-pass of `sockets`, `websockets`, `requests`, `http_server`, `msgpack`, `runner`, `timing` with the new §1 wrapper-doubling check.  The literal-suffix grep (`def \w+_raw\(` etc.) returned zero — none of the 7 libraries used the `_raw` naming convention.  Structural search across method pairs surfaced 5 candidates; 2 collapsed, 3 left in place.  The exception classes are now codified in SKILL.md §1.
+
+**Collapsed:**
+
+- **`HttpServer.respond` → drop, callers use module-level `build_response`.**  `respond` was `return build_response(status, body=body, json=json, text=text, html=html, headers=headers)` — pure delegation.  Only caller was a test that asserted `respond == build_response`.  Method + test removed; module-level builder is the single entry point.  chumicro_http_server 0.12.0 → 0.13.0.
+- **`Heartbeat.is_due` → `_is_due` (privatize).**  `is_due` was the query-only sibling of `.poll()` which called it.  Every real caller in the workspace (5 examples, runner runtime_control, bench paths) used `.poll()`; `is_due` was only exercised by tests that mirrored their `.poll()` neighbors.  Privatize beats collapse-to-kwarg here because the kwarg shape (`poll(now_ms, advance=False)`) would have invented an opt-out nobody had asked for.  chumicro_timing 0.3.7 → 0.4.0.
+
+**Left in place (exception classes):**
+
+- **`requests.HttpClient.get / post / put / patch / delete`** all forward to `_start_request("METHOD", ...)`.  Structural wrapper-doubling, but `requests.get(url)` is the universally-known PyPI-`requests` convention; collapse to `request(method, ...)` would trade ergonomics for one qstr per verb in flash.  Exception class 1 (PyPI convention).
+- **`msgpack.pack` / `packb`, `unpack` / `unpackb`.**  `pack` is `stream.write(packb(obj))`; `unpack` is `unpackb(stream.read())`.  Matches the PyPI-`msgpack` API contract callers will reach for.  Exception class 1.
+- **`Runner.add_periodic` vs `Runner.add(handler=..., period_ms=...)`.**  `add_periodic(handler, 500)` reads cleaner than the kwarg form because `add()`'s first positional slot is `task`.  ~25 call sites across docs / examples / tests would each gain kwarg noise.  Exception class 2 (positional/kwarg asymmetry).
+
+**Lesson for the skill:** the structural match (two methods, one helper-call body delta) is necessary but not sufficient for a collapse recommendation.  Apply the three exception tests before recommending: is one method the established PyPI-library convention?  Does the kwarg-collapse force every caller to switch to kwarg syntax for a positional their callers prefer?  Is the lighter method actually used by anyone outside the wrapper itself (if not, privatize beats kwarg-merge)?
