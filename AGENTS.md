@@ -168,7 +168,7 @@ Family of cross-runtime Python libraries for embedded boards.
 
 If a third-party library doesn't support CircuitPython or MicroPython, prefer a pure-Python alternative.
 
-**Minimum board class:** 256 KB MCU RAM, 4 MB flash. Tier detail in [Decision 0015](plans/decisions/0015-board-architecture-support.md).
+**Minimum board class:** 256 KB MCU RAM, 2 MB physical / ~800 KB usable flash. Tier detail in [Decision 0015](plans/decisions/0015-board-architecture-support.md).
 
 ## Workspace layout
 
