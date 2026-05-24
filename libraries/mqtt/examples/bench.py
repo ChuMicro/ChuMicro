@@ -175,8 +175,8 @@ line(f"CONNECTED state={mqtt.state}")
 INBOUND_TOPIC = f"{CLIENT_ID}/inbound"
 INBOUND_WILDCARD = f"{CLIENT_ID}/inbound/+"
 SUMMARY_TOPIC = f"{CLIENT_ID}/bench-summary"
-mqtt.subscribe_raw(INBOUND_TOPIC, qos=0)
-mqtt.subscribe_raw(INBOUND_WILDCARD, qos=0)
+mqtt.subscribe(INBOUND_TOPIC, qos=0)
+mqtt.subscribe(INBOUND_WILDCARD, qos=0)
 # Drive ticks so SUBACKs come back before scenarios start.
 drive_for(500)
 line(f"subscribed to {INBOUND_TOPIC} and {INBOUND_WILDCARD}")
@@ -227,7 +227,7 @@ def scenario_tier1():
     scenario = Scenario("tier1_32b")
     _reset_inbound()
     payload = b"x" * 32
-    mqtt.publish_raw(INBOUND_TOPIC, payload, qos=0)
+    mqtt.publish(INBOUND_TOPIC, payload, qos=0)
     deadline = ticks_add(ticks_ms(), 5000)
     while inbound_topic_count == 0 and ticks_diff(deadline, ticks_ms()) > 0:
         scenario.tick()
@@ -243,7 +243,7 @@ def scenario_tier2(label, payload_size):
     scenario = Scenario(label)
     _reset_inbound()
     payload = b"y" * payload_size
-    mqtt.publish_raw(INBOUND_TOPIC, payload, qos=0)
+    mqtt.publish(INBOUND_TOPIC, payload, qos=0)
     deadline = ticks_add(ticks_ms(), 10_000)
     while inbound_topic_count == 0 and ticks_diff(deadline, ticks_ms()) > 0:
         scenario.tick()
@@ -260,7 +260,7 @@ def scenario_tier3():
     scenario = Scenario("tier3_4kb")
     seen = len(oversize_events)
     payload = b"z" * 4096
-    mqtt.publish_raw(INBOUND_TOPIC, payload, qos=0)
+    mqtt.publish(INBOUND_TOPIC, payload, qos=0)
     deadline = ticks_add(ticks_ms(), 15_000)
     while len(oversize_events) == seen and ticks_diff(deadline, ticks_ms()) > 0:
         scenario.tick()
@@ -283,7 +283,7 @@ def scenario_oversize_topic():
     scenario = Scenario("oversize_topic")
     seen = len(oversize_events)
     long_topic = INBOUND_TOPIC + "/" + ("a" * 300)
-    mqtt.publish_raw(long_topic, b"hi", qos=0)
+    mqtt.publish(long_topic, b"hi", qos=0)
     deadline = ticks_add(ticks_ms(), 10_000)
     while len(oversize_events) == seen and ticks_diff(deadline, ticks_ms()) > 0:
         scenario.tick()
@@ -314,7 +314,7 @@ def scenario_qos1():
 
     for index in range(10):
         last_at[0] = ticks_ms()
-        mqtt.publish_raw(f"{CLIENT_ID}/qos1-out", b"qos1-%d" % index, qos=1, on_publish=_on_pub)
+        mqtt.publish(f"{CLIENT_ID}/qos1-out", b"qos1-%d" % index, qos=1, on_publish=_on_pub)
         target = acked[0] + 1
         deadline = ticks_add(ticks_ms(), 5000)
         while acked[0] < target and ticks_diff(deadline, ticks_ms()) > 0:
@@ -350,7 +350,7 @@ def scenario_stress():
     _reset_inbound()
     expected = 100
     for index in range(expected):
-        mqtt.publish_raw(INBOUND_TOPIC, b"s%03d" % index, qos=0)
+        mqtt.publish(INBOUND_TOPIC, b"s%03d" % index, qos=0)
         scenario.tick()  # let outbound flush between sends
     # Drain inbound: broker echoes every publish back to our subscription.
     deadline = ticks_add(ticks_ms(), 30_000)
@@ -401,7 +401,7 @@ else:
 
 # Also publish the one-line verdict to the broker so an off-device watcher
 # (mosquitto_sub -t '<client_id>/bench-summary') can collect results.
-mqtt.publish_raw(
+mqtt.publish(
     SUMMARY_TOPIC,
     ("ALL_OK" if all_ok else "FAILURES").encode() + b" alloc=" + str(gc.mem_alloc()).encode()
     + b" free=" + str(gc.mem_free()).encode(),

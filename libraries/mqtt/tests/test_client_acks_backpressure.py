@@ -337,7 +337,7 @@ class TestConnectorFactorySelfHeal:
         _drive(client, ticks, count=3)
         assert client.state == ProtocolState.CONNECTED
 
-        client.subscribe_raw("sensors/+", qos=1)
+        client.subscribe("sensors/+", qos=1, prefixed=False)
         _drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
         _drive(client, ticks, count=1)
@@ -369,11 +369,11 @@ class TestConnectorFactorySelfHeal:
         )
         client.connect()
         _drive(client, ticks, count=3)
-        client.subscribe_raw("sensors/+", qos=1)
+        client.subscribe("sensors/+", qos=1, prefixed=False)
         _drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_suback_bytes(packet_id=1, granted_qos=1))
         _drive(client, ticks, count=1)
-        client.unsubscribe_raw("sensors/+")
+        client.unsubscribe("sensors/+", prefixed=False)
         _drive(client, ticks, count=1)
         sock_one.enqueue_recv(canned_unsuback_bytes(packet_id=2))
         _drive(client, ticks, count=1)

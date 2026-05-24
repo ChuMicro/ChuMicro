@@ -11,7 +11,6 @@ from chumicro_mqtt.testing import (
     canned_publish_bytes,
 )
 from chumicro_sockets.testing import FakeSocket
-from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 
@@ -161,7 +160,7 @@ class TestTopicPrefixSugar:
         # No prefix was injected.
         assert b"test-client/temp" not in wire
 
-    def test_publish_raw_bypasses_prefix(self) -> None:
+    def test_publish_prefixed_false_bypasses_prefix(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
@@ -173,7 +172,7 @@ class TestTopicPrefixSugar:
         client.connect()
         _drive(client, ticks, count=2)
         sock.sent = bytearray()
-        client.publish_raw("$SYS/bridge/status", b"online", qos=0)
+        client.publish("$SYS/bridge/status", b"online", qos=0, prefixed=False)
         _drive(client, ticks, count=1)
         wire = bytes(sock.sent)
         assert b"$SYS/bridge/status" in wire
@@ -195,7 +194,7 @@ class TestTopicPrefixSugar:
         _drive(client, ticks, count=1)
         assert b"myapp/thing-42/commands/+" in bytes(sock.sent)
 
-    def test_subscribe_raw_bypasses_prefix(self) -> None:
+    def test_subscribe_prefixed_false_bypasses_prefix(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))
         ticks = FakeTicks()
@@ -207,7 +206,7 @@ class TestTopicPrefixSugar:
         client.connect()
         _drive(client, ticks, count=2)
         sock.sent = bytearray()
-        client.subscribe_raw("$SYS/broker/uptime")
+        client.subscribe("$SYS/broker/uptime", prefixed=False)
         _drive(client, ticks, count=1)
         wire = bytes(sock.sent)
         assert b"$SYS/broker/uptime" in wire
@@ -248,14 +247,15 @@ class TestLastWillPrefix:
         wire = bytes(sock.sent)
         assert b"livingRoom/mainLightSwitch/online" in wire
 
-    def test_will_topic_raw_skips_prefix(self) -> None:
+    def test_will_prefixed_false_skips_prefix(self) -> None:
         sock = FakeSocket()
         ticks = FakeTicks()
         client = MQTTClient(
             sock,
             client_id="mainLightSwitch",
             root_topic="livingRoom",
-            will_topic_raw="$SYS/bridge/dead",
+            will_topic="$SYS/bridge/dead",
+            will_prefixed=False,
             will_message=b"true",
             ticks=ticks,
         )
@@ -265,18 +265,6 @@ class TestLastWillPrefix:
         assert b"$SYS/bridge/dead" in wire
         # Prefix should NOT have been applied.
         assert b"livingRoom/mainLightSwitch/$SYS" not in wire
-
-    def test_will_topic_and_will_topic_raw_mutually_exclusive(self) -> None:
-        sock = FakeSocket()
-        ticks = FakeTicks()
-        with raises(ValueError):
-            MQTTClient(
-                sock,
-                client_id="thing",
-                will_topic="online",
-                will_topic_raw="$SYS/x",
-                ticks=ticks,
-            )
 
 
 class TestKeepalive:
