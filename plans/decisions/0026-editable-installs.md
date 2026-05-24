@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-09`
+Summary: `pip install -e` is the standard workspace setup for every importable package; IDE source-root configs remain an additional layer for tooling features, not the primary import path.
 Related: none
 
 ## Context

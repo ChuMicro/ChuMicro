@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-12`
+Summary: MicroPython transport uses `mpremote` (mount default + copy fallback); CircuitPython uses `pyserial` + raw REPL with class-as-module injection; `chumicro-pytest-device` plugin drives the IDE.
 Related: Decision 0003, Decision 0016, Decision 0015
 
 ## Context

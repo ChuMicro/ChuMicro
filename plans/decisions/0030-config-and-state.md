@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-21`
+Summary: Config and persisted state are different problems: app config is read-only TOML → msgpack baked at deploy; `chumicro-kvstore` is a separate mutable KV over CP NVM, MP NVS, or LittleFS.
 Related: Decision 0029 (project workspace), Decision 0034 (kvstore), Decision 0035 (runtime config), Decision 0036 (chumicro-config)
 
 ## Context

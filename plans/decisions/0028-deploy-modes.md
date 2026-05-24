@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-18`
+Summary: `--deploy-mode ram|flash` maps to runtime-specific transports (RAM = MP `mount` + CP inline raw-REPL; FLASH = MP `copy` + CP USB drive); `devices.yml` `deploy_mode` sets the default.
 Related: Decision 0027, Decision 0029
 
 ## Context
