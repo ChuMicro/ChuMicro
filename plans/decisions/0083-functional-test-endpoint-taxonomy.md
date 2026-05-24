@@ -45,9 +45,11 @@ A board talking to its own LAN IP requires router hairpinning, which is firmware
 
 ### Host-side fixtures live with `chumicro_pytest_device`
 
-The fixture machinery for Category 1 (start Mosquitto, start an HTTP server, start an SNTP responder) lives at `workbench/pytest-device/src/chumicro_pytest_device/fixtures/`.  The package already owns device-session orchestration, devices.yml, and transport — host-side fixtures fit the same mental model.  No new package; the new submodule is the home.
+The fixture machinery for Category 1 (start Mosquitto, start an SNTP responder, drive a stdlib HTTP client against a board-hosted server) lives at `workbench/pytest-device/src/chumicro_pytest_device/fixtures/`.  The package already owns device-session orchestration, devices.yml, and transport — host-side fixtures fit the same mental model.  No new package; the new submodule is the home.
 
 The board side of a Category 1 test imports `chumicro_test_harness.network` (Decision 0082) for wifi bring-up + runtime-config and the package under test from its own `src/`.  No `chumicro_<other-package>` imports in the test body.
+
+For server-side tests (`http_server`, future `websockets`-server), the board signals readiness to the host driver via the stdout-marker protocol — see [Decision 0085](0085-board-to-host-sync-stdout-markers.md).
 
 ## Rejected
 
