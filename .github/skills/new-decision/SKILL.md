@@ -68,6 +68,7 @@ Use this template:
 
 Status: `accepted`
 Date: `YYYY-MM-DD`
+Summary: <!-- One-sentence machine-extractable summary of what was decided. Read at session start by the SessionStart hook; keep it under ~200 chars, no line wraps, no markdown other than backticks for code identifiers. The H1 title says what the ADR is about; this says what it decided. -->
 Related: <!-- Decision numbers, open questions, or "none" -->
 
 ## Context
@@ -128,7 +129,8 @@ The README is the source of truth for these rules; mirror its language when in d
 - [ ] File exists at `plans/decisions/NNNN-<slug>.md`
 - [ ] Number is sequential (no gaps, no duplicates)
 - [ ] Has all three sections: Context, Decision, Consequences
-- [ ] Status, date, and Related field are present
+- [ ] Status, date, Summary, and Related fields are present
+- [ ] Summary is one sentence, ≤200 chars, no line wraps, machine-extractable
 - [ ] `AGENTS.md` updated if the decision adds hard rules or pitfalls
 - [ ] Referenced from related decisions if applicable
 - [ ] If the decision resolves an open question, update `plans/open-questions.md`
