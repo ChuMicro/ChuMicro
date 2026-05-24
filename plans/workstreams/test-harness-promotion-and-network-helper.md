@@ -59,6 +59,8 @@ Networking libraries that rely on `chumicro_test_harness.network` in their shipp
 
 <!-- One line per phase as it lands.  Format: `- **YYYY-MM-DD** Phase N. <short summary> + commit hash.` -->
 
+- **2026-05-24** Phase 1. `chumicro_test_harness.network` submodule (`wifi_up` + `runtime_config` + inline msgpack decoder) landed in-place with cross-runtime test coverage; preflight green at coverage 94 across CPython + MP + CP. Commit `4613ff0d`.
+
 ## Out of scope
 
 - Two-board functional-test orchestration (deferred to a separate workstream — pytest-orchestrated category 3 in the endpoint taxonomy).
