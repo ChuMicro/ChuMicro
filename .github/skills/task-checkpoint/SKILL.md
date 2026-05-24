@@ -1,11 +1,11 @@
 ---
 name: task-checkpoint
-description: Sanity check at the end of a unit of work — preflight green, plans/next-up.md refreshed, durable lessons lifted, commit pushed. Use after finishing a coherent unit of work (one that could carry a single commit subject), before yielding to the user.
+description: Sanity check at the end of a unit of work — preflight green, plans/next-up.md refreshed, durable lessons lifted, commit pushed. Use after finishing a coherent unit of work (one that could carry a single commit subject). Multiple checkpoints can ride the same session; the yield happens once when the named work is done, not after every unit.
 ---
 
 # Task Checkpoint
 
-Per [AGENTS.md → Keeping plans and docs current](../../../AGENTS.md#keeping-plans-and-docs-current), run this at the end of every unit of work — before telling the user you're done.
+Per [AGENTS.md → Keeping plans and docs current](../../../AGENTS.md#keeping-plans-and-docs-current), run this at the end of every unit of work — before moving on to the next unit or telling the user you're done.
 
 **Trigger gate.** Did you just complete a unit of work that could be described in one commit subject?  If no, you're not at a checkpoint — go finish the work.
 
