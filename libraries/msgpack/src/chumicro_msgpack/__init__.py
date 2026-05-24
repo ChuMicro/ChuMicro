@@ -85,3 +85,7 @@ if not _native_loaded:
     from chumicro_msgpack._pure import pack, packb, unpack, unpackb  # noqa: F401
 
 __all__ = ["pack", "packb", "unpack", "unpackb"]
+
+import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
+_gc.collect()
+del _gc
