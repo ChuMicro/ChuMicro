@@ -1,7 +1,19 @@
 """Test helpers for libraries that depend on chumicro-timing.
 
-Deterministic fakes that replace the real tick functions, letting
-host-side tests control time without wall-clock waits.
+Two flavors live here:
+
+* :class:`FakeTicks` — deterministic fake tick source that replaces
+  the real tick functions so host-side tests control time without
+  wall-clock waits.  Models the 2²⁹ ms wraparound period; values
+  returned by ``ticks_ms()`` are always in ``[0 .. 2**29 - 1]``, and
+  ``ticks_diff`` uses ring arithmetic so tests catch code that
+  accidentally uses plain subtraction.
+
+* :func:`sleep_ms` — real-clock sleep that adapts across runtimes
+  (``time.sleep_ms`` on MicroPython, ``time.sleep`` on CPython /
+  CircuitPython).  Test-only because real sleeps are forbidden in
+  runner-tick library code; functional tests need them to assert
+  "after N ms, X happened" on real hardware.
 
 Example — tick-domain tests:
     ```python
@@ -12,17 +24,26 @@ Example — tick-domain tests:
     fake.advance(100)
     assert heartbeat.poll(fake.ticks_ms()) is True
     ```
-
-``FakeTicks`` models the full tick contract including the 2²⁹ ms
-wraparound period.  Values returned by ``ticks_ms()`` are always in
-``[0 .. 2**29 - 1]``, and ``ticks_diff`` uses ring arithmetic, so
-tests will catch code that accidentally uses plain subtraction instead
-of ``ticks_diff``.
 """
 
 __chumicro_test_support__ = True
 
+import time
+
 from chumicro_timing.ticks import TICKS_HALFPERIOD, TICKS_MAX, TICKS_PERIOD
+
+
+def sleep_ms(duration_ms: int) -> None:
+    """Real-clock sleep that picks the best available runtime API.
+
+    Uses ``time.sleep_ms`` when present (MicroPython, CircuitPython)
+    and falls back to ``time.sleep`` (CPython).
+    """
+    runtime_sleep_ms = getattr(time, "sleep_ms", None)
+    if callable(runtime_sleep_ms):
+        runtime_sleep_ms(duration_ms)
+        return
+    time.sleep(duration_ms / 1000)
 
 
 class FakeTicks:

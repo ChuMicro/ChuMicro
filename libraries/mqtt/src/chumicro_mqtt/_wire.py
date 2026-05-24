@@ -447,8 +447,7 @@ _DRAIN_INTACT = const(1)
 _DRAIN_OVERSIZED = const(2)
 
 
-# Defragment compile-time scratch before the PacketDecoder class body —
-# see chumicro_mqtt/__init__.py docstring for the broader pattern.
+# Defragment compile-time scratch before the PacketDecoder class body.
 import gc as _gc  # noqa: E402, I001 — placement is intentional; see comment above.
 _gc.collect()
 del _gc

@@ -1,28 +1,13 @@
 """Device-facing tests for the cross-runtime timing helpers."""
 
-import time
-
+from chumicro_timing.testing import sleep_ms
 from chumicro_timing.ticks import ticks_diff, ticks_ms
 
 
-def _sleep_ms(duration_ms: int) -> None:
-	"""Sleep for the requested duration using the best available runtime API.
-
-	Args:
-		duration_ms: Duration in milliseconds.
-	"""
-	runtime_sleep_ms = getattr(time, "sleep_ms", None)
-	if callable(runtime_sleep_ms):
-		runtime_sleep_ms(duration_ms)
-		return
-
-	time.sleep(duration_ms / 1000)
-
-
 def test_ticks_progress_on_runtime() -> None:
-	"""The active runtime should expose forward-moving monotonic ticks."""
-	start_ms = ticks_ms()
-	_sleep_ms(20)
-	end_ms = ticks_ms()
+    """The active runtime should expose forward-moving monotonic ticks."""
+    start_ms = ticks_ms()
+    sleep_ms(20)
+    end_ms = ticks_ms()
 
-	assert ticks_diff(end_ms, start_ms) >= 1
+    assert ticks_diff(end_ms, start_ms) >= 1

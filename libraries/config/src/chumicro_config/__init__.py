@@ -39,7 +39,6 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# End-of-package GC sweep; rationale: chumicro_mqtt/__init__.py.
 import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
 _gc.collect()
 del _gc
