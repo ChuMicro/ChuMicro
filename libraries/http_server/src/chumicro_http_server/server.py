@@ -78,6 +78,20 @@ def _force_non_blocking(socket):
         pass
 
 
+def _split_pattern_path(path):
+    """Split *path* into ``(prefix, last_segment)`` for pattern-route lookup.
+
+    *prefix* is the path up to and including the final ``/``; *last_segment*
+    is everything after it.  An empty *last_segment* means the path has no
+    parameter-shaped trailing segment (caller treats this as "no pattern
+    match").  Returns ``("", "")`` for paths with no slash.
+    """
+    last_slash = path.rfind("/")
+    if last_slash == -1:
+        return "", ""
+    return path[:last_slash + 1], path[last_slash + 1:]
+
+
 # ---------------------------------------------------------------------------
 # Request + Response value objects
 # ---------------------------------------------------------------------------
@@ -211,15 +225,9 @@ class _Connection:
         self._recv_budget = recv_budget
         self._send_budget = send_budget
         # No per-connection steady-state body buffer: every response
-        # emits ``Connection: close`` so each :class:`_Connection`
-        # serves exactly one request before being destroyed.  A
-        # pre-allocated buffer here would have a use-once lifetime
-        # that fragments worse than allocating sized-to-fit on demand.
-        # The parser starts empty and the sized-rebind path in
-        # :meth:`RequestParser._enter_body_state` does one allocation
-        # of ``bytearray(content_length)`` for the request.  When
-        # keep-alive lands and ``_Connection`` lives across requests,
-        # revisit and pass a long-lived buffer in here.
+        # emits ``Connection: close``, so each _Connection serves one
+        # request before destruction.  A use-once buffer would fragment
+        # worse than RequestParser's sized-rebind alloc per request.
         self._parser = RequestParser(max_body_bytes=max_request_body_bytes)
         # Pre-allocated recv scratch reused by every :meth:`_drive_recv`
         # call.  A 4-conn server with the default 1024-byte budget pins
@@ -264,7 +272,7 @@ class _Connection:
             # 413 before any body bytes were allocated — surface the
             # response cleanly instead of letting the connection die
             # silently with a TCP close.
-            self._emit_error_response(413, str(oversized_error))
+            self._stage_response(_build_error_response(413, str(oversized_error)))
         except (OSError, ServerError):
             # Either side of the wire died — drop the connection.  The
             # writer's response state is already past the point where a
@@ -345,6 +353,15 @@ class _Connection:
                 500,
                 f"handler returned {type(response).__name__}, expected Response",
             )
+        self._stage_response(response)
+
+    def _stage_response(self, response):
+        """Serialize *response* and transition to WANT_SEND_HEADERS.
+
+        Single seam between any code path that resolves a Response
+        (handler dispatch, oversize-body short-circuit) and the send
+        half of the tick.
+        """
         self._response_bytes = encode_response(response)
         self._response_view = memoryview(self._response_bytes)
         self._response_offset = 0
@@ -373,19 +390,6 @@ class _Connection:
 
     def _fail(self):
         self.state = _ConnState.ERROR
-
-    def _emit_error_response(self, status_code: int, message: str) -> None:
-        """Stage a pre-built error response for the send half of the tick.
-
-        Used for failure modes that have a sensible HTTP-level reply
-        (e.g. 413 from :class:`ServerOversizedError`).  After this,
-        ``handle()`` keeps ticking the connection through send + DONE.
-        """
-        response = _build_error_response(status_code, message)
-        self._response_bytes = encode_response(response)
-        self._response_view = memoryview(self._response_bytes)
-        self._response_offset = 0
-        self.state = _ConnState.WANT_SEND_HEADERS
 
 
 # ---------------------------------------------------------------------------
@@ -477,6 +481,12 @@ class HttpServer:
     ``tls.cert_path`` / ``tls.key_path``) and reads server limits
     from ``runtime_config.msgpack``.
     """
+
+    #: The listener is not a write target — in-flight connection sends
+    #: drain during the per-tick advance rather than via poll readiness.
+    #: Runner reads this via ``getattr(service, "io_wants_write", False)``,
+    #: so a class attribute beats a property returning the same constant.
+    io_wants_write = False
 
     @classmethod
     def from_config(
@@ -701,16 +711,14 @@ class HttpServer:
         if explicit_handler is not None:
             return explicit_handler(request)
 
-        # 2. Pattern match.  prefix is the path up to + including the
-        # last ``/``; the trailing segment is the parameter value.
-        last_slash = path.rfind("/")
-        if last_slash != -1:
-            prefix = path[:last_slash + 1]
-            param_value = path[last_slash + 1:]
+        # 2. Pattern match — prefix is the path up to + including the
+        # last "/"; the trailing segment is the candidate parameter value.
+        prefix, param_value = _split_pattern_path(path)
+        if param_value:
             for entry_method, entry_prefix, param_name, handler_func in (
                 self._pattern_routes
             ):
-                if entry_method == method and entry_prefix == prefix and param_value:
+                if entry_method == method and entry_prefix == prefix:
                     request.path_params[param_name] = param_value
                     return handler_func(request)
 
@@ -732,14 +740,11 @@ class HttpServer:
         for entry_method, entry_path in self._explicit_routes:
             if entry_path == path:
                 allowed.add(entry_method)
-        last_slash = path.rfind("/")
-        if last_slash != -1:
-            prefix = path[:last_slash + 1]
-            param_value = path[last_slash + 1:]
-            if param_value:
-                for entry_method, entry_prefix, _, _ in self._pattern_routes:
-                    if entry_prefix == prefix:
-                        allowed.add(entry_method)
+        prefix, param_value = _split_pattern_path(path)
+        if param_value:
+            for entry_method, entry_prefix, _, _ in self._pattern_routes:
+                if entry_prefix == prefix:
+                    allowed.add(entry_method)
         return allowed
 
     # ------------------------------------------------------------------
@@ -810,14 +815,6 @@ class HttpServer:
         """``True`` whenever the listener is open: an inbound accept can
         arrive at any time."""
         return self._listener is not None
-
-    @property
-    def io_wants_write(self):
-        """Always ``False``: the listener is not a write target.  In-
-        flight connection sends drain during the per-tick advance
-        rather than via poll readiness — see the section header above.
-        """
-        return False
 
     def next_deadline(self, now_ms):  # noqa: ARG002 — runner contract
         """Earliest per-connection deadline across in-flight connections.
