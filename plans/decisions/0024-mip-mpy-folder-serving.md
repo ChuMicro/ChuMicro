@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-11`
+Summary: Bundle repos carry dual mpy folders: `circuitpython-10.x-mpy/` (magic 'C', for circup) + `mpy6/` (magic 'M', for mip); root library dirs hold `.py` source for universal install.
 Related: Decision 0018
 
 ## Context

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-12`
+Summary: Humans default to 85% coverage (pyproject default); agents pass `--coverage-threshold 94` for elevated gate; the 94% is CPython-reachable post-pragma, no device-execution coverage.
 Related: [Decision 0009](0009-per-library-test-runs.md)
 
 ## Context

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-21`
+Summary: Workspace template repo with local `run.py`; projects are folders under `projects/`; device identity is UID not port; deploy is import-graph-driven; `chumicro-deploy` stays workspace-agnostic.
 Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 0031, Decision 0046 (supersedes §1 default layout + §7 resolution order)
 
 ## Context
