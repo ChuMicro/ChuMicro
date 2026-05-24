@@ -156,7 +156,7 @@ class Request:
 
 
 class Response:
-    """Outbound HTTP response built by :meth:`HttpServer.respond`.
+    """Outbound HTTP response built by :func:`build_response`.
 
     Attributes:
         status_code: Integer HTTP status (e.g. ``200``).
@@ -879,36 +879,9 @@ class HttpServer:
         )
         self._connections.append(connection)
 
-    # ------------------------------------------------------------------
-    # Response builder
-    # ------------------------------------------------------------------
-
-    def respond(
-        self,
-        status: int = 200,
-        *,
-        body: bytes | str | None = None,
-        json: object | None = None,
-        text: str | None = None,
-        html: str | None = None,
-        headers: object | None = None,
-    ) -> Response:
-        """Build a :class:`Response` with sensible defaults.
-
-        Pass at most one of *body* / *json* / *text* / *html*.  *text*
-        defaults ``Content-Type: text/plain; charset=utf-8``; *html*
-        defaults ``text/html; charset=utf-8``; *json* runs ``json.dumps``
-        + sets ``application/json``.  Caller-supplied *headers* always
-        override these defaults.
-        """
-        return build_response(
-            status, body=body, json=json, text=text, html=html, headers=headers,
-        )
-
-
 # ---------------------------------------------------------------------------
-# Module-level response builder (so handlers can build responses without
-# needing a server reference — useful for tests and helper functions).
+# Module-level response builder.  Handlers + tests build responses without
+# needing a server reference.
 # ---------------------------------------------------------------------------
 
 
@@ -921,10 +894,13 @@ def build_response(
     html: str | None = None,
     headers: object | None = None,
 ) -> Response:
-    """Build a :class:`Response` — same surface as :meth:`HttpServer.respond`.
+    """Build a :class:`Response` with sensible defaults.
 
-    Exposed at module level so handlers + tests can build responses
-    without a server reference.
+    Pass at most one of *body* / *json* / *text* / *html*.  *text*
+    defaults ``Content-Type: text/plain; charset=utf-8``; *html*
+    defaults ``text/html; charset=utf-8``; *json* runs ``json.dumps``
+    + sets ``application/json``.  Caller-supplied *headers* always
+    override these defaults.
     """
     body_count = sum(
         candidate is not None for candidate in (body, json, text, html)
