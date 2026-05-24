@@ -24,7 +24,6 @@
 - [ ] **`_load_fallback_device` — stash sessionstart error.**  [workstreams/load-fallback-device-stash-sessionstart.md](workstreams/load-fallback-device-stash-sessionstart.md)
 - [ ] **Deploy walker fails on unresolved imports.**  [workstreams/walker-unresolved-import-failure.md](workstreams/walker-unresolved-import-failure.md)
 - [ ] **Concurrent-agent commit scrambling — process / skill note.**  [workstreams/concurrent-agent-commit-scrambling.md](workstreams/concurrent-agent-commit-scrambling.md)
-- [ ] **`/audit-library libraries/requests` — dedup test helpers (`make_factory` / `canned_response` / `drive_until_done` / `make_client` repeated near-verbatim across 4 `test_client_*.py` files).**
 - [ ] **`examples/helpers.py` cross-library drift.**  [workstreams/examples-helpers-cross-library-drift.md](workstreams/examples-helpers-cross-library-drift.md)
 - [ ] **`functional_tests/` conftest helper dedup.**  [workstreams/functional-tests-conftest-helper-dedup.md](workstreams/functional-tests-conftest-helper-dedup.md)
 - [ ] **`/audit-library libraries/timing` — `_sleep_ms` duplicated across `functional_tests/test_heartbeat.py` and `test_heartbeat_ticks.py` (latter uses tabs, former spaces).**
