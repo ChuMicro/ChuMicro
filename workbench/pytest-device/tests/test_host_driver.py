@@ -136,3 +136,99 @@ class TestHttpClientAgainstBoardFixture:
         finally:
             runner.wait_for_completion(timeout_s=2.0)
             runner.shutdown()
+
+
+class TestResolveBoardFile:
+    """`_resolve_board_file` picks the paired board file from a host test."""
+
+    def _make_request_stub(
+        self, host_file_path, marker_args=None,
+    ):
+        """Stand-in for ``pytest.FixtureRequest`` with only the fields the
+        resolver reads — fspath + node.get_closest_marker."""
+
+        class _Marker:
+            def __init__(self, args):
+                self.args = args
+
+        class _Node:
+            def __init__(self, marker):
+                self._marker = marker
+
+            def get_closest_marker(self, name):  # noqa: ARG002
+                return self._marker
+
+        class _Request:
+            def __init__(self, fspath, marker):
+                self.fspath = fspath
+                self.node = _Node(marker)
+
+        return _Request(
+            host_file_path,
+            _Marker(marker_args) if marker_args is not None else None,
+        )
+
+    def test_sibling_name_rule_strips_host_suffix(
+        self, tmp_path,
+    ) -> None:
+        from chumicro_pytest_device.fixtures.host_driver import (
+            _resolve_board_file,
+        )
+
+        board_file = tmp_path / "test_real_serve.py"
+        host_file = tmp_path / "test_real_serve_host.py"
+        board_file.write_text("# board side\n")
+        host_file.write_text("# host side\n")
+
+        request = self._make_request_stub(str(host_file))
+        assert _resolve_board_file(request) == board_file
+
+    def test_explicit_marker_overrides_sibling_rule(
+        self, tmp_path,
+    ) -> None:
+        from chumicro_pytest_device.fixtures.host_driver import (
+            _resolve_board_file,
+        )
+
+        host_file = tmp_path / "test_real_serve_host.py"
+        host_file.write_text("# host side\n")
+        # The marker names a file that is NOT the sibling default.
+        custom_board = tmp_path / "alternate_board.py"
+        custom_board.write_text("# alt board\n")
+
+        request = self._make_request_stub(
+            str(host_file), marker_args=("alternate_board.py",),
+        )
+        assert _resolve_board_file(request) == custom_board
+
+    def test_fail_when_host_file_not_suffixed_and_no_marker(
+        self, tmp_path,
+    ) -> None:
+        # A host file that doesn't end in `_host.py` and has no marker
+        # — the resolver can't guess the pairing; surface fast rather
+        # than silently picking the wrong file.
+        from chumicro_pytest_device.fixtures.host_driver import (
+            _resolve_board_file,
+        )
+
+        host_file = tmp_path / "test_real_serve_driver.py"
+        host_file.write_text("# weirdly-named host file\n")
+
+        request = self._make_request_stub(str(host_file))
+        with pytest.raises(BaseException, match=r"_host\.py"):
+            _resolve_board_file(request)
+
+    def test_fail_when_resolved_board_file_does_not_exist(
+        self, tmp_path,
+    ) -> None:
+        from chumicro_pytest_device.fixtures.host_driver import (
+            _resolve_board_file,
+        )
+
+        host_file = tmp_path / "test_real_serve_host.py"
+        host_file.write_text("# host side\n")
+        # No sibling test_real_serve.py exists.
+
+        request = self._make_request_stub(str(host_file))
+        with pytest.raises(BaseException, match=r"does not exist"):
+            _resolve_board_file(request)

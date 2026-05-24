@@ -705,8 +705,15 @@ def pytest_pycollect_makemodule(
     device-unit exclusion is enforced by :func:`pytest_collect_file`
     returning ``None`` for it. The net effect is zero items for that
     file on the sweep.
+
+    A ``__chumicro_host_only__`` file under
+    ``libraries/<name>/functional_tests/`` is the Category 1 host
+    driver shape — it carries a regular pytest test that drives a
+    paired board file via the ``device_bootstrap_runner`` fixture.
+    Returning ``None`` here lets pytest's default Module factory
+    import it as ordinary host-side pytest.
     """
-    if _is_library_functional_test(module_path):
+    if _is_library_functional_test(module_path) and not is_host_only_test(module_path):
         return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
             parent, path=module_path,
         )
@@ -747,9 +754,19 @@ def pytest_collect_file(
     pytest that call ``chumicro_deploy`` against a real board. They
     must not be routed through the library test harness and are left
     to run as ordinary pytest collection.
+
+    A library functional test file marked
+    ``__chumicro_host_only__ = True`` is the Category 1 host-driver
+    shape — it carries a regular pytest test that drives a paired
+    board file via the ``device_bootstrap_runner`` fixture.
+    Returning ``None`` for it leaves the file to ordinary pytest
+    collection (the host test runs on CPython, just like a unit
+    test).
     """
 
     if _is_library_functional_test(file_path):
+        if is_host_only_test(file_path):
+            return None
         return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
     if (
         _is_library_unit_test(file_path)
