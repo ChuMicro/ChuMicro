@@ -1515,40 +1515,42 @@ class MQTTClient:
     # ------------------------------------------------------------------
 
     def _check_deadlines(self, now_ms):
-        """Retry / fault on expired in-flight + pending entries."""
-        # ``list()`` wraps are needed only to allow safe mutation inside
-        # the loop body (``discard`` / ``remove``).  Skip allocating the
-        # copy when the underlying collection is empty (the common
-        # steady-state on a sensor-profile publisher).
-        if self._in_flight:
-            for entry in list(self._in_flight.values()):
-                if self._ticks.ticks_diff(entry.deadline_ticks, now_ms) > 0:
-                    continue
-                if entry.retry_count >= self._publish_retry_max:
-                    self._in_flight.pop(entry.packet_id, None)
-                    self.last_error = MQTTError(
-                        f"PUBLISH packet_id {entry.packet_id} exceeded "
-                        f"retry limit {self._publish_retry_max}",
-                    )
-                    self.state = ProtocolState.FAILED
-                    return
-                entry.retry_count += 1
-                entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
-                # Set the DUP flag (bit 3 of byte 0) per MQTT 3.1.1 §4.3.2.
-                retry_packet = bytearray(entry.packet_bytes)
-                retry_packet[0] |= 0x08
-                self._tx_queue.append(bytes(retry_packet))
+        """Retry / fault on expired in-flight + pending entries.
 
-        if self._pending_responses:
-            for pending in list(self._pending_responses):
-                if self._ticks.ticks_diff(pending.deadline_ticks, now_ms) > 0:
-                    continue
-                self._pending_responses.remove(pending)
+        Neither loop allocates a copy of its source collection: the
+        in-flight retry path mutates only entry attributes (dict
+        identity preserved), and both the in-flight retry-max path
+        and the pending-response expiry path mutate then ``return``
+        immediately, so the iterator never sees the modified state.
+        Steady-state zero allocation when nothing is expired.
+        """
+        for entry in self._in_flight.values():
+            if self._ticks.ticks_diff(entry.deadline_ticks, now_ms) > 0:
+                continue
+            if entry.retry_count >= self._publish_retry_max:
+                self._in_flight.pop(entry.packet_id, None)
                 self.last_error = MQTTError(
-                    f"timed out awaiting {pending.awaiting}",
+                    f"PUBLISH packet_id {entry.packet_id} exceeded "
+                    f"retry limit {self._publish_retry_max}",
                 )
                 self.state = ProtocolState.FAILED
                 return
+            entry.retry_count += 1
+            entry.deadline_ticks = self._deadline(self._ack_timeout_ms, now_ms=now_ms)
+            # Set the DUP flag (bit 3 of byte 0) per MQTT 3.1.1 §4.3.2.
+            retry_packet = bytearray(entry.packet_bytes)
+            retry_packet[0] |= 0x08
+            self._tx_queue.append(bytes(retry_packet))
+
+        for pending in self._pending_responses:
+            if self._ticks.ticks_diff(pending.deadline_ticks, now_ms) > 0:
+                continue
+            self._pending_responses.remove(pending)
+            self.last_error = MQTTError(
+                f"timed out awaiting {pending.awaiting}",
+            )
+            self.state = ProtocolState.FAILED
+            return
 
         # Send timeout: the socket has been non-writable with a packet
         # queued for longer than the configured limit.  Fires only when
