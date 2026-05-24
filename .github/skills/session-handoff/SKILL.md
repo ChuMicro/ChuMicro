@@ -69,6 +69,7 @@ Ask the user (or work from conversation context if it's already clear) — these
 - What were the dead ends — paths tried that didn't pan out, so future-me doesn't re-walk them?
 - What open questions are still waiting on a user answer? (These belong in `plans/open-questions.md` — handoffs get deleted on resume, so don't park questions here.)
 - What gotchas surfaced — workarounds applied, brittle assumptions, environmental quirks?
+- What workstream prose did you find to be wrong against current code?  Drifts that the session uncovered (the workstream said X, the code does Y) belong in the handoff as a named gotcha class — otherwise the resumer treats the workstream prose as authoritative and re-litigates the discovery, or worse, builds on the wrong claim.
 - If the next session has only the handoff and `git log`, what context would they still be missing? Add pointers (key files, ADRs, search terms) to rebuild fast.
 
 ### 4. Write the handoff file
@@ -118,7 +119,7 @@ Template — include only the sections that have content; drop empty sections ra
 
 ## Gotchas
 
-<workarounds applied, brittle assumptions, environmental quirks, anything that would bite future-me. Mark hardware/board/env state point-in-time ("as of write — re-verify").>
+<workarounds applied, brittle assumptions, environmental quirks, anything that would bite future-me. Mark hardware/board/env state point-in-time ("as of write — re-verify").  Include any **workstream-prose-vs-code drift** the session uncovered — name the workstream file + the claim + what reality actually is, so the resumer doesn't re-discover it (and ideally fixes the workstream in the same edit).>
 ```
 
 Length follows the session — a 30-minute exploratory session might produce 20 lines; a multi-hour debugging marathon might produce 200. Both are fine. Don't pad, don't truncate.
@@ -133,8 +134,10 @@ Append one top-level bullet to `## Now` pointing at the handoff:
 
 Keep it to one line (CHU011 caps each top-level bullet at 5 bullet points — lead + sub-bullets — and a one-line top-level is the right shape here). When the work picked up *from* this handoff finishes, the bullet is removed from `## Now` per the normal AGENTS.md rule (no `## Done` section — `git log` carries history) and the handoff file becomes git history.
 
-### 6. Show diff, commit
+### 6. Run preflight, show diff, commit
 
-Show the user the diff (handoff file + next-up.md edit). Once approved, follow the [`git-commit`](../git-commit/SKILL.md) skill. Commit message names the handoff topic and links any related workstream or ADR.
+The handoff is a unit of work and follows the same end-of-work discipline as any other commit.  Invoke [`task-checkpoint`](../task-checkpoint/SKILL.md) (which owns preflight + plans/next-up refresh + commit + push) — or at minimum run `python scripts/run.py preflight --coverage-threshold 94` before commit.  Doc-only diffs are not carved out: CHU lints catch broken inbound links, drifted cross-references, and CHU029 / CHU011 violations in plans-docs that `git diff` does not surface, and the next session is the consumer who pays if a broken handoff ships.
+
+Show the user the diff (handoff file + next-up.md edit).  Once approved, commit via [`git-commit`](../git-commit/SKILL.md).  Commit message names the handoff topic and links any related workstream or ADR.
 
 After commit, the handoff is durable — the user can `/clear` knowing the next session's `/session-resume` will surface it via the `next-up.md ## Now` pointer. Tell them exactly that: resume with **`/session-resume`** (optionally `/session-resume <slug>`). Do **not** instruct them to hand-walk `git log` + `next-up.md` + open the handoff — that redundantly narrates what `/session-resume` already does.

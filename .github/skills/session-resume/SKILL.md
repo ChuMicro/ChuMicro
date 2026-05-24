@@ -61,6 +61,7 @@ A handoff describes the writer's **intent and belief at write time, not current 
 - Spot-check that named files / symbols / line numbers still exist (line numbers drift; grep the symbol).
 - **Cheaply reproduce one `[VERIFIED]` claim.** If a claim the handoff calls verified does not reproduce, treat the *entire* handoff as suspect and say so to the user — a degraded writer's "verified" is the highest-value thing to falsify.
 - Diff the handoff against the code / ADRs / `open-questions.md` it references; flag drift.
+- **If the handoff flagged workstream-prose-vs-code drift**, re-validate the workstream prose against current code — the drift usually survives until someone edits the workstream file, and the resumer is the natural person to do it.  Fix the workstream in the same unit of work; otherwise the wrong claim sits there for the next session to re-discover.
 - Treat every `[HYPOTHESIS]` as falsifiable: run its cheapest-test before building on it. Treat untagged claims as `[ASSUMED]`.
 
 This is deeper research *on top of* the handoff, not instead of it. The handoff is the index, not the boundary — read the code on both sides of every seam it describes; its description can be stale or wrong.
