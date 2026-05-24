@@ -8,3 +8,7 @@ apps reach for the opt-in :mod:`chumicro_ntp.sockets_factory` helper.
 from chumicro_ntp.core import NTPClient, NTPError, NTPResult
 
 __all__ = ["NTPClient", "NTPError", "NTPResult"]
+
+import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
+_gc.collect()
+del _gc

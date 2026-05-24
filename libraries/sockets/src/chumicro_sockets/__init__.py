@@ -688,7 +688,7 @@ def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
 # Defragment compile-time scratch at the end of the package import so
 # downstream library imports (and the runtime-gated lazy adapter loads
 # inside ``tcp_client_socket`` / ``tls_client_socket``) land in a
-# cleaner heap.  See chumicro_mqtt/__init__.py docstring.
+# cleaner heap.
 import gc as _gc  # noqa: E402, I001 — end-of-module placement is intentional.
 _gc.collect()
 del _gc

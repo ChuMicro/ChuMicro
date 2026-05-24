@@ -40,3 +40,7 @@ __all__ = [
     "WifiService",
     "WifiState",
 ]
+
+import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
+_gc.collect()
+del _gc

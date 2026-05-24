@@ -19,7 +19,7 @@ def test_heartbeat_rejects_non_positive_periods() -> None:
 
 
 def test_sleep_ms_advances_the_clock() -> None:
-    """The cross-runtime sleep adapter blocks long enough for ticks to move."""
+    """sleep_ms(5) returns within 500 ms with non-negative elapsed ticks."""
     start = ticks_ms()
     sleep_ms(5)
     elapsed = ticks_diff(ticks_ms(), start)

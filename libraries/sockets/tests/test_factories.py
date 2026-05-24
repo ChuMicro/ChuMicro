@@ -26,8 +26,10 @@ from chumicro_sockets import (
     ssl_context_with_ca,
     ssl_context_with_cert_and_key,
     ssl_context_with_cert_and_key_paths,
+    tcp_client_connector,
     tcp_client_socket,
     tcp_listening_socket,
+    tls_client_connector,
     tls_client_socket,
     tls_listening_socket,
 )
@@ -811,3 +813,159 @@ class TestPollableOf:
 # CircuitPython unix-ports ``sys`` is read-only at the C level and
 # ``setattr(sys, "platform", ...)`` raises ``AttributeError``.  No
 # portable way to simulate "running on RP2040" from a non-RP2 host.
+
+
+# ---------------------------------------------------------------------------
+# tls_client_socket — MP routing (CP + CPython already covered above)
+# ---------------------------------------------------------------------------
+
+
+class TestTLSClientSocketMPRouting:
+    """``tls_client_socket`` on micropython routes through the MP adapter."""
+
+    def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
+        captured: dict = {}
+
+        def fake_connect_tls(host, port, *, context):
+            captured["called"] = (host, port, context)
+            return "mp-tls-socket"
+
+        contexts = [_set_runtime("micropython")]
+        contexts.extend(_stub_mp_adapter(connect_tls=fake_connect_tls))
+
+        for context in contexts:
+            context.__enter__()
+        try:
+            result = tls_client_socket("broker.example", 8883, context="ctx")
+        finally:
+            for context in reversed(contexts):
+                context.__exit__(None, None, None)
+
+        assert result == "mp-tls-socket"
+        assert captured["called"] == ("broker.example", 8883, "ctx")
+
+
+# ---------------------------------------------------------------------------
+# tcp_client_connector routing
+# ---------------------------------------------------------------------------
+
+
+class TestTCPClientConnectorRouting:
+    """``tcp_client_connector`` dispatches to the runtime-appropriate adapter."""
+
+    def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
+        captured: dict = {}
+
+        def fake_connector(host, port, *, radio):
+            captured["called"] = (host, port, radio)
+            return "cp-tcp-connector"
+
+        from chumicro_sockets._adapters import cp as cp_adapter
+
+        with _set_runtime("circuitpython"), \
+                _SwapAttribute(cp_adapter, "tcp_connector", fake_connector):
+            result = tcp_client_connector("host", 80, radio="fake-radio")
+
+        assert result == "cp-tcp-connector"
+        assert captured["called"] == ("host", 80, "fake-radio")
+
+    def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
+        captured: dict = {}
+
+        def fake_connector(host, port):
+            captured["called"] = (host, port)
+            return "mp-tcp-connector"
+
+        contexts = [_set_runtime("micropython")]
+        contexts.extend(_stub_mp_adapter(tcp_connector=fake_connector))
+
+        for context in contexts:
+            context.__enter__()
+        try:
+            result = tcp_client_connector("host", 80)
+        finally:
+            for context in reversed(contexts):
+                context.__exit__(None, None, None)
+
+        assert result == "mp-tcp-connector"
+        assert captured["called"] == ("host", 80)
+
+
+# ---------------------------------------------------------------------------
+# tls_client_connector routing
+# ---------------------------------------------------------------------------
+
+
+class TestTLSClientConnectorRouting:
+    """``tls_client_connector`` dispatches to the runtime-appropriate adapter."""
+
+    def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
+        captured: dict = {}
+
+        def fake_connector(host, port, *, context, radio):
+            captured["called"] = (host, port, context, radio)
+            return "cp-tls-connector"
+
+        from chumicro_sockets._adapters import cp as cp_adapter
+
+        with _set_runtime("circuitpython"), \
+                _SwapAttribute(cp_adapter, "tls_connector", fake_connector):
+            result = tls_client_connector(
+                "host", 443, context="ctx", radio="fake-radio",
+            )
+
+        assert result == "cp-tls-connector"
+        assert captured["called"] == ("host", 443, "ctx", "fake-radio")
+
+    def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
+        captured: dict = {}
+
+        def fake_connector(host, port, *, context):
+            captured["called"] = (host, port, context)
+            return "mp-tls-connector"
+
+        contexts = [_set_runtime("micropython")]
+        contexts.extend(_stub_mp_adapter(tls_connector=fake_connector))
+
+        for context in contexts:
+            context.__enter__()
+        try:
+            result = tls_client_connector("host", 443, context="ctx")
+        finally:
+            for context in reversed(contexts):
+                context.__exit__(None, None, None)
+
+        assert result == "mp-tls-connector"
+        assert captured["called"] == ("host", 443, "ctx")
+
+
+# ---------------------------------------------------------------------------
+# ssl_context_with_ca — MP routing
+# ---------------------------------------------------------------------------
+
+
+class TestSslContextWithCaMPRouting:
+    """``ssl_context_with_ca`` on micropython routes through the MP adapter."""
+
+    def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
+        captured: dict = {}
+
+        def fake_helper(ca_pem):
+            captured["ca_pem"] = ca_pem
+            return "mp-ca-context"
+
+        contexts = [_set_runtime("micropython")]
+        contexts.extend(_stub_mp_adapter(ssl_context_with_ca=fake_helper))
+
+        for context in contexts:
+            context.__enter__()
+        try:
+            result = ssl_context_with_ca(
+                b"-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n",
+            )
+        finally:
+            for context in reversed(contexts):
+                context.__exit__(None, None, None)
+
+        assert result == "mp-ca-context"
+        assert captured["ca_pem"].startswith(b"-----BEGIN CERTIFICATE-----")
