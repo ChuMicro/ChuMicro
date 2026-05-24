@@ -6,10 +6,9 @@ each measurement.  They catch Python-level leaks in
 :class:`ResponseParser` — accumulating list/dict references,
 buffer growth that doesn't release across cycles, retained closures.
 
-These don't replicate device-level heap fragmentation — CP / MP
-allocators differ from CPython, and dedicated soak measurement of
-that belongs in the planned resource-benchmarking harness, not the
-unit suite.
+These don't replicate device-level heap fragmentation: CP / MP
+allocators differ from CPython.  Device-side soak measurement is a
+separate concern from this unit suite.
 
 Why the library itself never calls ``gc.collect()``: fragmentation is
 prevented by design (parser tears down per-request, no module-level

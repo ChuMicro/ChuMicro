@@ -1,13 +1,23 @@
-"""``FakeHttpClient`` — drive downstream code without a real network.
+"""``FakeHttpClient`` plus low-level helpers for the real-client suite.
 
-Designed for tests of code that takes an :class:`HttpClient` as a
-constructor-injected dependency.  Mirrors the
-production client's external surface (``get`` / ``post`` / ``put`` /
-``patch`` / ``delete`` / ``check`` / ``handle`` / ``busy`` /
-``on_oversized``) but completes each request from a scripted response
-queue instead of opening a socket.
+Two layers live here:
 
-Idiom — for a thing that fetches weather over HTTP::
+* :class:`FakeHttpClient` — a scripted in-memory stand-in for an
+  :class:`HttpClient` constructor-injected dependency.  Mirrors the
+  production verb surface (``get`` / ``post`` / ``put`` / ``patch`` /
+  ``delete`` / ``check`` / ``handle`` / ``busy`` / ``on_oversized``)
+  but completes each request from a scripted response queue instead
+  of opening a socket.
+
+* :func:`make_factory`, :func:`canned_response`, :func:`drive_until_done`,
+  :func:`make_client` — the lower-level fixtures the real-client
+  test suite uses to drive an actual :class:`HttpClient` against a
+  :class:`chumicro_sockets.testing.FakeSocket`.  Building blocks; pick
+  one per test depending on whether the deliverable is *response on
+  the wire* (low level) or *behavior of code that holds an HttpClient*
+  (FakeHttpClient).
+
+Idiom — testing code that takes an HttpClient::
 
     from chumicro_requests.testing import FakeHttpClient
 
@@ -34,12 +44,15 @@ on-device unit sweep is the one path that stages it).
 #: Ships in the source bundle and sdist; never lands on a device.
 __chumicro_test_support__ = True
 
+from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
+from chumicro_timing.testing import FakeTicks
+
 from chumicro_requests._wire import (
     CaseInsensitiveDict,
     HttpBusyError,
     HttpError,
 )
-from chumicro_requests.client import RequestHandle, Response
+from chumicro_requests.client import HttpClient, RequestHandle, Response
 
 
 class _ScriptedCall:
@@ -291,3 +304,68 @@ class FakeHttpClient:
         self._handle = RequestHandle(url=url, on_done=on_done)
         self._url = url
         return self._handle
+
+
+# ---------------------------------------------------------------------------
+# Low-level fixtures for the real-client test suite
+# ---------------------------------------------------------------------------
+
+
+def canned_response(*, status=200, reason="OK", body=b"", extra_headers=()):
+    """Build an HTTP/1.1 response byte-string with ``Content-Length``."""
+    lines = [f"HTTP/1.1 {status} {reason}\r\n".encode("ascii")]
+    lines.append(f"Content-Length: {len(body)}\r\n".encode("ascii"))
+    lines.append(b"Content-Type: text/plain\r\n")
+    for name, value in extra_headers:
+        lines.append(f"{name}: {value}\r\n".encode("ascii"))
+    lines.append(b"\r\n")
+    lines.append(body)
+    return b"".join(lines)
+
+
+def make_factory(socket_or_factory):
+    """Return a connector_factory that wraps *socket_or_factory* in a
+    happy-path :class:`FakeSocketConnector`.
+
+    *socket_or_factory* is either a single :class:`FakeSocket` (wrapped
+    on every call) or a zero-arg callable that builds a fresh socket
+    on demand.  The connector script is the shortest happy path:
+    ``dns_ok`` then ``tcp_ok``.  Tests that need pending/failure
+    phases should build the connector directly.
+    """
+    def factory(host, port, use_tls):  # noqa: ARG001 — fake ignores args
+        socket = socket_or_factory() if callable(socket_or_factory) else socket_or_factory
+        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
+
+    return factory
+
+
+def make_client(*, socket_or_factory=None, **kwargs):
+    """Build an :class:`HttpClient` against ``FakeTicks`` + a ``FakeSocket``.
+
+    Returns ``(client, ticks, socket)``.  ``kwargs`` forward to
+    ``HttpClient``.
+    """
+    ticks = FakeTicks()
+    socket = socket_or_factory if socket_or_factory is not None else FakeSocket()
+    client = HttpClient(
+        connector_factory=make_factory(socket),
+        ticks=ticks,
+        **kwargs,
+    )
+    return client, ticks, socket
+
+
+def drive_until_done(client, handle, ticks, *, max_ticks=200, advance_ms=1):
+    """Tick *client* until *handle*\\ ``.done`` flips True.
+
+    Safety-caps at *max_ticks* iterations and raises
+    :class:`AssertionError` if the handle never completes.
+    """
+    for _ in range(max_ticks):
+        if handle.done:
+            return
+        if client.check(ticks.ticks_ms()):
+            client.handle(ticks.ticks_ms())
+        ticks.advance(advance_ms)
+    raise AssertionError(f"handle never completed within {max_ticks} ticks")

@@ -14,20 +14,8 @@ from chumicro_requests import (
     parse_url,
     resolve_redirect_url,
 )
+from chumicro_requests.testing import canned_response
 from chumicro_test_harness.assertions import raises
-
-
-def canned_response(*, status=200, reason="OK", body=b"", extra_headers=()):
-    """Build an HTTP/1.1 response byte-string with Content-Length."""
-    lines = [f"HTTP/1.1 {status} {reason}\r\n".encode("ascii")]
-    lines.append(f"Content-Length: {len(body)}\r\n".encode("ascii"))
-    lines.append(b"Content-Type: text/plain\r\n")
-    for name, value in extra_headers:
-        lines.append(f"{name}: {value}\r\n".encode("ascii"))
-    lines.append(b"\r\n")
-    lines.append(body)
-    return b"".join(lines)
-
 
 # ---------------------------------------------------------------------------
 # URL parsing
@@ -395,17 +383,17 @@ class TestResponseParserLengthUnknown:
         assert parser.state == ParseState.DONE
         assert parser.body == b"streaming-body"
 
-    def test_eof_idempotent_after_done(self):
+    def test_eof_safe_after_done(self):
         parser = ResponseParser()
         parser.feed(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
-        parser.feed_eof()  # safe even after DONE
+        parser.feed_eof()
         assert parser.state == ParseState.DONE
 
     def test_eof_after_error_is_safe(self):
         parser = ResponseParser()
         parser.feed(b"HTTP/1.1 NOT-A-CODE 200\r\n")
         assert parser.state == ParseState.ERROR
-        parser.feed_eof()  # idempotent
+        parser.feed_eof()
         assert parser.state == ParseState.ERROR
 
     def test_oversized_unknown_length_raises(self):

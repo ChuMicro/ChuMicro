@@ -7,34 +7,14 @@ from chumicro_requests import (
     HttpURLError,
     WhenOversized,
 )
+from chumicro_requests.testing import (
+    canned_response,
+    drive_until_done,
+    make_client,
+)
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 from chumicro_timing.testing import FakeTicks
 
-
-def make_factory(socket_or_factory):
-    """Return a connector_factory that hands out a FakeSocketConnector
-    wrapping *socket_or_factory* on ``ready``.
-
-    *socket_or_factory* can be either a single :class:`FakeSocket`
-    (wrapped every call) or a zero-arg callable that builds a fresh
-    one on demand.
-    """
-    def factory(host, port, use_tls):  # noqa: ARG001 — fake ignores args
-        socket = socket_or_factory() if callable(socket_or_factory) else socket_or_factory
-        return FakeSocketConnector(actions=["dns_ok", "tcp_ok"], socket=socket)
-
-    return factory
-
-def canned_response(*, status=200, reason="OK", body=b"", extra_headers=()):
-    """Build an HTTP/1.1 response byte-string with Content-Length."""
-    lines = [f"HTTP/1.1 {status} {reason}\r\n".encode("ascii")]
-    lines.append(f"Content-Length: {len(body)}\r\n".encode("ascii"))
-    lines.append(b"Content-Type: text/plain\r\n")
-    for name, value in extra_headers:
-        lines.append(f"{name}: {value}\r\n".encode("ascii"))
-    lines.append(b"\r\n")
-    lines.append(body)
-    return b"".join(lines)
 
 def canned_redirect(*, status=301, location="/", reason="Moved"):
     """Build an HTTP/1.1 3xx redirect response byte-string."""
@@ -45,26 +25,6 @@ def canned_redirect(*, status=301, location="/", reason="Moved"):
         "\r\n"
     ).encode("ascii")
 
-def drive_until_done(client, handle, ticks, *, max_ticks=200, advance_ms=1):
-    """Run handle/check until done; safety-cap at *max_ticks* iterations."""
-    for _ in range(max_ticks):
-        if handle.done:
-            return
-        if client.check(ticks.ticks_ms()):
-            client.handle(ticks.ticks_ms())
-        ticks.advance(advance_ms)
-    raise AssertionError(f"handle never completed within {max_ticks} ticks")
-
-def make_client(*, socket_or_factory=None, **kwargs):
-    """Construct an HttpClient wired to FakeTicks + a FakeSocket factory."""
-    ticks = FakeTicks()
-    socket = socket_or_factory if socket_or_factory is not None else FakeSocket()
-    client = HttpClient(
-        connector_factory=make_factory(socket),
-        ticks=ticks,
-        **kwargs,
-    )
-    return client, ticks, socket
 
 class _CountingSocket(FakeSocket):
     """FakeSocket that records bytes consumed per recv_into call."""
