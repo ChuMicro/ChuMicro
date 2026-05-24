@@ -4,7 +4,7 @@
 
 ## Now
 
-(empty — pick the next item from `## Next` below.)
+- [ ] **Resume ADR Summary-field workstream then test-harness promotion** — see [`handoffs/2026-05-24-adr-summary-field-and-test-harness-promotion.md`](handoffs/2026-05-24-adr-summary-field-and-test-harness-promotion.md).
 
 ## Next
 
