@@ -428,3 +428,8 @@ class _CPConnector(SocketConnector):
                 return
         except Exception as error:  # noqa: BLE001 - any failure stops the machine
             self._fail(error)
+
+
+# Defragment compile-time scratch at module bottom so the lazy load
+# from chumicro_sockets's factories lands in a cleaner heap.
+gc.collect()
