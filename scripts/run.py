@@ -473,6 +473,12 @@ def verify_examples(package_dirs: list[Path]) -> int:
     return _verify(package_dirs)
 
 
+def verify_demos() -> int:
+    """Compile-check every ``.py`` under ``demos/``."""
+    from verify_demos import verify_demos as _verify
+    return _verify()
+
+
 def new_library(name: str, *, workbench: bool = False) -> int:
     """Scaffold a new device library (or host-only workbench tool)."""
     from new_library_scaffold import new_library as _new_library
@@ -1578,6 +1584,7 @@ def preflight(
         (f"test (python {python_version})", test_args),
         ("test-scripts", ["test-scripts"]),
         ("verify-examples", ["verify-examples", "--all"]),
+        ("verify-demos", ["verify-demos"]),
         ("check-dep-graph", ["check-dep-graph"]),
         ("check-version", ["check-version"] if can_diff else None),
         (
@@ -3123,6 +3130,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="buffer per-phase output; replay full transcript at end",
     )
     subparsers.add_parser("verify-examples", parents=[scope], help="import-check examples")
+    subparsers.add_parser("verify-demos", help="compile-check the demos/ tree")
 
     docs_parser = subparsers.add_parser("docs", parents=[scope], help="build library docs")
     docs_parser.add_argument(
@@ -3231,6 +3239,9 @@ def main(argv: list[str]) -> int:
 
     if args.task == "verify-examples":
         return verify_examples(_resolve_scoped_packages(args))
+
+    if args.task == "verify-demos":
+        return verify_demos()
 
     if args.task == "docs":
         return docs(

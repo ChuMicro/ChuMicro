@@ -37,6 +37,7 @@ from ..collection import (
     _session_effective_deploy_mode,
 )
 from ..concurrent_runner import DeviceBootstrapRunner
+from ..markers import Marker
 from ..session import (
     _encode_runtime_config_extra_files,
     _harness_source_dir,
@@ -81,11 +82,15 @@ def bind_to(runner: DeviceBootstrapRunner) -> Callable[..., HttpResponseSnapshot
 
     The returned callable:
 
-    1. Calls :meth:`DeviceBootstrapRunner.wait_for` for the
-       ``SERVER_READY`` marker, with the per-call ``timeout_s``.
-    2. Opens :class:`http.client.HTTPConnection` to
-       ``marker.values["ip"]`` and ``int(marker.values["port"])``,
-       with the same ``timeout_s`` as the socket timeout.
+    1. On its first invocation, calls
+       :meth:`DeviceBootstrapRunner.wait_for` for the ``SERVER_READY``
+       marker (with the per-call ``timeout_s``) and caches the
+       resolved ``ip:port``.  Subsequent invocations reuse the
+       cached address — the board prints ``SERVER_READY`` once at
+       startup, so re-waiting on every call would block forever
+       after the first request consumed the marker.
+    2. Opens :class:`http.client.HTTPConnection` to the cached
+       ``ip:port``, with ``timeout_s`` as the socket timeout.
     3. Fires the request (``GET`` by default; ``method`` + ``body``
        overridable) and reads the response.
     4. Closes the underlying connection before returning a
@@ -93,12 +98,13 @@ def bind_to(runner: DeviceBootstrapRunner) -> Callable[..., HttpResponseSnapshot
 
     Args:
         runner: The runner whose marker queue the ``hit`` callable
-            should block on.
+            should block on for the initial ``SERVER_READY`` resolve.
 
     Returns:
         A function ``hit(path, *, timeout_s=10.0, method="GET",
         body=None) -> HttpResponseSnapshot``.
     """
+    cached_marker: Marker | None = None
 
     def hit(
         path: str,
@@ -107,9 +113,13 @@ def bind_to(runner: DeviceBootstrapRunner) -> Callable[..., HttpResponseSnapshot
         method: str = "GET",
         body: bytes | None = None,
     ) -> HttpResponseSnapshot:
-        marker = runner.wait_for("SERVER_READY", timeout_s=timeout_s)
-        ip_address = marker.values["ip"]
-        port_number = int(marker.values["port"])
+        nonlocal cached_marker
+        if cached_marker is None:
+            cached_marker = runner.wait_for(
+                "SERVER_READY", timeout_s=timeout_s,
+            )
+        ip_address = cached_marker.values["ip"]
+        port_number = int(cached_marker.values["port"])
         connection = http.client.HTTPConnection(
             ip_address, port_number, timeout=timeout_s,
         )
