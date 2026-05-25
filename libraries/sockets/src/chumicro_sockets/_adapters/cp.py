@@ -175,7 +175,7 @@ def listen_tcp(host, port, *, backlog=4, radio):
     recv/send don't stall the runner.
     """
     pool = _pool_for(radio)
-    listener = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
+    sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
     # Best-effort SO_REUSEADDR so a back-to-back rebind on the same
     # port doesn't fail with OSError(EADDRINUSE) while a previous
     # socket is still in TIME_WAIT.  CP firmware exposure of
@@ -185,13 +185,13 @@ def listen_tcp(host, port, *, backlog=4, radio):
     # they did before, but the common case (current CP on ESP32) gets
     # the same SO_REUSEADDR semantics as MP and CPython.
     try:
-        listener.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
+        sock.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
     except (AttributeError, OSError):
         pass
-    listener.bind((host, port))
-    listener.listen(backlog)
-    listener.setblocking(False)
-    return listener
+    sock.bind((host, port))
+    sock.listen(backlog)
+    sock.setblocking(False)
+    return sock
 
 
 def ssl_context_with_cert_and_key(cert_pem, key_pem):
@@ -270,11 +270,11 @@ def listen_tls(host, port, *, context, backlog=4, radio):
         )
     pool = _pool_for(radio)
     raw = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
-    tls_listener = context.wrap_socket(raw, server_side=True)
-    tls_listener.bind((host, port))
-    tls_listener.listen(backlog)
-    tls_listener.setblocking(False)
-    return tls_listener
+    tls_sock = context.wrap_socket(raw, server_side=True)
+    tls_sock.bind((host, port))
+    tls_sock.listen(backlog)
+    tls_sock.setblocking(False)
+    return tls_sock
 
 
 def ssl_context_with_ca(ca_pem):
