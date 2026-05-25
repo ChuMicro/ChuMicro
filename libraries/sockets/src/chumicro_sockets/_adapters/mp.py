@@ -131,10 +131,11 @@ def connect_tls(host, port, *, context=None, **_kwargs):  # pragma: no cover - d
 
     When ``context`` is ``None``, the TLS handshake validates the
     server cert against the library-shipped CA bundle in
-    :mod:`chumicro_sockets._ca_bundle` — loaded lazily and cached at
-    module level via :func:`_default_context`.  Override the trust set
-    at runtime with :func:`set_default_ca_bundle` (called transparently
-    by ``chumicro_sockets.set_default_ca_bundle``).  For explicit
+    :mod:`chumicro_sockets._ca_bundle` — loaded lazily and cached on
+    ``_DEFAULT_CONTEXT_CACHE`` inside :func:`_resolve_default_context`.
+    Override the trust set at runtime with :func:`set_default_ca_bundle`
+    (called transparently by ``chumicro_sockets.set_default_ca_bundle``).
+    For explicit
     no-verification (dev against self-signed brokers, captive-portal
     probes), pass ``context=ssl_context_no_verify()`` — opt-out is
     named so a code reviewer can grep for it.
@@ -157,16 +158,31 @@ def connect_tls(host, port, *, context=None, **_kwargs):  # pragma: no cover - d
 
 
 def _resolve_default_context(context):  # pragma: no cover - device only
-    """Return *context* unchanged, or load MP's default context if ``None``.
+    """Return *context* unchanged, or load + cache MP's default context if ``None``.
 
-    The default trust set is the chumicro-shipped DER bundle in
+    Default trust set is the chumicro-shipped DER bundle in
     :mod:`chumicro_sockets._ca_bundle`, parsed once and cached on
-    :func:`_default_context`.  Override it at runtime via
-    :func:`set_default_ca_bundle`.
+    ``_DEFAULT_CONTEXT_CACHE``.  Override the bytes at runtime via
+    :func:`set_default_ca_bundle`, which clears the cache so the next
+    call rebuilds from the new bytes.  The DER buffer passes through
+    ``ssl_context_with_ca`` as an unbound temporary; mbedTLS copies it
+    out of the caller's reference, so the freed span lands ahead of
+    the socket / handshake working set.
     """
     if context is not None:
         return context
-    return _default_context()
+    global _DEFAULT_CONTEXT_CACHE
+    if _DEFAULT_CONTEXT_CACHE is not None:
+        return _DEFAULT_CONTEXT_CACHE
+    if _OVERRIDE_PEM is not None:
+        _DEFAULT_CONTEXT_CACHE = ssl_context_with_ca(_OVERRIDE_PEM)
+        return _DEFAULT_CONTEXT_CACHE
+    from chumicro_sockets import (
+        _ca_bundle,  # noqa: PLC0415 - data-file loader; only TLS-using paths reach it
+    )
+
+    _DEFAULT_CONTEXT_CACHE = ssl_context_with_ca(_ca_bundle.read_der())
+    return _DEFAULT_CONTEXT_CACHE
 
 
 def udp_socket(  # pragma: no cover - device only
@@ -259,16 +275,16 @@ def listen_tcp(host, port, *, backlog=4, **_kwargs):  # pragma: no cover - devic
     don't break the listener.
     """
     address_info = socket.getaddrinfo(host, port)[0]
-    listener = socket.socket(address_info[0], address_info[1])
+    sock = socket.socket(address_info[0], address_info[1])
     try:
-        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     except OSError:
         # Some MP ports don't expose SO_REUSEADDR; non-fatal.
         pass
-    listener.bind(address_info[-1])
-    listener.listen(backlog)
-    listener.setblocking(False)
-    return _MpListeningSocketWrapper(listener)
+    sock.bind(address_info[-1])
+    sock.listen(backlog)
+    sock.setblocking(False)
+    return _MpListeningSocketWrapper(sock)
 
 
 class _MpListeningSocketWrapper:  # pragma: no cover - device only
@@ -332,9 +348,9 @@ def listen_tls(host, port, *, context, backlog=4, **_kwargs):  # pragma: no cove
 class _MpTLSListenerWrapper:  # pragma: no cover - device only
     """Wraps an MP listener so accept() yields TLS-wrapped sockets.
 
-    Holds the inner :class:`_MpListeningSocketWrapper` on ``sock``
-    so :func:`chumicro_sockets.pollable_of` unwraps to a registrable
-    listener for ``select.poll``.
+    Holds the inner :class:`_MpListeningSocketWrapper` on ``sock`` so
+    Runner reads the underlying registrable listener via the connector's
+    ``io_socket`` (Runner uses ``getattr(io_socket, "sock", io_socket)``).
     """
 
     def __init__(self, raw_listener, context):
@@ -482,34 +498,6 @@ def set_default_ca_bundle(pem_bytes):
     _DEFAULT_CONTEXT_CACHE = None
 
 
-def _default_context():  # pragma: no cover - device only
-    """Return the cached default :class:`ssl.SSLContext`, building on first use.
-
-    When an override is set (:func:`set_default_ca_bundle`) the
-    in-RAM override bytes are used.  Otherwise the shipped bundle is
-    read from the sibling ``_ca_bundle.der`` data file via
-    :func:`chumicro_sockets._ca_bundle.read_der`.
-
-    The DER buffer is passed straight into ``ssl_context_with_ca`` as
-    an unbound temporary and no reference is kept here, so it is
-    collectable the moment ``load_verify_locations`` has copied it
-    into mbedTLS — freed before the socket / handshake working set
-    allocates (tight lifetime keeps fragmentation minimal; see
-    ``_ca_bundle`` docstring).  Caching means plain-TCP-only callers
-    never pay the read+parse, and TLS callers pay it exactly once.
-    """
-    global _DEFAULT_CONTEXT_CACHE
-    if _DEFAULT_CONTEXT_CACHE is not None:
-        return _DEFAULT_CONTEXT_CACHE
-    if _OVERRIDE_PEM is not None:
-        _DEFAULT_CONTEXT_CACHE = ssl_context_with_ca(_OVERRIDE_PEM)
-        return _DEFAULT_CONTEXT_CACHE
-    from chumicro_sockets import _ca_bundle  # noqa: PLC0415 — lazy
-
-    _DEFAULT_CONTEXT_CACHE = ssl_context_with_ca(_ca_bundle.read_der())
-    return _DEFAULT_CONTEXT_CACHE
-
-
 def ssl_context_no_verify():  # pragma: no cover - device only
     """Return an MP ``ssl.SSLContext`` that **skips** certificate verification.
 
@@ -594,13 +582,28 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
             if self.state == STATE_AWAITING_TCP:
                 if self._inflight_socket is None:
                     self._inflight_socket = self._issue_tcp_connect()
-                    self._register_tcp_poll(self._inflight_socket)
+                    self._tcp_poll = select.poll()
+                    self._tcp_poll.register(self._inflight_socket, select.POLLOUT)
                     return
-                if not self._tcp_ready():
+                # POLLOUT firing means the kernel has resolved the
+                # connect (success or failure).  POLLERR / POLLHUP would
+                # surface as events too; the subsequent first ``send``
+                # raises the actual errno.  ``getsockopt(SO_ERROR)`` is
+                # not exposed reliably on rp2 plain sockets, so we rely
+                # on POLLOUT + first-send-fails.
+                if not self._tcp_poll.poll(0):  # 0 ms — non-blocking probe
                     return
                 self._tcp_poll = None
                 if self._tls:
-                    self._inflight_socket = self._wrap_tls(self._inflight_socket)
+                    # ``ssl.SSLContext.wrap_socket`` blocks until the TLS
+                    # handshake completes — substrate limit documented on
+                    # the public ``tls_client_connector`` factory.  On
+                    # the next tick the ``awaiting_tls`` branch promotes
+                    # to ``ready``.
+                    self._context = _resolve_default_context(self._context)
+                    self._inflight_socket = self._context.wrap_socket(
+                        self._inflight_socket, server_hostname=self._host,
+                    )
                     self.state = STATE_AWAITING_TLS
                 else:
                     self.socket = _MpSocketWrapper(self._inflight_socket)
@@ -634,28 +637,6 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
                 sock.close()
                 raise
         return sock
-
-    def _register_tcp_poll(self, sock):
-        self._tcp_poll = select.poll()
-        self._tcp_poll.register(sock, select.POLLOUT)
-
-    def _tcp_ready(self):
-        # POLLOUT firing means the kernel has resolved the connect
-        # (success or failure).  POLLERR / POLLHUP would surface as
-        # events too; the subsequent first ``send`` raises the actual
-        # errno.  ``getsockopt(SO_ERROR)`` is not exposed reliably on
-        # rp2 plain sockets, so we rely on POLLOUT + first-send-fails.
-        events = self._tcp_poll.poll(0)  # 0 ms — non-blocking probe
-        return bool(events)
-
-    def _wrap_tls(self, sock):
-        # ``ssl.SSLContext.wrap_socket`` blocks until the TLS handshake
-        # completes — substrate limit documented on the public
-        # ``tls_client_connector`` factory.  On the next tick the
-        # ``awaiting_tls`` branch promotes to ``ready``.
-        self._context = _resolve_default_context(self._context)
-        return self._context.wrap_socket(sock, server_hostname=self._host)
-
 
 # Defragment compile-time scratch at module bottom so the lazy load
 # from chumicro_sockets's factories lands in a cleaner heap.

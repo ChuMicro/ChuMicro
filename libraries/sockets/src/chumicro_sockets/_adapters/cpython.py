@@ -181,14 +181,12 @@ def listen_tcp(host, port, *, backlog=4, **_kwargs):
     ``SO_REUSEADDR`` is set so a quick restart of the server doesn't
     trip ``OSError(EADDRINUSE)`` on the rebind.
     """
-    import socket  # noqa: PLC0415 — runtime-gated
-
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind((host, port))
-    listener.listen(backlog)
-    listener.setblocking(False)
-    return listener
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((host, port))
+    sock.listen(backlog)
+    sock.setblocking(False)
+    return sock
 
 
 def ssl_context_with_cert_and_key(cert_pem, key_pem):
@@ -249,9 +247,9 @@ class _CPythonTLSListenerWrapper:
     `accept()` raises `BlockingIOError` when no client is queued; we
     propagate that as `OSError(EAGAIN)`.
 
-    Holds the raw listening socket on ``sock`` so
-    :func:`chumicro_sockets.pollable_of` unwraps to the registrable
-    listener.
+    Holds the raw listening socket on ``sock`` so Runner reads the
+    underlying registrable listener via the connector's ``io_socket``
+    (Runner uses ``getattr(io_socket, "sock", io_socket)``).
     """
 
     def __init__(self, raw_listener, context):
