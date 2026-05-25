@@ -46,7 +46,6 @@ class UnsupportedSSLConfigError(RuntimeError):
 
 __all__ = [
     "UnsupportedSSLConfigError",
-    "pollable_of",
     "set_default_ca_bundle",
     "ssl_context_no_verify",
     "ssl_context_with_ca",
@@ -58,31 +57,6 @@ __all__ = [
     "tls_listening_socket",
     "udp_socket",
 ]
-
-
-def pollable_of(sock: object) -> object:
-    """Return the underlying pollable socket inside a chumicro-sockets adapter.
-
-    Pass the result to ``select.poll().register(...)``.  Both target
-    runtimes' ``poll.register()`` accepts the socket *object*, which
-    the runtime polls through its C-level stream ``ioctl``.  Chumicro
-    wrappers do not expose ``fileno()``, so the underlying runtime
-    socket has to be unwrapped before registration.
-
-    Adapter wrappers that hold their socket on ``sock``
-    (``_MpSocketWrapper``, ``_MpListeningSocketWrapper``,
-    ``_MpTLSListenerWrapper``, ``_CPUDPWrapper``, ``_CPythonUDPWrapper``,
-    ``_CPythonTLSListenerWrapper``) unwrap to it; bare sockets
-    (CP TCP / TLS client, CP TCP listener, CP TLS listener, MP TLS,
-    CPython stdlib ``socket.socket``) pass through unchanged.
-    """
-    return getattr(sock, "sock", sock)
-
-
-def _runtime_name() -> str:
-    """Return ``sys.implementation.name`` (``"cpython"`` / ``"micropython"`` /
-    ``"circuitpython"``)."""
-    return sys.implementation.name
 
 
 #: Per-package adapter cache — populated on first factory call.
@@ -105,7 +79,7 @@ def _get_adapter():
     global _adapter
     if _adapter is not None:
         return _adapter
-    runtime = _runtime_name()
+    runtime = sys.implementation.name
     if runtime == "circuitpython":
         from chumicro_sockets._adapters import cp as resolved  # noqa: PLC0415 — runtime-gated
     elif runtime == "micropython":
