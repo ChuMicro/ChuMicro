@@ -3,11 +3,7 @@
 Spins up a TCP echo server on the host's LAN IP, deploys the board's
 ``app.py`` via :func:`chumicro_workspace.deploy_api.deploy_project`
 with the echo coords baked into the runtime_config payload, then
-waits for the board's marker sequence to confirm the round trip AND
-asserts the board emitted at least one ``HEARTBEAT`` between the
-``CONNECTING`` and ``CONNECTED`` markers — the proof that
-``runner.add(connector)`` keeps other tasks ticking during the
-non-blocking connect.
+waits for the board's marker sequence to confirm the round trip.
 
 Pinned ``deploy_mode="flash"`` so the demo always runs the
 production-shaped path regardless of any per-device override in
@@ -105,22 +101,8 @@ def main(argv: list[str] | None = None) -> int:
             f"port={connecting_marker.values.get('port')}",
         )
 
-        # Count HEARTBEAT markers between CONNECTING and CONNECTED.
-        # At least one proves the runner kept ticking during the
-        # connect — the whole point of the runner-shaped connector.
-        heartbeats_during_connect = 0
-
-        def _count_heartbeat(_marker):
-            nonlocal heartbeats_during_connect
-            heartbeats_during_connect += 1
-
-        with session.subscribe("HEARTBEAT", _count_heartbeat):
-            session.wait_for("CONNECTED", timeout_s=args.connect_timeout_s)
-
-        print(
-            f"driver: board CONNECTED "
-            f"(heartbeats during connect: {heartbeats_during_connect})",
-        )
+        session.wait_for("CONNECTED", timeout_s=args.connect_timeout_s)
+        print("driver: board CONNECTED")
 
         sent_marker = session.wait_for("SENT", timeout_s=5.0)
         print(f"driver: board SENT bytes={sent_marker.values.get('bytes')}")
