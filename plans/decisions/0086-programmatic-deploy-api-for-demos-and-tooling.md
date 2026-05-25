@@ -1,6 +1,6 @@
 # Decision 0086: Programmatic deploy API for demos and host-side tooling
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-05-24`
 Summary: `chumicro_workspace.deploy_api.deploy_project()` is the one programmatic deploy+marker-orchestration entry point; runner/marker primitives move to `chumicro_workspace`.
 Related: Decision [0077](0077-one-device-staging-path.md) (one device staging path — this ADR adds the programmatic caller without adding a second staging path), Decision [0083](0083-functional-test-endpoint-taxonomy.md) (Category 1 host-driver-as-client shape that demos extend), Decision [0085](0085-board-to-host-sync-stdout-markers.md) (stdout-marker protocol the orchestration primitives implement), Decision [0082](0082-test-harness-as-infrastructure-library.md) (`support/` dissolution — new shared primitives land in `libraries/` or `workbench/`, not a new tree).

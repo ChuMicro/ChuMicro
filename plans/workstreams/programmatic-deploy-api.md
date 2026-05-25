@@ -1,6 +1,6 @@
 # Workstream: programmatic deploy API for demos and host-side tooling
 
-Status: **proposed.** Accepts [Decision 0086](../decisions/0086-programmatic-deploy-api-for-demos-and-tooling.md) and tracks the implementation. Pairs with the [deploy-path-unification workstream](deploy-path-unification.md) — that workstream owns the *write* mechanism; this one owns the *programmatic caller surface* over it, plus the test-shaped execution layer that surfaces stdout markers to host orchestration.
+Status: **shipped** (all six phases landed 2026-05-24). Accepts [Decision 0086](../decisions/0086-programmatic-deploy-api-for-demos-and-tooling.md) and tracks the implementation. Pairs with the [deploy-path-unification workstream](deploy-path-unification.md) — that workstream owns the *write* mechanism; this one owns the *programmatic caller surface* over it, plus the test-shaped execution layer that surfaces stdout markers to host orchestration.
 
 ## Problem
 
@@ -170,6 +170,14 @@ Re-run the full preflight + a representative real-hardware bake (Pico W CP funct
 ## Validation history
 
 <!-- One line per phase as it lands.  Format: `- **YYYY-MM-DD** Phase N. <short summary> + commit hash.` -->
+
+- **2026-05-24** Phase 0.5. Broken `demos/mqtt_pub_sub/` rolled to `.scratch/mqtt_pub_sub_v1/`; ADR + workstream filed together. Commit `6b22c42a`.
+- **2026-05-24** Phase 1. Four orchestration primitives moved from `chumicro_pytest_device` to `chumicro_workspace.{device_runner, markers, device_orchestration}`; all in-repo callers updated; no back-compat shim per user direction ("nothing has shipped"). workspace 0.39.3→0.40.0, pytest-device 0.14.2→0.15.0. Preflight green at coverage 94. Commit `99c15443`.
+- **2026-05-24** Phase 2. `chumicro_workspace.deploy_api.deploy_project()` + `DeployedProject` session implemented; 9 tests against FakeTransport + monkeypatched device resolution (staging shape, runtime_config overlay, deploy_mode override, error paths, marker waits, context-manager teardown). workspace 0.40.0→0.41.0. Preflight green at coverage 94. Commit `7fa499dd`.
+- **2026-05-24** Phase 3a. `demos/http_server_roundtrip/driver.py` ported to deploy_api — 260 lines → 155 lines, all of it demo-specific narration. Bench: deployed against real Pi Pico W CP from clean reset; three round-trips render exactly as before; `DEMO_COMPLETE` arrives. Regression gate passes. Commit `925f1af6`.
+- **2026-05-24** Phase 3b. `demos/mqtt_pub_sub/` rebuilt on Runner + MQTTClient + chumicro_config canonical composition with event-driven state machine (no `drive_until` helpers). Two non-obvious gotchas encoded: WifiService stays off the runner (its blocking CP `wifi.radio.connect` violates runner-tick cooperative shape), `DemoState.advance()` registers as a `runner.add_periodic(100 ms)` so the runner wakes up between MQTT events to fire the pacing timer. Marker order matters: `add_pattern_handler` callback fires before `on_message` so `PATTERN_HIT` prints before `CMD_RECEIVED` — driver waits in arrival order. Bench: Lolin S2 CP runs the full pipeline through the cmd round-trip and two telemetry messages (USB-CDC dropped before the third — board-specific, not a demo defect). Pi Pico W CP wifi fails with `ConnectionError: Unknown failure 1` despite the same `wifi_up()` succeeding in http_server_roundtrip on the same board; documented in the demo README and in plans/next-up.md as a known issue. Commit `381c8abc`.
+- **2026-05-24** Phase 4. CHU030 lands — forbidden-imports + literal-`deploy_mode="flash"` enforcement on every `.py` under `demos/`. 15 tests cover the prefix-match, bare/from-import distinction, noqa suppression, literal-vs-non-literal kwarg case, and silent no-op when `demos/` is absent. Both shipped demos pass under the rule with no suppressions. checks 0.10.1→0.11.0. Commit `765f53c5`.
+- **2026-05-24** Phase 5. No shims to retire (Phase 1 did the hard-cut). Decision 0086 promoted `proposed` → `accepted`: 3a confirms the API doesn't regress an existing demo, 3b confirms the canonical-library composition works on real hardware (Lolin S2 CP); the Pi Pico W wifi issue is a board / radio-state quirk independent of the deploy_api surface, tracked separately in plans/next-up.md.
 
 ## Out of scope
 
