@@ -1,0 +1,93 @@
+# Decision 0087: Generator-driven coroutines for sequential I/O
+
+Status: `accepted`
+Date: `2026-05-25`
+Summary: Sequential I/O state machines use generator functions (`def` + `yield from`) registered via `runner.add_generator()`; `async`/`await` and the `asyncio` module are both banned in library code.
+
+Related: Decision 0014 (runner pattern), Decision 0051 (runner-shaped policy), Decision 0080 (runner reactor), Decision 0081 (non-blocking connect via tick-driven connector)
+
+## Context
+
+The runner-shaped contract from Decisions 0014 / 0051 (`check(now_ms) -> bool` + `handle(now_ms)`, plus the `io_socket` / `io_wants_read` / `io_wants_write` attributes added by 0080) reads cleanly for reactive services — MQTT keepalive, WiFi state changes, button debounce, sensor polls — but is verbose for sequential I/O state machines. The `demos/sockets_runner_connector/app.py` `EchoService` is the canonical case: ~80 lines of explicit state machine — four state strings, three `_handle_*` methods, manual `_send_offset` tracking, three `io_wants_*` properties — for what is conceptually "connect, send, recv, close." A first-time custom-protocol author bounces off the ceremony.
+
+Decisions 0051 and 0080 both rejected adopting asyncio, but the rejection elided a load-bearing distinction. Two independent things sit under "async" — the **asyncio module** (an event-loop scheduler + a stream layer + a Task heap) and the **language-level coroutine substrate** (generator `.send()` / `.throw()` / `.close()`, `yield from` for delegation, PEP 380 return-value semantics). The module-level scheduler is the part incompatible with the runner reactor. The generator substrate is just Python's cooperative-scheduling primitive; trio and curio drive their own schedulers on top of it on CPython, and the same approach works on MP and CP today.
+
+Two further pieces of runtime evidence sharpen the choice of *syntax* once the substrate is settled:
+
+- The asyncio module itself remains a poor substrate to depend on. Adafruit's CircuitPython port (the only path to asyncio on CP) has [issue #4](https://github.com/adafruit/Adafruit_CircuitPython_asyncio/issues/4) open since 2021-11-18: `asyncio/stream.py` imports `usocket`, a MicroPython-only module not present on CircuitPython, so `asyncio.open_connection` / `start_server` / `StreamReader` / `StreamWriter` are all broken on CP. Recent commits to the repo are upstream-sync, not bug-fix.
+
+- `async`/`await` and `yield from` are **not** byte-identical on CircuitPython. MicroPython compiles `await x` directly to `YIELD_FROM` (MP `py/compile.c:2767-2780`); CircuitPython explicitly diverges and emits `load_method __await__; call; YIELD_FROM` (CP `py/compile.c:2790-2796`, with an in-source `// CIRCUITPY-CHANGE: Use __await__ instead of yield from.` comment). On CP, every `await` costs a method dispatch plus a fresh generator instance from the `__await__()` call. `yield from` is one bytecode on both runtimes.
+
+## Decision
+
+### 1. Sequential I/O uses generator functions
+
+Library code expresses sequential I/O state machines as **generator functions** registered with the runner via `runner.add_generator(gen) -> GeneratorHandle`. The runner drives the generator via `.send()` against wait-tokens (`ReadReady`, `WriteReady`, `Sleep`) it yields. The runner's external dispatch surface is unchanged — internally the wrapper satisfies the same check/handle/io_* contract everything else does.
+
+```python
+def echo_run(host, port, radio):
+    sock = yield from connect(host, port, radio)
+    try:
+        yield from send_all(sock, b"hello chumicro\n")
+        reply = yield from recv_until(sock, b"\n")
+    finally:
+        sock.close()
+
+handle = runner.add_generator(echo_run(host, port, wifi.adapter.radio))
+
+while not handle.done:
+    now_ms = runner.tick()
+    runner.wait(now_ms)
+```
+
+### 2. `async`/`await` syntax and the asyncio module are both banned
+
+A CHU lint rule fails on `async def`, `await`, `async with`, `async for`, `import asyncio`, `from asyncio import …`, `import uasyncio`, and any file or directory named `asyncio*` in `libraries/` / `support/` / `workbench/`. Deploy-bundle staging refuses to copy `asyncio*` to a device as defense in depth.
+
+### Why generators, not async/await
+
+Four reasons, in declining order of weight:
+
+1. **Yield-point hygiene.** Every `yield` / `yield from` is a scheduler checkpoint — a place the runner gets to interleave another service's work between two lines of your code. With `async def` + `await`, the natural pattern is to write `await` in front of every helper call, including helpers that do pure CPU work. The asyncio community has a name for the result ("coroutine-without-await") and a class of linters that try to catch it after the fact. With `def` + `yield from`, you *cannot* `yield from` a regular function — it raises `TypeError`. The syntax enforces the invariant that every `yield from` corresponds to a helper that actually suspends; pure-CPU helpers stay regular functions and can't accidentally be promoted by anyone reaching for the wrong keyword. On a 256 KB device where the runner's whole value prop is "every other service runs between your yields," the marker semantics matter more than the keyword familiarity.
+
+2. **Transparency.** A `yield` is one bytecode that hands control to the scheduler — single-steppable, breakpoint-able, visible in a traceback. `await` hides the same handoff behind compile-time machinery that *differs per runtime*. The runner's README leans on "the developer can read, breakpoint, and single-step"; the more transparent primitive matches the project's posture.
+
+3. **Allocation budget on CircuitPython.** Per the runtime-evidence section above, every `await x` on CP allocates a fresh generator from the `__await__()` call. In a `recv_until` loop polling for bytes, that's one heap allocation per tick during receive — measurable churn under the per-tick allocation budget in AGENTS.md. `yield from x` has no such overhead; tokens are cacheable and reusable across yields.
+
+4. **Smaller lint surface.** A `def` + `yield` substrate offers no asyncio-shaped syntactic affordance. A user who has never seen `async def` cannot reach for `import asyncio`. The asyncio ban (item 2 above) lints code that *can't be written in the legal syntax*, so it's defense-in-depth rather than load-bearing.
+
+The cost is that post-PEP-492 Python authors expect `async`/`await` as the modern idiom. That cost is real but narrow: the chumicro user-facing surface is four helpers (`connect`, `send_all`, `recv_until`, `recv_exact`) plus the registration call. One worked example in the runner README is enough to bridge the idiom gap.
+
+## Rejected
+
+- **Adopt asyncio as the scheduler.** Inherits Adafruit asyncio issue #4 (broken stream layer on CP), unmaintained substrate, `Task`-object-per-service allocation cost, and reactor-vs-runner loop-ownership conflict.
+
+- **`async def` + `await` syntax against the runner-driven scheduler.** Technically equivalent to generators-with-`yield from` at the substrate level on MP, but the four reasons in *Why generators, not async/await* above (yield-point hygiene, transparency, CP allocation cost, lint surface) all cut the same direction. The "modern idiom" win does not survive contact with the embedded constraints.
+
+- **Make generator-driven sequential I/O the cross-cutting service model.** Decision 0051's reasoning still applies for reactive services — MQTT keepalive, button debounce, sensor polls read more naturally as `check`/`handle` than as `while True:` loops with `yield Sleep(N)`. Two service shapes is real conceptual overhead, but forcing sequential services into explicit state machines (or forcing reactive services into per-task allocations) is worse on both ends. Default to `check`/`handle`; reach for `add_generator` only when the work is naturally one-shot sequential I/O.
+
+- **Ship a `GeneratorService` base class as part of the public surface.** The user has to know they are writing a generator either way. The class form adds an inheritance entry point without expanding capability; a user who wants a state-bearing class wraps their own class around a generator they register. The internal `_GeneratorWrapper` that `add_generator()` constructs stays private.
+
+- **Inject I/O primitives as a scheduler-as-DI abstraction.** Academically clean (library code calls `yield from self._io.recv_until(...)` against an injected `RunnerIO`) but adds per-call method-dispatch indirection in hot paths, requires maintaining parallel implementations per primitive, and inherits the broken substrate's bugs in any asyncio-backed implementation that would ship.
+
+- **Ship an asyncio bridge.** Defer until a real user asks. The duck-typed `check`/`handle` contract is the escape hatch — asyncio users drive chumicro services from a polling adapter (~5 lines), losing the I/O-sleep optimization but functional.
+
+## Consequences
+
+- New `chumicro_runner` public API: `runner.add_generator(gen) -> GeneratorHandle`, `GeneratorHandle.done`, wait-token classes (`ReadReady`, `WriteReady`, `Sleep`, `Done` sentinel). Internal `_GeneratorWrapper` stays private. Existing check/handle services and their registration paths are unchanged.
+
+- Wait-tokens expose `ready(now_ms) -> bool` and `result(now_ms)`. They are **not** awaitables — they do not implement `__await__`. Generator helpers `yield` them directly. Tokens are cacheable: a helper that loops on `yield ready` constructs one token outside the loop and reuses it.
+
+- New socket generator helpers in `chumicro_sockets`: `connect(host, port, radio)`, `send_all(sock, data)`, `recv_until(sock, sep, max_bytes=...)`, `recv_exact(sock, n)`. `connect` returns the connected socket via PEP 380 `return value`; callers use a plain `with sock:` (or `try/finally`) around the synchronous socket object. Existing synchronous and tick-driven-connector factories stay — these are an additional surface, not a replacement.
+
+- New CHU lint rule bans `async def` / `await` / `async with` / `async for` and `import asyncio` / `from asyncio import …` / `import uasyncio` in `libraries/`, `support/`, and `workbench/`. Deploy bundle staging refuses to copy any module named `asyncio*` to a device.
+
+- `chumicro_runner` `VERSION` minor bump (new public surface). `chumicro_sockets` `VERSION` minor bump (new helpers). `workbench/checks` `VERSION` minor bump (new lint rule).
+
+- Demo rewrite: `demos/sockets_runner_connector/app.py` collapses from ~80 lines to ~7. The current explicit-state-machine version moves to `demos/sockets_runner_connector_explicit/` as a teaching companion that shows the underlying machinery.
+
+- Decisions 0051 and 0080 are edited in place to distinguish "the asyncio module / event loop" (rejected) from "the runner-driven generator substrate" (the path this ADR takes). The `async`/`await` keywords stay rejected alongside the module.
+
+- Reactive libraries (MQTT, WiFi, HTTP server, websockets) keep their `check`/`handle` shape unchanged. They may optionally adopt `add_generator`-style internals for genuinely sequential subpaths in future, but no migration is mandated. Two service shapes coexist; library authors default to `check`/`handle` and reach for `add_generator` only when the work is naturally one-shot sequential I/O.
+
+- Asyncio users who want to drive chumicro services from their own loop use the existing duck-typed `check`/`handle` contract via a polling adapter (~5 lines of glue per service). They lose the `Runner.wait()` `ipoll`-based I/O sleep optimization; this is documented, not fixed.
