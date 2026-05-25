@@ -8,7 +8,7 @@ slice of progress per call.
 QoS 0 and QoS 1 are supported.  QoS 2 raises :class:`UnsupportedQoSError`.
 """
 
-import gc as _gc  # noqa: I001 — interleaved gc.collect() between the submodule imports below.
+import gc
 
 from chumicro_mqtt._wire import (
     MQTTBackpressureError,
@@ -17,7 +17,8 @@ from chumicro_mqtt._wire import (
     MQTTProtocolError,
     UnsupportedQoSError,
 )
-_gc.collect()
+
+gc.collect()
 
 from chumicro_mqtt.client import MQTTClient, ProtocolState, WhenOversized  # noqa: E402, I001 — preceded by gc.collect().
 
@@ -32,5 +33,4 @@ __all__ = [
     "WhenOversized",
 ]
 
-_gc.collect()
-del _gc
+gc.collect()

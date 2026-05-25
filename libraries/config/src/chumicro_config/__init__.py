@@ -7,6 +7,8 @@ explicit read.  Library authors use :func:`load_section` /
 Patterns and exceptions live in ``docs/guide.md``.
 """
 
+import gc
+
 from chumicro_config.runtime import DEFAULT_RUNTIME_CONFIG_PATH, load_runtime_config
 from chumicro_config.section import (
     ConfigError,
@@ -39,6 +41,4 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
-_gc.collect()
-del _gc
+gc.collect()

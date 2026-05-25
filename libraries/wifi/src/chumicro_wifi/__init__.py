@@ -32,6 +32,8 @@ lazy-imports the substrate-specific module with a named
 RAM-mode class-as-module stub silently bypasses them.
 """
 
+import gc
+
 from chumicro_wifi.config import WifiConfig
 from chumicro_wifi.service import WifiService, WifiState
 
@@ -41,6 +43,4 @@ __all__ = [
     "WifiState",
 ]
 
-import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
-_gc.collect()
-del _gc
+gc.collect()

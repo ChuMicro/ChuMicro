@@ -1,6 +1,8 @@
 """WebSocket client tests (chumicro_websockets.client): auto-ping,
 recv errors, client edges, request shape, from_config."""
 
+import errno
+
 from chumicro_sockets.testing import FakeSocketConnector
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
@@ -190,7 +192,7 @@ class TestClientEdges:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_text("hi")
-        socket.raise_on_send = OSError(11, "would block")
+        socket.raise_on_send = OSError(errno.EAGAIN, "would block")
         client.handle(clock.ticks_ms())
         assert client.state == WebSocketState.OPEN
         # Frame still queued.

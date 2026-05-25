@@ -10,6 +10,7 @@ handshake, send queue, pong watchdog.  The two halves diverge only on:
   reject unmasked.  Subclasses set :attr:`_inbound_mask_required`.
 """
 
+import errno
 from collections import deque
 
 from chumicro_websockets._wire import (
@@ -37,11 +38,6 @@ from chumicro_websockets._wire import (
     parse_close_payload,
     validate_text_payload,
 )
-
-
-def _is_eagain(error):
-    return getattr(error, "errno", None) in (11, 35)
-
 
 #: A peer can legally fragment a message, including with empty
 #: continuation frames, but an unbounded run of zero-byte fragments
@@ -369,8 +365,8 @@ class _BaseSession:
         chunk = remaining[: self._send_budget_per_tick]
         try:
             sent = self._socket.send(chunk)
-        except Exception as send_error:  # noqa: BLE001 - narrow below
-            if _is_eagain(send_error):
+        except OSError as send_error:
+            if send_error.errno == errno.EAGAIN:
                 return
             self._fail_with_error(
                 WebSocketHandshakeError(
@@ -627,8 +623,8 @@ class _BaseSession:
             chunk = buffer[offset : offset + budget]
             try:
                 sent = self._socket.send(chunk)
-            except Exception as send_error:  # noqa: BLE001 - narrow below
-                if _is_eagain(send_error):
+            except OSError as send_error:
+                if send_error.errno == errno.EAGAIN:
                     return
                 self._fail_with_error(
                     WebSocketProtocolError(
@@ -660,8 +656,8 @@ class _BaseSession:
         cap = min(max_bytes, len(self._recv_buffer))
         try:
             received = self._socket.recv_into(self._recv_view, cap)
-        except Exception as recv_error:  # noqa: BLE001 - narrow below
-            if _is_eagain(recv_error):
+        except OSError as recv_error:
+            if recv_error.errno == errno.EAGAIN:
                 return None
             self._fail_with_error(
                 WebSocketProtocolError(

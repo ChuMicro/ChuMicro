@@ -282,7 +282,6 @@ class TestMultiTickConnect:
         off the client — during AWAITING_TRANSPORT they forward to the
         connector so the runner parks on the right pollable."""
         sock = FakeSocket()
-        sock.set_fileno(7777)  # distinguishable from any other socket
         ticks = FakeTicks()
 
         def factory():

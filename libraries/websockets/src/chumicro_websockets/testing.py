@@ -5,7 +5,8 @@ Two fakes parallel to the patterns proven in
 so consumers don't write their own:
 
 * :class:`FakeConnection`: bidirectional in-memory pipe satisfying
-  the :class:`chumicro_sockets.TCPClientSocket` shape consumed by
+  the TCP client socket shape (``send`` / ``recv_into`` / ``close`` /
+  ``setblocking`` / ``settimeout``) consumed by
   :class:`WebSocketClient` / :class:`Connection`.  Drive both sides
   via :meth:`feed_inbound` (peer pushes data the local end will
   read) + :meth:`read_outbound` (drain whatever the local end has
@@ -25,8 +26,11 @@ pass it through the client's / server's ``ticks=`` kwarg.
 __chumicro_test_support__ = True
 
 
+import errno
+
+
 class FakeConnection:
-    """Bidirectional in-memory pipe modeling :class:`TCPClientSocket`.
+    """Bidirectional in-memory pipe modeling a TCP client socket.
 
     Inject into :class:`WebSocketClient` via ``connector_factory=lambda
     *_args, **_kwargs: FakeConnection()``, or hand into a
@@ -92,7 +96,7 @@ class FakeConnection:
         self.eof = True
 
     # ------------------------------------------------------------------
-    # TCPClientSocket protocol
+    # TCP client socket surface
     # ------------------------------------------------------------------
 
     def setblocking(self, flag: bool) -> None:  # noqa: ARG002 - protocol
@@ -121,11 +125,11 @@ class FakeConnection:
         if not self.inbound:
             if self.eof:
                 return 0
-            # ``OSError(EAGAIN)`` rather than ``BlockingIOError``.
+            # ``OSError(errno.EAGAIN)`` rather than ``BlockingIOError``.
             # MicroPython lacks the latter.  Real adapters raise
             # ``OSError`` too on every runtime, so this is closer to
-            # what production sees.
-            raise OSError(11, "no data ready")
+            # what production sees on the host the test is running on.
+            raise OSError(errno.EAGAIN, "no data ready")
         take = min(cap, len(self.inbound))
         buffer[:take] = self.inbound[:take]
         # CircuitPython doesn't support `del bytearray[start:stop]`.
@@ -161,7 +165,7 @@ class FakeListener:
         """Return ``(connection, address)`` or raise EAGAIN if no pending."""
         if not self._pending:
             # OSError, not BlockingIOError, since MicroPython lacks the latter.
-            raise OSError(11, "no pending connection")
+            raise OSError(errno.EAGAIN, "no pending connection")
         peer = self._pending.pop(0)
         return peer, ("127.0.0.1", 12345)
 

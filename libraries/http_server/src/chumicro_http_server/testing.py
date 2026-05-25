@@ -5,13 +5,16 @@ pre-baked HTTP/1.1 request bytes:
 
 - :class:`FakeListener` — listener stub that hands out queued
   :class:`~chumicro_sockets.testing.FakeSocket` instances on
-  ``accept()``.  Raises ``OSError(11, "would block")`` when the
-  queue is empty so the server's EAGAIN path runs unchanged.
+  ``accept()``.  Raises ``OSError(errno.EAGAIN, "would block")`` when
+  the queue is empty so the server's EAGAIN path runs unchanged.
 - :func:`request_bytes` — build a raw HTTP/1.1 request byte string
   (start line + optional ``Content-Length`` + extra headers + body).
 """
 
 __chumicro_test_support__ = True
+
+
+import errno
 
 
 class FakeListener:
@@ -20,9 +23,10 @@ class FakeListener:
     Construct with a list of pre-loaded
     :class:`~chumicro_sockets.testing.FakeSocket` instances.  Each
     ``accept()`` call pops the next socket; an empty queue raises
-    ``OSError(11, "would block")`` matching the EAGAIN shape the real
-    listener uses so the server's would-block handling exercises
-    unchanged.
+    ``OSError(errno.EAGAIN, "would block")`` matching the EAGAIN shape
+    the real listener uses on this host (``11`` on Linux / MP / CP,
+    ``35`` on macOS CPython) so the server's would-block handling
+    exercises unchanged.
     """
 
     def __init__(self, connections):
@@ -31,7 +35,7 @@ class FakeListener:
 
     def accept(self):
         if not self._queue:
-            raise OSError(11, "would block")
+            raise OSError(errno.EAGAIN, "would block")
         return self._queue.pop(0)
 
     def close(self):

@@ -155,16 +155,3 @@ class TestBlockingFlags:
         sock.settimeout(2.5)
         assert sock.blocking is False
         assert sock.timeout == 2.5
-
-
-class TestFileno:
-    def test_default_fileno_is_positive_int(self) -> None:
-        sock = FakeSocket()
-        assert sock.fileno() > 0
-
-    def test_set_fileno_overrides(self) -> None:
-        sock = FakeSocket()
-        sock.set_fileno(42)
-        assert sock.fileno() == 42
-        sock.set_fileno(-1)  # CP-radio-fake convention
-        assert sock.fileno() == -1

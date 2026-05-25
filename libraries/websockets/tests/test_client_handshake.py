@@ -1,6 +1,7 @@
 """WebSocket client tests (chumicro_websockets.client): constructor,
 connect, opening-handshake send/receive."""
 
+import errno
 import select
 
 from chumicro_runner import Runner
@@ -189,7 +190,7 @@ class TestHandshakeSend:
 
     def test_eagain_during_send_keeps_state(self):
         socket = FakeSocket()
-        socket.raise_on_send = OSError(11, "would block")
+        socket.raise_on_send = OSError(errno.EAGAIN, "would block")
         client, _socket, clock, _ = _make_client(socket=socket)
         client.connect("ws://example.com/")
         # First two ticks drive the connector through dns_ok + tcp_ok;

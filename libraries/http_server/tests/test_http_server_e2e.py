@@ -1,6 +1,8 @@
 """http_server end-to-end: happy path, protocol error, oversized
 body, timeout, EAGAIN paths."""
 
+import errno
+
 from chumicro_http_server import (
     HttpServer,
     build_response,
@@ -266,7 +268,7 @@ class TestHttpServerTimeout:
     def test_connection_dropped_when_deadline_exceeded(self):
         class StalledSocket(FakeSocket):
             def recv_into(self, _buffer, _nbytes=0):
-                raise OSError(11, "would block")
+                raise OSError(errno.EAGAIN, "would block")
 
         sock = StalledSocket()
         server, ticks, _ = _make_server(

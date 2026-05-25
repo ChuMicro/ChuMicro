@@ -1,6 +1,8 @@
 """WebSocket server tests (chumicro_websockets.server): oversize,
 frame-level oversize, server close, connection edges."""
 
+import errno
+
 from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 from chumicro_websockets import (
@@ -273,7 +275,7 @@ class TestConnectionEdges:
         listener.queue_accept(peer)
         peer.feed_inbound(_client_handshake_bytes())
         server.handle(clock.ticks_ms())  # accepts + reads request + transitions to SENDING_RESPONSE
-        peer.raise_on_send = OSError(11, "would block")
+        peer.raise_on_send = OSError(errno.EAGAIN, "would block")
         server.handle(clock.ticks_ms())  # send EAGAIN — state unchanged
         connection = server.connections[0]
         assert connection.state == WebSocketState.CONNECTING

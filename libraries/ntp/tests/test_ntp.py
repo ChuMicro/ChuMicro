@@ -9,6 +9,8 @@ API by injecting ``FakeUDPSocket`` from chumicro-sockets.  No NTP
 server is contacted.
 """
 
+import errno
+
 import chumicro_ntp
 from chumicro_ntp import NTPClient, NTPError, NTPResult
 from chumicro_ntp.core import _CLIENT_REQUEST, NTP_TO_UNIX, _parse_response
@@ -276,7 +278,7 @@ def test_send_failure_marks_request_failed() -> None:
     request = client.query()
     assert request.done is True
     assert isinstance(request.error, OSError)
-    assert request.error.args[0] == 11
+    assert request.error.args[0] == errno.EAGAIN
     # And the client is no longer busy — caller can retry.
     assert client.busy is False
 

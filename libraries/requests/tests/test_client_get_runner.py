@@ -1,5 +1,6 @@
 """requests client: response decode, GET, runner contract."""
 
+import errno
 import select
 
 from chumicro_requests import (
@@ -360,8 +361,8 @@ class _StalledRecvSocket(FakeSocket):
 
     def recv_into(self, buffer, nbytes=0):  # noqa: ARG002 — fake signature
         if self._closed:
-            raise OSError(9, "socket closed")
-        raise OSError(11, "would block")
+            raise OSError(errno.EBADF, "socket closed")
+        raise OSError(errno.EAGAIN, "would block")
 
 
 class TestOnDoneCallback:

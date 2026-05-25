@@ -20,42 +20,49 @@ Public surface (factory routes to these):
 
 __chumicro_runtimes__ = ("circuitpython",)
 
-from chumicro_sockets.errors import UnsupportedSSLConfigError
+import gc
+import sys
 
-#: Memoization cache: ``radio_id -> SocketPool``.  ``id(radio)`` keys
-#: are stable for the lifetime of the radio object; CP boards have one
-#: ``wifi.radio`` singleton per board, so the cache size is exactly
-#: one in steady state.
-_POOLS: dict = {}
+import socketpool
+
+from chumicro_sockets import UnsupportedSSLConfigError
+from chumicro_sockets._connector import (
+    STATE_AWAITING_DNS,
+    STATE_AWAITING_TCP,
+    STATE_FAILED,
+    STATE_READY,
+    SocketConnector,
+)
+
+_TERMINAL = (STATE_READY, STATE_FAILED)
+
+#: Single-pool module cache.  Every production wifi-capable CP board
+#: exposes one ``wifi.radio`` singleton, and ``socketpool.SocketPool``
+#: only ever wraps that one radio in this codebase — so a one-slot
+#: cache is enough and the dict-keyed-by-id pattern from
+#: ``adafruit_connection_manager`` (which dispatches across radio
+#: classes) is not.
+_POOL = None
 
 
 def _pool_for(radio):
-    """Return (or memoize) a ``socketpool.SocketPool`` for *radio*.
+    """Return the module-cached ``socketpool.SocketPool``, building on first use.
 
-    *radio=None* auto-detects ``wifi.radio`` — the only radio on any
-    production wifi-capable CP board.  Boards without a wifi module
-    (SAMD M0 etc.) still get a ``TypeError`` directing them to pass
-    ``radio=`` explicitly with whatever they're using.  Callers that
-    want a non-default radio (multi-radio prototypes, AirLift, etc.)
-    pass it explicitly and bypass the auto-detect.
+    *radio* must be a concrete CP radio object — typically ``wifi.radio``.
+    The adapter does not auto-import ``wifi`` to backfill ``None``;
+    callers pass the radio they already have so there is no implicit
+    network-stack import the user did not ask for.
     """
+    global _POOL
+    if _POOL is not None:
+        return _POOL
     if radio is None:
-        try:
-            import wifi  # noqa: PLC0415 — CP-only import
-            radio = wifi.radio
-        except (ImportError, AttributeError) as auto_detect_failure:
-            raise TypeError(
-                "CircuitPython adapter could not auto-detect a radio "
-                "(`import wifi` failed). Pass radio= explicitly with "
-                "whatever radio object your board exposes.",
-            ) from auto_detect_failure
-    cached = _POOLS.get(id(radio))
-    if cached is not None:
-        return cached
-    import socketpool  # noqa: PLC0415 — CP-only import
-    pool = socketpool.SocketPool(radio)
-    _POOLS[id(radio)] = pool
-    return pool
+        raise TypeError(
+            "chumicro_sockets requires a CircuitPython radio object on CP. "
+            "Pass radio=wifi.radio (or the radio your board exposes).",
+        )
+    _POOL = socketpool.SocketPool(radio)
+    return _POOL
 
 
 def connect_tcp(host, port, *, radio):
@@ -64,6 +71,22 @@ def connect_tcp(host, port, *, radio):
     sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
     sock.connect((host, port))
     return sock
+
+
+def _resolve_default_context(context):
+    """Return *context* unchanged, or build CP's default context if ``None``.
+
+    ``ssl.create_default_context()`` picks up the firmware-bundled
+    mbedTLS CA store — the standard verify path on every CP board.
+    Import is lazy: callers that hand us their own context skip the
+    ssl module load entirely, and host-side tests against the CP
+    unix-port (which lacks the ``tls`` C module the ssl shim looks
+    for) only fail when they reach a non-context-providing call site.
+    """
+    if context is not None:
+        return context
+    import ssl  # noqa: PLC0415 — CP-only import; lazy per docstring
+    return ssl.create_default_context()
 
 
 def connect_tls(host, port, *, context=None, radio):
@@ -75,16 +98,7 @@ def connect_tls(host, port, *, context=None, radio):
     :func:`ssl_context_with_ca` for a custom CA) is accepted.
     """
     pool = _pool_for(radio)
-    if context is None:
-        # ``import ssl`` is gated on the *no caller-provided context*
-        # branch so callers that hand us their own context don't pay
-        # the import — relevant for unix-port testing where the CP
-        # ``ssl.py`` shim still ImportErrors even after the
-        # SSL+axtls build flag enable (axtls doesn't expose a
-        # ``tls`` module the shim can find).
-        import ssl  # noqa: PLC0415 — CP-only import
-
-        context = ssl.create_default_context()
+    context = _resolve_default_context(context)
     raw = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
     wrapped = context.wrap_socket(raw, server_hostname=host)
     wrapped.connect((host, port))
@@ -140,14 +154,7 @@ class _CPUDPWrapper:
         # CP socketpool exposes settimeout on recent firmware; fall
         # back to a no-op so the protocol stays satisfied on older builds.
         self.settimeout = getattr(sock, "settimeout", lambda _seconds: None)
-        forwarded_fileno = getattr(sock, "fileno", None)
-        self.fileno = forwarded_fileno if forwarded_fileno is not None else (lambda: -1)
-        forwarded_getsockname = getattr(sock, "getsockname", None)
-        if forwarded_getsockname is not None:
-            self.getsockname = forwarded_getsockname
-        else:
-            # CP socketpool may omit getsockname; report a placeholder.
-            self.getsockname = lambda: ("0.0.0.0", 0)
+        self.getsockname = sock.getsockname
         # CP's recvfrom_into returns (nbytes, address) — forward.
         self.recvfrom_into = sock.recvfrom_into
 
@@ -243,52 +250,28 @@ def listen_tls(host, port, *, context, backlog=4, radio):
     """Open a non-blocking TLS listening socket via CP socketpool.
 
     Wraps the LISTENING socket with ``server_side=True`` before
-    bind/listen — every accepted client inherits the TLS wrap.
+    bind/listen — every accepted client inherits the TLS wrap, so
+    ``accept()`` returns ``(tls_client_socket, address)`` directly.
 
     Refused on CP-rp2 (Pi Pico W / Pi Pico 2 W) — raises
-    :class:`UnsupportedSSLConfigError`.  CP-rp2 lacks the
-    ``server_side=True`` SSL wrap path; the adapter fails fast
-    instead of letting the user discover that mid-handshake.
+    :class:`UnsupportedSSLConfigError`.  ``wrap_socket(server_side=True)
+    + accept()`` raises ``OSError(32)`` mid-handshake on the CP-rp2
+    port AND wedges the CYW43 chip's station-mode state until USB
+    power-cycle; the adapter fails fast instead of letting the user
+    discover that mid-handshake.
     """
-    import sys  # noqa: PLC0415 - runtime detection only
     if sys.platform.upper().startswith("RP2"):
-        from chumicro_sockets.errors import UnsupportedSSLConfigError  # noqa: PLC0415
         raise UnsupportedSSLConfigError(
             "TLS server not supported on CP-rp2 (Pi Pico W / Pi Pico 2 W). "
             "Use an ESP32-family board, or MicroPython on rp2."
         )
     pool = _pool_for(radio)
     raw = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
-    wrapped = context.wrap_socket(raw, server_side=True)
-    wrapped.bind((host, port))
-    wrapped.listen(backlog)
-    wrapped.setblocking(False)
-    return _CPTLSListenerWrapper(wrapped)
-
-
-class _CPTLSListenerWrapper:
-    """Wraps a CP TLS listener so accept() returns the standard
-    ``(client_socket, address)`` tuple.
-
-    The underlying CP wrapped-socket's ``accept()`` already returns
-    a TLS-wrapped client socket (because the listener itself was
-    wrapped) — we just normalize the return shape.
-    """
-
-    def __init__(self, wrapped_listener):
-        self._sock = wrapped_listener
-
-    def accept(self):
-        return self._sock.accept()
-
-    def close(self):
-        self._sock.close()
-
-    def setblocking(self, flag):
-        self._sock.setblocking(flag)
-
-    def fileno(self):
-        return self._sock.fileno() if hasattr(self._sock, "fileno") else -1
+    tls_listener = context.wrap_socket(raw, server_side=True)
+    tls_listener.bind((host, port))
+    tls_listener.listen(backlog)
+    tls_listener.setblocking(False)
+    return tls_listener
 
 
 def ssl_context_with_ca(ca_pem):
@@ -337,6 +320,12 @@ def ssl_context_with_ca(ca_pem):
 
     context = ssl.create_default_context()
     context.load_verify_locations(cadata=ca_pem)
+    # mbedTLS has copied the PEM into its chain; drop the local
+    # buffer + force a collection so the freed span is available to
+    # the next allocation instead of fragmenting alongside the
+    # SSLContext.  CP GC is non-compacting.
+    del ca_pem
+    gc.collect()
     return context
 
 
@@ -390,50 +379,54 @@ def tls_connector(host, port, *, context=None, radio=None):
     return _CPConnector(host, port, tls=True, context=context, radio=radio)
 
 
-from chumicro_sockets._connector import (  # noqa: E402
-    STATE_READY,
-    SocketConnector,
-)
-
-
 class _CPConnector(SocketConnector):
+    """CP dialer — DNS, then a single blocking connect that runs both
+    TCP and (optionally) TLS.
+
+    Two phases on the public surface (``awaiting_dns`` /
+    ``awaiting_tcp``) — CP's ``socketpool`` does not expose a
+    non-blocking connect, so the TCP step blocks for the kernel
+    handshake duration.  When TLS is requested the socket is wrapped
+    with ``server_hostname`` *before* ``connect()`` so the substrate
+    runs the TLS handshake in the same blocking call; the connector
+    never enters ``awaiting_tls`` on CP.
+
+    Honest documented compromise — better than the all-blocking-in-one
+    synchronous factory because DNS and connect get their own ticks,
+    but not truly non-blocking the way the CPython adapter is.
+    """
+
     def __init__(self, host, port, *, tls=False, context=None, radio=None):
         super().__init__(host, port, tls=tls, context=context)
         self._radio = radio
+        self._sockaddr = None
 
-    def _resolve_dns(self, host, port):
-        # CP's ``socketpool.getaddrinfo`` is synchronous — blocks one
-        # phase tick for the lookup.  Returns the first address tuple
-        # in the same shape as stdlib's ``socket.getaddrinfo``.
-        pool = _pool_for(self._radio)
-        return pool.getaddrinfo(host, port, pool.AF_INET, pool.SOCK_STREAM)[0]
+    def tick(self, now_ms):  # noqa: ARG002 (runner contract)
+        if self.state in _TERMINAL:
+            return
+        try:
+            if self.state == STATE_AWAITING_DNS:
+                pool = _pool_for(self._radio)
+                addr_info = pool.getaddrinfo(
+                    self._host, self._port, pool.AF_INET, pool.SOCK_STREAM,
+                )[0]
+                self._sockaddr = addr_info[4]
+                self.state = STATE_AWAITING_TCP
+                return
 
-    def _start_tcp_connect(self, addr_info):
-        # On CP, the ``connect`` call below does the TCP three-way
-        # handshake AND, when the socket is TLS-wrapped, the TLS
-        # handshake — all in one blocking call.  Wrap before connect
-        # so the substrate runs both in this single phase.
-        pool = _pool_for(self._radio)
-        sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
-        if self._tls:
-            if self._context is None:
-                import ssl  # noqa: PLC0415 — CP-only import
-
-                self._context = ssl.create_default_context()
-            sock = self._context.wrap_socket(sock, server_hostname=self._host)
-        sockaddr = addr_info[4]
-        sock.connect(sockaddr)
-        return sock
-
-    def _check_tcp_connect(self, sock):  # noqa: ARG002 - already connected
-        # Substrate-blocking connect completed inside
-        # ``_start_tcp_connect``; nothing to poll.
-        return True
-
-    def _enter_post_tcp(self):
-        # CP collapses TCP + TLS into one connect() call, so the
-        # connector skips the ``awaiting_tls`` phase — the socket is
-        # fully ready once ``_start_tcp_connect`` returns.
-        self.socket = self._inflight_socket
-        self._inflight_socket = None
-        self.state = STATE_READY
+            if self.state == STATE_AWAITING_TCP:
+                pool = _pool_for(self._radio)
+                sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
+                if self._tls:
+                    self._context = _resolve_default_context(self._context)
+                    sock = self._context.wrap_socket(
+                        sock, server_hostname=self._host,
+                    )
+                # Blocking connect — completes TCP and (if wrapped)
+                # the TLS handshake before returning.
+                sock.connect(self._sockaddr)
+                self.socket = sock
+                self.state = STATE_READY
+                return
+        except Exception as error:  # noqa: BLE001 - any failure stops the machine
+            self._fail(error)

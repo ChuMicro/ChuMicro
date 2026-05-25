@@ -26,6 +26,7 @@ bodies via ``Content-Length``, ``Transfer-Encoding: chunked``, or
 read-until-close.
 """
 
+import errno
 import json
 
 from chumicro_requests._wire import (
@@ -48,11 +49,6 @@ from chumicro_requests._wire import (
     parse_url,
     resolve_redirect_url,
 )
-
-
-def _is_eagain(error):
-    return getattr(error, "errno", None) in (11, 35)
-
 
 # ---------------------------------------------------------------------------
 # WhenOversized policy
@@ -859,7 +855,7 @@ class HttpClient:
             try:
                 sent = self._socket.send(view)
             except OSError as socket_error:
-                if _is_eagain(socket_error):
+                if socket_error.errno == errno.EAGAIN:
                     return
                 raise
             if sent <= 0:
@@ -886,7 +882,7 @@ class HttpClient:
             try:
                 got = self._socket.recv_into(self._recv_view, capacity)
             except OSError as socket_error:
-                if _is_eagain(socket_error):
+                if socket_error.errno == errno.EAGAIN:
                     return
                 raise
             if got == 0:

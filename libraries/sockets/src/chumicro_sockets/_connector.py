@@ -1,30 +1,33 @@
 """Advance a non-blocking TCP/TLS connect across multiple ``tick(now_ms)`` calls.
 
-The non-blocking counterpart to ``tcp_client_socket`` / ``tls_client_socket``.
-Library methods that perform network I/O do not block: a runner-shaped
-library constructs a connector and advances it across ticks instead of
-calling a synchronous factory.  The synchronous factory stays for
-non-runner contexts (one-shot scripts, REPL, ``main`` before the runner
-loop starts).
+The non-blocking counterpart to ``tcp_client_socket`` /
+``tls_client_socket``.  Library methods that perform network I/O do not
+block: a runner-shaped library constructs a connector and advances it
+across ticks instead of calling a synchronous factory.  The synchronous
+factory stays for non-runner contexts (one-shot scripts, REPL, ``main``
+before the runner loop starts).
 
-Each call to :meth:`SocketConnector.tick` advances one phase:
+Each call to :meth:`SocketConnector.tick` advances the connector by one
+phase.  Phase boundaries are uniform across runtimes:
 
 * ``awaiting_dns`` — resolve ``host`` to an address.
-* ``awaiting_tcp`` — non-blocking TCP connect; first tick issues the
-  connect, subsequent ticks poll for completion (POLLOUT + SO_ERROR).
-* ``awaiting_tls`` — TLS handshake step; loops until done or ``WantRead`` /
-  ``WantWrite`` (the connector yields between handshake rounds).
+* ``awaiting_tcp`` — TCP connect in progress.
+* ``awaiting_tls`` — TLS handshake in progress.
 * ``ready`` — terminal; :attr:`socket` is set.
 * ``failed`` — terminal; :attr:`last_error` is set.
 
-``SocketConnector`` drives the state machine, exposes the runner-contract
-surface (``check``, ``handle``, ``io_socket``, ``io_wants_read``,
-``io_wants_write``, ``next_deadline``, ``cancel``), and transitions to
-``failed`` on any unexpected ``OSError`` from the subclass overrides.
-Per-runtime subclasses override :meth:`_resolve_dns`,
-:meth:`_start_tcp_connect`, :meth:`_check_tcp_connect`,
-:meth:`_wrap_tls`, and :meth:`_step_tls_handshake` with the
-runtime-specific calls.
+*How* a runtime moves between phases is its own concern — CPython runs
+three genuine non-blocking phases; MP collapses the TLS handshake into
+one blocking tick (no ``do_handshake_on_connect=False`` on its mbedTLS
+binding); CP collapses TCP + TLS into one blocking ``connect()`` call
+and skips the ``awaiting_tls`` phase entirely.  Each per-runtime
+adapter implements its own :meth:`tick` to encode that flow.
+
+This base class owns the runner-contract surface
+(``check`` / ``handle`` / ``io_socket`` / ``io_wants_read`` /
+``io_wants_write`` / ``next_deadline`` / ``cancel``) plus the
+terminal-state bookkeeping (``_fail`` close-on-failure, ``cancel``
+close-on-abort).
 """
 
 
@@ -34,19 +37,20 @@ STATE_AWAITING_TLS = "awaiting_tls"
 STATE_READY = "ready"
 STATE_FAILED = "failed"
 
-_NON_TERMINAL = (STATE_AWAITING_DNS, STATE_AWAITING_TCP, STATE_AWAITING_TLS)
 _TERMINAL = (STATE_READY, STATE_FAILED)
 
 
 class SocketConnector:
-    """Drive a non-blocking connect across DNS, TCP, and optional TLS phases.
+    """Base — runner-contract surface + terminal-state plumbing.
 
-    One phase per ``tick(now_ms)`` call.  ``__init__`` records ``host``,
-    ``port``, ``tls``, and optional ``context``.  Runtime-specific
-    subclasses (``_CPythonConnector``, ``_MpConnector``, ``_CPConnector``
-    in ``_adapters/``) supply ``_resolve_dns``, ``_start_tcp_connect``,
-    ``_check_tcp_connect``, ``_wrap_tls``, and ``_step_tls_handshake``.
-    See the module docstring for the state diagram.
+    Holds ``host`` / ``port`` / ``tls`` / ``context`` on the instance.
+    The current phase lives on :attr:`state`; the in-progress socket
+    lives on :attr:`_inflight_socket` between phases and is promoted
+    to :attr:`socket` once :attr:`state` reaches ``ready``.
+
+    Subclasses implement :meth:`tick` with their full per-runtime
+    state machine.  Any exception raised by :meth:`tick` transitions
+    the connector to ``failed`` and closes the in-progress socket.
     """
 
     def __init__(self, host, port, *, tls=False, context=None):
@@ -64,12 +68,8 @@ class SocketConnector:
         # In-progress socket between phases.  Holds the raw socket
         # during ``awaiting_tcp`` and the TLS-wrapped socket during
         # ``awaiting_tls``.  Promoted to ``self.socket`` on entry to
-        # ``ready``; closed in :meth:`cancel`.
+        # ``ready``; closed in :meth:`cancel` and :meth:`_fail`.
         self._inflight_socket = None
-        # Resolved address info from DNS; consumed by the TCP step.
-        # Shape is adapter-specific (CPython uses tuples from
-        # ``getaddrinfo``; CP uses host/port directly).
-        self._addr_info = None
 
     # ------------------------------------------------------------------
     # Runner-contract surface
@@ -80,8 +80,8 @@ class SocketConnector:
         """Underlying pollable while the handshake is in flight, else ``None``.
 
         ``Runner.wait`` reads this to register the right socket with
-        ``ipoll``.  Terminal states return ``None`` so the runner
-        doesn't keep waking on a dead handle.
+        ``ipoll``.  Terminal states return ``None`` so the runner does
+        not keep waking on a dead handle.
         """
         if self.state in _TERMINAL:
             return None
@@ -123,58 +123,32 @@ class SocketConnector:
         return None
 
     # ------------------------------------------------------------------
-    # Driver
+    # Driver — overridden per runtime
     # ------------------------------------------------------------------
 
-    def tick(self, now_ms):
+    def tick(self, now_ms):  # noqa: ARG002 (subclass contract)
         """Advance the state machine by one phase.
 
-        Any exception raised by a subclass override transitions to
-        ``failed`` with the error in ``last_error``.  Subclass overrides
-        must therefore convert want-read / want-write conditions to a
-        ``False`` return — never raise them.
+        Subclass overrides own the full state progression — see the
+        per-runtime adapter files in ``_adapters/``.  The override
+        wraps its body in ``try / except Exception`` and calls
+        :meth:`_fail` on any error so the public surface stays
+        uniform (``state == "failed"`` + ``last_error`` set).
         """
-        if self.state in _TERMINAL:
-            return
-        try:
-            if self.state == STATE_AWAITING_DNS:
-                self._addr_info = self._resolve_dns(self._host, self._port)
-                self.state = STATE_AWAITING_TCP
-                return
-            if self.state == STATE_AWAITING_TCP:
-                if self._inflight_socket is None:
-                    self._inflight_socket = self._start_tcp_connect(self._addr_info)
-                if not self._check_tcp_connect(self._inflight_socket):
-                    return
-                self._enter_post_tcp()
-                return
-            if self.state == STATE_AWAITING_TLS:
-                if self._step_tls_handshake(self._inflight_socket):
-                    self.socket = self._inflight_socket
-                    self._inflight_socket = None
-                    self.state = STATE_READY
-                return
-        except Exception as error:  # noqa: BLE001 - any failure stops the machine
-            self._fail(error)
+        raise NotImplementedError
 
-    def _enter_post_tcp(self):
-        """Wrap the connected socket for TLS, or land in ``ready``.
-
-        For a plain-TCP connect, promotes the socket to ``self.socket``
-        and enters ``ready``.  For TLS, wraps the socket and enters
-        ``awaiting_tls``.
-        """
-        if not self._tls:
-            self.socket = self._inflight_socket
-            self._inflight_socket = None
-            self.state = STATE_READY
-            return
-        self._inflight_socket = self._wrap_tls(
-            self._inflight_socket, self._host, self._context,
-        )
-        self.state = STATE_AWAITING_TLS
+    # ------------------------------------------------------------------
+    # Terminal-state bookkeeping
+    # ------------------------------------------------------------------
 
     def _fail(self, error):
+        """Transition to ``failed`` and close the in-progress socket.
+
+        Subclass ``tick`` overrides call this from their ``except``
+        clause on any unexpected error.  The in-progress socket close
+        is best-effort — a socket whose connect / handshake failed may
+        not survive a clean close, so we swallow secondary errors here.
+        """
         self.last_error = error
         self.state = STATE_FAILED
         if self._inflight_socket is not None:
@@ -188,7 +162,8 @@ class SocketConnector:
         """Close any in-flight socket and transition to ``failed``.
 
         No-op when already terminal.  Used by consumers that need to
-        abort a connect attempt.
+        abort a connect attempt (per-connector deadline elapsed,
+        higher-level shutdown, etc.).
         """
         if self.state in _TERMINAL:
             return
@@ -201,60 +176,3 @@ class SocketConnector:
                 pass
             self._inflight_socket = None
         self.state = STATE_FAILED
-
-    # ------------------------------------------------------------------
-    # Per-runtime overrides
-    # ------------------------------------------------------------------
-
-    def _resolve_dns(self, host, port):
-        """Return adapter-specific address info for the TCP step.
-
-        Most runtimes resolve synchronously in one tick.  Subclasses
-        return whatever shape :meth:`_start_tcp_connect` expects.
-        """
-        raise NotImplementedError
-
-    def _start_tcp_connect(self, addr_info):
-        """Create a non-blocking socket and issue ``connect``.
-
-        Returns the in-progress socket object; raise ``OSError`` on
-        immediate failure.  Implementations that block to completion
-        (CP socketpool) leave the socket fully connected — the
-        ``_check_tcp_connect`` call following this MUST return ``True``
-        on that substrate.
-        """
-        raise NotImplementedError
-
-    def _check_tcp_connect(self, sock):
-        """Return ``True`` when the in-progress connect has completed.
-
-        ``False`` means "not yet, try again next tick."  Raise
-        ``OSError`` (or runtime-equivalent) when the connect attempt
-        has failed.  Substrates that block to completion in
-        ``_start_tcp_connect`` return ``True`` here.
-        """
-        raise NotImplementedError
-
-    def _wrap_tls(self, sock, host, context):
-        """Wrap *sock* for TLS, returning the SSL socket object.
-
-        Should set ``do_handshake_on_connect=False`` where the
-        substrate supports it so the handshake can be driven by
-        :meth:`_step_tls_handshake` across multiple ticks.  Substrates
-        that hand-shake inline at wrap time (MP without
-        ``do_handshake_on_connect``, CP) return a fully-handshaken
-        socket and the following ``_step_tls_handshake`` call MUST
-        return ``True``.
-        """
-        raise NotImplementedError
-
-    def _step_tls_handshake(self, sock):
-        """Run one TLS handshake step.
-
-        Return ``True`` when the handshake is complete, ``False`` when
-        it needs another round.  Do not raise want-read / want-write
-        sentinels — :meth:`tick` treats every raised exception as
-        terminal, so the override catches and converts them to
-        ``False``.
-        """
-        raise NotImplementedError

@@ -38,7 +38,6 @@ class TestCPythonUDP:
             host, port = sock.getsockname()
             assert host == "127.0.0.1"
             assert port > 0  # OS-assigned ephemeral
-            assert sock.fileno() > 0
         finally:
             sock.close()
 
@@ -120,9 +119,11 @@ class TestCPythonUDP:
         sock = udp_socket("127.0.0.1", 0)
         sock.close()
         sock.close()  # second close: no exception.
-        # POSIX: a closed socket reports fileno() as -1.  Confirms the
-        # close actually took effect (vs. silently no-oping).
-        assert sock.fileno() == -1
+        # The underlying CPython socket reports fileno() as -1 after
+        # close — confirms the close actually took effect (vs.
+        # silently no-oping).  Unwrap via ``_sock``; the chumicro
+        # wrapper itself no longer exposes ``fileno``.
+        assert sock._sock.fileno() == -1  # noqa: SLF001
 
     def test_broadcast_flag_sets_so_broadcast(self) -> None:
         """``broadcast=True`` allows sendto to a broadcast address."""

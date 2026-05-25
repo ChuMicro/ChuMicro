@@ -40,6 +40,7 @@ raise ``ValueError`` with a message that names the tag and points at
 the producer-side fix.
 """
 
+import gc
 import sys
 
 _native_loaded = False
@@ -86,6 +87,4 @@ if not _native_loaded:
 
 __all__ = ["pack", "packb", "unpack", "unpackb"]
 
-import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
-_gc.collect()
-del _gc
+gc.collect()

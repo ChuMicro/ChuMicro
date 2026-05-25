@@ -32,8 +32,46 @@ __chumicro_host_only__ = True
 
 import sys
 
-from chumicro_sockets import UnsupportedSSLConfigError
-from chumicro_test_harness.assertions import raises
+
+class _SocketpoolStub:
+    """Stand-in for the ``socketpool`` firmware module on host runtimes.
+
+    Production CP boards expose ``socketpool`` from firmware; host
+    runtimes (CPython, MP / CP unix-port) do not.  The cp adapter
+    imports ``socketpool`` at module top (production-correct shape),
+    so this stub has to be in ``sys.modules`` before any test reaches
+    that import.  Per-test fakes overwrite ``cp_adapter.socketpool``
+    directly via :class:`_SwapAttribute`; this stub only needs to
+    satisfy the module-load import.
+
+    ``types.ModuleType`` would be the obvious tool but the MP / CP
+    unix-ports do not ship a ``types`` module, so the stub is a plain
+    class with the surface ``import socketpool`` consumers reach for.
+    """
+
+    AF_INET = 2
+    SOCK_STREAM = 1
+    SOCK_DGRAM = 2
+    SOL_SOCKET = 0
+    SO_REUSEADDR = 4
+    SO_BROADCAST = 6
+
+    class SocketPool:
+        def __init__(self, _radio):
+            raise RuntimeError(
+                "_SocketpoolStub.SocketPool reached — a test invoked "
+                "the cp adapter without overriding "
+                "``cp_adapter.socketpool`` with a per-test fake first.",
+            )
+
+
+sys.modules.setdefault("socketpool", _SocketpoolStub())
+
+
+from chumicro_sockets import (  # noqa: E402 — load-order dependency on the stub above
+    UnsupportedSSLConfigError,
+)
+from chumicro_test_harness.assertions import raises  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Cross-runtime stand-ins for unittest.mock.patch{,.dict}
@@ -195,12 +233,18 @@ class _StubPool:
 
 
 def _install_socketpool_stub():
-    """Stub ``sys.modules['socketpool']`` with a module exposing ``SocketPool``.
+    """Swap the CP adapter's module-level ``socketpool`` with a fake.
 
     Returns the (context-manager, fake-module) pair so the test can
     later look up the most-recently-created pool via the fake module's
-    recorded list.
+    recorded list.  The conftest stubs ``sys.modules['socketpool']``
+    once at session start so ``import socketpool`` at cp.py module
+    top succeeds; per-test swaps target the adapter's binding
+    directly so tests do not race against the cached
+    ``cp.socketpool`` reference.
     """
+    from chumicro_sockets._adapters import cp as cp_adapter
+
     fake = _FakeModule()
     fake.SocketPool = _StubPool
     fake.created_pools = []  # filled by the patched constructor below
@@ -217,7 +261,7 @@ def _install_socketpool_stub():
         (_StubPool,),
         {"__init__": recording_init},
     )
-    return _SwapItem(sys.modules, "socketpool", fake), fake
+    return _SwapAttribute(cp_adapter, "socketpool", fake), fake
 
 
 def _install_ssl_stub(create_default_context_factory=None):
@@ -268,9 +312,9 @@ class _StubContext:
 
 
 def _clear_pool_cache():
-    """Empty the CP adapter's per-radio pool cache between tests."""
+    """Reset the CP adapter's module-level pool cache between tests."""
     from chumicro_sockets._adapters import cp as cp_adapter
-    cp_adapter._POOLS.clear()
+    cp_adapter._POOL = None
 
 
 # ---------------------------------------------------------------------------
@@ -279,34 +323,6 @@ def _clear_pool_cache():
 
 
 class TestPoolFor:
-    def test_none_radio_auto_detects_wifi_radio(self) -> None:
-        """``radio=None`` falls through to ``wifi.radio`` — the only radio
-        on any production CP board.  Drops the kwarg from cross-runtime
-        examples.
-        """
-        from chumicro_sockets._adapters import cp as cp_adapter
-        _clear_pool_cache()
-        sentinel_radio = object()
-        fake_wifi = _FakeModule()
-        fake_wifi.radio = sentinel_radio
-        wifi_swap = _SwapItem(sys.modules, "wifi", fake_wifi)
-        pool_swap, fake_pool_module = _install_socketpool_stub()
-        with wifi_swap, pool_swap:
-            pool = cp_adapter._pool_for(None)
-        assert pool is fake_pool_module.created_pools[0]
-        assert pool.radio is sentinel_radio
-
-    def test_none_radio_falls_back_to_typeerror_when_wifi_unavailable(self) -> None:
-        """Boards without a ``wifi`` module (SAMD M0 etc.) get a clear
-        directive to pass ``radio=`` explicitly.
-        """
-        from chumicro_sockets._adapters import cp as cp_adapter
-        _clear_pool_cache()
-        # Force `import wifi` to fail by stubbing sys.modules with None.
-        wifi_swap = _SwapItem(sys.modules, "wifi", None)
-        with wifi_swap, raises(TypeError, match="radio="):
-            cp_adapter._pool_for(None)
-
     def test_constructs_pool_via_socketpool_module(self) -> None:
         from chumicro_sockets._adapters import cp as cp_adapter
         _clear_pool_cache()
@@ -317,21 +333,27 @@ class TestPoolFor:
         assert pool is fake_pool_module.created_pools[0]
         assert pool.radio is radio
 
-    def test_memoizes_by_radio_identity(self) -> None:
-        """Reuses the pool for the same radio; a different radio gets a new pool."""
+    def test_memoizes_single_pool(self) -> None:
+        """Two calls return the same pool; constructor runs once."""
         from chumicro_sockets._adapters import cp as cp_adapter
         _clear_pool_cache()
-        radio_a = object()
-        radio_b = object()
+        radio = object()
         pool_swap, fake_pool_module = _install_socketpool_stub()
         with pool_swap:
-            pool_a_first = cp_adapter._pool_for(radio_a)
-            pool_a_second = cp_adapter._pool_for(radio_a)
-            pool_b = cp_adapter._pool_for(radio_b)
-        assert pool_a_first is pool_a_second
-        assert pool_b is not pool_a_first
-        # Constructor only called twice — once per distinct radio.
-        assert len(fake_pool_module.created_pools) == 2
+            first = cp_adapter._pool_for(radio)
+            second = cp_adapter._pool_for(radio)
+        assert first is second
+        assert len(fake_pool_module.created_pools) == 1
+
+    def test_none_radio_raises_typeerror(self) -> None:
+        """``radio=None`` is rejected — adapter does not import ``wifi``
+        to backfill a missing radio.  Callers pass ``wifi.radio``
+        explicitly or whichever radio object their board exposes.
+        """
+        from chumicro_sockets._adapters import cp as cp_adapter
+        _clear_pool_cache()
+        with raises(TypeError, match="radio="):
+            cp_adapter._pool_for(None)
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +541,7 @@ class TestCpUdpWrapper:
         assert nbytes == 5
         assert address == ("10.0.0.5", 1234)
 
-    def test_close_setblocking_fileno_getsockname_forwarded(self) -> None:
+    def test_close_setblocking_getsockname_forwarded(self) -> None:
         from chumicro_sockets._adapters import cp as cp_adapter
         _clear_pool_cache()
         pool_swap, fake_pool_module = _install_socketpool_stub()
@@ -532,48 +554,9 @@ class TestCpUdpWrapper:
         assert sock.blocking_flag is False
         wrapper.settimeout(2.5)
         assert sock.timeout == 2.5
-        assert wrapper.fileno() == 42
         assert wrapper.getsockname() == ("192.168.1.1", 1234)
         wrapper.close()
         assert sock.closed is True
-
-    def test_getsockname_fallback_when_socket_lacks_it(self) -> None:
-        """Older CP firmware may omit getsockname — wrapper returns a placeholder."""
-        from chumicro_sockets._adapters import cp as cp_adapter
-        _clear_pool_cache()
-        pool_swap, fake_pool_module = _install_socketpool_stub()
-
-        original_socket = _StubPool.socket
-
-        def socket_without_getsockname(self, family, kind):
-            sock = original_socket(self, family, kind)
-            # Delete the attribute so getattr returns None and the
-            # wrapper installs the placeholder.
-            del sock.__class__.getsockname
-            return sock
-
-        # Don't actually delete the class attribute — too fragile; instead
-        # patch the per-instance getattr by setting attr to None on init.
-        class _NoGetsockname(_StubSocket):
-            def __init__(self, family, kind):
-                super().__init__(family, kind)
-                # Hide the attribute so the adapter's getattr returns None.
-                self.no_getsockname = True
-
-            getsockname = None  # explicitly None at class level
-
-        original_socket = _StubPool.socket
-
-        def socket_factory(self, family, kind):
-            sock = _NoGetsockname(family, kind)
-            self.sockets.append(sock)
-            return sock
-
-        with pool_swap, _SwapAttribute(
-            fake_pool_module.SocketPool, "socket", socket_factory,
-        ):
-            wrapper = cp_adapter.udp_socket(radio=object())
-        assert wrapper.getsockname() == ("0.0.0.0", 0)
 
 
 # ---------------------------------------------------------------------------
@@ -681,7 +664,7 @@ class TestSslContextWithCertAndKeyPaths:
 
 
 # ---------------------------------------------------------------------------
-# listen_tls + _CPTLSListenerWrapper
+# listen_tls
 # ---------------------------------------------------------------------------
 
 
@@ -692,21 +675,19 @@ class TestListenTls:
         _clear_pool_cache()
         pool_swap, fake_pool_module = _install_socketpool_stub()
         context = _StubContext()
-        # Make wrap_socket return the same socket so we can keep
-        # asserting on its state across the wrap boundary.
         with pool_swap:
-            wrapper = cp_adapter.listen_tls(
+            listener = cp_adapter.listen_tls(
                 "0.0.0.0", 8443, context=context, backlog=8, radio=object(),
             )
-        # Server-side wrap fired against the raw pool socket.
         raw = fake_pool_module.created_pools[0].sockets[0]
+        # Server-side wrap fired against the raw pool socket, then bind /
+        # listen / setblocking ran on the wrap result; the stub's
+        # ``wrap_socket`` returns the same socket so ``listener is raw``.
         assert context.server_side_wrap_calls == [raw]
-        # Then bind / listen / setblocking.
         assert raw.bound_to == ("0.0.0.0", 8443)
         assert raw.listening_backlog == 8
         assert raw.blocking_flag is False
-        # Wrapper exposes the wrapped socket.
-        assert wrapper._sock is raw  # noqa: SLF001
+        assert listener is raw
 
     def test_default_backlog_is_4(self) -> None:
         from chumicro_sockets._adapters import cp as cp_adapter
@@ -718,36 +699,6 @@ class TestListenTls:
             )
         raw = fake_pool_module.created_pools[0].sockets[0]
         assert raw.listening_backlog == 4
-
-
-class TestCpTlsListenerWrapper:
-    def test_accept_forwarded(self) -> None:
-        """``accept()`` returns whatever the underlying socket returns."""
-        from chumicro_sockets._adapters import cp as cp_adapter
-        _clear_pool_cache()
-        pool_swap, fake_pool_module = _install_socketpool_stub()
-        with pool_swap:
-            wrapper = cp_adapter.listen_tls(
-                "0.0.0.0", 8443, context=_StubContext(), radio=object(),
-            )
-        client_sock, peer = wrapper.accept()
-        assert peer == ("10.0.0.42", 12345)
-        assert client_sock is not None
-
-    def test_close_setblocking_fileno_forwarded(self) -> None:
-        from chumicro_sockets._adapters import cp as cp_adapter
-        _clear_pool_cache()
-        pool_swap, fake_pool_module = _install_socketpool_stub()
-        with pool_swap:
-            wrapper = cp_adapter.listen_tls(
-                "0.0.0.0", 8443, context=_StubContext(), radio=object(),
-            )
-        raw = fake_pool_module.created_pools[0].sockets[0]
-        wrapper.setblocking(True)
-        assert raw.blocking_flag is True
-        assert wrapper.fileno() == 42
-        wrapper.close()
-        assert raw.closed is True
 
 
 # ---------------------------------------------------------------------------

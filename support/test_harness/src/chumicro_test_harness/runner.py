@@ -5,6 +5,7 @@ and reports per-test timing plus an optional memory summary.  Works on
 CPython, MicroPython, and CircuitPython, including on real boards.
 """
 
+import gc
 import sys
 import time
 
@@ -14,11 +15,6 @@ try:
 	import traceback
 except ImportError:  # pragma: no cover - MicroPython and CircuitPython may omit traceback.
 	traceback = None
-
-try:
-	import gc as _gc
-except ImportError:  # pragma: no cover - gc may be absent on some CPython configs.
-	_gc = None
 
 # Cross-runtime monotonic seconds: CPython/CircuitPython expose
 # time.monotonic(). MicroPython only has time.ticks_ms().
@@ -31,12 +27,7 @@ else:  # pragma: no cover
 		return time.ticks_ms() / 1000
 
 
-def _has_mem_free():
-	"""Return whether ``gc.mem_free`` is available (MicroPython/CircuitPython)."""
-	return _gc is not None and hasattr(_gc, "mem_free")
-
-
-_MEM_FREE_AVAILABLE = _has_mem_free()
+_MEM_FREE_AVAILABLE = hasattr(gc, "mem_free")
 
 
 def _iter_test_functions(module: object):
@@ -146,8 +137,8 @@ def run_module(module, name_filter=None):
 	# the test body itself runs under production-realistic auto-GC.
 	gc_tracking = _MEM_FREE_AVAILABLE
 	if gc_tracking:
-		_gc.collect()
-		module_heap_before = _gc.mem_free()
+		gc.collect()
+		module_heap_before = gc.mem_free()
 
 	for name, function in _iter_test_functions(module):
 		if name_filter is not None and name_filter not in name:
@@ -163,8 +154,8 @@ def run_module(module, name_filter=None):
 		# by this test" measurement because both ``mem_free`` samples
 		# straddle only ``function()`` itself.
 		if gc_tracking:
-			_gc.collect()
-			test_heap_before = _gc.mem_free()
+			gc.collect()
+			test_heap_before = gc.mem_free()
 
 		test_start = _now_seconds()
 		try:
@@ -174,14 +165,14 @@ def run_module(module, name_filter=None):
 			# but don't print a heap suffix: a skipped test didn't run
 			# any allocations worth reporting.
 			if gc_tracking:
-				_gc.collect()
+				gc.collect()
 			print(f"SKIP {name} ({skip_error})")
 		except Exception as error:  # pragma: no cover - exercised indirectly by tests.
 			test_end = _now_seconds()
 			heap_suffix = ""
 			if gc_tracking:
-				_gc.collect()
-				test_delta = _gc.mem_free() - test_heap_before
+				gc.collect()
+				test_delta = gc.mem_free() - test_heap_before
 				sign = "+" if test_delta >= 0 else ""
 				heap_suffix = f", heap {sign}{test_delta}"
 			duration = test_end - test_start
@@ -192,16 +183,16 @@ def run_module(module, name_filter=None):
 			test_end = _now_seconds()
 			heap_suffix = ""
 			if gc_tracking:
-				_gc.collect()
-				test_delta = _gc.mem_free() - test_heap_before
+				gc.collect()
+				test_delta = gc.mem_free() - test_heap_before
 				sign = "+" if test_delta >= 0 else ""
 				heap_suffix = f", heap {sign}{test_delta}"
 			duration = test_end - test_start
 			print(f"PASS {name} ({duration:.3f}s{heap_suffix})")
 
 	if gc_tracking:
-		_gc.collect()
-		module_heap_after = _gc.mem_free()
+		gc.collect()
+		module_heap_after = gc.mem_free()
 		delta = module_heap_after - module_heap_before
 		sign = "+" if delta >= 0 else ""
 		print(f"HEAP {module_heap_after} bytes free (delta {sign}{delta} bytes)")

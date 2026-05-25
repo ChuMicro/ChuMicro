@@ -21,11 +21,12 @@ request, send 101), outbound-mask discipline (servers MUST NOT mask),
 and the accept-loop in :class:`WebSocketServer`.
 """
 
+import errno
+
 from chumicro_websockets._session import (
     WhenOversized,
     _BaseSession,
     _force_non_blocking,
-    _is_eagain,
 )
 from chumicro_websockets._wire import (
     CLOSE_NORMAL,
@@ -482,8 +483,8 @@ class WebSocketServer:
                 return
             try:
                 accepted = self._listener.accept()
-            except Exception as accept_error:  # noqa: BLE001 - narrow below
-                if _is_eagain(accept_error):
+            except OSError as accept_error:
+                if accept_error.errno == errno.EAGAIN:
                     return
                 self.last_error = accept_error
                 return

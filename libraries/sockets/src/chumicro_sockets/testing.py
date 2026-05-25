@@ -1,16 +1,17 @@
 """``FakeSocket`` — drives downstream tests without a real network.
 
-Implements the full :class:`~chumicro_sockets.protocol.TCPClientSocket`
-protocol against in-memory bytearrays.  Three knobs cover almost every
-test pattern downstream libs need:
+Implements the full TCP client socket surface
+(``send`` / ``recv_into`` / ``close`` / ``setblocking`` / ``settimeout``)
+against in-memory bytearrays.  Three knobs cover almost every test
+pattern downstream libs need:
 
 * :attr:`FakeSocket.sent` — bytes written via :meth:`send`.  Tests
   assert against this to confirm correct wire-format encoding.
 * :meth:`enqueue_recv` — script bytes the next :meth:`recv_into`
   call(s) will return.  Multiple chunks queue in FIFO order.
 * :meth:`enqueue_eagain` — script the next :meth:`send` or
-  :meth:`recv_into` to raise ``OSError(11)``.  Lets tests exercise
-  non-blocking partial-completion paths.
+  :meth:`recv_into` to raise ``OSError(errno.EAGAIN)``.  Lets tests
+  exercise non-blocking partial-completion paths.
 
 Idiom for downstream libs::
 
@@ -31,12 +32,15 @@ real closed socket would.
 __chumicro_test_support__ = True
 
 
+import errno
 from collections import deque
 
-# Errno 11 (EAGAIN) is the cross-runtime "would block" code.  Spelled
-# out as a constant so callers can ``except OSError`` and check
-# ``error.errno == EAGAIN`` rather than testing against a literal ``11``.
-EAGAIN = 11
+# EAGAIN resolved per host so the fake raises the same errno a real
+# non-blocking socket would raise on the platform the test is running
+# on (``11`` on Linux / MP / CP, ``35`` on macOS CPython).  Production
+# ``_is_eagain`` checks ``errno.EAGAIN`` / ``errno.EWOULDBLOCK``; the
+# fake matches.
+EAGAIN = errno.EAGAIN
 
 # Upper bound on enqueued bytes / datagrams a test can script before
 # the deque starts dropping the oldest entry.  No real test comes
@@ -48,12 +52,12 @@ _FAKE_SOCKET_QUEUE_MAXLEN = 1024
 
 
 class FakeSocket:
-    """In-memory ``TCPClientSocket`` for tests.
+    """In-memory TCP client socket for tests.
 
-    All methods match the :class:`~chumicro_sockets.protocol.TCPClientSocket`
-    protocol; in addition, :meth:`enqueue_recv` and
-    :meth:`enqueue_eagain` script future behavior and :attr:`sent`
-    exposes the byte log.
+    Exposes the cross-runtime TCP surface (``send`` / ``recv_into`` /
+    ``close`` / ``setblocking`` / ``settimeout``); in addition,
+    :meth:`enqueue_recv` and :meth:`enqueue_eagain` script future
+    behavior and :attr:`sent` exposes the byte log.
     """
 
     def __init__(self) -> None:
@@ -75,10 +79,6 @@ class FakeSocket:
         self._timeout: float | None = None
         self._send_eagains: int = 0
         self._recv_eagains: int = 0
-        # Optional explicit fd for tests that exercise select.poll
-        # registration paths.  Defaults to a stable per-instance
-        # int; `-1` advertises "no fd" the way CP-radio fakes do.
-        self._fileno: int = id(self) & 0x7FFFFFFF
 
     # -- scripting ------------------------------------------------------
 
@@ -113,10 +113,6 @@ class FakeSocket:
         (e.g. a final DISCONNECT packet) before the FIN.
         """
         self._peer_closed = True
-
-    def set_fileno(self, fd: int) -> None:
-        """Override the integer fd :meth:`fileno` returns."""
-        self._fileno = int(fd)
 
     # -- protocol surface ----------------------------------------------
 
@@ -173,9 +169,6 @@ class FakeSocket:
         self._timeout = seconds
         self._blocking = seconds is None
 
-    def fileno(self) -> int:
-        return self._fileno
-
     # -- introspection -------------------------------------------------
 
     @property
@@ -204,14 +197,15 @@ class FakeSocket:
             # Stdlib raises OSError(EBADF=9) on a closed fd.  We pick
             # the same shape so downstream error-handling code that
             # checks ``except OSError`` works identically.
-            raise OSError(9, "socket closed")
+            raise OSError(errno.EBADF, "socket closed")
 
 
 class FakeUDPSocket:
-    """In-memory ``UDPSocket`` for tests.
+    """In-memory UDP socket for tests.
 
-    Datagram-shaped counterpart of :class:`FakeSocket`.  All methods
-    match the :class:`~chumicro_sockets.protocol.UDPSocket` protocol;
+    Datagram-shaped counterpart of :class:`FakeSocket`.  Exposes the
+    cross-runtime UDP surface (``sendto`` / ``recvfrom_into`` /
+    ``close`` / ``setblocking`` / ``settimeout`` / ``getsockname``);
     plus :meth:`enqueue_recv` scripts future ``recvfrom_into`` returns
     and :attr:`sent` exposes the byte log of every ``sendto`` call as
     ``(data, host, port)`` tuples.
@@ -250,7 +244,6 @@ class FakeUDPSocket:
         self._recv_eagains: int = 0
         self._bind_host = bind_host
         self._bind_port = bind_port
-        self._fileno: int = id(self) & 0x7FFFFFFF
 
     # -- scripting ------------------------------------------------------
 
@@ -280,10 +273,6 @@ class FakeUDPSocket:
     def enqueue_eagain_for_recv(self, count: int = 1) -> None:
         """Script the next *count* :meth:`recvfrom_into` calls to raise EAGAIN."""
         self._recv_eagains += int(count)
-
-    def set_fileno(self, fd: int) -> None:
-        """Override the integer fd :meth:`fileno` returns."""
-        self._fileno = int(fd)
 
     # -- protocol surface ----------------------------------------------
 
@@ -331,9 +320,6 @@ class FakeUDPSocket:
         self._timeout = seconds
         self._blocking = seconds is None
 
-    def fileno(self) -> int:
-        return self._fileno
-
     def getsockname(self) -> tuple:
         """Report the bound ``(host, port)`` tuple given at construction."""
         return self._bind_host, self._bind_port
@@ -362,7 +348,7 @@ class FakeUDPSocket:
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            raise OSError(9, "socket closed")
+            raise OSError(errno.EBADF, "socket closed")
 
 
 class FakeSocketConnector:

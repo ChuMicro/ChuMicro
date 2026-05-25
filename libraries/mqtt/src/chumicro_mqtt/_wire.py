@@ -8,6 +8,7 @@ FAT-cluster slack on a USB-mounted CIRCUITPY drive low, since each
 file costs a 4 KB cluster minimum on FAT16/32.
 """
 
+import gc
 import struct
 
 try:
@@ -448,9 +449,7 @@ _DRAIN_OVERSIZED = const(2)
 
 
 # Defragment compile-time scratch before the PacketDecoder class body.
-import gc as _gc  # noqa: E402, I001 — placement is intentional; see comment above.
-_gc.collect()
-del _gc
+gc.collect()
 
 
 class PacketDecoder:
