@@ -148,6 +148,24 @@ class TestDeviceBootstrapRunnerShutdown:
         runner.shutdown()
         runner.shutdown()  # second call is a no-op
 
+    def test_shutdown_with_timeout_returns_when_thread_still_alive(self) -> None:
+        """``shutdown(timeout_s=...)`` bounds the join so the driver
+        cleanup path doesn't block on a wedged bg thread."""
+        release = threading.Event()
+        transport = _SlowFakeTransport(release_event=release)
+        runner = DeviceBootstrapRunner(transport, "boot")
+        runner.start()
+        try:
+            start = time.monotonic()
+            runner.shutdown(timeout_s=0.1)
+            elapsed = time.monotonic() - start
+            # Should return within the timeout plus a small fudge
+            # rather than block on the slow transport.
+            assert elapsed < 1.0
+        finally:
+            release.set()
+            runner.shutdown()  # final join now that the thread can exit
+
     def test_context_manager_shuts_down_even_on_exception(self) -> None:
         release = threading.Event()
         transport = _SlowFakeTransport(release_event=release)

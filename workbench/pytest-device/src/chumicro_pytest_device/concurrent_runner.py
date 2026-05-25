@@ -146,20 +146,29 @@ class DeviceBootstrapRunner:
         assert self._captured_output is not None
         return self._captured_output
 
-    def shutdown(self) -> None:
+    def shutdown(self, *, timeout_s: float | None = None) -> None:
         """Best-effort join the bg thread.  Idempotent; safe to call any time.
 
         Does not interrupt the bootstrap — the board is expected to
-        carry its own deadline and exit on its own.  When called
-        before the thread has finished, this method joins without a
-        timeout, so callers that want a bounded wait should use
-        :meth:`wait_for_completion` first.
+        carry its own deadline and exit on its own.
+
+        Args:
+            timeout_s: Optional bound on the join.  ``None`` (default)
+                joins without timeout, which is fine when the bg thread
+                is known to have completed (after a successful
+                :meth:`wait_for_completion`).  Pass a finite value to
+                give up after that many seconds — useful on the
+                cleanup path after a host-side abort where the bg
+                thread is still mid-execute and would otherwise block
+                until the board's own deadline expires.  A timed-out
+                join leaves the thread running; daemon-thread cleanup
+                takes it down at interpreter exit.
         """
         thread = self._thread
         if thread is None:
             return
         if thread.is_alive():
-            thread.join()
+            thread.join(timeout=timeout_s)
         self._thread = None
 
     def __enter__(self) -> DeviceBootstrapRunner:

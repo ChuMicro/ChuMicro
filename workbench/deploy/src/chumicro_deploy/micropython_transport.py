@@ -531,12 +531,27 @@ class MicropythonTransport:
             if on_line is not None
             else None
         )
+        # mpremote's ``read_until(data_consumer=...)`` *replaces* its
+        # internal ``data`` byte on every read instead of appending, so
+        # ``exec_raw`` returns empty stdout when a consumer is wired.
+        # Accumulate raw stdout bytes in a parallel buffer so the
+        # captured-output contract survives the streaming path.
+        captured_stdout_bytes: bytearray | None = (
+            bytearray() if line_dispatcher is not None else None
+        )
+
+        def dispatch_and_capture(chunk: bytes) -> None:
+            assert captured_stdout_bytes is not None
+            assert line_dispatcher is not None
+            captured_stdout_bytes.extend(chunk)
+            line_dispatcher.feed(chunk)
+
         try:
             if line_dispatcher is not None:
                 result = self._serial.exec_raw(
                     bootstrap_script,
                     timeout=_EXECUTE_IDLE_TIMEOUT,
-                    data_consumer=line_dispatcher.feed,
+                    data_consumer=dispatch_and_capture,
                 )
             else:
                 result = self._serial.exec_raw(
@@ -548,6 +563,20 @@ class MicropythonTransport:
             ) from error
         if line_dispatcher is not None:
             line_dispatcher.flush()
+            # mpremote feeds the trailing ``\x04`` end-of-stdout byte
+            # to the consumer before exiting its read loop; strip it
+            # from the captured bytes so callers see clean stdout.
+            assert captured_stdout_bytes is not None
+            stdout_text = bytes(captured_stdout_bytes).rstrip(b"\x04").decode(
+                "utf-8", errors="replace",
+            )
+            stderr_bytes = result[1] if isinstance(result, tuple) else b""
+            stderr_text = (
+                stderr_bytes.decode("utf-8", errors="replace")
+                if stderr_bytes
+                else ""
+            )
+            return stdout_text + stderr_text
         return _decode_exec_result(result)
 
     def run_script(self, script: str, *, timeout: float = 10.0) -> str:

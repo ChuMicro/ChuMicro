@@ -26,6 +26,7 @@ from chumicro_deploy import DeviceEntry, load_device_registry
 from msgpack import packb
 from chumicro_pytest_device.concurrent_runner import DeviceBootstrapRunner
 from chumicro_pytest_device.fixtures.host_driver import bind_to
+from chumicro_pytest_device.markers import MarkerTimeoutError
 from chumicro_pytest_device.test_runner import (
     build_device_bootstrap,
     build_transport_for_entry,
@@ -166,7 +167,18 @@ def main(argv: list[str] | None = None) -> int:
             hit = bind_to(runner)
 
             print(f"driver: waiting for SERVER_READY (up to {args.ready_timeout_s}s)...")
-            hello_response = hit("/hello", timeout_s=args.ready_timeout_s)
+            try:
+                hello_response = hit("/hello", timeout_s=args.ready_timeout_s)
+            except MarkerTimeoutError as marker_error:
+                print(
+                    f"driver: SERVER_READY didn't arrive within "
+                    f"{args.ready_timeout_s}s — the board may still be "
+                    f"booting, wifi credentials in secrets.toml may be "
+                    f"wrong, or the board can't reach the AP.  "
+                    f"Detail: {marker_error}",
+                    file=sys.stderr,
+                )
+                return 2
             print(
                 f"driver: GET /hello → {hello_response.status} "
                 f"{hello_response.reason}\n{_format_body(hello_response.body)}",
@@ -188,9 +200,17 @@ def main(argv: list[str] | None = None) -> int:
             )
 
             print("driver: waiting for board to print DEMO_COMPLETE...")
-            captured = runner.wait_for_completion(
-                timeout_s=args.completion_timeout_s,
-            )
+            try:
+                captured = runner.wait_for_completion(
+                    timeout_s=args.completion_timeout_s,
+                )
+            except TimeoutError as completion_error:
+                print(
+                    f"driver: board didn't print DEMO_COMPLETE within "
+                    f"{args.completion_timeout_s}s — {completion_error}",
+                    file=sys.stderr,
+                )
+                return 3
             if "DEMO_COMPLETE" in captured:
                 print("driver: demo completed cleanly.")
                 return 0
@@ -202,7 +222,11 @@ def main(argv: list[str] | None = None) -> int:
             print(captured, file=sys.stderr)
             return 1
         finally:
-            runner.shutdown()
+            # Bounded shutdown so a wedged board after an aborted run
+            # doesn't keep the driver alive until the board's own
+            # deadline expires.  daemon=True takes the bg thread down
+            # on interpreter exit if it's still alive after the bound.
+            runner.shutdown(timeout_s=5.0)
     finally:
         try:
             transport.disconnect()
