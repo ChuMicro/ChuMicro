@@ -309,11 +309,11 @@ class _RequestState:
 
         IDLE -> AWAITING_TRANSPORT -> SENDING -> RECEIVING -> IDLE
 
-    ``AWAITING_TRANSPORT`` is the phase during which a
-    :class:`~chumicro_sockets.SocketConnector` is driving DNS / TCP /
-    TLS across multiple ticks.  On ``ready`` the socket is promoted
-    and the state moves to ``SENDING``.  On ``failed`` the handle is
-    set to error and the state returns to ``IDLE``.
+    ``AWAITING_TRANSPORT`` is the phase during which the connector
+    object returned by *connector_factory* is driving DNS / TCP / TLS
+    across multiple ticks.  On ``ready`` the socket is promoted and the
+    state moves to ``SENDING``.  On ``failed`` the handle is set to
+    error and the state returns to ``IDLE``.
     """
 
     IDLE = "idle"
@@ -331,7 +331,14 @@ class HttpClient:
 
     The factory signature is::
 
-        connector_factory(host: str, port: int, use_tls: bool) -> SocketConnector
+        connector_factory(host: str, port: int, use_tls: bool) -> connector
+
+    The returned *connector* is a structural type: an object with
+    ``state`` / ``socket`` / ``last_error`` attributes, ``tick(now_ms)``
+    / ``cancel()`` methods, and the runner-poll surface ``io_socket`` /
+    ``io_wants_read`` / ``io_wants_write`` / ``next_deadline(now_ms)``.
+    Any object of that shape works — the client never imports a specific
+    class.
 
     For a board with WiFi + chumicro-sockets, use
     :func:`chumicro_requests.sockets_factory.chumicro_sockets_connector_factory`
@@ -346,8 +353,7 @@ class HttpClient:
         )
 
     The connector advances DNS / TCP / TLS across multiple ticks rather
-    than blocking the runner during the round-trip — see
-    :class:`chumicro_sockets.SocketConnector` for the contract.
+    than blocking the runner during the round-trip.
 
     For config-driven construction, see :meth:`from_config` —
     one-line factory that reads the per-call defaults
@@ -431,10 +437,12 @@ class HttpClient:
 
         Args:
             connector_factory: Callable ``(host: str, port: int,
-                use_tls: bool) -> SocketConnector`` invoked per request
-                hop to bring up the underlying socket without blocking
-                the runner.  The connector is ticked across multiple
-                ``handle()`` calls during ``AWAITING_TRANSPORT``; once
+                use_tls: bool) -> connector`` invoked per request hop
+                to bring up the underlying socket without blocking the
+                runner.  The connector is a duck-typed object — see
+                the class docstring for the structural contract.  It
+                is ticked across multiple ``handle()`` calls during
+                ``AWAITING_TRANSPORT``; once
                 ``connector.state == "ready"`` the underlying socket is
                 promoted and must expose:
 
@@ -452,8 +460,7 @@ class HttpClient:
 
                 :func:`chumicro_sockets_connector_factory` is one
                 valid producer; any zero-network-side fake or wrapper
-                that returns a :class:`SocketConnector`-shaped object
-                works too.
+                returning a connector-shaped object works too.
             recv_budget_per_tick: Soft cap on bytes drained from the
                 socket in a single :meth:`handle` call.  Default 1024.
                 Bounds tick latency so concurrent runner tasks (LED
