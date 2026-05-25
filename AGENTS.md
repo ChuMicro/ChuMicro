@@ -242,13 +242,12 @@ Core commands for active development and troubleshooting:
 |---|---|
 | `deploy [<name>]` | Push a project to a board. Auto-detects boot-shim + import-graph for `app.py` + `run()` projects |
 | `deploy-example` | Push a `libraries/<lib>/examples/<name>.py` example to a registered device |
-| `demo` | Push a built-in hello-world to the active device (~5s; cross-runtime smoke test) |
+| `demo` | Push a built-in sample to the active device — quick cross-runtime smoke test (~5s) |
 | `add-device` | Probe a board and register it in `devices.yml` |
 | `devices` | List every entry in `devices.yml` |
 | `probe` | Print the runtime identity reported by the selected board |
-| `status` / `doctor` | Workspace health snapshot (workspace.yml, devices.yml, projects tree; `doctor` adds Python-version + per-project `run()` AST scan) |
-| `reset-board --yes` | Destructive: wipe and re-prep a board (FSKit-wedge remediation; only command authorized to manipulate CIRCUITPY mount state) |
-| `install-firmware` / `upgrade-firmware` | Firmware flash / version-bump for a registered device |
+| `status` / `doctor` | Workspace health snapshot; `doctor` adds Python-version + `run()` AST checks |
+| `reset-board --yes` | Destructive: wipe and re-prep a board |
 
 Each subcommand's `--help` shows its flags. The CLI rejects wrong runtime / project-type combinations with actionable error messages.
 
