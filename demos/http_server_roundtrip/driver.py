@@ -42,25 +42,36 @@ _APP_FILE = _DEMO_DIR / "app.py"
 def _select_device(
     runtime: str | None, device_id: str | None,
 ) -> DeviceEntry:
-    """Pick a registered device matching the runtime + id filters."""
-    entries, defaults = load_device_registry(workspace_root=_REPO_ROOT)
+    """Pick a registered device matching the runtime + id filters.
+
+    Raises :class:`SystemExit` when no device matches the filters, or
+    when *device_id* and *runtime* are both supplied but resolve to a
+    device whose actual runtime doesn't match — silently honouring
+    one and ignoring the other would let a typo go undetected.
+    """
+    entries, _ = load_device_registry(workspace_root=_REPO_ROOT)
     if device_id is not None:
         for entry in entries:
             if entry.identifier == device_id:
+                if runtime is not None and entry.runtime != runtime:
+                    raise SystemExit(
+                        f"driver: --device {device_id!r} is a "
+                        f"{entry.runtime!r} board, but --runtime says "
+                        f"{runtime!r}.  Drop --runtime or pass a "
+                        f"matching device id.",
+                    )
                 return entry
         raise SystemExit(
             f"driver: no device with id {device_id!r} in devices.yml "
             f"(known: {[entry.identifier for entry in entries]!r})",
         )
-    if runtime is None:
-        runtime = defaults.circuitpython_device or "circuitpython"
-        runtime = "circuitpython"  # safe default
+    effective_runtime = runtime or "circuitpython"
     for entry in entries:
-        if entry.runtime == runtime:
+        if entry.runtime == effective_runtime:
             return entry
     raise SystemExit(
-        f"driver: no {runtime!r} device in devices.yml — register one "
-        f"with `chumicro-workspace add-device`.",
+        f"driver: no {effective_runtime!r} device in devices.yml — "
+        f"register one with `chumicro-workspace add-device`.",
     )
 
 
@@ -133,9 +144,14 @@ def main(argv: list[str] | None = None) -> int:
         help="device id from devices.yml (default: first matching --runtime)",
     )
     parser.add_argument(
-        "--runtime", default="circuitpython",
+        "--runtime", default=None,
         choices=("circuitpython", "micropython"),
-        help="runtime filter when --device isn't given (default: circuitpython)",
+        help=(
+            "runtime filter — when --device isn't given, picks the "
+            "first matching device (default: circuitpython); when "
+            "--device IS given, validates the chosen device's runtime "
+            "matches"
+        ),
     )
     parser.add_argument(
         "--ready-timeout-s", type=float, default=60.0,
