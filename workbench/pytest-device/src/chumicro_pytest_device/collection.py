@@ -31,6 +31,10 @@ from chumicro_deploy import (
     resolve_ide_devices,
 )
 from chumicro_deploy.runtime_marker import is_host_only_test, read_runtime_marker
+from chumicro_workspace.device_orchestration import (
+    resolve_effective_deploy_mode,
+    resolve_library_source_dirs,
+)
 
 from .backends import BackendExecuteError, BackendPrepareError
 from .features import (
@@ -55,7 +59,6 @@ from .session import (
     _target_is_unix_port,
     _workspace_root,
 )
-from .test_runner import resolve_effective_deploy_mode, resolve_library_source_dirs
 
 
 def _parse_test_functions(filepath: Path) -> list[str]:

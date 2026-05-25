@@ -30,14 +30,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from chumicro_workspace.device_orchestration import (
+    build_device_bootstrap,
+    resolve_library_source_dirs,
+)
+from chumicro_workspace.device_runner import DeviceBootstrapRunner
+from chumicro_workspace.markers import Marker
 
 from ..collection import (
     _load_fallback_device,
     _resolve_library_dir,
     _session_effective_deploy_mode,
 )
-from ..concurrent_runner import DeviceBootstrapRunner
-from ..markers import Marker
 from ..session import (
     _encode_runtime_config_extra_files,
     _harness_source_dir,
@@ -45,10 +49,6 @@ from ..session import (
     _session_cache,
     _session_targets,
     _target_is_device_unit,
-)
-from ..test_runner import (
-    build_device_bootstrap,
-    resolve_library_source_dirs,
 )
 
 # How long the fixture's teardown waits for the board bootstrap to finish

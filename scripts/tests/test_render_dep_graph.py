@@ -60,7 +60,7 @@ class TestDiscoverStrictDeps:
         """``chumicro-deploy>=0.1.0`` should surface as just ``deploy``."""
         # chumicro-pytest-device pins chumicro-deploy with a version specifier.
         deps = discover_strict_deps(WORKBENCH_DIR)
-        assert deps["pytest-device"] == ["deploy"], (
+        assert deps["pytest-device"] == ["deploy", "workspace"], (
             f"version specifier leaked: {deps['pytest-device']!r}"
         )
 

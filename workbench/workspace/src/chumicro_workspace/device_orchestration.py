@@ -1,9 +1,16 @@
-"""Plugin-internal device-test helpers.
+"""Host-side device-orchestration primitives.
 
-Owns the primitives that actually touch device hardware: bootstrap
-script generation, transport construction, and the workspace-source
-discovery that staging depends on.  Orchestration (test selection,
-per-device loops, PR-summary rendering) lives in :mod:`plugin`.
+Owns the primitives that bridge a `DeviceEntry` (registry record) and
+a board running its bootstrap: transport construction with deploy-mode
+resolution, library-source-dir walking, bootstrap-script generation
+(single-script flash / chunked CP RAM), and execute-with-marker-dispatch.
+
+Consumed by `chumicro_workspace.deploy_api` (the programmatic
+deploy + marker-orchestration entry point for demos and host tooling)
+and by `chumicro_pytest_device` (the pytest collection layer that
+runs cross-runtime tests on real boards).  The split: this module owns
+"deploy + run on a board with stdout markers"; pytest-device owns
+"collect tests, pick devices per session, render PR summaries."
 """
 
 from __future__ import annotations

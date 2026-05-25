@@ -7,11 +7,11 @@ import time
 
 import pytest
 from chumicro_deploy.testing import FakeTransport
-from chumicro_pytest_device.concurrent_runner import (
+from chumicro_workspace.device_runner import (
     DeviceBootstrapRunner,
     RunnerNotStartedError,
 )
-from chumicro_pytest_device.markers import MarkerTimeoutError
+from chumicro_workspace.markers import MarkerTimeoutError
 
 
 class _SlowFakeTransport:

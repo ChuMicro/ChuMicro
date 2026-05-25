@@ -2327,7 +2327,7 @@ def test_unit_on_device(
         load_device_registry,
         resolve_deploy_mode,
     )
-    from chumicro_pytest_device.test_runner import (  # noqa: PLC0415
+    from chumicro_workspace.device_orchestration import (  # noqa: PLC0415
         resolve_library_source_dirs,
     )
 

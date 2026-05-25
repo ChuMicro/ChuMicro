@@ -23,16 +23,16 @@ import sys
 from pathlib import Path
 
 from chumicro_deploy import DeviceEntry, load_device_registry
-from msgpack import packb
-from chumicro_pytest_device.concurrent_runner import DeviceBootstrapRunner
 from chumicro_pytest_device.fixtures.host_driver import bind_to
-from chumicro_pytest_device.markers import MarkerTimeoutError
-from chumicro_pytest_device.test_runner import (
+from chumicro_workspace import compose_runtime_config
+from chumicro_workspace.device_orchestration import (
     build_device_bootstrap,
     build_transport_for_entry,
     resolve_library_source_dirs,
 )
-from chumicro_workspace import compose_runtime_config
+from chumicro_workspace.device_runner import DeviceBootstrapRunner
+from chumicro_workspace.markers import MarkerTimeoutError
+from msgpack import packb
 
 _DEMO_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _DEMO_DIR.parents[1]

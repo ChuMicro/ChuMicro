@@ -10,9 +10,9 @@ session-state wiring) without any cycle.
 from __future__ import annotations
 
 from chumicro_deploy import DeviceEntry, TransportProtocol
+from chumicro_workspace.device_orchestration import build_transport_for_entry
 
 from .result_parser import RunResult
-from .test_runner import build_transport_for_entry
 
 
 class _TransportCache:

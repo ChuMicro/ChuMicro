@@ -1,8 +1,9 @@
-"""Tests for the plugin's internal device-test primitives.
+"""Tests for the host-side device-orchestration primitives.
 
-Covers the helpers the plugin relies on: bootstrap generation,
-transport construction, intra-workspace source resolution, and
-deploy-mode precedence. PR-summary rendering has its own test module.
+Covers bootstrap generation, transport construction, intra-workspace
+source resolution, and deploy-mode precedence — the helpers
+``chumicro_workspace.deploy_api`` and ``chumicro_pytest_device`` both
+consume.
 
 ``TestResolveLibrarySourceDirs`` exercises dependency resolution
 against a synthetic multi-library workspace materialized under
@@ -16,7 +17,7 @@ from pathlib import Path
 
 import pytest
 from chumicro_deploy import DeviceEntry
-from chumicro_pytest_device import test_runner as device_testing
+from chumicro_workspace import device_orchestration as device_testing
 
 
 def _make_synthetic_library(
@@ -536,7 +537,7 @@ class TestExecuteDeviceBootstrapMarkerDispatch:
         """The on_line callback parses each captured stdout line and
         pushes matching markers onto the supplied queue.  Non-marker
         lines are silently dropped at the parser level."""
-        from chumicro_pytest_device.markers import MarkerQueue
+        from chumicro_workspace.markers import MarkerQueue
 
         class StreamingFakeTransport:
             @staticmethod
@@ -570,7 +571,7 @@ class TestExecuteDeviceBootstrapMarkerDispatch:
 
     def test_marker_queue_threads_through_chunked_execute_scripts(self) -> None:
         """A list bootstrap routes to execute_scripts with on_line."""
-        from chumicro_pytest_device.markers import MarkerQueue
+        from chumicro_workspace.markers import MarkerQueue
 
         class StreamingFakeTransport:
             @staticmethod

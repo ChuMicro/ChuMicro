@@ -76,7 +76,7 @@ def _uptime_route(request):  # noqa: ARG001
 def _echo_route(request):
     hit_routes.append("/echo")
     payload = request.json()
-    print(f"ROUTE_HIT route=/echo")
+    print("ROUTE_HIT route=/echo")
     return build_response(200, json={"echoed": payload})
 
 
