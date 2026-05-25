@@ -80,12 +80,12 @@ def _get_adapter():
     if _adapter is not None:
         return _adapter
     runtime = sys.implementation.name
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp as resolved  # noqa: PLC0415 — runtime-gated
-    elif runtime == "micropython":
-        from chumicro_sockets._adapters import mp as resolved  # noqa: PLC0415 — runtime-gated
+    if runtime == "circuitpython":  # pragma: no cover - runtime-gated; never hits on host pytest
+        from chumicro_sockets._adapters import cp as resolved  # noqa: PLC0415
+    elif runtime == "micropython":  # pragma: no cover - runtime-gated; never hits on host pytest
+        from chumicro_sockets._adapters import mp as resolved  # noqa: PLC0415
     else:
-        from chumicro_sockets._adapters import cpython as resolved  # noqa: PLC0415 — runtime-gated
+        from chumicro_sockets._adapters import cpython as resolved  # noqa: PLC0415
     _adapter = resolved
     return _adapter
 

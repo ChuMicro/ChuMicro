@@ -16,6 +16,11 @@ Public surface (factory routes to these):
 
 ``_pool_for(radio)`` memoizes the per-radio ``socketpool.SocketPool``
 (steady-state cache size is one).
+
+``ssl`` stays a lazy in-function import in every TLS-using helper:
+the module costs real heap on construct, and plain-TCP consumers
+shouldn't pay for it.  ``socketpool`` is eager at module top because
+every code path here uses it.
 """
 
 __chumicro_runtimes__ = ("circuitpython",)
@@ -83,7 +88,7 @@ def _resolve_default_context(context):
     """
     if context is not None:
         return context
-    import ssl  # noqa: PLC0415 — CP-only import; lazy per docstring
+    import ssl  # noqa: PLC0415
     return ssl.create_default_context()
 
 
@@ -236,7 +241,7 @@ def ssl_context_with_cert_and_key_paths(cert_path, key_path):
     ``UnsupportedSSLConfigError``; this helper can still build the
     context but it'll have nowhere to go.
     """
-    import ssl  # noqa: PLC0415 — CP-only import
+    import ssl  # noqa: PLC0415
 
     context = ssl.create_default_context()
     context.load_verify_locations(cadata="")
@@ -314,7 +319,7 @@ def ssl_context_with_ca(ca_pem):
             "binding cannot accept DER.  Convert to PEM, or pass DER "
             "only on MicroPython / CPython.",
         )
-    import ssl  # noqa: PLC0415 — CP-only import
+    import ssl  # noqa: PLC0415
 
     context = ssl.create_default_context()
     context.load_verify_locations(cadata=ca_pem)
@@ -344,7 +349,7 @@ def ssl_context_no_verify():
     CP's ``shared-module/ssl/SSLSocket.c``).  ``check_hostname = False``
     matches the other runtimes' opt-out shape.
     """
-    import ssl  # noqa: PLC0415 — CP-only import
+    import ssl  # noqa: PLC0415
 
     context = ssl.create_default_context()
     context.load_verify_locations(cadata="")

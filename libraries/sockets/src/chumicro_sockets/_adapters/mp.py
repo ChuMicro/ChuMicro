@@ -4,11 +4,6 @@ One MP adapter covers every supported port (MP 1.26+ ships
 ``MICROPY_SSL_MBEDTLS=1`` on both ESP32 and RP2; the "no TLS on Pico
 W" folklore is pre-mbedTLS).
 
-Imports of ``socket`` / ``ssl`` happen INSIDE the functions: CP's
-RAM-mode bootstrap stages every deploy file and imports it, and a
-top-level ``import socket`` would fail on CP (no ``socket`` module).
-Lazy imports keep this adapter staged-but-quiet on CP.
-
 ``recv_into`` polyfill: MP's stream-backed socket exposes ``recv()``
 but not ``recv_into()``; :class:`_MpSocketWrapper` adapts via
 ``recv() + memoryview-copy`` so downstream code sees the unified
@@ -16,12 +11,20 @@ protocol.
 
 TLS: always pass *host* as ``server_hostname`` (SNI-less verification
 breaks against modern brokers).
+
+``ssl`` stays a lazy in-function import in every TLS-using helper:
+mbedTLS costs ~10 KB heap on import, and plain-TCP consumers (NTP,
+plain MQTT) never need it.  Every other stdlib dependency (``socket``,
+``select``, ``errno``, ``binascii``) is eager at module top.
 """
 
 __chumicro_runtimes__ = ("micropython",)
 
+import binascii
 import errno
 import gc
+import select
+import socket
 
 from chumicro_sockets._connector import (
     _TERMINAL,
@@ -115,8 +118,6 @@ def connect_tcp(host, port, **_kwargs):  # pragma: no cover - device only
     MP's ``create_connection`` shim is missing on some builds, so
     we do the dance explicitly.
     """
-    import socket  # noqa: PLC0415 — MP-only import; staged-but-not-imported on CP
-
     address_info = socket.getaddrinfo(host, port)[0]
     sock = socket.socket(address_info[0], address_info[1])
     sock.connect(address_info[-1])
@@ -147,8 +148,6 @@ def connect_tls(host, port, *, context=None, **_kwargs):  # pragma: no cover - d
     ``recv`` returns ``None`` (rather than raising EAGAIN like
     plain TCP); see :class:`_MpSocketWrapper.recv_into`.
     """
-    import socket  # noqa: PLC0415 — MP-only import; staged-but-not-imported on CP
-
     address_info = socket.getaddrinfo(host, port)[0]
     sock = socket.socket(address_info[0], address_info[1])
     sock.connect(address_info[-1])
@@ -187,8 +186,6 @@ def udp_socket(  # pragma: no cover - device only
     ``SO_BROADCAST`` is best-effort — failures are swallowed so older
     ports without the option don't break the socket factory.
     """
-    import socket  # noqa: PLC0415 — runtime-gated; lazy so CP can stage this file
-
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     if broadcast:
         try:
@@ -231,8 +228,6 @@ class _MpUDPWrapper:  # pragma: no cover - device only
         # per ``sendto`` — acceptable for chumicro-ntp-shaped traffic
         # (one send per query).  Callers in tighter loops should
         # pre-resolve and cache the IP themselves.
-        import socket  # noqa: PLC0415 — runtime-gated; lazy so CP can stage this file
-
         address_info = socket.getaddrinfo(host, port)[0]
         return self.sock.sendto(data, address_info[-1])
 
@@ -263,8 +258,6 @@ def listen_tcp(host, port, *, backlog=4, **_kwargs):  # pragma: no cover - devic
     do); failures are swallowed so older ports without the option
     don't break the listener.
     """
-    import socket  # noqa: PLC0415 — runtime-gated
-
     address_info = socket.getaddrinfo(host, port)[0]
     listener = socket.socket(address_info[0], address_info[1])
     try:
@@ -308,7 +301,7 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - devi
 
     Returned context targets `PROTOCOL_TLS_SERVER`.
     """
-    import ssl  # noqa: PLC0415 — runtime-gated
+    import ssl  # noqa: PLC0415
 
     if isinstance(cert_pem, str):
         cert_pem = cert_pem.encode("ascii")
@@ -404,7 +397,7 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     Raises:
         ValueError: input is neither PEM nor DER-shaped.
     """
-    import ssl  # noqa: PLC0415 — MP-only import
+    import ssl  # noqa: PLC0415
 
     if isinstance(ca_pem, str):
         ca_pem = ca_pem.encode("ascii")
@@ -412,7 +405,32 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
         ca_pem = bytes(ca_pem)  # bytearray / memoryview
 
     if b"-----BEGIN CERTIFICATE-----" in ca_pem:
-        cadata = _pem_to_der(ca_pem)
+        # PEM → DER inline.  ``bytes.find`` walks the marker pairs in C
+        # without a per-line Python loop; ``binascii.a2b_base64`` skips
+        # every non-base64 byte (embedded \\n, \\r, spaces, blank lines —
+        # verified: MP ``modbinascii.c`` does ``if (sextet == -1) continue``,
+        # CPython's default ``strict_mode=False`` behaves the same), so no
+        # whitespace strip or per-cert intermediate list is needed.  Slices
+        # go through a ``memoryview`` to skip per-region copies before
+        # decoding.  ``cadata`` stays a ``bytearray`` — mbedTLS /
+        # stdlib ssl accept any buffer-protocol object and copy
+        # internally, so a ``bytes()`` wrap would only allocate a
+        # same-size copy that's immediately discarded.
+        begin_marker = b"-----BEGIN CERTIFICATE-----"
+        end_marker = b"-----END CERTIFICATE-----"
+        source = memoryview(ca_pem)
+        cadata = bytearray()
+        search_from = 0
+        while True:
+            begin_at = ca_pem.find(begin_marker, search_from)
+            if begin_at < 0:
+                break
+            body_start = begin_at + len(begin_marker)
+            end_at = ca_pem.find(end_marker, body_start)
+            if end_at < 0:
+                break
+            cadata += binascii.a2b_base64(source[body_start:end_at])
+            search_from = end_at + len(end_marker)
     elif ca_pem[:1] == b"\x30":  # ASN.1 SEQUENCE — already DER
         cadata = ca_pem
     else:
@@ -433,44 +451,6 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     del cadata, ca_pem
     gc.collect()
     return context
-
-
-def _pem_to_der(ca_pem):  # pragma: no cover - device only
-    """Convert a PEM bundle (one or more certs) to concatenated DER bytes.
-
-    Streaming: locates each ``-----BEGIN CERTIFICATE-----`` /
-    ``-----END CERTIFICATE-----`` pair with C-level ``bytes.find``
-    (no per-line Python loop), then base64-decodes the raw
-    marker-to-marker slice directly.  ``binascii.a2b_base64`` skips
-    every non-base64 byte — embedded ``\\n``, ``\\r``, spaces, blank
-    lines — so no line splitting, whitespace stripping, or per-cert
-    intermediate list is needed (verified: MP ``modbinascii.c`` does
-    ``if (sextet == -1) continue``; CPython's default
-    ``strict_mode=False`` behaves the same).
-
-    *ca_pem* must be ``bytes`` (the caller normalizes).  Slices are
-    taken through a ``memoryview`` so the per-cert base64 region is
-    not copied before decoding; only the growing DER output and the
-    final ``bytes()`` allocate.
-    """
-    import binascii  # noqa: PLC0415 — MP-only import
-
-    begin_marker = b"-----BEGIN CERTIFICATE-----"
-    end_marker = b"-----END CERTIFICATE-----"
-    source = memoryview(ca_pem)
-    der_out = bytearray()
-    search_from = 0
-    while True:
-        begin_at = ca_pem.find(begin_marker, search_from)
-        if begin_at < 0:
-            break
-        body_start = begin_at + len(begin_marker)
-        end_at = ca_pem.find(end_marker, body_start)
-        if end_at < 0:
-            break
-        der_out += binascii.a2b_base64(source[body_start:end_at])
-        search_from = end_at + len(end_marker)
-    return bytes(der_out)
 
 
 #: PEM override installed via :func:`set_default_ca_bundle`.  ``None``
@@ -545,7 +525,7 @@ def ssl_context_no_verify():  # pragma: no cover - device only
     ``CERT_NONE`` so the opt-out is visible at the call site rather
     than silently in effect.
     """
-    import ssl  # noqa: PLC0415 — runtime-gated
+    import ssl  # noqa: PLC0415
 
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.verify_mode = ssl.CERT_NONE
@@ -607,8 +587,6 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
             return
         try:
             if self.state == STATE_AWAITING_DNS:
-                import socket  # noqa: PLC0415 — MP-only import
-
                 self._addr_info = socket.getaddrinfo(self._host, self._port)[0]
                 self.state = STATE_AWAITING_TCP
                 return
@@ -641,8 +619,6 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
             self._fail(error)
 
     def _issue_tcp_connect(self):
-        import socket  # noqa: PLC0415 — MP-only import
-
         sock = socket.socket(self._addr_info[0], self._addr_info[1])
         sock.setblocking(False)
         try:
@@ -660,8 +636,6 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
         return sock
 
     def _register_tcp_poll(self, sock):
-        import select  # noqa: PLC0415 — MP-only import
-
         self._tcp_poll = select.poll()
         self._tcp_poll.register(sock, select.POLLOUT)
 
