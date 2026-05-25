@@ -6,7 +6,7 @@
 
 ## Next
 
-- [ ] **Programmatic deploy API for demos + host-side tooling — [Decision 0086](decisions/0086-programmatic-deploy-api-for-demos-and-tooling.md), [workstreams/programmatic-deploy-api.md](workstreams/programmatic-deploy-api.md).**  Broken `demos/mqtt_pub_sub/` parked at `.scratch/mqtt_pub_sub_v1/` (2026-05-24) pending Phase 3b rebuild.
+- [ ] **`demos/mqtt_pub_sub` Pi Pico W CP wifi `Unknown failure 1`** — `wifi_up()` fails on first connect in this demo, succeeds in `demos/http_server_roundtrip` against the same board / AP / credentials.  Validated end-to-end on ESP32-S2 Lolin S2 CP.  Suspect mqtt demo's deploy ordering or import-side-effect on `wifi.radio` state; the http demo's identical `wifi_up` path doesn't trigger it.  Surfaced 2026-05-24 during workstreams/programmatic-deploy-api.md Phase 3b.
 - [ ] **chumicro_mqtt + chumicro_runner cooperative-tick convergence.**  [workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md](workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md)
 - [ ] **MQTT negative-testing suite.**  [workstreams/mqtt-negative-testing-suite.md](workstreams/mqtt-negative-testing-suite.md)
 - [ ] **Wifi-recovery bake — gated on `chumicro_wifi.WifiService` adoption in the bake.**  Today's `projects/mqtt_bake_diag_plain/app.py` calls a raw `wlan.connect()` / `wifi.radio.connect()` at boot and never reconnects.  A router-reboot test against that harness would mostly measure the substrate's auto-rejoin behaviour, not our library.  When the bake (or any real project) starts driving `chumicro_wifi.WifiService` from the runner, re-queue: reboot the router mid-bake, confirm `WifiService` re-associates + the MQTT connector resumes from FAILED.
