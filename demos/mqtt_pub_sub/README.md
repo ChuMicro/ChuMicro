@@ -7,16 +7,20 @@ subscriptions, QoS 1 publish-with-PUBACK in both directions, and a
 pattern handler — in one command, with no broker setup beyond
 `brew install mosquitto`.
 
-The board uses the canonical libraries — `chumicro_runner.Runner`
-drives `chumicro_wifi.WifiService` + `chumicro_mqtt.MQTTClient` in
-one `while True: runner.tick(); runner.wait(now_ms)` loop, with
-orchestration entirely event-driven through library callbacks.
+The board wires `chumicro_wifi.WifiService` + `chumicro_mqtt.MQTTClient`
+into one `chumicro_runner.Runner` and drives them with
+`while True: now = runner.tick(); runner.wait(now)` — the same shape
+the root README's "Now scale it up: add MQTT and chumicro_runner"
+walkthrough uses.  Orchestration is event-driven through library
+callbacks (`mqtt.on_connect`, `on_publish`, `on_subscribe`,
+`on_message`).
 
 ## What it shows
 
-- **Canonical composition.** `Runner` + `WifiService` +
-  `MQTTClient.from_config` + `chumicro_config.load_runtime_config`.
-  No hand-rolled drive loops, no test-harness shortcuts.
+- **Runner-driven composition.** `WifiService` and `MQTTClient`
+  added with `runner.add(...)`, telemetry pacing through
+  `runner.add_periodic(...)` — the same pattern beginners read first
+  in the top-level README.
 - **Local broker.** The driver spawns Mosquitto on the host's LAN IP
   via `chumicro_pytest_device.fixtures.mosquitto.start_mosquitto_broker`
   so the board (joining the same wifi) can reach it.
@@ -73,13 +77,3 @@ driver: demo completed cleanly.
 - `mosquitto` on PATH (`brew install mosquitto` /
   `apt install mosquitto`).
 
-## Known issues
-
-- **Pi Pico W CP wifi `ConnectionError: Unknown failure 1` after deploy.**
-  The same `wifi_up()` call works in the `http_server_roundtrip` demo on
-  the same board, so the AP + credentials are valid; something in the
-  mqtt demo's deploy ordering puts the CP wifi radio into a state where
-  the first `wifi.radio.connect` returns ConnectionError until a
-  power-cycle.  End-to-end has been validated on an ESP32-S2 Lolin S2
-  CP board.  Rooting out the Pico-W-specific path is tracked in
-  `plans/next-up.md`.

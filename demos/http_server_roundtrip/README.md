@@ -7,10 +7,11 @@ another window, no IP discovery.
 
 ## What it shows
 
-- Wifi bring-up via `chumicro_test_harness.network.wifi_up`.
-- `chumicro_http_server.HttpServer` cooperative loop on the board
-  with three registered routes (`GET /hello`, `GET /uptime`,
-  `POST /echo`).
+- `chumicro_wifi.WifiService` + `chumicro_http_server.HttpServer`
+  sharing one `while True:` loop on the board — same shape as the
+  README's "Now drop a network request in next to it" walkthrough.
+- Three registered routes (`GET /hello`, `GET /uptime`,
+  `POST /echo`) with a `@server.route(...)` decorator.
 - The host driver reads the `SERVER_READY` marker the board prints
   to learn the board's address, then opens stdlib
   `http.client.HTTPConnection` connections against it.
