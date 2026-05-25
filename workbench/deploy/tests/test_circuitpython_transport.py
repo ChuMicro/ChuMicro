@@ -169,6 +169,33 @@ class TestConnect:
 
         assert captured_kwargs.get("baudrate") == 9600
 
+    def test_default_factory_requests_exclusive_port_lock(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The default pyserial factory passes ``exclusive=True``.
+
+        Regression guard for the port-locking fix: dropping the kwarg
+        lets two host processes share one ``/dev/cu.usbmodem...`` and
+        garble each other's raw-REPL session.  Patches ``serial.Serial``
+        and calls the default factory directly so the assertion sees the
+        kwargs the production code path would send to pyserial.
+        """
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_serial(**kwargs: object) -> object:
+            captured_kwargs.update(kwargs)
+            return object()
+
+        import serial
+
+        monkeypatch.setattr(serial, "Serial", fake_serial)
+        CircuitpythonTransport._default_serial_factory(
+            port="/dev/ttyUSB0", baudrate=115200, timeout=1.0,
+        )
+
+        assert captured_kwargs.get("exclusive") is True
+        assert captured_kwargs.get("port") == "/dev/ttyUSB0"
+
 
 class TestStage:
     """Tests for CircuitpythonTransport.stage."""

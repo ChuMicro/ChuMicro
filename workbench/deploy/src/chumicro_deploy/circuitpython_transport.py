@@ -362,10 +362,19 @@ class CircuitpythonTransport:
         self._post_stage_step: PostStageStep | None = None
 
     @staticmethod
-    def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
-        """Create a pyserial Serial port (default factory)."""
+    def _default_serial_factory(**kwargs) -> SerialPort:
+        """Create a pyserial Serial port (default factory).
+
+        ``exclusive=True`` requests POSIX ``TIOCEXCL`` on the underlying
+        tty.  Without it, two host processes can both open the same
+        ``/dev/cu.usbmodem...`` and interleave bytes on the same raw-REPL
+        session — one process sees the other's prompt fragments, both
+        surface as ``CircuitpythonTransportError`` tracebacks, and the
+        board is left in an unknown state.  With it, the second open
+        fails fast with ``EBUSY`` instead of silently corrupting both.
+        """
         import serial
-        return serial.Serial(**kwargs)
+        return serial.Serial(**kwargs, exclusive=True)
 
     def connect(self) -> None:
         """Open the serial port and enter raw REPL mode.
