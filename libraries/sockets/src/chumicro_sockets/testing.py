@@ -55,12 +55,15 @@ class FakeSocket:
 
     def __init__(self) -> None:
         self.sent: bytearray = bytearray()
+        #: ``True`` after :meth:`close` has been called.
+        self.closed: bool = False
+        #: Reflects the most recent :meth:`setblocking` / :meth:`settimeout`.
+        self.blocking: bool = True
         # ``deque((), maxlen)`` — positional form is required on
         # MicroPython.  We deliberately exercise the same primitive
         # the production libraries use (mqtt, websockets, events…)
         # so any future MP-specific deque quirks surface here too.
         self._recv_queue: deque[bytes] = deque((), _FAKE_SOCKET_QUEUE_MAXLEN)
-        self._closed: bool = False
         # Peer-close (clean FIN) is separate from own-side ``close()``.
         # Set by :meth:`simulate_peer_close`.  When True, ``recv_into``
         # returns 0 once the queue drains — matching real non-blocking
@@ -68,7 +71,6 @@ class FakeSocket:
         # where a connected non-blocking socket returns 0 only on a
         # peer FIN, never on a quiet line (which raises EAGAIN).
         self._peer_closed: bool = False
-        self._blocking: bool = True
         self._send_eagains: int = 0
         self._recv_eagains: int = 0
 
@@ -151,30 +153,18 @@ class FakeSocket:
 
     def close(self) -> None:
         """Mark the socket closed."""
-        self._closed = True
+        self.closed = True
 
     def setblocking(self, flag: bool) -> None:
-        self._blocking = bool(flag)
+        self.blocking = bool(flag)
 
     def settimeout(self, seconds: float | None) -> None:
-        self._blocking = seconds is None
-
-    # -- introspection -------------------------------------------------
-
-    @property
-    def closed(self) -> bool:
-        """``True`` when :meth:`close` has been called."""
-        return self._closed
-
-    @property
-    def blocking(self) -> bool:
-        """Reflects the most recent :meth:`setblocking` / :meth:`settimeout`."""
-        return self._blocking
+        self.blocking = seconds is None
 
     # -- helpers -------------------------------------------------------
 
     def _raise_if_closed(self) -> None:
-        if self._closed:
+        if self.closed:
             # Stdlib raises OSError(EBADF=9) on a closed fd.  We pick
             # the same shape so downstream error-handling code that
             # checks ``except OSError`` works identically.
@@ -216,10 +206,12 @@ class FakeUDPSocket:
         bind_port: int = 54321,
     ) -> None:
         self.sent: list = []
+        #: ``True`` after :meth:`close` has been called.
+        self.closed: bool = False
+        #: Reflects the most recent :meth:`setblocking` / :meth:`settimeout`.
+        self.blocking: bool = True
         # ``deque((), maxlen)`` — see FakeSocket for the reasoning.
         self._recv_queue: deque = deque((), _FAKE_SOCKET_QUEUE_MAXLEN)
-        self._closed: bool = False
-        self._blocking: bool = True
         self._send_eagains: int = 0
         self._recv_eagains: int = 0
         self._bind_host = bind_host
@@ -290,33 +282,22 @@ class FakeUDPSocket:
 
     def close(self) -> None:
         """Mark the socket closed."""
-        self._closed = True
+        self.closed = True
 
     def setblocking(self, flag: bool) -> None:
-        self._blocking = bool(flag)
+        self.blocking = bool(flag)
 
     def settimeout(self, seconds: float | None) -> None:
-        self._blocking = seconds is None
+        self.blocking = seconds is None
 
     def getsockname(self) -> tuple:
         """Report the bound ``(host, port)`` tuple given at construction."""
         return self._bind_host, self._bind_port
 
-    # -- introspection -------------------------------------------------
-
-    @property
-    def closed(self) -> bool:
-        """``True`` when :meth:`close` has been called."""
-        return self._closed
-
-    @property
-    def blocking(self) -> bool:
-        return self._blocking
-
     # -- helpers -------------------------------------------------------
 
     def _raise_if_closed(self) -> None:
-        if self._closed:
+        if self.closed:
             raise OSError(errno.EBADF, "socket closed")
 
 
