@@ -23,15 +23,13 @@ __chumicro_runtimes__ = ("micropython",)
 import gc
 
 from chumicro_sockets._connector import (
+    _TERMINAL,
     STATE_AWAITING_DNS,
     STATE_AWAITING_TCP,
     STATE_AWAITING_TLS,
-    STATE_FAILED,
     STATE_READY,
     SocketConnector,
 )
-
-_TERMINAL = (STATE_READY, STATE_FAILED)
 
 
 def _no_op(*_args, **_kwargs):

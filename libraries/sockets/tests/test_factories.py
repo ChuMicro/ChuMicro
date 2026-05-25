@@ -53,7 +53,6 @@ sys.modules.setdefault("select", _BareStub())
 import chumicro_sockets  # noqa: E402 — load-order dependency on the stub above
 from chumicro_sockets import (  # noqa: E402
     UnsupportedSSLConfigError,
-    is_eagain,
     pollable_of,
     set_default_ca_bundle,
     ssl_context_no_verify,
@@ -785,26 +784,6 @@ class TestUnsupportedSSLConfigErrorIsAvailable:
     def test_class_is_raisable(self) -> None:
         with raises(UnsupportedSSLConfigError):
             raise UnsupportedSSLConfigError("placeholder")
-
-
-class TestIsEagain:
-    def test_eagain_errno_returns_true(self) -> None:
-        # Platform-resolved EAGAIN (11 on Linux / MP / CP, 35 on macOS).
-        import errno
-        assert is_eagain(OSError(errno.EAGAIN, "EAGAIN")) is True
-
-    def test_ebadf_returns_false(self) -> None:
-        # Closed fd is a real error; consumers must re-raise.
-        import errno
-        assert is_eagain(OSError(errno.EBADF, "bad fd")) is False
-
-    def test_econnreset_returns_false(self) -> None:
-        import errno
-        assert is_eagain(OSError(errno.ECONNRESET, "ECONNRESET")) is False
-
-    def test_non_oserror_returns_false(self) -> None:
-        # Defensive: any exception missing ``errno`` falls through to False.
-        assert is_eagain(RuntimeError("not a socket error")) is False
 
 
 class TestPollableOf:
