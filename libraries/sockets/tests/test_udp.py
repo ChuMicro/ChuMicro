@@ -146,7 +146,6 @@ class TestFakeUDPSocket:
     def test_default_state(self) -> None:
         sock = FakeUDPSocket()
         assert sock.sent == []
-        assert sock.pending_recv_chunks == 0
         assert sock.closed is False
         assert sock.blocking is True
         assert sock.timeout is None
@@ -258,12 +257,6 @@ class TestFakeUDPSocket:
     def test_getsockname_reports_bind_address(self) -> None:
         sock = FakeUDPSocket(bind_host="192.168.1.10", bind_port=1234)
         assert sock.getsockname() == ("192.168.1.10", 1234)
-
-    def test_pending_recv_chunks_counts_queue(self) -> None:
-        sock = FakeUDPSocket()
-        sock.enqueue_recv(b"a")
-        sock.enqueue_recv(b"b")
-        assert sock.pending_recv_chunks == 2
 
 
 # ---------------------------------------------------------------------------

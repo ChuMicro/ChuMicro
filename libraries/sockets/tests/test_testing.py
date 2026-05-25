@@ -44,8 +44,7 @@ class TestRecvScripting:
         nbytes_first = sock.recv_into(buffer, 3)
         assert nbytes_first == 3
         assert bytes(buffer[:3]) == b"abc"
-        # The tail "def" should still be in the queue.
-        assert sock.pending_recv_chunks == 1
+        # The tail "def" should still be queued for the next read.
         nbytes_second = sock.recv_into(buffer, 8)
         assert nbytes_second == 3
         assert bytes(buffer[:3]) == b"def"

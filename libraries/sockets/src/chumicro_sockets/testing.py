@@ -178,11 +178,6 @@ class FakeSocket:
     def timeout(self) -> float | None:
         return self._timeout
 
-    @property
-    def pending_recv_chunks(self) -> int:
-        """Number of unconsumed chunks left in the recv queue."""
-        return len(self._recv_queue)
-
     # -- helpers -------------------------------------------------------
 
     def _raise_if_closed(self) -> None:
@@ -331,11 +326,6 @@ class FakeUDPSocket:
     @property
     def timeout(self) -> float | None:
         return self._timeout
-
-    @property
-    def pending_recv_chunks(self) -> int:
-        """Number of unconsumed datagrams left in the recv queue."""
-        return len(self._recv_queue)
 
     # -- helpers -------------------------------------------------------
 
