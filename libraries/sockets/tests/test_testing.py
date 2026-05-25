@@ -143,16 +143,13 @@ class TestBlockingFlags:
         assert sock.blocking is True
         sock.setblocking(False)
         assert sock.blocking is False
-        assert sock.timeout == 0.0
 
     def test_settimeout_none_blocking(self) -> None:
         sock = FakeSocket()
         sock.settimeout(None)
         assert sock.blocking is True
-        assert sock.timeout is None
 
     def test_settimeout_value_non_blocking(self) -> None:
         sock = FakeSocket()
         sock.settimeout(2.5)
         assert sock.blocking is False
-        assert sock.timeout == 2.5

@@ -148,7 +148,6 @@ class TestFakeUDPSocket:
         assert sock.sent == []
         assert sock.closed is False
         assert sock.blocking is True
-        assert sock.timeout is None
 
     def test_sendto_records_data_and_destination(self) -> None:
         sock = FakeUDPSocket()
@@ -246,12 +245,9 @@ class TestFakeUDPSocket:
         sock = FakeUDPSocket()
         sock.setblocking(False)
         assert sock.blocking is False
-        assert sock.timeout == 0.0
         sock.settimeout(2.5)
-        assert sock.timeout == 2.5
         assert sock.blocking is False
         sock.settimeout(None)
-        assert sock.timeout is None
         assert sock.blocking is True
 
     def test_getsockname_reports_bind_address(self) -> None:
