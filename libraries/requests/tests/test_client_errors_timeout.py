@@ -29,7 +29,7 @@ class _StalledRecvSocket(FakeSocket):
     """
 
     def recv_into(self, buffer, nbytes=0):
-        if self._closed:
+        if self.closed:
             raise OSError(errno.EBADF, "socket closed")
         raise OSError(errno.EAGAIN, "would block")
 

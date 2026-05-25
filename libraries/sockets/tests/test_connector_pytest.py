@@ -141,6 +141,38 @@ class TestCPythonTCPConnector:
         connector.cancel()
         assert connector.state == STATE_FAILED
 
+    def test_tick_in_terminal_is_noop(self, listener) -> None:
+        # Driving the real CPython tick path past terminal must early-
+        # return without re-entering the state machine.  Pinned because
+        # the early-return branch in _CPythonConnector.tick is otherwise
+        # only reachable via the consumer-side wrapper.
+        host, port = listener
+        connector = tcp_client_connector(host, port)
+        _drive(connector)
+        assert connector.state == STATE_READY
+        ready_socket = connector.socket
+        connector.tick(0)
+        assert connector.state == STATE_READY
+        assert connector.socket is ready_socket
+        ready_socket.close()
+
+    def test_tcp_ready_returns_false_when_socket_not_writable(self) -> None:
+        # _tcp_ready returning False keeps the connector in awaiting_tcp;
+        # a connect to a non-responsive routable target keeps select
+        # writability False for the test window.  Hits the not-writable
+        # branch of _tcp_ready that fast loopback skips.
+        from chumicro_sockets._adapters.cpython import _CPythonConnector
+
+        connector = _CPythonConnector("203.0.113.1", 9, tls=False, context=None)
+        connector.tick(0)  # awaiting_dns -> awaiting_tcp
+        assert connector.state == STATE_AWAITING_TCP
+        connector.tick(0)  # issues non-blocking connect; sets _inflight_socket
+        # Subsequent tick checks readiness; the kernel hasn't completed
+        # the connect (203.0.113.0/24 is TEST-NET-3, RFC 5737, no peer).
+        connector.tick(0)
+        assert connector.state == STATE_AWAITING_TCP
+        connector.cancel()
+
 
 class TestCPythonTLSConnector:
     # Real TLS handshake exercise lives in the consumer test path

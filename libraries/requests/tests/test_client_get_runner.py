@@ -360,7 +360,7 @@ class _StalledRecvSocket(FakeSocket):
     until their per-request timeout fires."""
 
     def recv_into(self, buffer, nbytes=0):  # noqa: ARG002 — fake signature
-        if self._closed:
+        if self.closed:
             raise OSError(errno.EBADF, "socket closed")
         raise OSError(errno.EAGAIN, "would block")
 

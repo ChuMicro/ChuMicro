@@ -479,7 +479,7 @@ class TestFromConfig:
         assert captured == {"radio": "fake-radio", "broadcast": False}
         assert client.socket is sock
         # Non-blocking was applied — FakeUDPSocket records setblocking calls.
-        assert sock._blocking is False  # noqa: SLF001
+        assert sock.blocking is False
 
     def test_default_factory_does_not_raise_on_empty_config(self) -> None:
         """Empty config dict is valid input even without socket=/socket_factory=.
