@@ -1,23 +1,25 @@
-"""Background-thread bootstrap runner that lets a host fixture overlap with a device run.
+"""Background-thread bootstrap runner — overlap a host orchestrator with a board run.
 
-For Category 1 host-driver tests, the board prints checkpoint markers
-on its stdout (``SERVER_READY ip=... port=...``) and the host fixture
-has to react mid-execute — open a TCP connection, fire a request,
-wait for the next marker.  That overlap requires the board's bootstrap
-to run concurrently with the test body.
+The board prints checkpoint markers on its stdout (``SERVER_READY
+ip=... port=...``, ``MQTT_CONNECTED broker=...``) and the host
+orchestrator reacts mid-execute — open a TCP connection, publish a
+command, wait for the next marker.  That overlap requires the board's
+bootstrap to run concurrently with the host code that drives it.
 
 :class:`DeviceBootstrapRunner` spawns a daemon thread that calls
 ``transport.execute(bootstrap, on_line=...)``; the ``on_line`` callback
 parses each captured stdout line and pushes any markers onto the
-internal :class:`MarkerQueue`.  The test body, on the pytest main
-thread, calls :meth:`wait_for` to block on a specific marker, then
-later :meth:`wait_for_completion` to join the thread and read the
-captured stdout (which still feeds :mod:`result_parser` for board-side
-PASS / FAIL / SUMMARY reporting).
+internal :class:`MarkerQueue`.  The host code calls :meth:`wait_for`
+to block on a specific marker, then later :meth:`wait_for_completion`
+to join the thread and read the captured stdout.
 
 The board side stays single-threaded cooperative — this module adds
 no constraints to what runs on the device.  All concurrency is
 host-side.
+
+Consumed by `chumicro_workspace.deploy_api` (programmatic demo /
+tooling entry point) and by `chumicro_pytest_device` (the pytest
+collection layer that drives functional tests).
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ import threading
 import time
 
 import pytest
-from chumicro_pytest_device.markers import (
+from chumicro_workspace.markers import (
     Marker,
     MarkerQueue,
     MarkerTimeoutError,

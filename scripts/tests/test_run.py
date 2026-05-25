@@ -1853,7 +1853,7 @@ class TestUnitOnDeviceSweep:
         from types import SimpleNamespace
 
         import chumicro_deploy
-        from chumicro_pytest_device import test_runner as _test_runner
+        from chumicro_workspace import device_orchestration as _test_runner
 
         ntp = self._make_library(tmp_path, "ntp", ships_data_file=False)
         sockets = self._make_library(tmp_path, "sockets", ships_data_file=True)

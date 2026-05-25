@@ -18,6 +18,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 from chumicro_deploy import DeviceEntry, TransportProtocol
+from chumicro_workspace.device_orchestration import (
+    build_device_bootstrap,
+    execute_device_bootstrap,
+    resolve_library_source_dirs,
+)
 
 from .backends import BackendExecuteError, BackendPrepareError
 from .collection import _bulk_stage_for_device, _session_effective_deploy_mode
@@ -28,11 +33,6 @@ from .session import (
     _session_cache,
     _session_per_file,
     _target_is_device_unit,
-)
-from .test_runner import (
-    build_device_bootstrap,
-    execute_device_bootstrap,
-    resolve_library_source_dirs,
 )
 from .transport_cache import _TransportCache
 

@@ -14,12 +14,12 @@ from typing import Any
 
 import pytest
 from chumicro_deploy.testing import FakeTransport
-from chumicro_pytest_device.concurrent_runner import DeviceBootstrapRunner
 from chumicro_pytest_device.fixtures.host_driver import (
     HttpResponseSnapshot,
     bind_to,
     http_client_against_board,
 )
+from chumicro_workspace.device_runner import DeviceBootstrapRunner
 
 # Re-export the fixture so pytest's fixture-discovery picks it up
 # when a test in this module asks for it by name.  Functional fixtures
@@ -129,7 +129,7 @@ class TestBindToAgainstRealHttpServer:
         # Bootstrap finishes without ever printing SERVER_READY — the
         # hit call should surface that as a MarkerTimeoutError, not
         # a hung test.
-        from chumicro_pytest_device.markers import MarkerTimeoutError
+        from chumicro_workspace.markers import MarkerTimeoutError
 
         transport = FakeTransport(
             execute_output="PASS some_other_test (0.001s)\n",

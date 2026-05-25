@@ -30,6 +30,7 @@
   <!-- Strict-dep arrows (pyproject.toml dependencies) -->
   <g>
   <line x1="325.0" y1="96" x2="125.0" y2="240" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="325.0" y1="60" x2="125.0" y2="96" class="edge-strict" marker-end="url(#arrow-strict)" />
   <line x1="125.0" y1="96" x2="125.0" y2="240" class="edge-strict" marker-end="url(#arrow-strict)" />
   </g>
 

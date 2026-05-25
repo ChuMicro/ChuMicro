@@ -29,6 +29,14 @@ classifiers = [
 dependencies = [
     "pytest>=8.0",
     "chumicro-deploy>=0.1.0",
+    # Hosts the device-orchestration primitives the pytest plugin's
+    # collection layer dispatches to: ``device_runner`` (bg-thread
+    # bootstrap runner), ``markers`` (parser + thread-safe queue),
+    # ``device_orchestration`` (transport build + bootstrap build +
+    # library-source-dir walking).  These are not pytest-specific;
+    # pytest-device is one of two consumers, the other being
+    # ``chumicro_workspace.deploy_api`` itself.
+    "chumicro-workspace",
     # Used to msgpack-encode the runtime-config dict registered via
     # ``set_runtime_config()`` before staging it at
     # ``/runtime_config.msgpack`` on the device.  ``use_single_float=True``
