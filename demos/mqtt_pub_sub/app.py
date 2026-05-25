@@ -21,6 +21,7 @@ genuine non-blocking runner-tick work.
 """
 
 import json
+import sys
 
 from chumicro_config import load_runtime_config
 from chumicro_mqtt import MQTTClient, ProtocolState
@@ -39,6 +40,19 @@ client_id = config.get("mqtt.client_id", "chumicro-mqtt-demo-board")
 state_topic = f"demo/{client_id}/state"
 command_topic = f"demo/{client_id}/cmd"
 telemetry_topic = f"demo/{client_id}/telemetry"
+
+# Some CP wifi.radio implementations carry stale association state
+# across the soft-reset deploy hands them.  An explicit stop_station()
+# before connect gives the radio a clean slate so the first
+# wifi.radio.connect doesn't return ConnectionError ("Unknown failure 1").
+# Did not fix the Pi Pico W instance of this failure mode in bench
+# 2026-05-24; kept defensive for other CP boards.
+if sys.implementation.name == "circuitpython":
+    import wifi  # noqa: PLC0415 - CP-only, must happen post-decision
+    try:
+        wifi.radio.stop_station()
+    except Exception:  # noqa: BLE001, S110 - best-effort precheck
+        pass
 
 radio, ip_address = wifi_up(
     config.get("wifi.ssid"),
