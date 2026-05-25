@@ -87,7 +87,7 @@ class SocketConnector:
             return None
         if self._inflight_socket is None:
             return None
-        return getattr(self._inflight_socket, "_sock", self._inflight_socket)
+        return getattr(self._inflight_socket, "sock", self._inflight_socket)
 
     @property
     def io_wants_read(self):

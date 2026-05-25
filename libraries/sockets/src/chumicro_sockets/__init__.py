@@ -69,14 +69,14 @@ def pollable_of(sock: object) -> object:
     wrappers do not expose ``fileno()``, so the underlying runtime
     socket has to be unwrapped before registration.
 
-    Adapter wrappers that hold their socket on ``_sock``
+    Adapter wrappers that hold their socket on ``sock``
     (``_MpSocketWrapper``, ``_MpListeningSocketWrapper``,
     ``_MpTLSListenerWrapper``, ``_CPUDPWrapper``, ``_CPythonUDPWrapper``,
     ``_CPythonTLSListenerWrapper``) unwrap to it; bare sockets
     (CP TCP / TLS client, CP TCP listener, CP TLS listener, MP TLS,
     CPython stdlib ``socket.socket``) pass through unchanged.
     """
-    return getattr(sock, "_sock", sock)
+    return getattr(sock, "sock", sock)
 
 
 def _runtime_name() -> str:

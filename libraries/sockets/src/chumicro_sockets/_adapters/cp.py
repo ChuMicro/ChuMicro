@@ -146,7 +146,7 @@ class _CPUDPWrapper:
     """
 
     def __init__(self, sock):
-        self._sock = sock
+        self.sock = sock
         self.close = sock.close
         self.setblocking = sock.setblocking
         # CP socketpool exposes settimeout on recent firmware; fall
@@ -157,7 +157,7 @@ class _CPUDPWrapper:
         self.recvfrom_into = sock.recvfrom_into
 
     def sendto(self, data, host, port):
-        return self._sock.sendto(data, (host, port))
+        return self.sock.sendto(data, (host, port))
 
 
 def listen_tcp(host, port, *, backlog=4, radio):
@@ -397,7 +397,7 @@ class _CPConnector(SocketConnector):
     def __init__(self, host, port, *, tls=False, context=None, radio=None):
         super().__init__(host, port, tls=tls, context=context)
         self._radio = radio
-        self._sockaddr = None
+        self.sockaddr = None
 
     def tick(self, now_ms):  # noqa: ARG002 (runner contract)
         if self.state in _TERMINAL:
@@ -408,7 +408,7 @@ class _CPConnector(SocketConnector):
                 addr_info = pool.getaddrinfo(
                     self._host, self._port, pool.AF_INET, pool.SOCK_STREAM,
                 )[0]
-                self._sockaddr = addr_info[4]
+                self.sockaddr = addr_info[4]
                 self.state = STATE_AWAITING_TCP
                 return
 
@@ -422,7 +422,7 @@ class _CPConnector(SocketConnector):
                     )
                 # Blocking connect — completes TCP and (if wrapped)
                 # the TLS handshake before returning.
-                sock.connect(self._sockaddr)
+                sock.connect(self.sockaddr)
                 self.socket = sock
                 self.state = STATE_READY
                 return

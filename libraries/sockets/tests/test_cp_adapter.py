@@ -451,7 +451,7 @@ class TestUdpSocket:
         assert sock.kind == _StubPool.SOCK_DGRAM
         assert sock.bound_to == ("0.0.0.0", 5353)
         # Wrapper exposes the underlying socket.
-        assert wrapper._sock is sock  # noqa: SLF001
+        assert wrapper.sock is sock
 
     def test_broadcast_true_sets_so_broadcast(self) -> None:
         from chumicro_sockets._adapters import cp as cp_adapter
@@ -492,7 +492,7 @@ class TestUdpSocket:
         ):
             wrapper = cp_adapter.udp_socket(radio=object(), broadcast=True)
         # No exception; wrapper still constructed; bind still happened.
-        assert wrapper._sock.bound_to == ("0.0.0.0", 0)  # noqa: SLF001
+        assert wrapper.sock.bound_to == ("0.0.0.0", 0)
 
     def test_broadcast_setsockopt_attributeerror_swallowed(self) -> None:
         """Older CP firmware may lack ``setsockopt`` entirely — non-fatal."""
@@ -513,7 +513,7 @@ class TestUdpSocket:
             wrapper = cp_adapter.udp_socket(radio=object(), broadcast=True)
         # Wrapper still constructed; bind still happened — the missing
         # ``setsockopt`` was swallowed, not propagated.
-        assert wrapper._sock.bound_to == ("0.0.0.0", 0)  # noqa: SLF001
+        assert wrapper.sock.bound_to == ("0.0.0.0", 0)
 
 
 class TestCpUdpWrapper:

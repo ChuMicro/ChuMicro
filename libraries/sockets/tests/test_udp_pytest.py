@@ -121,16 +121,16 @@ class TestCPythonUDP:
         sock.close()  # second close: no exception.
         # The underlying CPython socket reports fileno() as -1 after
         # close — confirms the close actually took effect (vs.
-        # silently no-oping).  Unwrap via ``_sock``; the chumicro
+        # silently no-oping).  Unwrap via ``sock``; the chumicro
         # wrapper itself no longer exposes ``fileno``.
-        assert sock._sock.fileno() == -1  # noqa: SLF001
+        assert sock.sock.fileno() == -1
 
     def test_broadcast_flag_sets_so_broadcast(self) -> None:
         """``broadcast=True`` allows sendto to a broadcast address."""
         sock = udp_socket("0.0.0.0", 0, broadcast=True)
         try:
             # Verify SO_BROADCAST is enabled on the underlying socket.
-            value = sock._sock.getsockopt(  # noqa: SLF001 — testing the wrapper
+            value = sock.sock.getsockopt(
                 socket.SOL_SOCKET,
                 socket.SO_BROADCAST,
             )
@@ -141,7 +141,7 @@ class TestCPythonUDP:
     def test_broadcast_default_off(self) -> None:
         sock = udp_socket("0.0.0.0", 0)
         try:
-            value = sock._sock.getsockopt(  # noqa: SLF001 — testing the wrapper
+            value = sock.sock.getsockopt(
                 socket.SOL_SOCKET,
                 socket.SO_BROADCAST,
             )
