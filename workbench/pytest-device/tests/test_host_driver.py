@@ -67,6 +67,34 @@ def in_process_http_server():
         server_thread.join(timeout=2.0)
 
 
+class TestBindToCachesMarker:
+    """``hit`` only consumes SERVER_READY once — subsequent calls
+    against the same bound runner reuse the cached address.  The
+    board prints SERVER_READY once at startup, so re-waiting per
+    call would hang forever after the first request."""
+
+    def test_two_calls_resolve_marker_once(
+        self, in_process_http_server: int,
+    ) -> None:
+        marker_line = (
+            f"SERVER_READY ip=127.0.0.1 port={in_process_http_server}\n"
+        )
+        # Only ONE SERVER_READY in the captured output; a hit that
+        # tried to wait_for it twice would time out on the second call.
+        transport = FakeTransport(execute_output=marker_line)
+        runner = DeviceBootstrapRunner(transport, "boot")
+        runner.start()
+        try:
+            hit = bind_to(runner)
+            first = hit("/", timeout_s=2.0)
+            second = hit("/", timeout_s=2.0)
+            assert first.status == 200
+            assert second.status == 200
+        finally:
+            runner.wait_for_completion(timeout_s=2.0)
+            runner.shutdown()
+
+
 class TestBindToAgainstRealHttpServer:
     """bind_to + DeviceBootstrapRunner drives real HTTP against a real server."""
 

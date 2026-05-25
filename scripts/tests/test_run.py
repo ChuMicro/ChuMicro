@@ -1712,12 +1712,13 @@ class TestPreflightParallelDispatch:
         # The other 9 phases are all present.
         for expected in (
             "lint", "build", "docs", "test-scripts", "verify-examples",
-            "check-dep-graph", "test-micropython", "test-circuitpython",
+            "verify-demos", "check-dep-graph", "test-micropython",
+            "test-circuitpython",
         ):
             assert expected in captured_phases
 
     def test_includes_diff_phases_when_origin_main_reachable(self, monkeypatch):
-        """All 11 phases dispatch when origin/main is reachable."""
+        """All 12 phases dispatch when origin/main is reachable."""
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
 
         captured_labels: list[str] = []
@@ -1737,7 +1738,7 @@ class TestPreflightParallelDispatch:
         )
         assert captured_labels == [
             "lint", "build", "docs", python_version, "test-scripts",
-            "verify-examples", "check-dep-graph", "check-version",
+            "verify-examples", "verify-demos", "check-dep-graph", "check-version",
             "check-api", "test-micropython", "test-circuitpython",
         ]
 
