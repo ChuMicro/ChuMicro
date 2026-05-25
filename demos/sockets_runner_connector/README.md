@@ -1,17 +1,18 @@
 # sockets_runner_connector — sockets via runner with a user-defined service
 
 End-to-end demo of the canonical pattern for **custom TCP protocols
-under runner**: write a tiny runner-service that owns a
-`SocketConnector` for the connect phase and drives send / recv in its
-own `check` / `handle`.  Drop-in template for any protocol not
-covered by `HttpClient` / `MQTTClient` / `WebSocketClient`.
+under runner**: write a tiny runner-service that hands its
+`SocketConnector` to the runner for the connect phase and then takes
+over for send / recv in its own `check` / `handle`.  Drop-in template
+for any protocol not covered by `HttpClient` / `MQTTClient` /
+`WebSocketClient`.
 
-`EchoService` here is the template — ~40 lines of state machine
-(`idle` → `connecting` → `sending` → `receiving` → `done`) plus the
-runner-ABI properties (`io_socket` / `io_wants_read` /
-`io_wants_write`) that let the runner sleep on socket-ready events
-instead of polling.  Real custom-protocol code follows the same shape
-— only the wire-format logic in `handle` changes.
+`EchoService` here is the template — a short state machine (`idle` →
+`connecting` → `sending` → `receiving` → `done`) plus the runner-ABI
+properties (`io_socket` / `io_wants_read` / `io_wants_write`) that
+let the runner sleep on socket-ready events instead of polling.
+Real custom-protocol code follows the same shape — only the
+wire-format logic in `_handle_sending` / `_handle_receiving` changes.
 
 ## What it shows
 
@@ -19,22 +20,25 @@ instead of polling.  Real custom-protocol code follows the same shape
   is the user's `EchoService` class — same registration shape as
   `runner.add(wifi)` / `runner.add(mqtt)`.  The class is local to
   the app; no library scaffolding involved.
-- **`SocketConnector` for the connect phase.**  `tcp_client_connector`
-  returns a runner-shaped connector the service drives via
-  `connector.tick(now_ms)` inside its own `handle`.  Once
-  `connector.state == "ready"`, the service grabs `connector.socket`
-  and does protocol I/O.
-- **Event-driven runner integration.**  The service exposes
-  `io_socket` / `io_wants_read` / `io_wants_write`, so the runner's
-  `wait(now_ms)` sleeps on socket events.  No 50 ms blind polling.
+- **The service drives its own connector.**  `EchoService.start()`
+  builds the `SocketConnector`; the service's own `handle` calls
+  `connector.tick(now_ms)` during `connecting` and inspects the
+  connector's state inline.  Single runner entry, deterministic
+  ordering, no sibling state polling between two entries.  The
+  service's `io_*` properties delegate to the connector during the
+  connect phase, then own the socket once `ready`.
+- **Service owns the socket after `ready`.**  `_finish_connecting`
+  grabs `self._socket = self._connector.socket`; from then on the
+  service's own `io_socket` / `io_wants_read` / `io_wants_write`
+  describe the send and receive phases.  The connector goes inert
+  (terminal state, both want-bits False) and the runner ignores it.
+- **Real send loop, not a one-shot.**  `_handle_sending` loops on
+  `send()` and tracks `_send_offset` so a short return — including
+  `EAGAIN` — resumes from the right byte on the next wake.  The
+  shape any custom-protocol service uses for outbound bytes.
 - **Single `while not echo.done` loop at the end.**  Everything else
-  is declarative — all the services and periodic tasks register
-  before the loop, and the loop is just
-  `now_ms = runner.tick(); runner.wait(now_ms)`.
-- **Heartbeat through connect + I/O.**  A 500 ms periodic heartbeat
-  fires throughout.  The driver counts heartbeats between
-  `CONNECTING` and `CONNECTED` markers — at least one proves the
-  connect didn't block.
+  is declarative — services register before the loop, and the loop
+  is just `now_ms = runner.tick(); runner.wait(now_ms)`.
 
 ## Run it
 
@@ -59,14 +63,11 @@ driver: tcp echo server up on 10.0.0.5:54321
 driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
 driver: board WIFI_OK ip=10.0.0.42
 driver: board CONNECTING host=10.0.0.5 port=54321
-driver: board CONNECTED (heartbeats during connect: 2)
+driver: board CONNECTED
 driver: board SENT bytes=15
 driver: board ECHO_RECEIVED bytes=14 payload=b'hello chumicro'
 driver: demo completed cleanly.
 ```
-
-The heartbeat count between `CONNECTING` and `CONNECTED` is the
-demo's key signal — if it's zero, the connect blocked the runner.
 
 ## What it requires
 
@@ -88,19 +89,21 @@ libraries instead — they own the wire-format codec and the runner
 integration for you.  See `demos/mqtt_pub_sub` for the
 already-built-in-client equivalent.
 
+One-shot by design — this demo exits after one round trip.  For
+reconnect-capable adapters (wifi-up / wifi-down cycles), add a small
+`reset()` to clear `_connector` / `_socket` / buffers back to `idle`
+and call it from the wifi `DISCONNECTED` callback.
+
 ## Substrate honesty for the connect phase
 
 - **CPython** (host pytest, sim runs) — truly non-blocking via
   `BlockingIOError`(EINPROGRESS) + `select.select(POLLOUT)` + `SO_ERROR`.
-  Heartbeats land throughout.
 - **MicroPython rp2 / esp32** — truly non-blocking via
-  `OSError(EINPROGRESS)` + `select.poll(POLLOUT)`.  Heartbeats land
-  throughout.
+  `OSError(EINPROGRESS)` + `select.poll(POLLOUT)`.
 - **CircuitPython** — `socketpool` does not expose a non-blocking
   connect, so the TCP step blocks for the handshake duration.
-  Honest documented compromise on CP; heartbeats may not land
-  between `CONNECTING` and `CONNECTED` on a fast LAN, but land
-  everywhere else.
+  Honest documented compromise on CP; other runner tasks pause for
+  the duration of that one call.
 
 ## Related
 
