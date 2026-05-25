@@ -108,7 +108,7 @@ class _MpSocketWrapper:
         return copied
 
 
-def connect_tcp(host, port):  # pragma: no cover - device only
+def connect_tcp(host, port, **_kwargs):  # pragma: no cover - device only
     """Open a plain TCP connection on MicroPython.
 
     Uses ``socket.getaddrinfo`` + ``socket.socket`` + ``connect`` —
@@ -123,7 +123,7 @@ def connect_tcp(host, port):  # pragma: no cover - device only
     return _MpSocketWrapper(sock)
 
 
-def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
+def connect_tls(host, port, *, context=None, **_kwargs):  # pragma: no cover - device only
     """Open a TLS connection on MicroPython.
 
     *context* is an MP ``ssl.SSLContext`` or ``None``.
@@ -175,6 +175,7 @@ def udp_socket(  # pragma: no cover - device only
     bind_host="0.0.0.0",
     bind_port=0,
     broadcast=False,
+    **_kwargs,
 ):
     """Open a UDP socket on MicroPython, bound to (bind_host, bind_port).
 
@@ -250,7 +251,7 @@ class _MpUDPWrapper:  # pragma: no cover - device only
         return copied, address
 
 
-def listen_tcp(host, port, *, backlog=4):  # pragma: no cover - device only
+def listen_tcp(host, port, *, backlog=4, **_kwargs):  # pragma: no cover - device only
     """Open a non-blocking TCP listening socket on MicroPython.
 
     Wraps the result so ``accept()`` returns a ``(_MpSocketWrapper,
@@ -323,7 +324,7 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - devi
     return context
 
 
-def listen_tls(host, port, *, context, backlog=4):  # pragma: no cover - device only
+def listen_tls(host, port, *, context, backlog=4, **_kwargs):  # pragma: no cover - device only
     """Open an MP TLS listening socket.
 
     The TLS handshake happens synchronously inside `accept()` —
@@ -551,7 +552,7 @@ def ssl_context_no_verify():  # pragma: no cover - device only
     return context
 
 
-def tcp_connector(host, port):  # pragma: no cover - device only
+def tcp_connector(host, port, **_kwargs):  # pragma: no cover - device only
     """Return a tick-driven TCP :class:`SocketConnector` for MicroPython.
 
     Uses non-blocking ``socket.connect`` (raises ``OSError(EINPROGRESS)``
@@ -563,7 +564,7 @@ def tcp_connector(host, port):  # pragma: no cover - device only
     return _MpConnector(host, port, tls=False, context=None)
 
 
-def tls_connector(host, port, *, context=None):  # pragma: no cover - device only
+def tls_connector(host, port, *, context=None, **_kwargs):  # pragma: no cover - device only
     """Return a tick-driven TLS :class:`SocketConnector` for MicroPython.
 
     Same per-tick shape as :func:`tcp_connector` for the DNS + TCP

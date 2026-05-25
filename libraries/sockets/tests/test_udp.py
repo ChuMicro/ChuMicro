@@ -282,7 +282,7 @@ class TestUDPFactoryRouting:
         # Ensure the cp adapter module is importable before we patch on it.
         from chumicro_sockets._adapters import cp as cp_adapter
 
-        with _SwapAttribute(chumicro_sockets, "_runtime_name", lambda: "circuitpython"), \
+        with _SwapAttribute(chumicro_sockets, "_adapter", cp_adapter), \
                 _SwapAttribute(cp_adapter, "udp_socket", fake_cp_udp_socket):
             result = udp_socket(
                 "0.0.0.0",
@@ -307,36 +307,22 @@ class TestUDPFactoryRouting:
             calls.append(kwargs)
             return sentinel
 
-        # The MP adapter module imports stdlib ``socket`` at module-load
-        # time — works on the MP unix-port and on CPython, raises
-        # ``ImportError`` on the CP unix-port.  Stub it via
-        # ``sys.modules`` AND on the ``_adapters`` package object so
-        # the dispatcher's ``from chumicro_sockets._adapters import mp``
-        # picks up the stub.  ``from … import mp`` checks the package
-        # object's attribute first (which a previous test may have
-        # bound to the real module), then falls back to ``sys.modules``.
-        #
-        # ``types.ModuleType`` doesn't exist on MP / CP unix-ports —
-        # use a bare ``_FakeModule`` class with the one attribute the
-        # dispatcher reaches for.
-        import sys
-
-        from chumicro_sockets import _adapters as adapters_package
-
+        # Build a bare module-shaped object exposing the one attribute
+        # the package factory reaches for.  ``types.ModuleType`` doesn't
+        # exist on MP / CP unix-ports — use a plain class instead.
         class _FakeModule:
             udp_socket = staticmethod(fake_mp_udp_socket)
 
         fake_mp_module = _FakeModule()
 
-        with _SwapAttribute(chumicro_sockets, "_runtime_name", lambda: "micropython"), \
-                _SwapItem(sys.modules, "chumicro_sockets._adapters.mp", fake_mp_module), \
-                _SwapAttribute(adapters_package, "mp", fake_mp_module):
+        with _SwapAttribute(chumicro_sockets, "_adapter", fake_mp_module):
             result = udp_socket("1.2.3.4", 9, broadcast=True)
 
         assert result is sentinel
         assert calls == [{
             "bind_host": "1.2.3.4",
             "bind_port": 9,
+            "radio": None,
             "broadcast": True,
         }]
 
@@ -350,7 +336,7 @@ class TestUDPFactoryRouting:
 
         from chumicro_sockets._adapters import cpython as cpython_adapter
 
-        with _SwapAttribute(chumicro_sockets, "_runtime_name", lambda: "pypy"), \
+        with _SwapAttribute(chumicro_sockets, "_adapter", cpython_adapter), \
                 _SwapAttribute(cpython_adapter, "udp_socket", fake_cpython_udp_socket):
             result = udp_socket()
 
@@ -358,5 +344,6 @@ class TestUDPFactoryRouting:
         assert calls == [{
             "bind_host": "0.0.0.0",
             "bind_port": 0,
+            "radio": None,
             "broadcast": False,
         }]

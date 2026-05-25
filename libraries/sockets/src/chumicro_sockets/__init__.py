@@ -81,8 +81,39 @@ def pollable_of(sock: object) -> object:
 
 def _runtime_name() -> str:
     """Return ``sys.implementation.name`` (``"cpython"`` / ``"micropython"`` /
-    ``"circuitpython"``).  Wrapped so tests can patch it cleanly."""
+    ``"circuitpython"``)."""
     return sys.implementation.name
+
+
+#: Per-package adapter cache — populated on first factory call.
+#: Lazy first-use rather than eager so ``import chumicro_sockets``
+#: succeeds on unix-port runtimes that don't ship the substrate
+#: (CP unix-port has no ``socketpool``, MP unix-port build varies).
+#: Tests that never touch a factory don't pay for the substrate import.
+#: Tests that drive a specific runtime swap this binding directly.
+_adapter = None
+
+
+def _get_adapter():
+    """Return the resolved per-runtime adapter, importing on first call.
+
+    First-call resolution amortizes runtime dispatch across the
+    11 public factories — they each call ``_get_adapter().method(...)``
+    instead of carrying their own runtime branch.  The cache is a
+    module-level binding tests can swap directly via ``_adapter``.
+    """
+    global _adapter
+    if _adapter is not None:
+        return _adapter
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        from chumicro_sockets._adapters import cp as resolved  # noqa: PLC0415 — runtime-gated
+    elif runtime == "micropython":
+        from chumicro_sockets._adapters import mp as resolved  # noqa: PLC0415 — runtime-gated
+    else:
+        from chumicro_sockets._adapters import cpython as resolved  # noqa: PLC0415 — runtime-gated
+    _adapter = resolved
+    return _adapter
 
 
 def tcp_client_socket(host: str, port: int, *, radio: object | None = None):
@@ -109,19 +140,7 @@ def tcp_client_socket(host: str, port: int, *, radio: object | None = None):
             normalize runtime-specific socket errors into ``OSError``.
         TypeError: CP runtime invoked with ``radio=None``.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated import
-
-        return cp.connect_tcp(host, port, radio=radio)
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated import
-
-        return mp.connect_tcp(host, port)
-    # CPython + anything else stdlib-shaped (e.g. PyPy).
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
-
-    return cpython.connect_tcp(host, port)
+    return _get_adapter().connect_tcp(host, port, radio=radio)
 
 
 def tls_client_socket(
@@ -174,18 +193,7 @@ def tls_client_socket(
         OSError: Connection or handshake failure.
         TypeError: CP runtime invoked with ``radio=None``.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated import
-
-        return cp.connect_tls(host, port, context=context, radio=radio)
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated import
-
-        return mp.connect_tls(host, port, context=context)
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
-
-    return cpython.connect_tls(host, port, context=context)
+    return _get_adapter().connect_tls(host, port, context=context, radio=radio)
 
 
 def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -> object:
@@ -217,18 +225,7 @@ def tcp_client_connector(host: str, port: int, *, radio: object | None = None) -
         :class:`SocketConnector` in ``"awaiting_dns"`` — call ``tick``
         until terminal.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated import
-
-        return cp.tcp_connector(host, port, radio=radio)
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated import
-
-        return mp.tcp_connector(host, port)
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
-
-    return cpython.tcp_connector(host, port)
+    return _get_adapter().tcp_connector(host, port, radio=radio)
 
 
 def tls_client_connector(
@@ -269,18 +266,7 @@ def tls_client_connector(
     Returns:
         :class:`SocketConnector` in ``"awaiting_dns"``.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated import
-
-        return cp.tls_connector(host, port, context=context, radio=radio)
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated import
-
-        return mp.tls_connector(host, port, context=context)
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
-
-    return cpython.tls_connector(host, port, context=context)
+    return _get_adapter().tls_connector(host, port, context=context, radio=radio)
 
 
 def tcp_listening_socket(
@@ -328,18 +314,7 @@ def tcp_listening_socket(
             etc.).
         TypeError: CP runtime invoked with ``radio=None``.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
-
-        return cp.listen_tcp(host, port, backlog=backlog, radio=radio)
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
-
-        return mp.listen_tcp(host, port, backlog=backlog)
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
-
-    return cpython.listen_tcp(host, port, backlog=backlog)
+    return _get_adapter().listen_tcp(host, port, backlog=backlog, radio=radio)
 
 
 def tls_listening_socket(
@@ -382,18 +357,7 @@ def tls_listening_socket(
     Raises:
         TypeError: CP runtime invoked with ``radio=None``.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
-
-        return cp.listen_tls(host, port, context=context, backlog=backlog, radio=radio)
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
-
-        return mp.listen_tls(host, port, context=context, backlog=backlog)
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
-
-    return cpython.listen_tls(host, port, context=context, backlog=backlog)
+    return _get_adapter().listen_tls(host, port, context=context, backlog=backlog, radio=radio)
 
 
 def ssl_context_with_cert_and_key(
@@ -422,18 +386,7 @@ def ssl_context_with_cert_and_key(
     Returns:
         Configured :class:`ssl.SSLContext`.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
-
-        return cp.ssl_context_with_cert_and_key(cert_pem, key_pem)
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
-
-        return mp.ssl_context_with_cert_and_key(cert_pem, key_pem)
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
-
-    return cpython.ssl_context_with_cert_and_key(cert_pem, key_pem)
+    return _get_adapter().ssl_context_with_cert_and_key(cert_pem, key_pem)
 
 
 def ssl_context_with_cert_and_key_paths(
@@ -462,24 +415,15 @@ def ssl_context_with_cert_and_key_paths(
     Returns:
         Configured :class:`ssl.SSLContext`.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
-
-        return cp.ssl_context_with_cert_and_key_paths(cert_path, key_path)
+    adapter = _get_adapter()
+    if hasattr(adapter, "ssl_context_with_cert_and_key_paths"):
+        return adapter.ssl_context_with_cert_and_key_paths(cert_path, key_path)
     # MP + CPython: load the bytes and use the in-memory helper.
     with open(cert_path, "rb") as cert_handle:
         cert_bytes = cert_handle.read()
     with open(key_path, "rb") as key_handle:
         key_bytes = key_handle.read()
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
-
-        context = mp.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
-    else:
-        from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
-
-        context = cpython.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
+    context = adapter.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
     # mbedTLS / stdlib ssl has parsed the PEM into the context; drop
     # the file buffers (~1–2 KB each) and force a collection before
     # the caller's next allocation lands.
@@ -535,29 +479,10 @@ def udp_socket(
         OSError: Bind failed (port in use, permission denied, etc.).
         TypeError: CP runtime invoked with ``radio=None``.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
-
-        return cp.udp_socket(
-            bind_host=bind_host,
-            bind_port=bind_port,
-            radio=radio,
-            broadcast=broadcast,
-        )
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
-
-        return mp.udp_socket(
-            bind_host=bind_host,
-            bind_port=bind_port,
-            broadcast=broadcast,
-        )
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
-
-    return cpython.udp_socket(
+    return _get_adapter().udp_socket(
         bind_host=bind_host,
         bind_port=bind_port,
+        radio=radio,
         broadcast=broadcast,
     )
 
@@ -606,18 +531,7 @@ def ssl_context_with_ca(ca_pem: str | bytes) -> object:
         ValueError: input is not an accepted format for the runtime
             (e.g. DER on CircuitPython, or neither PEM nor DER).
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated import
-
-        return cp.ssl_context_with_ca(ca_pem)
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated import
-
-        return mp.ssl_context_with_ca(ca_pem)
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
-
-    return cpython.ssl_context_with_ca(ca_pem)
+    return _get_adapter().ssl_context_with_ca(ca_pem)
 
 
 def ssl_context_no_verify() -> object:
@@ -635,18 +549,7 @@ def ssl_context_no_verify() -> object:
         ``load_verify_locations`` idiom; MP + CPython set
         ``verify_mode = CERT_NONE`` directly.
     """
-    runtime = _runtime_name()
-    if runtime == "circuitpython":
-        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
-
-        return cp.ssl_context_no_verify()
-    if runtime == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
-
-        return mp.ssl_context_no_verify()
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
-
-    return cpython.ssl_context_no_verify()
+    return _get_adapter().ssl_context_no_verify()
 
 
 def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
@@ -672,15 +575,12 @@ def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
         pem_bytes: PEM-encoded CA bundle (single or multi-cert) as
             bytes or str, or ``None`` to revert.
     """
-    if _runtime_name() == "micropython":
-        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
-
-        mp.set_default_ca_bundle(pem_bytes)
+    adapter = _get_adapter()
+    if hasattr(adapter, "set_default_ca_bundle"):
+        adapter.set_default_ca_bundle(pem_bytes)
     # CP + CPython: trust comes from elsewhere — silently ignore.
 
 
 # Defragment compile-time scratch at the end of the package import so
-# downstream library imports (and the runtime-gated lazy adapter loads
-# inside ``tcp_client_socket`` / ``tls_client_socket``) land in a
-# cleaner heap.
+# the consumer's first allocation lands in a cleaner heap.
 gc.collect()
