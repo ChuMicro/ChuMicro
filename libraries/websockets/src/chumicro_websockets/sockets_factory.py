@@ -7,7 +7,7 @@ so users who pass their own ``connector_factory`` never pull
 
 
 def chumicro_sockets_connector_factory(*, radio=None, ssl_context=None):
-    """Build a ``(host, port, use_tls) -> SocketConnector`` factory.
+    """Build a ``(host, port, use_tls) -> connector`` factory.
 
     Plain TCP routes to :func:`chumicro_sockets.tcp_client_connector`;
     TLS routes to :func:`chumicro_sockets.tls_client_connector` with
