@@ -113,10 +113,16 @@ class FakeSerialTransport:
         if data_consumer is not None:
             # Mirror mpremote's read_until loop: stdout bytes arrive one
             # at a time, then the terminator ``\x04`` byte is also fed
-            # before the loop breaks on the next iteration.
+            # before the loop breaks on the next iteration.  When a
+            # ``data_consumer`` is set, mpremote's read_until *replaces*
+            # its internal ``data`` byte per iteration instead of
+            # appending, so ``exec_raw`` returns empty stdout — callers
+            # that want the captured output must accumulate it
+            # themselves alongside the consumer feed.
             for byte_offset in range(len(stdout_bytes)):
                 data_consumer(stdout_bytes[byte_offset : byte_offset + 1])
             data_consumer(b"\x04")
+            return (b"", stderr_bytes)
         return (stdout_bytes, stderr_bytes)
 
     def read_until(
