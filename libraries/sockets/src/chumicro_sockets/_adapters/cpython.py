@@ -29,7 +29,7 @@ from chumicro_sockets._connector import (
 )
 
 
-def connect_tcp(host, port):
+def connect_tcp(host, port, **_kwargs):
     """Open a plain TCP connection.
 
     Returns a real :class:`socket.socket` — its ``send`` /
@@ -40,7 +40,7 @@ def connect_tcp(host, port):
     return socket.create_connection((host, port))
 
 
-def connect_tls(host, port, *, context=None):
+def connect_tls(host, port, *, context=None, **_kwargs):
     """Open a TLS connection.
 
     *context=None* uses :func:`ssl.create_default_context` — system
@@ -61,7 +61,7 @@ def _resolve_default_context(context):
     return context if context is not None else ssl.create_default_context()
 
 
-def tcp_connector(host, port):
+def tcp_connector(host, port, **_kwargs):
     """Return a non-blocking TCP :class:`SocketConnector` for CPython.
 
     Uses stdlib ``socket.getaddrinfo`` + non-blocking ``socket.connect``
@@ -72,7 +72,7 @@ def tcp_connector(host, port):
     return _CPythonConnector(host, port, tls=False, context=None)
 
 
-def tls_connector(host, port, *, context=None):
+def tls_connector(host, port, *, context=None, **_kwargs):
     """Return a non-blocking TLS :class:`SocketConnector` for CPython.
 
     Same shape as :func:`tcp_connector` plus a TLS handshake phase
@@ -169,7 +169,7 @@ class _CPythonConnector(SocketConnector):
         return True
 
 
-def listen_tcp(host, port, *, backlog=4):
+def listen_tcp(host, port, *, backlog=4, **_kwargs):
     """Open a non-blocking TCP listening socket.
 
     Returns a real :class:`socket.socket` set to non-blocking mode and
@@ -229,7 +229,7 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):
     return context
 
 
-def listen_tls(host, port, *, context, backlog=4):
+def listen_tls(host, port, *, context, backlog=4, **_kwargs):
     """Open a non-blocking TLS listening socket on CPython.
 
     Returns a wrapper whose `accept()` returns a `(tls_wrapped_client,
@@ -284,7 +284,7 @@ class _CPythonTLSListenerWrapper:
         return self.sock.getsockname()
 
 
-def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False):
+def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False, **_kwargs):
     """Open a UDP socket on CPython, bound to (bind_host, bind_port).
 
     Returns a :class:`_CPythonUDPWrapper` so the public ``sendto(data,

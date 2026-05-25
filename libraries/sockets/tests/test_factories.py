@@ -139,27 +139,32 @@ class _FakeModule:
 
 
 def _set_runtime(name):
-    """Return a ``_SwapAttribute`` that pins ``_runtime_name`` to *name*."""
-    return _SwapAttribute(chumicro_sockets, "_runtime_name", lambda: name)
+    """Return a ``_SwapAttribute`` that swaps ``chumicro_sockets._adapter`` to *name*'s adapter.
+
+    The package resolves ``_adapter`` once at import time from
+    ``sys.implementation.name``.  Tests that need to drive a different
+    runtime's adapter swap the binding directly; the swap stack restores
+    the host's real adapter on exit.
+    """
+    if name == "circuitpython":
+        from chumicro_sockets._adapters import cp as target_adapter
+    elif name == "micropython":
+        from chumicro_sockets._adapters import mp as target_adapter
+    else:
+        from chumicro_sockets._adapters import cpython as target_adapter
+    return _SwapAttribute(chumicro_sockets, "_adapter", target_adapter)
 
 
 def _stub_mp_adapter(**attrs):
-    """Stub ``chumicro_sockets._adapters.mp`` in ``sys.modules`` + on its parent.
+    """Build a fake mp-adapter and swap ``chumicro_sockets._adapter`` to it.
 
-    ``from chumicro_sockets._adapters import mp`` (the dispatcher's
-    pattern) checks the parent package's ``mp`` attribute first (which
-    a previous test in the same process may have bound to the real
-    module).  We have to patch both spots for the stub to win.
+    Returned as a list so the call site can extend a context-manager
+    stack uniformly with the other ``_Swap*`` contexts.
     """
-    from chumicro_sockets import _adapters as adapters_package
-
     fake = _FakeModule()
     for attr, value in attrs.items():
         setattr(fake, attr, value)
-    return [
-        _SwapItem(sys.modules, "chumicro_sockets._adapters.mp", fake),
-        _SwapAttribute(adapters_package, "mp", fake),
-    ]
+    return [_SwapAttribute(chumicro_sockets, "_adapter", fake)]
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +176,7 @@ class TestAdapterRouting:
     def test_cpython_runtime_routes_to_cpython_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connect(host, port):
+        def fake_connect(host, port, **_kwargs):
             captured["routed"] = "cpython"
             captured["host"] = host
             captured["port"] = port
@@ -191,7 +196,7 @@ class TestAdapterRouting:
 
         from chumicro_sockets._adapters import cp as cp_adapter
 
-        def fake_connect(host, port, *, radio):
+        def fake_connect(host, port, *, radio, **_kwargs):
             captured["routed"] = "cp"
             captured["radio"] = radio
             return "fake-cp-socket"
@@ -207,7 +212,7 @@ class TestAdapterRouting:
     def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connect(host, port):
+        def fake_connect(host, port, **_kwargs):
             captured["routed"] = "mp"
             return "fake-mp-socket"
 
@@ -238,7 +243,7 @@ class TestListenerRouting:
     def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_listen(host, port, *, backlog, radio):
+        def fake_listen(host, port, *, backlog, radio, **_kwargs):
             captured["called"] = (host, port, backlog, radio)
             return "cp-listener"
 
@@ -254,7 +259,7 @@ class TestListenerRouting:
     def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_listen(host, port, *, backlog):
+        def fake_listen(host, port, *, backlog, **_kwargs):
             captured["called"] = (host, port, backlog)
             return "mp-listener"
 
@@ -284,7 +289,7 @@ class TestTLSListenerRouting:
     def test_cpython_runtime_routes_to_cpython_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_listen_tls(host, port, *, context, backlog):
+        def fake_listen_tls(host, port, *, context, backlog, **_kwargs):
             captured["called"] = (host, port, context, backlog)
             return "cpython-tls-listener"
 
@@ -300,7 +305,7 @@ class TestTLSListenerRouting:
     def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_listen_tls(host, port, *, context, backlog, radio):
+        def fake_listen_tls(host, port, *, context, backlog, radio, **_kwargs):
             captured["called"] = (host, port, context, backlog, radio)
             return "cp-tls-listener"
 
@@ -318,7 +323,7 @@ class TestTLSListenerRouting:
     def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_listen_tls(host, port, *, context, backlog):
+        def fake_listen_tls(host, port, *, context, backlog, **_kwargs):
             captured["called"] = (host, port, context, backlog)
             return "mp-tls-listener"
 
@@ -731,45 +736,22 @@ class TestSetDefaultCaBundleRouting:
         assert captured["pem"] == b"fake-pem"
 
     def test_cp_route_is_noop(self) -> None:
-        """CP gets trust from the firmware bundle — calling
-        ``set_default_ca_bundle`` must not touch the MP adapter."""
-        captured: dict = {}
+        """CP gets trust from the firmware bundle — the cp adapter has no
+        ``set_default_ca_bundle``, so the package function silently no-ops."""
+        from chumicro_sockets._adapters import cp as cp_adapter
 
-        def fake_setter(pem):
-            captured["pem"] = pem  # should never fire
-
-        contexts = [_set_runtime("circuitpython")]
-        contexts.extend(_stub_mp_adapter(set_default_ca_bundle=fake_setter))
-
-        for context in contexts:
-            context.__enter__()
-        try:
-            set_default_ca_bundle(b"ignored")
-        finally:
-            for context in reversed(contexts):
-                context.__exit__(None, None, None)
-
-        assert captured == {}
+        assert not hasattr(cp_adapter, "set_default_ca_bundle")
+        with _set_runtime("circuitpython"):
+            set_default_ca_bundle(b"ignored")  # must not raise
 
     def test_cpython_route_is_noop(self) -> None:
-        """CPython gets trust from the OS store — call must be silent."""
-        captured: dict = {}
+        """CPython gets trust from the OS store — the cpython adapter has no
+        ``set_default_ca_bundle``, so the package function silently no-ops."""
+        from chumicro_sockets._adapters import cpython as cpython_adapter
 
-        def fake_setter(pem):
-            captured["pem"] = pem
-
-        contexts = [_set_runtime("cpython")]
-        contexts.extend(_stub_mp_adapter(set_default_ca_bundle=fake_setter))
-
-        for context in contexts:
-            context.__enter__()
-        try:
-            set_default_ca_bundle(None)
-        finally:
-            for context in reversed(contexts):
-                context.__exit__(None, None, None)
-
-        assert captured == {}
+        assert not hasattr(cpython_adapter, "set_default_ca_bundle")
+        with _set_runtime("cpython"):
+            set_default_ca_bundle(None)  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -839,7 +821,7 @@ class TestTLSClientSocketMPRouting:
     def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connect_tls(host, port, *, context):
+        def fake_connect_tls(host, port, *, context, **_kwargs):
             captured["called"] = (host, port, context)
             return "mp-tls-socket"
 
@@ -869,7 +851,7 @@ class TestTCPClientConnectorRouting:
     def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connector(host, port, *, radio):
+        def fake_connector(host, port, *, radio, **_kwargs):
             captured["called"] = (host, port, radio)
             return "cp-tcp-connector"
 
@@ -885,7 +867,7 @@ class TestTCPClientConnectorRouting:
     def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connector(host, port):
+        def fake_connector(host, port, **_kwargs):
             captured["called"] = (host, port)
             return "mp-tcp-connector"
 
@@ -915,7 +897,7 @@ class TestTLSClientConnectorRouting:
     def test_circuitpython_runtime_routes_to_cp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connector(host, port, *, context, radio):
+        def fake_connector(host, port, *, context, radio, **_kwargs):
             captured["called"] = (host, port, context, radio)
             return "cp-tls-connector"
 
@@ -933,7 +915,7 @@ class TestTLSClientConnectorRouting:
     def test_micropython_runtime_routes_to_mp_adapter(self) -> None:
         captured: dict = {}
 
-        def fake_connector(host, port, *, context):
+        def fake_connector(host, port, *, context, **_kwargs):
             captured["called"] = (host, port, context)
             return "mp-tls-connector"
 
