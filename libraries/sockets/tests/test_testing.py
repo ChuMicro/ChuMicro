@@ -1,6 +1,8 @@
 """Tests for FakeSocket — the in-memory test double."""
 
-from chumicro_sockets.testing import EAGAIN, FakeSocket
+import errno
+
+from chumicro_sockets.testing import FakeSocket
 from chumicro_test_harness.assertions import raises
 
 
@@ -50,13 +52,13 @@ class TestRecvScripting:
 
     def test_empty_queue_raises_eagain(self) -> None:
         """No data on a still-connected socket matches real non-blocking
-        ``recv_into`` semantics on every runtime — raises EAGAIN, never
+        ``recv_into`` semantics on every runtime — raises errno.EAGAIN, never
         returns 0.  Returning 0 is reserved for a peer FIN."""
         sock = FakeSocket()
         buffer = bytearray(4)
         with raises(OSError) as caught:
             sock.recv_into(buffer, 4)
-        assert caught.value.args[0] == EAGAIN
+        assert caught.value.args[0] == errno.EAGAIN
 
     def test_simulate_peer_close_returns_zero_when_queue_drained(self) -> None:
         """``simulate_peer_close`` flips the contract: once the queue
@@ -90,10 +92,10 @@ class TestEAGAINInjection:
         sock.enqueue_eagain_for_send(2)
         with raises(OSError) as caught_first:
             sock.send(b"x")
-        assert caught_first.value.args[0] == EAGAIN
+        assert caught_first.value.args[0] == errno.EAGAIN
         with raises(OSError) as caught_second:
             sock.send(b"x")
-        assert caught_second.value.args[0] == EAGAIN
+        assert caught_second.value.args[0] == errno.EAGAIN
         # Third send succeeds — the script is exhausted.
         sock.send(b"x")
         assert bytes(sock.sent) == b"x"
@@ -105,7 +107,7 @@ class TestEAGAINInjection:
         buffer = bytearray(16)
         with raises(OSError) as caught:
             sock.recv_into(buffer, 16)
-        assert caught.value.args[0] == EAGAIN
+        assert caught.value.args[0] == errno.EAGAIN
         # Second call returns the queued chunk.
         nbytes_read = sock.recv_into(buffer, 16)
         assert nbytes_read == 5

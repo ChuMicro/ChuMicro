@@ -8,7 +8,6 @@ Public API::
         tls_client_socket,         # TLS factory
         udp_socket,                # UDP datagram factory (unicast + broadcast)
         ssl_context_with_ca,       # custom-CA helper
-        is_eagain,                 # would-block detector for non-blocking recv/send loops
     )
 
     from chumicro_sockets.testing import FakeSocket, FakeUDPSocket
@@ -29,7 +28,6 @@ UDP exposes ``sendto`` / ``recvfrom_into`` / ``close`` /
 hold the returned socket and call those methods directly.
 """
 
-import errno
 import gc
 import sys
 
@@ -48,7 +46,6 @@ class UnsupportedSSLConfigError(RuntimeError):
 
 __all__ = [
     "UnsupportedSSLConfigError",
-    "is_eagain",
     "pollable_of",
     "set_default_ca_bundle",
     "ssl_context_no_verify",
@@ -80,21 +77,6 @@ def pollable_of(sock: object) -> object:
     CPython stdlib ``socket.socket``) pass through unchanged.
     """
     return getattr(sock, "_sock", sock)
-
-
-def is_eagain(exception: BaseException) -> bool:
-    """``True`` if *exception* signals "would block, retry next tick".
-
-    Matches ``errno.EAGAIN``, which resolves to the platform's
-    would-block errno (``11`` on Linux / MP / CP, ``35`` on macOS
-    CPython).  MicroPython's ``errno`` module exposes ``EAGAIN`` on
-    every supported port but not ``EWOULDBLOCK``; on POSIX they alias
-    to the same int, so ``EAGAIN`` alone covers both.  Custom-factory
-    sockets must raise ``OSError(errno.EAGAIN)`` on non-blocking
-    would-block — consumers' recv loops use this to distinguish retry
-    from a real socket error.
-    """
-    return getattr(exception, "errno", None) == errno.EAGAIN
 
 
 def _runtime_name() -> str:

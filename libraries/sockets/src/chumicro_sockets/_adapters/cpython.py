@@ -20,15 +20,13 @@ import socket
 import ssl
 
 from chumicro_sockets._connector import (
+    _TERMINAL,
     STATE_AWAITING_DNS,
     STATE_AWAITING_TCP,
     STATE_AWAITING_TLS,
-    STATE_FAILED,
     STATE_READY,
     SocketConnector,
 )
-
-_TERMINAL = (STATE_READY, STATE_FAILED)
 
 
 def connect_tcp(host, port):

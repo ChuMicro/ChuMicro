@@ -35,13 +35,6 @@ __chumicro_test_support__ = True
 import errno
 from collections import deque
 
-# EAGAIN resolved per host so the fake raises the same errno a real
-# non-blocking socket would raise on the platform the test is running
-# on (``11`` on Linux / MP / CP, ``35`` on macOS CPython).  Production
-# ``_is_eagain`` checks ``errno.EAGAIN`` / ``errno.EWOULDBLOCK``; the
-# fake matches.
-EAGAIN = errno.EAGAIN
-
 # Upper bound on enqueued bytes / datagrams a test can script before
 # the deque starts dropping the oldest entry.  No real test comes
 # close — but MicroPython's ``deque`` requires a positive ``maxlen``
@@ -121,7 +114,7 @@ class FakeSocket:
         self._raise_if_closed()
         if self._send_eagains > 0:
             self._send_eagains -= 1
-            raise OSError(EAGAIN, "would block")
+            raise OSError(errno.EAGAIN, "would block")
         view = memoryview(data)
         self.sent.extend(view)
         return len(view)
@@ -142,11 +135,11 @@ class FakeSocket:
         self._raise_if_closed()
         if self._recv_eagains > 0:
             self._recv_eagains -= 1
-            raise OSError(EAGAIN, "would block")
+            raise OSError(errno.EAGAIN, "would block")
         if not self._recv_queue:
             if self._peer_closed:
                 return 0
-            raise OSError(EAGAIN, "would block")
+            raise OSError(errno.EAGAIN, "would block")
         capacity = nbytes if nbytes > 0 else len(buffer)
         if capacity <= 0:
             return 0
@@ -281,7 +274,7 @@ class FakeUDPSocket:
         self._raise_if_closed()
         if self._send_eagains > 0:
             self._send_eagains -= 1
-            raise OSError(EAGAIN, "would block")
+            raise OSError(errno.EAGAIN, "would block")
         view = memoryview(data)
         self.sent.append((bytes(view), host, port))
         return len(view)
@@ -298,7 +291,7 @@ class FakeUDPSocket:
         self._raise_if_closed()
         if self._recv_eagains > 0:
             self._recv_eagains -= 1
-            raise OSError(EAGAIN, "would block")
+            raise OSError(errno.EAGAIN, "would block")
         if not self._recv_queue:
             return 0, ("0.0.0.0", 0)
         capacity = nbytes if nbytes > 0 else len(buffer)
