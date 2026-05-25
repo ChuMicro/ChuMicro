@@ -146,7 +146,7 @@ class TestConnectTcp:
     def test_connects_via_getaddrinfo(self, mp_adapter: types.ModuleType) -> None:
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
         # The factory returns a _MpSocketWrapper around the raw stub.
-        underlying = wrapper._sock  # type: ignore[attr-defined]
+        underlying = wrapper.sock
         assert underlying.connected_to == ("broker.example.com", 1883)
         assert underlying.family == 2
         assert underlying.kind == 1
@@ -163,7 +163,7 @@ class TestConnectTcp:
         refactor.
         """
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
-        underlying = wrapper._sock  # type: ignore[attr-defined]
+        underlying = wrapper.sock
         underlying.recv_queue.append(b"hello world")
         buffer = bytearray(32)
         nbytes_read = wrapper.recv_into(buffer, 32)
@@ -174,7 +174,7 @@ class TestConnectTcp:
         self, mp_adapter: types.ModuleType,
     ) -> None:
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
-        underlying = wrapper._sock  # type: ignore[attr-defined]
+        underlying = wrapper.sock
         underlying.recv_queue.append(b"abc")
         buffer = bytearray(4)
         nbytes_read = wrapper.recv_into(buffer, 0)
@@ -204,7 +204,7 @@ class TestConnectTcp:
         import pytest  # noqa: PLC0415
 
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
-        underlying = wrapper._sock  # type: ignore[attr-defined]
+        underlying = wrapper.sock
         underlying.recv = lambda _size: None  # MP TLS WANT_READ shape
         buffer = bytearray(8)
         with pytest.raises(OSError) as captured:
@@ -216,7 +216,7 @@ class TestConnectTcp:
     ) -> None:
         """All other protocol methods are direct attribute forwards."""
         wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
-        underlying = wrapper._sock  # type: ignore[attr-defined]
+        underlying = wrapper.sock
         wrapper.send(b"ping")
         assert bytes(underlying.sent) == b"ping"
         wrapper.setblocking(False)
@@ -308,7 +308,7 @@ class TestConnectTls:
         assert cached is not None, "default context should be cached"
         assert len(cached.wrapped) == 1
         wrapped_sock, server_hostname = cached.wrapped[0]
-        underlying = wrapper._sock  # type: ignore[attr-defined]
+        underlying = wrapper.sock
         assert wrapped_sock is underlying
         assert server_hostname == "broker.example.com"
         assert underlying.connected_to == ("broker.example.com", 8883)
@@ -337,7 +337,7 @@ class TestConnectTls:
         wrapper = mp_adapter.connect_tls(
             "broker.example.com", 8883, context=context,
         )
-        underlying = wrapper._sock  # type: ignore[attr-defined]
+        underlying = wrapper.sock
         assert len(context.wrapped) == 1
         wrapped_sock, server_hostname = context.wrapped[0]
         assert wrapped_sock is underlying

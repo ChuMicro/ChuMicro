@@ -789,15 +789,15 @@ class TestUnsupportedSSLConfigErrorIsAvailable:
 class TestPollableOf:
     """``pollable_of`` returns the object ``select.poll().register()`` should see.
 
-    Wrappers store the underlying socket on ``_sock``; bare sockets
-    have no ``_sock`` and pass through.  ``getattr(sock, "_sock", sock)``
+    Wrappers store the underlying socket on ``sock``; bare sockets
+    have no ``sock`` attribute and pass through.  ``getattr(sock, "sock", sock)``
     is the whole implementation — the tests pin both branches.
     """
 
     def test_wrapper_returns_underlying_socket(self) -> None:
         class _Wrapper:
             def __init__(self, sock):
-                self._sock = sock
+                self.sock = sock
 
         underlying = object()
         wrapper = _Wrapper(underlying)
@@ -811,7 +811,7 @@ class TestPollableOf:
         assert pollable_of(sock) is sock
 
     def test_object_with_other_attributes_passes_through(self) -> None:
-        # Only the literal ``_sock`` attribute unwraps — incidental
+        # Only the literal ``sock`` attribute unwraps — incidental
         # private attributes don't trigger the unwrap.
         class _OtherPrivate:
             def __init__(self):

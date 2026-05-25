@@ -249,17 +249,17 @@ class _CPythonTLSListenerWrapper:
     `accept()` raises `BlockingIOError` when no client is queued; we
     propagate that as `OSError(EAGAIN)`.
 
-    Holds the raw listening socket on ``_sock`` so
+    Holds the raw listening socket on ``sock`` so
     :func:`chumicro_sockets.pollable_of` unwraps to the registrable
     listener.
     """
 
     def __init__(self, raw_listener, context):
-        self._sock = raw_listener
+        self.sock = raw_listener
         self._context = context
 
     def accept(self):  # pragma: no cover - exercised by slice 7t live test
-        client_raw, address = self._sock.accept()
+        client_raw, address = self.sock.accept()
         # `wrap_socket(..., server_side=True)` performs the TLS
         # handshake synchronously.  Set the underlying socket to
         # blocking for the handshake (mbedTLS doesn't support
@@ -275,13 +275,13 @@ class _CPythonTLSListenerWrapper:
         return wrapped, address
 
     def close(self):
-        self._sock.close()
+        self.sock.close()
 
     def setblocking(self, flag):  # pragma: no cover - listener already non-blocking
-        self._sock.setblocking(flag)
+        self.sock.setblocking(flag)
 
     def getsockname(self):  # pragma: no cover - inspection-only
-        return self._sock.getsockname()
+        return self.sock.getsockname()
 
 
 def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False):
@@ -309,19 +309,19 @@ class _CPythonUDPWrapper:
     """
 
     def __init__(self, sock):
-        self._sock = sock
+        self.sock = sock
         self.close = sock.close
         self.setblocking = sock.setblocking
         self.settimeout = sock.settimeout
         self.getsockname = sock.getsockname
 
     def sendto(self, data, host, port):
-        return self._sock.sendto(data, (host, port))
+        return self.sock.sendto(data, (host, port))
 
     def recvfrom_into(self, buffer, nbytes=0):
         size = nbytes if nbytes > 0 else len(buffer)
         view = memoryview(buffer)[:size]
-        nbytes_received, address = self._sock.recvfrom_into(view, size)
+        nbytes_received, address = self.sock.recvfrom_into(view, size)
         return nbytes_received, address
 
 

@@ -56,7 +56,7 @@ class _MpSocketWrapper:
     """
 
     def __init__(self, sock):
-        self._sock = sock
+        self.sock = sock
         # Forward the operations MP's socket supports natively so
         # downstream callers don't pay a Python-level shim round-trip
         # on every call.  ``send`` / ``close`` / ``setblocking`` are
@@ -97,7 +97,7 @@ class _MpSocketWrapper:
         size = nbytes if nbytes > 0 else len(buffer)
         import errno  # noqa: PLC0415 — MP-only; lazy per file convention.
 
-        data = self._sock.recv(size)
+        data = self.sock.recv(size)
         if data is None:
             # MP TLS WANT_READ surfaces as recv() returning None; raise
             # the would-block errno so the recv-loop contract holds
@@ -214,7 +214,7 @@ class _MpUDPWrapper:  # pragma: no cover - device only
     """
 
     def __init__(self, sock):
-        self._sock = sock
+        self.sock = sock
         self.close = sock.close
         self.setblocking = sock.setblocking
         self.settimeout = sock.settimeout
@@ -234,13 +234,13 @@ class _MpUDPWrapper:  # pragma: no cover - device only
         import socket  # noqa: PLC0415 — runtime-gated; lazy so CP can stage this file
 
         address_info = socket.getaddrinfo(host, port)[0]
-        return self._sock.sendto(data, address_info[-1])
+        return self.sock.sendto(data, address_info[-1])
 
     def recvfrom_into(self, buffer, nbytes=0):
         import errno  # noqa: PLC0415 — MP-only; lazy per file convention.
 
         size = nbytes if nbytes > 0 else len(buffer)
-        result = self._sock.recvfrom(size)
+        result = self.sock.recvfrom(size)
         # MP returns (data, address); some ports may return None on
         # would-block instead of raising — match the TCP wrapper's
         # contract by raising EAGAIN explicitly.
@@ -285,17 +285,17 @@ class _MpListeningSocketWrapper:  # pragma: no cover - device only
     wrapped client socket (matching our protocol)."""
 
     def __init__(self, sock):
-        self._sock = sock
+        self.sock = sock
         self.close = sock.close
 
     def accept(self):
         """Accept a pending connection.  Raises ``OSError(EAGAIN)`` when
         none is queued."""
-        new_sock, address = self._sock.accept()
+        new_sock, address = self.sock.accept()
         return _MpSocketWrapper(new_sock), address
 
     def setblocking(self, flag):
-        self._sock.setblocking(flag)
+        self.sock.setblocking(flag)
 
 
 def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - device only
@@ -341,21 +341,21 @@ def listen_tls(host, port, *, context, backlog=4):  # pragma: no cover - device 
 class _MpTLSListenerWrapper:  # pragma: no cover - device only
     """Wraps an MP listener so accept() yields TLS-wrapped sockets.
 
-    Holds the inner :class:`_MpListeningSocketWrapper` on ``_sock``
+    Holds the inner :class:`_MpListeningSocketWrapper` on ``sock``
     so :func:`chumicro_sockets.pollable_of` unwraps to a registrable
     listener for ``select.poll``.
     """
 
     def __init__(self, raw_listener, context):
-        self._sock = raw_listener
+        self.sock = raw_listener
         self._context = context
 
     def accept(self):
-        new_wrapper, address = self._sock.accept()
+        new_wrapper, address = self.sock.accept()
         # Pull the underlying MP socket out of the wrapper so we
         # can wrap it directly with TLS — the handshake needs the
         # raw socket, not our `_MpSocketWrapper` polyfill.
-        underlying = new_wrapper._sock
+        underlying = new_wrapper.sock
         underlying.setblocking(True)
         try:
             tls_sock = self._context.wrap_socket(underlying, server_side=True)
@@ -365,10 +365,10 @@ class _MpTLSListenerWrapper:  # pragma: no cover - device only
         return _MpSocketWrapper(tls_sock), address
 
     def close(self):
-        self._sock.close()
+        self.sock.close()
 
     def setblocking(self, flag):
-        self._sock.setblocking(flag)
+        self.sock.setblocking(flag)
 
 
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
