@@ -13,8 +13,8 @@ phase.  Phase boundaries are uniform across runtimes:
 * ``awaiting_dns`` — resolve ``host`` to an address.
 * ``awaiting_tcp`` — TCP connect in progress.
 * ``awaiting_tls`` — TLS handshake in progress.
-* ``ready`` — terminal; :attr:`socket` is set.
-* ``failed`` — terminal; :attr:`last_error` is set.
+* ``ready`` — terminal; :attr:`socket` is the connected socket.
+* ``failed`` — terminal; :attr:`last_error` is set; :attr:`socket` is ``None``.
 
 *How* a runtime moves between phases is its own concern — CPython runs
 three genuine non-blocking phases; MP collapses the TLS handshake into
@@ -44,13 +44,16 @@ class SocketConnector:
     """Base — runner-contract surface + terminal-state plumbing.
 
     Holds ``host`` / ``port`` / ``tls`` / ``context`` on the instance.
-    The current phase lives on :attr:`state`; the in-progress socket
-    lives on :attr:`_inflight_socket` between phases and is promoted
-    to :attr:`socket` once :attr:`state` reaches ``ready``.
+    The current phase lives on :attr:`state`; the current socket lives
+    on :attr:`socket` throughout — the raw socket from
+    ``awaiting_tcp`` entry until ``ready`` promotes it to the final
+    (optionally TLS-wrapped) connected socket.  Consumers always read
+    :attr:`socket`; ``io_socket`` is the registrable pollable for the
+    runner.
 
     Subclasses implement :meth:`tick` with their full per-runtime
     state machine.  Any exception raised by :meth:`tick` transitions
-    the connector to ``failed`` and closes the in-progress socket.
+    the connector to ``failed`` and closes :attr:`socket`.
     """
 
     def __init__(self, host, port, *, tls=False, context=None):
@@ -60,16 +63,13 @@ class SocketConnector:
         self._context = context
 
         self.state = STATE_AWAITING_DNS
-        #: Set when ``state == "ready"``; ``None`` otherwise.
+        #: The current socket.  Set during ``awaiting_tcp`` once the
+        #: raw socket is built, replaced with the TLS-wrapped or
+        #: protocol-wrapped reference at ``awaiting_tls`` / ``ready``,
+        #: cleared to ``None`` on ``failed`` / ``cancel``.
         self.socket = None
         #: Set when ``state == "failed"``; ``None`` otherwise.
         self.last_error = None
-
-        # In-progress socket between phases.  Holds the raw socket
-        # during ``awaiting_tcp`` and the TLS-wrapped socket during
-        # ``awaiting_tls``.  Promoted to ``self.socket`` on entry to
-        # ``ready``; closed in :meth:`cancel` and :meth:`_fail`.
-        self._inflight_socket = None
 
     # ------------------------------------------------------------------
     # Runner-contract surface
@@ -77,17 +77,16 @@ class SocketConnector:
 
     @property
     def io_socket(self):
-        """Underlying pollable while the handshake is in flight, else ``None``.
+        """Underlying pollable for ``Runner.wait`` to register, or ``None``.
 
-        ``Runner.wait`` reads this to register the right socket with
-        ``ipoll``.  Terminal states return ``None`` so the runner does
-        not keep waking on a dead handle.
+        Returns the registrable underlying of :attr:`socket` if set
+        (chumicro wrapper classes store the raw socket on ``.sock``;
+        bare sockets pass through).  ``None`` until the connector has
+        built its socket and after cleanup on ``failed`` / ``cancel``.
         """
-        if self.state in _TERMINAL:
+        if self.socket is None:
             return None
-        if self._inflight_socket is None:
-            return None
-        return getattr(self._inflight_socket, "sock", self._inflight_socket)
+        return getattr(self.socket, "sock", self.socket)
 
     @property
     def io_wants_read(self):
@@ -142,21 +141,21 @@ class SocketConnector:
     # ------------------------------------------------------------------
 
     def _fail(self, error):
-        """Transition to ``failed`` and close the in-progress socket.
+        """Transition to ``failed`` and close any in-progress socket.
 
         Subclass ``tick`` overrides call this from their ``except``
-        clause on any unexpected error.  The in-progress socket close
-        is best-effort — a socket whose connect / handshake failed may
+        clause on any unexpected error.  The socket close is
+        best-effort — a socket whose connect / handshake failed may
         not survive a clean close, so we swallow secondary errors here.
         """
         self.last_error = error
         self.state = STATE_FAILED
-        if self._inflight_socket is not None:
+        if self.socket is not None:
             try:
-                self._inflight_socket.close()
+                self.socket.close()
             except Exception:  # noqa: BLE001 - best-effort cleanup
                 pass
-            self._inflight_socket = None
+            self.socket = None
 
     def cancel(self):
         """Close any in-flight socket and transition to ``failed``.
@@ -169,10 +168,10 @@ class SocketConnector:
             return
         if self.last_error is None:
             self.last_error = OSError("connector cancelled")
-        if self._inflight_socket is not None:
+        if self.socket is not None:
             try:
-                self._inflight_socket.close()
+                self.socket.close()
             except Exception:  # noqa: BLE001 - best-effort cleanup
                 pass
-            self._inflight_socket = None
+            self.socket = None
         self.state = STATE_FAILED
