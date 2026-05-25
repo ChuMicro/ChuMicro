@@ -73,16 +73,20 @@ class WebSocketClient(_BaseSession):
     """Non-blocking RFC 6455 WebSocket client.
 
     Construct with a *connector_factory*: a ``(host: str, port: int,
-    use_tls: bool) -> SocketConnector`` callable that hands back a
-    tick-driven non-blocking connect state machine.  Once the
-    connector reports ``ready``, the promoted socket must expose the
-    four-method TCP contract (``recv_into`` / ``send`` / ``close`` /
-    ``setblocking``; full shape documented on the *connector_factory*
-    parameter below).  ``chumicro_sockets``-based factories work; so
-    does anything else of the same shape.  Configure callbacks, then
-    call :meth:`connect`.  Drive via :meth:`check` / :meth:`handle`
-    from a runner tick or hand-rolled loop.  Callbacks fire from
-    :meth:`handle`, never from a thread or interrupt.
+    use_tls: bool) -> connector`` callable that hands back a tick-driven
+    non-blocking connect state machine.  The connector is a duck-typed
+    object exposing ``state`` / ``socket`` / ``last_error`` attributes,
+    ``tick(now_ms)`` / ``cancel()`` methods, and the runner-poll
+    surface ``io_socket`` / ``io_wants_read`` / ``io_wants_write`` /
+    ``next_deadline(now_ms)``.  Once the connector reports ``ready``,
+    the promoted socket must expose the four-method TCP contract
+    (``recv_into`` / ``send`` / ``close`` / ``setblocking``; full shape
+    documented on the *connector_factory* parameter below).
+    ``chumicro_sockets``-based factories work; so does anything else of
+    the same shape.  Configure callbacks, then call :meth:`connect`.
+    Drive via :meth:`check` / :meth:`handle` from a runner tick or
+    hand-rolled loop.  Callbacks fire from :meth:`handle`, never from a
+    thread or interrupt.
 
     For config-driven construction, see :meth:`from_config`: a
     one-line factory that reads ``websockets.client.max_message_bytes``
