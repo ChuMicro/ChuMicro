@@ -20,6 +20,7 @@ breaks against modern brokers).
 
 __chumicro_runtimes__ = ("micropython",)
 
+import errno
 import gc
 
 from chumicro_sockets._connector import (
@@ -95,8 +96,6 @@ class _MpSocketWrapper:
         the moment a recv races ahead of the peer's send.
         """
         size = nbytes if nbytes > 0 else len(buffer)
-        import errno  # noqa: PLC0415 — MP-only; lazy per file convention.
-
         data = self.sock.recv(size)
         if data is None:
             # MP TLS WANT_READ surfaces as recv() returning None; raise
@@ -237,8 +236,6 @@ class _MpUDPWrapper:  # pragma: no cover - device only
         return self.sock.sendto(data, address_info[-1])
 
     def recvfrom_into(self, buffer, nbytes=0):
-        import errno  # noqa: PLC0415 — MP-only; lazy per file convention.
-
         size = nbytes if nbytes > 0 else len(buffer)
         result = self.sock.recvfrom(size)
         # MP returns (data, address); some ports may return None on
@@ -643,7 +640,6 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
             self._fail(error)
 
     def _issue_tcp_connect(self):
-        import errno  # noqa: PLC0415 — MP-only import
         import socket  # noqa: PLC0415 — MP-only import
 
         sock = socket.socket(self._addr_info[0], self._addr_info[1])
@@ -684,3 +680,8 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
         # ``awaiting_tls`` branch promotes to ``ready``.
         self._context = _resolve_default_context(self._context)
         return self._context.wrap_socket(sock, server_hostname=self._host)
+
+
+# Defragment compile-time scratch at module bottom so the lazy load
+# from chumicro_sockets's factories lands in a cleaner heap.
+gc.collect()
