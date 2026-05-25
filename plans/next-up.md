@@ -4,6 +4,8 @@
 
 ## Now
 
+- [ ] **Resume `demos/mqtt_pub_sub` Pi Pico W wifi failure from session handoff** — see [`handoffs/2026-05-24-mqtt-pub-sub-pico-w-wifi.md`](handoffs/2026-05-24-mqtt-pub-sub-pico-w-wifi.md).
+
 ## Next
 
 - [ ] **`demos/mqtt_pub_sub` Pi Pico W CP wifi `Unknown failure 1`** — `wifi_up()` fails on first connect in this demo, succeeds in `demos/http_server_roundtrip` against the same board / AP / credentials.  Validated end-to-end on ESP32-S2 Lolin S2 CP.  Suspect mqtt demo's deploy ordering or import-side-effect on `wifi.radio` state; the http demo's identical `wifi_up` path doesn't trigger it.  Surfaced 2026-05-24 during workstreams/programmatic-deploy-api.md Phase 3b.
