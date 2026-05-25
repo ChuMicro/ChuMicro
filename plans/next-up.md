@@ -4,11 +4,9 @@
 
 ## Now
 
-- [ ] **Resume `demos/mqtt_pub_sub` Pi Pico W wifi failure from session handoff** — see [`handoffs/2026-05-24-mqtt-pub-sub-pico-w-wifi.md`](handoffs/2026-05-24-mqtt-pub-sub-pico-w-wifi.md).
-
 ## Next
 
-- [ ] **`demos/mqtt_pub_sub` Pi Pico W CP wifi `Unknown failure 1`** — `wifi_up()` fails on first connect in this demo, succeeds in `demos/http_server_roundtrip` against the same board / AP / credentials.  Validated end-to-end on ESP32-S2 Lolin S2 CP.  Suspect mqtt demo's deploy ordering or import-side-effect on `wifi.radio` state; the http demo's identical `wifi_up` path doesn't trigger it.  Surfaced 2026-05-24 during workstreams/programmatic-deploy-api.md Phase 3b.
+- [ ] **Lolin S2 MP USB-CDC drops mid-deploy on `demos/mqtt_pub_sub`** — board prints `WIFI_OK` and then the host-side `pyserial.in_waiting` raises `TypeError: argument must be an int, or have a fileno() method` from `fcntl.ioctl(self.fd, TIOCINQ, ...)`, indicating the serial fd went stale.  Same Lolin S2 USB-CDC dropout class the prior handoff documented for CP; surfaced for MP this time during the demo rewrite (2026-05-25, `.scratch/mqtt_diag_lolin_mp_v2.log`).  Board is still enumerated after the drop, so likely a transient under wifi-connect current draw.  Both Pi Pico W CP and MP run the same demo end-to-end without symptom.  Not a chumicro_sockets / chumicro_runner issue — initial misread was that this was a poll-registration bug.
 - [ ] **chumicro_mqtt + chumicro_runner cooperative-tick convergence.**  [workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md](workstreams/chumicro-mqtt-runner-cooperative-tick-convergence.md)
 - [ ] **MQTT negative-testing suite.**  [workstreams/mqtt-negative-testing-suite.md](workstreams/mqtt-negative-testing-suite.md)
 - [ ] **Wifi-recovery bake — gated on `chumicro_wifi.WifiService` adoption in the bake.**  Today's `projects/mqtt_bake_diag_plain/app.py` calls a raw `wlan.connect()` / `wifi.radio.connect()` at boot and never reconnects.  A router-reboot test against that harness would mostly measure the substrate's auto-rejoin behaviour, not our library.  When the bake (or any real project) starts driving `chumicro_wifi.WifiService` from the runner, re-queue: reboot the router mid-bake, confirm `WifiService` re-associates + the MQTT connector resumes from FAILED.

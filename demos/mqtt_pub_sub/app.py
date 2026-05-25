@@ -1,217 +1,160 @@
 """Board-side of the mqtt_pub_sub demo.
 
-Composes the canonical libraries: chumicro_config loads the deployed
-runtime_config; chumicro_test_harness.network.wifi_up brings the wifi
-substrate up; chumicro_mqtt.MQTTClient.from_config dials the broker;
-chumicro_runner.Runner drives the MQTT client cooperatively in one
-``while not done: now_ms = runner.tick(); runner.wait(now_ms)`` loop.
-Orchestration is event-driven through library callbacks
-(``on_publish``, ``on_subscribe``, ``on_message``) and a per-tick
-state advance — no hand-rolled drive-until helpers.
+Wires ``chumicro_wifi.WifiService`` + ``chumicro_mqtt.MQTTClient``
+into one ``chumicro_runner.Runner`` and drives them with
+``while not done: now = runner.tick(); runner.wait(now)`` — the same
+shape the README's "Now scale it up: add MQTT and chumicro_runner"
+walkthrough uses.
 
-Stdout markers (``WIFI_OK``, ``MQTT_CONNECTED``, ``RETAINED_STATE_SENT``,
+Once MQTT is connected the demo publishes a retained ``"online"``
+state, subscribes to a command topic, then publishes three QoS 1
+telemetry samples on a 1.5 s cadence.  When all three PUBACKs are in
+and the host has sent its one command back, the demo disconnects and
+prints ``DEMO_COMPLETE``.
+
+Marker lines (``WIFI_OK``, ``MQTT_CONNECTED``, ``RETAINED_STATE_SENT``,
 ``SUBSCRIBED``, ``TELEMETRY_SENT``, ``CMD_RECEIVED``, ``PATTERN_HIT``,
-``DEMO_COMPLETE``) drive the host driver via the stdout-marker protocol.
-
-WifiService isn't on the runner here because CircuitPython's
-``wifi.radio.connect`` is blocking (15 s budget) — running it inside a
-runner tick disturbs the USB-CDC and the cooperative loop assumption.
-``wifi_up`` is the single blocking call at boot; everything after is
-genuine non-blocking runner-tick work.
+``DEMO_COMPLETE``) drive the host driver via stdout markers.
 """
 
 import json
-import sys
 
 from chumicro_config import load_runtime_config
-from chumicro_mqtt import MQTTClient, ProtocolState
+from chumicro_mqtt import MQTTClient
 from chumicro_runner import Runner
-from chumicro_test_harness.network import wifi_up
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 _TELEMETRY_COUNT = 3
 _TELEMETRY_INTERVAL_MS = 1_500
-_DEMO_OVERALL_DEADLINE_MS = 120_000
+_DEMO_DEADLINE_MS = 120_000
 _DISCONNECT_DRAIN_MS = 250
-
 
 config = load_runtime_config()
 client_id = config.get("mqtt.client_id", "chumicro-mqtt-demo-board")
+broker = f"{config['mqtt.broker.host']}:{config['mqtt.broker.port']}"
 state_topic = f"demo/{client_id}/state"
 command_topic = f"demo/{client_id}/cmd"
 telemetry_topic = f"demo/{client_id}/telemetry"
 
-# Some CP wifi.radio implementations carry stale association state
-# across the soft-reset deploy hands them.  An explicit stop_station()
-# before connect gives the radio a clean slate so the first
-# wifi.radio.connect doesn't return ConnectionError ("Unknown failure 1").
-# Did not fix the Pi Pico W instance of this failure mode in bench
-# 2026-05-24; kept defensive for other CP boards.
-if sys.implementation.name == "circuitpython":
-    import wifi  # noqa: PLC0415 - CP-only, must happen post-decision
-    try:
-        wifi.radio.stop_station()
-    except Exception:  # noqa: BLE001, S110 - best-effort precheck
-        pass
+wifi = WifiService(WifiConfig.from_config(config))
+mqtt = MQTTClient.from_config(config, radio=wifi.adapter.radio)
 
-radio, ip_address = wifi_up(
-    config.get("wifi.ssid"),
-    config.get("wifi.password"),
-)
-print(f"WIFI_OK ip={ip_address}")
-
-runner = Runner()
-mqtt = MQTTClient.from_config(config, radio=radio)
-runner.add(mqtt)
+# Demo progress — kept at module scope so the callbacks below can read
+# and write without ceremony.  Small enough that a class would add noise.
+subscribed = False
+telemetry_sent = 0
+telemetry_acked = 0
+command_received = False
 
 
-class DemoState:
-    """Per-tick state machine: drives the demo through its phases.
-
-    Each ``advance(now_ms)`` inspects the MQTT state and fires one-shot
-    actions when their prerequisites are met.  All side effects (prints,
-    publishes, subscribes) happen here so the main loop stays a plain
-    ``while not done: tick; advance; wait``.
-    """
-
-    PHASE_BOOT = "boot"
-    PHASE_RETAIN_PENDING = "retain_pending"
-    PHASE_SUBSCRIBE_PENDING = "subscribe_pending"
-    PHASE_PUBLISHING = "publishing"
-    PHASE_DRAINING = "draining"
-    PHASE_DISCONNECTING = "disconnecting"
-    PHASE_DONE = "done"
-
-    def __init__(self) -> None:
-        self.phase = self.PHASE_BOOT
-        self.start_ticks_ms = ticks_ms()
-        self.telemetry_sent = 0
-        self.telemetry_acked = 0
-        self.next_telemetry_due_ms = 0
-        self.command_received = False
-        self.disconnect_started_ms = 0
-
-    @property
-    def done(self) -> bool:
-        return self.phase == self.PHASE_DONE
-
-    def advance(self, now_ms):
-        if self.phase == self.PHASE_BOOT:
-            if mqtt.state == ProtocolState.CONNECTED:
-                broker_host = config["mqtt.broker.host"]
-                broker_port = config["mqtt.broker.port"]
-                print(
-                    f"MQTT_CONNECTED broker={broker_host}:{broker_port} "
-                    f"client_id={client_id}",
-                )
-                mqtt.publish(
-                    state_topic, b"online",
-                    qos=1, retain=True, prefixed=False,
-                    on_publish=self._on_retained_published,
-                )
-                self.phase = self.PHASE_RETAIN_PENDING
-            return
-
-        if self.phase == self.PHASE_RETAIN_PENDING:
-            return  # Wait for retained PUBACK callback to advance.
-
-        if self.phase == self.PHASE_SUBSCRIBE_PENDING:
-            return  # Wait for SUBACK callback to advance.
-
-        if self.phase == self.PHASE_PUBLISHING:
-            if (
-                self.telemetry_sent < _TELEMETRY_COUNT
-                and ticks_diff(now_ms, self.next_telemetry_due_ms) >= 0
-            ):
-                self.telemetry_sent += 1
-                payload = json.dumps({
-                    "seq": self.telemetry_sent,
-                    "value": 20 + self.telemetry_sent,
-                    "uptime_ms": ticks_diff(now_ms, self.start_ticks_ms),
-                })
-                mqtt.publish(
-                    telemetry_topic, payload.encode(),
-                    qos=1, prefixed=False,
-                    on_publish=self._on_telemetry_published,
-                )
-                self.next_telemetry_due_ms = ticks_add(
-                    now_ms, _TELEMETRY_INTERVAL_MS,
-                )
-            if (
-                self.telemetry_sent == _TELEMETRY_COUNT
-                and self.telemetry_acked == _TELEMETRY_COUNT
-                and self.command_received
-            ):
-                self.phase = self.PHASE_DRAINING
-            return
-
-        if self.phase == self.PHASE_DRAINING:
-            mqtt.disconnect()
-            self.phase = self.PHASE_DISCONNECTING
-            self.disconnect_started_ms = now_ms
-            return
-
-        if self.phase == self.PHASE_DISCONNECTING:
-            if (
-                ticks_diff(now_ms, self.disconnect_started_ms)
-                >= _DISCONNECT_DRAIN_MS
-            ):
-                print("DEMO_COMPLETE")
-                self.phase = self.PHASE_DONE
-            return
-
-    def _on_retained_published(self, *_args):
-        print(f"RETAINED_STATE_SENT topic={state_topic}")
-        mqtt.subscribe(
-            command_topic, qos=1, prefixed=False,
-            on_subscribe=self._on_subscribed,
-        )
-        self.phase = self.PHASE_SUBSCRIBE_PENDING
-
-    def _on_subscribed(self, *_args):
-        print(f"SUBSCRIBED topic={command_topic}")
-        self.next_telemetry_due_ms = ticks_ms()
-        self.phase = self.PHASE_PUBLISHING
-
-    def _on_telemetry_published(self, *_args):
-        self.telemetry_acked += 1
-        print(f"TELEMETRY_SENT seq={self.telemetry_acked}")
+def on_wifi_state(_old, new):
+    if new == WifiState.CONNECTED:
+        print(f"WIFI_OK ip={wifi.ip}")
+        mqtt.connect()
 
 
-demo = DemoState()
-# Register advance() as a periodic so the runner wakes up between MQTT
-# events to fire the pacing timer.  Without this, runner.wait sleeps
-# until MQTT's next keepalive deadline (~30 s) and the demo's
-# 1.5 s telemetry cadence stretches across that whole interval.
-runner.add_periodic(lambda now_ms: demo.advance(now_ms), period_ms=100)
+def on_mqtt_connected():
+    print(f"MQTT_CONNECTED broker={broker} client_id={client_id}")
+    mqtt.publish(
+        state_topic, b"online",
+        qos=1, retain=True, prefixed=False,
+        on_publish=on_retained_published,
+    )
 
 
-def _on_message(topic, payload):
-    decoded = (
+def on_retained_published(*_args):
+    print(f"RETAINED_STATE_SENT topic={state_topic}")
+    mqtt.subscribe(
+        command_topic, qos=1, prefixed=False,
+        on_subscribe=on_subscribed,
+    )
+
+
+def on_subscribed(*_args):
+    global subscribed
+    print(f"SUBSCRIBED topic={command_topic}")
+    subscribed = True
+
+
+def on_telemetry_published(*_args):
+    global telemetry_acked
+    telemetry_acked += 1
+    print(f"TELEMETRY_SENT seq={telemetry_acked}")
+
+
+def on_command_message(topic, payload):
+    global command_received
+    text = (
         payload.decode("utf-8", "replace") if isinstance(payload, bytes)
         else payload
     )
-    demo.command_received = True
-    print(f"CMD_RECEIVED topic={topic} payload={decoded}")
+    command_received = True
+    print(f"CMD_RECEIVED topic={topic} payload={text}")
 
 
-def _on_cmd_pattern(topic, _payload):
+def on_cmd_pattern(topic, _payload):
     print(f"PATTERN_HIT topic={topic}")
 
 
-mqtt.on_message = _on_message
-mqtt.add_pattern_handler("demo/+/cmd", _on_cmd_pattern)
-mqtt.connect()
+wifi.on_state_change(on_wifi_state)
+mqtt.on_connect = on_mqtt_connected
+mqtt.on_message = on_command_message
+mqtt.add_pattern_handler("demo/+/cmd", on_cmd_pattern)
 
-overall_deadline_ms = ticks_add(ticks_ms(), _DEMO_OVERALL_DEADLINE_MS)
-while not demo.done:
+
+def publish_telemetry(now_ms):
+    """Publish one QoS 1 telemetry sample per call until done."""
+    global telemetry_sent
+    if not subscribed or telemetry_sent >= _TELEMETRY_COUNT:
+        return
+    telemetry_sent += 1
+    payload = json.dumps({
+        "seq": telemetry_sent,
+        "value": 20 + telemetry_sent,
+        "uptime_ms": ticks_diff(now_ms, start_ms),
+    }).encode()
+    mqtt.publish(
+        telemetry_topic, payload,
+        qos=1, prefixed=False,
+        on_publish=on_telemetry_published,
+    )
+
+
+start_ms = ticks_ms()
+overall_deadline_ms = ticks_add(start_ms, _DEMO_DEADLINE_MS)
+disconnect_started_ms = 0
+
+runner = Runner()
+runner.add(wifi)
+runner.add(mqtt)
+runner.add_periodic(publish_telemetry, period_ms=_TELEMETRY_INTERVAL_MS)
+
+while True:
     now_ms = runner.tick()
+
+    if (
+        telemetry_acked >= _TELEMETRY_COUNT
+        and command_received
+        and disconnect_started_ms == 0
+    ):
+        mqtt.disconnect()
+        disconnect_started_ms = now_ms
+
+    if (
+        disconnect_started_ms
+        and ticks_diff(now_ms, disconnect_started_ms) >= _DISCONNECT_DRAIN_MS
+    ):
+        print("DEMO_COMPLETE")
+        break
+
     if ticks_diff(now_ms, overall_deadline_ms) >= 0:
         print(
-            f"STATUS: FAIL_DEMO_DEADLINE phase={demo.phase} "
-            f"telemetry_sent={demo.telemetry_sent} "
-            f"telemetry_acked={demo.telemetry_acked} "
-            f"command_received={demo.command_received}",
+            f"STATUS: FAIL_DEMO_DEADLINE "
+            f"telemetry_sent={telemetry_sent} "
+            f"telemetry_acked={telemetry_acked} "
+            f"command_received={command_received}",
         )
         raise SystemExit(1)
+
     runner.wait(now_ms)

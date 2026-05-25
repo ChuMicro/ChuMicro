@@ -1,62 +1,38 @@
 """Board-side of the http_server_roundtrip demo.
 
-Brings wifi up, starts an HttpServer with a couple of demo routes,
-prints ``SERVER_READY ip=<ip> port=<port>`` once accepting, ticks the
-server cooperatively until the host driver has hit every advertised
-route or the deadline expires.  Marker lines (``SERVER_READY``,
-``ROUTE_HIT``, ``DEMO_COMPLETE``) drive the host driver via the
-stdout-marker protocol.
+Brings WiFi up with ``chumicro_wifi.WifiService`` and serves three
+routes with ``chumicro_http_server.HttpServer``.  Both services
+share one cooperative ``while True:`` loop — no async, no threads —
+which is the same shape the README's "Now drop a network request in
+next to it" walkthrough uses.
 
-Cross-runtime — pure-Python HttpServer + chumicro_sockets +
-chumicro_test_harness.network for wifi-up.  No CP / MP branching in
-this file; the test harness handles the per-runtime wifi glue.
+The host driver discovers the board's address by reading the
+``SERVER_READY ip=<ip> port=<port>`` marker line, fires three HTTP
+requests, and the loop exits after the three matching ``ROUTE_HIT``
+prints land and ``DEMO_COMPLETE`` is printed.
 """
 
 import time
 
+from chumicro_config import load_runtime_config
 from chumicro_http_server import HttpServer, build_response
-from chumicro_sockets import tcp_listening_socket
-from chumicro_test_harness.network import runtime_config, wifi_up
 from chumicro_timing import ticks_diff, ticks_ms
+from chumicro_wifi import WifiConfig, WifiService
 
-_LISTEN_PORT = 8765
 _DEMO_DEADLINE_MS = 60_000
-_TICK_SLEEP_MS = 20
-
-#: Each route the demo advertises.  When all three have been hit the
-#: loop exits and the board prints ``DEMO_COMPLETE``.  Adding a route
-#: here is enough to extend the demo; the driver reads the marker
-#: stream so it doesn't need to know the route list up front.
 _DEMO_ROUTES = ("/hello", "/uptime", "/echo")
 
-
-def _sleep_ms(duration_ms: int) -> None:
-    runtime_sleep_ms = getattr(time, "sleep_ms", None)
-    if callable(runtime_sleep_ms):
-        runtime_sleep_ms(duration_ms)
-        return
-    time.sleep(duration_ms / 1000)
-
-
-config = runtime_config()
-radio, ip_address = wifi_up(
-    config.get("wifi.ssid"),
-    config.get("wifi.password"),
-)
-print(f"WIFI_OK ip={ip_address}")
-
-server = HttpServer(
-    listener_factory=lambda: tcp_listening_socket(
-        host="0.0.0.0", port=_LISTEN_PORT, radio=radio,
-    ),
-)
+config = load_runtime_config()
+wifi = WifiService(WifiConfig.from_config(config))
+server = HttpServer.from_config(config, radio=wifi.adapter.radio)
+bind_port = config.get("http_server.bind_port", 8080)
 
 hit_routes: list[str] = []
 start_ticks_ms = ticks_ms()
 
 
 @server.route("/hello")
-def _hello_route(request):  # noqa: ARG001
+def _hello(_request):
     hit_routes.append("/hello")
     print("ROUTE_HIT route=/hello")
     return build_response(
@@ -65,7 +41,7 @@ def _hello_route(request):  # noqa: ARG001
 
 
 @server.route("/uptime")
-def _uptime_route(request):  # noqa: ARG001
+def _uptime(_request):
     hit_routes.append("/uptime")
     uptime_ms = ticks_diff(ticks_ms(), start_ticks_ms)
     print(f"ROUTE_HIT route=/uptime uptime_ms={uptime_ms}")
@@ -73,28 +49,37 @@ def _uptime_route(request):  # noqa: ARG001
 
 
 @server.route("/echo", methods=["POST"])
-def _echo_route(request):
+def _echo(request):
     hit_routes.append("/echo")
-    payload = request.json()
     print("ROUTE_HIT route=/echo")
-    return build_response(200, json={"echoed": payload})
+    return build_response(200, json={"echoed": request.json()})
 
 
-# One tick to bind the listener + initialize the accept loop.
-server.handle(ticks_ms())
-print(f"SERVER_READY ip={ip_address} port={_LISTEN_PORT}")
+ready_printed = False
+deadline_ms = ticks_ms() + _DEMO_DEADLINE_MS
 
-deadline = ticks_ms() + _DEMO_DEADLINE_MS
 while len(hit_routes) < len(_DEMO_ROUTES):
-    now = ticks_ms()
-    if ticks_diff(deadline, now) <= 0:
+    now_ms = ticks_ms()
+    if ticks_diff(deadline_ms, now_ms) <= 0:
         print(
-            f"DEMO_TIMEOUT hit={len(hit_routes)} expected={len(_DEMO_ROUTES)}",
+            f"DEMO_TIMEOUT hit={len(hit_routes)} "
+            f"expected={len(_DEMO_ROUTES)}",
         )
         break
-    if server.check(now):
-        server.handle(now)
-    _sleep_ms(_TICK_SLEEP_MS)
+
+    if wifi.check(now_ms):
+        wifi.handle(now_ms)
+
+    if wifi.connected:
+        # First server.handle() lazy-opens the listener, so SERVER_READY
+        # only prints once the port is actually accepting connections.
+        server.handle(now_ms)
+        if not ready_printed:
+            print(f"WIFI_OK ip={wifi.ip}")
+            print(f"SERVER_READY ip={wifi.ip} port={bind_port}")
+            ready_printed = True
+
+    time.sleep(0.02)
 
 server.close()
 print("DEMO_COMPLETE")
