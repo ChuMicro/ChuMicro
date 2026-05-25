@@ -69,7 +69,6 @@ class FakeSocket:
         # peer FIN, never on a quiet line (which raises EAGAIN).
         self._peer_closed: bool = False
         self._blocking: bool = True
-        self._timeout: float | None = None
         self._send_eagains: int = 0
         self._recv_eagains: int = 0
 
@@ -156,10 +155,8 @@ class FakeSocket:
 
     def setblocking(self, flag: bool) -> None:
         self._blocking = bool(flag)
-        self._timeout = None if flag else 0.0
 
     def settimeout(self, seconds: float | None) -> None:
-        self._timeout = seconds
         self._blocking = seconds is None
 
     # -- introspection -------------------------------------------------
@@ -173,10 +170,6 @@ class FakeSocket:
     def blocking(self) -> bool:
         """Reflects the most recent :meth:`setblocking` / :meth:`settimeout`."""
         return self._blocking
-
-    @property
-    def timeout(self) -> float | None:
-        return self._timeout
 
     # -- helpers -------------------------------------------------------
 
@@ -227,7 +220,6 @@ class FakeUDPSocket:
         self._recv_queue: deque = deque((), _FAKE_SOCKET_QUEUE_MAXLEN)
         self._closed: bool = False
         self._blocking: bool = True
-        self._timeout: float | None = None
         self._send_eagains: int = 0
         self._recv_eagains: int = 0
         self._bind_host = bind_host
@@ -302,10 +294,8 @@ class FakeUDPSocket:
 
     def setblocking(self, flag: bool) -> None:
         self._blocking = bool(flag)
-        self._timeout = None if flag else 0.0
 
     def settimeout(self, seconds: float | None) -> None:
-        self._timeout = seconds
         self._blocking = seconds is None
 
     def getsockname(self) -> tuple:
@@ -322,10 +312,6 @@ class FakeUDPSocket:
     @property
     def blocking(self) -> bool:
         return self._blocking
-
-    @property
-    def timeout(self) -> float | None:
-        return self._timeout
 
     # -- helpers -------------------------------------------------------
 
