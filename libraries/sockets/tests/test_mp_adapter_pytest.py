@@ -18,6 +18,7 @@ from __future__ import annotations
 #: CPython-only lane (pytest fixtures / host stdlib); not cross-runtime.
 __chumicro_runtimes__ = ("cpython",)
 
+import errno
 import importlib
 import sys
 import types
@@ -195,7 +196,7 @@ class TestConnectTcp:
     ) -> None:
         """MP TLS ``SSLSocket.recv()`` returns ``None`` for WANT_READ.
 
-        The wrapper raises ``OSError(11)`` (EAGAIN) so callers see
+        The wrapper raises ``OSError(errno.EAGAIN)`` so callers see
         the same "no data this tick" contract as plain TCP.  Without
         this, a length-known TCP-style read on MP TLS cannot tell
         "no data yet" from "peer closed mid-response".
@@ -208,9 +209,9 @@ class TestConnectTcp:
         buffer = bytearray(8)
         with pytest.raises(OSError) as captured:
             wrapper.recv_into(buffer, 8)
-        assert captured.value.args[0] == 11
+        assert captured.value.args[0] == errno.EAGAIN
 
-    def test_send_close_setblocking_settimeout_fileno_forward(
+    def test_send_close_setblocking_settimeout_forward(
         self, mp_adapter: types.ModuleType,
     ) -> None:
         """All other protocol methods are direct attribute forwards."""
@@ -222,7 +223,6 @@ class TestConnectTcp:
         assert underlying._blocking is False
         wrapper.settimeout(2.5)
         assert underlying._timeout == 2.5
-        assert wrapper.fileno() == 7
         wrapper.close()
         assert underlying._closed is True
 
@@ -231,16 +231,20 @@ class TestConnectTcp:
     ) -> None:
         """Missing ``settimeout`` on an MP SSLSocket falls back to a no-op.
 
-        mbedTLS SSLSocket on the supported MP ports lacks ``settimeout`` —
-        a bare ``sock.settimeout(2.5)`` raises ``AttributeError("'SSLSocket'
-        object has no attribute 'settimeout'")``.  The wrapper falls
-        back to a no-op stub; this test pins that fallback in place.
+        mbedTLS SSLSocket on the supported MP ports exposes ``send`` /
+        ``recv`` / ``close`` / ``setblocking`` but does NOT expose
+        ``settimeout`` (verified in MP's ``extmod/modtls_mbedtls.c``
+        locals dict).  A bare ``sock.settimeout(2.5)`` raises
+        ``AttributeError("'SSLSocket' object has no attribute
+        'settimeout'")``.  The wrapper falls back to a no-op stub;
+        this test pins that fallback in place.
         """
 
         class _SSLishSocket:
             def __init__(self) -> None:
                 self.sent: bytearray = bytearray()
                 self._closed: bool = False
+                self._blocking: bool = True
 
             def send(self, data: bytes) -> int:
                 self.sent.extend(data)
@@ -251,14 +255,18 @@ class TestConnectTcp:
 
             def close(self) -> None:
                 self._closed = True
-            # No setblocking, no settimeout, no fileno — like the live
-            # MP SSLSocket on the supported boards.
 
-        wrapper = mp_adapter._MpSocketWrapper(_SSLishSocket())
-        # No-ops succeed silently.
+            def setblocking(self, flag: bool) -> None:
+                self._blocking = flag
+            # No settimeout — like the live MP SSLSocket on the
+            # supported boards.
+
+        underlying = _SSLishSocket()
+        wrapper = mp_adapter._MpSocketWrapper(underlying)
         wrapper.setblocking(False)
+        assert underlying._blocking is False
+        # settimeout no-ops silently against the missing-method fallback.
         wrapper.settimeout(2.5)
-        assert wrapper.fileno() == -1  # "no real fd" sentinel
         wrapper.send(b"hi")
         wrapper.close()
 

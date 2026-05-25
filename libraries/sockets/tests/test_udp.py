@@ -23,10 +23,47 @@ unittest / etc., and run unmodified under CPython + MicroPython +
 CircuitPython unix-ports via the ``chumicro_test_harness`` runner.
 """
 
-import chumicro_sockets
-from chumicro_sockets import UDPSocket, udp_socket
-from chumicro_sockets.testing import FakeUDPSocket
-from chumicro_test_harness.assertions import raises
+import errno
+import sys
+
+
+class _SocketpoolStub:
+    """Stand-in for the ``socketpool`` firmware module on host runtimes.
+
+    UDP routing tests below patch the runtime to ``"circuitpython"``,
+    triggering a lazy ``from chumicro_sockets._adapters import cp`` —
+    that adapter imports ``socketpool`` at module top, which fails
+    on hosts without it.  The cpython adapter does the same for
+    ``socket`` / ``ssl`` / ``select``.  These stubs only need to
+    satisfy the module-load imports; routing tests swap the adapter
+    module's attribute (``udp_socket``) directly.  Plain classes
+    instead of ``types.ModuleType`` because MP / CP unix-ports omit
+    ``types``.
+    """
+
+    AF_INET = 2
+    SOCK_STREAM = 1
+    SOCK_DGRAM = 2
+    SOL_SOCKET = 0
+    SO_REUSEADDR = 4
+    SO_BROADCAST = 6
+
+
+class _BareStub:
+    """Empty placeholder for ``sys.modules[<name>]`` entries the
+    cpython adapter needs at module-load time on host runtimes."""
+
+
+sys.modules.setdefault("socketpool", _SocketpoolStub())
+sys.modules.setdefault("socket", _BareStub())
+sys.modules.setdefault("ssl", _BareStub())
+sys.modules.setdefault("select", _BareStub())
+
+
+import chumicro_sockets  # noqa: E402 — load-order dependency on the stubs above
+from chumicro_sockets import udp_socket  # noqa: E402
+from chumicro_sockets.testing import FakeUDPSocket  # noqa: E402
+from chumicro_test_harness.assertions import raises  # noqa: E402
 
 
 class _SwapAttribute:
@@ -96,8 +133,6 @@ class _SwapItem:
 
 def test_udp_socket_factory_in_public_namespace() -> None:
     assert hasattr(chumicro_sockets, "udp_socket")
-    assert hasattr(chumicro_sockets, "UDPSocket")
-    assert chumicro_sockets.UDPSocket is UDPSocket
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +212,7 @@ class TestFakeUDPSocket:
         sock.enqueue_eagain_for_send(2)
         with raises(OSError) as first:
             sock.sendto(b"x", "h", 1)
-        assert first.value.args[0] == 11
+        assert first.value.args[0] == errno.EAGAIN
         with raises(OSError):
             sock.sendto(b"x", "h", 1)
         # Third send succeeds.
@@ -191,7 +226,7 @@ class TestFakeUDPSocket:
         buffer = bytearray(8)
         with raises(OSError) as raised:
             sock.recvfrom_into(buffer)
-        assert raised.value.args[0] == 11
+        assert raised.value.args[0] == errno.EAGAIN
         n_received, _address = sock.recvfrom_into(buffer)
         assert n_received == 1
 
@@ -223,15 +258,6 @@ class TestFakeUDPSocket:
     def test_getsockname_reports_bind_address(self) -> None:
         sock = FakeUDPSocket(bind_host="192.168.1.10", bind_port=1234)
         assert sock.getsockname() == ("192.168.1.10", 1234)
-
-    def test_fileno_default_is_positive(self) -> None:
-        sock = FakeUDPSocket()
-        assert sock.fileno() >= 0
-
-    def test_fileno_can_be_overridden(self) -> None:
-        sock = FakeUDPSocket()
-        sock.set_fileno(-1)
-        assert sock.fileno() == -1
 
     def test_pending_recv_chunks_counts_queue(self) -> None:
         sock = FakeUDPSocket()

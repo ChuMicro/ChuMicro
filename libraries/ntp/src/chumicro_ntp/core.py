@@ -11,14 +11,13 @@ them should use a full NTP implementation (out of scope for embedded).
 Wire format reference: RFC 4330 §4.
 """
 
+import errno
+
 try:
     from micropython import const
 except ImportError:
     def const(value):
         return value
-
-def _is_eagain(error):
-    return getattr(error, "errno", None) in (11, 35)
 
 
 #: Seconds between the NTP epoch (1900-01-01T00:00:00Z) and the
@@ -319,7 +318,7 @@ class NTPClient:
                 self._recv_buffer,
             )
         except OSError as recv_error:
-            if _is_eagain(recv_error):
+            if recv_error.errno == errno.EAGAIN:
                 # No data this tick.  Check the timeout instead.
                 self._check_timeout(result, now_ms)
                 return

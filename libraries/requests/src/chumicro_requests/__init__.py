@@ -10,6 +10,8 @@ Not supported: HTTP/1.1 keep-alive, gzip, cookies, streaming uploads,
 multi-in-flight requests on the same client.
 """
 
+import gc
+
 from chumicro_requests._wire import (
     CaseInsensitiveDict,
     HttpBusyError,
@@ -52,6 +54,4 @@ __all__ = [
     "resolve_redirect_url",
 ]
 
-import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
-_gc.collect()
-del _gc
+gc.collect()

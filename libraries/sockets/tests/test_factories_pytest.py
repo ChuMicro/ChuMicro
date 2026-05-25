@@ -313,7 +313,7 @@ class TestCPythonTLSListener:
 
         server_context = ssl_context_with_cert_and_key(cert_pem, key_pem)
         listener = tls_listening_socket("127.0.0.1", 0, context=server_context)
-        host, port = listener._raw.getsockname()  # noqa: SLF001
+        host, port = listener._sock.getsockname()  # noqa: SLF001
 
         # Listener is non-blocking; drive the accept in a background thread.
         accepted_holder: list = []

@@ -135,7 +135,7 @@ def test_run_module_duration_excludes_gc_collect_time(
         disable=lambda: None,
         enable=lambda: None,
     )
-    monkeypatch.setattr(runner_module, "_gc", fake_gc)
+    monkeypatch.setattr(runner_module, "gc", fake_gc)
     monkeypatch.setattr(runner_module, "_MEM_FREE_AVAILABLE", True)
     monkeypatch.setattr(
         runner_module, "_now_seconds", lambda: fake_time["now"],
@@ -171,7 +171,7 @@ def test_run_module_reports_heap_when_available(monkeypatch, capsys) -> None:
         disable=lambda: None,
         enable=lambda: None,
     )
-    monkeypatch.setattr(runner_module, "_gc", fake_gc)
+    monkeypatch.setattr(runner_module, "gc", fake_gc)
     monkeypatch.setattr(runner_module, "_MEM_FREE_AVAILABLE", True)
 
     module = SimpleNamespace(test_ok=lambda: None)

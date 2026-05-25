@@ -3,8 +3,6 @@
 Public API::
 
     from chumicro_sockets import (
-        TCPClientSocket,           # TCP protocol every adapter implements
-        UDPSocket,                 # UDP protocol every adapter implements
         UnsupportedSSLConfigError, # raised when the requested TLS shape isn't supported
         tcp_client_socket,         # plain-TCP factory
         tls_client_socket,         # TLS factory
@@ -24,18 +22,31 @@ board ships on-board ``ssl``.
 
 Substrate for ``chumicro-mqtt``, ``chumicro-requests``,
 ``chumicro-http-server`` (TCP/TLS), and ``chumicro-ntp`` (UDP).
-Downstream libs annotate against ``TCPClientSocket`` / ``UDPSocket``
-instead of importing ``socketpool`` / ``socket`` / ``ssl`` directly.
+Returned sockets are duck-typed: TCP exposes
+``send`` / ``recv_into`` / ``close`` / ``setblocking`` / ``settimeout``;
+UDP exposes ``sendto`` / ``recvfrom_into`` / ``close`` /
+``setblocking`` / ``settimeout`` / ``getsockname``.  Downstream libs
+hold the returned socket and call those methods directly.
 """
 
+import errno
+import gc
 import sys
 
-from chumicro_sockets.errors import UnsupportedSSLConfigError
-from chumicro_sockets.protocol import TCPClientSocket, UDPSocket
+
+class UnsupportedSSLConfigError(RuntimeError):
+    """Raised when the requested TLS configuration isn't supported on this runtime.
+
+    Today's only firing site is :func:`tls_listening_socket` on CP-rp2
+    (Pi Pico W / Pi Pico 2 W), where ``wrap_socket(server_side=True) +
+    accept()`` raises ``OSError(32)`` mid-handshake and wedges the
+    CYW43 station-mode state until USB power-cycle.  Downstream libs
+    ``except`` it so future adapter additions for older hardware
+    surface as a structured failure instead of an ``AttributeError``.
+    """
+
 
 __all__ = [
-    "TCPClientSocket",
-    "UDPSocket",
     "UnsupportedSSLConfigError",
     "is_eagain",
     "pollable_of",
@@ -57,15 +68,16 @@ def pollable_of(sock: object) -> object:
 
     Pass the result to ``select.poll().register(...)``.  Both target
     runtimes' ``poll.register()`` accepts the socket *object*, which
-    the runtime polls through its C-level stream ``ioctl`` —
-    ``fileno()`` is the wrong primitive, returning ``-1`` on CP radio
-    sockets and on rp2 MP sockets even though the object is still
-    pollable.
+    the runtime polls through its C-level stream ``ioctl``.  Chumicro
+    wrappers do not expose ``fileno()``, so the underlying runtime
+    socket has to be unwrapped before registration.
 
     Adapter wrappers that hold their socket on ``_sock``
-    (``_MpSocketWrapper``, ``_CPUDPWrapper``, ``_CPTLSListenerWrapper``)
-    unwrap to it; bare sockets (CP TCP / TLS client, CP TCP listener,
-    MP TLS, CPython stdlib ``socket.socket``) pass through unchanged.
+    (``_MpSocketWrapper``, ``_MpListeningSocketWrapper``,
+    ``_MpTLSListenerWrapper``, ``_CPUDPWrapper``, ``_CPythonUDPWrapper``,
+    ``_CPythonTLSListenerWrapper``) unwrap to it; bare sockets
+    (CP TCP / TLS client, CP TCP listener, CP TLS listener, MP TLS,
+    CPython stdlib ``socket.socket``) pass through unchanged.
     """
     return getattr(sock, "_sock", sock)
 
@@ -73,13 +85,16 @@ def pollable_of(sock: object) -> object:
 def is_eagain(exception: BaseException) -> bool:
     """``True`` if *exception* signals "would block, retry next tick".
 
-    Matches ``OSError(errno=11)`` (Linux / MP / CP) and ``35`` (macOS
-    CPython).  Custom-factory sockets must raise one of these on
-    non-blocking would-block — consumers' recv loops use this to
-    distinguish retry from a real socket error.
+    Matches ``errno.EAGAIN``, which resolves to the platform's
+    would-block errno (``11`` on Linux / MP / CP, ``35`` on macOS
+    CPython).  MicroPython's ``errno`` module exposes ``EAGAIN`` on
+    every supported port but not ``EWOULDBLOCK``; on POSIX they alias
+    to the same int, so ``EAGAIN`` alone covers both.  Custom-factory
+    sockets must raise ``OSError(errno.EAGAIN)`` on non-blocking
+    would-block — consumers' recv loops use this to distinguish retry
+    from a real socket error.
     """
-    errno = getattr(exception, "errno", None)
-    return errno == 11 or errno == 35
+    return getattr(exception, "errno", None) == errno.EAGAIN
 
 
 def _runtime_name() -> str:
@@ -88,14 +103,13 @@ def _runtime_name() -> str:
     return sys.implementation.name
 
 
-def tcp_client_socket(host: str, port: int, *, radio: object | None = None) -> TCPClientSocket:
+def tcp_client_socket(host: str, port: int, *, radio: object | None = None):
     """Open a plain TCP client connection.
 
     Routes to the runtime-appropriate adapter:
 
     * **CircuitPython** — ``socketpool.SocketPool(radio).socket(...).connect``.
-      *radio* defaults to ``wifi.radio``; pass explicitly for multi-radio
-      prototypes or boards without a ``wifi`` module.
+      *radio* is required (typically ``wifi.radio``).
     * **MicroPython** — stdlib ``socket.socket`` + ``connect``.
       *radio* is ignored.
     * **CPython** — stdlib ``socket.create_connection``.  *radio* is ignored.
@@ -103,19 +117,15 @@ def tcp_client_socket(host: str, port: int, *, radio: object | None = None) -> T
     Args:
         host: DNS name or IP literal.
         port: Remote port.
-        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP;
-            ignored on MP and CPython.  Pass explicitly for multi-radio
-            prototypes or CP boards without a ``wifi`` module.
+        radio: CP-only radio object — pass ``wifi.radio`` on CP boards;
+            ignored on MP and CPython.
 
-    Returns:
-        Connected :class:`TCPClientSocket`.  Already connected — callers
-        do not see a separate ``connect`` step.
+    Returns: Already-connected TCP client socket.  Callers do not see a separate ``connect`` step.
 
     Raises:
         OSError: Connection refused, DNS failure, etc.  Adapters
             normalize runtime-specific socket errors into ``OSError``.
-        TypeError: CP runtime invoked on a board where ``import wifi``
-            fails and no explicit ``radio=`` was passed.
+        TypeError: CP runtime invoked with ``radio=None``.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -138,15 +148,15 @@ def tls_client_socket(
     *,
     context: object | None = None,
     radio: object | None = None,
-) -> TCPClientSocket:
+):
     """Open a TLS client connection.
 
     Routes to the runtime-appropriate adapter; *context* is honored
     on every runtime (every supported board ships on-board ``ssl``):
 
     * **CircuitPython** — ``context.wrap_socket(socketpool_sock,
-      server_hostname=host)`` then ``connect``.  *radio* defaults to
-      ``wifi.radio``.
+      server_hostname=host)`` then ``connect``.  *radio* is required
+      (typically ``wifi.radio``).
     * **MicroPython** — same shape via MP's ``ssl.SSLContext``
       (mbedTLS-backed on RP2 + ESP32 from MP 1.24+).
     * **CPython** — stdlib ``ssl.SSLContext.wrap_socket``.
@@ -173,17 +183,14 @@ def tls_client_socket(
         port: Remote port.
         context: SSLContext to use.  ``None`` = runtime default.
             Pre-build via :func:`ssl_context_with_ca` for custom CAs.
-        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP;
-            ignored on MP and CPython.  Pass explicitly for multi-radio
-            prototypes or CP boards without a ``wifi`` module.
+        radio: CP-only radio object — pass ``wifi.radio`` on CP boards;
+            ignored on MP and CPython.
 
-    Returns:
-        Connected, TLS-wrapped :class:`TCPClientSocket`.
+    Returns: Connected, TLS-wrapped TCP client socket.
 
     Raises:
         OSError: Connection or handshake failure.
-        TypeError: CP runtime invoked on a board where ``import wifi``
-            fails and no explicit ``radio=`` was passed.
+        TypeError: CP runtime invoked with ``radio=None``.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -308,8 +315,7 @@ def tcp_listening_socket(
     * **CircuitPython** — ``socketpool.SocketPool(radio).socket().bind().listen()``
       (since CP 7.x).  ``setsockopt(SO_REUSEADDR, 1)`` is best-effort
       (older CP firmware / rp2 ports may not expose the option).
-      *radio* defaults to ``wifi.radio``; pass explicitly for multi-radio
-      prototypes or boards without a ``wifi`` module.
+      *radio* is required (typically ``wifi.radio``).
     * **MicroPython** — ``socket.socket().bind().listen()``;
       ``setsockopt(SO_REUSEADDR, 1)`` is best-effort (some ports don't
       expose the option).  *radio* is ignored.
@@ -328,18 +334,17 @@ def tcp_listening_socket(
         backlog: SYN-queue depth for incoming connections.  4 is a
             reasonable default for a small-IoT server; raise for
             higher-volume listeners.
-        radio: CP-only radio object.  Required on CP, ignored
-            elsewhere.
+        radio: CP-only radio object — pass ``wifi.radio`` on CP boards;
+            ignored on MP and CPython.
 
     Returns:
         A listening socket object exposing ``accept()`` / ``close()``
-        / ``setblocking()`` / ``fileno()``.
+        / ``setblocking()``.
 
     Raises:
         OSError: Bind / listen failed (port in use, permission denied,
             etc.).
-        TypeError: CP runtime invoked on a board where ``import wifi``
-            fails and no explicit ``radio=`` was passed.
+        TypeError: CP runtime invoked with ``radio=None``.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -385,12 +390,15 @@ def tls_listening_socket(
         context: Server-side ``ssl.SSLContext`` from
             :func:`ssl_context_with_cert_and_key`.
         backlog: SYN-queue depth.
-        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP;
+        radio: CP-only radio object — pass ``wifi.radio`` on CP boards;
             ignored on MP and CPython.
 
     Returns:
         A listening socket wrapper whose ``accept()`` returns
         ``(tls_wrapped_socket, address)``.
+
+    Raises:
+        TypeError: CP runtime invoked with ``radio=None``.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -485,10 +493,17 @@ def ssl_context_with_cert_and_key_paths(
     if runtime == "micropython":
         from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
 
-        return mp.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
-    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
+        context = mp.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
+    else:
+        from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
 
-    return cpython.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
+        context = cpython.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
+    # mbedTLS / stdlib ssl has parsed the PEM into the context; drop
+    # the file buffers (~1–2 KB each) and force a collection before
+    # the caller's next allocation lands.
+    del cert_bytes, key_bytes
+    gc.collect()
+    return context
 
 
 def udp_socket(
@@ -497,7 +512,7 @@ def udp_socket(
     *,
     radio: object | None = None,
     broadcast: bool = False,
-) -> UDPSocket:
+):
     """Open a UDP datagram socket.
 
     Routes to the runtime-appropriate adapter:
@@ -516,30 +531,27 @@ def udp_socket(
     binds it.  Pass ``bind_port=N`` for a server / receiver that
     listens on a known port (NTP responses, mDNS replies, etc.).
 
-    Use :meth:`UDPSocket.getsockname` after construction to learn
-    the bound address — useful when ``bind_port=0`` and the caller
-    needs to know which port the OS assigned.
+    Call ``getsockname()`` on the returned socket to learn the bound
+    address — useful when ``bind_port=0`` and the caller needs to
+    know which port the OS assigned.
 
     Args:
         bind_host: Local address to bind.  ``"0.0.0.0"`` accepts on
             every interface (the typical case for boards on a single
             LAN).
         bind_port: Local port.  ``0`` = ephemeral.
-        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP;
-            ignored on MP and CPython.  Pass explicitly for multi-radio
-            prototypes or CP boards without a ``wifi`` module.
+        radio: CP-only radio object — pass ``wifi.radio`` on CP boards;
+            ignored on MP and CPython.
         broadcast: Set ``SO_BROADCAST`` so ``sendto`` to a broadcast
             address (typically ``"255.255.255.255"`` or the LAN
             broadcast address) succeeds.  Off by default — kernels
             reject broadcast sends without it.
 
-    Returns:
-        Bound :class:`UDPSocket`.
+    Returns: Bound UDP socket.
 
     Raises:
         OSError: Bind failed (port in use, permission denied, etc.).
-        TypeError: CP runtime invoked on a board where ``import wifi``
-            fails and no explicit ``radio=`` was passed.
+        TypeError: CP runtime invoked with ``radio=None``.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -689,6 +701,4 @@ def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
 # downstream library imports (and the runtime-gated lazy adapter loads
 # inside ``tcp_client_socket`` / ``tls_client_socket``) land in a
 # cleaner heap.
-import gc as _gc  # noqa: E402, I001 — end-of-module placement is intentional.
-_gc.collect()
-del _gc
+gc.collect()

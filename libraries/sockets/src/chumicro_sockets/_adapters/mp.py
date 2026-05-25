@@ -20,26 +20,28 @@ breaks against modern brokers).
 
 __chumicro_runtimes__ = ("micropython",)
 
+import gc
 
-def _no_fileno():
-    """Stand-in for missing ``socket.fileno`` on some MP ports.
+from chumicro_sockets._connector import (
+    STATE_AWAITING_DNS,
+    STATE_AWAITING_TCP,
+    STATE_AWAITING_TLS,
+    STATE_FAILED,
+    STATE_READY,
+    SocketConnector,
+)
 
-    Returns -1 — the "no real fd" convention chumicro-sockets uses
-    so callers can detect "this socket can't be poll()'d" without a
-    runtime check on every callsite.
-    """
-    return -1
+_TERMINAL = (STATE_READY, STATE_FAILED)
 
 
 def _no_op(*_args, **_kwargs):
-    """Stand-in no-op for socket methods absent on a given MP port.
+    """Stand-in no-op for ``settimeout`` on mbedTLS ``SSLSocket``.
 
-    Installed via ``getattr(sock, "<method>", _no_op)`` in
-    :class:`_MpSocketWrapper` so the wrapper exposes the full
-    protocol surface even when the underlying socket doesn't.
-    Two real gaps: mbedTLS ``SSLSocket`` lacks ``settimeout``
-    (its call surface stops at ``setblocking``), and rp2's plain
-    socket lacks ``fileno``.
+    MP's mbedTLS ``SSLSocket`` call surface stops at ``setblocking``
+    — it does not expose ``settimeout``.  Installed via
+    ``getattr(sock, "settimeout", _no_op)`` in
+    :class:`_MpSocketWrapper` so callers see the unified TCP
+    protocol surface across plain and TLS-wrapped sockets.
     """
     return None
 
@@ -59,18 +61,15 @@ class _MpSocketWrapper:
         self._sock = sock
         # Forward the operations MP's socket supports natively so
         # downstream callers don't pay a Python-level shim round-trip
-        # on every call.  ``send`` and ``close`` are required — every
-        # socket-shaped object exposes them.
+        # on every call.  ``send`` / ``close`` / ``setblocking`` are
+        # universal across plain and TLS-wrapped MP sockets.
         self.send = sock.send
         self.close = sock.close
-        # Soft-forward setblocking / settimeout / fileno: mbedTLS
-        # SSLSocket lacks ``settimeout`` and rp2's plain socket lacks
-        # ``fileno``, so a missing method falls back to a no-op /
-        # ``-1`` stub and downstream construction stays uniform.
-        self.setblocking = getattr(sock, "setblocking", _no_op)
+        self.setblocking = sock.setblocking
+        # mbedTLS ``SSLSocket`` does not expose ``settimeout`` — falls
+        # back to a no-op so the wrapper surface stays uniform for
+        # both plain TCP and TLS sockets.
         self.settimeout = getattr(sock, "settimeout", _no_op)
-        forwarded_fileno = getattr(sock, "fileno", None)
-        self.fileno = forwarded_fileno if forwarded_fileno is not None else _no_fileno
 
     def recv_into(self, buffer, nbytes=0):
         """Polyfill ``recv_into`` via MP's ``recv``.
@@ -83,24 +82,29 @@ class _MpSocketWrapper:
         MP-specific contract divergence:
 
         * Plain TCP non-blocking ``recv`` with no data raises
-          ``OSError(11)`` (EAGAIN).
+          ``OSError(errno.EAGAIN)``.
         * mbedTLS ``SSLSocket`` non-blocking ``recv`` with no data
           returns ``None`` instead (mbedTLS ``WANT_READ`` /
           ``WANT_WRITE`` maps to ``MP_EWOULDBLOCK`` internally, but
           the Python-level surface for SSLSocket returns ``None``
           rather than raising).
 
-        We **raise** ``OSError(11)`` on ``None`` so the protocol
-        contract — "EAGAIN on no data, 0 on clean peer close" —
-        holds across plain TCP and TLS uniformly.  Without it, a
-        length-known TCP-style read on MP TLS cannot tell "no data
-        this tick" apart from "peer closed mid-response" the moment
-        a recv races ahead of the peer's send.
+        We **raise** ``OSError(errno.EAGAIN)`` on ``None`` so the
+        protocol contract — "EAGAIN on no data, 0 on clean peer
+        close" — holds across plain TCP and TLS uniformly.  Without
+        it, a length-known TCP-style read on MP TLS cannot tell
+        "no data this tick" apart from "peer closed mid-response"
+        the moment a recv races ahead of the peer's send.
         """
         size = nbytes if nbytes > 0 else len(buffer)
+        import errno  # noqa: PLC0415 — MP-only; lazy per file convention.
+
         data = self._sock.recv(size)
         if data is None:
-            raise OSError(11, "would block")  # MP TLS WANT_READ.
+            # MP TLS WANT_READ surfaces as recv() returning None; raise
+            # the would-block errno so the recv-loop contract holds
+            # against plain TCP and TLS uniformly.
+            raise OSError(errno.EAGAIN, "would block")
         copied = len(data)
         if copied:
             buffer[:copied] = data
@@ -151,10 +155,22 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
     address_info = socket.getaddrinfo(host, port)[0]
     sock = socket.socket(address_info[0], address_info[1])
     sock.connect(address_info[-1])
-    if context is None:
-        context = _default_context()
+    context = _resolve_default_context(context)
     wrapped = context.wrap_socket(sock, server_hostname=host)
     return _MpSocketWrapper(wrapped)
+
+
+def _resolve_default_context(context):  # pragma: no cover - device only
+    """Return *context* unchanged, or load MP's default context if ``None``.
+
+    The default trust set is the chumicro-shipped DER bundle in
+    :mod:`chumicro_sockets._ca_bundle`, parsed once and cached on
+    :func:`_default_context`.  Override it at runtime via
+    :func:`set_default_ca_bundle`.
+    """
+    if context is not None:
+        return context
+    return _default_context()
 
 
 def udp_socket(  # pragma: no cover - device only
@@ -202,17 +218,9 @@ class _MpUDPWrapper:  # pragma: no cover - device only
     def __init__(self, sock):
         self._sock = sock
         self.close = sock.close
-        self.setblocking = getattr(sock, "setblocking", _no_op)
-        self.settimeout = getattr(sock, "settimeout", _no_op)
-        forwarded_fileno = getattr(sock, "fileno", None)
-        self.fileno = forwarded_fileno if forwarded_fileno is not None else _no_fileno
-        forwarded_getsockname = getattr(sock, "getsockname", None)
-        if forwarded_getsockname is not None:
-            self.getsockname = forwarded_getsockname
-        else:
-            # Some MP ports omit getsockname; report a placeholder so
-            # downstream code doesn't trip on an absent attribute.
-            self.getsockname = lambda: ("0.0.0.0", 0)
+        self.setblocking = sock.setblocking
+        self.settimeout = sock.settimeout
+        self.getsockname = sock.getsockname
 
     def sendto(self, data, host, port):
         # MP's UDP ``sendto`` does not auto-resolve hostnames — passing
@@ -231,13 +239,15 @@ class _MpUDPWrapper:  # pragma: no cover - device only
         return self._sock.sendto(data, address_info[-1])
 
     def recvfrom_into(self, buffer, nbytes=0):
+        import errno  # noqa: PLC0415 — MP-only; lazy per file convention.
+
         size = nbytes if nbytes > 0 else len(buffer)
         result = self._sock.recvfrom(size)
         # MP returns (data, address); some ports may return None on
         # would-block instead of raising — match the TCP wrapper's
         # contract by raising EAGAIN explicitly.
         if result is None:
-            raise OSError(11, "would block")
+            raise OSError(errno.EAGAIN, "would block")
         data, address = result
         copied = len(data)
         if copied:
@@ -249,8 +259,9 @@ def listen_tcp(host, port, *, backlog=4):  # pragma: no cover - device only
     """Open a non-blocking TCP listening socket on MicroPython.
 
     Wraps the result so ``accept()`` returns a ``(_MpSocketWrapper,
-    address)`` tuple — the new connection satisfies our
-    :class:`TCPClientSocket` protocol.
+    address)`` tuple — the new connection exposes the cross-runtime
+    TCP surface (``send`` / ``recv_into`` / ``close`` /
+    ``setblocking`` / ``settimeout``).
 
     ``SO_REUSEADDR`` is set when the platform supports it (rp2 + esp32
     do); failures are swallowed so older ports without the option
@@ -278,8 +289,6 @@ class _MpListeningSocketWrapper:  # pragma: no cover - device only
     def __init__(self, sock):
         self._sock = sock
         self.close = sock.close
-        forwarded_fileno = getattr(sock, "fileno", None)
-        self.fileno = forwarded_fileno if forwarded_fileno is not None else _no_fileno
 
     def accept(self):
         """Accept a pending connection.  Raises ``OSError(EAGAIN)`` when
@@ -311,6 +320,11 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - devi
         key_pem = key_pem.encode("ascii")
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert_pem, key_pem)
+    # mbedTLS has parsed the cert + key into its internal structures;
+    # drop the PEM buffers (~1–2 KB each) and reclaim before the
+    # caller's next allocation lands.
+    del cert_pem, key_pem
+    gc.collect()
     return context
 
 
@@ -327,14 +341,19 @@ def listen_tls(host, port, *, context, backlog=4):  # pragma: no cover - device 
 
 
 class _MpTLSListenerWrapper:  # pragma: no cover - device only
-    """Wraps an MP listener so accept() yields TLS-wrapped sockets."""
+    """Wraps an MP listener so accept() yields TLS-wrapped sockets.
+
+    Holds the inner :class:`_MpListeningSocketWrapper` on ``_sock``
+    so :func:`chumicro_sockets.pollable_of` unwraps to a registrable
+    listener for ``select.poll``.
+    """
 
     def __init__(self, raw_listener, context):
-        self._raw = raw_listener
+        self._sock = raw_listener
         self._context = context
 
     def accept(self):
-        new_wrapper, address = self._raw.accept()
+        new_wrapper, address = self._sock.accept()
         # Pull the underlying MP socket out of the wrapper so we
         # can wrap it directly with TLS — the handshake needs the
         # raw socket, not our `_MpSocketWrapper` polyfill.
@@ -345,19 +364,13 @@ class _MpTLSListenerWrapper:  # pragma: no cover - device only
         except Exception:
             underlying.close()
             raise
-        # SSLSocket on the supported MP ports (rp2 + esp32) honors
-        # setblocking; older ports fall through to the no-op stub
-        # in _MpSocketWrapper.
         return _MpSocketWrapper(tls_sock), address
 
     def close(self):
-        self._raw.close()
+        self._sock.close()
 
     def setblocking(self, flag):
-        self._raw.setblocking(flag)
-
-    def fileno(self):
-        return self._raw.fileno() if hasattr(self._raw, "fileno") else _no_fileno()
+        self._sock.setblocking(flag)
 
 
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
@@ -416,6 +429,13 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.load_verify_locations(cadata=cadata)
     context.verify_mode = ssl.CERT_REQUIRED
+    # mbedTLS has copied the DER into its internal chain; the local
+    # buffers (~16 KB for the shipped bundle) are dead weight from
+    # here on.  Drop them and force a collection so the freed span
+    # is available to the SSLContext / handshake working set instead
+    # of fragmenting alongside it.  MP / CP GC is non-compacting.
+    del cadata, ca_pem
+    gc.collect()
     return context
 
 
@@ -563,89 +583,106 @@ def tls_connector(host, port, *, context=None):  # pragma: no cover - device onl
     return _MpConnector(host, port, tls=True, context=context)
 
 
-from chumicro_sockets._connector import SocketConnector  # noqa: E402
-
-
 class _MpConnector(SocketConnector):  # pragma: no cover - device only
-    def _resolve_dns(self, host, port):
-        # MP's ``socket.getaddrinfo`` is synchronous — one phase tick.
-        # First tuple is enough; multi-AF fallback can be added if a
-        # consumer needs it.
+    """MP non-blocking dialer — DNS + non-blocking TCP, blocking TLS.
+
+    Three phases on the public surface (``awaiting_dns`` /
+    ``awaiting_tcp`` / ``awaiting_tls``) match the runner-contract
+    vocabulary, but the TLS phase is a single blocking tick: MP's
+    mbedTLS ``ssl.SSLContext.wrap_socket`` performs the full handshake
+    inline and does not expose ``do_handshake_on_connect=False``.
+
+    A ``select.poll`` registration on the in-flight socket is
+    constructed once at the first TCP-ready check and reused across
+    ticks so the connector stays allocation-quiet on the runner-tick
+    path.  Imports stay lazy at the method-body site to keep this file
+    staged-but-quiet on CP (see module docstring).
+    """
+
+    def __init__(self, host, port, *, tls=False, context=None):
+        super().__init__(host, port, tls=tls, context=context)
+        self._addr_info = None
+        # Pre-allocated when entering ``awaiting_tcp`` and reused
+        # across subsequent ticks; cleared on transition out.
+        self._tcp_poll = None
+
+    def tick(self, now_ms):  # noqa: ARG002 (runner contract)
+        if self.state in _TERMINAL:
+            return
+        try:
+            if self.state == STATE_AWAITING_DNS:
+                import socket  # noqa: PLC0415 — MP-only import
+
+                self._addr_info = socket.getaddrinfo(self._host, self._port)[0]
+                self.state = STATE_AWAITING_TCP
+                return
+
+            if self.state == STATE_AWAITING_TCP:
+                if self._inflight_socket is None:
+                    self._inflight_socket = self._issue_tcp_connect()
+                    self._register_tcp_poll(self._inflight_socket)
+                    return
+                if not self._tcp_ready():
+                    return
+                self._tcp_poll = None
+                if self._tls:
+                    self._inflight_socket = self._wrap_tls(self._inflight_socket)
+                    self.state = STATE_AWAITING_TLS
+                else:
+                    self.socket = _MpSocketWrapper(self._inflight_socket)
+                    self._inflight_socket = None
+                    self.state = STATE_READY
+                return
+
+            if self.state == STATE_AWAITING_TLS:
+                # MP's ``wrap_socket`` already drove the handshake to
+                # completion on entry; this tick just promotes.
+                self.socket = _MpSocketWrapper(self._inflight_socket)
+                self._inflight_socket = None
+                self.state = STATE_READY
+                return
+        except Exception as error:  # noqa: BLE001 - any failure stops the machine
+            self._fail(error)
+
+    def _issue_tcp_connect(self):
+        import errno  # noqa: PLC0415 — MP-only import
         import socket  # noqa: PLC0415 — MP-only import
 
-        return socket.getaddrinfo(host, port)[0]
-
-    def _start_tcp_connect(self, addr_info):
-        import socket  # noqa: PLC0415 — MP-only import
-
-        sock = socket.socket(addr_info[0], addr_info[1])
+        sock = socket.socket(self._addr_info[0], self._addr_info[1])
         sock.setblocking(False)
         try:
-            sock.connect(addr_info[-1])
+            sock.connect(self._addr_info[-1])
         except OSError as connect_exception:
-            # EINPROGRESS (115 on rp2 lwIP, also 115 on esp32 lwIP) is
-            # the expected "connect started, poll for completion"
-            # signal — fall through and let _check_tcp_connect drive
-            # the poll loop.  Any other errno is a real failure.
-            if connect_exception.errno != 115:
+            # Every MP port's non-blocking connect raises EINPROGRESS;
+            # subsequent ticks drive the POLLOUT-ready check to
+            # completion.  Comparison via ``errno.EINPROGRESS`` because
+            # the integer value differs per lwIP port (115 on rp2, 119
+            # on esp32-s2); any literal here would only work on the
+            # port it was tested on.
+            if connect_exception.errno != errno.EINPROGRESS:
                 sock.close()
                 raise
         return sock
 
-    def _check_tcp_connect(self, sock):
-        # ``select.poll(POLLOUT)`` is the cross-port readiness check on
-        # MP — SO_ERROR via ``getsockopt`` is not exposed reliably on
-        # rp2 plain sockets, but POLLOUT firing indicates the connect
-        # has completed (success or failure).  A subsequent send
-        # surfacing OSError is how we'd see a delayed failure.
+    def _register_tcp_poll(self, sock):
         import select  # noqa: PLC0415 — MP-only import
 
-        poll = select.poll()
-        poll.register(sock, select.POLLOUT)
-        events = poll.poll(0)  # 0 ms — non-blocking probe
-        if not events:
-            return False  # Still pending — retry next tick.
-        # Any returned event means the kernel has resolved the connect.
-        # POLLERR / POLLHUP would also surface here; let downstream
-        # code (the first send) raise the underlying errno.
-        return True
+        self._tcp_poll = select.poll()
+        self._tcp_poll.register(sock, select.POLLOUT)
 
-    def _wrap_tls(self, sock, host, context):
-        # MP's ``ssl.SSLContext.wrap_socket`` performs the full TLS
-        # handshake synchronously — substrate limit documented in the
-        # public ``tls_client_connector`` factory.  The wrap call
-        # blocks for this single phase tick; on the next tick
-        # ``_step_tls_handshake`` confirms completion and the
-        # connector promotes to ``ready``.
-        if context is None:
-            context = _default_context()
-        return context.wrap_socket(sock, server_hostname=host)
+    def _tcp_ready(self):
+        # POLLOUT firing means the kernel has resolved the connect
+        # (success or failure).  POLLERR / POLLHUP would surface as
+        # events too; the subsequent first ``send`` raises the actual
+        # errno.  ``getsockopt(SO_ERROR)`` is not exposed reliably on
+        # rp2 plain sockets, so we rely on POLLOUT + first-send-fails.
+        events = self._tcp_poll.poll(0)  # 0 ms — non-blocking probe
+        return bool(events)
 
-    def _step_tls_handshake(self, sock):
-        # ``wrap_socket`` already drove the handshake to completion
-        # under MP-mbedTLS; nothing more to do.  Wrap the inflight
-        # SSLSocket in ``_MpSocketWrapper`` so the connector's
-        # eventual promotion ``self.socket = self._inflight_socket``
-        # lands a chumicro-protocol-shaped object on consumers.
-        self._inflight_socket = _MpSocketWrapper(sock)
-        return True
-
-    def _enter_post_tcp(self):
-        # Override the base hook so the non-TLS path also wraps the
-        # raw socket in ``_MpSocketWrapper`` before promotion — the
-        # consumer expects ``recv_into`` semantics that plain MP
-        # sockets lack.
-        from chumicro_sockets._connector import (  # noqa: PLC0415 - lazy
-            STATE_AWAITING_TLS,
-            STATE_READY,
-        )
-
-        if not self._tls:
-            self.socket = _MpSocketWrapper(self._inflight_socket)
-            self._inflight_socket = None
-            self.state = STATE_READY
-            return
-        self._inflight_socket = self._wrap_tls(
-            self._inflight_socket, self._host, self._context,
-        )
-        self.state = STATE_AWAITING_TLS
+    def _wrap_tls(self, sock):
+        # ``ssl.SSLContext.wrap_socket`` blocks until the TLS handshake
+        # completes — substrate limit documented on the public
+        # ``tls_client_connector`` factory.  On the next tick the
+        # ``awaiting_tls`` branch promotes to ``ready``.
+        self._context = _resolve_default_context(self._context)
+        return self._context.wrap_socket(sock, server_hostname=self._host)

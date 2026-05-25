@@ -142,7 +142,7 @@ A chumicro_mqtt audit took 30 minutes for a side-by-side against `~/circuitpytho
 
 `projects/mqtt_tls_probe` on Pi Pico W MP failed every TLS handshake with `OSError(ENOMEM)` despite ~140 KB total free, because `max_free_sz` collapsed to ~490 16-byte blocks (~8 KB) — Swiss-cheese fragmentation, not exhaustion.  A 25-iteration hypothesis sweep (`.scratch/frag-iter-log.md`, commit `a99221b9`) bisected this to MicroPython's compile-time scratch staying resident after `chumicro_mqtt` and its dependencies finished loading.  Auto-GC only fires under allocation pressure; a successful import sequence never triggers it.  The scratch interleaves with the library's persistent objects (function / code / class / string heads), and the next big contiguous allocation request (the TLS handshake) fails.
 
-The fix is six `import gc as _gc; _gc.collect(); del _gc` blocks at strategic placement (see commit `a99221b9` for the diff):
+The fix is six `gc.collect()` calls at strategic placement (`import gc` at module top, `gc.collect()` at each point; see commit `a99221b9` for the historical diff):
 - `chumicro_mqtt/__init__.py` — between `_wire` and `client` imports (defragment _wire's scratch before client.py's persistent state lands) AND at end (defragment before downstream imports of `sockets_factory` and `runner`).  The end-of-init position is **load-bearing**: removing it drops `max_free_sz` by 1117 blocks (~18 KB).
 - `chumicro_mqtt/_wire.py` — before the `PacketDecoder` class body (+5 blocks, marginal but stable).
 - `chumicro_sockets/__init__.py` — at end, mainly to help the runtime-gated lazy `_adapters/mp` import inside `tls_client_socket`.
@@ -183,7 +183,7 @@ Don't propose eager adapter imports as a fragmentation fix.  The lazy pattern is
 
 ## Mid-module gc.collect — caveat: the file has to be imported
 
-The pattern `import gc as _gc; _gc.collect()` inserted mid-file between two large blocks (e.g. between encoder and decoder sections of a 400-line module) extends the gc.collect-at-boundaries idea.  Iter 12 of the original chumicro_mqtt sweep showed +5 blocks on `_wire.py`; this session's iter 03 showed **+944 bytes free at post_import on Pi Pico W CP custom firmware** when applied mid-`chumicro_msgpack/_pure.py`.
+The pattern `gc.collect()` inserted mid-file between two large blocks (e.g. between encoder and decoder sections of a 400-line module) extends the gc.collect-at-boundaries idea — `import gc` lives at the top of the file with the other imports.  Iter 12 of the original chumicro_mqtt sweep showed +5 blocks on `_wire.py`; this session's iter 03 showed **+944 bytes free at post_import on Pi Pico W CP custom firmware** when applied mid-`chumicro_msgpack/_pure.py`.
 
 The catch: `_pure` is **not** always imported.  `chumicro_msgpack/__init__.py` tries `from msgpack import pack, unpack` first on CircuitPython and only falls back to `_pure` when the native module is absent.  On stock CP firmware that ships native `msgpack`, the mid-module gc.collect inside `_pure` never executes (the file isn't loaded).  On MP and on CP builds that strip native `msgpack` (e.g. custom builds), `_pure` is imported and the gc.collect fires.
 

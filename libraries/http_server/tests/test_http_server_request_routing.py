@@ -1,6 +1,8 @@
 """http_server: in-flight observation, caller headers, Request
 object, routing."""
 
+import errno
+
 from chumicro_http_server import (
     CaseInsensitiveDict,
     HttpServer,
@@ -72,9 +74,10 @@ def _connection(request_bytes):
 class TestHttpServerInFlightObservation:
     def test_in_flight_increments_after_accept(self):
         # Use a stalled socket so the connection sticks around.
-        sock_stalled = type("Stalled", (FakeSocket,), {
-            "recv_into": lambda self, _b, _n=0: (_ for _ in ()).throw(OSError(11, "would block")),
-        })()
+        def _raise_eagain(self, _b, _n=0):
+            raise OSError(errno.EAGAIN, "would block")
+
+        sock_stalled = type("Stalled", (FakeSocket,), {"recv_into": _raise_eagain})()
         server, ticks, _ = _make_server(sockets=[(sock_stalled, ("127.0.0.1", 1))])
         assert server.in_flight == 0
         server.handle(ticks.ticks_ms())

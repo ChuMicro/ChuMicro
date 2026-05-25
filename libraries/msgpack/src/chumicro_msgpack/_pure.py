@@ -5,6 +5,7 @@ Supports None, bool, int (32-bit), float (32-bit), str, bytes,
 bytearray, list, tuple, and dict.
 """
 
+import gc
 import struct
 
 # ---------------------------------------------------------------------------
@@ -169,8 +170,7 @@ _MAX_DEPTH = 8
 _MALFORMED = "malformed msgpack: truncated or over-length framing"
 
 
-import gc as _gc  # noqa: E402, I001 — mid-file placement is intentional.
-_gc.collect()
+gc.collect()
 
 
 def _bounded_end(data: memoryview, start: int, length: int) -> int:

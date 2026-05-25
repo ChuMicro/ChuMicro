@@ -23,6 +23,7 @@ The handler is called once, after the full request (headers + any
 path parameter are all wired up.
 """
 
+import errno
 import json
 
 from chumicro_http_server._wire import (
@@ -41,11 +42,6 @@ from chumicro_http_server._wire import (
     parse_query,
     split_target,
 )
-
-
-def _is_eagain(error):
-    return getattr(error, "errno", None) in (11, 35)
-
 
 #: Reason phrases for the status codes this server emits.
 _REASONS = {
@@ -319,7 +315,7 @@ class _Connection:
             try:
                 got = self._socket.recv_into(self._recv_view, capacity)
             except OSError as socket_error:
-                if _is_eagain(socket_error):
+                if socket_error.errno == errno.EAGAIN:
                     return
                 raise
             if got == 0:
@@ -386,7 +382,7 @@ class _Connection:
             try:
                 sent = self._socket.send(chunk)
             except OSError as socket_error:
-                if _is_eagain(socket_error):
+                if socket_error.errno == errno.EAGAIN:
                     return
                 raise
             if sent <= 0:  # pragma: no cover - non-blocking-EAGAIN backpressure path
@@ -860,7 +856,7 @@ class HttpServer:
         try:
             accept_result = self._listener.accept()
         except OSError as accept_error:
-            if _is_eagain(accept_error):
+            if accept_error.errno == errno.EAGAIN:
                 return
             raise
         if accept_result is None:

@@ -16,8 +16,42 @@ patching — live in the sibling ``test_factories_pytest.py``.
 
 import sys
 
-import chumicro_sockets
-from chumicro_sockets import (
+
+class _SocketpoolStub:
+    """Stand-in for the ``socketpool`` firmware module on host runtimes.
+
+    Routing tests here drive runtime-specific adapter source through
+    host fakes — the cp adapter imports ``socketpool`` at module top,
+    the cpython adapter imports ``socket`` / ``ssl`` / ``select`` at
+    module top, and the CP / MP unix-ports do not ship those.  The
+    stubs only need to satisfy the module-load imports; per-test
+    fakes overwrite the adapter modules' attributes directly via
+    :class:`_SwapAttribute`.  Plain classes instead of
+    ``types.ModuleType`` because the MP / CP unix-ports omit
+    ``types``.
+    """
+
+    AF_INET = 2
+    SOCK_STREAM = 1
+    SOCK_DGRAM = 2
+    SOL_SOCKET = 0
+    SO_REUSEADDR = 4
+    SO_BROADCAST = 6
+
+
+class _BareStub:
+    """Empty placeholder for ``sys.modules[<name>]`` entries the
+    cpython adapter needs at module-load time on host runtimes."""
+
+
+sys.modules.setdefault("socketpool", _SocketpoolStub())
+sys.modules.setdefault("socket", _BareStub())
+sys.modules.setdefault("ssl", _BareStub())
+sys.modules.setdefault("select", _BareStub())
+
+
+import chumicro_sockets  # noqa: E402 — load-order dependency on the stub above
+from chumicro_sockets import (  # noqa: E402
     UnsupportedSSLConfigError,
     is_eagain,
     pollable_of,
@@ -33,7 +67,7 @@ from chumicro_sockets import (
     tls_client_socket,
     tls_listening_socket,
 )
-from chumicro_test_harness.assertions import raises
+from chumicro_test_harness.assertions import raises  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Cross-runtime stand-ins for unittest.mock.patch{,.object,.dict}
@@ -395,6 +429,8 @@ class TestCPythonTLSDefaultContextRouting:
     """
 
     def test_default_context_used_when_none_passed(self) -> None:
+        from chumicro_sockets._adapters import cpython as cpython_adapter
+
         captured: dict = {}
 
         class _FakeRawSocket:
@@ -421,9 +457,11 @@ class TestCPythonTLSDefaultContextRouting:
         fake_ssl = _FakeModule()
         fake_ssl.create_default_context = fake_default_context
 
+        # The cpython adapter imports ``socket`` / ``ssl`` at module
+        # top, so swap the adapter's module-level bindings directly.
         with _set_runtime("cpython"), \
-                _SwapItem(sys.modules, "socket", fake_socket), \
-                _SwapItem(sys.modules, "ssl", fake_ssl):
+                _SwapAttribute(cpython_adapter, "socket", fake_socket), \
+                _SwapAttribute(cpython_adapter, "ssl", fake_ssl):
             result = tls_client_socket("example.com", 443)
 
         assert captured.get("used_default_context") is True
@@ -750,23 +788,19 @@ class TestUnsupportedSSLConfigErrorIsAvailable:
 
 
 class TestIsEagain:
-    def test_errno_11_returns_true(self) -> None:
-        assert is_eagain(OSError(11, "EAGAIN")) is True
+    def test_eagain_errno_returns_true(self) -> None:
+        # Platform-resolved EAGAIN (11 on Linux / MP / CP, 35 on macOS).
+        import errno
+        assert is_eagain(OSError(errno.EAGAIN, "EAGAIN")) is True
 
-    def test_errno_35_returns_true(self) -> None:
-        # macOS-host CPython on a non-blocking socket.
-        assert is_eagain(OSError(35, "EAGAIN")) is True
+    def test_ebadf_returns_false(self) -> None:
+        # Closed fd is a real error; consumers must re-raise.
+        import errno
+        assert is_eagain(OSError(errno.EBADF, "bad fd")) is False
 
-    def test_errno_9_returns_false(self) -> None:
-        # EBADF — closed fd is a real error; consumers must re-raise.
-        assert is_eagain(OSError(9, "bad fd")) is False
-
-    def test_errno_10035_returns_false(self) -> None:
-        # Windows WSAEWOULDBLOCK — not in scope for the chumicro target set.
-        assert is_eagain(OSError(10035, "WSAEWOULDBLOCK")) is False
-
-    def test_unrelated_oserror_returns_false(self) -> None:
-        assert is_eagain(OSError(104, "ECONNRESET")) is False
+    def test_econnreset_returns_false(self) -> None:
+        import errno
+        assert is_eagain(OSError(errno.ECONNRESET, "ECONNRESET")) is False
 
     def test_non_oserror_returns_false(self) -> None:
         # Defensive: any exception missing ``errno`` falls through to False.

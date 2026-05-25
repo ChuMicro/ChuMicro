@@ -13,6 +13,7 @@ goes through :meth:`MQTTClient._allocate_packet_id`, which handles
 1-65535 wraparound and refuses ids already in flight.
 """
 
+import errno
 from collections import deque
 
 from chumicro_mqtt._wire import (
@@ -39,11 +40,6 @@ from chumicro_mqtt._wire import (
     encode_subscribe,
     encode_unsubscribe,
 )
-
-
-def _is_eagain(error):
-    return getattr(error, "errno", None) in (11, 35)
-
 
 # ---------------------------------------------------------------------------
 # Connection state + pending-work tracking
@@ -185,7 +181,8 @@ def _force_non_blocking(socket):
 class MQTTClient:
     """Non-blocking MQTT 3.1.1 client (QoS 0 + 1).
 
-    Construct with an already-connected :class:`TCPClientSocket` and
+    Construct with an already-connected TCP client socket (``send`` /
+    ``recv_into`` / ``close`` / ``setblocking`` / ``settimeout``) and
     user knobs, then drive via :meth:`check` / :meth:`handle` from a
     runner tick or a hand-rolled loop.  All callbacks fire from
     :meth:`handle`, never from a thread or interrupt.
@@ -1247,7 +1244,7 @@ class MQTTClient:
         try:
             return self._socket.send(payload)
         except OSError as error:
-            if _is_eagain(error):  # pragma: no cover - EAGAIN handling
+            if error.errno == errno.EAGAIN:  # pragma: no cover - EAGAIN handling
                 return 0
             raise
 
@@ -1295,7 +1292,7 @@ class MQTTClient:
             try:
                 got = self._socket.recv_into(buffer_view, capacity)
             except OSError as error:
-                if _is_eagain(error):  # pragma: no cover - EAGAIN handling
+                if error.errno == errno.EAGAIN:  # pragma: no cover - EAGAIN handling
                     got = 0  # No bytes this tick; fall through to dispatch.
                 else:
                     raise

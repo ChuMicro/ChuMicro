@@ -478,6 +478,75 @@ abstractions package.
 
 Related: Decision 0010, `new-library` skill.
 
+## Production tolerance that exists only to paper over a fake's hardcoded value
+
+A literal-set or "accept either A or B" tolerance in production code that exists *specifically* because a fake pins to A is a smell that the fake is wrong, not the platform.  A fake simulates what production observes on the platform the fake is executing on — if production has to tolerate a value the host wouldn't actually emit, the fake is the bug.
+
+**Worked shape (EAGAIN errno):**
+
+```python
+# Production accepts (11, 35), with a comment claiming 11 is "the" right one
+WOULD_BLOCK_ERRNOS = (11, 35)  # Errno 11 (EAGAIN) is the cross-runtime would-block code
+
+# Fake raises 11 on every platform
+class FakeSocket:
+    def recv(self, n: int) -> bytes:
+        raise OSError(11, "EAGAIN")
+```
+
+EAGAIN is `11` on Linux and embedded Pythons (CircuitPython, MicroPython) and `35` on macOS CPython.  A fake executing on macOS should raise `OSError(35)`, not `11`.  Production accepted both literals because the fake forced it to; the comment naming one value as "cross-runtime" was the writer's belief at write-time, not the reality.
+
+**The recognizer:** a literal-set or `errno in (…)` check in production paired with a comment that asserts one value is correct.  The other value usually traces to a fake pinned to it.  The same shape applies beyond errno — any host-observable value (path separator, line ending, default port, environment lookup) where production accepts "A or B" and a fake hardcodes A.
+
+**The fix:** the fake reads the platform's real value (`errno.EAGAIN`, `os.sep`, `os.linesep`), not a hardcoded literal.  Production drops the tolerance once the fake stops lying.
+
+**Why this matters in this repo:** ChuMicro fakes run on CPython (host tests), MicroPython unix-port, and CircuitPython unix-port — three platforms whose errno tables, path conventions, and runtime defaults differ.  A fake pinned to one platform's literal forces production to paper over the others, which then masks real platform bugs when the production code runs against a fourth (a real board).
+
+Related: AGENTS.md test-stand-in-fake rule under Testing; "Test fakes as `testing` submodules" above.
+
+## Cross-runtime test-file stub for a production module that exists only on a target firmware
+
+When production source imports a firmware-only module at module top (the correct shape), host-side tests that drive that source need the module present in `sys.modules` *before* the test file loads.  `pytest`'s `conftest.py` works for the pytest path but not for the `chumicro_test_harness` collector (which runs tests on MicroPython / CircuitPython unix-ports without picking up pytest hooks).  Install the stub at the test file's module top instead.
+
+**Worked shape — `socketpool` on host runtimes:**
+
+```python
+__chumicro_host_only__ = True
+
+import sys
+
+
+class _SocketpoolStub:
+    """Stand-in for ``socketpool`` on host runtimes — only needs to
+    satisfy the module-load import; per-test fakes overwrite the
+    adapter's module-level binding directly via ``_SwapAttribute``.
+
+    Plain class instead of ``types.ModuleType`` — CP / MP unix-ports
+    do not ship ``types``.
+    """
+
+    AF_INET = 2
+    SOCK_STREAM = 1
+    SOCK_DGRAM = 2
+    SOL_SOCKET = 0
+
+
+sys.modules.setdefault("socketpool", _SocketpoolStub())
+
+
+# Imports below depend on the stub having been installed.
+from chumicro_sockets import UnsupportedSSLConfigError  # noqa: E402
+```
+
+**Recognizer:** test file fails with `ImportError: no module named 'X'` on `test-micropython` / `test-circuitpython` but passes on `pytest`, where `X` is a CPython-stdlib or firmware-only module that production imports at module top.
+
+**Per-test fakes** then swap the adapter's attribute (`_SwapAttribute(cp_adapter, "socketpool", per_test_fake)`) rather than re-patching `sys.modules` after the fact — the production module has already bound the stub at its module-load `import` site, so post-hoc `sys.modules` patches do not take effect.
+
+**Why a class, not ``types.ModuleType``:** ``types`` is absent on the MicroPython and CircuitPython unix-ports.  A plain class instance assigned to ``sys.modules[name]`` satisfies ``import name`` on every host runtime — Python's import machinery only requires attribute access on the object it retrieves from ``sys.modules``.
+
+Related: AGENTS.md "Production tolerance that paper-overs a fake's hardcoded value" (sibling rule about production not bending to tests), `_SwapAttribute` helper in `libraries/sockets/tests/test_cp_adapter.py`.
+
+
 ## Cross-runtime shim
 
 When a module exists on CPython but not on MicroPython/CircuitPython

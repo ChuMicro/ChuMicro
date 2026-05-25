@@ -8,7 +8,7 @@ call, so an LED keeps blinking through the opening handshake, frame
 I/O, control-frame interleave, and the close handshake.
 """
 
-import gc as _gc  # noqa: I001 — interleaved gc.collect() between the submodule imports below.
+import gc
 
 from chumicro_websockets._wire import (
     CLOSE_BAD_DATA,
@@ -35,10 +35,11 @@ from chumicro_websockets._wire import (
     make_websocket_key,
     parse_ws_url,
 )
-_gc.collect()
+
+gc.collect()
 
 from chumicro_websockets.client import WebSocketClient, WhenOversized  # noqa: E402, I001 — preceded by gc.collect().
-_gc.collect()
+gc.collect()
 
 from chumicro_websockets.server import Connection, WebSocketServer  # noqa: E402, I001 — preceded by gc.collect().
 
@@ -72,5 +73,4 @@ __all__ = [
     "parse_ws_url",
 ]
 
-_gc.collect()
-del _gc
+gc.collect()

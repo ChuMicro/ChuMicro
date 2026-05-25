@@ -11,15 +11,11 @@ import footprint minimal so :func:`run_one_file` works under CPython,
 MicroPython unix-port, CircuitPython unix-port, and on real devices.
 """
 
+import gc
 import os
 import sys
 
 from chumicro_test_harness.runner import run_module
-
-try:
-    import gc as _gc
-except ImportError:  # pragma: no cover - gc may be absent on some CPython configs.
-    _gc = None
 
 
 def _is_dir(path):
@@ -135,8 +131,7 @@ def _exec_chunked(source, boundaries, namespace):
         chunk = "\n" * begin + "\n".join(lines[begin:end])
         if chunk.strip():
             exec(chunk, namespace)
-        if _gc is not None:
-            _gc.collect()
+        gc.collect()
 
 
 def _exec_as_namespace(file_path, name="__main__", package="", chunk_boundaries=None):

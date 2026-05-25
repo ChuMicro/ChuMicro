@@ -13,6 +13,8 @@ response carries ``Connection: close``); chunked request bodies
 helpers, multipart upload, sub-app mounting, async handlers.
 """
 
+import gc
+
 from chumicro_http_server._wire import (
     DEFAULT_MAX_CONNECTIONS,
     DEFAULT_MAX_REQUEST_BODY_BYTES,
@@ -59,6 +61,4 @@ __all__ = [
     "split_target",
 ]
 
-import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
-_gc.collect()
-del _gc
+gc.collect()

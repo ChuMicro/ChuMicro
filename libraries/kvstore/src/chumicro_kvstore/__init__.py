@@ -21,6 +21,8 @@ Per-runtime backends ship with the library:
 * ``"memory"`` — CPython default + ``FakeKVStore`` substrate.
 """
 
+import gc
+
 from chumicro_kvstore.core import (
     KVStore,
     KVStoreCorrupt,
@@ -35,6 +37,4 @@ __all__ = [
     "KVStoreFull",
 ]
 
-import gc as _gc  # noqa: E402, I001 — intentional end-of-module placement.
-_gc.collect()
-del _gc
+gc.collect()
