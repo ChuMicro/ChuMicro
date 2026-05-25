@@ -425,10 +425,13 @@ class _CPConnector(SocketConnector):
                     sock = self._context.wrap_socket(
                         sock, server_hostname=self._host,
                     )
+                # Assign before the blocking connect so ``_fail()`` (via
+                # the outer except) finds the partially-built socket to
+                # close on connect failure.
+                self.socket = sock
                 # Blocking connect — completes TCP and (if wrapped)
                 # the TLS handshake before returning.
                 sock.connect(self.sockaddr)
-                self.socket = sock
                 self.state = STATE_READY
                 return
         except Exception as error:  # noqa: BLE001 - any failure stops the machine

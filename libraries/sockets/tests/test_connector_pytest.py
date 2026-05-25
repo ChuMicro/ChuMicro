@@ -90,13 +90,18 @@ class TestCPythonTCPConnector:
         assert connector.state == STATE_READY
         connector.socket.close()
 
-    def test_io_socket_none_after_ready(self, listener) -> None:
+    def test_io_socket_tracks_socket_after_ready(self, listener) -> None:
         host, port = listener
         connector = tcp_client_connector(host, port)
         _drive(connector)
-        # Once terminal, io_socket returns None so the runner stops
-        # polling the connector's socket — the consumer has picked it up.
-        assert connector.io_socket is None
+        # io_socket is a thin delegate of self.socket throughout the
+        # lifecycle — including after ready — so consumers can keep
+        # ``runner.add(consumer)`` registered without re-attributing
+        # the wake-target.  The runner stops dispatching ``handle``
+        # to the connector via ``check()`` returning False (separate
+        # test); io_socket exposing the connected socket doesn't drive
+        # extra wakeups.
+        assert connector.io_socket is connector.socket
         connector.socket.close()
 
     def test_check_returns_false_when_ready(self, listener) -> None:
@@ -166,7 +171,7 @@ class TestCPythonTCPConnector:
         connector = _CPythonConnector("203.0.113.1", 9, tls=False, context=None)
         connector.tick(0)  # awaiting_dns -> awaiting_tcp
         assert connector.state == STATE_AWAITING_TCP
-        connector.tick(0)  # issues non-blocking connect; sets _inflight_socket
+        connector.tick(0)  # issues non-blocking connect; sets connector.socket
         # Subsequent tick checks readiness; the kernel hasn't completed
         # the connect (203.0.113.0/24 is TEST-NET-3, RFC 5737, no peer).
         connector.tick(0)

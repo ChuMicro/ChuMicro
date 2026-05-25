@@ -580,10 +580,10 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
                 return
 
             if self.state == STATE_AWAITING_TCP:
-                if self._inflight_socket is None:
-                    self._inflight_socket = self._issue_tcp_connect()
+                if self.socket is None:
+                    self.socket = self._issue_tcp_connect()
                     self._tcp_poll = select.poll()
-                    self._tcp_poll.register(self._inflight_socket, select.POLLOUT)
+                    self._tcp_poll.register(self.socket, select.POLLOUT)
                     return
                 # POLLOUT firing means the kernel has resolved the
                 # connect (success or failure).  POLLERR / POLLHUP would
@@ -601,21 +601,19 @@ class _MpConnector(SocketConnector):  # pragma: no cover - device only
                     # the next tick the ``awaiting_tls`` branch promotes
                     # to ``ready``.
                     self._context = _resolve_default_context(self._context)
-                    self._inflight_socket = self._context.wrap_socket(
-                        self._inflight_socket, server_hostname=self._host,
+                    self.socket = self._context.wrap_socket(
+                        self.socket, server_hostname=self._host,
                     )
                     self.state = STATE_AWAITING_TLS
                 else:
-                    self.socket = _MpSocketWrapper(self._inflight_socket)
-                    self._inflight_socket = None
+                    self.socket = _MpSocketWrapper(self.socket)
                     self.state = STATE_READY
                 return
 
             if self.state == STATE_AWAITING_TLS:
                 # MP's ``wrap_socket`` already drove the handshake to
                 # completion on entry; this tick just promotes.
-                self.socket = _MpSocketWrapper(self._inflight_socket)
-                self._inflight_socket = None
+                self.socket = _MpSocketWrapper(self.socket)
                 self.state = STATE_READY
                 return
         except Exception as error:  # noqa: BLE001 - any failure stops the machine

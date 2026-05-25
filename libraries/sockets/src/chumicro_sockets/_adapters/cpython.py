@@ -109,25 +109,21 @@ class _CPythonConnector(SocketConnector):
                 return
 
             if self.state == STATE_AWAITING_TCP:
-                if self._inflight_socket is None:
-                    self._inflight_socket = self._issue_tcp_connect()
+                if self.socket is None:
+                    self.socket = self._issue_tcp_connect()
                     return
-                if not self._tcp_ready(self._inflight_socket):
+                if not self._tcp_ready(self.socket):
                     return
                 if self._tls:
-                    self._inflight_socket = self._wrap_tls(self._inflight_socket)
+                    self.socket = self._wrap_tls(self.socket)
                     self.state = STATE_AWAITING_TLS
                 else:
-                    self.socket = self._inflight_socket
-                    self._inflight_socket = None
                     self.state = STATE_READY
                 return
 
             if self.state == STATE_AWAITING_TLS:
-                if not self._tls_ready(self._inflight_socket):
+                if not self._tls_ready(self.socket):
                     return
-                self.socket = self._inflight_socket
-                self._inflight_socket = None
                 self.state = STATE_READY
                 return
         except Exception as error:  # noqa: BLE001 - any failure stops the machine
