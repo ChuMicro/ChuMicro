@@ -47,6 +47,7 @@ _library-backups/
 #   (chumicro-workspace / chumicro-deploy / chumicro-repl).  `.local.json`
 #   stays ignored for per-user overrides.
 .claude/*
+!.claude/agents
 !.claude/skills
 !.claude/settings.json
 
