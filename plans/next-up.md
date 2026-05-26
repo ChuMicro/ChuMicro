@@ -4,6 +4,8 @@
 
 ## Now
 
+- [ ] **Resume runner.add_generator workstream from session handoff** — re-verify the workstream against current code, then execute Phase 1.  See [`handoffs/2026-05-25-runner-generator-tasks-resume.md`](handoffs/2026-05-25-runner-generator-tasks-resume.md).
+
 ## Next
 
 - [ ] **Simplify io_socket bridging in chumicro_mqtt / chumicro_requests / chumicro_websockets** — after `chumicro_sockets` 0.10.0 made `SocketConnector.socket` a live reference throughout the lifecycle and `SocketConnector.io_socket` a thin delegate of it, each consumer's `client.py` carries a dual-source bridge (delegate to `connector.io_socket` during connect, fall back to `connector.socket` after) that can collapse to single-source delegation.  Same for `io_wants_read` / `io_wants_write`.  Backward-compatible — current code still works; the simplification is opt-in per consumer.  Touch sites: `libraries/mqtt/src/chumicro_mqtt/client.py` (io_socket / io_wants_read / io_wants_write block), `libraries/requests/src/chumicro_requests/client.py` (same), `libraries/websockets/src/chumicro_websockets/client.py` (same).  Each consumer also needs its FakeSocketConnector usage re-checked since the fake's io_socket still returns None when terminal — either update `chumicro_sockets.testing.FakeSocketConnector` to match the new shape (mirror `socket` as live ref) OR keep the consumer bridges that handle both shapes.  Patch bump per consumer; sockets `FakeSocketConnector` update would be a sockets patch bump.
