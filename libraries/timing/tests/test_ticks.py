@@ -25,6 +25,11 @@ def test_ticks_diff_handles_wraparound() -> None:
     assert ticks_module.ticks_diff(end, start) == 15
 
 
+def test_ticks_diff_returns_negative_for_past_value() -> None:
+    """A diff where the end is before the start should return a negative value."""
+    assert ticks_module.ticks_diff(100, 150) == -50
+
+
 # -- ticks_add --
 
 

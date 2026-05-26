@@ -43,16 +43,14 @@ class Heartbeat:
         """
         self._last_beat_ms = now_ms
 
-    def _is_due(self, now_ms: int) -> bool:
-        """Return whether the heartbeat period has elapsed since the last beat.
-
-        Internal predicate split out so :meth:`poll` reads as
-        "if due, advance" rather than carrying the tick math inline.
-        """
-        return self._ticks.ticks_diff(now_ms, self._last_beat_ms) >= self.period_ms
-
     def poll(self, now_ms: int) -> bool:
         """Return ``True`` once per elapsed period and advance the heartbeat state.
+
+        When ``poll`` is called late (more than one period after the
+        previous fire), the heartbeat fires once and anchors to *now_ms*
+        — missed intervals are dropped, not caught up.  For drift-free
+        periodic work, compute the next deadline manually with
+        ``ticks_add(last_deadline, period_ms)``.
 
         Args:
             now_ms: Current tick value.
@@ -60,7 +58,7 @@ class Heartbeat:
         Returns:
             ``True`` if the period elapsed and the heartbeat advanced.
         """
-        if not self._is_due(now_ms):
+        if self._ticks.ticks_diff(now_ms, self._last_beat_ms) < self.period_ms:
             return False
         self._last_beat_ms = now_ms
         return True
