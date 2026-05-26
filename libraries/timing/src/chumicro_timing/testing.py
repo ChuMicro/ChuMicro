@@ -30,7 +30,7 @@ __chumicro_test_support__ = True
 
 import time
 
-from chumicro_timing.ticks import TICKS_HALFPERIOD, TICKS_MAX, TICKS_PERIOD
+from chumicro_timing.ticks import TICKS_MAX, ticks_add, ticks_diff
 
 
 def sleep_ms(duration_ms: int) -> None:
@@ -78,8 +78,6 @@ class FakeTicks:
     def ticks_diff(self, end: int, start: int) -> int:
         """Wraparound-safe signed difference *end* − *start*.
 
-        Uses the same ring arithmetic as the real ``ticks_diff``.
-
         Args:
             end: Later tick value.
             start: Earlier tick value.
@@ -87,14 +85,10 @@ class FakeTicks:
         Returns:
             Signed difference in milliseconds.
         """
-        diff = (end - start) & TICKS_MAX
-        return ((diff + TICKS_HALFPERIOD) & TICKS_MAX) - TICKS_HALFPERIOD
+        return ticks_diff(end, start)
 
     def ticks_add(self, ticks_val: int, delta: int) -> int:
         """Wraparound-safe addition of *delta* to a tick value.
-
-        Matches the real ``ticks_add`` behavior, including raising
-        ``OverflowError`` for deltas at or beyond the half-period.
 
         Args:
             ticks_val: Base tick value.
@@ -106,6 +100,4 @@ class FakeTicks:
         Raises:
             OverflowError: If *delta* is outside (-2**28 .. 2**28).
         """
-        if not (-TICKS_HALFPERIOD < delta < TICKS_HALFPERIOD):
-            raise OverflowError("ticks interval overflow")
-        return (ticks_val + delta) % TICKS_PERIOD
+        return ticks_add(ticks_val, delta)

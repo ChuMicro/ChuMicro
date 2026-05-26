@@ -106,6 +106,31 @@ def test_heartbeat_poll_fires_exactly_at_period() -> None:
     assert heartbeat.poll(now) is True
 
 
+def test_heartbeat_fires_across_tick_wraparound() -> None:
+    """poll() fires when the period elapses across the 2**29 wrap boundary."""
+    # Start 50 ms before wrap so the next period boundary lands 50 ms past it.
+    period = 1 << 29
+    fake = FakeTicks(start_ms=period - 50)
+    heartbeat = Heartbeat(period_ms=100, ticks=fake)
+
+    fake.advance(100)
+    now = fake.ticks_ms()
+    assert heartbeat.poll(now) is True
+
+
+def test_heartbeat_drops_missed_beats_after_long_gap() -> None:
+    """poll() fires once and re-anchors to now after a gap longer than one period."""
+    fake = FakeTicks()
+    heartbeat = Heartbeat(period_ms=100, ticks=fake)
+
+    # 2.5 periods of lateness: only one beat fires, the rest are dropped.
+    fake.advance(250)
+    now = fake.ticks_ms()
+    assert heartbeat.poll(now) is True
+    # Re-anchored to now, so a second poll at the same timestamp is False.
+    assert heartbeat.poll(now) is False
+
+
 def test_heartbeat_default_ticks_uses_real_clock() -> None:
     """Creating a Heartbeat without ticks= should use the real clock."""
     heartbeat = Heartbeat(period_ms=1000)

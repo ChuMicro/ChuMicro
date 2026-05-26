@@ -60,6 +60,12 @@ heartbeat.reset(now)
 # regardless of when the last beat was.
 ```
 
+### Behavior under late polls
+
+When the loop runs late, `Heartbeat.poll(now)` fires once and re-anchors the next deadline to `now` — missed intervals are dropped, not caught up. For most loops this is what you want: a heartbeat that lost a cycle resumes from where the code actually got to, not from where it should have been.
+
+For workloads where the period really has to mean what it says ("10 messages per minute", "sample the sensor every 200 ms regardless of jitter"), use the deadline-carrier pattern instead — see [`examples/phase_locked_tick.py`](../examples/phase_locked_tick.py).
+
 ## Using ticks directly
 
 For custom timing logic that doesn't fit the heartbeat pattern, use the tick functions directly:
@@ -131,12 +137,25 @@ The [examples](../examples/) directory contains complete runnable scripts:
 | `timeout_check.py` | Using `ticks_diff()` for deadline-based timeout detection |
 | `debounce.py` | Button debounce using `ticks_ms()` and `ticks_diff()` |
 | `periodic_tick.py` | Manual periodic action — the same logic `Heartbeat` wraps |
+| `phase_locked_tick.py` | Drift-free deadline carrier — same period across late loops |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `circuitpython_debounce.py` | Button debounce on CircuitPython hardware |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 | `micropython_debounce.py` | Button debounce on MicroPython hardware |
 
 Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board — see the setup notes in each file.
+
+### Sensor timeouts (`timeout_check.py`)
+
+Shows `ticks_add` for computing an absolute deadline and `ticks_diff` for checking it.  A `wait_for_sensor(timeout_ms)` helper polls a simulated sensor until it reads ready or the deadline expires, returning the elapsed time on success or `-1` on timeout.  The deadline is computed once with `ticks_add(start, timeout_ms)`; each iteration tests `ticks_diff(now, deadline) < 0` to decide whether to keep polling.
+
+The same pattern generalises to any "fail after N ms" check — handshake completion, status-register polling, button-hold detection.
+
+### Button debounce (`debounce.py`)
+
+Shows `ticks_ms` and `ticks_diff` for the classic debounce pattern.  A raw button signal bounces for a few ms after each press; the debouncer records the timestamp of the last accepted transition and rejects further changes until a quiet period (`DEBOUNCE_MS`) has elapsed.
+
+The same shape applies any time you need to suppress rapid signal changes — button presses, sensor readings near a threshold, motion-detector pulses.
 
 ---
 

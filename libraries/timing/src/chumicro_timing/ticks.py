@@ -29,16 +29,10 @@ TICKS_HALFPERIOD = const(TICKS_PERIOD // 2)
 
 
 def _resolve_ticks_ms() -> object:
-    """Choose the best raw millisecond source available on this runtime.
+    """Return the best raw millisecond source available on this runtime.
 
-    Called once at import time.  The returned callable is stored in
+    Called once at import time; the returned callable is stored in
     ``_raw_ticks_ms`` and invoked by ``ticks_ms()`` on every call.
-
-    Resolution order:
-      1. ``supervisor.ticks_ms`` — CircuitPython 7+
-      2. ``time.ticks_ms`` — MicroPython (and CP unix port)
-      3. ``time.monotonic_ns`` — CPython, some CP Express boards
-      4. ``time.monotonic`` — final fallback (float seconds)
     """
     try:
         import supervisor
