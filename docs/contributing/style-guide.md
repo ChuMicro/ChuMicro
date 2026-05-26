@@ -238,6 +238,19 @@ class PacketReader:
 </details>
 
 
+## Cooperative concurrency
+
+`chumicro-runner` is the only sanctioned scheduler.  Services register via `runner.add(service)` (check / handle), `runner.add_periodic(handler, period_ms=...)` (periodic), or `runner.add_generator(gen)` (generator function for sequential I/O — see the [runner README](../../libraries/runner/README.md#generator-driven-sequential-io)).
+
+**`async` / `await` and the `asyncio` module are banned across `libraries/` / `support/` / `workbench/`.**  This is a hard rule.  Specifically:
+
+- `async def`, `await`, `async with`, `async for`.
+- `import asyncio` / `from asyncio import …`.
+- `import uasyncio` / `from uasyncio import …` (MicroPython alias).
+- A module file or directory named `asyncio*`.
+
+The substitute is `def` + `yield` / `yield from` against the wait shapes the runner accepts.  Reasoning (yield-point hygiene, transparency, the per-`await` allocation cost on CircuitPython, smaller lint surface) lives in the runner's user guide.  An unenforced lint today; if asyncio code starts creeping in, the rule moves to `chumicro-checks` and gets a `CHU` code.
+
 ## Coverage exclusions
 
 Every library must meet the **85 %** coverage threshold configured in `pyproject.toml` (`fail_under = 85`). Sometimes code genuinely can't be exercised in CPython tests — runtime-specific branches, hardware fallbacks, or defensive guards that only fire on a real board. Mark those lines so they don't drag down your coverage.

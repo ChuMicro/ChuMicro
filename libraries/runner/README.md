@@ -103,6 +103,7 @@ while True:
 | `Runner(ticks=None, poller=None)` | Tick-based service loop with shared timestamps.  `poller` is an injectable `select.poll`-shaped object consulted by `wait()`; the default is built lazily on the first wait that has a socket to register |
 | `Runner.add(task, handler=None, period_ms=None, start_after_ms=None, run_count=None)` | Register a task; returns a `TaskHandle` |
 | `Runner.add_periodic(handler, period_ms, start_after_ms=None, run_count=None)` | Register a periodic handler; returns a `TaskHandle` |
+| `Runner.add_generator(gen)` | Register a generator function (for sequential I/O written top-to-bottom); returns a `GeneratorHandle`.  See [Generator-driven sequential I/O](#generator-driven-sequential-io) |
 | `Runner.tick()` | Capture time, check services, batch-fire handlers; returns `now_ms` |
 | `Runner.wait(now_ms)` | Idle until the next deadline or a registered socket is ready.  Companion to `tick()`; see [Idling between ticks](#idling-between-ticks) |
 | `TaskHandle` | Opaque handle for runtime mutation of a registered service |
@@ -111,6 +112,20 @@ while True:
 | `TaskHandle.period_ms` | Current period in milliseconds, or `None`.  Mutate via `set_period()`, not direct assignment (direct writes skip the timer reset) |
 | `TaskHandle.run_count` | Remaining run count, or `None` if unlimited.  Decremented by the runner after each fire |
 | `TaskHandle.active` | Whether the service is still registered.  Set to `False` by `remove()` |
+| `GeneratorHandle.done` | `True` once the generator has returned or been cancelled |
+| `GeneratorHandle.cancel()` | Stop the generator early; fires any `finally` blocks inside the body |
+
+### Generator helpers (opt-in sub-module)
+
+`chumicro_runner.generators` carries four socket-driven helpers and one sleep helper for writing sequential I/O without per-state plumbing.  Import explicitly so plain-runner consumers stay free of the load:
+
+| Symbol | Description |
+|---|---|
+| `connect(connector)` | Drive any `SocketConnector`-shaped object to ready across runner ticks; return the connected socket via PEP 380 (`sock = yield from connect(connector)`) |
+| `send_all(sock, data)` | Send every byte of *data* with an EAGAIN-yielding inner loop |
+| `recv_until(sock, separator, max_bytes=...)` | Read until *separator* appears, capped at *max_bytes* (heap-DoS guard) |
+| `recv_exact(sock, byte_count)` | Read exactly *byte_count* bytes |
+| `sleep_until(until_ms)` | Suspend until the absolute tick `until_ms`; pair with `chumicro_timing.ticks_add(ticks_ms(), delay_ms)` |
 
 ### Testing
 
@@ -188,6 +203,48 @@ No service check needed — the handler fires on schedule:
 handle = runner.add_periodic(toggle_led, period_ms=500)
 handle.set_period(1000)  # change rate at runtime
 ```
+
+## Generator-driven sequential I/O
+
+Write the work as a generator function and register it with `runner.add_generator(gen)`.  Each `yield` hands control back to the runner so other services get their tick, and the body reads top-to-bottom:
+
+```python
+from chumicro_runner import Runner
+from chumicro_runner.generators import connect, recv_until, send_all
+from chumicro_sockets import tcp_client_connector
+
+
+def echo_run(host, port, radio):
+    sock = yield from connect(tcp_client_connector(host, port, radio=radio))
+    try:
+        yield from send_all(sock, b"hello\n")
+        reply = yield from recv_until(sock, b"\n", max_bytes=4096)
+        print(f"got {reply!r}")
+    finally:
+        sock.close()
+
+
+runner = Runner()
+handle = runner.add_generator(echo_run("echo.example", 7, radio=wifi_radio))
+
+while not handle.done:
+    now_ms = runner.tick()
+    runner.wait(now_ms)
+```
+
+The generator yields a wait — typically a `connector`, a socket-bound wait from `send_all` / `recv_until` / `recv_exact`, or a deadline from `sleep_until` — and the runner resumes it when the underlying socket is ready (or, for `sleep_until`, when the deadline passes).  `try / finally` runs whether the generator returns normally, raises, or gets cancelled via `handle.cancel()` (which sends `GeneratorExit` into the body).
+
+### When to pick generators vs check/handle
+
+**Default to `check` / `handle`.**  Reactive services — keepalive timers, button debounce, sensor polls, state-change reactions — read naturally as a small object with a gate and a handler.  Composes well with other services; the runner gives every service a fair share of every tick without one stalling another.
+
+**Reach for `add_generator` when the work is naturally one-shot sequential I/O.**  Connect, send, receive, close.  An HTTP request and its response.  A multi-step protocol handshake.  Without the generator helpers, that work compiles to a per-state class with three `_handle_*` methods, four state strings, and manual offset bookkeeping.  With them it reads as a top-to-bottom function.
+
+The runner accommodates both — every networked library in ChuMicro (`wifi`, `mqtt`, `requests`, `http_server`, `websockets`) keeps its `check` / `handle` shape.  Custom-protocol code that does one round trip per request is what `add_generator` exists for.
+
+### What the runner does NOT use
+
+`async` / `await` and the `asyncio` module are out.  Generators win on yield-point hygiene (`yield from` raises `TypeError` against a regular function — the keyword can't lie about whether the callee actually suspends), on transparency (one bytecode that's single-steppable and visible in a traceback), and on CircuitPython allocation cost (CP compiles `await x` to `load_method __await__; call; YIELD_FROM` and allocates a fresh generator per await — `yield from x` is one bytecode on every runtime).
 
 ## Idling between ticks
 
@@ -278,6 +335,7 @@ All classes use only basic Python features. Works identically on CPython, MicroP
 | `basic_handler.py` | Handler-only task (fires every tick) |
 | `multi_service.py` | Multiple services at different rates |
 | `runtime_control.py` | TaskHandle: change period, limit runs, remove at runtime |
+| `generator_basic.py` | Generator-driven service using `sleep_until` (no hardware) |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `circuitpython_button_led.py` | Button-gated LED on CircuitPython |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
