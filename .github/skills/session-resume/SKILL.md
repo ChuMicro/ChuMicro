@@ -27,19 +27,14 @@ Trigger conditions — all require an explicit user signal:
 
 ### 1. Locate the handoff
 
-If invoked with a slug or partial match:
+Handoffs live at `plans/handoffs/<YYYY-MM-DD>-<slug>.md`.
 
-```bash
-ls plans/handoffs/ | grep '<slug>'
-```
+- With a slug, construct the path and read directly via the file tool.
+- With a partial-match slug, use Glob (`plans/handoffs/*<slug>*.md`). Multiple matches: ask the user to disambiguate.
+- With no slug, use Glob (`plans/handoffs/*.md`) and take the most recent by filename date.
+- If `plans/next-up.md` `## Now` already names the path, read it from there.
 
-If no arg, the latest by date:
-
-```bash
-ls plans/handoffs/ | grep -E '^[0-9]{4}-' | sort | tail -1
-```
-
-If the auto-trigger fired, the path is already in the `## Now` pointer — read it from there.
+Use file tools to read, not a shell `cat` / `ls` chain.
 
 ### 2. Read the handoff end-to-end
 
@@ -57,7 +52,7 @@ Every section.  Not just the punch list.  Specifically:
 
 A handoff describes the writer's **intent and belief at write time, not current state** — the same rule AGENTS.md applies to sub-agent reports (*"Reports describe intent, not state"*), now applied to handoffs. The writer was the most context-degraded agent in the cycle. Do not treat it as gospel; the user should not have to tell you that. Before step 5:
 
-- `git --no-pager log --oneline <first>..<last>` across the SHAs the handoff cites — confirm they exist and the narrative matches the commits.
+- The SHAs the handoff cites are evidence pointers. When a specific commit is load-bearing for the work ahead, read the affected files directly via the file tools (or `git show <sha>` if the commit *message* or diff is itself the load-bearing artifact). Don't sweep `git log` across the handoff's SHA range as a warm-up ritual — verify only what's material.
 - Spot-check that named files / symbols / line numbers still exist (line numbers drift; grep the symbol).
 - **Cheaply reproduce one `[VERIFIED]` claim.** If a claim the handoff calls verified does not reproduce, treat the *entire* handoff as suspect and say so to the user — a degraded writer's "verified" is the highest-value thing to falsify.
 - Diff the handoff against the code / ADRs / `open-questions.md` it references; flag drift.
