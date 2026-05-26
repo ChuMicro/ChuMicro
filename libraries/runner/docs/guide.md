@@ -237,6 +237,58 @@ runner.add_periodic(
 )
 ```
 
+### Generator-driven
+
+Write the I/O as a generator function and register it with `runner.add_generator(gen)`.  Each `yield from connect(...)` / `send_all(...)` / `recv_until(...)` hands control back to the runner between steps, so the body reads top-to-bottom while other services keep ticking.  Import the helpers explicitly from `chumicro_runner.generators` — plain-runner consumers pay nothing.
+
+```python
+from chumicro_runner import Runner
+from chumicro_runner.generators import connect, recv_until, send_all
+from chumicro_sockets import tcp_client_connector
+
+
+def echo_run(host, port, radio):
+    sock = yield from connect(tcp_client_connector(host, port, radio=radio))
+    try:
+        yield from send_all(sock, b"hello\n")
+        reply = yield from recv_until(sock, b"\n", max_bytes=4096)
+        print(f"got {reply!r}")
+    finally:
+        sock.close()
+
+
+runner = Runner()
+handle = runner.add_generator(echo_run("echo.example", 7, radio=wifi_radio))
+
+while not handle.done:
+    now_ms = runner.tick()
+    runner.wait(now_ms)
+```
+
+Each `yield from` is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  `handle.done` flips True the moment the generator returns; `handle.cancel()` raises `GeneratorExit` inside the body so any `finally` block runs the cleanup.
+
+#### Choosing between `add` and `add_generator`
+
+| Use `runner.add(service)` when... | Use `runner.add_generator(gen)` when... |
+|---|---|
+| The work is reactive — a condition fires, you respond | The work is a one-shot sequence — connect, send, recv, close |
+| The state machine is small and stable (one state, or a handful of binary flags) | The state machine is long and linear — multiple I/O steps in order |
+| Multiple instances run side by side and share resources cooperatively | A single attempt drives one connection to completion |
+| You want to expose `set_period()` / `run_count` for runtime control | You want PEP 380 `return value` for the helper's terminal result |
+
+Default to `check` / `handle` for everything in `libraries/`; reach for `add_generator` when the work is naturally sequential I/O.  "Everything is a generator" is the drift to avoid — reactive services read more clearly in the gated shape, and two service models coexisting is genuinely lower overhead than forcing all work into one or the other.
+
+#### What the runner does NOT use
+
+The runner deliberately does not use `async` / `await` or the `asyncio` module.  Generators were picked over async syntax for four reasons in declining order of weight:
+
+1. **Yield-point hygiene.**  `yield from helper()` raises `TypeError` if `helper` isn't a generator — the syntax enforces that every yield-point is a deliberate scheduler checkpoint.  `await helper()` against a regular function silently produces a *coroutine-without-await*, and the asyncio community already has a class of linters chasing that footgun.
+2. **Transparency.**  A `yield` is one bytecode that hands control to the scheduler — single-steppable, breakpoint-able, visible in a traceback.  `await` hides the same handoff behind compile-time machinery that differs per runtime.
+3. **Allocation budget on CircuitPython.**  CircuitPython compiles `await x` to `load_method __await__; call; YIELD_FROM`; every `await` allocates a fresh generator from the `__await__()` call.  `yield from x` is one bytecode on every runtime.
+4. **Smaller lint surface.**  A user who has never seen `async def` cannot reach for `import asyncio`.
+
+`async def` / `await` / `async with` / `async for` and `import asyncio` / `import uasyncio` are banned across `libraries/` / `support/` / `workbench/` — see [the style guide's lint section](../../../docs/contributing/style-guide.md#lint) for the contributor-facing rule.
+
 ## Period-gated services
 
 Pass `period_ms` to `add()` and the runner will only check the service when the period elapses.  Services without a period are checked every tick.

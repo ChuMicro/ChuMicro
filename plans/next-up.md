@@ -4,8 +4,6 @@
 
 ## Now
 
-- [ ] **Generator-driven sequential I/O — Phase 4: CHU lint rule banning async/await + asyncio module.**  Phases 1 + 2 + 3 + 5 shipped in `chumicro_runner` 0.5.0; helpers live at `chumicro_runner.generators` with a duck-typed wait protocol.  Remaining: the lint rule + Phase 6 docs.  [`workstreams/runner-generator-tasks.md`](workstreams/runner-generator-tasks.md)
-
 ## Next
 
 - [ ] **Simplify io_socket bridging in chumicro_mqtt / chumicro_requests / chumicro_websockets** — after `chumicro_sockets` 0.10.0 made `SocketConnector.socket` a live reference throughout the lifecycle and `SocketConnector.io_socket` a thin delegate of it, each consumer's `client.py` carries a dual-source bridge (delegate to `connector.io_socket` during connect, fall back to `connector.socket` after) that can collapse to single-source delegation.  Same for `io_wants_read` / `io_wants_write`.  Backward-compatible — current code still works; the simplification is opt-in per consumer.  Touch sites: `libraries/mqtt/src/chumicro_mqtt/client.py` (io_socket / io_wants_read / io_wants_write block), `libraries/requests/src/chumicro_requests/client.py` (same), `libraries/websockets/src/chumicro_websockets/client.py` (same).  Each consumer also needs its FakeSocketConnector usage re-checked since the fake's io_socket still returns None when terminal — either update `chumicro_sockets.testing.FakeSocketConnector` to match the new shape (mirror `socket` as live ref) OR keep the consumer bridges that handle both shapes.  Patch bump per consumer; sockets `FakeSocketConnector` update would be a sockets patch bump.
