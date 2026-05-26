@@ -1,159 +1,43 @@
-"""Board-side echo demo — sockets via runner.
+"""Board-side echo demo — sockets via runner, generator shape.
 
-``EchoService`` runs one TCP round trip — connect, send a probe,
-read the echo, exit — under ``chumicro_runner``.  It stays dormant
-until the wifi link is up, then ``start()`` builds the
-``SocketConnector`` and the service drives it through DNS / TCP /
-TLS inside its own ``handle``.  Once the connector reaches
-``ready``, the service takes over the socket for send / recv.
+``echo_run`` expresses the full lifecycle top-to-bottom: build a
+``SocketConnector``, drive it to ``ready`` via ``connect``, send a
+probe via ``send_all``, receive the echo via ``recv_until``, close.
+``Runner.add_generator`` drives it across ticks; the wait-tokens
+the helpers yield gate ipoll wake-ups on the right socket events.
+
+Compare with ``demos/sockets_runner_connector_explicit/app.py`` —
+the same wire behaviour expressed as an explicit ``check`` / ``handle``
+state machine.  Read that one to see what the generator helpers
+collapse.
 
 Marker lines (``WIFI_OK``, ``CONNECTING``, ``CONNECTED``, ``SENT``,
 ``ECHO_RECEIVED``, ``DEMO_COMPLETE``) drive the host driver.
 """
 
-import errno
-
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
+from chumicro_runner.generators import connect, recv_until, send_all
 from chumicro_sockets import tcp_client_connector
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
+PROBE_PAYLOAD = b"hello chumicro\n"
+MAX_REPLY_BYTES = 256
 
-class EchoService:
-    """Connect to the echo server, send a probe, read the echo, exit.
 
-    ``self.state`` walks ``idle`` → ``connecting`` → ``sending`` →
-    ``receiving`` → ``done``.  Pass the radio at construction; call
-    ``start()`` once the wifi link is up.  ``handle`` drives the
-    ``SocketConnector`` through ``connecting``; this service owns
-    ``self._socket`` for send and recv after ``ready``.
-    """
-
-    PROBE_PAYLOAD = b"hello chumicro\n"
-    RECV_BUFFER_SIZE = 64
-
-    def __init__(self, host, port, radio):
-        self._host = host
-        self._port = port
-        self._radio = radio
-        self.connector = None
-        self._socket = None
-        self._buffer = bytearray(self.RECV_BUFFER_SIZE)
-        self._received = bytearray()
-        self._send_offset = 0
-        self.state = "idle"
-
-    @property
-    def done(self):
-        return self.state == "done"
-
-    def start(self):
-        """Build the ``SocketConnector`` and move into ``connecting``."""
-        if self.connector is not None or self.state == "done":
-            return
-        print(f"CONNECTING host={self._host} port={self._port}")
-        try:
-            self.connector = tcp_client_connector(
-                self._host, self._port, radio=self._radio,
-            )
-        except Exception as error:  # noqa: BLE001 - surface as marker, not traceback
-            print(f"CONNECT_FAILED error={error!r}")
-            self.state = "done"
-            return
-        self.state = "connecting"
-
-    def check(self, _):
-        # Tell Runner whether handle() should fire on the next wake.
-        return self.state in ("connecting", "sending", "receiving")
-
-    def handle(self, now_ms):
-        if self.state == "connecting":
-            self._handle_connecting(now_ms)
-        elif self.state == "sending":
-            self._handle_sending()
-        elif self.state == "receiving":
-            self._handle_receiving()
-
-    def _handle_connecting(self, now_ms):
-        # Drive the connector one phase (DNS → TCP → (TLS) → ready).
-        self.connector.tick(now_ms)
-        if self.connector.state == "ready":
-            self._socket = self.connector.socket
-            # Nonblocking so send() / recv() raise EAGAIN instead of stalling the runner.
-            self._socket.setblocking(False)
-            print("CONNECTED")
-            self.state = "sending"
-        elif self.connector.state == "failed":
-            print(f"CONNECT_FAILED error={self.connector.last_error!r}")
-            self.state = "done"
-
-    def _handle_sending(self):
-        # A short send is normal; EAGAIN means resume next tick when writable.
-        payload = memoryview(self.PROBE_PAYLOAD)
-        while self._send_offset < len(payload):
-            try:
-                sent = self._socket.send(payload[self._send_offset:])
-            except OSError as error:
-                if error.args[0] == errno.EAGAIN:
-                    return
-                print(f"SEND_FAILED error={error!r}")
-                self.state = "done"
-                return
-            if sent == 0:
-                print("SEND_FAILED error=peer-closed")
-                self.state = "done"
-                return
-            self._send_offset += sent
-        print(f"SENT bytes={len(self.PROBE_PAYLOAD)}")
-        self.state = "receiving"
-
-    def _handle_receiving(self):
-        try:
-            number_of_bytes = self._socket.recv_into(
-                self._buffer, self.RECV_BUFFER_SIZE,
-            )
-        except OSError as error:
-            # EAGAIN means no bytes yet — wait for the next read-ready tick.
-            if error.args[0] != errno.EAGAIN:
-                print(f"RECV_FAILED error={error!r}")
-                self.state = "done"
-            return
-        if number_of_bytes == 0:
-            # recv_into() of 0 bytes signals the peer closed the connection.
-            self.state = "done"
-            return
-        self._received.extend(self._buffer[:number_of_bytes])
-        # The echo server terminates its reply with a newline.
-        if b"\n" in self._received:
-            payload = bytes(self._received).rstrip(b"\n")
-            print(f"ECHO_RECEIVED bytes={len(payload)} payload={payload!r}")
-            self._socket.close()
-            self.state = "done"
-            print("DEMO_COMPLETE")
-
-    # Runner.wait() reads these to sleep on the right socket event:
-    # delegate to the connector while connecting, then own the socket
-    # (read while receiving, write while sending) after ready.
-
-    @property
-    def io_socket(self):
-        if self.state == "connecting":
-            return self.connector.io_socket
-        if self._socket is None:
-            return None
-        return getattr(self._socket, "sock", self._socket)
-
-    @property
-    def io_wants_read(self):
-        if self.state == "connecting":
-            return self.connector.io_wants_read
-        return self.state == "receiving"
-
-    @property
-    def io_wants_write(self):
-        if self.state == "connecting":
-            return self.connector.io_wants_write
-        return self.state == "sending"
+def echo_run(host, port, radio):
+    print(f"CONNECTING host={host} port={port}")
+    sock = yield from connect(tcp_client_connector(host, port, radio=radio))
+    print("CONNECTED")
+    try:
+        yield from send_all(sock, PROBE_PAYLOAD)
+        print(f"SENT bytes={len(PROBE_PAYLOAD)}")
+        reply = yield from recv_until(sock, b"\n", max_bytes=MAX_REPLY_BYTES)
+        payload = reply.rstrip(b"\n")
+        print(f"ECHO_RECEIVED bytes={len(payload)} payload={payload!r}")
+        print("DEMO_COMPLETE")
+    finally:
+        sock.close()
 
 
 config = load_runtime_config()
@@ -161,24 +45,23 @@ echo_host = config["sockets.echo.host"]
 echo_port = int(config["sockets.echo.port"])
 
 wifi = WifiService(WifiConfig.from_config(config))
-echo = EchoService(echo_host, echo_port, radio=wifi.adapter.radio)
-
 runner = Runner()
+runner.add(wifi)
+
+echo_handle = None
 
 
 def on_wifi_state(_old, new):
+    global echo_handle  # noqa: PLW0603
     if new == WifiState.CONNECTED:
         print(f"WIFI_OK ip={wifi.ip}")
-        # Link is up — kick off the round trip.
-        echo.start()
+        echo_handle = runner.add_generator(
+            echo_run(echo_host, echo_port, radio=wifi.adapter.radio),
+        )
 
 
 wifi.on_state_change(on_wifi_state)
 
-runner.add(wifi)
-runner.add(echo)
-
-while not echo.done:
-    # tick() runs every ready task; wait() sleeps until the next io event or deadline.
+while echo_handle is None or not echo_handle.done:
     now_ms = runner.tick()
     runner.wait(now_ms)

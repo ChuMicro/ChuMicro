@@ -34,6 +34,7 @@ test = [
     "pytest",
     "chumicro-test-harness",
     "chumicro-msgpack",
+    "chumicro-sockets",
 ]
 
 [project.urls]
