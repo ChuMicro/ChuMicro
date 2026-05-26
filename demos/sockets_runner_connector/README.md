@@ -1,44 +1,44 @@
-# sockets_runner_connector — sockets via runner with a user-defined service
+# sockets_runner_connector — sockets via runner with a generator
 
 End-to-end demo of the canonical pattern for **custom TCP protocols
-under runner**: write a tiny runner-service that hands its
-`SocketConnector` to the runner for the connect phase and then takes
-over for send / recv in its own `check` / `handle`.  Drop-in template
-for any protocol not covered by `HttpClient` / `MQTTClient` /
+under runner**: write a generator that yields wait-tokens between
+each I/O step, hand it to `runner.add_generator`, and let the
+runner schedule it across ticks.  Drop-in template for any TCP
+protocol not covered by `HttpClient` / `MQTTClient` /
 `WebSocketClient`.
 
-`EchoService` here is the template — a short state machine (`idle` →
-`connecting` → `sending` → `receiving` → `done`) plus the runner-ABI
-properties (`io_socket` / `io_wants_read` / `io_wants_write`) that
-let the runner sleep on socket-ready events instead of polling.
-Real custom-protocol code follows the same shape — only the
-wire-format logic in `_handle_sending` / `_handle_receiving` changes.
+`echo_run` here is the template — a 14-line function that calls
+`connect` / `send_all` / `recv_until` in straight-line order.  The
+runner ticks the underlying socket events; the generator body reads
+top-to-bottom.  For the same wire behaviour expressed as an
+explicit `check` / `handle` state machine, see
+[`sockets_runner_connector_explicit`](../sockets_runner_connector_explicit/)
+— useful when you want to see what the helpers collapse, or when
+your protocol has state the generator shape doesn't fit (parallel
+fan-out, complex error recovery, long-lived multi-phase sessions).
 
 ## What it shows
 
-- **User-defined runner-service.**  `runner.add(echo)` where `echo`
-  is the user's `EchoService` class — same registration shape as
-  `runner.add(wifi)` / `runner.add(mqtt)`.  The class is local to
-  the app; no library scaffolding involved.
-- **The service drives its own connector.**  `EchoService.start()`
-  builds the `SocketConnector`; the service's own `handle` calls
-  `connector.tick(now_ms)` during `connecting` and inspects the
-  connector's state inline.  Single runner entry, deterministic
-  ordering, no sibling state polling between two entries.  The
-  service's `io_*` properties delegate to the connector during the
-  connect phase, then own the socket once `ready`.
-- **Service owns the socket after `ready`.**  `_finish_connecting`
-  grabs `self._socket = self._connector.socket`; from then on the
-  service's own `io_socket` / `io_wants_read` / `io_wants_write`
-  describe the send and receive phases.  The connector goes inert
-  (terminal state, both want-bits False) and the runner ignores it.
-- **Real send loop, not a one-shot.**  `_handle_sending` loops on
-  `send()` and tracks `_send_offset` so a short return — including
-  `EAGAIN` — resumes from the right byte on the next wake.  The
-  shape any custom-protocol service uses for outbound bytes.
-- **Single `while not echo.done` loop at the end.**  Everything else
-  is declarative — services register before the loop, and the loop
-  is just `now_ms = runner.tick(); runner.wait(now_ms)`.
+- **One generator, one `runner.add_generator(echo_run(...))`.**  The
+  generator captures host / port / radio at call time, yields wait
+  tokens to suspend, and returns when the round trip completes.  No
+  user-defined class, no `io_*` plumbing.
+- **`connect` drives the connector across ticks.**  Wraps the
+  existing `SocketConnector` lifecycle (DNS -> TCP -> ready) and
+  yields `WriteReady` / `ReadReady` so the runner sleeps on the
+  right socket-ready event instead of polling.  PEP 380's `return`
+  hands the connected socket back via `sock = yield from connect(...)`.
+- **`send_all` and `recv_until` carry their own EAGAIN loops.**  Each
+  caches its wait-token outside the EAGAIN retry path so the
+  steady-state allocation is zero — the helpers are safe for hot
+  loops on a 256 KB device.
+- **`try / finally` for cleanup.**  `sock.close()` in the finally
+  runs whether the generator returns normally, raises, or gets
+  cancelled mid-flight via `handle.cancel()`.  No separate teardown
+  path.
+- **Single `while not handle.done` loop at the end.**  The runner
+  flips `handle.done` to True the moment `echo_run` returns; the
+  outer loop exits cleanly.
 
 ## Run it
 
@@ -83,6 +83,11 @@ driver: demo completed cleanly.
   WebSockets.
 - **You need it under a runner** because you're sharing the loop
   with wifi management, an LED blink, sensor reads, etc.
+- **The work is naturally sequential** — one connect, one (or a
+  small number of) send/recv pairs, then done.  For long-lived
+  reactive protocols (subscribe-and-route, broker-like multiplexers),
+  the explicit `check` / `handle` shape composes better; reach for
+  it via `runner.add(service)`.
 
 If your protocol IS one of HTTP / MQTT / WebSockets, use those
 libraries instead — they own the wire-format codec and the runner
@@ -90,9 +95,8 @@ integration for you.  See `demos/mqtt_pub_sub` for the
 already-built-in-client equivalent.
 
 One-shot by design — this demo exits after one round trip.  For
-reconnect-capable adapters (wifi-up / wifi-down cycles), add a small
-`reset()` to clear `_connector` / `_socket` / buffers back to `idle`
-and call it from the wifi `DISCONNECTED` callback.
+reconnect-capable services, register a new generator from the wifi
+`DISCONNECTED` / `CONNECTED` callback each time the link comes back.
 
 ## Substrate honesty for the connect phase
 
@@ -107,11 +111,15 @@ and call it from the wifi `DISCONNECTED` callback.
 
 ## Related
 
+- [`sockets_runner_connector_explicit`](../sockets_runner_connector_explicit/) —
+  the same wire behaviour, written as an explicit per-state
+  `check` / `handle` service.  Read it for the teaching version of
+  what `connect` / `send_all` / `recv_until` do under the hood.
 - [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/) — synchronous
-  TCP, no runner-driven connect, no custom service.  Simpler app
-  code; blocks for the full TCP handshake.
+  TCP, no runner-driven connect.  Simpler app code; blocks for the
+  full TCP handshake.
 - [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/) — TLS variant
   of the synchronous demo with a custom-CA trust anchor.
 - [`mqtt_pub_sub`](../mqtt_pub_sub/) — the same `runner.add(service)`
   shape but with the protocol absorbed into `MQTTClient` (no
-  user-defined service needed).
+  user-defined service or generator needed).

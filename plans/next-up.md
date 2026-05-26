@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Generator-driven sequential I/O — Phase 3: socket helpers in `chumicro_sockets`.**  Phases 1 + 2 shipped in `chumicro_runner` 0.4.0.  Next is `connect` / `send_all` / `recv_until` / `recv_exact` generator helpers wrapping the existing `tcp_client_connector` and synchronous socket primitives.  [`workstreams/runner-generator-tasks.md`](workstreams/runner-generator-tasks.md)
+- [ ] **Generator-driven sequential I/O — Phase 4: CHU lint rule banning async/await + asyncio module.**  Phases 1 + 2 + 3 + 5 shipped in `chumicro_runner` 0.5.0; helpers live at `chumicro_runner.generators` with a duck-typed wait protocol.  Remaining: the lint rule + Phase 6 docs.  [`workstreams/runner-generator-tasks.md`](workstreams/runner-generator-tasks.md)
 
 ## Next
 

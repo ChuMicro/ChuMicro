@@ -1,9 +1,26 @@
 """Generator adapter for ``Runner.add_generator``.
 
 Bridges a Python generator function (``def`` + ``yield`` / ``yield from``)
-into the runner's check / handle / io_* protocol.  The generator yields
-wait-tokens (``ReadReady`` / ``WriteReady`` / ``Sleep``); the wrapper
-inspects each token to drive the runner's poll set and resume timing.
+into the runner's check / handle / io_* protocol.  The wrapper is
+fully duck-typed: a generator yields *anything* that exposes the
+attributes the wrapper inspects.  No named protocol classes required.
+
+The duck-typed wait protocol — every attribute optional, defaults to
+None / False:
+
+* ``io_socket``: the underlying pollable the runner should register
+  with ipoll, or ``None``.
+* ``io_wants_read`` / ``io_wants_write``: ``True`` to register the
+  socket for that direction.
+* ``next_deadline``: absolute tick at which the wrapper should resume
+  the generator; ``None`` means "resume on the next tick after an
+  ipoll wake or any other deadline elapses."
+
+The ``SocketConnector`` from ``chumicro_sockets`` already exposes
+these attributes natively, so a generator that wraps it can simply
+``yield connector`` — no extra wrapping needed.  The helpers in
+``chumicro_runner.generators`` build small private wait objects for
+the cases where a bare socket or a sleep needs the same surface.
 
 Sequential I/O state machines that would otherwise need an explicit
 per-state ``check`` / ``handle`` object collapse to a top-to-bottom
@@ -17,7 +34,7 @@ loop.
 touch directly.
 """
 
-from chumicro_runner._tokens import ReadReady, Sleep, WriteReady
+from chumicro_timing.ticks import ticks_diff
 
 
 class GeneratorHandle:
@@ -83,27 +100,41 @@ class _GeneratorWrapper:
 
     def check(self, now_ms: int) -> bool:
         wait = self._wait
-        return wait is not None and wait.ready(now_ms)
+        if wait is None:
+            return False
+        # next_deadline gates time-based waits.  Socket-based waits
+        # leave next_deadline at None and rely on ipoll wake-ups in
+        # Runner.wait to gate the loop — an EAGAIN-loop helper that
+        # re-yields the same wait re-tries on the next tick.
+        deadline = self.next_deadline(now_ms)
+        if deadline is not None:
+            return ticks_diff(now_ms, deadline) >= 0
+        return True
 
     def handle(self, now_ms: int) -> None:
-        wait = self._wait
-        # ``check`` returning True is the gate; ``wait`` is non-None here.
-        self._advance(wait.result(now_ms))
+        # check returning True is the gate; wait is non-None here.
+        # Resume the generator with now_ms — the value the gen receives
+        # at its yield expression.  Most helpers ignore it; long-running
+        # state machines can use it to advance internal deadlines
+        # without a second ticks_ms call.
+        self._advance(now_ms)
 
     @property
     def io_socket(self) -> object | None:
         wait = self._wait
         if wait is None:
             return None
-        return getattr(wait, "sock", None)
+        return getattr(wait, "io_socket", None)
 
     @property
     def io_wants_read(self) -> bool:
-        return isinstance(self._wait, ReadReady)
+        wait = self._wait
+        return bool(getattr(wait, "io_wants_read", False)) if wait is not None else False
 
     @property
     def io_wants_write(self) -> bool:
-        return isinstance(self._wait, WriteReady)
+        wait = self._wait
+        return bool(getattr(wait, "io_wants_write", False)) if wait is not None else False
 
     def io_error(self, now_ms: int, eventmask: int) -> None:
         """POLLERR / POLLHUP on the awaited socket — throw into the generator.
@@ -118,15 +149,24 @@ class _GeneratorWrapper:
     def next_deadline(self, now_ms: int) -> int | None:
         """Absolute tick at which the generator should be re-checked.
 
-        ``Sleep(until_ms)`` is the only wait-token with a future
-        deadline — ``ReadReady`` / ``WriteReady`` are gated by ipoll
-        wake-ups in ``Runner.wait`` instead.  Returning None means the
-        runner has no deadline to contribute for this entry.
+        Reads the yielded wait's ``next_deadline``.  Accepts both
+        shapes the protocol allows: an int attribute (what tiny private
+        wait shapes use) and a callable that takes ``now_ms`` and
+        returns an int or None (what ``SocketConnector`` uses,
+        matching the runner's existing service contract).  ``None``
+        means the wait is socket-driven (ipoll wake-up) or unbounded.
+        ``Runner.wait`` mins this against every other entry's
+        deadline to compute its ipoll timeout.
         """
         wait = self._wait
-        if isinstance(wait, Sleep):
-            return wait.until_ms
-        return None
+        if wait is None:
+            return None
+        deadline = getattr(wait, "next_deadline", None)
+        if deadline is None:
+            return None
+        if callable(deadline):
+            return deadline(now_ms)
+        return deadline
 
     def _advance(self, value: object) -> None:
         try:

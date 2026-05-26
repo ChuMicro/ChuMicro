@@ -2,25 +2,44 @@
 
 Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 (via chumicro_test_harness).  Covers the lifecycle a sequential I/O
-state machine actually walks — first yield primed at registration, wait
-tokens drive check / handle / io_*, ``StopIteration`` auto-removes the
-entry, ``cancel()`` fires the generator's ``finally`` block, and
-``io_error`` throws into the generator so it can recover (or propagate).
+state machine actually walks — first yield primed at registration,
+yielded waits drive check / handle / io_*, ``StopIteration``
+auto-removes the entry, ``cancel()`` fires the generator's
+``finally`` block, ``io_error`` throws into the generator so it can
+recover (or propagate).
+
+The wait shape is **duck-typed**: this file constructs ad-hoc ``_Wait``
+stubs with the four protocol attributes (``io_socket``,
+``io_wants_read``, ``io_wants_write``, ``next_deadline``) and asserts
+the wrapper inspects them via ``getattr``.  No imports of the private
+wait classes from ``chumicro_runner.generators`` — proving the
+protocol is genuinely duck-typed rather than tied to specific types.
 """
 
-from chumicro_runner import (
-    GeneratorHandle,
-    ReadReady,
-    Runner,
-    Sleep,
-    WriteReady,
-)
+from chumicro_runner import GeneratorHandle, Runner
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
 
 
 class _Sock:
     """Stand-in for a socket-like object — identity is what matters."""
+
+
+class _Wait:
+    """Ad-hoc wait stub matching the wrapper's duck-typed protocol.
+
+    Any object exposing these four attributes works as a wait — the
+    wrapper reads them via ``getattr`` with defaults, so missing
+    attributes degrade gracefully.  This stub sets all four so tests
+    can express any wait shape (socket-driven, deadline-driven, or
+    both) with one constructor.
+    """
+
+    def __init__(self, *, sock=None, want_read=False, want_write=False, until_ms=None):
+        self.io_socket = sock
+        self.io_wants_read = want_read
+        self.io_wants_write = want_write
+        self.next_deadline = until_ms
 
 
 # -- Happy path: registration, run-to-completion, auto-removal --
@@ -30,7 +49,7 @@ def test_add_generator_returns_handle_with_done_false():
     runner = Runner(ticks=FakeTicks())
 
     def noop_gen():
-        yield Sleep(until_ms=10)
+        yield _Wait(until_ms=10)
 
     handle = runner.add_generator(noop_gen())
     assert isinstance(handle, GeneratorHandle)
@@ -39,7 +58,7 @@ def test_add_generator_returns_handle_with_done_false():
 
 def test_generator_advances_to_first_yield_at_registration():
     # The wrapper primes via .send(None) inside add_generator so the
-    # first wait-token is visible to wait()'s _sync_poll_set on the
+    # first wait is visible to Runner.wait()'s _sync_poll_set on the
     # very first tick — without this, the loop sleeps on the wrong
     # deadline because the generator has not run yet.
     sock = _Sock()
@@ -47,7 +66,7 @@ def test_generator_advances_to_first_yield_at_registration():
 
     def gen():
         events.append("before_yield")
-        yield ReadReady(sock)
+        yield _Wait(sock=sock, want_read=True)
         events.append("after_yield")
 
     Runner(ticks=FakeTicks()).add_generator(gen())
@@ -61,26 +80,26 @@ def test_generator_runs_to_completion_across_ticks():
 
     def gen():
         events.append("start")
-        yield Sleep(until_ms=10)
+        yield _Wait(until_ms=10)
         events.append("after_sleep")
-        yield Sleep(until_ms=20)
+        yield _Wait(until_ms=20)
         events.append("done")
 
     handle = runner.add_generator(gen())
     assert events == ["start"]
     assert handle.done is False
 
-    runner.tick()  # now_ms = 0; first Sleep(10) not ready
+    runner.tick()  # now_ms = 0; first sleep(10) not ready
     assert events == ["start"]
     assert handle.done is False
 
     ticks.advance(10)
-    runner.tick()  # now_ms = 10; first Sleep ready, gen advances
+    runner.tick()  # now_ms = 10; first sleep ready, gen advances
     assert events == ["start", "after_sleep"]
     assert handle.done is False
 
     ticks.advance(10)
-    runner.tick()  # now_ms = 20; second Sleep ready, gen returns
+    runner.tick()  # now_ms = 20; second sleep ready, gen returns
     assert events == ["start", "after_sleep", "done"]
     assert handle.done is True
 
@@ -101,17 +120,17 @@ def test_finished_generator_is_removed_from_runner_entries():
     runner = Runner(ticks=FakeTicks())
 
     def short_gen():
-        yield Sleep(until_ms=0)  # ready immediately at now_ms=0
+        yield _Wait(until_ms=0)  # ready immediately at now_ms=0
 
     handle = runner.add_generator(short_gen())
     assert len(runner._entries) == 1
 
-    runner.tick()  # Sleep ready at now_ms=0, gen returns, auto-removed.
+    runner.tick()  # sleep ready at now_ms=0, gen returns, auto-removed.
     assert handle.done is True
     assert len(runner._entries) == 0
 
 
-# -- Wait-token dispatch on the wrapper --
+# -- Wait dispatch on the wrapper (duck-typed via getattr) ----------
 
 
 def test_wrapper_io_socket_tracks_current_wait():
@@ -121,8 +140,8 @@ def test_wrapper_io_socket_tracks_current_wait():
     runner = Runner(ticks=ticks)
 
     def gen():
-        yield ReadReady(sock_a)
-        yield WriteReady(sock_b)
+        yield _Wait(sock=sock_a, want_read=True)
+        yield _Wait(sock=sock_b, want_write=True)
 
     handle = runner.add_generator(gen())
     wrapper = handle._wrapper
@@ -130,60 +149,82 @@ def test_wrapper_io_socket_tracks_current_wait():
     assert wrapper.io_wants_read is True
     assert wrapper.io_wants_write is False
 
-    runner.tick()  # ReadReady.ready always True; gen advances
+    runner.tick()  # socket-based wait fires every tick; gen advances
     assert wrapper.io_socket is sock_b
     assert wrapper.io_wants_read is False
     assert wrapper.io_wants_write is True
 
-    runner.tick()  # WriteReady.ready always True; gen returns
+    runner.tick()  # second wait fires; gen returns
     assert handle.done is True
     assert wrapper.io_socket is None
     assert wrapper.io_wants_read is False
     assert wrapper.io_wants_write is False
 
 
-def test_sleep_token_contributes_to_next_deadline():
+def test_sleep_contributes_to_next_deadline():
     # Without this, Runner.wait would sleep on whatever other entry's
-    # deadline is nearest — a generator with only a Sleep token would
-    # never wake on time.
+    # deadline is nearest — a generator with only a deadline wait
+    # would never wake on time.
     ticks = FakeTicks()
     runner = Runner(ticks=ticks)
 
     def gen():
-        yield Sleep(until_ms=500)
+        yield _Wait(until_ms=500)
 
     handle = runner.add_generator(gen())
     wrapper = handle._wrapper
     assert wrapper.next_deadline(0) == 500
 
 
-def test_read_ready_token_does_not_contribute_deadline():
-    # ReadReady gates on ipoll wake-ups, not on tick deadlines.
+def test_socket_wait_does_not_contribute_deadline():
+    # Socket waits leave next_deadline at None; ipoll wake-ups gate
+    # the loop instead of a deadline.
     def gen():
-        yield ReadReady(_Sock())
+        yield _Wait(sock=_Sock(), want_read=True)
 
     handle = Runner(ticks=FakeTicks()).add_generator(gen())
     assert handle._wrapper.next_deadline(0) is None
 
 
-# -- EAGAIN retry: re-yield the same token, keep trying --
+def test_wrapper_tolerates_bare_object_missing_protocol_attrs():
+    # The wrapper uses getattr with defaults, so a yielded value that
+    # exposes only some of the protocol still works — the missing
+    # attributes degrade to None / False.  This is what lets a
+    # ``SocketConnector`` (which exposes all four attributes) and a
+    # tiny private wait (which only exposes io_socket + a wants flag)
+    # both flow through the same code path.
+    class _MinimalWait:
+        io_socket = _Sock()
+        # no io_wants_*, no next_deadline
+
+    def gen():
+        yield _MinimalWait()
+
+    handle = Runner(ticks=FakeTicks()).add_generator(gen())
+    wrapper = handle._wrapper
+    assert wrapper.io_socket is _MinimalWait.io_socket
+    assert wrapper.io_wants_read is False
+    assert wrapper.io_wants_write is False
+    assert wrapper.next_deadline(0) is None
+
+
+# -- EAGAIN-style retry: re-yield the same wait, keep trying --------
 
 
 def test_eagain_retry_loop_advances_when_underlying_call_succeeds():
     # Mirrors the recv_until shape: the helper tries to read, gets a
-    # synthetic EAGAIN signal, re-yields the same cached ReadReady,
-    # the wrapper sees ready True, calls handle again, and the
-    # generator's next iteration succeeds.  This exercises the
-    # cache-and-reuse pattern under the wrapper, not just the token.
+    # synthetic EAGAIN signal, re-yields the same cached wait, the
+    # wrapper sees check True (socket-based waits always do), calls
+    # handle again, generator's next iteration succeeds.  Exercises
+    # the cache-and-reuse pattern under the wrapper.
     sock = _Sock()
     attempts = [0]
 
     def gen():
-        ready = ReadReady(sock)
+        cached_wait = _Wait(sock=sock, want_read=True)
         while attempts[0] < 3:
             attempts[0] += 1
-            yield ready
-        # Final successful attempt:
+            yield cached_wait
         attempts[0] += 1
 
     runner = Runner(ticks=FakeTicks())
@@ -198,7 +239,7 @@ def test_eagain_retry_loop_advances_when_underlying_call_succeeds():
     assert attempts[0] == 4
 
 
-# -- io_error throws OSError into the generator --
+# -- io_error throws OSError into the generator ---------------------
 
 
 def test_io_error_throws_into_generator_at_current_yield():
@@ -207,7 +248,7 @@ def test_io_error_throws_into_generator_at_current_yield():
 
     def gen():
         try:
-            yield ReadReady(sock)
+            yield _Wait(sock=sock, want_read=True)
         except OSError as error:
             caught.append(error)
         # Returns after handling the error.
@@ -231,14 +272,14 @@ def test_unhandled_exception_during_advance_marks_done_and_propagates():
     runner = Runner(ticks=FakeTicks())
 
     def gen():
-        yield Sleep(until_ms=0)
+        yield _Wait(until_ms=0)
         raise ValueError("synthetic")
 
     handle = runner.add_generator(gen())
     assert len(runner._entries) == 1
 
     with raises(ValueError):
-        runner.tick()  # Sleep ready at 0; resume hits the raise.
+        runner.tick()  # sleep ready at 0; resume hits the raise.
     assert handle.done is True
     assert len(runner._entries) == 0
 
@@ -251,7 +292,7 @@ def test_io_error_unhandled_propagates_done():
     sock = _Sock()
 
     def gen():
-        yield ReadReady(sock)  # no try/except
+        yield _Wait(sock=sock, want_read=True)  # no try/except
 
     runner = Runner(ticks=FakeTicks())
     handle = runner.add_generator(gen())
@@ -261,7 +302,7 @@ def test_io_error_unhandled_propagates_done():
     assert handle.done is True
 
 
-# -- Cancellation --
+# -- Cancellation ----------------------------------------------------
 
 
 def test_cancel_fires_finally_block_in_generator():
@@ -269,7 +310,7 @@ def test_cancel_fires_finally_block_in_generator():
 
     def gen():
         try:
-            yield Sleep(until_ms=10_000)  # would block forever
+            yield _Wait(until_ms=10_000)  # would block forever
         finally:
             cleanup_ran[0] = True
 
@@ -283,7 +324,7 @@ def test_cancel_fires_finally_block_in_generator():
 
 def test_cancel_is_idempotent():
     def gen():
-        yield Sleep(until_ms=10_000)
+        yield _Wait(until_ms=10_000)
 
     handle = Runner(ticks=FakeTicks()).add_generator(gen())
     handle.cancel()
@@ -295,7 +336,7 @@ def test_cancel_removes_entry_from_runner():
     runner = Runner(ticks=FakeTicks())
 
     def gen():
-        yield Sleep(until_ms=10_000)
+        yield _Wait(until_ms=10_000)
 
     handle = runner.add_generator(gen())
     assert len(runner._entries) == 1
@@ -308,7 +349,7 @@ def test_cancel_after_completion_is_a_noop():
     runner = Runner(ticks=FakeTicks())
 
     def gen():
-        yield Sleep(until_ms=0)
+        yield _Wait(until_ms=0)
 
     handle = runner.add_generator(gen())
     runner.tick()  # gen completes
@@ -319,7 +360,7 @@ def test_cancel_after_completion_is_a_noop():
     assert handle.done is True
 
 
-# -- yield from delegation (the canonical use case) --
+# -- yield from delegation (the canonical use case) -----------------
 
 
 def test_yield_from_delegation_works_across_helpers():
@@ -330,7 +371,7 @@ def test_yield_from_delegation_works_across_helpers():
 
     def inner_helper(label):
         events.append(f"inner:{label}:start")
-        yield Sleep(until_ms=0)
+        yield _Wait(until_ms=0)
         events.append(f"inner:{label}:done")
 
     def outer_gen():
@@ -363,7 +404,7 @@ def test_yield_from_helper_return_value_is_received_by_caller():
     received = []
 
     def producer():
-        yield Sleep(until_ms=0)
+        yield _Wait(until_ms=0)
         return "produced-value"
 
     def consumer():

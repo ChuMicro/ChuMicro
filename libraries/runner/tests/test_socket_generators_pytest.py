@@ -1,0 +1,112 @@
+"""Allocation profile for the socket-generator helpers.
+
+CPython-only lane: uses :mod:`tracemalloc` + :mod:`gc` to confirm
+that the EAGAIN-loop inside ``send_all`` / ``recv_until`` / ``recv_exact``
+allocates only the helper's own cached wait object and nothing per
+iteration.  Pins the steady-state allocation contract the helpers
+document — a regression that allocates inside the EAGAIN branch (e.g.
+formatting a debug string, copying the buffer) surfaces here.
+
+The threshold matches the existing memory-pressure tests:  under
+2 KiB of growth across 500 sample iterations.
+"""
+
+#: CPython-only lane (uses stdlib tracemalloc + gc).  Not cross-runtime.
+__chumicro_runtimes__ = ("cpython",)
+
+import gc
+import tracemalloc
+
+from chumicro_runner.generators import recv_exact, recv_until, send_all
+from chumicro_sockets.testing import FakeSocket
+
+
+def _measure_growth(operation, *, warmup_iterations=50, sample_iterations=500):
+    """Run *operation* warmup + sample times; return retained bytes growth.
+
+    Matches the convention used by the runner-side memory-pressure tests.
+    """
+    gc.collect()
+    tracemalloc.start()
+    try:
+        for _ in range(warmup_iterations):
+            operation()
+        gc.collect()
+        baseline, _ = tracemalloc.get_traced_memory()
+
+        for _ in range(sample_iterations):
+            operation()
+        gc.collect()
+        final, _ = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    return final - baseline
+
+
+class TestSendAllEagainLoopStaysFlat:
+    """Each EAGAIN inside ``send_all`` reuses the cached write-wait;
+    no per-iteration heap growth should accumulate."""
+
+    def test_send_all_eagain_iteration_no_growth(self):
+        sock = FakeSocket()
+
+        def operation():
+            sock.enqueue_eagain_for_send(count=1)
+            gen = send_all(sock, b"x")
+            gen.send(None)  # one EAGAIN yield
+            try:
+                gen.send(0)  # send succeeds, gen returns
+            except StopIteration:
+                pass
+            sock.sent.clear()  # don't let the byte log dominate growth
+
+        growth = _measure_growth(operation)
+        assert growth < 2048, (
+            f"send_all EAGAIN loop leaked {growth} bytes over 500 iterations"
+        )
+
+
+class TestRecvUntilEagainLoopStaysFlat:
+    """The canonical 1000-EAGAIN polling test the workstream calls out —
+    a cached read-wait should let a recv_until polling loop run
+    indefinitely with bounded heap."""
+
+    def test_recv_until_eagain_iteration_no_growth(self):
+        sock = FakeSocket()
+
+        def operation():
+            sock.enqueue_eagain_for_recv(count=1)
+            sock.enqueue_recv(b"\n")
+            gen = recv_until(sock, b"\n", max_bytes=100)
+            gen.send(None)
+            try:
+                gen.send(0)
+            except StopIteration:
+                pass
+
+        growth = _measure_growth(operation)
+        assert growth < 2048, (
+            f"recv_until EAGAIN loop leaked {growth} bytes over 500 iterations"
+        )
+
+
+class TestRecvExactEagainLoopStaysFlat:
+    """Same EAGAIN-loop contract for ``recv_exact``."""
+
+    def test_recv_exact_eagain_iteration_no_growth(self):
+        sock = FakeSocket()
+
+        def operation():
+            sock.enqueue_eagain_for_recv(count=1)
+            sock.enqueue_recv(b"abc")
+            gen = recv_exact(sock, 3)
+            gen.send(None)
+            try:
+                gen.send(0)
+            except StopIteration:
+                pass
+
+        growth = _measure_growth(operation)
+        assert growth < 2048, (
+            f"recv_exact EAGAIN loop leaked {growth} bytes over 500 iterations"
+        )
