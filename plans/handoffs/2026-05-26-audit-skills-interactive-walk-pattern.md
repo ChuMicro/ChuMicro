@@ -43,6 +43,39 @@ The user pain point this targets: "*audit skills usually have me spend 20 minute
 
 **The patterns generalize from `/regen-comments` to audit skills.** Comment regen has naturally discrete, locally-fixable findings (one docstring at a time). Some audit skills produce findings that are *entangled* — a structural refactor in `/audit-library` might touch six files where flagging once + walking once isn't the right shape. Cheapest test: take `/audit-comments` (closest in spirit to `/regen-comments`) and try retrofitting the verifier + walk pattern. If the findings naturally fit the per-finding `AskUserQuestion` shape, the broader retrofit is worth pursuing; if they fight the shape, the pattern is comment-pass-specific and shouldn't be force-fit.
 
+## What audit-library already does (read end-of-session before the handoff was finalized)
+
+After writing the first draft of this handoff, the user asked the director to read `audit-library/SKILL.md` to ground judgment.  [VERIFIED: read in full from `.github/skills/audit-library/SKILL.md`]  Findings that shape the retrofit:
+
+- **Confidence tiers already exist:** `HIGH-CONFIDENCE / MEDIUM-CONFIDENCE / TASTE-CALL / ESCALATE` with dimension tags (`honesty / duplicate / shape / dead-code / wiring / perf / flow / prose / lean / policy / cross-lib / sibling-cohesion`).  The skill is more sophisticated than my reflection document credited.  Output-format section at lines 199-251.
+- **HIGH items are batch-executed** (step #6: "Execute high-confidence items as one cohesive commit") — *no per-finding user review*.  That's correct as-is.  Forcing `AskUserQuestion` on every HIGH finding (dead code, obvious dupe, lying class name) would be friction-addition, not friction-reduction.
+- **MEDIUM items are one-per-commit but free-text-surfaced** (step #7: "Execute medium-confidence items as separate commits, one per finding").  This is the retrofit lever — currently the user reads the punch-list and replies in free text, then the agent acts.  Per-finding `AskUserQuestion` with rewrite/edit/skip/defer options would land here.
+- **TASTE-CALL findings are explicitly user-judgment-required** ("Hand off remaining low items to the user").  Same retrofit lever as MEDIUM.
+- **Prose findings already route to `/audit-comments`** (lines 93, 99) — the audit-library skill defers comment-rewrite work to the comment-rewrite skill.  Existing precedent for skill chaining; the retrofit shouldn't break this.
+- **The auditor reads the entire library top-to-bottom first** (step #1).  Same shape as the `/regen-comments` director bias problem: one agent reads everything, then judges its own findings.  Verifier-blind separation is *technically* applicable here, but heavier-handed than what's needed — the bench-test value came from per-finding option lists, not from a separate verifier agent.  The verifier-blind insight may matter more for `/audit-skill` and the audit-* family at large than for `/audit-library` in isolation.
+
+The targeted retrofit, then, is narrower than the original handoff framing suggested:
+
+1. **Step 5 ("Present the punch-list")** — when surfacing MEDIUM + TASTE findings to the user, use `AskUserQuestion` per finding with options sized to that finding's category.  For a `prose` finding routed to `/audit-comments`, the options might be `{Run /audit-comments on this file now, defer to next session, accept the trim suggestion inline, write my own replacement}`.  For a `shape` finding, options might be `{Inline as proposed, leave for /audit-library follow-up, write the refactor differently, skip}`.
+2. **Step 7 ("Execute medium-confidence items")** — keep one-commit-per-finding shape; replace free-text user input with the AskUserQuestion-derived choice.
+3. **HIGH batch stays as-is** — mechanical fixes don't benefit from per-finding option lists.
+4. **ESCALATE handling is broken; fix it as part of the retrofit.**  Currently ESCALATE means "file a one-line bullet under `## Next` in `plans/next-up.md` pointing at `/audit-integration <name>,<other>` or `/audit-workspace`."  Context loss is severe: the file:line, the dimension tag, the specific concern, the surrounding-code awareness the auditor had at the moment of finding all collapse to a one-liner that ages further as related code shifts.  [VERIFIED: `plans/next-up.md` lines 17, 19, 30, 31, 32, 34, 35, 36 all show audit-escalation residue at varying context fidelity; line 19 in particular is "both are large libraries left over from the prior session's 'next session' list" — pure inheritance, no grounding for the pickup session.]  This is a meaningful design gap that hides behind the existing `## Next` mechanism.  Candidate fixes the next session can design (don't pre-commit to one):
+   - Audits write a per-run findings file (`plans/audits/<library>-<YYYY-MM-DD>.md`) with full context for every finding including ESCALATEd ones; the `## Next` bullet is a pointer to that file, not the canonical record.
+   - ESCALATE findings auto-attach to the relevant existing workstream file if one matches, or seed a new workstream stub with the captured context.
+   - The audit's punch-list output is itself archived under `plans/audits/` so an escalation is never written without its surrounding findings being co-located.
+   None of these is a finished design; the next session should pick one based on what's cheap to adopt across the audit-* family.
+
+The next session can validate this read against the actual skill text and propose specific edits.
+
+## What the audit-* family looks like collectively (uneven priority for retrofit)
+
+[ASSUMED] My read after only audit-library:
+
+- `/audit-library` — biggest output, highest user-pain.  Targeted retrofit on steps 5/7 (above).  Highest-priority pickup.
+- `/audit-comments` — closer in spirit to `/regen-comments`.  Already runs in two passes (subtractive Pass 1, reconstructive Pass 2).  Output format is similar punch-list shape.  May benefit from the same retrofit, but smaller output per pass so lower urgency.
+- `/audit-skill` — meta-skill that audits other skills.  HIGH/MEDIUM/LOW confidence already used.  Could absorb the new "candidate findings" (director-bias acknowledgement, AskUserQuestion-walk, persona-content-embedding) as new dimension tags once validated.
+- `/audit-docs`, `/audit-embedded`, `/audit-integration`, `/audit-workspace`, `/audit-publishable-isolation` — not read this session.  [HYPOTHESIS: cheapest test = the four sibling skills share the same punch-list output format and step 5/7 shape, so a retrofit pattern that works for `/audit-library` and `/audit-comments` should mechanically apply to them.  Confirm by reading one before committing to a generalization.]
+
 ## To re-research / verify next session
 
 - [ ] Skim each audit skill's current "report findings" / "surface to user" section. The natural retrofit candidates (high-volume discrete findings, low cross-file entanglement) come first. [HYPOTHESIS: cheapest test = `for s in .github/skills/audit-*/SKILL.md; do echo "=== $s ==="; grep -n -A3 'Output\|Punch\|Findings\|Surface' "$s" | head -20; done`]

@@ -255,7 +255,7 @@ Mechanical checks: PASS / FAIL
 
 Verifier findings:
 
-📋 libraries/<name>/src/chumicro_<name>/core.py
+FILE: libraries/<name>/src/chumicro_<name>/core.py
    Cold-reader summary: <one-line summary>
    CRITICAL (2):
      L24 [shape] "blob-shaped persistence target" — `shape` banned everywhere; "blob-shaped" is the X-shaped compound form. Drop the suffix.
@@ -265,7 +265,7 @@ Verifier findings:
    AMBIGUOUS (1):
      L203 [paraphrase] "the corrupt indicator" — could be paraphrase of `self._corrupt: bool` OR could be standard storage vocabulary. Verify whether "indicator" is in code identifiers or should be `_corrupt`.
 
-📋 libraries/<name>/src/chumicro_<name>/_backends/memory.py
+FILE: libraries/<name>/src/chumicro_<name>/_backends/memory.py
    Cold-reader summary: clean read; module purpose clear, all methods named accurately.
    CRITICAL: (none)
    IMPORTANT: (none)
