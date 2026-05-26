@@ -1,4 +1,4 @@
-"""Public exports for the cross-runtime timing package."""
+"""Re-exports the millisecond-tick helpers and ``Heartbeat`` as the public surface."""
 
 import gc
 
@@ -12,4 +12,5 @@ __all__ = [
 	"ticks_ms",
 ]
 
+# Reclaims import-time scratch so the package settles into its steady-state footprint.
 gc.collect()
