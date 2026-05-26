@@ -45,7 +45,6 @@ Every section.  Not just the punch list.  Specifically:
 - `To re-research / verify` — work the handoff explicitly flagged as needing eyes-on before code lands.
 - `Dead ends` — paths already explored.  Don't re-walk them.
 - `How to rebuild context fast` — the file paths, commit SHAs, and search terms the handoff author left for you.  Read every linked file before touching code.
-- `Open questions waiting on user` — blockers, not nice-to-haves.  Ask before proceeding (step 5).
 - `Gotchas` — quirks and brittle assumptions.  Often the difference between landing the change cleanly and shipping a regression.
 
 ### 2a. Validate the handoff against ground truth — before confirming with the user
@@ -54,7 +53,7 @@ A handoff describes the writer's **intent and belief at write time, not current 
 
 - The SHAs the handoff cites are evidence pointers. When a specific commit is load-bearing for the work ahead, read the affected files directly via the file tools (or `git show <sha>` if the commit *message* or diff is itself the load-bearing artifact). Don't sweep `git log` across the handoff's SHA range as a warm-up ritual — verify only what's material.
 - Spot-check that named files / symbols / line numbers still exist (line numbers drift; grep the symbol).
-- **Cheaply reproduce one `[VERIFIED]` claim.** If a claim the handoff calls verified does not reproduce, treat the *entire* handoff as suspect and say so to the user — a degraded writer's "verified" is the highest-value thing to falsify.
+- **Reproduce any `[VERIFIED]` claim that's load-bearing for the next step.** If a claim the handoff calls verified does not reproduce, treat the *entire* handoff as suspect and say so to the user — a degraded writer's "verified" is the highest-value thing to falsify.
 - Diff the handoff against the code / ADRs / `open-questions.md` it references; flag drift.
 - **If the handoff flagged workstream-prose-vs-code drift**, re-validate the workstream prose against current code — the drift usually survives until someone edits the workstream file, and the resumer is the natural person to do it.  Fix the workstream in the same unit of work; otherwise the wrong claim sits there for the next session to re-discover.
 - Treat every `[HYPOTHESIS]` as falsifiable: run its cheapest-test before building on it. Treat untagged claims as `[ASSUMED]`.
@@ -77,7 +76,7 @@ Write one short paragraph back to the user before doing anything else:
 
 - What the prior session was about (one sentence).
 - What the next concrete step is (one sentence — the first item on the handoff's punch list).
-- Anything from `Open questions waiting on user` that needs an answer first.
+- Any open questions in `plans/open-questions.md` tagged against this work that need an answer first.
 - Any environmental state the handoff assumed that you couldn't verify (e.g. "the handoff says `.scratch/ast-walker-check/` should have two fixture files — they're not on disk; should I recreate them with the inline command in the handoff, or did you already do that?").
 
 Wait for the user to confirm "go" before touching code.  Resumes failed to honor this step are the most common way handoffs lose value — the resumer infers intent that the handoff author didn't actually express.
@@ -86,9 +85,9 @@ Wait for the user to confirm "go" before touching code.  Resumes failed to honor
 
 Once confirmed, follow the punch list from the handoff (or from `## Now`'s detail entries, if they're separate from the handoff pointer).  Apply the normal task-checkpoint discipline as units of work land.
 
-### When a claim is falsified mid-resume
+## When a claim is falsified mid-resume
 
-A resumed session frequently disproves a handoff hypothesis (or one of its own earlier in-session conclusions) once real evidence lands. When that happens: **stop building on the dead claim immediately.** Re-derive from the evidence, tell the user the handoff/earlier belief was wrong and what's true instead, and **fix the durable record in the same unit** (ADR / workstream / `open-questions.md` / commit body) — *before* continuing. A wrong belief that isn't killed at the source propagates straight into the next handoff. This is a named step, not an ad-hoc reaction.
+A resumed session frequently disproves a handoff hypothesis (or one of its own earlier in-session conclusions) once real evidence lands. When that happens: **stop building on the dead claim immediately.** Re-derive from the evidence, tell the user the handoff/earlier belief was wrong and what's true instead, and **fix the durable record in the same unit** (ADR / workstream / `open-questions.md` / commit body) — *before* continuing. A wrong belief that isn't killed at the source propagates straight into the next handoff. This is a named concern, not an ad-hoc reaction.
 
 ## Context-corruption hygiene
 
@@ -96,7 +95,7 @@ A resumed session *starts* near the context pressure that produced the handoff a
 
 - **Re-derive, don't recall.** Before acting on any non-trivial fact (a function's behaviour, a file's shape, a test's intent, an API), re-read it *this turn*. Treat earlier-in-session conclusions that weren't evidence-anchored as suspect — they may be corruption, not memory.
 - **Web search beats training recall** for anything time-sensitive, version-specific, or post-dating the model cutoff. Training knowledge is not evidence; a web check is cheap and under-used. If you're about to assert such a fact from memory, search instead (see AGENTS.md "Don't fabricate").
-- **Re-ground after any external change or surprise.** Re-assert `pwd`; re-read a file after a "modified externally" notice; re-run the *smallest* failing check rather than trust a prior green.
+- **Re-ground after any external change or surprise.** Re-read the affected file after a "modified externally" notice before editing it again; re-run the *smallest* failing check rather than trust a prior green.
 - **Never trust an exit code or summary line — read the artifact.** (This session's preflight reported success while red three times; only grepping the log caught it.)
 - **Long-session self-audit.** When the session has run very long (many tool calls, multiple background cycles), say so explicitly and verify claims from source rather than memory — and treat that as a signal a fresh handoff may be overdue. Recommending a handoff *is* progress when continuing would mean the most-degraded agent doing the most delicate work.
 - **Detect a corrupted incoming handoff.** Internal contradictions, `[VERIFIED]` claims that don't reproduce, SHAs/paths that don't exist → surface to the user as "this handoff may have been written degraded," don't silently inherit it.
