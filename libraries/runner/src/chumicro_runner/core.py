@@ -29,6 +29,8 @@ import time
 
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
+from chumicro_runner._generator import GeneratorHandle, _GeneratorWrapper
+
 # POSIX poll flags resolved once at import time so ``wait`` can translate
 # the duck-typed ``io_wants_read`` / ``io_wants_write`` bools into a
 # poll eventmask without an attribute lookup on every loop.  The
@@ -270,6 +272,40 @@ class Runner:
             run_count, self, service=service,
         )
         self._entries.append(handle)
+        return handle
+
+    def add_generator(self, gen: object) -> GeneratorHandle:
+        """Register a generator-driven service with the runner.
+
+        *gen* is a primed-or-unprimed generator object — call the
+        generator function once at the call site so its arguments are
+        captured (``runner.add_generator(echo_run(host, port, radio))``).
+
+        The generator yields wait-tokens (``ReadReady`` / ``WriteReady``
+        / ``Sleep``) to suspend; the runner resumes it via ``.send()``
+        of the token's ``result(now_ms)`` once the token reports
+        ``ready()`` and any underlying ipoll wake-up has fired.
+        Sequential I/O state machines that would otherwise need an
+        explicit per-state ``handle`` shape collapse to a top-to-bottom
+        generator body.  See the runner README for the canonical
+        worked example.
+
+        The returned ``GeneratorHandle`` carries ``.done`` (False until
+        the generator finishes) and ``.cancel()`` (stop early, firing
+        any ``finally`` blocks).  The wrapper self-removes from the
+        runner on ``StopIteration`` so a finished generator does not
+        linger as a dead entry.
+
+        Args:
+            gen: A generator object.  Pre-primed or freshly constructed;
+                this method advances it to its first yield before returning.
+        """
+        handle = GeneratorHandle()
+        wrapper = _GeneratorWrapper(gen, handle)
+        task_handle = self.add(wrapper)
+        wrapper._task_handle = task_handle
+        handle._wrapper = wrapper
+        wrapper.start()
         return handle
 
     def add_periodic(self, handler: object, period_ms: int,
