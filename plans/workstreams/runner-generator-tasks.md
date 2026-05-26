@@ -12,7 +12,7 @@ Decision 0087 adopts generator functions (`def` + `yield` / `yield from`) regist
 
 ### Phase 1 — Wait-token vocabulary in `chumicro_runner`
 
-Add `ReadReady(sock)`, `WriteReady(sock)`, `Sleep(until_ms)`, plus a `Done` sentinel in `chumicro_runner` (private module, re-exported at package root). Each has:
+Add `ReadReady(sock)`, `WriteReady(sock)`, and `Sleep(until_ms)` in `chumicro_runner` (private module, re-exported at package root). Each has:
 
 - `ready(self, now_ms) -> bool` — whether the runner should resume the generator on the next tick. `ReadReady` / `WriteReady` defer to the socket-readiness check (`ipoll` result); `Sleep` compares `now_ms` against `until_ms`.
 - `result(self, now_ms)` — value `.send()`-ed back into the generator when it resumes. For `ReadReady` / `WriteReady` this is the sock itself; for `Sleep` it is `now_ms`.
@@ -136,4 +136,4 @@ Update `plans/patterns.md` if a "generator-as-state-machine" pattern crystallize
 
 ## Validation history
 
-(Append one line per phase as it lands.)
+- 2026-05-25: Phases 1 + 2 shipped. `ReadReady`, `WriteReady`, `Sleep`, `GeneratorHandle`, `Runner.add_generator` all public in `chumicro_runner` 0.4.0. Tests: 134 CPython / 127 each on MP + CP unix-port unit suites; per-token tracemalloc allocation bracket pinned at <2 KiB over 500 iterations. Pi Pico W bake under both CircuitPython 10.2.0-dirty and MicroPython 1.26.0 ran `generator_basic.py` cleanly (Sleep tokens woke within 2-4 ms of target, generator returned, handle.done flipped). Wrapper deviates from the workstream pseudo-code by also catching arbitrary exceptions from `gen.send` / `gen.throw` to mark done before re-raising — a generator that raises during advance would otherwise linger as a dead entry in `Runner._entries`. The `Done` sentinel mentioned in the original Phase 1 list was dropped: no caller, duplicated by the public `GeneratorHandle.done` boolean attribute.
