@@ -478,6 +478,30 @@ abstractions package.
 
 Related: Decision 0010, `new-library` skill.
 
+## Fake delegates to production for pure-math helpers
+
+A test fake exposing pure-math production helpers delegates to the real functions rather than re-deriving them.  Pure math = no I/O, no clock, no module state, no platform variance: arguments in, value out.
+
+```python
+# In src/chumicro_timing/testing.py
+from chumicro_timing.ticks import ticks_add, ticks_diff
+
+class FakeTicks:
+    def ticks_diff(self, end: int, start: int) -> int:
+        return ticks_diff(end, start)
+
+    def ticks_add(self, ticks_val: int, delta: int) -> int:
+        return ticks_add(ticks_val, delta)
+```
+
+The default reflex is *"a fake should be self-contained"* — true for I/O, clocks, and state, where platform-independent behavior is the whole point of a fake.  Pure math has no platform variance to fake, and re-deriving production creates a drift surface where a bug fix or contract change silently misses the fake.  Consumer-library tests through the substrate then pass on the same stale answer.
+
+**Recognizer:** the production helper takes only its arguments and returns a value computed from them (no `time.*`, no `os.*`, no module-level state).  The fake's method body is a verbatim copy of the production body, just wrapped in a class.
+
+**Why not "the fake is the contract":** the production module's own test suite enforces the contract (`libraries/timing/tests/test_ticks.py` for `ticks_diff` / `ticks_add`).  Consumer tests through the substrate validate that the consumer *uses* the contract correctly — they don't need to independently re-prove the math.
+
+Related: `chumicro_timing.testing.FakeTicks`, "Test fakes as `testing` submodules" above, "Production tolerance that exists only to paper over a fake's hardcoded value" below.
+
 ## Production tolerance that exists only to paper over a fake's hardcoded value
 
 A literal-set or "accept either A or B" tolerance in production code that exists *specifically* because a fake pins to A is a smell that the fake is wrong, not the platform.  A fake simulates what production observes on the platform the fake is executing on — if production has to tolerate a value the host wouldn't actually emit, the fake is the bug.
