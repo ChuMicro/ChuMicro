@@ -150,7 +150,7 @@ grep -niE 'canonical|idempotent|comprehensive|seamless|robust|cutting-edge|best-
 
 **Handling a hit.**  The regex surfaces candidates, it does not decide.  Hard-ban hits (`canonical`, `idempotent`) almost always need rewriting, soft hits (`under the hood`) are case-by-case, and either way the swap is not done until the new sentence reads right said out loud.  A regex hit cleared from a sentence that now reads worse is a regression, not a fix.  See the phrase-ban subsections above for per-word guidance.
 
-**Keep `the` for genuinely-specific singular nouns.**  *"the LED"*, *"the loop"*, *"the request"* refer to a specific instance in the example, and dropping the article reads wrong.  Only flag the genuinely-redundant ones.  Per-noun three-way test in [`feedback_the_forward_reference`](../../../.claude/projects/-Users-chuxor-circuitpython-chumicro/memory/feedback_the_forward_reference.md).
+**Keep `the` for genuinely-specific singular nouns.**  *"the LED"*, *"the loop"*, *"the request"* refer to a specific instance in the example, and dropping the article reads wrong.  Only flag the genuinely-redundant ones.
 
 **Paraphrasing keeps filler.**  When rewriting prose that already contains AI-tic words, the easy move is to keep the filler intact and swap the rest.  Audit the net delta on flagged words across the rewrite.  *"canonical"* should drop, not survive paraphrased.
 
