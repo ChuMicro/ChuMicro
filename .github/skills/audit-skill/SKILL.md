@@ -1,359 +1,449 @@
 ---
-name: audit-skill
-description: Audit one `.github/skills/<name>/SKILL.md` (or a related set) for frontmatter shape, trigger discoverability, reference rot, drift from AGENTS.md / ADRs, sibling composability, AI-tic phrasing, and absolute rules without an incident trail.  Produces a punch-list, executes safe cleanups with sign-off.  Use when a SKILL has drifted, a new one has landed, or two look like they compete for the same trigger.
+description: Audits an existing skill on disk against the skill-writing rules in AGENTS.md and the skill's own stated goal. Use when a skill's flow feels off, contradicts itself, or routes wrong — or before relying on it for important work. Examples: "audit the audit-docs skill", "/audit-skill audit-library", "is the audit-library skill achieving its goal?".
+allowed-tools: Read, Edit, Grep, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(date *), AskUserQuestion, Agent
+argument-hint: "<slug-or-path>"
+arguments:
+  - target
+when_to_use: |
+  Use when an existing skill routes the wrong messages, when its body
+  contradicts its frontmatter, when its tool list is over-broad or skips
+  AskUserQuestion at user-input forks, when its sub-agent dispatch is
+  sequential where parallel was needed, or when a fresh cold-walk would
+  surface drift the author normalized after weeks on the file. Also fires
+  on "validate X against spec" / "check X for issues" phrasings. Do NOT
+  use to author a new skill — that workflow is /new-skill. This skill
+  detects the misroute at Step 1 and redirects.
 ---
 
-# Skill audit
+# Audit Skill
 
-Audit one SKILL.md file under `.github/skills/<name>/` (or a related set — e.g. the audit-* family, the session-* pair) for the things that make a skill drift away from its trigger or duplicate what a sibling already does.  Output a prioritized punch-list, execute the high-confidence batch with the user's go-ahead.  Surface medium / low confidence items as questions rather than guessing.
+Audits a SKILL.md, its reference files, and any persona files it dispatches. Five sub-agents read in parallel. Four apply checklists — loader-routing accuracy, body walkability and goal-derivability, tool-use craft, and sub-agent orchestration. The fifth proposes adjacent improvements. The director merges checklist findings into a tiered punch-list, prints ideas as a separate menu, then asks whether to apply inline fixes or hand off to `/new-skill` for a re-author.
 
-> **About this skill's own prose.**  The target is internal docs (`.github/skills/`) — same audience as this body, so the rules don't invert the way they do for `audit-docs`.  The AI-tic grep applies here normally; the impl-leak / jargon-used-before-defined dimensions from `audit-docs` are *not* relevant because SKILL.md bodies legitimately cite `Decision NNNN`, `CHU0NN`, and `plans/` paths.
+## When to use this skill
 
-## Scope
+- A skill's directives feel confusing or contradictory on a cold read.
+- A skill's goal is hard to derive from reading its SKILL.md top-to-bottom.
+- A skill never reaches for `AskUserQuestion`, sub-agents, or parallelism where they would obviously serve the user better.
+- Before relying on a skill for important or repeated work.
+- After significant edits to a skill, to check what drift landed.
 
-`.github/skills/<name>/SKILL.md` files (also reachable at `.claude/skills/<name>/SKILL.md` via symlink — same file).  Out of scope: API-reference skills generated from code.
+**Don't use for:**
 
-**Arguments.**
+- Authoring a new skill — that's [`/new-skill`](../new-skill/SKILL.md). This skill detects the misroute at Step 1 and redirects.
 
-* `/audit-skill <name>` — single skill (e.g. `/audit-skill audit-docs`).  Runs every dimension except the cross-skill ones.
-* `/audit-skill <name> <name> ...` — related set (e.g. `/audit-skill audit-library audit-embedded audit-integration`, or `/audit-skill session-handoff session-resume`).  Enables cross-skill dimensions (overlap, redundancy, composability against siblings).
+## Invocation
 
-When auditing a set, dims 7, 9, and the cross-skill parts of dim 10 fire in addition to the per-skill checks.
+| Form | Behavior |
+|---|---|
+| `/audit-skill <slug>` | Resolves the slug to `.claude/skills/<slug>/SKILL.md` or `.github/skills/<slug>/SKILL.md`, then audits |
+| `/audit-skill <path>` | Audits the SKILL.md at the explicit path |
+| `/audit-skill` (no arg) | Asks the user which skill via `AskUserQuestion` populated from the tree's slug list |
 
-## Audit philosophy
+## Definition of done
 
-Three agents land on the same SKILL.md and want different things.  The skill's job is to find prose that loses any one of them:
+You are done when **all** of these are true:
 
-* **Loader agent** — Claude Code reads the `description` (and any `when_to_use`) at session start to decide whether this skill should appear in the picker for a given user message.  Bails when the description is vague, jargon-heavy, or doesn't name *what* and *when*.
-* **Triggering agent** — Claude is mid-task, decides this skill matches, opens the body cold (no prior conversation context).  Bails when the body doesn't say what to do, what success looks like, or assumes context only the previous session had.
-* **Sibling-skill author** — adding a new skill next to this one, needs to know whether the new task overlaps with what's here.  Bails when two skills compete for the same trigger or restate each other's rules.
+1. Pre-flight resolved a real SKILL.md, OR redirected cleanly to a different artifact's audit / authoring tool.
+2. Five sub-agent readers ran in parallel; findings from the four checklist readers merged into a tiered punch-list (CRITICAL / IMPORTANT / MINOR / AMBIGUOUS) with source attribution per finding; ideas from the fifth reader surfaced in a separate menu (or "Ideas: none").
+3. The user picked a next action for findings — apply inline fixes, route to re-author, or print as report-only — and that action ran to completion. (Ideas sign-off and Edits are tracked in item 5.)
+4. If the target is being handed off to `/new-skill` (re-author), a backup landed at `.scratch/skills-backup/skills/<slug>-<UTC>/` where `<UTC>` is an ISO-8601 stamp from `date -u +%Y%m%dT%H%M%SZ`. Inline fixes (Step 8) rely on git for recovery; no backup needed.
+5. When the ideas-reader returned ≥ 1 idea, the user worked through the per-idea action question for each picked idea. The available actions depend on the findings choice: in inline-fix / report-only modes, actions are apply / apply-with-edits / discuss / skip; in re-author mode, actions are include-in-seed / discuss / skip. The Ideas block in the report shows resolved outcomes (no `pending` entries remain).
 
-Most skill drift falls into:
+## Process
 
-* **Trigger vagueness** — `description` doesn't carry *what* + *when* concretely enough to route a user message
-* **Trigger overlap** — two skills' descriptions would both match the same plain-language ask
-* **Reference rot** — `Decision NNNN` / `scripts/run.py <cmd>` / `CHU0NN` / sibling-skill name cited but no longer resolves
-* **Drift from source of truth** — body re-states an AGENTS.md / ADR rule that has since changed
-* **Speculative rules** — rules with no incident trail behind them ("always do X") that the agent can't tell apart from load-bearing ones
-* **Sibling duplication** — re-implementing what `task-checkpoint` / `git-commit` already covers instead of deferring
-* **Bloat** — body grown past the point where the agent reads it carefully
-* **Anti-self-assertions** — *"I have read all rules"* / *"always follow X"* style affirmations that backfire (Cline community failure mode)
-* **AI-tic phrasing** — phrase bans and standing regex live in [`agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md)
+### 1. Pre-flight — confirm the target is actually a skill
 
-## Audit dimensions
+Resolve `<target>` to a SKILL.md path. When `<target>` is an explicit path containing `/`, `ls` it directly:
 
-Run each.  Capture findings as `<line>` (or section name) + one-line description + dimension tag (see "Output format" below).
+```bash
+ls "<target>"
+```
 
-### 1. Frontmatter shape
+Otherwise treat `<target>` as a slug and check both common locations, capturing each result. `.claude/skills/` is the loader path; some projects keep the files under `.github/skills/` and symlink `.claude/skills` to them, in which case either `ls` resolves to the same file:
 
-Open the frontmatter block; check against Anthropic's published SKILL.md spec.
+```bash
+ls .claude/skills/<slug>/SKILL.md 2>/dev/null
+ls .github/skills/<slug>/SKILL.md 2>/dev/null
+```
 
-* **`name`** — present (or implicitly the directory name).  ≤64 chars, lowercase + digits + hyphens only.  Not `anthropic` / `claude` / other reserved words.  Should match the parent directory.
-* **`description`** — present.  Names both *what the skill does* and *when to invoke it*.  Length: keep the *triggering* portion under ~400 chars; the loader reads the description text into every session-start reminder, so verbose descriptions tax every session uncached.
-* **Person / mood** — Anthropic recommends third-person (*"Audits SKILL.md files for…"*).  The project's existing audit-* skills use imperative (*"Audit a user-facing markdown doc…"*).  Flag the mismatch only if it actually hurts trigger matching — both forms route correctly in practice.  Keep the project's imperative convention unless an explicit decision moves it.
-* **Conditional fields** — if `context: fork` is set, `agent:` must be specified.  If `disable-model-invocation: true`, the skill is purely procedural (a `/command`-style entry point); verify the body reads that way.  If `allowed-tools:` is set, the listed tools must be ones the skill actually uses.
-* **Reserved-word collision** — flag any `name` or filename that collides with Anthropic-reserved patterns.
+If both `ls` outputs are empty (no path resolved), the request might be about a different artifact — fire a redirect `AskUserQuestion`:
 
-### 2. Discoverability — does the trigger phrase route?
+> "I can't find a SKILL.md at `<target>`. What kind of artifact did you mean to audit?" `header: Artifact kind`
+> Options:
+> - "It's a SKILL.md — I'll give a different path"
+> - "Prose doc (README / guide.md / INSTALL) — route to `/audit-docs`"
+> - "Code comments / docstrings — route to `/audit-comments`"
+> - "A persona file in `.claude/agents/` — I'll find the dispatching skill and print the re-route invocation"
+> - "Authoring a new skill from scratch — route to `/new-skill`"
 
-The loader agent matches user messages against the `description` text.  The body never enters that decision.
+Each non-SKILL.md option carries a `preview` field showing the invocation form the user would land on after picking — for example, the `/audit-docs` option previews `/audit-docs <target>`; the `/audit-comments` option previews `/audit-comments <target>`; the `/new-skill` option previews `/new-skill <slug-or-description>`. AskUserQuestion previews render side-by-side on focus, so the user can compare destinations before picking. When the user picks a non-skill option, print the previewed invocation in chat and exit cleanly.
 
-* **Concrete-action first** — *"Audits SKILL.md for X"* routes; *"Tools for working with skills"* / *"Helps you with skills"* does not.  Vague stems: `tools for`, `helps with`, `utilities`, `things related to`, `working with` — flag.
-* **Jargon in description** — internal vocabulary in the description line burns the only signal the loader has.  *"runner-shaped"*, *"the canonical X"*, *"CHU0NN"* in the description specifically (the body is fine) — flag.
-* **Missing *when*** — descriptions that say *what* but not *when to invoke* leave the loader with no triggering signal.  Look for an explicit *"Use when…"* / *"Use this skill when…"* clause.
-* **Description bloat** — the description is part of every session-start cost.  Anything over ~400 chars of trigger text without a clear payoff is a tax on every session.
-* **Trigger phrase obviousness** — would a user actually say the phrasing the description matches?  *"Use when a SKILL has drifted"* matches *"audit this skill"* and *"check if these skills overlap"*; *"For SKILL.md governance"* matches almost nothing a user would type.
+For the persona-file pick, fire a follow-up `AskUserQuestion` populated by `grep -lE '<persona-name>' .github/skills/**/SKILL.md` to confirm the dispatching skill, then print `Now run: /audit-skill <parent-slug>` and exit. The director does not auto-invoke `/audit-skill` on the parent (same hand-off pattern as Step 7's `/new-skill` re-author).
 
-### 3. Body shape
+**Success criteria:** EITHER an absolute path to a real SKILL.md is printed AND the request is confirmed as a skill audit, OR a recommended-invocation print landed for a non-skill artifact and the skill exited.
 
-* **Length** — Anthropic recommends ≤500 lines for the SKILL.md body (see [Skills best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)); existing audit-* skills land 190–390 lines.  Past 500, signal-to-noise degrades because the agent skims rather than reads.  Past 800, the agent will partial-read with `head` and miss the back half.
-* **Reference files** — supporting `.md` files in the skill directory.  One hop deep from SKILL.md only — deeper nesting causes the same partial-read pattern.  Reference files >100 lines need a table of contents at the top.
-* **Procedure-first vs narrative** — skill bodies are read by an agent mid-task, not browsed by a human.  Flag long narrative preambles before any actionable step.  *"In this skill we will explore how to…"* / *"This skill covers many aspects of…"* — drop, start with the procedure.
-* **Section ordering** — most skills want: Scope → Philosophy/Why → Dimensions/Checks → Procedure → Output format → Don'ts → Defer.  Bodies that bury Procedure below 400 lines of philosophy are unloadable.
-* **Heading depth** — usually H1 (title) + H2 (top-level sections) + H3 (subsections).  Past H4, the structure is over-nested.
-* **Rule-first vs example-first** — when teaching a principle, state the rule (with its reasoning) before the example.  *Good/bad* contrasts that leave the principle implicit force the reading agent to reverse-engineer it from the shape of the example — two reasoning hops instead of one, and the inferred rule covers only the cases the example covers.  Flag long *"common mistakes"* / *"good vs bad"* / *"❌ … ✅ …"* blocks doing the work that a single principle sentence would do.
-* **Tool calls that could be invocation-time injection** — when a body opens with *"first, run X via Bash to get [state]"* and that value is invariably needed up front (git status, file listing, env vars), Claude Code's invocation-time shell expansion (a `!` prefix followed by a backticked shell command in slash-command / skill prose) substitutes stdout before the first agent step, saving a tool round-trip.  Flag the prose pattern; verify the current injection syntax in Claude Code docs before rewriting.  *(Don't write the literal bang-backtick sequence in a SKILL.md body — the preprocessor will fire it at load time.  Describe in prose instead.)*
+### 2. Inventory the audit target
 
-### 4. Cold-agent loadability
+Print a structured inventory:
 
-Can an agent invoke this skill with no session context and know what *"done"* looks like?
+```bash
+ls <skill-dir>/*.md 2>/dev/null
+ls <skill-dir>/scripts/ 2>/dev/null
+grep -E 'subagent_type:|new-skill-|audit-skill-|.claude/agents/' <skill-dir>/SKILL.md
+grep -E '^description:.*Examples:' <skill-dir>/SKILL.md
+```
 
-* **When-to-use clause** — explicit, near the top.  Either in the description (frontmatter) or in an opening section.
-* **Success / exit condition** — somewhere the body says when the skill is finished.  Audit skills carry an *"After-action sweep + exit condition"* block; procedural skills carry a *"Done when…"* clause.  Skills without an exit condition tend to over-run.
-* **No implicit prior-conversation context** — flag phrasings like *"continue from the previous pass"*, *"as we discussed"*, *"the user mentioned earlier"*.  The skill can be invoked fresh.
-* **Arguments documented** — if the skill takes a path / name argument, the body says so and shows examples.
-* **Single-pass walkable** — can an agent walk top-to-bottom and execute, or does the body require jumping around?  Procedure section should be linear.
-* **Mental simulation** — pick a representative user invocation and walk the body as a cold agent.  Flag *divergence points* (steps where two Claude instances would produce meaningfully different outputs because the spec is under-specified), *stuck points* (steps that need info not yet gathered or argued), and *dead ends* (the skill's workflow stops but the user's goal isn't accomplished — the user has to do something manually after).
-* **Edge-case probe** — try 2–3 adversarial inputs: missing argument, malformed path, contradictory request, an input from outside the skill's intended domain.  Does the skill detect + surface a useful error, or silently produce wrong output?  Flag the latter as `loadability`.
+Capture: the SKILL.md path, any reference files in the skill directory, any bundled scripts, and any custom persona files the skill dispatches (cited by `subagent_type:` or a path under `.claude/agents/`). The fourth grep surfaces the `Examples: "<m1>", "<m2>", "<m3>"` block on the description line.
 
-### 5. Reference rot
+If the description carries no `Examples:` block, salvage three trigger phrases from `when_to_use`. **If both sources are empty, surface a CRITICAL finding ("description carries no triggers") and stop before the Step 4 dispatch. Without trigger messages the loader-reader cannot run.**
 
-Every citation in the body should still resolve.  Walk the file and verify:
+After the inventory grep returns the persona names, check each one against the live agent registry. A persona file on disk but not in the registry (freshly written, session not restarted) cannot be dispatched at Step 4. When a persona is on disk but unregistered, stop and tell the user: *"Persona `<name>` is on disk but not in this session's agent registry. Restart the session and re-invoke `/audit-skill <slug>` to pick it up; or proceed with the remaining N readers and the audit will run with that lens missing."* Then fire one `AskUserQuestion` letting the user pick *Restart* or *Proceed with N readers*. *Proceed* records the missing lens as a director follow-up note in the Step 6 report.
 
-* **`plans/decisions/NNNN-*.md`** — the file exists; the status enum is still meaningful (`proposed` / `accepted` / `superseded` / `deferred`).  A skill citing a `superseded` ADR is rot.
-* **`scripts/run.py <cmd>`** — the command exists in the runner.  Quick check:
-  ```
-  grep -nE "scripts/run\.py \w[-\w]*" <SKILL.md> | awk -F"run.py " '{print $2}' | awk '{print $1}' | sort -u
-  ```
-  Each command should appear in `python scripts/run.py --help` output.
-* **`CHU0NN`** — the lint code exists in `workbench/checks/`.
-* **File paths** — every `libraries/<name>/...`, `workbench/<name>/...`, `support/<name>/...` path resolves.
-* **Sibling skill names** — every `audit-docs` / `task-checkpoint` / `git-commit` reference points to a real `.github/skills/<name>/` directory.
-* **Intra-doc + reference-file anchors** — SKILL.md bodies link into anchored sections of sibling reference files (`field-reality.md#stale-cli-...`).  A renamed anchor breaks the link silently.  Check with:
-  ```
-  grep -nE '\(#[a-z0-9-]+\)|\([a-z0-9-]+\.md#[a-z0-9-]+\)' <SKILL.md>
-  ```
-  For each `(file.md#anchor)` hit, verify the anchor exists in the target file (GitHub slug rules: lowercase, spaces → hyphens, em-dashes / parens dropped).
-* **Embedded snippets** — grep / awk / regex blocks shown as audit checks must actually fire.  When the skill says *"grep for X"* and shows a pattern, dry-run the pattern against a representative target in the repo.  A regex that was right at write-time but whose target has since moved (renamed method, restructured directory, changed lint code) is rot the same way a dead citation is.
-* **External URLs** — flag, don't verify by default (cost / flakiness); only verify if the URL is load-bearing for the procedure.
+**Success criteria:** an inventory block printed in chat naming every file the audit covers — SKILL.md absolute path, reference-file paths, persona-file paths — plus the three trigger messages (or a CRITICAL stop). Every persona file the SKILL.md cites resolves at `.claude/agents/<name>.md` AND is dispatchable from the live agent registry (or the user explicitly accepted the missing-lens fallback).
 
-### 6. Drift from source of truth
+Steps 3, 4, and 6 consume these paths and triggers.
 
-`AGENTS.md` and `plans/decisions/` are the source of truth.  Skills should *cite* them, not re-state and then drift from them.
+### 3. Director's own goal-derivability draft — before sub-agents
 
-* **Re-stated AGENTS.md rules** — if the skill restates a non-negotiable rule (test-skip loudness, runner-shape, absolute-imports-in-libraries, etc.) and the AGENTS.md wording has changed, flag.  Prefer a one-line citation: *"Per AGENTS.md → Testing, test skips must be loud (see [Decision 0058](../../../plans/decisions/0058-test-skips-must-be-loud.md))"*.
-* **Re-stated ADR content** — same.  If the skill explains *why* a Decision exists, that explanation can drift from the ADR body.  Cite, don't restate.
-* **Tone bans cite [`agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md).**  The agent style guide is the source of truth for the phrase bans, the standing regex, and per-word handling.  Any skill that carries its own AI-tic list, restates the per-word handling, or maintains a parallel regex is drift.  Cite, do not restate.  When a new word lands, it goes into the right § Phrase bans subsection and the regex in § Standing AI-tic regex; every audit skill picks it up automatically.
+Read the SKILL.md and the reference files from a fresh, top-to-bottom pass. From that read alone, draft TWO things, holding both in chat:
 
-### 7. Composability with sibling skills
+(a) A 2–3 sentence goal: what the skill claims to do, what it actually walks through, and what a reasonable goal statement would be.
 
-The end-of-work bookend (`task-checkpoint`) and the commit step (`git-commit`) are *their own skills*.  Other skills should defer, not re-implement.
+(b) An expected-findings list: 3–6 bullets naming what any well-formed audit of this skill type should surface (frontmatter structure, walkability, orchestration choice, persona shape, scope, blindness contracts, anything else worth surfacing). These are predictions, not observations.
 
-* **Re-implemented bookend** — if the body has its own *"now run preflight, update plans/next-up.md, commit, push"* paragraph, that's `task-checkpoint`'s job.  Cite it instead.
-* **Re-implemented commit prose** — heredoc commit-message recipes belong in `git-commit`; skill bodies should cite.
-* **Sibling-skill references that resolve** — if the body says *"see [`task-checkpoint`](../task-checkpoint/SKILL.md)"*, the link should resolve (covered by dim 5 too).
-* **Skill-set internal references (multi-skill mode)** — when auditing a related set, check that members cross-reference each other appropriately.  `audit-library` and `audit-embedded` should both mention they complement (not replace) each other; `session-handoff` and `session-resume` should bookend explicitly.
+The expected-findings list is the comparison baseline for Step 5's missing-content pass. Items in your list that no checklist sub-agent touched become director follow-up notes — that's the mechanical way to catch what's not in the body but should be.
 
-### 8. Tone — AI-tics + skill-specific anti-patterns
+**Success criteria:** both the goal draft and the expected-findings list are in chat, ready to compare against sub-agent findings in Step 5.
 
-Run the **AI-tic grep from [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex)** — that section is the source of truth.  Treat hits per [§ Phrase bans](../../../docs/contributing/agent-style-guide.md#phrase-bans) (drop / replace / case-by-case).  Same rules apply to skill bodies as to user-facing docs.
+**Rules:**
+- Do not Read any other audit-* skill in this repo. They may be wrong and would bias the draft.
+- Do not Read the five `audit-skill-*` persona files. They carry the rules the sub-agents enforce; reading them now biases the director toward what the sub-agents will find.
 
-**Degraded passages get rewritten, not re-trimmed.**  SKILL.md bodies rot exactly the way code comments and READMEs do — trimmed pass after pass, each removing a word, none asking *what should this say?*  An `ai-tic` or `shape` finding whose passage has rotted that far is not fixed by removing another word.  Discard it and rewrite from a fresh read of *what this skill does and when it fires*, applying the cold-loader / cold-triggering-agent test (Audit philosophy).  Tag `rewrite`, show replacement inline, MEDIUM by default.
+### 4. Dispatch five sub-agent readers in ONE message
 
-*Testable criterion.*  If the proposed edit changes ≤1 sentence and leaves the surrounding paragraph intact, it is a strip (`ai-tic` / `shape`), not a `rewrite` — even if the word *"rewrite"* came up while drafting.  A rewrite reconsiders the passage from source (the dim 4 three-agent personae), not from the existing prose.  Read source, look away, draft fresh, *then* compare.  If you cannot draft from source alone, that itself is a finding (the prose carried knowledge the skill's scope doesn't make obvious — revisit dim 2 or dim 3).
+Fire five `Agent` tool calls **in one message**. The harness runs concurrent calls from a single message; sequential messages serialize them.
 
-This is [`agent-style-guide.md` § Degraded prose is rewritten, not trimmed again](../../../docs/contributing/agent-style-guide.md#degraded-prose-is-rewritten-not-trimmed-again) applied to SKILL.md bodies.  `/audit-comments` and `/audit-docs` make the same move for their scopes.  Re-trimming the wreckage manufactures the residue the rule exists to stop.
+Pattern: 3c parallel lens-split (per the orchestration-reader's taxonomy) — same SKILL.md input, four checklist personas each judging a disjoint lens (loader / cold-walk / craft / orchestration) plus one generative persona (ideas). The director catalogs disjoint findings into one tiered punch-list (Step 5) and prints the generative menu separately (Step 6b). This is not the classic second-opinion 3b pattern (same input + same spec, consolidate agreement vs divergence); the lenses are disjoint by design and agreement-vs-divergence is not the merge criterion.
 
-Skill-specific anti-patterns on top of the standard list:
+Pass the three trigger messages extracted at Step 2 (from the audited SKILL.md's `description: … Examples: "<m1>", "<m2>", "<m3>"` line, or the `when_to_use` salvage) to the loader-reader.
 
-* **Anti-self-assertions** — *"I have read all the rules"*, *"always follow these guidelines"*, *"I will not skip steps"* in the body.  Known Cline-community failure mode: the assertion reads as completed work and the agent skips the actual rule.  Flag every occurrence.
-* **Time-sensitive phrasing** — *"before August 2025"*, *"as of 2026-05-13"*, *"in the current release"*.  Skills outlive their dates.  Drop dates, name the condition that was true at the time (*"on CircuitPython 9.x"*) instead.
-* **Inconsistent terminology** — using *"audit"* / *"check"* / *"review"* interchangeably within one skill where they should be one term.
-* **"Voodoo constants"** — magic numbers / paths in procedural snippets without a why.  *"Run with `--timeout 47`"* without an explanation of why 47.
-* **First-person plural** — *"we run"*, *"our convention"* in a skill body.  The agent is reading instructions, not co-authoring them.  Switch to imperative.
+| Sub-agent | Lens | Inputs |
+|---|---|---|
+| `audit-skill-loader-reader` | Frontmatter contract — description voice + length, `name` rules, `when_to_use`, per-message routing | absolute SKILL.md path; the three example user messages |
+| `audit-skill-cold-walker` | Body walkability + goal-derivability — per-step Success criteria, Done-when, reference-file links, AI-tic / hedging / moralizing patterns, stance | absolute SKILL.md path; reference-file paths from the inventory |
+| `audit-skill-craft-reader` | Tool-use at user-interaction moments (`AskUserQuestion`, `multiSelect`, `preview`, `SendUserFile`, `Agent`), scope coverage vs minimum-deliverable stop, focused-step opportunities, weak directives | absolute SKILL.md path |
+| `audit-skill-orchestration-reader` | Sub-agent dispatch correctness, one-message batching, model selection, director-bias warning, persona-file structure, hook-vs-skill routing | absolute SKILL.md path; persona-file paths from the inventory |
+| `audit-skill-ideas-reader` | Generative menu — alternative framings, adjacent problems to fold in, harness tools the skill could use but doesn't, scope expansion / contraction, lifecycle gaps, output-format rethinks, persona-lens reframings, cross-persona refactors | absolute SKILL.md path; persona-file paths from the inventory |
 
-### 9. Cross-skill overlap (multi-skill mode only)
+**Blindness contract (verbatim — do not paraphrase).** Prepend exactly this string to every dispatch's `prompt`:
 
-When auditing a related set, check that the skills don't compete with or duplicate each other.
+```text
+Read only what this prompt names. Do not Read any other audit-* skill, the director's draft, or any reference file outside the inputs.
+```
 
-* **Trigger phrase overlap** — extract the *"Use when…"* clause from each description.  Two skills whose triggers would route the same user message → flag.  Concrete approach: for each pair of descriptions, extract noun-phrases after *"use when"* / *"use this when"* / *"audit a"* etc., and look for substantial lexical overlap.
-* **Directive extraction + conflict** — lift the cursor-doctor approach.  Extract imperative directives from each body (regex on `\b(use|prefer|never|avoid|always|don'?t|must|should)\s+\w+`).  Cross-file diff: same noun, opposite verb → contradiction.  Same noun, same verb in two skills → candidate for moving the rule to a single source of truth (AGENTS.md or one skill).
-* **Redundancy** — line-overlap >60% between two skills → merge candidate.  Approximate with:
-  ```
-  diff -y --suppress-common-lines <skill1>/SKILL.md <skill2>/SKILL.md | wc -l
-  ```
-  vs the line count of each.  Not exact, but surfaces obvious duplication.
-* **Coverage gap** — for a family like audit-* or session-*, ask: is there an obvious case the set doesn't cover?  *"audit-library covers libraries, audit-workspace covers cross-library, but nothing covers `support/`"* — surface as a question, not a finding.
+Step 9a greps the SKILL.md body for this exact string. When a paraphrase slips in, the grep misses and the audit fails. The fence above keeps the verbatim source visually distinct, so an edit that breaks the grep stands out in review. Without that catch, a slow paraphrase drift in the body could ride into the dispatch unnoticed and sub-agents would lose blindness with no failing test.
 
-### 10. Rule justification — incident trail vs speculation
+Each dispatch prompt names: the absolute SKILL.md path, the auxiliary paths from the table (persona files for orchestration; reference files for cold-walker; the three trigger messages for loader), and one sentence framing the lens. The rules stay in each persona's system prompt rather than the dispatch prompt — a persona's system prompt stays in effect across the whole run, while a user-message rule gets diluted as the conversation grows.
 
-Rules without an incident behind them are hard for the agent to weigh against contradicting signals.
+**Success criteria:** five `Agent` calls land in one assistant message (one tool-call batch); five reports back (four checklist reports + one ideas menu, which may be `Ideas: none`).
 
-* **"Always do X" without context** — rules phrased as absolutes should be traceable to an incident, an ADR, or a feedback memory.  *"Always run preflight before commit — preflight enforces coverage (see [Decision 0025](../../../plans/decisions/0025-dual-coverage-thresholds.md))"* is grounded; *"Always run preflight before commit"* alone is harder to weigh.  Flag rules without a why or a pointer.
-* **Cross-check against `feedback_*` memories** — the user's auto-memory carries the *incident → rule* pairs (`feedback_dont_unmount_circuitpy`, `feedback_never_persist_microcontroller_reset`, etc.).  If a skill encodes a rule that should be there but isn't, surface as a question: *"Is this rule captured in feedback memory, or should it be?"*.
-* **Rule of Three** — borrowed from refactoring guidance (Fowler, *Refactoring*: "Three Strikes and You Refactor"; recently applied to agent-rule discipline in the agentic-tooling community).  A rule codified after the agent fails the same pattern once is often premature; three observations is the rough cut-off.  Skills that read like a defensive catalog of every possible mistake usually have premature rules; ask the user *"do you want to keep this, or is it covered by [memory / ADR / regex check]?"*.
+**Execution:** sub-agents (`Agent` tool, five parallel dispatches).
 
-### 11. Stance toward the reading agent
+**Rules:**
+- A sub-agent returning *no findings* is a valid clean lens — accept it.
+- A sub-agent that errors gets one re-dispatch with the same prompt.
+- A sub-agent return that doesn't carry tier labels (CRITICAL / IMPORTANT / MINOR / AMBIGUOUS) gets one re-dispatch with the framing "tier each finding".
+- More than one re-dispatch on the same lens means the prompt is wrong; surface the gap to the user rather than looping.
 
-A SKILL.md is read by an agent mid-task.  Dims 1-10 catch mechanical failures; this dimension catches skills that pass mechanically but talk down to, hedge at, or apologize at the reading agent.  Ask: does the skill treat the agent as a capable practitioner, or as a beginner who needs every step spelled out?
+### 5. Merge findings into a tiered punch-list
 
-Common shapes that fail:
+For each finding from the four checklist sub-agents (the ideas-reader returns ideas, handled separately below), assign a tier:
 
-* **Defensive hedging.** *"This should usually work"*, *"may handle the common cases"* — the hedge tells the agent *"I'm not sure when this fires."*  Either name the conditions explicitly or remove the hedge.
-* **Moralizing imperatives.** *"Be careful when…"*, *"Remember to always…"*, *"Don't forget that…"* — empty scaffolding.  State the constraint as a rule, not a prompt to a child.
-* **Apologetic scope notes.** *"We know this skill doesn't cover X, but…"* — apologizing for bounds steals attention.  State scope plainly; if a non-feature is intentional, name it and move on.
-* **Step-by-step narration of self-evident agent actions.** *"First, identify the file.  Then read it.  Then look for X."* over *"Read the file and check for X."* — the agent can sequence; tell them what to find, not how to walk.
-* **Over-cautious checkpointing.** *"Pause and verify with the user before continuing"* on every step turns the skill into a polling loop.  Reserve checkpoints for genuinely user-owned decisions.
+- **CRITICAL** — goal not derivable from cold read; core flow wrong for the stated purpose; frontmatter would not route any of the trigger messages; Done-when missing; a procedure that fires on a tool event (`PreToolUse` / `PostToolUse` / `Stop`) mis-classified as a skill instead of a hook. Any CRITICAL finding defaults the recommendation toward re-author.
+- **IMPORTANT** — missing per-step Success criteria on a non-trivial skill; `AskUserQuestion` missing at a clear user-input fork; sub-agent dispatch missing where the work needs cold-walk; AI-tic, defensive-hedging, or moralizing pattern in directives; persona file missing required frontmatter (`name`, `description`); persona tooling that breaks the persona's stated blindness contract.
+- **MINOR** — single AI-tic word swap; voodoo constant without explanation; first-person plural in body prose; reference file > 100 lines without a table of contents; could-use-preview suggestion.
+- **AMBIGUOUS** — sub-agents partially disagreed (2 / 4 or 3 / 4 agreement; 4 / 4 = clean finding, not AMBIGUOUS); the judgment isn't clearly in scope for the skill being audited; the rule the finding cites is itself a guideline rather than an absolute.
 
-The fix: write to a capable practitioner.  State what to do and what the exit condition is.  If a check is load-bearing, name what's being checked and why.  Trust the agent to handle the routine; flag only the non-obvious.
+Compare sub-agent findings against the director's Step 3 expected-findings list:
 
-Pass 2 judgment — no sweep catches it.  Apply to both originals and rewrite drafts.
+- Items in your expected-findings list that no checklist sub-agent touched become **director follow-up** notes.
+- Items in sub-agent findings absent from your expected-findings list are sub-agent finds — keep them in the punch-list at the tier the sub-agent's reasoning warrants; do not downgrade or omit on the basis that you didn't think of them yourself.
 
-## Procedure
+Sub-agent findings outrank director observations.
 
-**Two passes, in order.**  Pass 1 makes the subtractive edits — AI-tic strips, anti-self-assertion strips, dated-phrasing strips, voodoo-constant flags, frontmatter normalization, reference-rot fixes, drift one-line citation swaps, composability strip-to-citation moves, and description vague-stem fixes where the swap is mechanical.  Pass 2 re-reads the post-Pass-1 state cold against the three personae (loader, triggering agent, sibling-skill author): with the tic noise and dead citations cleared, the structural and judgment-level failures that survive are legible as failures.  Pass 2 surfaces body-shape moves, cold-agent loadability gaps, cross-skill overlap (in multi-skill mode), rule-justification rewrites, and the `rewrite` findings where a fresh-read replacement is the right fix.  **Run Pass 1 to a commit before starting Pass 2** — strips routinely reveal that the surrounding prose, not the tic, was the actual defect, and reading the original state biases Pass 2 toward minimal edits and degraded prose perpetuates.  This is the same boundary `/audit-docs` and `/audit-comments` enforce, for the same reason.
+**Ideas channel.** The ideas-reader returns up to 5 ideas covering improvements the author probably did not consider: alternative framings, adjacent problems to fold in, harness tools the skill could use but doesn't, scope adjustments, lifecycle gaps, output-format rethinks. The cap keeps the menu short enough that the user can weigh each idea individually in the Step 6 per-idea questions. Ideas do not get tiered — the CRITICAL / IMPORTANT / MINOR / AMBIGUOUS labels describe defects, and an idea is not a defect. The menu prints as a separate block in the Step 6 report. The user decides per-idea whether to apply inline (an Edit on the audited skill, same machinery as Step 8 but on its own per-idea question), discuss first, or skip. Ideas do not file to `plans/next-up.md`; resolve them in this audit.
 
-**Clause-paced reading in Pass 2.**  Pass 1's strips leave paragraphs that read fine at paragraph scale while a mid-paragraph parenthetical, a buried clause, or a single item in a long bulleted dimension list still encodes the defect.  Pass 2 reads clauses individually inside each paragraph, not paragraphs as units.  Paragraph-paced reads leave residue; clause-paced reads catch it.
+**Success criteria:** one table with columns TIER · SOURCE (sub-agent or director) · FINDING · ACTION (inline-fix | re-author | human-judgment), plus a separate Ideas block (or `Ideas: none`).
 
-**Cross-section sweep before per-passage rewrites.**  In Pass 2, read related parts of the body together — frontmatter `description` + opening Scope + the first procedural step often state the same trigger.  Name a home (usually the description, since the loader sees only that) and collapse the others to one cohesive statement.  Per-section review misses this because each site reads fine alone.
+**Rules:**
+- The recommendation defaults to **re-author** when ≥ 2 CRITICAL findings land OR when any CRITICAL goal-derivability finding lands. Otherwise the default is **inline-fix**. The user can override either way.
+- The director-bias warning is part of the literal output template at the bottom of this file; do not paraphrase it.
 
-### Pass 1 — subtractive sweep
+### Director's writing discipline — apply before showing any Edit
 
-1. **AI-tic + anti-pattern grep** (dim 8).  Run the standing regex from [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex), plus the skill-specific patterns in dim 8 (anti-self-assertions, dated phrasing, voodoo constants, first-person plural).  Hard-ban hits and anti-self-assertions almost always need a strip; soft hits are case-by-case.
-2. **Frontmatter normalization** (dim 1).  Mechanical shape fixes: `name` matches directory, `description` exists and carries *what* + *when*, conditional fields satisfy their constraints.  Description rewrites that need new prose (subjective wording) defer to Pass 2.
-3. **Reference-rot fix** (dim 5).  Extract every `Decision NNNN`, `scripts/run.py <cmd>`, `CHU0NN`, sibling-skill name, file path, intra-doc anchor, embedded grep / awk snippet.  Resolve or dry-run each.  Dead citations get a one-line fix (corrected number, current command name) or removal where the surrounding sentence still holds.  Anchor renames get the new slug.
-4. **Drift one-line citation swap** (dim 6).  For each restated AGENTS.md / ADR rule that has diverged from source, replace the restatement with a one-line citation (*"Per AGENTS.md → Testing, test skips must be loud (see [Decision 0058](...))."*).  Restatements that have *not* diverged but still re-implement source content also get cited rather than mirrored, per dim 6.
-5. **Composability strip-to-citation** (dim 7).  Replace duplicated `task-checkpoint` / `git-commit` paragraphs with one-line citations.  Same for sibling-skill content that's restated rather than referenced.
-6. **Description vague-stem fix** (dim 2 — mechanical subset).  Vague openers (*"Tools for…"*, *"Helps with…"*, *"Utilities for…"*) get swapped to concrete-action openers when the swap is mechanical (the rest of the description already names the action; only the stem was vague).  Vague descriptions that need new content defer to Pass 2.
+Steps 6b (idea Apply), 7 (seed paragraph), 8 (inline-fix), and any `AskUserQuestion` option label require YOU to draft prose the user will read. The personas now carry the writing-tone rules in their bodies; you do not by default. Before showing any drafted Edit, summary, or option label:
 
-**Pass 1 punch-list and execution.**  Group by confidence.  HIGH: AI-tic hits, anti-self-assertions, dated phrasing, dead citations, anchor fixes, one-line drift citations, composability strip-to-citation moves, mechanical vague-stem swaps.  MEDIUM: drift cases where one sentence of the local restatement should survive the citation swap, frontmatter rewrites that need a judgment call.  Execute HIGH as one cohesive commit; MEDIUM as separate commits if accepted.
+- **Read aloud.** Read each sentence the way you'd say it out loud to a colleague. If you would not say it to a person, rewrite it. See [`docs/contributing/agent-style-guide.md` § Say it out loud](../../docs/contributing/agent-style-guide.md#say-it-out-loud).
+- **Concrete subject, real verb.** Reject your own draft when an abstract noun sits in the subject slot with a weak verb (*"Stance is the triggering-reader's lens"*, *"The win is…"*, *"Its floor is…"*) — find the real actor and let it act. No word-level scan catches this; per-sentence judgment. See [`docs/contributing/agent-style-guide.md` § Concrete subject, real verb](../../docs/contributing/agent-style-guide.md#concrete-subject-real-verb-the-structural-rule).
+- **Voice-match.** Re-read 5–10 lines of the audited file's surrounding prose. Your Edit reads like that voice, not like your default — a tight imperative skill body does not want a discursive insert; a discursive body does not want clipped imperative.
+- **Articles per noun (the forward-reference test).** Test each *"the X"* — use *"the X"* only when X is an established singular referent the reader already has; *"a X"* / *"an X"* for forward references; bare X for brand names and systems. *"the code fence"* fails when no specific fence was introduced; *"the Pi Pico W"* is decoration (drop the *the*). Inherited *the*s compound across rewrites — re-check per noun. See [`docs/contributing/agent-style-guide.md` § Definite-article tics](../../docs/contributing/agent-style-guide.md#definite-article-tics).
 
-### Pass 2 — reconstructive sweep
+When a swap that would honor these rules reads worse than the original, surface the finding without a proposed Edit and let the user draft the replacement. *Word-soup fixes are regressions, not improvements.*
 
-The three-persona walk runs against the cleaned state.  Pass 1's strips remove tic noise and dead citations, so the structural failures that survive are legible rather than camouflaged.
+This discipline applies to YOUR prose, not to findings the sub-agents return — the personas already carry the writing-tone rules. The gap is the director (you) drafting replacement prose, and the four checklist readers cannot judge prose they did not produce.
 
-7. **Cold-agent loadability walk** (dim 4).  Walk the body as a cold loader, then a cold triggering agent, then a sibling-skill author against one representative invocation (mental simulation), and probe 2–3 adversarial inputs (missing arg, malformed path, contradictory request, input from outside the skill's intended domain).  Flag divergence points (steps where two Claude instances would meaningfully diverge), stuck points (steps needing info not yet gathered), and dead ends (workflow stops short of the user's goal).  Apply the clause-paced rule.
-7b. **Draft the ideal skill description and procedure from source first, then compare.**  For each load-bearing piece (the `description` triggering text; the Procedure steps an agent walks; the Done-when exit condition), draft what the ideal version would say from a fresh read of *what this skill does, when it fires, who calls it, what done looks like*.  Compare your draft against the actual.  Items present in your draft but absent from the actual are findings — tag `missing`.  This makes the missing-content question explicit; without it, the loadability walk catches steps that *go wrong* but misses procedure that *omits what an agent needs to act* (the exit condition the agent infers wrong, the argument shape the description doesn't name, the failure mode no step anticipates).  Distinct from `rewrite`: `missing` adds; `rewrite` replaces.
-8. **Body shape evaluation** (dim 3).  `wc -l`, section grep (`grep -nE '^## ' <file>`).  Procedure-first vs narrative, section ordering against the recommended arc (Scope → Philosophy → Dimensions → Procedure → Output → Don'ts → Defer), heading depth, rule-first vs example-first, reference-file table-of-contents on files >100 lines.  Length thresholds are more legible after Pass 1 since the padding that masked them is gone.
-9. **Description reconstructive rewrite** (dim 2).  Descriptions that survived Pass 1 but still fail the triggerability test (no *when*, jargon-heavy, no obvious user phrasing match) get rewritten.  Draft from source per the discipline below — what the skill does, when it fires, who calls it — *before* re-reading the existing description.
-10. **Cross-skill overlap** (dim 9 — multi-skill mode only).  Trigger phrase overlap, directive extraction + conflict detection, redundancy diff, coverage gap.  Rewrites here are MEDIUM (which skill owns the contested phrase is a judgment call); pure deletions of duplicated paragraphs are HIGH.
-11. **Rule justification rewrites** (dim 10).  For each absolute rule without an incident trail: trace to an ADR / `feedback_*` memory and add the pointer, soften to a guideline, or remove.  Drafting the pointer prose follows the source-first discipline (read the ADR or memory; draft the cited sentence fresh; compare).
-12. **Reconstructive rewrites** (dim 8 — `rewrite` findings).  For each passage flagged as degraded in Pass 1's grep but where stripping further would leave the prose opaque or ambiguous, draft replacement text from a fresh read of *what this skill does and when it fires* (the dim 4 three-persona test) — *before* re-reading the original.  Order is load-bearing: read the skill's scope from its own dimensions and procedure, look away, draft fresh, *then* compare against the original.  Drafting with the original in view biases toward minimal edits and degraded prose perpetuates.  Apply the cold-loader / cold-triggering-agent test and the stance test (dim 11) to your proposed text — a fresh draft that hedges, moralizes, or apologizes has rebuilt the words and kept the stance defect.
+### 6. Print the punch-list and offer the next action
 
-**Pass 2 punch-list and execution.**  Group by confidence.  HIGH: structural moves with clear cold-agent benefit, mechanical loadability gaps (missing exit-condition clause, missing arguments section).  MEDIUM: `rewrite` findings with proposed replacement text (judgment call about which scope-framing is load-bearing); description rewrites; rule-justification rewrites where the soften-vs-trace call needs sign-off.  LOW: stumbles where the agent-persona is unclear.  Execute HIGH as one cohesive commit; MEDIUM as separate commits, one per rewrite — small reversible edits; if one rewrite reads worse on a second look, the rest stand.
+Step 6 has two sub-steps: 6a prints the report and gates the findings-action, 6b runs the per-idea sequence (only when ideas surfaced). The split exists so a fresh agent can follow each gate without losing track of which AskUserQuestion belongs to which decision.
 
-### After-action sweep + exit condition
+**Success criteria (parent):** the findings-action gate (6a) ran AND the per-idea sequence (6b) ran or was skipped per the `Ideas: none` clause; the user knows which mode the audit landed in before any Step 7 backup or Step 8 Edit fires.
 
-Re-run the dim 8 AI-tic grep on the changed file(s).  Re-run dim 5 reference checks on any citations that were edited.  Rewrites pull in new tics, so the second grep catches what fresh prose introduced.  The audit is done when:
+#### 6a. Print the report and gate the findings next-action
 
-* AI-tic grep returns no unjustified hits.
-* Every accepted punch-list item has a corresponding edit (or a deferred-to-`plans/next-up.md` entry if the fix is bigger than the audit).
-* In multi-skill mode, dim 9 finds no remaining overlap that the user hasn't explicitly accepted.
-* A cold re-walk of the changed sections against the three personae does not surface a new stumble.
+Print the table in the [output format](#output-format) below. Then fire one `AskUserQuestion`. Show the **Route to re-author** option only when the Step 5 recommendation defaults to re-author (≥ 2 CRITICAL findings OR any CRITICAL goal-derivability finding); otherwise show only the inline-fix and report-only options:
 
-If new stumbles surface after the edit pass, file as a follow-up rather than expanding the current one.
+> "Findings merged. What next?" `header: Next action`
+> Options (conditional, per Step 5 recommendation):
+> - "Apply inline fixes" — drills into each non-AMBIGUOUS finding for per-item sign-off (Step 8)
+> - "Route to re-author" — only present when Step 5 recommended re-author; routes to Step 7
+> - "Print as report only — no action"
 
-After the after-action sweep, invoke the `task-checkpoint` skill — it owns preflight, plans-doc update, commit, and push.  Don't stop without invoking it.
+**Success criteria:** report printed in chat in the [Output format](#output-format); user picked one of the conditional findings-action options; no filesystem change has occurred yet (Step 7 backup-and-handoff or Step 8 inline-fix runs in response to the picked action).
+
+#### 6b. Per-idea ideas sequence (skip when `Ideas: none`)
+
+When the ideas-reader returned ≥ 1 idea, fire a second `AskUserQuestion` for the Ideas menu (`multiSelect: true`):
+
+> "The ideas-reader proposed N ideas. Pick which to engage with — each picked idea opens a per-idea action question. Unpicked ideas stay in the report only." `header: Ideas`
+> Options:
+> - One row per idea title (multiSelect; default unchecked)
+> - *"Skip all — leave the menu in the report only"*
+
+For each idea the user picked, fire a per-idea follow-up. The action set is conditional on the findings action chosen in 6a. Every per-idea question carries a default recommendation as the first option (with "(Recommended)" appended to the label), so the user is confirming-or-revising rather than picking blank-slate. The default depends on the idea's tag:
+
+- `[WILD]` — recommend *"Discuss inline first"*. WILD ideas have loosened plausibility grounding and benefit most from one round of conversation before any commit. Surface this as a prose note: *"This idea is [WILD] — Discuss inline first recommended."*
+- Single-file SKILL.md anchor, kind = harness-affordance or output-shape — recommend *"Apply inline"*. Narrow, well-anchored, the Edit either lands or doesn't.
+- Cross-file anchor (`SKILL.md + <persona>`) or kind = scope-adjustment / lifecycle-gap — recommend *"Apply with edits"*. Likely to need user-tuned wording before the Edit lands cleanly across both files.
+- Anchor lands in goal-bearing prose (description, opening paragraph, Done-when, or a persona's blindness contract) — recommend *"Discuss inline first"* and pair with the goal-change pushback below.
+
+**When the findings action was *inline-fix* or *report-only*** — ideas Apply produces Edits in place. Before showing the question, parse the idea's `Anchor:` field to determine the **target file(s)** for the Edit: a SKILL.md anchor routes to the audited SKILL.md; a persona-file anchor routes to that persona file; a `SKILL.md + <persona>` anchor routes to both. Re-read every target file before proposing the edit — the file may have shifted since the cold-walk (from earlier per-idea applies or other in-session work):
+
+> "Idea `<title>` — target: `<target-path-or-paths>` — how to handle?" `header: <title>`
+> Options:
+> - *"Apply inline"* — `Edit` per the idea against the target file(s). The director proposes the exact edit before applying. When the anchor names two files, the user gets one confirmation per file.
+> - *"Apply with edits"* — director proposes the edit; user revises wording in plain chat; director applies the revised edit to the target file(s).
+> - *"Discuss inline first"* — expand the idea in chat (rationale, tradeoffs, what changes if applied, which file(s) the Edit will touch); re-fire this question after the discussion.
+> - *"Skip — leave in the report only"*
+
+**When the findings action was *re-author*** — the skill is about to be rewritten via `/new-skill`, so Apply Edits against the about-to-be-thrown-away file are wasted motion. Ideas inform the rewrite by riding along in the Step 7 seed paragraph instead:
+
+> "Idea `<title>` — how to handle? (Re-author mode: ideas inform the rewrite via the seed paragraph, not via Edits.)" `header: <title>`
+> Options:
+> - *"Include in `/new-skill` seed paragraph"* — appends a bullet to the seed's *"Ideas to fold into the rewrite"* block (added in Step 7).
+> - *"Discuss inline first"* — expand the idea in chat; re-fire this question after the discussion.
+> - *"Skip — leave in the report only"*
+
+The Edits-vs-seed split keeps Step 7's backup accurate: in re-author mode no Edits land at Step 6, so the backup folder captures the true pre-rewrite state.
+
+**Goal-change pushback.** When the user picks Apply on an idea whose anchor lands in the SKILL.md description, opening paragraph, or Done-when block — or in a persona's `## Blindness contract` section, required frontmatter (`name`, `description`, `tools`), or the persona's claimed lens declaration — fire a confirmation first: *"This idea touches the skill's stated goal or the persona's load-bearing contract. Confirm intentional change before the Edit lands?"* — Apply waits for the confirmation; Skip / re-frame the idea give the user a way out.
+
+Ideas do **not** feed `plans/next-up.md`. The audit is the place to solve them, not a bullet that rots in a backlog.
+
+**Success criteria:** user worked through the per-idea questions for each picked idea, and each per-idea action either landed an Edit (inline-fix / report-only modes) or was queued for the Step 7 seed paragraph (re-author mode) or was explicitly skipped / discussed; Step 9a's mechanical sweep will run over any Edits that landed during 6b.
+
+### 7. Re-author handoff (only when CRITICAL findings warrant + user approved)
+
+Back up the target before any further action:
+
+```bash
+mkdir -p .scratch/skills-backup/skills
+cp -r <skill-dir> .scratch/skills-backup/skills/<slug>-$(date -u +%Y%m%dT%H%M%SZ)/
+```
+
+Print the seed paragraph for the user to feed to `/new-skill`:
+
+```
+Seed for /new-skill <slug>:
+
+Original goal (preserved): <verbatim from the audit target's description / opening>
+Triggers (preserved): <three messages — from the description's Examples or salvaged from when_to_use>
+Exclusions (preserved): <out-of-scope items the audit target named>
+Orchestration intent (preserved or revised): <what sub-agents / parallelism the target tried; revise per CRITICAL findings>
+Architecture revisions from CRITICAL findings:
+  - <one line per architectural change the re-author should make>
+Reason for re-author:
+  - <one line per CRITICAL finding>
+Ideas to fold into the rewrite (from Step 6 ideas channel):
+  - <title> [<kind>] — <one-line summary of what changes if this lands>
+  - ...
+  (omit this block entirely when no ideas were picked for "Include in seed paragraph")
+```
+
+Print the invocation form:
+
+```
+Manually invoke when ready:
+
+  /new-skill <slug> <seed-text-above>
+
+The audit target is backed up at .scratch/skills-backup/skills/<slug>-<UTC>/.
+Audit-skill does not invoke /new-skill itself — review the seed paragraph above first.
+```
+
+**Success criteria:** backup folder exists at the printed path; seed paragraph printed in chat; user told the exact `/new-skill` invocation form and that audit-skill does not auto-invoke.
+
+### 8. Inline-fix mode (only when re-author was NOT chosen)
+
+Git on `main` is the recovery path for inline fixes; no separate backup step.
+
+For each non-AMBIGUOUS finding, fire `AskUserQuestion` (use `multiSelect: true` to batch when ≥ 2 findings share the same action pattern — e.g., AI-tic word swaps can be batched into one multi-select question):
+
+> "Apply this fix?" `header: Fix N`
+> Options:
+> - "Apply the suggested fix"
+> - "Skip — leave as-is"
+> - "Edit wording" — when picked, a follow-up free-form prompt collects the user's revision before applying via `Edit`
+> - "Explain why this matters first" — surface the persona's rationale (from the finding text, or a one-off re-dispatch asking the persona to expand) before deciding, then re-fire this question with the user's choice
+
+Apply via `Edit`. Re-read the file before any fix that depends on context several lines wide — the file may have shifted from earlier fixes in this same step, or from Step 6's per-idea Apply actions if any landed before Step 8 ran.
+
+AMBIGUOUS findings surface in the same step but are flagged for human judgment, never auto-applied.
+
+**Success criteria:** every non-AMBIGUOUS finding either applied or explicitly skipped; AMBIGUOUS findings flagged for human follow-up.
+
+**Human checkpoint:** every fix is per-finding sign-off — no batched Edits across findings without an explicit multiSelect pick.
+
+### 9. Final validation — re-check the edited skill (only when any Edits landed: Step 6 ideas Apply or Step 8 inline-fix)
+
+Step 6's per-idea Apply and Step 8's inline-fix both apply Edits per the user's sign-off. Each Edit can introduce its own regression: a swap that re-introduces a banned word, a rewrite that drops a Success criteria field, an Edit that broke a markdown link. This step is the safety net, split into a mechanical pass (9a) and a judgment pass (9b).
+
+**Skip clause:** skip all of Step 9 when Step 7 (re-author handoff) was chosen (files weren't edited in place) OR when neither Step 6 ideas Apply nor Step 8 findings Apply produced any Edits (everything was skipped / discussed / sent to report-only).
+
+**Success criteria (parent):** the mechanical sweep (9a) ran on every applicable check AND, when substantive rewrites landed, the originating persona re-dispatched and returned a resolution verdict (9b); any FAIL or unresolved finding is appended to the report as a known-concern or post-edit follow-up tail.
+
+#### 9a. Mechanical sweep — run when any Edits landed (Step 6 ideas, Step 8 findings, or both)
+
+- `description` ≤ 1024 chars; combined with `when_to_use` ≤ 1536 chars (loader contract; restated inline in `audit-skill-loader-reader.md`) — when frontmatter was touched
+- AI-tic ban-list grep against the body (regex in `AGENTS.md` § Writing tone, "Standing AI-tic regex")
+- Abstract-subject probe — grep `\b(its|the) (win|cost|goal|point|floor|key|trick|catch|upshot|tradeoff|answer|fix|reason|issue|problem) is\b` against the post-Edit body. A hit is a candidate, not a verdict; the structural rule (`docs/contributing/agent-style-guide.md` § Concrete subject, real verb) needs a per-sentence read, not a regex — this probe catches the most common cluster, the rest is judgment
+- Every Process step still has a Success criteria field (when the audited skill has > 2 steps)
+- Done-when block still distinct from the last Process step
+- Every persona file the SKILL.md references exists at `.claude/agents/<name>.md`
+- Every reference-file link resolves in the skill directory
+- Step 4's blindness-contract verbatim string is still present — grep `Read only what this prompt names. Do not Read any other audit-\* skill, the director's draft, or any reference file outside the inputs.` against the SKILL.md and confirm at least one match. Multiple matches are fine (a stray quote leaking in elsewhere doesn't break the contract check); zero matches means the fence was paraphrased and the contract drifted
+- The blindness-contract section in each persona file still matches the SKILL.md fence in spirit — grep `## Blindness contract` against each persona file in `.claude/agents/audit-skill-*.md` and confirm the section restricts the persona to the inputs the dispatch prompt names. The two sources duplicate by design (agents anchor better on inlined rules than on file pointers), but a drift between them surfaces as a known concern, not an auto-fix
+
+Print as a labeled PASS / FAIL block. When one FAIL lands, fire one `AskUserQuestion`: *"Post-edit regression — fix now, or land as a known concern in the report?"*. When ≥ 2 FAILs land, batch them in one `multiSelect: true` AskUserQuestion with a row per FAIL.
+
+**Success criteria:** PASS / FAIL block printed for every applicable check; each FAIL either fixed inline or recorded as a known-concern in the report; the operator knows which mechanical contracts the post-edit body still satisfies.
+
+#### 9b. Targeted re-dispatch — when Step 6b idea Apply or Step 8 fix rewrote a section (not a one-word swap)
+
+Cap each finding at one re-dispatch — the persona's blindness contract is the same on a second pass, so a still-unresolved finding belongs in the post-edit follow-up tail rather than another auto-pass. For each substantive Step 8 fix, re-dispatch the sub-agent reader that originally raised the finding. For each substantive Step 6b idea Apply, re-dispatch the cold-walker instead — the ideas-reader is generative, not a verifier, and the cold-walker already judges AI-tic / hedging / moralizing in body prose. When an idea Apply touched frontmatter rather than body prose, re-dispatch the loader-reader. The dispatch prompt instructs the persona to re-read the file fresh and treat any included prior-finding text as context only, not as anchoring observation. When ≥ 2 fixes need re-dispatch, batch them in one assistant message per the Step 4 batching rule — sequential messages serialize. The reader returns *Confirmed resolved* / *Not resolved* / *New finding surfaced*. New findings append to the original Step 6 report as a *"post-edit follow-up"* tail.
+
+Director-surfaced findings (from the Step 5 follow-up block) have no originating persona — the director re-reads the touched section and confirms *resolved* / *unresolved* inline rather than dispatching.
+
+**Success criteria:** for every substantive rewrite, the originating persona has returned *Confirmed resolved* / *Not resolved* / *New finding surfaced*; new findings appended as a "post-edit follow-up" tail; the operator knows whether the rewrites landed clean.
 
 ## Output format
 
-Single-skill mode:
+The punch-list, printed in chat at Step 6:
 
 ```
-Skill audit: .github/skills/<name>/SKILL.md
-===========================================
+audit-skill report — <skill-dir>/<slug>/SKILL.md
+================================================
 
-HIGH-CONFIDENCE (safe to fix):
+Director draft of skill goal (Step 3):
+  <2–3 sentences>
 
-  frontmatter  L<n>  — <one-line description>
-  discover     L<n>  — <one-line description>
-  shape        L<n>  — <one-line description>
-  loadability  L<n>  — <one-line description>
-  rot          L<n>  — <one-line description>
-  ai-tic       L<n>  — <one-line description>
-  ...
+Findings
+--------
+TIER       | SOURCE                       | FINDING                                     | ACTION
+-----------+------------------------------+---------------------------------------------+----------------
+CRITICAL   | cold-walker                  | Goal not derivable from cold read.          | re-author
+IMPORTANT  | craft                        | AskUserQuestion missing at the Step 3 fork. | inline
+IMPORTANT  | orchestration                | Sub-agents dispatched sequentially.         | inline
+MINOR      | loader                       | Description carries an AI-tic word.         | inline
+AMBIGUOUS  | 2 of 4 sub-agents agree      | Step 7's Success criteria is borderline.    | human-judgment
 
-MEDIUM-CONFIDENCE (sign-off needed):
+Director follow-up (sub-agents missed):
+  - <one note, or "none">
 
-  rewrite      §<section>  — <passage rotted by prior trim passes;
-                              proposed replacement text shown inline>
-  drift        §<section>  — <restated rule diverged from AGENTS.md / ADR>
-  composability §<section> — <duplicates task-checkpoint / git-commit>
-  justify      L<n>  — <rule absolute, no why or pointer>
-  ...
+Director-bias warning: the director read the source and is therefore biased.
+Sub-agent findings outrank director observations.
 
-LOW-CONFIDENCE (questions for the user):
+Recommendation: <inline-fix | re-author | report-only>
 
-  shape        §<section>  — <is this section earning its length?>
-  ...
+Ideas to consider (from ideas-reader)
+-------------------------------------
+  1. <title> [<kind>] [WILD]? — outcome: <pending | applied | edited-applied | included-in-seed | discussed | skipped | not-engaged>
+     Anchor: <SKILL.md file:line or section>
+     What changes if this lands: <one sentence>
+
+  2. ...
+
+  (or "Ideas: none")
+
+----
+Audit run: <UTC stamp from `date -u +%Y-%m-%dT%H:%M:%SZ`> · recommendation: <inline-fix | re-author | report-only>
 ```
 
-Multi-skill mode adds an "Across the set" block:
+The Ideas block prints once at Step 6 with every entry's outcome set to `pending`. After the user works through the per-idea questions, print a final updated block (only the Ideas section, not the full report) showing the resolved outcomes. `not-engaged` covers ideas the user did not pick in the multiSelect; the others reflect the per-idea action chosen.
 
-```
-Across the set (audit-library, audit-embedded, audit-integration):
+The trailing `Audit run:` footer carries the run's timestamp + headline recommendation so a copy-pasted report retains context when it lands in a workstream file, GitHub issue, or chat days later. The recommendation field duplicates the inline `Recommendation:` line deliberately — when the body gets trimmed during paste, the footer survives.
 
-  overlap     <skillA> ↔ <skillB>  — trigger phrases would match the same ask
-  redundant   <skillA> ↔ <skillB>  — N% line overlap in section §X
-  conflict    <skillA>:<line> ↔ <skillB>:<line>  — directives contradict
-  gap         — set doesn't cover <obvious case>
-```
+## Companion agents
 
-**Worked example** (synthetic — illustrative, not a real audit):
+| Agent | Role | File | Dispatched from step |
+|---|---|---|---|
+| [`audit-skill-loader-reader`](../../../.claude/agents/audit-skill-loader-reader.md) | Frontmatter contract + description routing | `.claude/agents/audit-skill-loader-reader.md` | Step 4 |
+| [`audit-skill-cold-walker`](../../../.claude/agents/audit-skill-cold-walker.md) | Body walkability + goal-derivability | `.claude/agents/audit-skill-cold-walker.md` | Step 4 |
+| [`audit-skill-craft-reader`](../../../.claude/agents/audit-skill-craft-reader.md) | Tool-use, scope-expansion, focused-step opportunities | `.claude/agents/audit-skill-craft-reader.md` | Step 4 |
+| [`audit-skill-orchestration-reader`](../../../.claude/agents/audit-skill-orchestration-reader.md) | Sub-agent / parallel-dispatch / model-selection / persona structure | `.claude/agents/audit-skill-orchestration-reader.md` | Step 4 |
+| [`audit-skill-ideas-reader`](../../../.claude/agents/audit-skill-ideas-reader.md) | Generative menu — improvements the checklists miss, grounded in what the SKILL.md actually says | `.claude/agents/audit-skill-ideas-reader.md` | Step 4 |
 
-```
-Skill audit: .github/skills/audit-widget/SKILL.md
-=================================================
+Each persona carries its rule set inline (loaded once at session start); the five rule blocks mirror the five lenses in the Step 4 table (loader, cold-walk, craft, orchestration, ideas). When you change a lens here, also update the corresponding persona file. Each persona's blindness contract names the files that persona must not Read. None of the five may Read the director's draft or another audit-* skill.
 
-HIGH-CONFIDENCE (safe to fix):
+## Red flags — stop and reconsider
 
-  frontmatter  L2  — description has *what* but no *when* clause
-  discover     L2  — description opens with "Tools for widget review" (vague stem)
-  ai-tic       L47 — "comprehensive widget coverage" — list what's covered
-  ai-tic       L91 — "under the hood" — name the verb concretely
-  rot          L66 — cites scripts/run.py widget-check; not in --help output
-  loadability  §Procedure — no exit-condition clause; agent will over-run
+Stop if:
 
-MEDIUM-CONFIDENCE (sign-off needed):
+- **The target isn't a SKILL.md.** Redirect at Step 1; do not run the cold-walk on the wrong artifact.
+- **The director draft from Step 3 disagrees materially with what the sub-agents found.** Either the director read past a real issue (sub-agents win), or the sub-agents were under-prompted (re-dispatch with the missing input named). Don't paper over the divergence.
+- **Three or more CRITICAL findings.** The skill is past the trim-and-rewrite line. Surface re-author rather than inline-fix.
+- **The user picks inline-fix on a CRITICAL goal-not-derivable finding.** Re-confirm — the fix won't stick because the underlying scope is wrong.
+- **Personas don't exist on disk or aren't loaded into the session registry before Step 4 fires.** Verify `.claude/agents/audit-skill-*.md` are present AND in the live agent registry before dispatching; a freshly-written persona requires a session restart to load. Step 2 owns the recovery prompt (restart vs proceed-with-fewer-readers).
 
-  composability §After-action — duplicates task-checkpoint's preflight + commit
-                                paragraph; replace with citation
-  drift         L120 — restates Decision 0025 coverage rule; ADR wording has
-                       since shifted to "94% for agent-generated" — body says 96%
-  justify       L140 — "Always run widget-check before commit" — no why, no
-                       ADR pointer; trace or remove
+## What to include
 
-LOW-CONFIDENCE (questions for the user):
+- A backup before re-author handoff (Step 7) — `cp -r` to `.scratch/skills-backup/skills/<slug>-<UTC>/` so the operator can diff or restore the pre-rewrite files outside the git history `/new-skill` is about to add to. Inline fixes (Step 8) rely on git.
+- The director's own follow-up notes as a trailing block in the report, clearly separated from the sub-agent findings.
+- Per-finding sign-off via `AskUserQuestion` for every inline fix, with `multiSelect` batching only when several findings share the same action pattern.
+- AskUserQuestion options shown in body prose are sketches. At invocation time, split the short label (≤ 5 words — the chip text) from the description (the prose context). A line like "Prose doc (README / guide.md / INSTALL) — route to `/audit-docs`" maps to `label: "Prose doc"` + `description: "Routes to /audit-docs"`.
 
-  shape         §Philosophy — 80-line preamble before first procedural step;
-                              compress or move to a reference file?
-```
+## What to leave out
 
-## Tag taxonomy
+- The five sub-agent rule sets in this body. They live inline in the five persona files in `.claude/agents/audit-skill-*.md`.
+- Citations to `/new-skill`, `/audit-comments`, or other audit-* skills as authoritative references. The personas carry their own rules; the body does not restate.
+- The `model: "opus"` directive per Agent call. All five persona files set `model: opus` in their frontmatter; the harness uses the persona's frontmatter when `subagent_type:` names one. A body-level `model:` override would be redundant.
 
-* `frontmatter` — frontmatter shape (dim 1)
-* `discover` — description quality / triggerability (dim 2)
-* `shape` — body length, structure, ref-file depth (dim 3)
-* `loadability` — cold-agent loadability (dim 4)
-* `rot` — reference rot (dim 5)
-* `drift` — restated rule diverged from source of truth (dim 6)
-* `composability` — sibling-skill duplication or missing deferral (dim 7)
-* `ai-tic` — vocabulary or phrasing flagged by [`agent-style-guide.md` § Standing AI-tic regex](../../../docs/contributing/agent-style-guide.md#standing-ai-tic-regex) (dim 8)
-* `rewrite` — passage degraded by prior subtractive passes; discard and rebuild from a fresh read of what the skill does (dim 8, per [`agent-style-guide.md` § Degraded prose is rewritten, not trimmed again](../../../docs/contributing/agent-style-guide.md#degraded-prose-is-rewritten-not-trimmed-again)).  *Testable criterion:* if the proposed edit changes ≤1 sentence and leaves the surrounding paragraph intact, it is a strip (`ai-tic` / `shape`), not a `rewrite` — tag accordingly.  Replacement shown inline; MEDIUM by default — rebuilt prose is a judgment call.
-* `missing` — content a reading agent needs that the skill doesn't carry: the exit condition the Procedure omits, the argument shape the description doesn't name, the failure mode a step doesn't anticipate, the contract a Done-when block leaves unstated.  Surfaced by Pass 2 step 7b (draft the ideal skill pieces from source first, compare to actual).  Show the addition inline.  MEDIUM by default since the call about what the agent needs is a judgment.  Distinct from `rewrite`: `missing` adds; `rewrite` replaces.
-* `overlap` — cross-skill trigger / directive overlap (dim 9)
-* `redundant` — line-overlap merge candidate (dim 9)
-* `conflict` — cross-skill directive contradiction (dim 9)
-* `gap` — set doesn't cover an obvious case (dim 9)
-* `justify` — absolute rule without an incident trail (dim 10)
+## Don'ts
 
-## Surface questions instead of guessing
+- **Don't dispatch sub-agents sequentially.** Batch all five `Agent` calls into one message — the harness runs concurrent calls from a single message.
+- **Don't apply fixes without per-finding user sign-off.** Skill audits are judgment-heavy; one round-trip per `Edit` is cheap insurance.
+- **Don't auto-invoke `/new-skill`.** The user reviews the seed paragraph and invokes manually.
+- **Don't Read other audit-* skills as references during the audit.** They may be wrong; the personas carry their own rule sets.
+- **Don't audit a persona file in isolation.** A persona is bound to its dispatching skill; audit the skill, and the persona is judged in that context.
+- **Don't substitute the director's bias for the sub-agents' blindness.** When a sub-agent finding contradicts the director's read, the sub-agent wins.
 
-| Symptom | Question to surface |
-|---|---|
-| Description vague but skill clearly does one thing | *"`description` opens with `<vague stem>` — want me to rewrite the first clause to name the concrete action?  Suggested: `<draft>`"* |
-| Restated AGENTS.md / ADR rule | *"This paragraph re-states [rule X] from [source].  Replace with a one-line citation, or keep the local copy because of [reason]?"* |
-| Skill re-implements task-checkpoint / git-commit | *"This section duplicates [`task-checkpoint`](...) — replace with citation, or is there a reason this skill needs its own copy?"* |
-| Trigger overlap between two skills in the set | *"`<skillA>` and `<skillB>` both trigger on `<phrase>`.  Disambiguate by trigger, merge into one, or accept and document the split?"* |
-| Same rule restated in multiple skills | *"`<rule>` appears in `<skillA>`, `<skillB>`, `<skillC>`.  Hoist to AGENTS.md and cite from each, or designate one as the source?"* |
-| Absolute rule without a why | *"`<rule>` is phrased as an absolute but I can't find an incident or ADR behind it.  Trace it, soften to a guideline, or remove?"* |
-| Body past ≤500 lines | *"SKILL.md is `<N>` lines.  Extract `<section>` to a reference file, or keep inline?"* |
-| Section heading promises more than the section delivers | *"`## <heading>` reads broader than what's in it (one paragraph).  Rename, fold up, or expand?"* |
-| Description in person/mood that differs from siblings | *"Project skills use imperative (`Audit a ...`); this one uses third-person (`Audits ...`).  Match the project pattern, or keep?"* |
+## Done when
 
-## Anti-patterns
+Observable post-state of a completed audit run:
 
-**Content don'ts**
+- The tiered punch-list (or the non-skill redirect print) sits in the chat scrollback the user can copy out — with the `Audit run:` footer carrying the timestamp + headline recommendation.
+- `git diff .github/skills/<slug>/ .claude/agents/audit-skill-*.md` shows either zero changes (report-only / re-author chosen / no fixes accepted) or the user-approved subset of inline fixes. No Edit went in without per-finding sign-off.
+- In re-author mode: `.scratch/skills-backup/skills/<slug>-<UTC>/` exists and contains the pre-rewrite SKILL.md + reference files; the `/new-skill <slug> <seed>` invocation is sitting in chat ready for the user to fire.
+- In inline-fix mode where any Edit landed: a Step 9a PASS / FAIL block is in chat, and any FAIL row either has a follow-up Edit or a *known-concern* note appended to the report.
+- The Ideas block (when ideas surfaced) shows no `pending` outcomes — every idea is `applied`, `edited-applied`, `included-in-seed`, `discussed`, `skipped`, or `not-engaged`.
 
-* **Don't propose merging two skills based on tag overlap alone.**  Two audit-* skills sharing the AI-tic regex doesn't mean they overlap — they're both citing the same source.  Look at the *trigger* and the *target*, not the shared boilerplate.
-* **Don't flag every absolute rule.**  Absolutes with a clear `Decision NNNN` / `feedback_*` / *"after the [date] incident"* pointer are grounded.  Flag the ungrounded ones, not the well-cited ones.
-* **Don't restructure based on taste.**  *"I'd write the Scope section last"* is not a finding.  The three-agent walk gives the objective lens.
-
-**Verification don'ts**
-
-* **Don't trust `description` length without checking the live cap.**  Anthropic's documented cap has moved between 1024 and 1536 chars across docs versions; verify against current docs before flagging a hard threshold.  The principle holds either way: the description rides in every session-start cost, keep it tight.
-* **Don't assume a citation is rot without resolving it.**  `Decision 0042` might just be the next one in a sequence — `ls plans/decisions/0042-*.md` first, then flag.
-* **Don't run dim 9 (cross-skill) on unrelated skills.**  *"audit-docs and git-commit don't overlap"* is not useful information.  Multi-skill mode is for sets that genuinely interact.
-
-**Process don'ts**
-
-* **Don't auto-commit.**  Skill edits are governance; user reviews before commit.  Surface as punch-list first; execute HIGH-confidence batch only after explicit go-ahead.
-* **Don't expand scope mid-pass.**  If a reference rot finding surfaces an outdated AGENTS.md paragraph, file as a follow-up — don't fold it into the current edit batch.
-* **Don't inline `task-checkpoint`'s steps.**  Preflight, plans-doc update, commit, push aren't part of this skill's procedure — but invoking the `task-checkpoint` skill *is* the required next agent step once this skill's exit condition is met.  "Don't re-implement" never means "skip the invocation".
-
-## Defer / out of scope
-
-* **`README` files inside `.github/skills/`** — index docs, not skills.  Use `audit-docs` if a README needs review.
-* **Plugin-namespaced skills (`plugin:skill`)** — out of project tree; can't be edited from here.
-* **Anthropic-recommended frontmatter fields not yet in use** (`when_to_use`, `argument-hint`, `disable-model-invocation`, etc.) — flag as a *low-confidence question*, not a finding.  Project convention may not adopt every field; ask before adding.
-* **Whole-tree skill audit** — auditing every skill in `.github/skills/` in one pass is a workspace-level concern.  If the user asks for it, surface that this is closer to an `audit-workspace`-style pass on the skills directory and ask whether to scope down or escalate.
+A reader scrolling back through this session can answer in one minute: what did the audit find, what did the user accept, what files moved, and what's the next handle.
