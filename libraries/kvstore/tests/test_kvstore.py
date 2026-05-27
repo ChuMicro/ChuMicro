@@ -243,11 +243,10 @@ def test_construction_with_corrupt_payload_resets_silently() -> None:
 
 
 def test_reload_raises_on_non_dict_payload() -> None:
-    """``reload`` raises ``KVStoreCorrupt`` on a payload that decodes to a non-dict.
+    """``reload`` raises ``KVStoreCorrupt`` when the payload decodes to a non-dict.
 
-    The construction-time path resets to empty silently; the explicit
-    ``reload`` form is the one callers reach for when they want the
-    exception.
+    Construction-time auto-load resets to empty silently; ``reload``
+    is the explicit form callers use to surface the exception.
     """
     backend = MemoryBackend()
     backend._payload = b"\xc3"  # noqa: SLF001 - msgpack-encoded `True`, decodes to bool
