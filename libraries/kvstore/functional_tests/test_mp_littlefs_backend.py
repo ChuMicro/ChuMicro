@@ -1,6 +1,6 @@
 """On-device tests for ``MpLittlefsBackend`` against real LittleFS.
 
-Runs anywhere a writable filesystem is mounted — Pi Pico W MP is
+Runs anywhere a writable filesystem is mounted. Pi Pico W MP is
 the primary target (no NVS partition, only LittleFS) but ESP32 MP
 boards work too if a user explicitly picks
 ``backend="littlefs"`` instead of the NVS default.

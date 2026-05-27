@@ -1,4 +1,4 @@
-"""In-memory backend — CPython default + ``FakeKVStore`` substrate.
+"""In-memory backend: CPython default + ``FakeKVStore`` substrate.
 
 Stores the encoded payload in process memory; no persistence across
 process boundary by default.  *initial* seeds a known starting state.

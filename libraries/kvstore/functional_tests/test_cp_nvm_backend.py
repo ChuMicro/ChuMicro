@@ -59,7 +59,7 @@ def test_kvstore_round_trips_through_real_nvm() -> None:
     store.commit()
 
     # Build a fresh KVStore against the same physical NVM and confirm
-    # state is recovered — equivalent to a reboot on this slice.
+    # state is recovered (equivalent to a reboot on this slice).
     fresh = KVStore(backend=CpNvmBackend())
     assert fresh["boot_count"] == 1
     assert fresh["last_seen_ms"] == 12345

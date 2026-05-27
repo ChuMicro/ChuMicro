@@ -2,12 +2,11 @@
 
 ``MemoryBackend`` is lazy-imported on the two paths that touch it
 (the CPython fall-through and ``backend="memory"``), keeping ~700 B
-of heap off device-runtime imports.  ``msgpack`` stays at module top:
-it runs on every
-commit/load and lazy overhead would dominate.  ``Backend`` lives
-alongside the exceptions so backends import their ABC + exception
-classes from one place, breaking the cycle that would otherwise
-require per-method lazy imports.
+of heap off device-runtime imports.  ``msgpack`` stays at module
+top: it runs on every commit/load and lazy overhead would dominate.
+``Backend`` lives alongside the exceptions so backends import their
+ABC + exception classes from one place, breaking the cycle that
+would otherwise require per-method lazy imports.
 """
 
 import sys
@@ -30,7 +29,7 @@ class KVStoreFull(KVStoreError):
 class KVStoreCorrupt(KVStoreError):
     """Persisted state failed integrity check on load.
 
-    Raised from explicit ``reload()`` only — auto-load on construction
+    Raised from explicit ``reload()`` only. Auto-load on construction
     surfaces corruption via the ``is_corrupt`` property and resets the
     store to empty so the app can keep running.
     """
@@ -41,7 +40,7 @@ class Backend:
 
     A backend is a thin shim around the substrate-specific persistence
     mechanism (CP NVM byte slab, MP NVS namespace, MP LittleFS file,
-    in-memory dict).  It deals in ``bytes`` payloads — the msgpack
+    in-memory dict).  It deals in ``bytes`` payloads; the msgpack
     codec lives in ``KVStore``, so backends never decode.
 
     ``load()`` returns the persisted bytes (``b""`` for a blank
@@ -112,7 +111,7 @@ def _resolve_backend(backend: Backend | str) -> Backend:
 
 
 class KVStore:
-    """Persisted key-value store with a mapping-shaped public API.
+    """Persisted key-value store with a mapping-style public API.
 
     Args:
         backend: Backend selection — ``"auto"`` (default; per-runtime
@@ -134,8 +133,8 @@ class KVStore:
     def _auto_load(self) -> None:
         """Read backend on construction; reset to empty on corruption.
 
-        Construction-time corruption never raises — it would force the
-        caller to handle a "store is broken" path before the app can
+        Construction-time corruption never raises. Surfacing would force
+        the caller to handle a "store is broken" path before the app can
         even start.  Instead, the store reports the event via
         ``is_corrupt`` and behaves as empty.  ``reload()`` is the
         explicit form that callers use when they want the exception.
@@ -210,7 +209,7 @@ class KVStore:
         return True
 
     def _persist(self, payload: bytes) -> None:
-        """Capacity-check + save + state update — shared by both commit paths."""
+        """Capacity-check + save + state update, shared by both commit paths."""
         if len(payload) > self.capacity:
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds capacity {self.capacity}"
@@ -219,7 +218,7 @@ class KVStore:
         self._last_payload = payload
         self.is_corrupt = False
 
-    # --- mapping-shaped API ----------------------------------------
+    # --- mapping-style API -----------------------------------------
 
     def __getitem__(self, key: str) -> object:
         return self._data[key]
@@ -256,7 +255,7 @@ class KVStore:
 
         The variadic *default lets the caller distinguish "no default
         supplied" (raise ``KeyError`` on missing) from "default is
-        ``None``" — same idiom as ``dict.pop``.
+        ``None``"; same idiom as ``dict.pop``.
         """
         if default:
             return self._data.pop(key, default[0])

@@ -23,7 +23,7 @@ from chumicro_test_harness import raises
 # leaves 246 B payload.
 SAMD21_SIZE = 256
 
-# ESP32-class NVM is the large-NVM target — 8 KB.  Tests use a
+# ESP32-class NVM is the large-NVM target: 8 KB.  Tests use a
 # convenient mid-sized slab so they're fast.
 ESP32_SIZE = 8192
 
@@ -183,7 +183,7 @@ def test_load_raises_on_zero_length_with_wrong_crc() -> None:
 
 
 def test_load_zero_length_with_zero_crc_succeeds() -> None:
-    """Empty payload with a CRC of zero matches an empty msgpack — valid."""
+    """Empty payload with a CRC of zero matches an empty msgpack: valid."""
     nvm = bytearray(b"\xff" * SAMD21_SIZE)
     nvm[0:4] = b"CKVS"
     nvm[4:6] = (0).to_bytes(2, "little")

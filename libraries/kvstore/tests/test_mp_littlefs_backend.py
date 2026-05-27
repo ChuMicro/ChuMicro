@@ -2,7 +2,7 @@
 
 Exercises the load / save / sync / rename loop without a Pi Pico W.
 The fake mirrors the public ``open`` / ``os.rename`` / ``os.remove``
-/ ``os.sync`` shape MicroPython exposes so the production code
+/ ``os.sync`` interface MicroPython exposes so the production code
 under test runs verbatim.
 
 Hardware-side coverage (real LittleFS on a Pi Pico W flash chip,
@@ -20,7 +20,7 @@ from chumicro_test_harness import raises
 
 
 class _FakeFile:
-    """Minimal file-like that mirrors the ``open()`` return surface.
+    """Minimal file-like that mirrors the ``open()`` return value's interface.
 
     Records every chunk written so tests can inspect the wire bytes,
     plus a ``closed`` flag for cleanup assertions.
@@ -96,7 +96,7 @@ def test_capacity_override_accepted() -> None:
 
 
 def test_path_override_accepted() -> None:
-    """Tests + alternative mount points can override the canonical path."""
+    """Tests + alternative mount points can override the default path."""
     backend = MpLittlefsBackend(path="/other.msgpack", filesystem=_FakeFs())
     assert backend._path == "/other.msgpack"
     assert backend._tmp_path == "/other.msgpack.tmp"
@@ -143,7 +143,7 @@ def test_save_uses_tmp_then_rename() -> None:
     fake = _FakeFs()
     backend = MpLittlefsBackend(filesystem=fake)
     backend.save(b"payload bytes")
-    # After rename, only the canonical path holds the bytes.
+    # After rename, only the payload path holds the bytes.
     assert "/_chu_kv.msgpack" in fake._store
     assert "/_chu_kv.msgpack.tmp" not in fake._store
 
