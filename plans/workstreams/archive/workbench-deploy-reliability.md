@@ -8,7 +8,7 @@ Pyright-cleanup wrap-up included on-board validation of three changed examples (
 
 ## What worked
 
-- **Deploy of `http_server/circuitpython_two_thing_server` to Pi Pico W CP** — captured `ADAPTER: cp`, `WIFI_OK ip=172.16.1.21`, and `Server listening on 0.0.0.0:8080` inline during the deploy's serial-attached window.  Confirmed `_State` class-level annotations don't break CP runtime (annotations stripped per Decision 0021).
+- **Deploy of `http_server/circuitpython_two_thing_server` to Pi Pico W CP** — captured `ADAPTER: cp`, `WIFI_OK ip=192.0.2.21`, and `Server listening on 0.0.0.0:8080` inline during the deploy's serial-attached window.  Confirmed `_State` class-level annotations don't break CP runtime (annotations stripped per Decision 0021).
 - **`verify-examples --all`** — 55/55 examples pass host-side import + AST checks.  Catches example breakage before the device round-trip.
 - **`preflight` + `test-all-runtimes`** — all green at 96% coverage; cross-runtime CPython + MP unix-port + CP unix-port suites pass.
 
@@ -69,7 +69,7 @@ The captured output sits on `_read_code_py_output()`'s side: the deploy reads se
 - `\r\n` to serial elicits `>>>` REPL prompts (input/output works in interactive mode)
 - A soft-reset prints `Auto-reload is off` then `code.py output:` then nothing for 30s
 - Pure passive listen for 30s captures zero bytes
-- `ping 172.16.1.21` (the board's previously-known IP) gets no response — wifi may have disconnected during the reboot loop
+- `ping 192.0.2.21` (the board's previously-known IP) gets no response — wifi may have disconnected during the reboot loop
 
 The board is presumably running code.py but its serial CDC output is silent.  Recovery requires a physical RESET button press.  Did NOT happen during the original (working) deploy of http_server to the same board — only after my repeated programmatic soft-reboots while debugging.
 
@@ -145,7 +145,7 @@ Shipped 2026-05-09.  Two coordinated edits:
 
 Both `test_flash_disconnect_does_not_touch_autoreload` and `test_ram_disconnect_does_not_send_autoreload` now lock in "no Ctrl-C at disconnect."  832 deploy tests + full preflight green at 96 % coverage.
 
-Bench-validated on Lolin S2 CP (`/dev/cu.usbmodem84722E7490C31`) with a `while True: print(counter); time.sleep(0.5)` probe via `chumicro-deploy deploy --transport circuitpython --address ... --drive /Volumes/CIRCUITPY --deploy-mode flash`.  Deploy captured counter=1..20 inside the 10 s window, returned cleanly.  `chumicro-repl --tail 5` immediately afterward saw counter=41..50 — `code.py` survived the deploy and kept printing on its own time.
+Bench-validated on Lolin S2 CP (`/dev/cu.usbmodemABCD1234`) with a `while True: print(counter); time.sleep(0.5)` probe via `chumicro-deploy deploy --transport circuitpython --address ... --drive /Volumes/CIRCUITPY --deploy-mode flash`.  Deploy captured counter=1..20 inside the 10 s window, returned cleanly.  `chumicro-repl --tail 5` immediately afterward saw counter=41..50 — `code.py` survived the deploy and kept printing on its own time.
 
 Pi Pico W CP not validated this step — its `/Volumes/CIRCUITPY 1` mount went stale during the prior session and got force-unmounted; needs a replug for a full 4-board sweep (deferred to Step 6 after Steps 2 + 3 land).
 

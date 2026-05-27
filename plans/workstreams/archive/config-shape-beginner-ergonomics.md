@@ -379,7 +379,7 @@ Add observations to the **Findings** section below, dated and tied to a specific
 A fresh-clone user follows the README, runs `python3 run.py setup`, and gets:
 
 ```
-error: no workspace.yml found in /Users/chuxor/circuitpython/ChuMicro-Workspace-Template or any parent
+error: no workspace.yml found in $WORKSPACE_TEMPLATE_ROOT or any parent
 ```
 
 Root cause: [`_cmd_setup`](workbench/workspace/src/chumicro_workspace/cli.py:250) calls `_resolve_workspace(args)`, which in turn calls `WorkspaceLayout.from_dir()` — and that walks up looking for `workspace.yml` and raises `WorkspaceNotFoundError` when it's absent.  But setup itself is what *creates* `workspace.yml` (via `materialize_workbench_starters` ten lines later).  The bootstrap fails before reaching the materializer.
@@ -418,7 +418,7 @@ After the chicken-and-egg fix landed, setup completed:
 setup: materialized 2 workbench-owned starter(s)
   devices.yml
   workspace.yml
-setup: synced library_sources for 15 chumicro libraries from /Users/chuxor/circuitpython/chumicro
+setup: synced library_sources for 15 chumicro libraries from $CHUMICRO_ROOT
 ```
 
 The materialized `workspace.yml` is:
@@ -456,7 +456,7 @@ Two compounding problems:
 After adding `defaults.wifi.{ssid,password}` + `defaults.mqtt.broker.{host,port}` (real keys) to `workspace.yml` and re-running `python3 run.py setup`, the output was:
 
 ```
-setup: library_sources already in sync with /Users/chuxor/circuitpython/chumicro
+setup: library_sources already in sync with $CHUMICRO_ROOT
 ```
 
 — and `workspace.yml` was untouched (header preserved, defaults preserved, library_sources preserved).  `sync_library_sources` short-circuited at the "already in sync" check before re-writing.  This confirms the diagnosis from the previous finding: the round-trip preservation works correctly **when there are keys to anchor comments to**.
@@ -496,8 +496,8 @@ The boot-shim flow is what every example is designed for — auto-detecting it (
 
 ```
 wifi_only: connecting ...
-wifi: connected at 172.16.1.21
-wifi: connected at 172.16.1.21
+wifi: connected at 192.0.2.21
+wifi: connected at 192.0.2.21
 ```
 
 Pipeline verified end-to-end:
@@ -543,7 +543,7 @@ This was the most informative scenario of the verification pass.  The good news:
 
 ## Verification conclusions (2026-05-06)
 
-The unification workstream landed correctly: the pipeline works end-to-end on real hardware (Pi Pico W CP demonstrated `wifi: connected at 172.16.1.21` from a workspace.yml-baked merged-config msgpack).  But verification surfaced **seven beginner-onramp issues**, of which two are config-shape questions (this workstream's domain) and five are adjacent papercuts that compound into the user's "plug in a board and go" complaint:
+The unification workstream landed correctly: the pipeline works end-to-end on real hardware (Pi Pico W CP demonstrated `wifi: connected at 192.0.2.21` from a workspace.yml-baked merged-config msgpack).  But verification surfaced **seven beginner-onramp issues**, of which two are config-shape questions (this workstream's domain) and five are adjacent papercuts that compound into the user's "plug in a board and go" complaint:
 
 | # | Finding | Bearing | Status |
 |---|---|---|---|

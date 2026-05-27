@@ -18,7 +18,7 @@ We imported a pattern designed for a use case that doesn't apply here.  The cost
 
 The marker existed precisely to bridge a *committed-shape file* and *uncommitted values*.  When the schema-bearing file is itself gitignored, that bridge has nothing to span — and the mechanism falls away with it.
 
-The shape evolved further during the config-shape-beginner-ergonomics workstream.  The user's audit (2026-05-06) flagged that lumping workspace machinery (`library_sources`, `deploy_targets`, `quality`) and device-bound credentials (wifi password, broker auth) into a single `workspace.yml` made the file's name misleading: a beginner reading "workspace.yml" expected layout / build / package config, not their wifi password.  The decision now describes the post-workstream three-file split.
+The shape evolved further during the config-shape-beginner-ergonomics workstream.  An audit (2026-05-06) flagged that lumping workspace machinery (`library_sources`, `deploy_targets`, `quality`) and device-bound credentials (wifi password, broker auth) into a single `workspace.yml` made the file's name misleading: a beginner reading "workspace.yml" expected layout / build / package config, not their wifi password.  The decision now describes the post-workstream three-file split.
 
 ## Decision
 

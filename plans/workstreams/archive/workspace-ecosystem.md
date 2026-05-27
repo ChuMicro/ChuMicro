@@ -69,7 +69,7 @@ Reports workspace health at a glance.
 ```
 $ python run.py status
 
-WORKSPACE        my-workspace at /Users/chux/projects/my-house
+WORKSPACE        my-workspace at ~/projects/my-house
 WORKSPACE.YML    ✓ valid
 DEVICES.YML      ✓ 3 devices registered, 2 reachable
 SECRETS.YML      ⚠ wifi_password still 'replace-me' — edit before deploying
@@ -322,7 +322,7 @@ Plus an advanced user can develop their own chumicro-style libraries with `pytho
 ## Notes for the executor
 
 * **No backward compatibility.**  Nothing has been published.  Change `THING_NAME` format, CLI flag shapes, file layouts, and remove commands (e.g. `switch`) freely if it makes the design cleaner.  Do NOT add migration logic.
-* **Two-repo flow.**  Phases 1, 2, 3, 4, 5 each touch the chumicro mono-repo.  Phases 1 + 6 also touch the template repo (local clone at `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template`).
+* **Two-repo flow.**  Phases 1, 2, 3, 4, 5 each touch the chumicro mono-repo.  Phases 1 + 6 also touch the template repo (local clone at `$WORKSPACE_TEMPLATE_ROOT`).
 * **Task-checkpoint per slice.**  Every slice ends with a green preflight + commit + push.  Don't batch slices.
 * **Tests come along.**  Every new module gets a test file.  Coverage gate stays at 94 % for changed packages.
 * **Templates live in `_payloads/`.**  Canonical scaffolds (thing, library, examples) live under `workbench/workspace/src/chumicro_workspace/_payloads/`.  The template repo's `_templates/` is a *user-owned-config materialization source* (secrets.yml etc.) — not where scaffolds belong.

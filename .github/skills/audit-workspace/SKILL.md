@@ -117,7 +117,7 @@ These cross-library invariants only show up at workspace scope.
 
 * **No speculative public API across the workspace** — apply the audit-library lens at workspace scope: every export in every library's `__init__.py` `__all__` should have at least one consumer in:
   * The mono-repo (other libraries, workbench, scripts, tests).
-  * The workspace-template repo (`/Users/chuxor/circuitpython/ChuMicro-Workspace-Template/`).
+  * The workspace-template repo (sibling checkout, conventionally at `$WORKSPACE_TEMPLATE_ROOT`).
   Zero callers in both → delete candidate.  Per AGENTS.md → Workflow ("Public API today means us using it").
 
 * **Decision-ADR drift** — per `plans/decisions/README.md` and AGENTS.md:

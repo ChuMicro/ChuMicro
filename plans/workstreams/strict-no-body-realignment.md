@@ -2,7 +2,7 @@
 
 Status: queued
 
-Surfaced 2026-05-26 by the audit-comments retrofit-test run on kvstore (commit `2356830e`).  The new verifier-blind dispatch surfaced ~30 CRITICAL body-paragraph violations in `libraries/kvstore/src/`.  The auditor (audit-comments dim 4 / dim 6) had judged those bodies as KEEPs under the essay-bloat detector + cold-maintainer test.  The verifier inherited strict no-body rules from the commenter-verifier persona, matching `feedback_no_docstring_bodies.md`: "summary line + Args/Returns/Raises only; flash budget + kills prose-bug surface."
+Surfaced 2026-05-26 by the audit-comments retrofit-test run on kvstore (commit `2356830e`).  The new verifier-blind dispatch surfaced ~30 CRITICAL body-paragraph violations in `libraries/kvstore/src/`.  The auditor (audit-comments dim 4 / dim 6) had judged those bodies as KEEPs under the essay-bloat detector + cold-maintainer test.  The verifier inherited the strict no-body rule from the commenter-verifier persona: summary line + Args/Returns/Raises only — the flash budget rules out prose bodies in library code and the rule kills prose-bug surface at the same time.
 
 Resolution: strict no-body is canonical.  Auditor needs to align with the verifier, AGENTS.md needs to carry the rule explicitly, and the previously-audited libraries (kvstore + any others with surviving bodies) need a slim pass with content lift to `docs/guide.md` per library before the slim lands.
 

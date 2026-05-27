@@ -164,8 +164,7 @@ landing, because `.scratch/` narrowing is a real design choice.
 ## #3 — new rule: the "the (one|single|sole) X that/which/is" tic
 
 No CHU rule covers prose AI-tics, yet AGENTS.md "Writing tone" bans
-this shape and there is a user memory (`feedback_the_one_x_aitic`) on
-it. It bit twice this pass (`circuitpython_transport.py:967`,
+this shape and it has been flagged as a recurring tic to watch for. It bit twice this pass (`circuitpython_transport.py:967`,
 `workbench/workspace/src/chumicro_workspace/cli/deploy.py:512`).
 Deterministic regex, but real false positives: "the single source of
 truth" (established term, `macos_fskit.py:59`), "the one belonging
@@ -443,7 +442,7 @@ gate is never built while the rest is in flight.
   current-code why" — prior art, reconcile #1/#3 with it.
 - CHU006 self-reference precedents: chu006.py:164-194 (predicate) and
   chu006.py:177-178 (inline `# noqa: CHU006`).
-- User memory `feedback_the_one_x_aitic` (the #3 tic).
+- The "the (one|single|sole) X" AI-tic (the #3 tic).
 - `.github/skills/audit-comments/SKILL.md` + AGENTS.md → Writing tone
   "degraded prose is rewritten, not trimmed again" single home (added
   2026-05-19) — the *judgment* counterpart this lint set's residue

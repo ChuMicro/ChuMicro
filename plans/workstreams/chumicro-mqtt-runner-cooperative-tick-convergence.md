@@ -4,7 +4,7 @@ Status: **proposed.**  Surfaced 2026-05-23 during the Pi Pico W CP TLS bake inve
 
 ## Problem
 
-`chumicro_mqtt` and `chumicro_runner` diverge from the cooperative-tick discipline that a proven reference implementation has run in production with multi-week uptimes.  Reference: `~/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py`.  The reference is a monolithic `loop()` (line 476-558) called by the application directly; chumicro splits the equivalent work between `Runner.tick` / `Runner.wait` (dispatch + idle) and `MQTTClient.handle` (per-tick service work).  The split is itself a runner-pattern design choice (Decision 0080) — convergence is not "make chumicro look like the reference," it's "fix the resilience gaps the reference's monolithic loop happens to plug."
+`chumicro_mqtt` and `chumicro_runner` diverge from the cooperative-tick discipline that a previous-generation MQTT reference implementation has run in production with multi-week uptimes.  The reference is a monolithic `loop()` (line 476-558) called by the application directly; chumicro splits the equivalent work between `Runner.tick` / `Runner.wait` (dispatch + idle) and `MQTTClient.handle` (per-tick service work).  The split is itself a runner-pattern design choice (Decision 0080) — convergence is not "make chumicro look like the reference," it's "fix the resilience gaps the reference's monolithic loop happens to plug."
 
 ## Architecture-level divergences (the bone structure)
 
@@ -90,7 +90,7 @@ These came up during the read but are not yet diagnosed as defects vs design cho
 | 2026-05-23 | Pre-convergence baseline | 5-min PLAIN bake, 290 publishes / 290 PUBACKs / 0 gaps -- happy path was always green; the defects only show on negative tests. |
 | 2026-05-23 | Steps 1 + 2 (recv-zero + handle reorder) | 5-min PLAIN bake, 289 publishes / 289 PUBACKs / 0 gaps / heap steady -- confirmed no regression on the happy path. |
 | 2026-05-23 | Steps 1–6 (recv-zero, reorder, send-timeout, POLLERR/POLLHUP, one-per-tick, polish) | 5-min PLAIN bake, 290 publishes / 290 PUBACKs / 0 inbound gaps / 0 outbound gaps / in_flight_final 0 / pending_final 0 / tx_queue_final 0 / duration_ms 300010 -- all six steps land without regression. |
-| 2026-05-23 | Steps 1–6, A1 negative bake (broker hard-kill + restart) | **FAILED.** Board transitioned to FAILED on `pkill -9 mosquitto` (step 1's recv-zero fix worked correctly), then stayed FAILED for 240 s and never reconnected after broker restart. Mosquitto log: zero "New connection from 172.16.1.16" events post-restart. Root cause was a separate defect in `MQTTClient.check()` that gated the FAILED state out of `Runner.tick`'s check-gate, making `_attempt_self_heal` unreachable. Steps 1-6 detected the broker death correctly but the recovery path the runner uses to call self-heal was locked out by an unrelated condition. Captured below as Step 7. |
+| 2026-05-23 | Steps 1–6, A1 negative bake (broker hard-kill + restart) | **FAILED.** Board transitioned to FAILED on `pkill -9 mosquitto` (step 1's recv-zero fix worked correctly), then stayed FAILED for 240 s and never reconnected after broker restart. Mosquitto log: zero "New connection from <board>" events post-restart. Root cause was a separate defect in `MQTTClient.check()` that gated the FAILED state out of `Runner.tick`'s check-gate, making `_attempt_self_heal` unreachable. Steps 1-6 detected the broker death correctly but the recovery path the runner uses to call self-heal was locked out by an unrelated condition. Captured below as Step 7. |
 | 2026-05-23 | Steps 1–7 (adds check() reachability fix), A1 + A2 negative bake | **PASS.** A1 (`pkill -9 mosquitto` at T0+60s, restart at T0+90s): TRANSITION connected→failed within one tick of broker death, ~470 SELF_HEAL attempts (each returning `socket factory failed: [Errno 104] ECONNRESET` while broker was down — RST propagated from the wifi-radio TCP stack), TRANSITION failed→connecting→connected within ~10 s of broker restart, publishes resumed. A2 (`pkill -TERM mosquitto` at T0+180s, restart at T0+210s): same shape, also recovered. Final: `sent 232 received 60 inbound_gaps 0 puback_total 231 in_flight_final 0`. Two follow-ups surfaced (not blocking the fix): inbound `received` count stayed at 60 from pre-A1 onward — the board does not re-subscribe after self-heal completes (this is A8 in the negative-testing-suite); and recovery latency is ~10 s of full-tick-rate retries against the wifi radio, making Decision 0081's connector motivation concrete (correctness restored, but the connect path still slams the runner during the outage). |
 | 2026-05-23 | Steps 1–8 (adds SUBSCRIBE replay on CONNACK), A1 + A2 negative bake | **PASS — inbound survives reconnect.** Same A1 + A2 schedule.  Inbound `received` count grew across both outages: pre-A1 49 → post-A1 109 → post-A2 229 → BAKE_END 289 (was frozen at 60 for the entire post-A1 window in the prior bake).  `inbound_gaps 0 puback_total 231 in_flight_final 0 tx_queue_final 0`.  Subscription replay restored the inbound stream both times.  The remaining concern is recovery latency (~10 s of full-tick-rate ECONNRESET retries while broker is down) — Decision 0081 territory, still open. |
 
@@ -129,11 +129,11 @@ The defects don't all need to land together.  Suggested order to maximize signal
 
 ## Pointers
 
-- Reference: `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` (1043 lines).
+- Reference: a previous-generation MQTT client (1043-line monolithic `loop()`).
 - Current `chumicro_mqtt.client`: `libraries/mqtt/src/chumicro_mqtt/client.py` (1283 lines).
 - Current `chumicro_mqtt._wire`: `libraries/mqtt/src/chumicro_mqtt/_wire.py` (889 lines).
 - Current `chumicro_runner.core`: `libraries/runner/src/chumicro_runner/core.py` (488 lines).
-- Bake harness: `~/circuitpython/ChuMicro-Workspace-Template/projects/mqtt_bake_diag*/`.
+- Bake harness: `projects/mqtt_bake_diag*/` in the sibling workspace-template checkout.
 - ADR for the runner contract: [`plans/decisions/0080-runner-reactor.md`](../decisions/0080-runner-reactor.md).
 - ADR for the runner pattern (constraints on services): [`plans/decisions/0014-runner-pattern.md`](../decisions/0014-runner-pattern.md).
 - Paired test workstream: [`plans/workstreams/mqtt-negative-testing-suite.md`](mqtt-negative-testing-suite.md).
