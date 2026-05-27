@@ -145,6 +145,14 @@ The pass split also lets work parallelize: dispatch one sub-agent per file (or p
 
 **Read paragraph-internal clauses individually, not just paragraphs as units.**  This rule binds in Pass 2 most acutely.  Pass 1's strips remove tic-shaped padding, leaving paragraphs that read "fine" while a mid-paragraph parenthetical (*"(bench-confirmed across both runtimes)"*), a buried "and the test will catch drift" clause, a single bulleted item in a 15-line list, or a historical aside inside otherwise-current prose still encodes a defect.  Paragraph-paced reads leave residue; clause-paced reads catch it.
 
+### The auditor's bias problem
+
+The auditor reads the code and the existing prose, then judges the prose and proposes rewrites — knowing what's there before knowing what should be there.  That makes the auditor a biased reader of any proposed replacement: the "this looks fine" verdict on your own rewrite is unreliable.
+
+Pass 2 step 7's "look away from the original, draft the new comment, then compare" is the procedural discipline.  The `audit-comments-verifier` subagent dispatched at step 7b is the independent check.  The verifier reads the post-rewrite state cold, blind to the original prose, and tiers rule violations and cold-reader failures the biased auditor missed.
+
+When reporting to the user, prefer the verifier's findings over your own observations on the rewrites.  Surface auditor / verifier disagreements visibly in the walk — let the user break the tie, don't substitute your bias for the verifier's blindness.
+
 ### Pass 1 — subtractive sweep
 
 1. **Resolve the target.**  Confirm the argument; list the `.py` files in scope (`git ls-files <target> | grep '\.py$'`).
@@ -155,7 +163,7 @@ The pass split also lets work parallelize: dispatch one sub-agent per file (or p
    * **DEFER:** the strip would leave the comment incoherent — mark for Pass 2 to handle as REWRITE, do not attempt a partial fix here.
    * **KEEP:** the hit is legitimate prose (ADR 0077-style invariant; a `the` that earns its specificity; an em-dash inside `print()` / error-message strings, which are user-facing output and out of scope for this skill).  Record KEEP-with-reason in the punch-list so the next auditor doesn't re-surface it.
 4. **Present the subtractive punch-list.**  Group by confidence.  HIGH: DELETEs and mechanical TRIMs (one tic, one redundant clause).  MEDIUM: TRIMs where which clause to cut is a judgment call (the home site in a 3-way redundancy, the load-bearing `the` in a stacked-article paragraph).
-5. **Execute Pass 1.**  HIGH as one cohesive commit; MEDIUM as separate commits.  Run `python scripts/run.py preflight --coverage-threshold 94` if `src/` comments in a shipped tree changed (a docstring edit can trip `CHU0NN` on the same line or shift a line a test pins).
+5. **Execute Pass 1.**  HIGH as one cohesive commit — DELETEs and mechanical TRIMs need no per-finding judgment.  Walk each MEDIUM finding via `AskUserQuestion`, one commit per applied finding ([Walking MEDIUM and LOW findings](#walking-medium-and-low-findings)).  Run `python scripts/run.py preflight --coverage-threshold 94` after each commit if `src/` comments in a shipped tree changed — a docstring edit can trip `CHU0NN` on the same line or shift a line a test pins.
 
 ### Pass 2 — reconstructive sweep
 
@@ -163,15 +171,56 @@ The pass split also lets work parallelize: dispatch one sub-agent per file (or p
 
    **Run a file-level cross-site sweep before per-comment classification.**  Read the module docstring, class docstrings, method docstrings, and attribute comments *together* — not one at a time.  The same fact stated in 2+ sites that didn't trip CHU027 (paraphrased, or sub-threshold at <12 tokens, or <3 in-package sites) names a *home* — usually the broadest scope where the fact is most discoverable — and the others collapse to a cross-reference or DELETE.  Per-comment review misses this because each site reads fine alone; the home-finding move happens only when the docs are read together.  Worked shape: a "Read via :func:`ast.parse` (no execution)" sentence repeated in a module docstring and three function docstrings collapses to the module docstring as the home; each function's repetition drops.
 7. **Draft replacement text for every REWRITE — from the code alone, *before* re-reading the original prose.**  A REWRITE finding without proposed new prose is not actionable; the punch-list shows the actual replacement.  *Order is load-bearing:* read the code, look away from the original, draft the new comment, *then* compare against the original.  Drafting with the original in view biases you toward minimal edits and degraded prose perpetuates.  If you can't draft a coherent comment from the code alone, that itself is a finding — the comment was carrying knowledge the code doesn't make obvious (KEEP-check, or escalate to `/audit-library` if the code's the problem).  Apply the cold-reader test, the read-aloud structural test (dim 7), and the stance test (dim 8) to your *proposed* text, not only the original.  Minimal-edit drafts that strip a tic often leave the surrounding prose opaque or ambiguous; a fresh draft that comes out nominalized has rebuilt the words and kept the structural defect; a fresh draft that comes out defensive or scaffolding has rebuilt the words and kept the stance defect.  Say your replacement out loud as if explaining it to a colleague before you commit it.
+7a. **Apply each proposed REWRITE to `libraries/<name>/src/` in place** (uncommitted).  The verifier dispatched at step 7b reads the post-apply state — it has no access to your draft otherwise.  Track each `(file:line, original_text, proposed_text)` tuple in your working memory so the per-finding walk at step 10 can revert a hunk if the user declines.  If the user later reverts the whole pass, `git restore libraries/<name>/src/` rolls every applied rewrite back.
+7b. **Dispatch the `audit-comments-verifier` subagent** on `libraries/<name>/src/`.  See [The auditor's bias problem](#the-auditors-bias-problem) for why the verifier exists.  The harness loads `.claude/agents/audit-comments-verifier.md` as the subagent's system prompt; the director does NOT read or embed the persona file.
+
+    ```
+    Agent(
+        subagent_type="audit-comments-verifier",
+        model="opus",
+        description="<library> Pass 2 verifier",
+        prompt="<task only — see template below>",
+        run_in_background=True,
+    )
+    ```
+
+    Task prompt:
+
+    ````
+    Read these Python files and produce findings per the output format in your system prompt:
+
+    <list of paths to the post-apply files in libraries/<name>/src/>
+
+    Do not read any other files. Judge each file standalone as a cold reader.
+
+    Report the findings.
+    ````
+
+    Wait for the verifier to complete before proceeding.  On a multi-file library, one verifier dispatch covers the whole tree — one verifier per library, not per file.  (Per-file parallel dispatch loses cross-file cohesion findings the auditor's step 6 cross-site sweep already covers; whole-tree dispatch is sufficient.)
+
+7c. **Consolidate verifier findings with your draft analysis.**  Verifier tier maps onto auditor confidence:
+
+    * **CRITICAL** (named rule break) → at least MEDIUM.  HIGH if the fix is one-line and unambiguous (drop the AI-tic word, drop the body paragraph); MEDIUM if it requires a judgment-call rewrite.
+    * **IMPORTANT** (cold-reader failure) → at least MEDIUM.
+    * **MINOR** (stylistic) → filter by default.  Surface only when the user asked for exhaustive review or total CRITICAL+IMPORTANT count is under 3.
+    * **AMBIGUOUS** → LOW.  Verifier flagged because project context resolves it; only the user can.
+
+    Verifier findings the auditor missed get appended to the punch-list, tagged `verifier-surfaced`.  Auditor findings the verifier cleared: keep, but downgrade one tier — the verifier is the cold-reader check, not a veto.  Tier disagreements: keep both, surface in step 9 and the per-finding walk at step 10.
 8. **Score by confidence:**
    * **HIGH** — REWRITE where the new text is mechanical and unambiguous (one plain what-sentence replacing a buried/superlative one).
    * **MEDIUM** — REWRITE where the new prose makes a judgment call about which why is load-bearing (essay collapse, mirror-list compression).  Sign-off needed: the user owns which constraint is the one worth keeping.
    * **LOW / question** — KEEP-check: comments that read fine to you but you're unsure carry a why a maintainer needs.  Ask rather than cut.
+
+   When the verifier (step 7b) tiered a finding differently from the auditor, carry both tiers into step 9 so the user sees the disagreement.  `_shared/walk-pattern.md` § "Verifier integration" covers how the walk presents this.
 9. **Present the reconstructive punch-list.**  Group by confidence, show proposed replacement text inline for REWRITEs.
-10. **Execute Pass 2.**  HIGH as one cohesive commit; MEDIUM as separate commits, one per finding (small reversible edits; if one rewrite reads worse on a second look, the rest stand).  Re-run preflight per Pass 1 step 5 if `src/` comments changed.
+10. **Execute Pass 2.**  HIGH REWRITEs as one cohesive commit — these are mechanical by definition (step 8) and need no per-finding pause.  Walk each MEDIUM REWRITE and each LOW `keep?` via `AskUserQuestion`, one commit per applied finding ([Walking MEDIUM and LOW findings](#walking-medium-and-low-findings)).  Small reversible edits — if one rewrite reads worse on a second look, the rest stand.  Re-run preflight per Pass 1 step 5 if `src/` comments changed.
 11. **Defer code-shape findings throughout.**  If reading the code to write a comment surfaces dead code / a lying name / a method that should split — *do not fix it here*.  File it as a `## Next` entry pointing at `/audit-library <name>` and move on.  Out-of-scope diffs riding along is the leading cause of revert traffic on audit work.
 
 After Pass 2, invoke the `task-checkpoint` skill — it owns preflight, `plans/next-up.md` refresh, commit, and push.  Read the `git-commit` skill before committing for the heredoc mechanics.  Don't re-implement either here, and don't stop without invoking `task-checkpoint`.
+
+## Walking MEDIUM and LOW findings
+
+**MUST READ:** [`.github/skills/_shared/walk-pattern.md`](../_shared/walk-pattern.md) — the shared `AskUserQuestion` convention for surfacing MEDIUM and LOW findings across audit-* skills, including verifier-integration handling.  In audit-comments specifically: MEDIUM TRIMs (Pass 1) and MEDIUM REWRITEs + LOW `keep?` (Pass 2) walk; HIGH batches; DEFER findings (the `shape` tag) file as `## Next` pointers to `/audit-library`.
 
 ## Output format
 
@@ -226,6 +275,7 @@ Tag taxonomy:
 * **Don't reshape code.**  If the code needs work to make the comment honest, the *code* finding is `/audit-library`'s.  File it, don't fix it.
 * **Don't auto-commit.**  Comment edits ship as flash bytes on every board and are read cold by users — surface the punch-list with proposed text first; execute HIGH only after explicit go-ahead.
 * **Don't transcribe sibling source-of-truth lists.**  The AI-tic regex and per-word handling live in [`agent-style-guide.md`](../../../docs/contributing/agent-style-guide.md).  The essay-bloat ratio script lives in `/audit-library` field-reality.  The dated-history lint subset lives in `CHU012`/`CHU006`.  All three are owned elsewhere.  Invoke by reference.  A private copy here is drift, flagged by `/audit-skill` dim 6.
+* **Don't surface MEDIUM or LOW findings as a free-text punch-list when walking is available.**  Per-finding `AskUserQuestion` turns each judgment into a click + the tool's "Other" free-text fallback.  Free-text mode is the fallback for very high finding counts (MEDIUM 15+) or when the user explicitly asks — never the default.
 * **Don't expand scope mid-pass.**  A new stumble after the edit batch is a follow-up, not an extension of this pass.
 
 ## Done when
