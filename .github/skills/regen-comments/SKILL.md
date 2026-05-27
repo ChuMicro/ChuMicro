@@ -1,6 +1,6 @@
 ---
 name: regen-comments
-description: Regenerate code comments and docstrings from a clean slate. Strips comments/docstrings, dispatches the commenter-casual-friendly writer agent on the baseline (no code context leaked), reapplies output, runs preflight, then dispatches the commenter-verifier agent (blind to the baseline) to flag potential misses tiered by severity. Surfaces a structured checklist for human review; never auto-commits. Use when a library's comments have drifted past the point where /audit-comments can salvage them, when a library was written hastily and needs a real doc pass, or when validating the persona itself against a new library.
+description: Regenerate code comments and docstrings from scratch. Strips existing prose, drafts new docstrings via a writer agent blind to the original, grades the result via a verifier agent blind to the baseline, and prints a tiered checklist for human review; never auto-commits. Use when comments have degraded past what /audit-comments can salvage, when a library was written hastily and needs a real doc pass, or when validating the writer persona against a new library. Examples: "/regen-comments chumicro_kvstore", "regenerate comments for chumicro_mqtt from scratch", "validate the commenter persona against a new library"
 ---
 
 # Regenerate Comments
@@ -10,10 +10,10 @@ Strip-and-regenerate pass on a target's docstrings and comments. Unlike `/audit-
 Three roles cooperate:
 
 1. **Stripper** (`scripts/strip_comments.py`): removes docstrings and non-lint comments, inserts `pass` into bodies that would become empty, verifies the baseline parses.
-2. **Writer agent** (`commenter-casual-friendly`): writes new docstrings + comments from the baseline. Sees only stripped code; never sees the original prose or technical rationale.
+2. **Writer agent** (one of `commenter-casual-friendly` for `src/`, `commenter-tests` for `tests/` + `functional_tests/`, `commenter-examples` for `examples/`): writes new docstrings + comments from the baseline. Sees only stripped code; never sees the original prose or technical rationale.
 3. **Verifier agent** (`commenter-verifier`): reviews the writer's output as a cold reader, blind to the baseline. Flags rule violations and cold-reader failures by tier. Surfaces ambiguous cases for human-only judgment.
 
-You (the assistant invoking this skill) are the **director**. You orchestrate but do not judge — your bias from reading the baseline means you can't fairly review the writer's output as a cold reader. That's why the verifier exists.
+You (the assistant invoking this skill) are the **director**. You orchestrate and never auto-commit. See `## The director's bias problem` for why the verifier exists.
 
 ## When to reach for this
 
@@ -54,15 +54,24 @@ For these, prefer `/regen-comments <library>` so the writer sees the whole packa
 
 ### 1. Confirm scope and ask before starting
 
-The strip step modifies source files in place (uncommitted in `main`). Confirm with the user before stripping. Show the file list:
+If `/regen-comments` was invoked with no target, fire `AskUserQuestion` populated by `ls libraries/` first to capture which library to regen.
+
+The strip step modifies source files in place (uncommitted in `main`). Print the file list, then fire `AskUserQuestion`:
 
 ```
 About to regenerate comments for libraries/<name>/src/:
   - chumicro_<name>/__init__.py
   - chumicro_<name>/core.py
   - chumicro_<name>/...
-This will strip docstrings and comments from these files in place, then dispatch the writer agent. Continue?
 ```
+
+> "This will strip docstrings and comments from those files in place, then dispatch the writer agent. Proceed?" `header: Strip + regen`
+> Options:
+> - "Proceed — strip and dispatch"
+> - "Narrow the scope first" — re-fire after the user names a smaller target
+> - "Cancel"
+
+**Success criteria:** when no target was provided, a target was captured via AskUserQuestion; user picked one of the confirmation options; scope captured before any file is touched.
 
 ### 2. Strip the baseline
 
@@ -89,13 +98,25 @@ cp -r .scratch/regen-comments/<name>/src/baseline/* libraries/<name>/src/chumicr
 
 (In multi-tree runs, do the same for each tree's baseline.)
 
+**Success criteria:** baseline at `.scratch/regen-comments/<name>/<tree>/baseline/` exists and parses with `ast.parse`; source files overwritten with the stripped versions.
+
 ### 3. Dispatch the writer agent(s)
 
-For each tree (or library, in multi-library mode), dispatch one writer agent in parallel. Use the `Agent` tool with native subagent dispatch:
+For each tree (or library, in multi-library mode), dispatch one writer agent in parallel. Batch all writer-agent dispatches into one assistant message — the harness runs concurrent calls from a single message; sequential messages serialize them. The Multi-library section restates this; the contract is the same in `--tree all` mode.
+
+**Pick the writer persona per tree** — three personas cover different file conventions:
+
+| Tree | Writer persona | Why this persona |
+|------|----------------|------------------|
+| `src/` | `commenter-casual-friendly` | Production-code docstrings: one-sentence summaries, Args/Returns/Raises only when earned, no body paragraphs |
+| `tests/`, `functional_tests/` | `commenter-tests` | Test docstrings: one-line claim of what's asserted in domain terms, no Args/Returns/Raises ever, causal connectors require real causation |
+| `examples/` | `commenter-examples` | Pedagogical: module docstrings carry a short body (use case + how to run + `Example output::` block); inline comments explain why a caller would make a choice |
+
+Use the `Agent` tool with the matching `subagent_type`:
 
 ```
 Agent(
-    subagent_type="commenter-casual-friendly",
+    subagent_type="<commenter-casual-friendly | commenter-tests | commenter-examples>",
     model="opus",
     description="<tree-or-library> writer",
     prompt="<task only — see template below>",
@@ -103,7 +124,7 @@ Agent(
 )
 ```
 
-The harness loads `.claude/agents/commenter-casual-friendly.md` as the subagent's system prompt automatically. The director does NOT read or embed the persona file — that would duplicate the rules, waste tokens, and let the embedded copy drift from the canonical .md.
+The harness loads the matching `.claude/agents/<persona>.md` as the subagent's system prompt automatically. The director does NOT read or embed any persona file — that would duplicate the rules, waste tokens, and let the embedded copy drift from the source .md.
 
 **Task prompt — minimal, paths only:**
 
@@ -123,16 +144,18 @@ Rules:
 Report only the list of files you wrote.
 ````
 
-**Critical: what the task prompt must NOT contain.** These caused real damage during persona development:
+**The task prompt must not contain:**
 
-- Technical rationale for why the code is the way it is (eager-import explanations, constant-value justifications, etc.) — the writer treats anything in the prompt as comment-worthy and puts it back into the source
-- Identifier examples from the target code (`_last_beat_ms`, `period_ms`, etc.) — leaks the answer
+- Technical rationale for why the code is the way it is (eager-import explanations, constant-value justifications) — the writer treats anything in the prompt as comment-worthy and puts it back into the source
+- Identifier examples from the target code (`_last_beat_ms`, `period_ms`) — leaks the answer
 - "Why" hints about constants, design choices, side-effects
 - Cross-file context the writer would otherwise have to derive
 
 If the writer can't figure out the why from a fresh code read, the correct outcome is no comment for that line.
 
 Wait for all writer agents to complete before proceeding.
+
+**Success criteria:** writer agents dispatched in one Agent batch per tree (or library); all returned with file lists; no rationale-leak words in the task prompts.
 
 ### 4. Apply the writer's output to source
 
@@ -142,21 +165,31 @@ cp -r .scratch/regen-comments/<name>/<tree>/output/* libraries/<name>/<tree>/...
 
 (Adjust path for the tree.)
 
+**Success criteria:** writer output copied to source paths under `libraries/<name>/<tree>/...`.
+
 ### 5. Mechanical verification — and writer re-dispatch on lint failure
 
-Run lint first (cheapest check):
+**5a. Byte-identity gate.** Confirm the writer didn't change code:
+
+```bash
+diff -u .scratch/regen-comments/<name>/<tree>/baseline/<file>.py libraries/<name>/<tree>/.../<file>.py | grep -v '^[+-]\s*"\|^[+-]\s*#\|^[+-]\s*$' | head -30
+```
+
+That filter shows lines changed outside docstrings and comments. If anything appears, surface to the user and stop — the writer broke the byte-identity rule. Don't proceed to lint until byte-identity is clean; spending tokens on E501 re-rolls against already-broken output wastes them.
+
+**5b. Lint and writer re-dispatch on E501.** Run lint:
 
 ```bash
 .venv/bin/python scripts/run.py lint 2>&1 | tail -30
 ```
 
-The most common error is **E501 (line too long > 100 chars)** — the persona doesn't enforce line length; ruff does.
+The most common error is **E501 (line too long > 100 chars)** — none of the writer personas enforce line length; ruff does.
 
-**Do not trim offending lines yourself.** The director is biased (you've seen the baseline) and trimming involves word-choice judgment that belongs to the writer. Instead, re-dispatch the writer with the failing lines:
+Don't trim offending lines yourself. You've seen the baseline, so trimming injects word-choice judgment that belongs to the writer. Re-dispatch the writer with the failing lines — use the same persona that produced the file (per the Step 3 per-tree table):
 
 ```
 Agent(
-    subagent_type="commenter-casual-friendly",
+    subagent_type="<same persona that wrote this tree>",
     model="opus",
     description="<tree> lint re-dispatch",
     prompt="<re-dispatch task — see template below>",
@@ -184,27 +217,21 @@ Line <N> (currently <chars> chars):
 Report the updated docstrings (one per failing line). Don't restate unchanged content.
 ````
 
-Apply the writer's response — only to the specific lines named. Re-run lint. If E501s persist, dispatch ONE more re-roll with the still-failing lines; if a second re-roll still fails, surface to the user as a stuck case rather than looping further or trimming inline.
+Apply the writer's response — only to the specific lines named. Re-run lint. If E501s persist, dispatch one more re-roll with the still-failing lines. If a second re-roll still fails, surface to the user as a stuck case.
 
 This keeps word choice in the writer's hands and means the verifier (next step) reads what the writer actually produced, not director edits.
 
-**If tests fail (not just lint)** the writer likely changed code despite the rule. Diff against the baseline to confirm:
-
-```bash
-diff -u .scratch/regen-comments/<name>/<tree>/baseline/<file>.py libraries/<name>/<tree>/.../<file>.py | grep -v '^[+-]\s*"\|^[+-]\s*#\|^[+-]\s*$' | head -30
-```
-
-That filter shows lines changed outside docstrings and comments. If anything appears, surface to the user and stop — the writer broke the byte-identity rule.
-
-Then full preflight (after lint is clean):
+**5c. Full preflight.** Once lint is clean:
 
 ```bash
 .venv/bin/python scripts/run.py preflight --coverage-threshold 94 2>&1 | tail -15
 ```
 
+**Success criteria:** byte-identity diff PASS; lint PASS or stuck-case surfaced; preflight PASS.
+
 ### 6. Dispatch the verifier agent(s)
 
-For each tree (or library), dispatch one verifier agent in parallel. The verifier sees the **final state** (regenerated commented files), NOT the baseline.
+For each tree (or library), dispatch one verifier agent in parallel. Batch all verifier-agent dispatches into one assistant message — same single-message contract as Step 3. The verifier sees the **final state** (regenerated commented files), NOT the baseline.
 
 ```
 Agent(
@@ -230,21 +257,73 @@ Do not read any other files. Judge each file standalone as a cold reader.
 Report the findings.
 ````
 
-The verifier is blind to the baseline by construction — its task prompt never references `.scratch/regen-comments/`, and its system prompt (the persona file) never sees the baseline either.
+The verifier is blind to the baseline — its task prompt never references `.scratch/regen-comments/`, and its system prompt (the persona file) never sees the baseline either.
 
 Wait for all verifier agents to complete before proceeding.
 
+**Success criteria:** verifier agents dispatched in one Agent batch; all returned with findings reports.
+
+### 6b. Lost-facts diff — director-side
+
+The verifier is structurally blind to the stripped baseline; its task prompt names only the final commented files. It can flag what's wrong in the new prose; it cannot flag what was *lost* — a rationale line, a constraint note, a "why this constant" comment — that the writer did not reproduce.
+
+The director is the one role that saw the baseline (during Step 2's strip), so the director runs the lost-facts pass.
+
+For each file, diff the preserved baseline against the final commented file:
+
+```bash
+diff -u .scratch/regen-comments/<name>/<tree>/baseline/<file>.py libraries/<name>/<tree>/.../<file>.py | head -200
+```
+
+Scan the original's docstrings and comments for any *fact* — not wording — that the regenerated version did not reproduce. Typical losses:
+
+- Why a constant has its specific value
+- A side-effect callers need to know about
+- A constraint enforced silently elsewhere
+- A workaround tied to a specific bug or quirk
+
+Append losses to the Step 7 findings list as `LOST-FACT` rows under the file they came from. Tier IMPORTANT by default; CRITICAL when the lost fact would prevent a caller from using the API correctly.
+
+`LOST-FACT` rows surface in the same Step 7 walk-mode as verifier findings; the per-finding actions apply identically. A re-dispatch of the writer on a `LOST-FACT` row carries the fact (one sentence, no original prose verbatim, no leaked identifiers), not the original comment.
+
+**Success criteria:** every file in the regen set diffed; `LOST-FACT` rows merged into Step 7's findings list (or "no lost facts" recorded).
+
 ### 7. Consolidate and surface findings
 
-Collect all verifier findings. For each file, show the **Cold-reader summary** + tiered findings.
+Collect all verifier findings (plus any LOST-FACT rows from Step 6b). Render **Cold-reader summary** + tiered findings per file.
 
-**Filter by default**:
+**Filter by default:**
 - Always surface CRITICAL findings
 - Always surface IMPORTANT findings
 - Always surface AMBIGUOUS findings (those explicitly need human judgment)
-- MINOR findings: surface only if the user asked for exhaustive review, OR if there are fewer than 3 findings overall (then MINOR fills the gap usefully)
+- MINOR findings: surface only when the user asked for exhaustive review, or when fewer than ~3 findings overall (sparse reports lose nothing by including MINORs)
 
-**Format for the user**:
+Print the report (format below), then fire one `AskUserQuestion`:
+
+> "Findings ready. Pick a review mode." `header: Review mode`
+> Options:
+> - "Walk findings inline" — per-finding `AskUserQuestion` rounds (described below); right mode when more than ~5 CRITICAL/IMPORTANT findings are open (above that, scroll-through review loses items) or the user is unfamiliar with the codebase
+> - "Wait for IDE review" — exit; user reads the printed report in their editor and returns with edits
+> - "Print only — no walk needed" — report stays in chat; no further action
+
+For "Walk findings inline", group findings into rounds of up to 5 (one file's findings per round when feasible). Per round, fire one `AskUserQuestion` with `multiSelect: true`:
+
+> "Round N of M — pick findings to address. Unpicked carry to the next round." `header: Round N`
+> Options:
+> - One row per finding: `TIER · file:line · one-line diagnostic`
+
+For each picked finding, fire a per-finding follow-up:
+
+> "Finding <file:line> — how to handle?" `header: <ref>`
+> Options:
+> - "Keep — accept the writer's text" — entry marked resolved; no Edit
+> - "Edit inline — collect revised wording, then Edit" — free-form follow-up for the wording
+> - "Re-dispatch the writer on this line" — paths + diagnostic only, no rationale or identifier examples (mirrors Step 5's E501 re-dispatch contract)
+> - "Skip — address later" — entry recorded as unresolved in the final report
+
+Apply user revisions via `Edit`. Re-dispatch the writer per Step 5's template.
+
+**Report format:**
 
 ```
 regen-comments complete for libraries/<name>/src/.
@@ -270,20 +349,17 @@ FILE: libraries/<name>/src/chumicro_<name>/_backends/memory.py
    CRITICAL: (none)
    IMPORTANT: (none)
    AMBIGUOUS: (none)
-
-How to proceed:
-  1. Open the diff in your editor (`git diff libraries/<name>/`) or review here.
-  2. Walk the CRITICAL findings first — those are clear rule breaks.
-  3. Walk the IMPORTANT findings — these are cold-reader failures.
-  4. AMBIGUOUS findings need your judgment — they're the kind of thing only you can call.
-  5. When satisfied, run /git-commit. (This skill does NOT auto-commit.)
-
-Want me to:
-  (a) Walk findings one at a time with you (interactive review)?
-  (b) Wait for you to review in your IDE and come back with edits?
 ```
 
-Default to asking. Walking one-at-a-time is the right mode when there are >5 CRITICAL/IMPORTANT findings or when the user is unfamiliar with the codebase.
+Tier and category labels in the example output come from the verifier persona's `## Output format` section in `.claude/agents/commenter-verifier.md`; when that enum changes, the example here may lag.
+
+For reports exceeding ~30 findings (above that, scroll-through review loses items), write the report to `.scratch/regen-comments/<name>/report.md` and send via `SendUserFile` with `status: proactive` instead of inline scroll.
+
+The walk closes with one final print:
+
+> "Walk complete — N resolved, M skipped. Run /git-commit when ready. (This skill does NOT auto-commit.)"
+
+**Success criteria:** report printed; user picked a review mode; in walk mode, every picked finding either has an Edit applied / wording collected / re-dispatch fired / skip recorded.
 
 ### 8. Bump VERSION
 
@@ -295,9 +371,13 @@ echo "<new-patch-version>" > libraries/<name>/VERSION
 
 Confirm with `python scripts/run.py check-version`.
 
+**Success criteria:** VERSION file updated; `python scripts/run.py check-version` confirms the level.
+
 ### 9. Hand off
 
-Do NOT commit. Surface a one-line ready-to-commit summary; user runs `/git-commit` when satisfied.
+Do NOT commit. Print a one-line ready-to-commit summary; user runs `/git-commit` when satisfied.
+
+**Success criteria:** ready-to-commit summary printed; no commit made.
 
 ## Multi-library parallel runs
 
@@ -321,19 +401,18 @@ You — the assistant invoking this skill — have read the source code (during 
 
 When reporting to the user, prefer the verifier's findings over your own observations. If you noticed something the verifier missed, you can mention it as a single follow-up note — but lead with the verifier's report. Don't substitute your bias for its blindness.
 
-## Methodology lessons (don't break these)
+Step 6b puts the saw-the-baseline read to work in a structured diff. The bias becomes a declared input to a specific step rather than a hidden contaminant the prose warns about.
 
-Learned the hard way during persona development:
+## Done when
 
-1. **Never include technical rationale in the writer's prompt.** Any "why" you put in becomes a comment in the output, even when the right next state is no comment.
-2. **Never include identifier examples from the target code.** Listing `_last_beat_ms` or `period_ms` as examples leaks the answer for that library.
-3. **Strip means strip.** Comments AND docstrings AND empty-body fixup. The stripper handles this; don't add manual edits.
-4. **The baseline must parse.** Always verify with `ast.parse` after stripping. A parse failure is a stripper bug.
-5. **Test passing isn't proof the writer left code alone.** Diff against the baseline to confirm byte-identity outside docstrings.
-6. **Lint after apply, but route fixes back to the writer.** E501 is the most common slip; the persona doesn't enforce line length. Re-dispatch the writer with the offending lines — don't trim them yourself. Director trims inject editorial bias and the verifier won't know which words were the writer's vs the director's.
-7. **Verifier is blind, director is biased.** Don't read the verifier's output through your bias — its tier and category are the signal.
-8. **Filter MINOR by default.** A user drowning in stylistic nitpicks misses CRITICAL findings. Surface MINOR only when explicitly asked.
-9. **AMBIGUOUS findings exist for a reason.** The verifier flags them because they require project-specific judgment. Don't try to resolve them yourself — surface to the user.
+Observable post-state of a completed regen-comments run:
+
+- Mechanical checks (lint + preflight) printed PASS, or any FAIL recorded as a known concern.
+- Verifier-findings report sits in chat with per-file tier breakdown.
+- `LOST-FACT` rows from Step 6b merged into the findings list (or "no lost facts" recorded).
+- Every picked finding in the Step 7 walk has an Edit applied, revised wording collected, a writer re-dispatch fired, or "skip" recorded.
+- VERSION bumped when `src/` was touched and the library is past `0.0.0`.
+- Source files at `libraries/<name>/...` are in their final regenerated state, uncommitted; user runs `/git-commit` to land the diff.
 
 ## Files this skill leaves around
 
@@ -342,11 +421,3 @@ Learned the hard way during persona development:
 - Source files at `libraries/<name>/...` — final state, uncommitted
 
 `.scratch/` is gitignored. Clean up after a successful commit if you want; otherwise these are useful for debugging or re-runs.
-
-## Future extensions
-
-These came up during the experiment but aren't built yet:
-
-- **Verifier-of-verifiers (consolidation agent)**: When running multi-library regen, a third agent that ingests all verifier reports, dedups across libraries, ranks by severity, and produces a single batched checklist. Useful when total finding count exceeds ~30.
-- **Persona-per-tree**: The current design uses `commenter-casual-friendly` for all trees. Tests and examples might benefit from a tighter persona focused on test-docstring conventions ("describes what's asserted, not what the code does"). Worth experimenting with if test-docstring quality drifts.
-- **Run integration**: Add `python scripts/run.py regen-comments <library>` as a wrapper that calls this skill non-interactively for CI / batch use. Current skill is interactive (asks before stripping, asks how to walk findings).
