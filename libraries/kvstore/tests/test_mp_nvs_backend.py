@@ -1,7 +1,7 @@
 """Host-side tests for ``MpNvsBackend`` via fake-NVS injection.
 
 Exercises the load / save / commit loop without an ESP32.  The fake
-mirrors the public ``esp32.NVS`` shape MicroPython exposes:
+mirrors the public ``esp32.NVS`` interface MicroPython exposes:
 ``set_blob(key, value)``, ``get_blob(key, buffer) -> length``,
 ``erase_key(key)``, ``commit()``.
 
@@ -21,7 +21,7 @@ from chumicro_test_harness import raises
 class _FakeNvs:
     """Minimal stand-in for ``esp32.NVS`` for host tests.
 
-    Mirrors the wire-level shape the real MP wrapper exposes —
+    Mirrors the wire-level interface the real MP wrapper exposes:
     set_blob writes a ``bytes`` value under a key; get_blob copies
     into a caller-allocated buffer and returns the length; missing
     keys raise ``OSError``; ``commit`` is a no-op (the fake is
@@ -157,8 +157,8 @@ def test_kvstore_with_mp_nvs_backend_round_trips_through_reload() -> None:
     store["boot_count"] = 7
     store["last_seen_ms"] = 42
     store.commit()
-    # Fresh KVStore against the same fake — equivalent to a reboot
-    # since NVS persists across power cycles in production.
+    # Fresh KVStore against the same fake (equivalent to a reboot
+    # since NVS persists across power cycles in production).
     fresh = KVStore(backend=MpNvsBackend(nvs=fake))
     assert fresh["boot_count"] == 7
     assert fresh["last_seen_ms"] == 42

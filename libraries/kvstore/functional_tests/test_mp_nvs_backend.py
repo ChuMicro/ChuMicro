@@ -29,7 +29,7 @@ def _wipe_nvs() -> None:
         nvs.erase_key(MpNvsBackend.PAYLOAD_KEY)
         nvs.commit()
     except OSError:
-        # Key didn't exist — fine, already blank.
+        # Key didn't exist; already blank.
         pass
 
 
@@ -58,7 +58,7 @@ def test_kvstore_round_trips_through_real_nvs() -> None:
     store.commit()
 
     # Build a fresh KVStore against the same physical NVS namespace
-    # and confirm state is recovered — equivalent to a reboot.
+    # and confirm state is recovered (equivalent to a reboot).
     fresh = KVStore(backend=MpNvsBackend())
     assert fresh["boot_count"] == 1
     assert fresh["last_seen_ms"] == 12345

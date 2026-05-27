@@ -4,10 +4,10 @@ Persists the msgpack payload as ``/_chu_kv.msgpack`` (leading
 underscore keeps it out of file-manager listings).
 
 Atomicity comes from LittleFS's atomic-rename: writes land in
-``/_chu_kv.msgpack.tmp`` and rename over the canonical path only
+``/_chu_kv.msgpack.tmp`` and rename over the payload path only
 after ``os.sync()``.  Power loss mid-write either leaves the old
 file intact or commits the new one — never a partial state.  No
-CRC framing — LittleFS wear-levels and verifies block integrity.
+CRC framing: LittleFS wear-levels and verifies block integrity.
 
 Tests inject a filesystem substrate exposing ``open``, ``rename``,
 ``remove``, and ``sync``.
@@ -43,7 +43,7 @@ class MpLittlefsBackend(Backend):
     ``path`` defaults to ``/_chu_kv.msgpack``; ``filesystem`` defaults
     to the module's runtime shim and accepts any object exposing
     ``open`` / ``rename`` / ``remove`` / ``sync``.  ``capacity``
-    defaults to 16 KB — generous for most partitions, bounded so a
+    defaults to 16 KB: generous for most partitions, bounded so a
     runaway store can't fill the whole filesystem.
     """
 

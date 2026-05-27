@@ -3,7 +3,7 @@
 Cross-runtime compatible: runs under CPython pytest, and under
 MicroPython + CircuitPython unix-ports via ``pytest libraries/kvstore/
 tests --target unix-port`` (the ``chumicro-pytest-device`` plugin's
-unix-port backend).  Only ``MemoryBackend`` is exercised here — the
+unix-port backend).  Only ``MemoryBackend`` is exercised here; the
 per-runtime backends have their own functional-test suites under
 ``functional_tests/``.
 """
@@ -31,7 +31,7 @@ def test_default_backend_is_memory_on_cpython() -> None:
     Runtime-aware: under MP and CP unix-port the auto-detect path
     routes to the per-runtime backends (which are still stubs in this
     slice).  Their selection logic is exercised by the functional
-    suites — assert the CPython case here only.
+    suites. Assert the CPython case here only.
     """
     if sys.implementation.name != "cpython":
         skip("auto-detect on MP/CP unix-port is covered by the functional suites")
@@ -60,12 +60,12 @@ def test_concrete_backend_instance_accepted() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Mapping-shaped API
+# Mapping-style API
 # ---------------------------------------------------------------------------
 
 
 def test_set_get_delete() -> None:
-    """Basic dict-shaped read/write/delete cycle."""
+    """Basic dict-style read/write/delete cycle."""
     store = KVStore(backend="memory")
     store["boot_count"] = 1
     assert store["boot_count"] == 1
@@ -258,11 +258,7 @@ def test_reload_raises_on_non_dict_payload() -> None:
 
 
 def test_construction_with_truncated_msgpack_resets_silently() -> None:
-    """A power-loss-truncated payload (unpackb raises) is corruption, not a boot crash.
-
-    Guards the ``_load`` contract: construction never raises, even now
-    that ``unpackb`` rejects malformed framing with ``ValueError``.
-    """
+    """A power-loss-truncated payload (unpackb raises) is corruption, not a boot crash."""
     # bin8 claiming 200 bytes, only 2 supplied — unpackb raises ValueError.
     store = KVStore(backend=MemoryBackend(initial=b"\xc4\xc8\x01\x02"))
     assert store.is_corrupt is True
@@ -304,7 +300,7 @@ def test_construction_with_corrupt_backend_load_resets_silently() -> None:
     """``KVStoreCorrupt`` raised during auto-load is caught silently.
 
     Exercises the construction-path branch where the backend itself
-    (not the msgpack decoder) flags corruption — the
+    (not the msgpack decoder) flags corruption. The
     ``MemoryBackend.force_corrupt`` test hook stands in for CP NVM's
     real CRC-mismatch failure mode.
     """

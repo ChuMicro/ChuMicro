@@ -12,7 +12,7 @@ single backend's suite:
   without the test having to know which one was picked.
 
 The "across hard reset" durability guarantee is exercised
-implicitly via the fresh-``KVStore``-instance pattern — the same
+implicitly via the fresh-``KVStore``-instance pattern, the same
 code path the boot path takes after a power cycle.  Real
 power-cycle testing is out of scope for the pytest harness (the
 device connection dies on hard reset); the substrate-level
@@ -124,7 +124,7 @@ def test_explicit_littlefs_works_on_micropython_regardless_of_nvs() -> None:
     """`backend="littlefs"` is pickable on any MP runtime with a filesystem.
 
     Both Pi Pico W (no NVS) and Lolin S2 (has NVS) should let the
-    user opt into LittleFS storage — confirms the design point that
+    user opt into LittleFS storage. Confirms the design point that
     auto-detect is a default, not a constraint.
     """
     if not _IS_MICROPYTHON:
@@ -166,7 +166,7 @@ def test_corrupt_substrate_lets_app_keep_running() -> None:
         # Cleanup
         microcontroller.nvm[:] = b"\xff" * len(microcontroller.nvm)
     elif _IS_MICROPYTHON:
-        # MP NVS / LittleFS handle "missing" as empty (not corrupt) — they
+        # MP NVS / LittleFS handle "missing" as empty (not corrupt); they
         # don't have CP NVM's framing-mismatch class of failure.  Run the
         # cleaner "construction on never-written substrate works" check
         # here so the MP arm still exercises the auto-load resilience.
