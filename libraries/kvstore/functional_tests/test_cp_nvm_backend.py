@@ -105,13 +105,11 @@ def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
 
 
 def test_commit_if_changed_skips_unchanged_writes_on_real_flash() -> None:
-    """Wear defense: identical state means no flash write.
+    """``commit_if_changed`` with unchanged state skips the flash write (first-line wear defense).
 
-    Side-effect test: the slab bytes after the second call are
-    identical to the bytes after the first.  If an actual write
-    happened we'd see a fresh CRC computed over the same data
-    (unchanged) but the test confirms the flash bytes don't churn
-    — the no-op early-return is what saves cycles.
+    Asserts both that the second call returns ``False`` and that the
+    NVM slab bytes after the second call match the snapshot taken
+    after the first.
     """
     _wipe_nvm()
     store = KVStore(backend=CpNvmBackend())
