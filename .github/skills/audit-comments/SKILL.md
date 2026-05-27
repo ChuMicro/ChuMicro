@@ -67,14 +67,14 @@ A docstring's first sentence orients the reader: *what this returns / does*, in 
 
 A low-level helper's comment that names its downstream callers is a leak: the helper is now coupled, in prose, to code it should not know about.
 
-* **"Called from X / used by Y" in a helper docstring** — *"Called from each platform's `actual fun platformHttpClient(...)`"*.  The helper does not get to know who calls it.  Rewrite to the contract + an abstract usage hint: *"Installs the Ktor plugins shared by every platform client. Use as the shared config for downstream platform clients."*
+* **"Called from X / used by Y" in a helper docstring** — *"Called from each platform's `_setup_session(...)`"*.  The helper does not get to know who calls it.  Rewrite to the contract + an abstract usage hint: *"Installs the plugins shared by every HTTP client.  Use as the shared config for downstream clients."*
 * **Upstream comment encoding a downstream invariant** — *"the caller must call close() after this"* is a real contract and stays; *"the deploy CLI passes this as --foo"* names a specific consumer and goes.  Test: would the comment still be true and useful if a *different* caller used it?  If naming the caller is the only content, delete the naming.
 
 ### 3. Provenance and reference-project noise
 
 Comments that point outside the realm of *this* code are noise to the reader of this code.
 
-* **Mirror / port pointers** — *"Mirrors `PlatformOkHttpClient.cloudClient()`"*, *"ported from the upstream client repo"*, *"matches the reference impl"*.  The reader of this file cannot act on a sibling/upstream project name.  Delete the pointer; keep only the behavioral content (*"uses the OS trust store"*).  For shipped trees this is also `CHU006`'s deterministic subset (mono-repo refs) — but the broader provenance class (any external-repo / reference-impl name) is judgment, owned here.
+* **Mirror / port pointers** — *"Mirrors `paho.mqtt.client.Client.connect()`"*, *"ported from a reference MQTT implementation"*, *"matches the reference impl"*.  The reader of this file cannot act on a sibling/upstream project name.  Delete the pointer; keep only the behavioral content (*"uses the OS trust store"*).  For shipped trees this is also `CHU006`'s deterministic subset (mono-repo refs) — but the broader provenance class (any external-repo / reference-impl name) is judgment, owned here.
 * **Enumerated mirror lists** — a docstring whose bulk is *"- repo-A does it with X; - repo-B does it with Y"*.  The reader needs *what this code does*, not a comparative survey.  Rewrite to the irreducible technical why (the constraint that forced this approach), drop the survey.  Worked shape: a 22-line cert-parsing docstring enumerating two reference impls collapses to 6 lines stating the JVM/Swift constraint, the byte-reinterpret approach, and the one load-bearing safety clause.
 
 ### 4. Signal-to-noise

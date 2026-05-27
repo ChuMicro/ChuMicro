@@ -29,13 +29,13 @@ Usage
 ::
 
     # Default: just listen for the device's bench-summary verdict.
-    python bench_host.py --broker 172.16.1.15
+    python bench_host.py --broker mqtt.example.com
 
     # Publish a 64 KB hostile payload first, then listen for the verdict.
-    python bench_host.py --broker 172.16.1.15 --hostile
+    python bench_host.py --broker mqtt.example.com --hostile
 
     # Different client_id (matches the CLIENT_ID constant in bench.py).
-    python bench_host.py --broker 172.16.1.15 --client-id my-thing
+    python bench_host.py --broker mqtt.example.com --client-id my-thing
 
 The device's bench publishes its verdict after the keepalive scenario
 ends (~3.5 minutes after start).  This script exits after the verdict

@@ -469,7 +469,7 @@ Mosquitto 2.0 macOS quirk encountered + worked around: brew Mosquitto fails with
 
 ### Phase 6 (original): `chumicro-mqtt` refactor
 
-Port and redesign the ~1043-line MQTT client at `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` into a new library.  Keep the solid parts; rewrite the parts that got weird.  Land on top of `chumicro-sockets` (Phase 5) and `chumicro-timing` + `chumicro-runner`.  QoS 0 and QoS 1 supported; internal shape permits QoS 2 but it is not implemented.
+Port and redesign the ~1043-line MQTT client at `a previous-generation MQTT reference implementation` into a new library.  Keep the solid parts; rewrite the parts that got weird.  Land on top of `chumicro-sockets` (Phase 5) and `chumicro-timing` + `chumicro-runner`.  QoS 0 and QoS 1 supported; internal shape permits QoS 2 but it is not implemented.
 
 #### Preserve from the original
 
@@ -553,7 +553,7 @@ A user clones the template, runs `python run.py setup`, plugs in a board, runs `
 
 ## Notes
 
-- `chumicro-mqtt` source-of-truth during refactor: read the original at `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` and treat it as prior art — reshape, don't port verbatim.
+- `chumicro-mqtt` source-of-truth during refactor: read the original at `a previous-generation MQTT reference implementation` and treat it as prior art — reshape, don't port verbatim.
 - `workspace.yml` quality knobs (`lint`, `coverage_threshold`) let the user dial their comfort.  Defaults are permissive (lint enabled, no coverage gate).  `AGENTS.md` in the template tells LLM agents how to read them.
 - Library sequencing is a guideline, not a hard ordering — Phase 3a and 3b can interleave, and Phase 2 can start before Phase 1 finishes if a developer-pair splits the work.  Phase 4 is the only gate that genuinely requires everything before it.
 

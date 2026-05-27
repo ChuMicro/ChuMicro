@@ -11,10 +11,10 @@ This skill is narrower than `/audit-workspace` (which covers library shapes, dep
 
 ## Scope
 
-* **Mono-repo:** `/Users/chuxor/circuitpython/chumicro/`
+* **Mono-repo:** `$CHUMICRO_ROOT` (this repo)
   * `libraries/*/{src,README.md}`, `workbench/*/{src,README.md}`, `support/test_harness/src/`
   * Any payload generators in `scripts/` whose output reaches a consumer's machine (config-file generators, bundle-README generators, scaffolders).
-* **Workspace-template repo:** `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template/`
+* **Workspace-template repo:** `$WORKSPACE_TEMPLATE_ROOT` (sibling checkout of the workspace-template repo)
   * Whole repo — every file a fresh `git clone` of the starter receives.
 
 Argument: none, or `--repo mono` / `--repo template` / `--pattern <N>` to scope.  Default is both repos, all eight patterns.
@@ -111,11 +111,11 @@ grep -rn "carved out of\|extracted from the chumicro" workbench/*/README.md libr
 
 The starter repo (a fresh `git clone` for users) names the upstream mono-repo, links to its `plans/`, describes itself as a "downstream" or "scaled-down" version, or hard-codes the upstream directory shape (`<chumicro_path>/libraries/*` walks).
 
-**Search scope:** entire `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template/`.
+**Search scope:** entire `$WORKSPACE_TEMPLATE_ROOT`.
 
 **Search recipes:**
 ```
-cd /Users/chuxor/circuitpython/ChuMicro-Workspace-Template
+cd "$WORKSPACE_TEMPLATE_ROOT"
 grep -rn -iE "chumicro mono[\s-]?repo|monorepo" .
 grep -rn -E "github\.com/ChuMicro/ChuMicro\b" .
 grep -rn -E "\bDecision\s*0?[0-9]{3,4}\b" .
@@ -221,8 +221,8 @@ Publishable-isolation audit
 ============================
 
 Repos audited:
-  mono       /Users/chuxor/circuitpython/chumicro
-  template   /Users/chuxor/circuitpython/ChuMicro-Workspace-Template
+  mono       $CHUMICRO_ROOT
+  template   $WORKSPACE_TEMPLATE_ROOT
 
 Pattern hits (P1–P8):
 

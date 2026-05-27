@@ -587,7 +587,7 @@ class TestEnterEsp32RomBootloader:
         vanished runtime port."""
         device = Device(
             transport="circuitpython",
-            address="/dev/cu.usbmodem84722E7490C31",
+            address="/dev/cu.usbmodemABCD1234",
         )
         monkeypatch.setattr(
             "chumicro_deploy.firmware._list_candidate_serial_ports",

@@ -127,7 +127,7 @@ Battery-powered boards are a different runner shape entirely — they wake perio
 
 ### Pi Pico W MP Layer-3 broker round-trip — MP socket default-blocking mode (resolved 2026-04-26)
 
-**Symptom:** the Layer-3 deploy succeeded, the device joined wifi (verified `sensor: wifi connected at 172.16.1.2`), reached the broker (Mosquitto's log: `New client connected from 172.16.1.2:55035 as chumicro-layer3-sensor`, `Sending CONNACK to chumicro-layer3-sensor`), and then... nothing.  The device closed the connection after exactly 5 s — `chumicro-mqtt`'s default `ack_timeout_seconds`.  Reconnect, CONNACK, 5 s, close.  Forever.  No publishes ever reached the broker.
+**Symptom:** the Layer-3 deploy succeeded, the device joined wifi (verified `sensor: wifi connected at 192.0.2.2`), reached the broker (Mosquitto's log: `New client connected from 192.0.2.2:55035 as chumicro-layer3-sensor`, `Sending CONNACK to chumicro-layer3-sensor`), and then... nothing.  The device closed the connection after exactly 5 s — `chumicro-mqtt`'s default `ack_timeout_seconds`.  Reconnect, CONNACK, 5 s, close.  Forever.  No publishes ever reached the broker.
 
 **Root cause:** chumicro-sockets' MP adapter `connect_tcp` returned a stdlib socket left in *blocking* mode — MP defaults match CPython.  chumicro-mqtt's tick-based RX path expected EAGAIN on no-data, never a blocking recv.  So `recv_into` blocked the runner's tick, the publisher's `handle()` never fired, and after MP's hidden long-poll timed out the deadline check faulted to `FAILED`, self-heal rebuilt — same blocking mode — cycle.
 

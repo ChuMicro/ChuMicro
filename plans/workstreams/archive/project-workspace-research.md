@@ -97,7 +97,7 @@ Grep of MP tree returns zero matches for `settings.toml`.  Confirms it is CP-onl
 
 ## pythonProject3 MQTT refactor reference
 
-File: `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` (~1043 lines).
+File: `a previous-generation MQTT reference implementation` (~1043 lines).
 
 ### Preserve (solid)
 
@@ -326,8 +326,8 @@ Someone has a thing running on a wall for >30 days and actually needs to push a 
 
 ## Runtime source trees (pinned, gitignored)
 
-- CircuitPython: `/Users/chuxor/circuitpython/chumicro/.tools/circuitpython-10.1.4/`
-- MicroPython: `/Users/chuxor/circuitpython/chumicro/.tools/micropython-v1.26.0/`
+- CircuitPython: `$CHUMICRO_ROOT/.tools/circuitpython-10.1.4/`
+- MicroPython: `$CHUMICRO_ROOT/.tools/micropython-v1.26.0/`
 - Rebuild via `python scripts/run.py prepare-circuitpython` / `prepare-micropython` if missing.
 
 ## Research URLs (for re-check)

@@ -174,7 +174,7 @@ merged["mqtt.broker.port"] = BROKER_PORT
 mqtt_config = RuntimeConfig(merged)
 ```
 
-Same final dict; no behavioral change.  Bench-validated: `python scripts/run.py deploy-example mqtt circuitpython_telemetry --device pi-pico-w-circuitpython-board --non-interactive` deployed without `SyntaxError`, executed past line 162 (the original failure point), and reached `WIFI_OK ip=172.16.1.21` — proof the CP parser accepts the new shape.  Pre-fix grep confirmed this was the only `**`-unpack idiom in `libraries/*/examples/`, so no audit overhang.
+Same final dict; no behavioral change.  Bench-validated: `python scripts/run.py deploy-example mqtt circuitpython_telemetry --device pi-pico-w-circuitpython-board --non-interactive` deployed without `SyntaxError`, executed past line 162 (the original failure point), and reached `WIFI_OK ip=192.0.2.21` — proof the CP parser accepts the new shape.  Pre-fix grep confirmed this was the only `**`-unpack idiom in `libraries/*/examples/`, so no audit overhang.
 
 **Not done (deliberately).**  We did *not* run the minimal CP-REPL probe of `d = {**{}, "k": 1}` to determine whether CircuitPython 10.2.0-rc.0 rejects the entire PEP 448 dict-`**unpack` idiom or just the multi-line continuation.  The fix is robust either way — the question only matters for filing an upstream CircuitPython issue.  Defer until the same idiom resurfaces somewhere else; if it does, run the probe then.
 
