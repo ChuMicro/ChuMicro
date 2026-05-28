@@ -211,13 +211,15 @@ cp .scratch/regen-comments/<name>/<tree>/consolidated/*.py libraries/<name>/<tre
 
 ### 5. Mechanical verification — and writer re-dispatch on lint failure
 
-**5a. Byte-identity gate.** Confirm the writer didn't change code:
+**5a. Byte-identity gate.** Confirm the writer (or judge) didn't change code — strip the applied source and diff against the original baseline:
 
 ```bash
-diff -u .scratch/regen-comments/<name>/<tree>/baseline/<file>.py libraries/<name>/<tree>/.../<file>.py | grep -v '^[+-]\s*"\|^[+-]\s*#\|^[+-]\s*$' | head -30
+python scripts/run.py strip-comments libraries/<name>/<tree>/<package>/ /tmp/strip-verify-<name>-<tree> --quiet && diff -r /tmp/strip-verify-<name>-<tree> .scratch/regen-comments/<name>/<tree>/baseline/
 ```
 
-That filter shows lines changed outside docstrings and comments. If anything appears, surface to the user and stop — the writer broke the byte-identity rule. Don't proceed to lint until byte-identity is clean; spending tokens on E501 re-rolls against already-broken output wastes them.
+Silent diff means code is byte-identical (only docstrings and comments differ). If diff prints anything, somebody broke the byte-identity rule — surface to the user and stop. Don't proceed to lint until byte-identity is clean; E501 re-rolls against already-broken output waste tokens.
+
+(A naive `diff -u baseline applied | grep -v '^[+-]\s*"'` filter is fragile here — it doesn't catch multi-line docstring continuation lines, so it produces noisy "code changed!" false positives. Strip-and-diff is the rigorous check; use it.)
 
 **5b. Lint and writer re-dispatch on E501.** Run lint:
 
