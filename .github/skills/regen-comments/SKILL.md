@@ -14,7 +14,7 @@ Four roles cooperate:
 3. **Judge agent** (`commenter-judge`): one judge per source file reads the four candidates plus the stripped source, picks the best docstring per symbol per its quality criteria, emits one consolidated file plus a picks rationale. Sits between writers and verifier; the verifier never sees the candidate pool, only the consolidated output.
 4. **Verifier agent** (`commenter-verifier`): reviews the consolidated output as a cold reader, blind to the baseline. Flags rule violations and cold-reader failures by tier. Surfaces ambiguous cases for human-only judgment.
 
-You (the assistant invoking this skill) are the **director**. You orchestrate and never auto-commit. See `## The director's bias problem` for why the verifier exists.
+You (the assistant invoking this skill) are the **director**. You orchestrate but do not judge — your bias from reading the baseline means you can't fairly review the writer's output as a cold reader. That's why the verifier exists.
 
 ## When to reach for this
 
@@ -112,9 +112,7 @@ For each tree, dispatch FOUR writer agents in parallel. The candidate pool split
 | `tests/`, `functional_tests/` | 4 × `commenter-tests` | same |
 | `examples/` | 4 × `commenter-examples` | same |
 
-Batch all writer dispatches for a tree (or all trees in `--tree all` mode) into one assistant message — the harness runs concurrent calls from a single message; sequential messages serialize them. The Multi-library section covers batch splitting when total dispatches exceed the harness budget.
-
-Use the `Agent` tool with the matching `subagent_type`:
+Batch all writer dispatches for the tree into one assistant message. Use the `Agent` tool with the matching `subagent_type`:
 
 ```
 Agent(
@@ -125,8 +123,6 @@ Agent(
     run_in_background=True,
 )
 ```
-
-The harness loads the matching `.claude/agents/<persona>.md` as the subagent's system prompt automatically. The director does NOT read or embed any persona file — that would duplicate the rules, waste tokens, and let the embedded copy drift from the source .md.
 
 **Task prompt — minimal, paths only, per-run output dir:**
 
@@ -146,10 +142,10 @@ Rules:
 Report only the list of files you wrote.
 ````
 
-**The task prompt must not contain:**
+**Critical: what the task prompt must NOT contain.** These caused real damage during persona development:
 
-- Technical rationale for why the code is the way it is (eager-import explanations, constant-value justifications) — the writer treats anything in the prompt as comment-worthy and puts it back into the source
-- Identifier examples from the target code (`_last_beat_ms`, `period_ms`) — leaks the answer
+- Technical rationale for why the code is the way it is (eager-import explanations, constant-value justifications, etc.) — the writer treats anything in the prompt as comment-worthy and puts it back into the source
+- Identifier examples from the target code (`_last_beat_ms`, `period_ms`, etc.) — leaks the answer
 - "Why" hints about constants, design choices, side-effects
 - Cross-file context the writer would otherwise have to derive
 
@@ -174,8 +170,6 @@ Agent(
     run_in_background=True,
 )
 ```
-
-The harness loads `.claude/agents/commenter-judge.md` as the subagent's system prompt automatically; it carries the quality criteria. The director does NOT read or embed the persona.
 
 **Task prompt:**
 
@@ -209,7 +203,7 @@ cp .scratch/regen-comments/<name>/<tree>/consolidated/*.py libraries/<name>/<tre
 
 **Success criteria:** consolidated `.py` files copied to source paths under `libraries/<name>/<tree>/...`; per-file picks reports remain at `.scratch/regen-comments/<name>/<tree>/consolidated/<file>.py.picks.md` for human audit.
 
-### 5. Mechanical verification — and writer re-dispatch on lint failure
+### 5. Mechanical verification
 
 **5a. Byte-identity gate.** Confirm the writer (or judge) didn't change code — strip the applied source and diff against the original baseline:
 
@@ -217,11 +211,11 @@ cp .scratch/regen-comments/<name>/<tree>/consolidated/*.py libraries/<name>/<tre
 python scripts/run.py strip-comments libraries/<name>/<tree>/<package>/ /tmp/strip-verify-<name>-<tree> --quiet && diff -r /tmp/strip-verify-<name>-<tree> .scratch/regen-comments/<name>/<tree>/baseline/
 ```
 
-Silent diff means code is byte-identical (only docstrings and comments differ). If diff prints anything, somebody broke the byte-identity rule — surface to the user and stop. Don't proceed to lint until byte-identity is clean; E501 re-rolls against already-broken output waste tokens.
+Silent diff means code is byte-identical (only docstrings and comments differ). If diff prints anything, somebody broke the byte-identity rule — surface to the user and stop.
 
 (A naive `diff -u baseline applied | grep -v '^[+-]\s*"'` filter is fragile here — it doesn't catch multi-line docstring continuation lines, so it produces noisy "code changed!" false positives. Strip-and-diff is the rigorous check; use it.)
 
-**5b. Lint and writer re-dispatch on E501.** Run lint:
+**5b. Lint — trim E501s inline.** Run lint:
 
 ```bash
 .venv/bin/python scripts/run.py lint 2>&1 | tail -30
@@ -229,56 +223,9 @@ Silent diff means code is byte-identical (only docstrings and comments differ). 
 
 The most common error is **E501 (line too long > 100 chars)** — none of the writer personas enforce line length; ruff does.
 
-Don't trim offending lines yourself. You've seen the baseline, so trimming injects word-choice judgment that belongs to a writer. Re-dispatch the **default writer per tree** to shorten the failing lines:
+Trim offending lines inline. Constraints: don't turn the line into word soup, don't reach for bland filler words to pad, and don't add `the` as part of the trim. The writer's verb and concrete nouns are the load-bearing words; tighten by dropping connectives or rephrasing in equally concrete language. Re-run lint to confirm.
 
-| Tree | Re-roll persona |
-|------|----------------|
-| `src/` | `commenter-casual-friendly` |
-| `tests/`, `functional_tests/` | `commenter-tests` |
-| `examples/` | `commenter-examples` |
-
-The judge-picked docstring may have come from any of the four candidate runs (G or F voice for `src/`), but re-rolling just shortens prose; persona choice doesn't change the contract. Use the default per tree.
-
-```
-Agent(
-    subagent_type="<default re-roll persona per the table above>",
-    model="opus",
-    description="<tree> lint re-dispatch",
-    prompt="<re-dispatch task — see template below>",
-    run_in_background=True,
-)
-```
-
-**Re-dispatch task prompt:**
-
-````
-The following docstrings in <path> exceed 100 characters and ruff is rejecting them with E501.
-Shorten each to fit, preserving its meaning. Don't change code. Don't add or remove sections.
-Replace only the listed lines.
-
-Use the `Edit` tool, one Edit call per failing line. Do NOT call `Write` — it overwrites the
-entire file with whatever content you pass, and a re-roll that only saw the failing lines
-will truncate every part of the file it didn't see. If `Edit` is unavailable, stop and report
-the missing tool grant rather than reaching for `Write`.
-
-File: <abs path>
-
-Line <N> (currently <chars> chars):
-<exact current text>
-
-Line <N> (currently <chars> chars):
-<exact current text>
-
-...
-
-Report the updated docstrings (one per failing line). Don't restate unchanged content.
-````
-
-The `Edit` instruction is load-bearing. A re-roll agent that has `Write` but not `Edit` will read a fragment of the file and call `Write` with that fragment, truncating everything it did not see. The writer personas now grant `Edit` (see `.claude/agents/commenter-*.md`); this prompt names the tool the agent must reach for.
-
-Apply the writer's response — only to the specific lines named. Re-run lint. If E501s persist, dispatch one more re-roll with the still-failing lines. If a second re-roll still fails, surface to the user as a stuck case.
-
-This keeps word choice in the writer's hands and means the verifier (next step) reads what the writer actually produced, not director edits.
+Note the inline trims in the Step 9 ready-to-commit summary so the human reviewer sees which docstrings the director re-shaped.
 
 **5c. Full preflight.** Once lint is clean:
 
@@ -286,7 +233,7 @@ This keeps word choice in the writer's hands and means the verifier (next step) 
 .venv/bin/python scripts/run.py preflight --coverage-threshold 94 2>&1 | tail -15
 ```
 
-**Success criteria:** byte-identity diff PASS; lint PASS or stuck-case surfaced; preflight PASS.
+**Success criteria:** byte-identity diff PASS; lint PASS (E501s trimmed inline if any, noted for the summary); preflight PASS.
 
 ### 6. Dispatch the verifier agent(s)
 
@@ -301,8 +248,6 @@ Agent(
     run_in_background=True,
 )
 ```
-
-The harness loads `.claude/agents/commenter-verifier.md` as the subagent's system prompt. Director does not read or embed the persona.
 
 **Task prompt:**
 
@@ -386,11 +331,11 @@ For each picked finding, fire a per-finding follow-up:
 > "Finding <file:line> — how to handle?" `header: <ref>`
 > Options:
 > - "Keep — accept the writer's text" — entry marked resolved; no Edit
-> - "Edit inline — collect revised wording, then Edit" — free-form follow-up for the wording
-> - "Re-dispatch the writer on this line" — paths + diagnostic only, no rationale or identifier examples (mirrors Step 5's E501 re-dispatch contract)
+> - "Edit inline — collect revised wording, then Edit" — free-form follow-up for the wording; director may also rewrite inline under the Step 5b quality constraints (no word soup, no bland padding, no inserted `the`)
+> - "Re-dispatch the writer on this line" — send paths + the verifier's diagnostic only, no rationale and no identifier examples
 > - "Skip — address later" — entry recorded as unresolved in the final report
 
-Apply user revisions via `Edit`. Re-dispatch the writer per Step 5's template.
+Apply user revisions via `Edit`. For "Re-dispatch the writer on this line", dispatch the matching writer persona with the diagnostic and the target line — same blindness contract as Step 3 (no rationale, no leaked identifiers).
 
 **Report format:**
 
