@@ -1,17 +1,18 @@
 ---
 name: regen-comments
-description: Regenerate code comments and docstrings from scratch. Strips existing prose, drafts new docstrings via a writer agent blind to the original, grades the result via a verifier agent blind to the baseline, and prints a tiered checklist for human review; never auto-commits. Use when comments have degraded past what /audit-comments can salvage, when a library was written hastily and needs a real doc pass, or when validating the writer persona against a new library. Examples: "/regen-comments chumicro_kvstore", "regenerate comments for chumicro_mqtt from scratch", "validate the commenter persona against a new library"
+description: Regenerate code comments and docstrings from scratch. Strips existing prose, drafts new docstrings via four parallel writer runs blind to the original (mixed personas for src/), consolidates per file via a judge agent that picks the best docstring per symbol, grades the consolidated output via a verifier blind to the baseline, and prints a tiered checklist for human review; never auto-commits. Use when comments have degraded past what /audit-comments can salvage, when a library was written hastily and needs a real doc pass, or when validating the writer persona against a new library. Examples: "/regen-comments chumicro_kvstore", "regenerate comments for chumicro_mqtt from scratch", "validate the commenter persona against a new library"
 ---
 
 # Regenerate Comments
 
 Strip-and-regenerate pass on a target's docstrings and comments. Unlike `/audit-comments` (which judges and rewrites existing prose), this skill discards everything and rewrites from a fresh read of code.
 
-Three roles cooperate:
+Four roles cooperate:
 
 1. **Stripper** (`scripts/strip_comments.py`): removes docstrings and non-lint comments, inserts `pass` into bodies that would become empty, verifies the baseline parses.
-2. **Writer agent** (one of `commenter-casual-friendly` for `src/`, `commenter-tests` for `tests/` + `functional_tests/`, `commenter-examples` for `examples/`): writes new docstrings + comments from the baseline. Sees only stripped code; never sees the original prose or technical rationale.
-3. **Verifier agent** (`commenter-verifier`): reviews the writer's output as a cold reader, blind to the baseline. Flags rule violations and cold-reader failures by tier. Surfaces ambiguous cases for human-only judgment.
+2. **Writer agents** (`commenter-casual-friendly` and `commenter-casual-friendly-prose` for `src/`; `commenter-tests` for `tests/` + `functional_tests/`; `commenter-examples` for `examples/`): four runs per tree write new docstrings + comments from the baseline. Each run sees only stripped code; never sees the original prose or technical rationale. For `src/`, the four runs split 2/2 across the two writer personas to widen the candidate pool the judge picks from.
+3. **Judge agent** (`commenter-judge`): one judge per source file reads the four candidates plus the stripped source, picks the best docstring per symbol per its quality criteria, emits one consolidated file plus a picks rationale. Sits between writers and verifier; the verifier never sees the candidate pool, only the consolidated output.
+4. **Verifier agent** (`commenter-verifier`): reviews the consolidated output as a cold reader, blind to the baseline. Flags rule violations and cold-reader failures by tier. Surfaces ambiguous cases for human-only judgment.
 
 You (the assistant invoking this skill) are the **director**. You orchestrate and never auto-commit. See `## The director's bias problem` for why the verifier exists.
 
@@ -101,25 +102,25 @@ cp -r libraries/<name>/<tree>/.../*.py .scratch/regen-comments/<name>/<tree>/ori
 
 **Success criteria:** baseline at `.scratch/regen-comments/<name>/<tree>/baseline/` exists and parses with `ast.parse`; original at `.scratch/regen-comments/<name>/<tree>/original/` mirrors the pre-strip source; `libraries/<name>/<tree>/` files are unchanged.
 
-### 3. Dispatch the writer agent(s)
+### 3. Dispatch the writer agents — four runs per tree
 
-For each tree (or library, in multi-library mode), dispatch one writer agent in parallel. Batch all writer-agent dispatches into one assistant message — the harness runs concurrent calls from a single message; sequential messages serialize them. The Multi-library section restates this; the contract is the same in `--tree all` mode.
+For each tree, dispatch FOUR writer agents in parallel. The candidate pool splits across two personas for `src/` (which has two writer personas); other trees use four runs of a single persona.
 
-**Pick the writer persona per tree** — three personas cover different file conventions:
+| Tree | Writer dispatches | Output paths |
+|------|-------------------|--------------|
+| `src/` | 2 × `commenter-casual-friendly` (G voice — strict one-sentence summaries) + 2 × `commenter-casual-friendly-prose` (F voice — slim baseline + 1-2 sentence allowance) | `.scratch/regen-comments/<name>/<tree>/run-1/` through `run-4/` |
+| `tests/`, `functional_tests/` | 4 × `commenter-tests` | same |
+| `examples/` | 4 × `commenter-examples` | same |
 
-| Tree | Writer persona | Why this persona |
-|------|----------------|------------------|
-| `src/` | `commenter-casual-friendly` | Production-code docstrings: one-sentence summaries, Args/Returns/Raises only when earned, no body paragraphs |
-| `tests/`, `functional_tests/` | `commenter-tests` | Test docstrings: one-line claim of what's asserted in domain terms, no Args/Returns/Raises ever, causal connectors require real causation |
-| `examples/` | `commenter-examples` | Pedagogical: module docstrings carry a short body (use case + how to run + `Example output::` block); inline comments explain why a caller would make a choice |
+Batch all writer dispatches for a tree (or all trees in `--tree all` mode) into one assistant message — the harness runs concurrent calls from a single message; sequential messages serialize them. The Multi-library section covers batch splitting when total dispatches exceed the harness budget.
 
 Use the `Agent` tool with the matching `subagent_type`:
 
 ```
 Agent(
-    subagent_type="<commenter-casual-friendly | commenter-tests | commenter-examples>",
+    subagent_type="<commenter-casual-friendly | commenter-casual-friendly-prose | commenter-tests | commenter-examples>",
     model="opus",
-    description="<tree-or-library> writer",
+    description="<tree> writer run-<N>",
     prompt="<task only — see template below>",
     run_in_background=True,
 )
@@ -127,14 +128,14 @@ Agent(
 
 The harness loads the matching `.claude/agents/<persona>.md` as the subagent's system prompt automatically. The director does NOT read or embed any persona file — that would duplicate the rules, waste tokens, and let the embedded copy drift from the source .md.
 
-**Task prompt — minimal, paths only:**
+**Task prompt — minimal, paths only, per-run output dir:**
 
 ````
 Read these stripped Python source files:
 <list of input paths under .scratch/regen-comments/<name>/<tree>/baseline/>
 
 Write commented versions to:
-<list of output paths under .scratch/regen-comments/<name>/<tree>/output/>
+<list of output paths under .scratch/regen-comments/<name>/<tree>/run-<N>/>
 
 Rules:
 - Code body byte-identical to baseline.
@@ -154,19 +155,59 @@ Report only the list of files you wrote.
 
 If the writer can't figure out the why from a fresh code read, the correct outcome is no comment for that line.
 
-Wait for all writer agents to complete before proceeding.
+Wait for all four writer agents per tree to complete before proceeding to the judge step.
 
-**Success criteria:** writer agents dispatched in one Agent batch per tree (or library); all returned with file lists; no rationale-leak words in the task prompts.
+**Success criteria:** four writer dispatches per tree (mixed-persona for `src/`, single-persona for other trees); all returned with file lists; per-run output dirs `.scratch/regen-comments/<name>/<tree>/run-1/` through `run-4/` populated; no rationale-leak words in the task prompts.
 
-### 4. Apply the writer's output to source
+### 3b. Dispatch the judge agents — one per file
 
-```bash
-cp -r .scratch/regen-comments/<name>/<tree>/output/* libraries/<name>/<tree>/.../
+After all four writer runs land, dispatch ONE judge agent per source file. Each judge reads the stripped source plus the four candidate commented versions for that file, picks the best docstring per symbol per its quality criteria, and emits a consolidated file plus a picks rationale.
+
+The judge picks across the candidate pool — for `src/` this means picking across the G + F voices, choosing whichever phrasing reads most clearly per symbol. The verifier will see only the consolidated output, never the candidates.
+
+```
+Agent(
+    subagent_type="commenter-judge",
+    model="opus",
+    description="<tree>/<file> judge",
+    prompt="<task only — see template below>",
+    run_in_background=True,
+)
 ```
 
-(Adjust path for the tree.)
+The harness loads `.claude/agents/commenter-judge.md` as the subagent's system prompt automatically; it carries the quality criteria. The director does NOT read or embed the persona.
 
-**Success criteria:** writer output copied to source paths under `libraries/<name>/<tree>/...`.
+**Task prompt:**
+
+````
+Source: <baseline/<file>.py absolute path>
+Candidates: <list of run-1..run-4/<file>.py absolute paths>
+Tree allowance: <text from the per-tree table below>
+Output: <consolidated/<file>.py absolute path>
+Picks report: <consolidated/<file>.picks.md absolute path>
+````
+
+**Per-tree allowance text** — paste the matching block as `Tree allowance:` value (same allowances apply to the verifier at Step 6):
+
+| Tree | Allowance text |
+|------|---------------|
+| `src/` | None — apply default rules. |
+| `tests/`, `functional_tests/` | Test function docstrings carry one summary line with no `Args:` / `Returns:` / `Raises:` sections; module docstrings may carry one `Cross-runtime: ...` line as a short second paragraph. |
+| `examples/` | Module docstrings carry a short body: a use-case sentence, an optional `Runs on ...` cross-runtime declaration, and an `Example output::` block. Inline comments are pedagogical. Do not penalize module-doc bodies of this shape. |
+
+Batch all judge dispatches for a tree into one assistant message; for a 4-file `src/` tree that's 4 parallel judges. Wait for all judges before applying.
+
+**Success criteria:** one judge per source file dispatched; `.scratch/regen-comments/<name>/<tree>/consolidated/<file>.py` and `<file>.picks.md` exist for every source file in the tree.
+
+### 4. Apply the consolidated output to source
+
+```bash
+cp .scratch/regen-comments/<name>/<tree>/consolidated/*.py libraries/<name>/<tree>/.../
+```
+
+(Adjust path for the tree. Use `*.py` rather than `*` so the per-file `.picks.md` reports stay in `.scratch/` for human audit — they aren't part of the source tree.)
+
+**Success criteria:** consolidated `.py` files copied to source paths under `libraries/<name>/<tree>/...`; per-file picks reports remain at `.scratch/regen-comments/<name>/<tree>/consolidated/<file>.py.picks.md` for human audit.
 
 ### 5. Mechanical verification — and writer re-dispatch on lint failure
 
@@ -186,11 +227,19 @@ That filter shows lines changed outside docstrings and comments. If anything app
 
 The most common error is **E501 (line too long > 100 chars)** — none of the writer personas enforce line length; ruff does.
 
-Don't trim offending lines yourself. You've seen the baseline, so trimming injects word-choice judgment that belongs to the writer. Re-dispatch the writer with the failing lines — use the same persona that produced the file (per the Step 3 per-tree table):
+Don't trim offending lines yourself. You've seen the baseline, so trimming injects word-choice judgment that belongs to a writer. Re-dispatch the **default writer per tree** to shorten the failing lines:
+
+| Tree | Re-roll persona |
+|------|----------------|
+| `src/` | `commenter-casual-friendly` |
+| `tests/`, `functional_tests/` | `commenter-tests` |
+| `examples/` | `commenter-examples` |
+
+The judge-picked docstring may have come from any of the four candidate runs (G or F voice for `src/`), but re-rolling just shortens prose; persona choice doesn't change the contract. Use the default per tree.
 
 ```
 Agent(
-    subagent_type="<same persona that wrote this tree>",
+    subagent_type="<default re-roll persona per the table above>",
     model="opus",
     description="<tree> lint re-dispatch",
     prompt="<re-dispatch task — see template below>",
@@ -269,15 +318,9 @@ Do not read any other files. Judge each file standalone as a cold reader.
 Report the findings.
 ````
 
-**Per-tree allowance text** — paste the matching block into the `<per-tree allowance block>` slot:
+**Per-tree allowance text** — same table as Step 3b above; paste the matching block into the `<per-tree allowance block>` slot.
 
-| Tree | Allowance text |
-|------|---------------|
-| `src/` | None — apply default rules. |
-| `tests/`, `functional_tests/` | Test function docstrings carry one summary line with no `Args:` / `Returns:` / `Raises:` sections; module docstrings may carry one `Cross-runtime: ...` line as a short second paragraph. |
-| `examples/` | Module docstrings carry a short body: a use-case sentence, an optional `Runs on ...` cross-runtime declaration, and an `Example output::` block. Inline comments are pedagogical (why a caller would make this choice). Do not flag module-doc bodies of this shape as CRITICAL body-paragraph violations. |
-
-The verifier persona is generic; without this allowance line it applies src/-style rules to test and example files and produces false-positive CRITICALs on the body-paragraph rule. The allowance is the bridge between the generic verifier and the per-tree writer persona.
+The verifier persona is generic; without this allowance line it applies src/-style rules to test and example files and produces false-positive CRITICALs on the body-paragraph rule.
 
 The verifier is blind to the baseline — its task prompt never references `.scratch/regen-comments/`, and its system prompt (the persona file) never sees the baseline either.
 
@@ -407,15 +450,17 @@ Do NOT commit. Print a one-line ready-to-commit summary; user runs `/git-commit`
 
 For `/regen-comments <lib1> <lib2> <lib3>`:
 
-- Strip all targets first (sequential, fast — pure local I/O)
-- Dispatch ALL writer agents in parallel — one Agent call per (library, tree) pair, all in one message
-- Wait for writer agents to complete
-- Apply outputs sequentially (avoids races on shared files like VERSION)
-- Run lint + preflight ONCE across all changes
-- Dispatch ALL verifier agents in parallel
-- Consolidate findings across libraries, sorted by tier within each file
+- Strip all targets first (sequential, fast — pure local I/O).
+- **Writer batch:** Dispatch ALL writer agents — N=4 per (library, tree) pair. The harness caps parallel agents at ~10 per message, so 3 libraries × 4 trees × 4 writers = 48 writer dispatches split across ≥5 sequential batches.
+- Wait for all writer batches before judges run.
+- **Judge batch:** Dispatch ALL judge agents — one per source file. Counts vary per tree; for example 3 libs × ~5 files/tree × 4 trees ≈ 60 judges, split across batches of ≤10.
+- Wait for all judge batches.
+- Apply consolidated outputs sequentially (avoids races on shared files like VERSION).
+- Run lint + preflight ONCE across all changes.
+- **Verifier batch:** Dispatch ALL verifier agents (3 libs × 4 trees = 12 verifiers — one or two batches).
+- Consolidate findings across libraries, sorted by tier within each file.
 
-For 3 libraries × `--tree all` = 12 writer + 12 verifier agents in flight. The Agent tool harness handles this; just batch the dispatches into single messages.
+The 10-agent batch budget makes multi-library + multi-tree runs noticeably slower than a single library; budget for several minutes of wall-clock per stage. Per-tree intermediate dirs (`run-1/` … `run-4/`, `consolidated/`) under `.scratch/regen-comments/<name>/<tree>/` keep dispatches isolated so batches can complete in any order without colliding.
 
 ## The director's bias problem
 
@@ -431,17 +476,20 @@ Step 6b puts the saw-the-baseline read to work in a structured diff. The bias be
 
 Observable post-state of a completed regen-comments run:
 
+- Stripped baseline at `.scratch/.../baseline/`, original at `.scratch/.../original/`, four writer-run dirs at `.scratch/.../run-1/` through `run-4/`, judge-consolidated `.py` files plus `.picks.md` reports at `.scratch/.../consolidated/`.
 - Mechanical checks (lint + preflight) printed PASS, or any FAIL recorded as a known concern.
 - Verifier-findings report sits in chat with per-file tier breakdown.
 - `LOST-FACT` rows from Step 6b merged into the findings list (or "no lost facts" recorded).
 - Every picked finding in the Step 7 walk has an Edit applied, revised wording collected, a writer re-dispatch fired, or "skip" recorded.
 - VERSION bumped when `src/` was touched and the library is past `0.0.0`.
-- Source files at `libraries/<name>/...` are in their final regenerated state, uncommitted; user runs `/git-commit` to land the diff.
+- Source files at `libraries/<name>/...` are in their final regenerated state (the judge-consolidated output applied), uncommitted; user runs `/git-commit` to land the diff.
 
 ## Files this skill leaves around
 
 - `.scratch/regen-comments/<library>/<tree>/baseline/` — stripped versions (kept for re-runs / diffs)
-- `.scratch/regen-comments/<library>/<tree>/output/` — writer agent output
-- Source files at `libraries/<name>/...` — final state, uncommitted
+- `.scratch/regen-comments/<library>/<tree>/original/` — preserved pre-strip source for the Step 6b lost-facts pass
+- `.scratch/regen-comments/<library>/<tree>/run-1/` through `run-4/` — raw writer outputs from the four candidate runs
+- `.scratch/regen-comments/<library>/<tree>/consolidated/` — judge-consolidated `.py` files plus per-file `.picks.md` reports
+- Source files at `libraries/<name>/...` — final state (the consolidated output applied), uncommitted
 
-`.scratch/` is gitignored. Clean up after a successful commit if you want; otherwise these are useful for debugging or re-runs.
+`.scratch/` is gitignored. Clean up after a successful commit if you want; otherwise these are useful for debugging or re-runs. The picks reports under `consolidated/` are worth keeping — they explain which candidate was picked for each docstring and why.
