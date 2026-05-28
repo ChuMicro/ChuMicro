@@ -90,15 +90,16 @@ The stripper:
 
 If the stripper reports a parse failure, **stop**. That's a bug in the stripper; surface to the user with the file path and the original error.
 
-Then overwrite the source files with the stripped versions so the user can see the clean state:
+Then preserve a copy of the pre-strip source so Step 6b's lost-facts pass has something to diff against:
 
 ```bash
-cp -r .scratch/regen-comments/<name>/src/baseline/* libraries/<name>/src/chumicro_<name>/
+mkdir -p .scratch/regen-comments/<name>/<tree>/original
+cp -r libraries/<name>/<tree>/.../*.py .scratch/regen-comments/<name>/<tree>/original/
 ```
 
-(In multi-tree runs, do the same for each tree's baseline.)
+**Do NOT** overwrite the source files with the stripped versions. The writer reads from `.scratch/.../baseline/`, and the lost-facts diff in Step 6b reads from `.scratch/.../original/`. Touching `libraries/<name>/` between the strip and Step 4's apply destroys the pre-strip prose the lost-facts pass needs and leaves the source half-broken meanwhile.
 
-**Success criteria:** baseline at `.scratch/regen-comments/<name>/<tree>/baseline/` exists and parses with `ast.parse`; source files overwritten with the stripped versions.
+**Success criteria:** baseline at `.scratch/regen-comments/<name>/<tree>/baseline/` exists and parses with `ast.parse`; original at `.scratch/regen-comments/<name>/<tree>/original/` mirrors the pre-strip source; `libraries/<name>/<tree>/` files are unchanged.
 
 ### 3. Dispatch the writer agent(s)
 
@@ -204,6 +205,11 @@ The following docstrings in <path> exceed 100 characters and ruff is rejecting t
 Shorten each to fit, preserving its meaning. Don't change code. Don't add or remove sections.
 Replace only the listed lines.
 
+Use the `Edit` tool, one Edit call per failing line. Do NOT call `Write` — it overwrites the
+entire file with whatever content you pass, and a re-roll that only saw the failing lines
+will truncate every part of the file it didn't see. If `Edit` is unavailable, stop and report
+the missing tool grant rather than reaching for `Write`.
+
 File: <abs path>
 
 Line <N> (currently <chars> chars):
@@ -216,6 +222,8 @@ Line <N> (currently <chars> chars):
 
 Report the updated docstrings (one per failing line). Don't restate unchanged content.
 ````
+
+The `Edit` instruction is load-bearing. A re-roll agent that has `Write` but not `Edit` will read a fragment of the file and call `Write` with that fragment, truncating everything it did not see. The writer personas now grant `Edit` (see `.claude/agents/commenter-*.md`); this prompt names the tool the agent must reach for.
 
 Apply the writer's response — only to the specific lines named. Re-run lint. If E501s persist, dispatch one more re-roll with the still-failing lines. If a second re-roll still fails, surface to the user as a stuck case.
 
@@ -252,10 +260,24 @@ Read these regenerated Python files and produce findings per the output format i
 
 <list of paths to the final commented files (in libraries/<name>/<tree>/...)>
 
+Tree conventions for THIS batch (the writer persona that produced these files allows them; do not flag as violations):
+
+<per-tree allowance block, picked from the table below>
+
 Do not read any other files. Judge each file standalone as a cold reader.
 
 Report the findings.
 ````
+
+**Per-tree allowance text** — paste the matching block into the `<per-tree allowance block>` slot:
+
+| Tree | Allowance text |
+|------|---------------|
+| `src/` | None — apply default rules. |
+| `tests/`, `functional_tests/` | Test function docstrings carry one summary line with no `Args:` / `Returns:` / `Raises:` sections; module docstrings may carry one `Cross-runtime: ...` line as a short second paragraph. |
+| `examples/` | Module docstrings carry a short body: a use-case sentence, an optional `Runs on ...` cross-runtime declaration, and an `Example output::` block. Inline comments are pedagogical (why a caller would make this choice). Do not flag module-doc bodies of this shape as CRITICAL body-paragraph violations. |
+
+The verifier persona is generic; without this allowance line it applies src/-style rules to test and example files and produces false-positive CRITICALs on the body-paragraph rule. The allowance is the bridge between the generic verifier and the per-tree writer persona.
 
 The verifier is blind to the baseline — its task prompt never references `.scratch/regen-comments/`, and its system prompt (the persona file) never sees the baseline either.
 
@@ -267,13 +289,15 @@ Wait for all verifier agents to complete before proceeding.
 
 The verifier is structurally blind to the stripped baseline; its task prompt names only the final commented files. It can flag what's wrong in the new prose; it cannot flag what was *lost* — a rationale line, a constraint note, a "why this constant" comment — that the writer did not reproduce.
 
-The director is the one role that saw the baseline (during Step 2's strip), so the director runs the lost-facts pass.
+The director is the one role that saw the pre-strip source (during Step 2), so the director runs the lost-facts pass.
 
-For each file, diff the preserved baseline against the final commented file:
+For each file, diff the **preserved original** (the pre-strip copy Step 2 wrote to `.scratch/.../original/`) against the final commented file:
 
 ```bash
-diff -u .scratch/regen-comments/<name>/<tree>/baseline/<file>.py libraries/<name>/<tree>/.../<file>.py | head -200
+diff -u .scratch/regen-comments/<name>/<tree>/original/<file>.py libraries/<name>/<tree>/.../<file>.py | head -200
 ```
+
+The diff target is the *original*, not the stripped baseline. Baseline carries no docstrings or comments, so a diff against it only shows what the writer wrote — never what was lost.
 
 Scan the original's docstrings and comments for any *fact* — not wording — that the regenerated version did not reproduce. Typical losses:
 
