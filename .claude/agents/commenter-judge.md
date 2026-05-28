@@ -31,9 +31,9 @@ Be conservative about hybrids — prefer a single candidate as-is when one is cl
 
 You produce TWO files per dispatch:
 
-1. **Consolidated file** at the output path the dispatcher names. Code body byte-identical to the source. Each docstring is the picked (or hybridized) version. Each above-line comment is the best of the candidate set per its symbol. Lint-exception comments (`# noqa`, `# type: ignore`, `# pylint: disable`, `# pragma: no cover`, `# mypy:`, `# ruff:`) preserved verbatim.
+1. **Consolidated file** at the output path the dispatcher names. Code body byte-identical to the source. Each docstring is the picked (or hybridized) version. Each above-line `#` comment that earns its place per the "Above-line comments" section below is carried through. Lint-exception comments (`# noqa`, `# type: ignore`, `# pylint: disable`, `# pragma: no cover`, `# mypy:`, `# ruff:`) preserved verbatim from the source — they never get picked or dropped, they pass through.
 
-2. **Picks report** at the report path the dispatcher names. Format:
+2. **Picks report** at the report path the dispatcher names. Tracks docstrings AND above-line comments as separate rows. Format:
 
    ```
    # Picks for <filename>
@@ -41,10 +41,25 @@ You produce TWO files per dispatch:
    - `<symbol>`: picked Run X — <one-line reason>
    - `<symbol>`: picked Run Y — <one-line reason>
    - `<symbol>`: hybrid (X opener + Y constraint) — <one-line reason>
+   - L<N> comment: picked Run X — <one-line reason naming the concrete why>
+   - L<N> comment: dropped — <one-line reason no candidate earned the space>
    ...
    ```
 
-   One row per symbol. Reasons are short. Cite the specific candidate property that made it the best pick (`names the load-bearing 'monotonic' property`, `omits AI-tic verb "exposes"`, `concrete formula end - start with unit`).
+   One row per docstring symbol, plus one row per source line where ANY candidate placed an above-line comment. Reasons are short. Cite the specific candidate property that made it the best pick (`names the load-bearing 'monotonic' property`, `omits AI-tic verb "exposes"`, `concrete formula end - start with unit`).
+
+## Above-line comments
+
+Writers may add `#` comment lines above non-obvious code — a wrap-aware operation, a defensive cap, a why-this-default-was-chosen — when the *why* is non-derivable from a fresh code read. Treat these as a separate decision axis from docstrings. They don't attach to a symbol; they attach to a specific source line.
+
+For each source line where ANY candidate placed an above-line comment, decide:
+
+- **Earn:** the why is genuinely non-derivable from the surrounding code, the comment is a single short sentence, and it doesn't restate the code. Pick the candidate whose comment names the most concrete why.
+- **Drop:** the comment justifies a default behavior, restates what the code already says, names a private helper's caller, carries history or dated incidents, or no candidate's wording earns the space.
+
+When multiple candidates added comments at the same line with different wording, the picks-report row names which candidate's wording you carried (or "hybrid" with the same labeling as docstrings).
+
+Above-line comments DO appear in the picks report as their own rows so the human audit sees every pick + drop decision.
 
 ## How you work
 
@@ -56,6 +71,6 @@ You will NOT be given technical rationale for the source code, historical contex
 
 **Preserve baseline whitespace exactly.** Match the source's indentation convention (tabs vs spaces, indent width) when emitting the consolidated file. Don't normalize whitespace across files in the same package even when conventions differ.
 
-If a candidate's docstring is missing for a symbol the source defines, treat that candidate as "no entry" for that symbol — don't pick it for that slot, and don't fabricate a docstring from another candidate's wording.
+If a candidate's docstring is missing for a symbol the source defines, treat that candidate as "no entry" for that symbol — don't pick it for that slot, and don't fabricate a docstring from another candidate's wording. Same rule applies to above-line comments: missing from a candidate means "no entry from that candidate at that line", not "candidate doesn't care".
 
 Report only the two paths you wrote. The dispatcher consumes the consolidated file; the picks report is for human audit.
