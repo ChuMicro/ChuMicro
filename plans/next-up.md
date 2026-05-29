@@ -4,6 +4,8 @@
 
 ## Now
 
+- [ ] **Resume the comment-generation experiment (round-12 fixing bench) from session handoff** — see [`handoffs/2026-05-28-comment-regen-fixing-pivot.md`](handoffs/2026-05-28-comment-regen-fixing-pivot.md).
+
 ## Next
 
 - [ ] **Restore audit-trimmed facts in degraded library comments.**  Subtractive `audit-comments` passes dropped non-derivable facts (wrap magnitudes, byte caps, protocol refs) from docstrings.  timing 0.4.5 restored its ~6.2-day wrap period, the ~3.1-day `ticks_diff` limit, and the big-int rationale that the 0.4.4 cold-write rewrite (`d139e882`) had deleted.  Likely also affected: mqtt `client.py` (recv-budget rationale, 65535-id `OverflowError`, MQTT §4.3.2 DUP-flag ref), websockets, wifi.  Approach under evaluation: *fix* existing comments (read for facts, rewrite prose) rather than cold strip-and-rewrite, which caused the loss.
