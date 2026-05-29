@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Resume the comment-generation experiment (round-12 fixing bench) from session handoff** — see [`handoffs/2026-05-28-comment-regen-fixing-pivot.md`](handoffs/2026-05-28-comment-regen-fixing-pivot.md).
+- [ ] **Resume the comment-generation experiment (round-14 personality × structure) from session handoff** — see [`handoffs/2026-05-28-comment-generation-round14-personality-discipline.md`](handoffs/2026-05-28-comment-generation-round14-personality-discipline.md).
 
 ## Next
 
