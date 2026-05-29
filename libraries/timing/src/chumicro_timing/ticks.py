@@ -1,25 +1,23 @@
-"""Wraps a millisecond tick counter into the 29-bit wrap arithmetic shared across runtimes."""
+"""Cross-runtime wrap-safe millisecond ticks and signed-difference math; values wrap every ~6.2 days."""
 
 import time
 
 try:
     from micropython import const
 except ImportError:
-    # Stands in for ``micropython.const`` on CPython so the module evaluates everywhere.
     def const(value):
         return value
 
 
-# Counts the distinct tick values; 2**29 matches MicroPython's ``time.ticks_ms`` wrap.
+# The 2**29 ms period (~6.2 days) matches MicroPython's ``time.ticks_ms`` wrap and keeps
+# add/diff results under 2**30, so boards without big-int support never heap-allocate a long.
 TICKS_PERIOD = const(1 << 29)
-# Masks any raw counter down to the wrap range.
 TICKS_MAX = const(TICKS_PERIOD - 1)
-# Splits the wrap range so ``ticks_diff`` can sign a result around the midpoint.
 TICKS_HALFPERIOD = const(TICKS_PERIOD // 2)
 
 
 def _resolve_ticks_ms() -> object:
-    """Picks the best-available millisecond tick source from the active runtime."""
+    """Returns the first available callable that yields millisecond ticks across runtimes."""
     try:
         import supervisor
     except ImportError:
@@ -41,27 +39,19 @@ def _resolve_ticks_ms() -> object:
     return lambda: int(_monotonic() * 1000)
 
 
-# Caches the resolved tick source so each call avoids the runtime probe.
 _raw_ticks_ms = _resolve_ticks_ms()
 
 
 def ticks_ms() -> int:
-    """Reads the current millisecond tick, masked into the 29-bit wrap range."""
+    """Returns the current tick in ``[0, TICKS_MAX]``; compare with ``ticks_diff``, not subtraction."""
     return _raw_ticks_ms() & TICKS_MAX
 
 
 def ticks_add(ticks: int, delta: int) -> int:
-    """Advances ``ticks`` by ``delta`` milliseconds and wraps the result.
-
-    Args:
-        ticks: A tick value in the 29-bit wrap range.
-        delta: A signed millisecond offset strictly inside ``+/- TICKS_HALFPERIOD``.
-
-    Returns:
-        The wrapped sum, in the same range as ``ticks``.
+    """Returns ``ticks`` advanced by ``delta`` within the wrap-safe range.
 
     Raises:
-        OverflowError: When ``delta`` reaches or exceeds half the wrap period.
+        OverflowError: When ``delta`` reaches half a period (~3.1 days) in either direction.
     """
     if -TICKS_HALFPERIOD < delta < TICKS_HALFPERIOD:
         return (ticks + delta) % TICKS_PERIOD
@@ -69,14 +59,11 @@ def ticks_add(ticks: int, delta: int) -> int:
 
 
 def ticks_diff(end: int, start: int) -> int:
-    """Reports ``end - start`` in milliseconds, signed across the 29-bit wrap.
-
-    Args:
-        end: The later tick reading.
-        start: The earlier tick reading.
+    """Returns the signed millisecond distance from ``start`` to ``end``.
 
     Returns:
-        A signed millisecond delta in ``[-TICKS_HALFPERIOD, TICKS_HALFPERIOD)``.
+        Signed value in ``[-TICKS_HALFPERIOD, TICKS_HALFPERIOD)``, accurate only for
+        gaps under ~3.1 days (half the wrap period); larger gaps alias to the wrong sign.
     """
     diff = (end - start) & TICKS_MAX
     return ((diff + TICKS_HALFPERIOD) & TICKS_MAX) - TICKS_HALFPERIOD

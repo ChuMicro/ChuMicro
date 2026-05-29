@@ -1,4 +1,4 @@
-"""Re-exports the millisecond-tick helpers and ``Heartbeat`` as the public surface."""
+"""Wrap-safe millisecond ticks plus a periodic ``Heartbeat`` helper."""
 
 import gc
 
@@ -12,5 +12,4 @@ __all__ = [
 	"ticks_ms",
 ]
 
-# Reclaims import-time scratch so the package settles into its steady-state footprint.
 gc.collect()
