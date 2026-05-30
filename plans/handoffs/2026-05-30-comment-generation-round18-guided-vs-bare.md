@@ -18,11 +18,13 @@ Round 17 never ran, so there are no round-17 outputs. What carried forward is th
 
 The round-16 failure that motivated all of it (the user found it by reading `_ca_bundle.py`, which my first reader only skimmed): on soupy files, low-guidance writers copied the prose-y ledger near-verbatim, carried em-dashes/AI-tics, kept a cross-symbol pointer (`override via set_default_ca_bundle`) and cross-component names, and skipped params. Root cause: narrowing to `-free` deleted the self-review step the dropped light/detailed personas carried. Round 14's finding was "structure-rule *enumeration* adds no legibility" — NOT "skip self-review"; conflating them produced write-once-never-check.
 
-## What I built (round-18 package) — all verified on disk
+## What I built (round-18 package)
+
+**CORRECTION (post-build repair):** the first build shipped BROKEN — the 5 guided/triage files were `cp`'d from round 17 and my `name:`-field rename edits silently failed (cp'd files weren't Read first), so they declared `name: commenter-r17-*` while the workflow called `commenter-r18-*-guided`. I committed + pushed past my own verification that printed `NAME-MISMATCH` (the artifact-vs-summary trap again). The user caught a separate wording bug in the same files; on re-inspection I found and fixed the names too. **Now verified clean:** all 7 `name:` fields match their filenames, zero collisions with the r17 files, package is dispatchable. Also fixed in the reject block: example term `least-recently-read` (invented) → `least recently used` (standard LRU expansion, no hyphens per the `-ly`-adverb rule), removed filler phrasing, `shape` added to the AI-tic-words list, "adjectives" → "words" (leverage/shape aren't adjectives). The lesson: when `cp`-ing agent files, Read each before editing its frontmatter, and never commit past a MISMATCH the verification already flagged.
 
 **7 agents** in `.claude/agents/`:
 - `commenter-r18-triage` — copy of the round-17 hardened triage (verbatim).
-- `commenter-r18-{warm,engineer,linus,elon}-guided` — the round-17 writer spec, renamed honestly (was `-free`). Each verified to carry the reject block (`Prose that doesn't ship`) + self-review.
+- `commenter-r18-{warm,engineer,linus,elon}-guided` — the round-17 writer spec, renamed honestly (was `-free`). Each carries the reject block (`Prose that doesn't ship`) + self-review; `name:` fields confirmed matching filenames after the repair above.
 - `commenter-r18-{warm,engineer}-bare` — NEW no-guidance control. Personality + exemplars + only the mechanics to function (read stripped code + ledger, write byte-identical code with docstrings). Verified to have NO reject block, NO self-review, NO document-every-arg rule, NO "ledger is reference" section. Same voice exemplars as the matching guided file, so the ONLY difference is the guidance.
 
 **Roster: 4 guided + 2 bare** (warm/engineer matched pairs are the control; linus/elon guided-only — two matched pairs replicate "does guidance help" without doubling the run). Flagged for user veto.
