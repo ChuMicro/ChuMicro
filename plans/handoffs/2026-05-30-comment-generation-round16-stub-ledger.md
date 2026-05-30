@@ -22,21 +22,23 @@ Run: 45 agents (9 triage + 36 writers), 0 failures, 27 ledgers + 108 written fil
 ## The user's round-16 decisions
 
 1. Arg policy: **no silent drops, per-param decision** — triage walks every public param and tags each KEEP (non-derivable stub) or `derivable`; vital args never fall out, trivial ones can stay bare (avoids robotic "username: the username"). NOT "document every arg" (that reintroduces the banned signature-restatement).
-2. Roster: **warm-free + engineer-free only** — smallest clean test of "did the stub ledger un-collapse the voice axis." Add other voices in round 17 once the ledger is proven. (User: "once we get the ledger right and working with warm we can try a couple other voices.")
+2. Roster: **4 voices — warm-free + engineer-free + linus-free + elon-free.** The user's first instinct was "warm + engineer, add voices in round 17," then on the roster question answered "add linus torvalds, and elon musk" — i.e. fold the two new voices in NOW alongside the reference pair. Distinct-voice test is sharper with four (linus/elon are far from warm/engineer; convergence would be obvious).
 3. Structure: free only (round 15: free ≈ light; detailed earned nothing — both dropped earlier).
 4. User added: "use your judgement… youre the comment master."
+
+**INTERPRETATION FLAGGED TO USER (awaiting veto):** I built linus/elon as the *technical core* of each figure, NOT the caricature. A profane-Torvalds or hype-Musk persona would violate the chumicro comment discipline (no colloquialisms, professional, no superlatives) — and personas are exemplar-taught, so the caricature WOULD leak into real docstrings. So: `linus-free` = blunt kernel-maintainer (opens on behavior, then spends words on the trap a caller hits; deletes signature-restatement; fail-loud; direct not rude, no profanity). `elon-free` = first-principles minimalist ("best comment is no comment," delete by default, strip to the governing constraint, name the real reason not the mechanism; no hype/superlatives). If the user wants the literal attitude, dial toward it — but it fights the rules, and the round measures whether a strong voice can hold them.
 
 ## What I built (round-16 package) — all verified on disk
 
 - **Triage agent** `.claude/agents/commenter-r16-triage.md` — adds (a) a hard **STUB discipline** (no leading capitalized verb, no subject-verb-object sentence, telegraphic fragments with `→`/`;`/math; good-vs-too-finished examples; a reread self-check that cuts any grammatical sentence back to a fragment); (b) a mandatory **per-public-parameter walk** — one `PARAM <name>:` line each (a stub, or `derivable`), none skipped; (c) a no-cross-symbol-pointer rule (fixes the r15 "documented on that class" leak). Cut-list + over-cut guard carried from r15 unchanged (they worked).
-- **2 writer agents** `.claude/agents/commenter-r16-{warm-free,engineer-free}.md` — carry the r15 free personas, plus: "expand each stub into a sentence in your own voice; never paste a stub verbatim" and "document every PARAM the ledger kept; `derivable` ones may be omitted." Personalities/exemplars unchanged (form-validation / token-bucket, zero test-vocab collision).
+- **4 writer agents** `.claude/agents/commenter-r16-{warm-free,engineer-free,linus-free,elon-free}.md` — all carry the same stub-expansion + per-PARAM rules ("expand each stub into a sentence in your own voice; never paste a stub verbatim"; "document every PARAM the ledger kept; `derivable` ones may be omitted"). warm/engineer = the r15 personas (form-validation / token-bucket exemplars, zero test-vocab collision). linus/elon = new, technical-core (see interpretation note above) with their own neutral exemplars (form-validation for linus, token-bucket for elon — same neutral domains, so no test-vocab leak).
 - **Inputs**: `round-16/fixing/` + `round-16/stripped/` — copied byte-identical from round-15 (`diff -rq` clean), so the ONLY changed variable is the triage ledger form + the writer arg rule. 9 files each.
-- **Workflow** `round-16/round-16-workflow.js` — `pipeline()` over 9 library-runs; stage1 triage → stage2 `parallel()` of the 2 writers. 27 agents (9 triage + 18 writers). Uses `export const meta` like the prior working workflows (`node --check` flags `export` — CJS-vs-ESM false alarm, ignore).
-- **RUN.md** `round-16/RUN.md` — dispatch runbook: restart, 3 agentTypes, run workflow, verify **27 ledgers + 54 written .py**, do-not list, analysis notes (the two round-16 questions: did the ledger come out as stubs, did the voice axis un-collapse; + the arg-coverage check on `__init__`).
+- **Workflow** `round-16/round-16-workflow.js` — `pipeline()` over 9 library-runs; stage1 triage → stage2 `parallel()` of the 4 writers. 45 agents (9 triage + 36 writers). Uses `export const meta` like the prior working workflows (`node --check` flags `export` as a CJS-vs-ESM false alarm — confirmed valid via `node --check` on a `.mjs` copy: ESM PARSE OK).
+- **RUN.md** `round-16/RUN.md` — dispatch runbook: restart, 5 agentTypes, run workflow, verify **27 ledgers + 108 written .py**, do-not list, analysis notes (the two round-16 questions: did the ledger come out as stubs, did the voice axis un-collapse across all 4; + the arg-coverage check on `__init__`; + whether linus/elon hold the discipline).
 
 ## Next concrete step
 
-Hand `round-16/RUN.md` to a fresh dispatch session. It restarts, runs the workflow, verifies 27 + 54, reports. Then a new analysis seat reads ledgers-first: (1) are they stubs now? (2) do warm and engineer sound distinct again? (3) does `MQTTClient.__init__` document username/password/will_*/when_oversized?
+Hand `round-16/RUN.md` to a fresh dispatch session. It restarts, runs the workflow, verifies 27 + 108, reports. Then a new analysis seat reads ledgers-first: (1) are they stubs now? (2) do the 4 voices sound distinct, or still converge? (3) does `MQTTClient.__init__` document username/password/will_*/when_oversized? (4) do linus/elon hold the chumicro discipline or push past it?
 
 ## Riskiest assumption (round 16's bet)
 
@@ -44,7 +46,7 @@ That forcing stub form actually un-collapses the voice axis without costing fact
 
 ## If round 16 succeeds → round 17
 
-Add the "couple other voices" the user wants, on top of the proven stub ledger + free structure. Candidate voices to consider (from the round-11 history): the round-8/11 imitate-adafruit warmth, a terse-Hemingway, a teaching/mental-model voice. Keep warm + engineer as the reference pair.
+Round 16 already folds in the two new voices (linus, elon). If the stub ledger proves out and the user has a favorite, round 17 is a narrowing/tournament: keep the 2-3 strongest voices, possibly add one more from the round-11 history (imitate-adafruit warmth, terse-Hemingway, teaching/mental-model), and consider standing up the best-of-N judge (the `commenter-judge` lane) to pick per-symbol across the survivors. The judge MAY see gold (round-8 `table.md` + the user's labeled pairs); writers stay domain-blind.
 
 ## Dead ends (don't re-walk)
 
