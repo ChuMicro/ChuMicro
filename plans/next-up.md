@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Comment-generation round 15 (separate triage pass + blind writers) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-29-comment-generation-round15-triage-pass.md`](handoffs/2026-05-29-comment-generation-round15-triage-pass.md).
+- [ ] **Comment-generation round 16 (stub-form ledger + per-param walk; warm + engineer) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-30-comment-generation-round16-stub-ledger.md`](handoffs/2026-05-30-comment-generation-round16-stub-ledger.md).
 
 ## Next
 
