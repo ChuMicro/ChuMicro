@@ -42,9 +42,19 @@ The round-16 failure that motivated all of it (the user found it by reading `_ca
 
 All agent files backed up to `.scratch/regen-comments/agents-archive/backup-2026-05-30-pre-round17/` (made before the round-17 rewrite; covers r15/r16). The r17 + r18 files are NOT in that backup — they were written after. `.claude/agents/` is untracked; the backup + git-tracked handoffs are the only safety net.
 
+## PENDING before dispatch — em-dash flat purge (user ruling, NOT yet done)
+
+The user ruled: **purge every em-dash from all 7 round-18 agent files (prose + exemplars + rules), and make reject-pattern #1 a FLAT BAN** (no em-dashes in generated comments at all, not the stapling-only distinction currently written). Scope: the 7 `commenter-r18-*.md` files only, not the older r14-r17 sets.
+
+NOT done yet. State at handoff: 139 em-dash lines remain across the 7 files (triage 34, warm-guided 22, engineer-guided 22, linus-guided 23, elon-guided 20, warm-bare 9, engineer-bare 9). The current on-disk reject-pattern #1 says the OPPOSITE of the ruling (it allows the sharp-aside em-dash with a `fine:` example) — that must be flipped to a flat ban, and the `fine:` line + linus's `validates twice — pick one` exemplar removed.
+
+How to do it correctly: each em-dash needs per-context replacement (period between two independent clauses; colon before a list; comma for an appositive), NOT a blind global swap — the whole point is correct English. Work one file at a time, read in full first. Verify after: `grep -c '—' commenter-r18-*.md` must be 0 for all 7, and reject-pattern #1 must read as a flat ban in the 4 guided files.
+
+Why deferred: surfaced at high context after three same-session errors (coverage misread, broken name: fields shipped past verification, edits made before reading the ruling). A careful 139-instance English-punctuation sweep is delicate work better done fresh than as a fourth rushed pass.
+
 ## Next concrete step
 
-Hand `round-18/RUN.md` to a fresh dispatch session. Verify 27 + 162. Then a new analysis seat:
+**First: do the em-dash purge above** (then dispatch). Hand `round-18/RUN.md` to a fresh dispatch session. Verify 27 + 162. Then a new analysis seat:
 1. Reads `warm-guided` vs `warm-bare` and `engineer-guided` vs `engineer-bare` side by side on the same symbols, hard files in full across runs.
 2. Quantifies the per-file defect gap (what bare lets through that guided catches).
 3. Confirms the guided arm holds the round-17 contract (every `__init__` param incl. username/password; no leaks; stubs stayed fragments).
