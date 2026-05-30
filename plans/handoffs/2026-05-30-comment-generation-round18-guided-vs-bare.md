@@ -42,19 +42,17 @@ The round-16 failure that motivated all of it (the user found it by reading `_ca
 
 All agent files backed up to `.scratch/regen-comments/agents-archive/backup-2026-05-30-pre-round17/` (made before the round-17 rewrite; covers r15/r16). The r17 + r18 files are NOT in that backup — they were written after. `.claude/agents/` is untracked; the backup + git-tracked handoffs are the only safety net.
 
-## PENDING before dispatch — em-dash flat purge (user ruling, NOT yet done)
+## Em-dash flat purge — DONE and verified (user ruling)
 
-The user ruled: **purge every em-dash from all 7 round-18 agent files (prose + exemplars + rules), and make reject-pattern #1 a FLAT BAN** (no em-dashes in generated comments at all, not the stapling-only distinction currently written). Scope: the 7 `commenter-r18-*.md` files only, not the older r14-r17 sets.
+The user ruled: purge every em-dash from all 7 round-18 agent files (prose, exemplars, rules, AND markdown headers), and make reject-pattern #1 a flat ban (no em-dashes in generated comments at all, not the stapling-only distinction). Scope: the 7 `commenter-r18-*.md` files only.
 
-NOT done yet. State at handoff: 139 em-dash lines remain across the 7 files (triage 34, warm-guided 22, engineer-guided 22, linus-guided 23, elon-guided 20, warm-bare 9, engineer-bare 9). The current on-disk reject-pattern #1 says the OPPOSITE of the ruling (it allows the sharp-aside em-dash with a `fine:` example) — that must be flipped to a flat ban, and the `fine:` line + linus's `validates twice — pick one` exemplar removed.
+Done. `grep -c` confirms 0 em-dashes in every one of the 7 files. Replacements were per-context (period between independent clauses, colon before a list, comma for a brief aside), not blind swaps. Reject-pattern #1 in the 4 guided files is now a flat ban; the sharp-aside `fine:` example and linus's `validates twice` em-dash exemplar are gone. A "No em-dashes" bullet is in the Write-correct-English section of all 6 writers. Verified intact: all 7 `name:` fields match filenames; guided keep reject-block + self-review, bare keep neither.
 
-How to do it correctly: each em-dash needs per-context replacement (period between two independent clauses; colon before a list; comma for an appositive), NOT a blind global swap — the whole point is correct English. Work one file at a time, read in full first. Verify after: `grep -c '—' commenter-r18-*.md` must be 0 for all 7, and reject-pattern #1 must read as a flat ban in the 4 guided files.
-
-Why deferred: surfaced at high context after three same-session errors (coverage misread, broken name: fields shipped past verification, edits made before reading the ruling). A careful 139-instance English-punctuation sweep is delicate work better done fresh than as a fourth rushed pass.
+Process note for the record: the purge took two passes because the first (full-file rewrites) cleaned prose and exemplars but missed the markdown section headers (`## The personality ...`). A header is still "in the file." The second pass caught the 25 header/title em-dashes. Lesson: "purge everywhere" includes headers and titles, not just prose; verify with `grep -c` returning 0, not by eyeballing the body.
 
 ## Next concrete step
 
-**First: do the em-dash purge above** (then dispatch). Hand `round-18/RUN.md` to a fresh dispatch session. Verify 27 + 162. Then a new analysis seat:
+Hand `round-18/RUN.md` to a fresh dispatch session. Verify 27 + 162. Then a new analysis seat:
 1. Reads `warm-guided` vs `warm-bare` and `engineer-guided` vs `engineer-bare` side by side on the same symbols, hard files in full across runs.
 2. Quantifies the per-file defect gap (what bare lets through that guided catches).
 3. Confirms the guided arm holds the round-17 contract (every `__init__` param incl. username/password; no leaks; stubs stayed fragments).
