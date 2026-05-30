@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Resume the comment-generation experiment (round-14 personality × structure) from session handoff** — see [`handoffs/2026-05-28-comment-generation-round14-personality-discipline.md`](handoffs/2026-05-28-comment-generation-round14-personality-discipline.md).
+- [ ] **Comment-generation round 15 (separate triage pass + blind writers) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-29-comment-generation-round15-triage-pass.md`](handoffs/2026-05-29-comment-generation-round15-triage-pass.md).
 
 ## Next
 
