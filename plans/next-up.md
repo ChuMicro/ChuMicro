@@ -4,7 +4,7 @@
 
 ## Now
 
-- [ ] **Comment-generation round 17 (hardened triage + self-reviewing writers + document-every-arg; warm/engineer/linus/elon) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-30-comment-generation-round17-strictness.md`](handoffs/2026-05-30-comment-generation-round17-strictness.md).
+- [ ] **Comment-generation round 18 (guided vs bare no-guidance control; honest naming; 4 guided voices + 2 bare) — built, awaiting dispatch + analysis** — see [`handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md`](handoffs/2026-05-30-comment-generation-round18-guided-vs-bare.md).
 
 ## Next
 
