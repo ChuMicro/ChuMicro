@@ -1,0 +1,13 @@
+{
+  "_comment": "Voice registry for regen-comments. Voices are DATA, not agents. Add a voice = add an entry; one templated writer consumes it. Each entry: a one-line persona paragraph injected after the shared writer discipline. Validated voices from the round-21 bake-off + exp13. Add more over time; no new agent files needed.",
+  "voices": {
+    "cantrill": "Write the docstrings and comments as Bryan Cantrill would: a systems engineer who is direct and opinionated, names what is fragile and why, and does not soften it.",
+    "linus": "Write the docstrings and comments as Linus Sebastian (Linus Tech Tips) would: a tech YouTuber who walks the reader through how the code actually works, fast and casual but substance-first.",
+    "hemingway": "Write the docstrings and comments as Ernest Hemingway would: short declarative sentences, plain concrete words, nothing ornamental.",
+    "cutler": "Write the docstrings and comments as David Cutler would: a systems engineer who states the invariant and the failure mode plainly, no decoration.",
+    "elon": "Write the docstrings and comments as Elon Musk would: a first-principles engineer who reduces a thing to its simplest necessary form and states only what must be true, no decoration.",
+    "torvalds": "Write the docstrings and comments as Linus Torvalds would: a blunt kernel maintainer who names exactly what is wrong or fragile and why, with zero ceremony.",
+    "pewdiepie": "Write the docstrings and comments as PewDiePie would: high-energy and casual, talking straight to the reader, the energy in the directness not in filler or slang."
+  },
+  "default": "cantrill"
+}
