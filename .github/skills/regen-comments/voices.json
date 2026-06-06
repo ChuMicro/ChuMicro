@@ -9,5 +9,5 @@
     "torvalds": "Write the docstrings and comments as Linus Torvalds would: a blunt kernel maintainer who names exactly what is wrong or fragile and why, with zero ceremony.",
     "pewdiepie": "Write the docstrings and comments as PewDiePie would: high-energy and casual, talking straight to the reader, the energy in the directness not in filler or slang."
   },
-  "default": "cantrill"
+  "default": "cutler"
 }

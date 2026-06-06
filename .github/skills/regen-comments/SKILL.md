@@ -29,6 +29,17 @@ Rebuild docstrings and inline comments for Python file(s) **from the code's beha
 
 ## Procedure
 
+### Runbook (the orchestrator follows these literally; the conceptual steps below explain each phase)
+Let `SKILL=.github/skills/regen-comments`, `RUN=/tmp/regen-cr/<slug>-<n>` (a fresh dir).
+1. **Voice gate (in-session):** if `--voice <key>` given, use it; else present the 4-voice menu (default `cutler`) via `AskUserQuestion`. (`--create-voice` → registry-add flow, then stop.)
+2. **Phase 1 (clean-room grounding):** `python3 $SKILL/regen_phase1.py <target.py> $RUN [--with-comment-triage] [--lib <LIBRARY_FACTS.md>]`. It strips, runs the triage workflow + validator as clean-room `claude -p`, and prints the **questionable facts** + writes `$RUN/{ledger_provisional.md, ledger.json, preserve.json, validation.json, phase1.json}`.
+3. **Validator gate (in-session):** if `phase1.json`/`validation.json` shows `any_wrong` or `any_underspecified`, re-run the ledger-writer with the validator's notes (or escalate to the user) before continuing.
+4. **Picker (in-session, the one human gate):** present the questionable facts via multi-select `AskUserQuestion`; then write `$RUN/ledger_final.md` = `ledger_provisional.md` with the **rejected** facts' lines removed (high-confidence facts are auto-kept).
+5. **Phase 2 (clean-room write):** `python3 $SKILL/regen_phase2.py $RUN <voice>`. Runs the writer workflow (4 passes + per-symbol consolidation), reattaches the preserve lane, writes `$RUN/FINAL_<voice>.py`.
+6. **Present (in-session):** show `FINAL_<voice>.py`; the human reviews + applies. **Never auto-commit/apply.**
+
+The conceptual phases (what each does + the invariants):
+
 ### Step 0 — Voice, strip, rooms (in-session)
 **Voice (first human gate):** if `--voice <key>` was given, use it; otherwise present the 4-voice menu (default `cutler`) via `AskUserQuestion` and use the pick. A run is exactly one voice. (If invoked as `--create-voice`, do the registry-add flow instead and stop — no generation.)
 **Strip:** run `strip.py target.py` → stripped code (comments + docstrings removed, executable code byte-identical). Set up `/tmp/regen-cr/<run>/` rooms. Copy stripped code into the code-lens / writer / judge rooms; with `--with-comment-triage`, copy the original (commented) file into the comment-lens room only.

@@ -1,10 +1,9 @@
-// exp13 WORKFLOW A — full grounding/triage stage of the regen-comments skill (--with-comment-triage ON).
-// 3 code lenses read the STRIPPED code; the comment lens reads the RAW commented file and routes every
-// comment to ledger/preserve/discard; the (validated) ledger-writer merges the code findings + the
-// comment LEDGER-lane facts into ONE telegraphic, non-copyable ledger with per-fact confidence.
-// Returns: ledger facts (w/ confidence) + the preserve lane + discard (instrumentation) + domain.
-// The orchestrator then runs the human picker on low/med facts before writers (Workflow B).
-// Output: exp13/findings/*.json , exp13/ledger_provisional.md
+// regen-comments TRIAGE workflow. Run inside ONE `claude -p` from the run room. 3 code lenses read the
+// stripped code; the comment lens reads the raw commented file and routes every comment to
+// ledger/preserve/discard; the ledger-writer merges the code findings + the comment LEDGER-lane facts
+// into ONE telegraphic, non-copyable ledger with per-fact confidence. Writes <RUNDIR>/ledger_provisional.md
+// + <RUNDIR>/ledger.json + <RUNDIR>/findings/*.json. The orchestrator runs the human picker on the
+// low/med + comment-derived facts before the writer phase. Orchestrator substitutes __RUNDIR__.
 
 export const meta = {
   name: 'exp13-triageA',
@@ -161,8 +160,10 @@ function ledgerPrompt(codeResults, commentLedger, domain) {
     + 'CODE (verify against it): ' + STRIPPED + '\n\n'
     + 'LENS FINDINGS:\n' + dump + cdump + '\n\n'
     + 'Write the merged ledger as a terse markdown stub list (one `- ` line per fact, sites in parens; every '
-    + 'line a fragment per STUB STYLE) to ' + EXP + '/ledger_provisional.md, set ledger_path to it, return '
-    + 'the structured result. Set domain_purpose to: "' + (domain || '') + '".'
+    + 'line a fragment per STUB STYLE) to ' + EXP + '/ledger_provisional.md. ALSO write the SAME facts as a '
+    + 'pretty JSON array (each item {stub, sites, source_lenses, confidence}) to ' + EXP + '/ledger.json '
+    + '(the orchestrator reads this to find the questionable facts for the human picker). Set ledger_path to '
+    + 'the .md, return the structured result. Set domain_purpose to: "' + (domain || '') + '".'
 }
 
 // ---------- run ----------
