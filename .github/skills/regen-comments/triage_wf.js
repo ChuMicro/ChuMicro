@@ -6,7 +6,7 @@
 // low/med + comment-derived facts before the writer phase. Orchestrator substitutes __RUNDIR__.
 
 export const meta = {
-  name: 'exp13-triageA',
+  name: 'regen-triage',
   description: 'Full triage: 3 code lenses + comment lens -> ledger-writer. Produces the provisional ledger + preserve lane.',
   phases: [
     { title: 'Lenses', detail: '3 code lenses (stripped) + 1 comment lens (raw)' },
@@ -19,7 +19,7 @@ const STRIPPED = RUNDIR + '/stripped.py'
 const COMMENTED = RUNDIR + '/commented.py'
 const EXP = RUNDIR
 
-// ---------- 3 CODE LENSES (validated exp10 prompts: fragment preamble) ----------
+// ---------- 3 CODE LENSES (fragment-preamble triage prompts) ----------
 const PREAMBLE =
   'You are reading a Python file to triage facts that a per-symbol docstring writer would get WRONG '
   + 'or MISS. The file has NO comments and NO docstrings -- the code is the only source of truth. '
@@ -79,7 +79,7 @@ function codeLensPrompt(l) {
     + ' and return it. Set lens to "' + l.key + '" and path to that file.'
 }
 
-// ---------- COMMENT LENS (validated exp12 3-lane prompt + placement on preserve) ----------
+// ---------- COMMENT LENS (3-lane: ledger / preserve / discard, with placement) ----------
 const COMMENT_OUT = {
   type: 'object', additionalProperties: false,
   properties: {
@@ -114,7 +114,7 @@ const commentPrompt =
   + 'Be skeptical. Do not promote a redundant or wrong comment into the ledger.\n\n'
   + 'Write JSON to ' + EXP + '/findings/comments.json and return it. lens = "comments", path = that file.'
 
-// ---------- LEDGER-WRITER (validated exp10 v3: STUB STYLE + no-invented-examples) ----------
+// ---------- LEDGER-WRITER (STUB STYLE + no-invented-examples) ----------
 const LEDGER_OUT = {
   type: 'object', additionalProperties: false,
   properties: {
