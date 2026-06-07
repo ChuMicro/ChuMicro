@@ -1,9 +1,13 @@
 // regen-comments TRIAGE workflow. Run inside ONE `claude -p` from the run room. 3 code lenses read the
 // stripped code; the comment lens reads the raw commented file and routes every comment to
 // ledger/preserve/discard; the ledger-writer merges the code findings + the comment LEDGER-lane facts
-// into ONE telegraphic, non-copyable ledger with per-fact confidence. Writes <RUNDIR>/ledger_provisional.md
-// + <RUNDIR>/ledger.json + <RUNDIR>/findings/*.json. The orchestrator runs the human picker on the
-// low/med + comment-derived facts before the writer phase. Orchestrator substitutes __RUNDIR__.
+// into ONE telegraphic, non-copyable ledger with per-fact confidence. A fixture-agnostic validator then
+// checks every fact against the code; if any is wrong or a correctness-critical fact is ambiguous, the
+// ledger-writer re-runs against the validator's notes (writer-only retry, up to MAX_LEDGER_ATTEMPTS) and
+// re-validates. Writes <RUNDIR>/ledger_provisional.md + <RUNDIR>/ledger.json + <RUNDIR>/validation.json +
+// <RUNDIR>/findings/*.json. validation.json's any_wrong/any_underspecified after the loop tell the
+// orchestrator whether to escalate to the human. The orchestrator runs the picker on the low/med +
+// comment-derived facts before the writer phase. Orchestrator substitutes __RUNDIR__.
 
 export const meta = {
   name: 'regen-triage',
@@ -11,6 +15,7 @@ export const meta = {
   phases: [
     { title: 'Lenses', detail: '3 code lenses (stripped) + 1 comment lens (raw)' },
     { title: 'Ledger', detail: 'merge -> telegraphic ledger w/ confidence' },
+    { title: 'Validate', detail: 'fixture-agnostic gate + ledger-writer re-run loop' },
   ],
 }
 
@@ -106,9 +111,14 @@ const commentPrompt =
   + 'author intent, a real why). Paraphrase telegraphically; NEVER lift wording. VERIFY against code; if '
   + 'contradicted, it is DISCARD (wrong-contradicts-code). Cap 1-2, often ZERO. Judge on CONTENT not '
   + 'position. Record source_site.\n'
-  + '(2) PRESERVE -- provenance/legal/tracking metadata kept VERBATIM, never reworded or fed to a writer: '
-  + 'copyright, license, author, live TODO / issue-tracker refs. For each set placement = "header-top" '
-  + '(copyright/author/license) or "inline" (a directive/TODO tied to a code location) and orig_site.\n'
+  + '(2) PRESERVE -- provenance/legal/tracking metadata AND attributed human notes, kept VERBATIM, never '
+  + 'reworded or fed to a writer: copyright, license, author; live TODO / issue-tracker refs; and any '
+  + 'ATTRIBUTED note carrying human intent, a future plan, or a rationale. The canonical attributed form '
+  + 'is "NOTE(<initials>): ..." (e.g. "NOTE(CB): refactor this class when pallas ships"); also recognize '
+  + 'looser attributions (other initials-/name-prefixed notes) EVEN WITH NO TODO KEYWORD. An attributed '
+  + 'note is a person speaking and is not derivable from code: preserve it verbatim, do NOT voice it, do '
+  + 'NOT discard it as banter. For each set placement = "header-top" (copyright/author/license) or '
+  + '"inline" (a directive/note/TODO tied to a code location) and orig_site.\n'
   + '(3) DISCARD -- everything else w/ a category: stale-archaeology, redundant-with-code, '
   + 'wrong-contradicts-code, decorative, banter, other.\n'
   + 'Be skeptical. Do not promote a redundant or wrong comment into the ledger.\n\n'
@@ -125,7 +135,7 @@ const LEDGER_OUT = {
   },
   required: ['facts', 'domain_purpose', 'ledger_path'],
 }
-function ledgerPrompt(codeResults, commentLedger, domain) {
+function ledgerPrompt(codeResults, commentLedger, domain, feedback) {
   const dump = codeResults.map((r) =>
     '### lens: ' + r.lens + '\n' + r.findings.map((f) => `- [${f.confidence}${f.cross_method ? ',xm' : ''}] ${f.fact}  (${f.sites})`).join('\n')
   ).join('\n\n')
@@ -159,11 +169,48 @@ function ledgerPrompt(codeResults, commentLedger, domain) {
     + '- For each fact: a telegraphic stub, code sites, source lens keys, a confidence.\n\n'
     + 'CODE (verify against it): ' + STRIPPED + '\n\n'
     + 'LENS FINDINGS:\n' + dump + cdump + '\n\n'
+    + (feedback
+      ? 'A VALIDATOR reviewed your PREVIOUS ledger and flagged the issues below. Produce a corrected, '
+        + 'complete ledger that fixes EACH one — make a wrong fact true against the code, and make an '
+        + 'ambiguous correctness-critical fact unambiguous (state which entity / which direction) while '
+        + 'keeping it a telegraphic stub, not prose. Keep all the other good facts.\n'
+        + 'VALIDATOR FEEDBACK:\n' + feedback + '\n\n'
+      : '')
     + 'Write the merged ledger as a terse markdown stub list (one `- ` line per fact, sites in parens; every '
     + 'line a fragment per STUB STYLE) to ' + EXP + '/ledger_provisional.md. ALSO write the SAME facts as a '
     + 'pretty JSON array (each item {stub, sites, source_lenses, confidence}) to ' + EXP + '/ledger.json '
     + '(the orchestrator reads this to find the questionable facts for the human picker). Set ledger_path to '
     + 'the .md, return the structured result. Set domain_purpose to: "' + (domain || '') + '".'
+}
+
+// ---------- VALIDATOR (fixture-agnostic; gates correctness, drives the re-run loop) ----------
+const VALIDATE_OUT = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    facts: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { fact: { type: 'string' }, correct: { type: 'boolean' }, note: { type: 'string' } }, required: ['fact', 'correct', 'note'] } },
+    underspecified: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { fact: { type: 'string' }, why: { type: 'string' } }, required: ['fact', 'why'] } },
+    any_wrong: { type: 'boolean' }, any_underspecified: { type: 'boolean' }, verdict: { type: 'string' },
+  },
+  required: ['facts', 'underspecified', 'any_wrong', 'any_underspecified', 'verdict'],
+}
+const validatePrompt =
+  'You validate a nuance LEDGER against the CODE. You have NO trap list and NO prior knowledge of this '
+  + 'file — reason only from the code.\n\nCODE: ' + STRIPPED + '\nLEDGER: ' + EXP + '/ledger_provisional.md\n\n'
+  + '(1) For EACH ledger fact, verify it is TRUE against the code (record correct + a short note; quote the '
+  + 'code site when wrong). EXCEPTION: a comment-derived domain fact is NON-CODE-DERIVABLE by design — it '
+  + 'comes from a now-stripped comment and is not in the code. Do NOT mark it wrong merely for being absent '
+  + 'from the code; mark it correct unless the code actively CONTRADICTS it.\n'
+  + '(2) Flag any fact in a CORRECTNESS-CRITICAL CLASS that is stated AMBIGUOUSLY (a reader could invert or '
+  + 'misread it): a returned flag or field\'s referent (WHICH entity it acts on), an inversion (a value that '
+  + 'means the opposite of the naive reading), a dual-role value (one name, two jobs), or a boundary / '
+  + 'inclusive-vs-exclusive condition. Under-specified = states only half the fact or leaves the critical '
+  + 'half to be inferred.\n\n'
+  + 'Write JSON to ' + EXP + '/validation.json with keys facts, underspecified, any_wrong, '
+  + 'any_underspecified, verdict. After writing, reply DONE.'
+function buildFeedback(v) {
+  const wrong = (v.facts || []).filter((f) => !f.correct).map((f) => '- WRONG: ' + f.fact + ' -- ' + f.note)
+  const under = (v.underspecified || []).map((f) => '- AMBIGUOUS: ' + f.fact + ' -- ' + f.why)
+  return wrong.concat(under).join('\n')
 }
 
 // ---------- run ----------
@@ -177,7 +224,23 @@ const comment = (lensResults.filter(Boolean).find((x) => x.kind === 'comment') |
 const domain = (code.find((r) => r.domain_purpose) || {}).domain_purpose || ''
 
 phase('Ledger')
-const ledger = await agent(ledgerPrompt(code, comment.ledger || [], domain), { label: 'ledger-writer', phase: 'Ledger', model: 'opus', agentType: 'general-purpose', schema: LEDGER_OUT })
+let ledger = await agent(ledgerPrompt(code, comment.ledger || [], domain), { label: 'ledger-writer', phase: 'Ledger', model: 'opus', agentType: 'general-purpose', schema: LEDGER_OUT })
+
+// Validate the ledger against the code, and re-run the LEDGER-WRITER ONLY against the validator's notes
+// until it converges or we hit the cap. Lenses do not re-run — their findings are fixed; only the merge
+// is corrected. validation.json (written by the validator) holds the final verdict for the orchestrator.
+const MAX_LEDGER_ATTEMPTS = 4
+phase('Validate')
+let validation = await agent(validatePrompt, { label: 'validate', phase: 'Validate', model: 'opus', agentType: 'general-purpose', schema: VALIDATE_OUT })
+let attempt = 1
+while ((validation.any_wrong || validation.any_underspecified) && attempt < MAX_LEDGER_ATTEMPTS) {
+  log('validator flagged issues (attempt ' + attempt + '/' + MAX_LEDGER_ATTEMPTS + '); re-running ledger-writer with feedback')
+  ledger = await agent(ledgerPrompt(code, comment.ledger || [], domain, buildFeedback(validation)), { label: 'ledger-writer:retry' + attempt, phase: 'Ledger', model: 'opus', agentType: 'general-purpose', schema: LEDGER_OUT })
+  validation = await agent(validatePrompt, { label: 'validate:retry' + attempt, phase: 'Validate', model: 'opus', agentType: 'general-purpose', schema: VALIDATE_OUT })
+  attempt++
+}
+const converged = !(validation.any_wrong || validation.any_underspecified)
+log(converged ? 'ledger validated clean after ' + attempt + ' attempt(s)' : 'ledger still flagged after ' + attempt + ' attempts; orchestrator must escalate to the human')
 
 const questionable = (ledger.facts || []).filter((f) => f.confidence === 'low' || f.confidence === 'med')
-return { facts: ledger.facts, domain_purpose: ledger.domain_purpose, ledger_path: ledger.ledger_path, preserve: comment.preserve || [], discard: comment.discard || [], questionable }
+return { facts: ledger.facts, domain_purpose: ledger.domain_purpose, ledger_path: ledger.ledger_path, preserve: comment.preserve || [], discard: comment.discard || [], questionable, converged, attempts: attempt }

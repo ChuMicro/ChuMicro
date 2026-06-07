@@ -20,6 +20,27 @@ def _is_docstring(stmt):
             and isinstance(stmt.value.value, str))
 
 
+def extract_header(src):
+    """Leading copyright/license/author/shebang comment block — preserved regardless of comment-triage mode.
+
+    Returns the run of `#` lines at the very top of the file, before any code, import, or the module
+    docstring, as preserve-lane header items ({line, placement: "header-top"}). strip() drops these like
+    any other comment; this lets the orchestrator ride them back verbatim even when comment-triage is off,
+    so a license header is never silently eaten. Blank lines inside the run are skipped (cosmetic), and the
+    scan stops at the first non-comment, non-blank line.
+    """
+    items = []
+    for line in src.splitlines():
+        s = line.strip()
+        if s == "":
+            continue
+        if s.startswith("#"):
+            items.append({"line": line.rstrip(), "placement": "header-top"})
+        else:
+            break
+    return items
+
+
 def strip_code(src):
     drop_lines = set()            # 1-based line numbers to remove entirely
     replace_pass = {}             # docstring-only body: lineno -> indent col for `pass`
