@@ -38,14 +38,17 @@ Let `SKILL=.github/skills/regen-comments`, `RUN=/tmp/regen-cr/<slug>-<n>` (a fre
 3. **Validator gate (in-session):** the ledger-writer already re-ran against the validator up to 4× inside phase 1. Only if `phase1.json` shows `needs_user: true` (still flagged after the loop) do you ESCALATE — present the flagged facts (`validation.json`) plus a recommendation in an `AskUserQuestion` with a free-text window, then apply the user's steer before phase 2.
 4. **Picker (in-session, the one human gate):** present the questionable facts via multi-select `AskUserQuestion`; then write `$RUN/ledger_final.md` = `ledger_provisional.md` with the **rejected** facts' lines removed (high-confidence facts are auto-kept).
 5. **Phase 2 (clean-room write):** `python3 $SKILL/regen_phase2.py $RUN <voice>`. Runs the writer workflow (4 passes + per-symbol consolidation + an independent summarizer), reattaches the preserve lane, writes `$RUN/{FINAL_<voice>.py, merged.py, picks.json, summary.json}`.
-6. **Report (in-session):** `python3 $SKILL/render_report.py $RUN <voice> <target.py>` → `$RUN/report.html`. Surface it with `SendUserFile` and print its `file://` line.
-7. **Refine (optional human loop, in-session):** offer to refine any symbol from the report. Per the human's pick, run the right tool (all below), then `render_report.py` again to refresh and re-surface. Loop until they are satisfied. See Step 8 for the full loop.
-   - **roll the dice** (different take, cheap): `splice_symbol.py $RUN/FINAL_<voice>.py $RUN/runs/run-<N>.py <symbol> $RUN/FINAL_<voice>.py`, cycling N=1..4; after the four cached candidates are exhausted, `regen_symbol.py` for a fresh one.
-   - **drop / edit a fact**: edit that fact's line in `$RUN/ledger_final.md`, then `python3 $SKILL/regen_symbol.py $RUN <voice> <symbol>`.
-   - **add a fact**: ask *correction or your-own-note?* Correction → `python3 $SKILL/stubify_fact.py $RUN "<fact>"`, act on the verdict (confirmed → append the stub to `ledger_final.md` + `regen_symbol.py`; contradicted → raise suspicion, do not block; unverifiable+needs_source → ask for a URL/desc; else trust). Your-own-note → ask initials, add `# NOTE(<initials>): <verbatim>` at the symbol (offer to voice it or keep verbatim).
-   - **write it myself**: replace that symbol's docstring with the human's exact text (in-session `Edit`; then `tics.py` + AST check).
-   - After any ledger edit: `python3 $SKILL/drift_check.py $RUN <voice> <symbol> "<what changed>"`; if it flags sure-stale symbols, offer to regen those too (never block).
-8. **Apply (in-session):** when the human approves, confirm via `AskUserQuestion`, then write the finished file onto the working tree (`cp $RUN/FINAL_<voice>.py <target.py>` — uncommitted, reversible) so they review the diff in their editor. **Never `git add`/`git commit`.**
+6. **Report (in-session):** `python3 $SKILL/render_report.py $RUN <voice> <target.py>` → `$RUN/report.html` (it auto-opens in a browser). Also surface it with `SendUserFile`, print its `file://` line, and **explicitly tell the human to open/read the report before deciding** — do not assume they have seen it.
+7. **Refine + apply loop (in-session) — KEEP LOOPING until the human Applies or Discards:** present an `AskUserQuestion` "What next?" each round (re-rendering + re-surfacing the report first). Because `AskUserQuestion` allows ≤4 options, the loop is two nested questions:
+   - **Round menu (≤4 opts):** **Refine a symbol** · **Apply to the repo** · **Discard (no changes)** (in library mode also **Apply all remaining**). A *refine* never exits the loop; only Apply/Discard do.
+   - **If Refine →** ask *which symbol* (offer up to 3 + free-text "Other"), then ask *the change* (4 opts): **roll the dice** · **drop/edit a fact** · **add a fact** · **write it myself**. Run the matching tool, re-render (it re-opens), then return to the round menu.
+       - roll the dice: `splice_symbol.py $RUN/FINAL_<voice>.py $RUN/runs/run-<N>.py <symbol> $RUN/FINAL_<voice>.py` cycling N=1..4; once exhausted, `regen_symbol.py $RUN <voice> <symbol>` for a fresh take.
+       - drop/edit a fact: edit that fact's line in `$RUN/ledger_final.md`, then `regen_symbol.py $RUN <voice> <symbol>`.
+       - add a fact: ask *correction or your-own-note?*. Correction → `stubify_fact.py $RUN "<fact>"`, act on the verdict (confirmed → append stub to `ledger_final.md` + `regen_symbol.py`; contradicted → raise suspicion, do not block; unverifiable+needs_source → ask for a URL/desc; else trust). Your-own-note → ask initials, add `# NOTE(<initials>): <verbatim>` at the symbol (offer voiced vs verbatim).
+       - write it myself: replace that symbol's docstring with the human's exact text (in-session `Edit`; then `tics.py` + AST check).
+       - after any ledger edit: `drift_check.py $RUN <voice> <symbol> "<what changed>"`; if it flags sure-stale symbols, offer to regen those too (never block).
+   - **If Apply →** `cp $RUN/FINAL_<voice>.py <target.py>` (working tree, uncommitted, reversible); tell the human to review the diff in their editor; exit the loop. **Never `git add`/`git commit`.** (Library mode: advance to the next file's report+loop; **Apply all remaining** writes every remaining file without further review.)
+   - **If Discard →** exit the loop, write nothing.
 
 The conceptual phases (what each does + the invariants):
 
@@ -84,25 +87,24 @@ Run `reattach.py` to ride the **preserve lane** back onto each finished file: he
 - **Success:** preserved lines present verbatim; nothing else changed; code still byte-identical.
 
 ### Step 7 — Report (in-session)
-Run `render_report.py` to build `report.html`: an **independent** plain-English summary of the file (written from the code, not the comments — so the human can check the comments against a description they did not write), the validated ledger, per-symbol before/after docstrings, and the consolidation rationale. Surface it with `SendUserFile` and a `file://` line.
-- **Success:** `report.html` rendered and surfaced.
+Run `render_report.py` to build `report.html`: an **independent** plain-English summary of the file (written from the code, not the comments — so the human can check the comments against a description they did not write), the validated ledger, per-symbol before/after docstrings, and the consolidation rationale. It **auto-opens in a browser**; also `SendUserFile` it and print the `file://` line. **Tell the human to actually open and read it** — name the changes and the verification results so they know what to look at; do not assume they have seen it.
+- **Success:** `report.html` rendered, auto-opened + surfaced, and the human pointed at it with a plain-language summary of what changed.
 
-### Step 8 — Refine (optional human loop, in-session)
-From the report the human can refine any symbol; loop until satisfied, re-rendering after each change. Per pick:
+### Step 8 — Refine + apply loop (human gate; loop until Apply or Discard)
+This is one **persistent loop**, not a one-shot. Each round, re-render + re-surface the report, then ask `AskUserQuestion` "What next?". Because `AskUserQuestion` allows ≤ 4 options, split it: a **round menu** (Refine a symbol · Apply · Discard; +Apply-all in library mode), and — when the human picks Refine — a *which symbol?* question (≤3 + free-text "Other") then a *what change?* question (4 opts). **A refine never exits the loop;** only Apply or Discard do. The exits are buttons the human must press — keep looping (roll the dice, edit facts, etc.) until they do.
 - **roll the dice** — a different take. Cheap: `splice_symbol.py` cycles the cached candidates `runs/run-1..4.py` for that symbol (its docstring + comments swap, code guaranteed unchanged). Once the four are exhausted, `regen_symbol.py` generates fresh.
 - **drop / edit a fact** — edit `ledger_final.md`, then `regen_symbol.py <symbol>` (re-runs the writer against the edited ledger and splices only that symbol back; every other symbol stays as the human had it).
 - **add a fact** — ask *correction or your-own-note?*. A **correction** goes through `stubify_fact.py` (validates against the code: confirmed → append stub + regen; contradicted → raise suspicion, never block; unverifiable+checkable → ask for a source; otherwise trust). A **your-own-note** is kept verbatim as `# NOTE(<initials>): …` at the symbol (ask initials; offer to voice it or keep verbatim) — the comment lens re-harvests it on a later run.
 - **write it myself** — replace that symbol's docstring with the human's exact words.
 - After any **ledger** edit, `drift_check.py` looks for OTHER symbols the change made sure-stale and offers to regen those too (never blocks the single-symbol intent).
-Every regeneration re-runs `polish.py`, and `splice_symbol.py` guards code byte-identity, so no edit can drift the code.
-- **Success:** the human is satisfied with every symbol; code still AST-identical; zero mechanical-ban violations.
+- **Apply** — `cp $RUN/FINAL_<voice>.py <target.py>`: write the finished file onto the working tree (uncommitted, reversible) so the human reviews the diff in their editor; exit the loop. Do not commit. In **library mode** Apply advances to the next file's report+loop; **Apply all remaining** writes every remaining file without further review.
+- **Discard** — exit the loop, write nothing.
 
-### Step 9 — Apply (human gate)
-When the human approves, confirm, then write the finished file onto the working tree (uncommitted) so they review the diff in their editor. Do not commit.
-- **Success:** on the human's confirm the finished file landed in the working tree (uncommitted), or they declined and nothing changed.
+Every regeneration re-runs `polish.py`, and `splice_symbol.py` guards code byte-identity, so no edit can drift the code.
+- **Success:** the loop exited on the human's explicit Apply (finished file written to the working tree, uncommitted) or Discard (nothing written); code still AST-identical; zero mechanical-ban violations.
 
 ## Done when
-A finished commented file exists for the chosen voice, with: executable code byte-identical to the original, every ledger fact correct against the code and the correctness-critical ones stated explicitly, must-carry domain facts present, preserve lane reattached verbatim, zero mechanical-ban violations, voice intact — surfaced via `report.html` (independent summary + ledger + before/after + rationale), optionally refined per symbol through the Step 8 loop, and either written to the working tree on the human's confirm or left for them, with nothing committed automatically.
+A finished commented file exists for the chosen voice, with: executable code byte-identical to the original, every ledger fact correct against the code and the correctness-critical ones stated explicitly, must-carry domain facts present, preserve lane reattached verbatim, zero mechanical-ban violations, voice intact — surfaced via an auto-opened `report.html` (independent summary + ledger + before/after + rationale) the human was pointed at, refined as they chose through the Step 8 loop, and the loop exited on their explicit Apply (written to the working tree, uncommitted) or Discard, with nothing committed automatically.
 
 ## Creating a voice (`--create-voice`)
 A separate mode that adds a voice to `voices.json`; it does not regenerate any file's comments. The orchestrator runs it interactively:

@@ -18,6 +18,7 @@ import html
 import json
 import os
 import sys
+import webbrowser
 
 
 def _symbols(path):
@@ -182,9 +183,16 @@ def main():
 
     out = os.path.join(rundir, "report.html")
     open(out, "w").write(doc)
+    url = f"file://{out}"
+    opened = False
+    try:
+        opened = webbrowser.open(url)  # best-effort; no-op on headless/SSH
+    except Exception:  # noqa: BLE001
+        opened = False
     print("=== REPORT WRITTEN ===")
     print(f"  {out}")
-    print(f"  file://{out}")
+    print(f"  {url}")
+    print("  " + ("opened in your browser." if opened else "open the link above in a browser to review it."))
     print(f"  symbols: {len(after)}   ledger facts: {len(ledger)}   validator: {'clean' if verdict_ok else 'flagged'}")
 
 
