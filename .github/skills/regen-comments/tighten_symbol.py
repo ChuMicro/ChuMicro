@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Refinement loop: shorten ONE symbol's docstring WITHOUT losing facts (the fact-preserving 'tighten').
+
+A blunt body-drop is destructive — it discards must-carry facts (e.g. a by-reference safety note the human
+kept in the picker). This instead runs a clean-room `claude -p` that rewrites only the target symbol's
+docstring shorter and denser: it keeps the one-line summary, the Args/Returns/Raises sections, the voice, and
+EVERY ledger fact that pertains to the symbol, cutting only wordy body prose that merely restates. It splices
+just that symbol back (code-identity guarded), re-polishes, and prints a KEPT/DROPPED fact report so the
+orchestrator can push back before Apply if a kept fact would be lost.
+
+Usage: tighten_symbol.py <rundir> <voice> <qualname>
+"""
+import os
+import subprocess
+import sys
+
+SKILL = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, SKILL)
+from preflight import require_claude  # noqa: E402
+
+
+def main():
+    require_claude()
+    rundir = os.path.abspath(sys.argv[1])
+    voice = sys.argv[2]
+    qual = sys.argv[3]
+    final = os.path.join(rundir, f"FINAL_{voice}.py")
+    if not os.path.exists(final):
+        sys.exit("no finished file yet — run phase 2 before tightening.")
+
+    prompt = (
+        "Read ./FINAL_" + voice + ".py and the nuance ledger ./ledger_final.md. Produce a copy of the file "
+        "where ONLY the symbol " + qual + " has its docstring TIGHTENED, written to ./tightened.py.\n"
+        "Tighten = shorter and denser. KEEP: the one-line summary, the Args/Returns/Raises sections, the "
+        "voice, and EVERY ledger fact that pertains to " + qual + " (including non-derivable / domain facts). "
+        "CUT only wordy body prose that just restates the summary or the Args. Do NOT add facts. Do NOT "
+        "change any executable code or any other symbol -- copy them verbatim.\n"
+        "Also write ./tighten_report.txt with two labelled lists: 'KEPT:' (the facts you preserved) and "
+        "'DROPPED:' (anything you could NOT keep while shortening -- empty if none). Reply DONE after both "
+        "files exist.\n"
+    )
+    subprocess.run(
+        ["claude", "-p", prompt, "--allowedTools", "Read", "Write",
+         "--permission-mode", "acceptEdits", "--model", "opus"],
+        cwd=rundir, capture_output=True, text=True,
+    )
+    tightened = os.path.join(rundir, "tightened.py")
+    if not os.path.exists(tightened):
+        sys.exit("tighten produced no tightened.py — check the run room.")
+
+    # splice ONLY the target symbol from the tightened copy (guard rejects any code drift), then re-polish
+    subprocess.run(
+        [sys.executable, os.path.join(SKILL, "splice_symbol.py"), final, tightened, qual, final],
+        check=True,
+    )
+    subprocess.run([sys.executable, os.path.join(SKILL, "polish.py"), rundir, final], check=True)
+
+    print("=== TIGHTENED ===")
+    print(f"  {qual!r} tightened in {final} (only that symbol changed; code byte-identical)")
+    rep = os.path.join(rundir, "tighten_report.txt")
+    if os.path.exists(rep):
+        print("  --- tighten report (kept / dropped facts) ---")
+        for line in open(rep).read().strip().splitlines():
+            print("   " + line)
+    print("  Orchestrator: if the report lists DROPPED facts, surface them and confirm with the human before Apply.")
+
+
+if __name__ == "__main__":
+    main()
