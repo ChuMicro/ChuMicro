@@ -79,7 +79,7 @@ Launch one `claude -p` that runs the **writer workflow** (`writers_wf.js`): the 
 - **Success:** one merged candidate; code AST-identical; must-carry facts present; no cruft leak; no lifted ledger phrasing.
 
 ### Step 5 — Verify (mechanical detect + clean-room polish)
-Phase 2 runs `polish.py` on the merged file: `tics.py` deterministically detects the absolute mechanical-ban violations (banned sentence-openers `The`/`That`/`This`/…, em-dashes, semicolons, the words `canonical`/`shape`) in docstrings/comments, and a clean-room `claude -p` minimally rewrites only the offending sentences (meaning + voice intact), looping until the detector is clean (max 3) and reverting any pass that altered executable code. Generators drift on "no exceptions" style rules, so this backstop is what makes the bans actually hold.
+Phase 2 runs `polish.py` on the merged file: `tics.py` deterministically detects the absolute mechanical-ban violations (em-dashes, semicolons, the words `canonical`/`shape`) in docstrings/comments, and a clean-room `claude -p` minimally rewrites only the offending sentences (meaning + voice intact), looping until the detector is clean (max 3) and reverting any pass that altered executable code. (Sentence-opener bans were intentionally dropped — they flattened the voice.)
 - **Success:** zero mechanical-ban violations in the finished file; code AST-identical; voice intact.
 
 ### Step 6 — Reattach (mechanical, in-session)
@@ -124,7 +124,7 @@ A separate mode that adds a voice to `voices.json`; it does not regenerate any f
 - `voices.json` — voice registry (data; add voices here).
 - `triage_wf.js` — triage workflow (3 code lenses + comment lens + ledger-writer + **validator/converge loop**; telegraphic-stub + no-invented-examples + comment-facts-are-non-code-derivable rules). The fixture-agnostic validator (per-fact correctness + explicitness of correctness-critical fact classes; NO trap list / NO file-specific knowledge) is folded in as a stage and drives the ledger-writer re-run loop.
 - `writers_wf.js` — writer fan-out + per-symbol consolidation + an independent code summarizer (`summary.json`).
-- `tics.py` / `polish.py` — Step 5 verify: `tics.py` deterministically detects mechanical-ban violations (banned openers, em-dashes, semicolons, `canonical`/`shape`) in docstrings/comments; `polish.py` runs the clean-room fix loop with a code-identity guard.
+- `tics.py` / `polish.py` — Step 5 verify: `tics.py` deterministically detects mechanical-ban violations (em-dashes, semicolons, `canonical`/`shape`) in docstrings/comments; `polish.py` runs the clean-room fix loop with a code-identity guard.
 - `render_report.py` — mechanical HTML report (no LLM): independent summary + validated ledger + per-symbol before/after + consolidation rationale. Code/correctness-first.
 - `gen_voice_previews.py` / `voice_preview_wf.js` — render every voice against one fixed no-code subject and cache the samples into `voices.json` `previews` for the pick menu. Re-run after adding a voice.
 - `splice_symbol.py` — refinement-loop primitive: swap one symbol's docstring+comments from another version (a cached candidate or a fresh regen), guarding executable code byte-identical.

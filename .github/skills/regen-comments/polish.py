@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Enforce the mechanical writing-tic bans on a finished file (SKILL.md Step 5, wired).
 
-Detects banned sentence-openers / em-dashes / semicolons / banned words (tics.py), then runs a clean-room
-`claude -p` that rewrites ONLY the offending docstring/comment sentences — minimal, meaning-preserving, voice
-intact, executable code byte-identical. Loops until the deterministic detector is clean or MAX attempts. The
+Detects em-dashes / semicolons / banned words (tics.py), then runs a clean-room `claude -p` that rewrites
+ONLY the offending docstring/comment sentences — minimal, meaning-preserving, voice intact, executable code
+byte-identical. Loops until the deterministic detector is clean or MAX attempts. The
 executable-code fingerprint (docstrings stripped) is checked after each pass; a pass that changed code is
 reverted. Generators drift on "no exceptions" style rules, so this is the backstop that actually guarantees
 the bans hold in the delivered file.
@@ -40,8 +40,6 @@ def _polish_once(rundir, fname, offenders):
         "rules. Fix EVERY violation listed below by minimally rewriting ONLY those docstring/comment "
         "sentences. Keep the meaning and the voice; change as few words as possible.\n"
         "Rules (absolute):\n"
-        "- No sentence may START with The, That, That's, This, These, or Those. Recast with a concrete noun "
-        "or a precise verb (e.g. 'The header carries X' -> 'A 10-byte header carries X', or name the actor).\n"
         "- No em-dashes (use a period or comma). No semicolons (split into two sentences). Never use the "
         "words 'canonical' or 'shape' in any form.\n"
         "- Do NOT change any executable code, and do NOT touch any line that is not a docstring or comment. "
