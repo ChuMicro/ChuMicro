@@ -16,9 +16,12 @@ import sys
 import tempfile
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, SKILL)
+from preflight import require_claude  # noqa: E402
 
 
 def main():
+    require_claude()
     regen_all = "--all" in sys.argv
     vpath = os.path.join(SKILL, "voices.json")
     data = json.load(open(vpath))

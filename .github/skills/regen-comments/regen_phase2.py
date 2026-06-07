@@ -15,6 +15,8 @@ import subprocess
 import sys
 
 SKILL = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, SKILL)
+from preflight import require_claude  # noqa: E402
 
 
 def claude_p_workflow(rundir, wf_name):
@@ -29,6 +31,7 @@ def claude_p_workflow(rundir, wf_name):
 
 
 def main():
+    require_claude()
     rundir = os.path.abspath(sys.argv[1])
     voice = sys.argv[2]
     if not os.path.exists(os.path.join(rundir, "ledger_final.md")):

@@ -22,6 +22,7 @@ import sys
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from strip import strip_code  # noqa: E402
+from preflight import require_claude  # noqa: E402
 
 # Library FACTS come from the source contracts, not tests/build artifacts; keep those out of the triage.
 SKIP_DIRS = {"__pycache__", "tests", "functional_tests", ".git", ".scratch", ".idea", "build", "dist"}
@@ -51,6 +52,7 @@ def library_prompt():
 def main():
     if len(sys.argv) != 3:
         sys.exit("usage: regen_phase0.py <library_dir> <libroom>")
+    require_claude()
     libdir = os.path.abspath(sys.argv[1])
     libroom = os.path.abspath(sys.argv[2])
     os.makedirs(os.path.join(libroom, "lib"), exist_ok=True)
