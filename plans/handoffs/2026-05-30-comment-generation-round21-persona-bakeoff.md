@@ -1411,3 +1411,54 @@ emptied to disable the @AGENTS.md include).
 Read this handoff, then `round-21/RUN.md`, then any two persona files side by side (e.g.
 `commenter-r21-elon.md` vs `commenter-r21-attenborough.md`) to see the shared discipline and the
 voice-only difference.
+
+---
+
+## SESSION 2026-06-07 — full skill build (steps 1–5), all committed
+
+The skill at `.github/skills/regen-comments/` was completed end-to-end this session. Seven user-driven
+design decisions + four mid-build catches, each validated on real code (heartbeat.py, kvstore/cp_nvm.py)
+and committed as its own bisectable commit.
+
+**Commits (newest first):**
+- `0748651b` voices.json fixture-agnostic hygiene (drop exp13/round-21 tokens)
+- `f667bfe2` step 5: create-voice (gen persona -> edit -> test on user target -> save + preview)
+- `38612d60` preflight checks the claude CLI's logged-in ACCOUNT (not OS user) — app-login vs CLI-login mismatch
+- `4071956d` step 4: refinement loop + preflight + library parallelization
+- `ed7f1f43` Step 5 verify wired (tics.py + polish.py) — fixes the "The"-opener leak at generation + backstop
+- `b24deded` report polish (collapse ledger, show signatures)
+- `908ebfaf` step 3: HTML report + independent summarizer + voice previews
+- `b8127a88` step 2: library-aware mode (phase 0 cross-file ledger ride-in)
+- `83d19128` step 1: comment-triage default-ON (--without-comment-triage), always-on header preserve,
+  validator folded into triage_wf.js with ledger-writer retry loop, NOTE(<initials>): attributed notes
+
+**Decisions locked this session:** comment-triage default ON; mechanical copyright/header preserve always
+on; validator re-run loop (≤4) then needs_user escalation; library mode = dir input (no --lib for user),
+LIBRARY_FACTS.md is a cross-file ledger, lenses DEFER to it, writer/judge emit only where touched; one voice
+per run; report = independent summary + ledger + per-symbol before/after + rationale, write-back to working
+tree on confirm (never commit); refinement loop off the report (roll-dice cheap-cycle -> fresh, drop/edit/add
+fact, write-it-myself, drift offers); user additions split correction (silent ledger) vs NOTE(<initials>):
+attributed verbatim note (greppable for re-harvest); 4 passes hardcoded; create-voice = name -> AI persona
+-> edit -> test on user target -> save.
+
+**File inventory (all compile, fixture-agnostic, tree clean):** SKILL.md, strip.py, reattach.py,
+triage_wf.js (3 lenses + comment lens + ledger-writer + validator loop), ledger validator (folded in),
+writers_wf.js (4 passes + per-symbol consolidation + independent summarizer), tics.py + polish.py (Step 5
+verify), render_report.py, gen_voice_previews.py + voice_preview_wf.js, voices.json (7 voices + previews),
+splice_symbol.py + regen_symbol.py + stubify_fact.py + drift_check.py (refine loop), preflight.py,
+regen_batch.py (library parallelism), regen_phase0/1/2.py drivers, create_voice.py, library_triage.md.
+Deleted: PLAN.md, ledger_validate.js (folded into triage_wf.js).
+
+**Deferred (the "voice/style later" track — DO NOT touch without the user):**
+- Header/fact repetition: same fact (e.g. 10-byte header layout) re-explained in module + class + methods.
+  Root tension: no-cross-reference discipline vs avoid-repetition. Candidate fix: state once, reference
+  tersely elsewhere; or judge-level cross-symbol fact dedup.
+- Writer clarity: the INDEPENDENT summarizer (summary.json) reads CLEARER than the generated docstrings —
+  it has one job + zero constraints while the writer juggles ~15. Lever: flip the dependency so the
+  summarizer's plain sentence is the BACKBONE the writer voices (voice as overlay), and/or trim the
+  discipline. User has their own ideas; hear them first.
+
+**NEXT: fresh-session bug hunt.** User runs `/regen-comments <file>` (single-file first, then a dir for
+library mode, then --create-voice) in a NEW session (cold orchestrator = unbiased test of SKILL.md
+walkability; also loads the project CLAUDE.md to exercise clean-room isolation), and reports failures back to
+THIS builder/debugger session. preflight is Runbook step 0; pass --expect-email <session account>.
