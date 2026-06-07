@@ -76,10 +76,35 @@ function consolPrompt() {
     + '/picks.json. Return merged_path = the merged file and picks = [{symbol, winner, why}]. Reply only after both files are written.'
 }
 
+// Independent summarizer: plain-English purpose per symbol, read from the CODE only (never the generated
+// comments), so the HTML report gives the human a higher-level description to sanity-check the comments
+// against — one they did not write. Runs alongside the writer passes (it shares nothing with them).
+const SUMMARY_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    module_summary: { type: 'string' },
+    symbols: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { symbol: { type: 'string' }, purpose: { type: 'string' } }, required: ['symbol', 'purpose'] } },
+    path: { type: 'string' },
+  },
+  required: ['module_summary', 'symbols', 'path'],
+}
+function summaryPrompt() {
+  return 'You are a code SUMMARIZER. Read ONLY the stripped code at ' + FILE + ' (it has no comments or '
+    + 'docstrings) and, if it exists, the library ledger at ' + RUNDIR + '/LIBRARY_FACTS.md for cross-file '
+    + 'context. Explain in PLAIN ENGLISH what the code does, INDEPENDENT of any documentation -- this lets a '
+    + 'human sanity-check generated comments against a higher-level description they did not write. '
+    + 'module_summary: 1-3 sentences on what this file does in the real world. symbols: for EACH top-level '
+    + 'class and function, and each method, one plain sentence on its purpose and any non-obvious behavior '
+    + '(symbol = a qualified name like "ClassName.method" or "func"). Do NOT invent; state only what the '
+    + 'code supports. Write JSON {module_summary, symbols, path} to ' + RUNDIR + '/summary.json (path = that '
+    + 'file) and reply DONE.'
+}
+
 phase('Generate')
-await parallel(Array.from({ length: PASSES }, (_, i) => i + 1).map((n) => () =>
-  agent(genPrompt(n), { label: 'gen#' + n, phase: 'Generate', model: 'opus', agentType: 'general-purpose', schema: GEN_SCHEMA })
-))
+const genTasks = Array.from({ length: PASSES }, (_, i) => i + 1).map((n) => () =>
+  agent(genPrompt(n), { label: 'gen#' + n, phase: 'Generate', model: 'opus', agentType: 'general-purpose', schema: GEN_SCHEMA }))
+genTasks.push(() => agent(summaryPrompt(), { label: 'summarize', phase: 'Generate', model: 'opus', agentType: 'general-purpose', schema: SUMMARY_SCHEMA }))
+await parallel(genTasks)
 phase('Consolidate')
 const merged = await agent(consolPrompt(), { label: 'consolidate', phase: 'Consolidate', model: 'opus', agentType: 'general-purpose', schema: CONSOL_SCHEMA })
 return merged

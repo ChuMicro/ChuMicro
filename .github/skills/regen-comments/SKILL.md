@@ -17,7 +17,7 @@ Rebuild docstrings and inline comments for Python file(s) **from the code's beha
 - **Passes:** **4** writer passes per voice before per-symbol consolidation.
 
 ### The 4-voice pick menu (when no `--voice`)
-`cutler` (default), `elon`, `cantrill`, `hemingway`. The full registry (`linus`, `torvalds`, `pewdiepie`, and any added via `--create-voice`) is reachable with `--voice <key>` but is not in the menu. The menu is the FIRST human gate; it precedes everything else.
+`cutler` (default), `elon`, `cantrill`, `hemingway`. The full registry (`linus`, `torvalds`, `pewdiepie`, and any added via `--create-voice`) is reachable with `--voice <key>` but is not in the menu. The menu is the FIRST human gate; it precedes everything else. Each option carries a `preview` — that voice's cached sample from `voices.json` `previews` (all voices rendered against one fixed no-code subject) — so the user compares voices before picking.
 
 ## Invariants (do not violate)
 1. **Clean room for every code-reading/judging layer.** Lenses, ledger-writer, writers, consolidation judge, verifier all run as `claude -p` launched **from a `/tmp` room**, never the in-session Workflow tool. Flags: `--allowedTools Read Write [Workflow Task] --permission-mode acceptEdits --model opus`. Never pass `--add-dir` pointing at the project (it would re-add a `CLAUDE.md` dir). Never use `bypassPermissions`.
@@ -25,19 +25,19 @@ Rebuild docstrings and inline comments for Python file(s) **from the code's beha
 3. **Writers never see the original comments.** The commented file is only ever in the comment-lens room; it is physically absent from writer rooms. Enforced by file placement, not instruction.
 4. **Code stays byte-identical.** Only docstrings/comments are added; verify with an AST-equality check (strip docstrings, compare) and by running the file.
 5. **Warn about user-global memory.** `~/.claude/CLAUDE.md` loads under `claude -p` regardless of cwd. Tell the user it may influence the comments; it's out of scope to neutralize.
-6. **Never auto-commit.** Present finished candidates; the human makes the final voice pick and applies it.
+6. **Never auto-commit.** After the human approves the report, you may write the finished file onto the working tree (uncommitted, reversible) on an explicit confirm; never `git add`/`git commit`. The human reviews the diff and commits.
 
 ## Procedure
 
 ### Runbook (the orchestrator follows these literally; the conceptual steps below explain each phase)
 Let `SKILL=.github/skills/regen-comments`, `RUN=/tmp/regen-cr/<slug>-<n>` (a fresh dir).
-1. **Voice gate (in-session):** if `--voice <key>` given, use it; else present the 4-voice menu (default `cutler`) via `AskUserQuestion`. (`--create-voice` → registry-add flow, then stop.)
+1. **Voice gate (in-session):** if `--voice <key>` given, use it; else present the 4-voice menu (default `cutler`) via `AskUserQuestion`, each option's `preview` = that voice's cached sample from `voices.json` `previews` (run `gen_voice_previews.py` once to populate). (`--create-voice` → registry-add flow, then stop.)
 1b. **Library mode (in-session, only when `target` is a directory):** `python3 $SKILL/regen_phase0.py <target_dir> $LIBROOM` (`LIBROOM=/tmp/regen-cr/<slug>-lib`). It strips the library source, runs the broad library triage as one clean-room `claude -p`, and writes `$LIBROOM/LIBRARY_FACTS.md` (domain + cross-file contracts + glossary). Then run steps 2–6 **for each `.py` file** in the library, passing `--lib $LIBROOM/LIBRARY_FACTS.md` to phase 1 each time. A single-file target skips this step.
 2. **Phase 1 (clean-room grounding):** `python3 $SKILL/regen_phase1.py <target.py> $RUN [--without-comment-triage] [--lib <LIBRARY_FACTS.md>]` (the orchestrator supplies `--lib` automatically in library mode). It strips, captures the header for preservation, then runs the triage workflow (3 lenses + comment lens + ledger-writer + **validator/converge loop**) as one clean-room `claude -p`, prints the **questionable facts** + whether the validator still flags issues, and writes `$RUN/{ledger_provisional.md, ledger.json, preserve.json, validation.json, phase1.json}`.
 3. **Validator gate (in-session):** the ledger-writer already re-ran against the validator up to 4× inside phase 1. Only if `phase1.json` shows `needs_user: true` (still flagged after the loop) do you ESCALATE — present the flagged facts (`validation.json`) plus a recommendation in an `AskUserQuestion` with a free-text window, then apply the user's steer before phase 2.
 4. **Picker (in-session, the one human gate):** present the questionable facts via multi-select `AskUserQuestion`; then write `$RUN/ledger_final.md` = `ledger_provisional.md` with the **rejected** facts' lines removed (high-confidence facts are auto-kept).
-5. **Phase 2 (clean-room write):** `python3 $SKILL/regen_phase2.py $RUN <voice>`. Runs the writer workflow (4 passes + per-symbol consolidation), reattaches the preserve lane, writes `$RUN/FINAL_<voice>.py`.
-6. **Present (in-session):** show `FINAL_<voice>.py`; the human reviews + applies. **Never auto-commit/apply.**
+5. **Phase 2 (clean-room write):** `python3 $SKILL/regen_phase2.py $RUN <voice>`. Runs the writer workflow (4 passes + per-symbol consolidation + an independent summarizer), reattaches the preserve lane, writes `$RUN/{FINAL_<voice>.py, merged.py, picks.json, summary.json}`.
+6. **Report + apply (in-session):** `python3 $SKILL/render_report.py $RUN <voice> <target.py>` → `$RUN/report.html`. Surface it with `SendUserFile` and print its `file://` line. After the human approves, confirm via `AskUserQuestion`, then write the finished file onto the working tree (`cp $RUN/FINAL_<voice>.py <target.py>` — uncommitted, reversible) so they review the diff in their editor. **Never `git add`/`git commit`.**
 
 The conceptual phases (what each does + the invariants):
 
@@ -75,18 +75,21 @@ Cold-reader pass per merged candidate: fabrication check, tic-density at human l
 Run `reattach.py` to ride the **preserve lane** back onto each finished file: headers (copyright/author/license) to the top, live directives/TODOs (`# noqa`, `TODO(TICKET)`) back to their original line. A writer never rewords these.
 - **Success:** preserved lines present verbatim; nothing else changed; code still byte-identical.
 
-### Step 7 — Present (human gate)
-Show the finished candidate(s). The human picks the voice and applies it. Do not commit.
+### Step 7 — Report + apply (human gate)
+Run `render_report.py` to build `report.html`: an **independent** plain-English summary of the file (written from the code, not the comments — so the human can check the comments against a description they did not write), the validated ledger, per-symbol before/after docstrings, and the consolidation rationale. Surface it with `SendUserFile` and a `file://` line. After the human approves, confirm, then write the finished file onto the working tree (uncommitted) so they review the diff in their editor. Do not commit.
+- **Success:** `report.html` rendered and surfaced; on the human's confirm the finished file landed in the working tree (uncommitted), or they declined and nothing changed.
 
 ## Done when
-A finished commented file exists per requested voice, with: executable code byte-identical to the original, every ledger fact correct against the code and the correctness-critical ones stated explicitly, must-carry domain facts present, preserve lane reattached verbatim, no cruft leak, voice intact — presented for the human's final pick, nothing committed automatically.
+A finished commented file exists for the chosen voice, with: executable code byte-identical to the original, every ledger fact correct against the code and the correctness-critical ones stated explicitly, must-carry domain facts present, preserve lane reattached verbatim, no cruft leak, voice intact — surfaced via `report.html` (independent summary + ledger + before/after + rationale), and either written to the working tree on the human's confirm or left for them, with nothing committed automatically.
 
 ## Reference files
 - `strip.py` — mechanical comment/docstring stripper (line surgery, not `ast.unparse`).
 - `reattach.py` — mechanical preserve-and-reattach.
 - `voices.json` — voice registry (data; add voices here).
 - `triage_wf.js` — triage workflow (3 code lenses + comment lens + ledger-writer + **validator/converge loop**; telegraphic-stub + no-invented-examples + comment-facts-are-non-code-derivable rules). The fixture-agnostic validator (per-fact correctness + explicitness of correctness-critical fact classes; NO trap list / NO file-specific knowledge) is folded in as a stage and drives the ledger-writer re-run loop.
-- `writers_wf.js` — writer fan-out + per-symbol consolidation/verify.
+- `writers_wf.js` — writer fan-out + per-symbol consolidation + an independent code summarizer (`summary.json`).
+- `render_report.py` — mechanical HTML report (no LLM): independent summary + validated ledger + per-symbol before/after + consolidation rationale. Code/correctness-first.
+- `gen_voice_previews.py` / `voice_preview_wf.js` — render every voice against one fixed no-code subject and cache the samples into `voices.json` `previews` for the pick menu. Re-run after adding a voice.
 - `regen_phase0.py` / `library_triage.md` — library-aware mode: `regen_phase0.py` strips a library subtree and runs the broad library-triage prompt as one clean-room `claude -p`, emitting `LIBRARY_FACTS.md` (domain + cross-file contracts + glossary) that rides into each per-file room — the lenses, writers, and consolidation judge all consult it (deferring to it for cross-file facts, emitting them only where a file's code touches them).
 
 ## Patterns to avoid
