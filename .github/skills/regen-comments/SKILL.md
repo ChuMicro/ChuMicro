@@ -12,7 +12,7 @@ Rebuild docstrings and inline comments for Python file(s) **from the code's beha
 - **target**: one Python **file**, OR a **directory/library**. A file runs the single-file procedure. A directory triggers **library-aware mode** (Runbook step 1b): a one-time library triage builds `LIBRARY_FACTS.md`, then the procedure loops per file with that cross-file ledger rode into every room. The input type is detected (file vs dir) — there is no separate flag.
 - **`--voice <key>`** (optional): run with any voice in `voices.json`. If omitted, present a **4-voice pick menu** via `AskUserQuestion` (default **cutler**); the other registry voices are reachable only via `--voice`. **A run is always exactly ONE voice.**
 - **`--without-comment-triage`** (default: comment-triage **ON**): by default the file's *existing* comments are mined for genuinely non-derivable facts — reliable enough now to be the default. Pass this flag to skip that lens and work purely from code. Writers stay clean-room either way; comment knowledge enters only through the (filtered) ledger. Copyright/license/author **header preservation is mechanical and always-on**, independent of this flag.
-- **`--create-voice`** (mode, no comment generation): add a voice to `voices.json`. Prompt for a key + a one-line persona paragraph, validate it against the persona discipline (named person or disposition, a SINGLE clause, NO rule-work baked inside it — see `[[personas-clean-one-clause]]`), append, and exit. Does not touch any target file. Voices are data; never author a per-voice agent file.
+- **`--create-voice`** (mode): add a voice to `voices.json` — see [Creating a voice](#creating-a-voice---create-voice). Voices are data; never author a per-voice agent file.
 - **Model:** every clean-room layer runs on **opus** (correctness-first; the lenses do the hard cross-method discovery and the judges gate correctness).
 - **Passes:** **4** writer passes per voice before per-symbol consolidation.
 
@@ -104,7 +104,17 @@ When the human approves, confirm, then write the finished file onto the working 
 ## Done when
 A finished commented file exists for the chosen voice, with: executable code byte-identical to the original, every ledger fact correct against the code and the correctness-critical ones stated explicitly, must-carry domain facts present, preserve lane reattached verbatim, zero mechanical-ban violations, voice intact — surfaced via `report.html` (independent summary + ledger + before/after + rationale), optionally refined per symbol through the Step 8 loop, and either written to the working tree on the human's confirm or left for them, with nothing committed automatically.
 
+## Creating a voice (`--create-voice`)
+A separate mode that adds a voice to `voices.json`; it does not regenerate any file's comments. The orchestrator runs it interactively:
+1. **Name** — ask the human for a person (or a clear disposition), e.g. "Grace Hopper".
+2. **Draft** — `python3 $SKILL/create_voice.py gen "<name>"` drafts a one-line persona in the registry's house style (clean-room `claude -p`).
+3. **Edit** — show the draft; let the human edit it via `AskUserQuestion` (free-text) until they are happy.
+4. **Test** — run the normal pipeline on a target the human supplies (`--voice <newkey>` once it is added, or test against a temporary key), render `report.html`, and **do not write back**. Optionally enter the Step 8 refine loop. Testing on a fresh user-supplied target (not a baked fixture) keeps the test from going stale.
+5. **Save** — on accept, `python3 $SKILL/create_voice.py add <key> "<final persona>"` appends the persona and generates its pick-menu preview (`gen_voice_previews.py`). The voice is then usable as `--voice <key>` and appears with a preview.
+- **Success:** the new persona is in `voices.json` with a cached preview, validated by the human on a real target; the committed registry stays clean if they decline.
+
 ## Reference files
+- `create_voice.py` — `--create-voice`: `gen` drafts a persona for a name (house style, clean-room), `add` appends an approved persona to `voices.json` + generates its preview.
 - `preflight.py` — Step 0 check: `claude` CLI on PATH + runnable + **logged in**, and which **Claude account** it resolves to (`claude auth status`) — `claude -p` uses the CLI's own login, which can differ from the session's account; `--expect-email` flags a mismatch. Imported by every driver as a guard (installed + logged-in).
 - `regen_batch.py` — library-mode speedup: bounded-parallel runner for the gate-free phases (phase 1 grounding across files, then phase 2 writing across rooms); keep concurrency low (2-3).
 - `strip.py` — mechanical comment/docstring stripper (line surgery, not `ast.unparse`).
