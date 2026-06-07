@@ -35,8 +35,12 @@ def main():
         "(3) needs_source: true if the fact is unverifiable BUT reads as a checkable claim (so the human "
         "should be asked for a URL or a source); false if it is clearly an opinion, a plan, or unverifiable "
         "by nature.\n"
-        "(4) note: one line — where the code agrees or disagrees, or why it is unverifiable.\n\n"
-        "Write JSON {stub, status, needs_source, note} to ./stub_result.json and reply DONE."
+        "(4) note: one line — where the code agrees or disagrees, or why it is unverifiable.\n"
+        "(5) concern: a SHORT reason if this fact reads as CLEARLY WRONG, or as low-value water-cooler "
+        "chatter / noise that probably should NOT become a code comment even though the human asked for it; "
+        "empty string if it is a fine thing to document. Still produce the stub regardless — the human "
+        "decides; this only flags it.\n\n"
+        "Write JSON {stub, status, needs_source, note, concern} to ./stub_result.json and reply DONE."
     )
     subprocess.run(
         ["claude", "-p", prompt, "--allowedTools", "Read", "Write",
@@ -48,11 +52,13 @@ def main():
         sys.exit("no stub_result.json produced — check the run room.")
     r = json.load(open(p))
     print("=== STUBIFY RESULT ===")
-    print(f"  status: {r.get('status')}   needs_source: {r.get('needs_source')}")
+    print(f"  status: {r.get('status')}   needs_source: {r.get('needs_source')}   concern: {r.get('concern') or '(none)'}")
     print(f"  stub: {r.get('stub')}")
     print(f"  note: {r.get('note')}")
-    print("  Orchestrator: confirmed -> append stub to ledger_final.md + regen_symbol; contradicted -> raise")
-    print("  suspicion to the human (do NOT block); unverifiable+needs_source -> ask for a URL/desc; else trust.")
+    print("  Orchestrator: confirmed + no concern -> append stub to ledger_final.md + regen_symbol.")
+    print("  PUSH BACK (invariant 7) if status==contradicted OR concern is set (clearly-wrong / low-value")
+    print("  water-cooler noise): surface it, offer keep-anyway / rephrase / cancel; comply only on explicit")
+    print("  confirm, then trust the human. unverifiable+needs_source -> ask for a URL/description first.")
 
 
 if __name__ == "__main__":

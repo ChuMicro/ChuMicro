@@ -91,10 +91,10 @@ def main():
     extra = [p for p in clens if p.get("line", "").strip() not in header_lines]
     preserve = header + extra
     json.dump(preserve, open(os.path.join(rundir, "preserve.json"), "w"), indent=2)
-    # questionable = low/med confidence OR comment-derived (a human decides whether each reaches the writers)
-    questionable = [f for f in ledger
-                    if f.get("confidence") in ("low", "med")
-                    or any("comment" in s for s in f.get("source_lenses", []))]
+    # questionable = low/med confidence only. High-confidence facts are auto-kept whether code- OR
+    # comment-derived: a confident fact does not need a human keep/drop, and surfacing them all made the
+    # picker too involved. Low/med comment-derived facts still surface (they ARE low/med).
+    questionable = [f for f in ledger if f.get("confidence") in ("low", "med")]
     needs_user = bool(val.get("any_wrong") or val.get("any_underspecified"))
     json.dump({"questionable": questionable, "validation": val, "needs_user": needs_user,
                "ledger_provisional": os.path.join(rundir, "ledger_provisional.md"),
