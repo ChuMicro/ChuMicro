@@ -18,7 +18,7 @@ const PASSES = 4
 const VOICE_PARA = "__VOICE_PARA__"
 
 function discipline() {
-  let s = 'Your voice comes first. Where a rule below would flatten your natural voice, keep the voice and break the rule. Otherwise follow them all.\n\n'
+  let s = 'Your voice comes first. Where a STYLE rule below would flatten your natural voice, keep the voice and break the rule. Otherwise follow them all. EXCEPTION -- these mechanical bans are ABSOLUTE and are never broken for voice: no sentence starts with The/That/That\'s/This/These/Those, no em-dashes, no semicolons, and never the words `canonical` or `shape`.\n\n'
   s += '## Document every parameter\n\nEvery public parameter gets an `Args:` entry describing the input. Never skip one even if it looks obvious.\n'
     + '- Enum members are not parameters. Never give an enum an `Args:` block, and never invent a per-member meaning from its name. If the code gives a member no behavior beyond its value, say only what is true, usually just that the names label the bits and the code counts how many are set.\n\n'
   s += '## Format\n\n- Open a module file with a one to two sentence module docstring for the file as a whole.\n'

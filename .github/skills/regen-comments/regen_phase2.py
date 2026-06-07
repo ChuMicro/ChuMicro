@@ -47,6 +47,8 @@ def main():
     merged = os.path.join(rundir, "merged.py")
     if not os.path.exists(merged):
         sys.exit("writer phase produced no merged.py — check the run room.")
+    # Step 5 (verify): enforce the mechanical tic bans before reattach (no-op when already clean)
+    subprocess.run([sys.executable, os.path.join(SKILL, "polish.py"), rundir, merged], check=True)
     final = os.path.join(rundir, f"FINAL_{voice}.py")
     preserve = os.path.join(rundir, "preserve.json")
     # reattach only if there is a preserve lane; otherwise the merged file is already final
