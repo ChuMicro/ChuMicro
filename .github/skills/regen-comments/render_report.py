@@ -20,16 +20,29 @@ import os
 import sys
 
 
-def _docstrings(path):
-    """{qualname: (docstring_or_None, lineno)} for the module + every class / function / method."""
-    tree = ast.parse(open(path).read())
-    out = {"<module>": (ast.get_docstring(tree), 0)}
+def _symbols(path):
+    """{qualname: {doc, lineno, sig}} for the module + every class / function / method.
+
+    sig is the source of the `def`/`class` statement (decorators through the colon, docstring excluded), so
+    the report shows what each docstring documents. The module row has no signature.
+    """
+    src = open(path).read()
+    lines = src.splitlines()
+    tree = ast.parse(src)
+    out = {"<module>": {"doc": ast.get_docstring(tree), "lineno": 0, "sig": ""}}
+
+    def sig_of(node):
+        start = node.lineno
+        if node.decorator_list:
+            start = min(start, min(d.lineno for d in node.decorator_list))
+        body_start = node.body[0].lineno if node.body else node.lineno + 1
+        return "\n".join(lines[start - 1:body_start - 1]).rstrip()
 
     def walk(node, prefix):
         for child in node.body:
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 q = prefix + child.name
-                out[q] = (ast.get_docstring(child), child.lineno)
+                out[q] = {"doc": ast.get_docstring(child), "lineno": child.lineno, "sig": sig_of(child)}
                 if isinstance(child, ast.ClassDef):
                     walk(child, q + ".")
 
@@ -73,8 +86,8 @@ def main():
     libfacts = os.path.join(rundir, "LIBRARY_FACTS.md")
     has_lib = os.path.exists(libfacts)
 
-    before = _docstrings(original)
-    after = _docstrings(final)
+    before = _symbols(original)
+    after = _symbols(final)
     purpose = {s["symbol"]: s["purpose"] for s in summary.get("symbols", [])}
     pick = {}
     for p in picks:
@@ -89,8 +102,10 @@ def main():
     badge_cls = "ok" if verdict_ok else "warn"
 
     rows = []
-    for qual, (doc_after, _) in after.items():
-        doc_before = before.get(qual, (None, 0))[0]
+    for qual, info in after.items():
+        doc_after = info["doc"]
+        sig = info["sig"]
+        doc_before = before.get(qual, {}).get("doc")
         pur = purpose.get(qual) or purpose.get(_short(qual)) or ""
         facts = _facts_for(qual, ledger)
         pk = pick.get(qual) or pick.get(_short(qual))
@@ -102,6 +117,7 @@ def main():
         rows.append(f"""
         <div class="sym">
           <h3>{_esc(qual)}</h3>
+          {f'<pre class="sig">{_esc(sig)}</pre>' if sig else ''}
           {f'<div class="purpose">{_esc(pur)}</div>' if pur else ''}
           <div class="ba">
             <div class="col"><div class="lbl">before</div><pre>{_esc(doc_before) or '<span class=none>(no docstring)</span>'}</pre></div>
@@ -138,6 +154,8 @@ def main():
  .purpose{{color:#33405a;margin-bottom:8px}}
  .ba{{display:flex;gap:12px}} .col{{flex:1;min-width:0}} .lbl{{font-size:11px;color:#8a93a0;text-transform:uppercase}}
  pre{{white-space:pre-wrap;word-break:break-word;background:#fafbfc;border:1px solid #eef0f3;border-radius:6px;padding:8px;margin:4px 0;font-size:12.5px}}
+ pre.sig{{background:#eef3f8;border-color:#d6e2ee;color:#0b3a5c;font-weight:600;margin-bottom:8px}}
+ details.card>summary{{font-size:16px;cursor:pointer}}
  .none{{color:#aab1bb;font-style:italic}}
  details{{margin-top:6px}} summary{{cursor:pointer;color:#5a6472;font-size:12px}}
  .facts{{margin:8px 0;padding-left:18px}} .facts .meta{{color:#8a93a0}}
@@ -152,10 +170,9 @@ def main():
    <ul>{''.join(f"<li><code>{_esc(s['symbol'])}</code> — {_esc(s['purpose'])}</li>" for s in summary.get('symbols', [])) or '<li class=none>no symbol summaries</li>'}</ul>
  </div>
 
- <h2>Validated ledger</h2>
- <div class="card">
+ <details class="card ledger"><summary><b>Validated ledger</b> — {len(ledger)} facts (click to expand)</summary>
    <table><tr><th>fact (telegraphic stub)</th><th>sites</th><th>lenses</th><th>conf</th></tr>{ledger_rows}</table>
- </div>
+ </details>
 
  <h2>Per-symbol: before → after</h2>
  <div class="card">{''.join(rows)}</div>
