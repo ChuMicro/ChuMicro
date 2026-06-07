@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Deterministic detector for the mechanical writing-tic bans (no LLM).
 
-Finds the violations the writer discipline calls absolute — banned sentence-openers (The / That / That's /
-This / These / Those), em-dashes, semicolons, and the banned words `canonical` / `shape` — in a file's
-DOCSTRINGS and COMMENTS only (executable code is never inspected). The polish step uses this to know exactly
-what to fix and to confirm a clean result; nothing here rewrites prose (that needs judgment).
+Finds the violations the writer discipline calls absolute — em-dashes, semicolons, and the banned words
+`canonical` / `shape` — in a file's DOCSTRINGS and COMMENTS only (executable code is never inspected). The
+polish step uses this to know exactly what to fix and to confirm a clean result; nothing here rewrites prose
+(that needs judgment). (Sentence-opener bans were intentionally dropped — they flattened the voice.)
 
 Usage: tics.py <file.py>      # prints violations, exit 1 if any
        from tics import detect # -> [{kind, where, text}]
@@ -15,12 +15,7 @@ import re
 import sys
 import tokenize
 
-BANNED_OPENERS = ("The", "That", "That's", "This", "These", "Those")
 BANNED_WORDS = ("canonical", "shape")
-
-
-def _sentences(text):
-    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text.replace("\n", " ")) if s.strip()]
 
 
 def _strip_code_spans(text):
@@ -28,10 +23,6 @@ def _strip_code_spans(text):
 
 
 def _scan(text, where, out):
-    for sent in _sentences(text):
-        first = sent.split()[0].strip("`\"'(") if sent.split() else ""
-        if first in BANNED_OPENERS:
-            out.append({"kind": "banned-opener", "where": where, "text": sent[:90]})
     bare = _strip_code_spans(text)
     if "—" in bare:
         out.append({"kind": "em-dash", "where": where, "text": text.strip()[:90]})
