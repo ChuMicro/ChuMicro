@@ -31,13 +31,21 @@ Rebuild docstrings and inline comments for Python file(s) **from the code's beha
 
 ### Runbook (the orchestrator follows these literally; the conceptual steps below explain each phase)
 Let `SKILL=.github/skills/regen-comments`, `RUN=/tmp/regen-cr/<slug>-<n>` (a fresh dir).
+0. **Preflight (in-session):** `python3 $SKILL/preflight.py` — confirms the `claude` CLI is on PATH, runnable, and reports the install/version + OS user it resolves to (every phase shells out to `claude -p`, and config/auth live under that user's `~/.claude`). If it fails, stop and tell the user; if the path/version/user looks wrong for this session, warn before proceeding.
 1. **Voice gate (in-session):** if `--voice <key>` given, use it; else present the 4-voice menu (default `cutler`) via `AskUserQuestion`, each option's `preview` = that voice's cached sample from `voices.json` `previews` (run `gen_voice_previews.py` once to populate). (`--create-voice` → registry-add flow, then stop.)
-1b. **Library mode (in-session, only when `target` is a directory):** `python3 $SKILL/regen_phase0.py <target_dir> $LIBROOM` (`LIBROOM=/tmp/regen-cr/<slug>-lib`). It strips the library source, runs the broad library triage as one clean-room `claude -p`, and writes `$LIBROOM/LIBRARY_FACTS.md` (domain + cross-file contracts + glossary). Then run steps 2–6 **for each `.py` file** in the library, passing `--lib $LIBROOM/LIBRARY_FACTS.md` to phase 1 each time. A single-file target skips this step.
+1b. **Library mode (in-session, only when `target` is a directory):** `python3 $SKILL/regen_phase0.py <target_dir> $LIBROOM` (`LIBROOM=/tmp/regen-cr/<slug>-lib`). It strips the library source, runs the broad library triage as one clean-room `claude -p`, and writes `$LIBROOM/LIBRARY_FACTS.md` (domain + cross-file contracts + glossary). Then run steps 2–8 **for each `.py` file** in the library, passing `--lib $LIBROOM/LIBRARY_FACTS.md` to phase 1 each time. A single-file target skips this step. **To go faster**, batch the gate-free phases with `regen_batch.py` (concurrency 2-3 — each pipeline is its own `claude -p` fan-out, so higher oversubscribes): `python3 $SKILL/regen_batch.py phase1 3 --lib $LIBROOM/LIBRARY_FACTS.md <files...>` (writes a room manifest), then do the pickers per room, then `python3 $SKILL/regen_batch.py phase2 3 <voice> <rooms...>`.
 2. **Phase 1 (clean-room grounding):** `python3 $SKILL/regen_phase1.py <target.py> $RUN [--without-comment-triage] [--lib <LIBRARY_FACTS.md>]` (the orchestrator supplies `--lib` automatically in library mode). It strips, captures the header for preservation, then runs the triage workflow (3 lenses + comment lens + ledger-writer + **validator/converge loop**) as one clean-room `claude -p`, prints the **questionable facts** + whether the validator still flags issues, and writes `$RUN/{ledger_provisional.md, ledger.json, preserve.json, validation.json, phase1.json}`.
 3. **Validator gate (in-session):** the ledger-writer already re-ran against the validator up to 4× inside phase 1. Only if `phase1.json` shows `needs_user: true` (still flagged after the loop) do you ESCALATE — present the flagged facts (`validation.json`) plus a recommendation in an `AskUserQuestion` with a free-text window, then apply the user's steer before phase 2.
 4. **Picker (in-session, the one human gate):** present the questionable facts via multi-select `AskUserQuestion`; then write `$RUN/ledger_final.md` = `ledger_provisional.md` with the **rejected** facts' lines removed (high-confidence facts are auto-kept).
 5. **Phase 2 (clean-room write):** `python3 $SKILL/regen_phase2.py $RUN <voice>`. Runs the writer workflow (4 passes + per-symbol consolidation + an independent summarizer), reattaches the preserve lane, writes `$RUN/{FINAL_<voice>.py, merged.py, picks.json, summary.json}`.
-6. **Report + apply (in-session):** `python3 $SKILL/render_report.py $RUN <voice> <target.py>` → `$RUN/report.html`. Surface it with `SendUserFile` and print its `file://` line. After the human approves, confirm via `AskUserQuestion`, then write the finished file onto the working tree (`cp $RUN/FINAL_<voice>.py <target.py>` — uncommitted, reversible) so they review the diff in their editor. **Never `git add`/`git commit`.**
+6. **Report (in-session):** `python3 $SKILL/render_report.py $RUN <voice> <target.py>` → `$RUN/report.html`. Surface it with `SendUserFile` and print its `file://` line.
+7. **Refine (optional human loop, in-session):** offer to refine any symbol from the report. Per the human's pick, run the right tool (all below), then `render_report.py` again to refresh and re-surface. Loop until they are satisfied. See Step 8 for the full loop.
+   - **roll the dice** (different take, cheap): `splice_symbol.py $RUN/FINAL_<voice>.py $RUN/runs/run-<N>.py <symbol> $RUN/FINAL_<voice>.py`, cycling N=1..4; after the four cached candidates are exhausted, `regen_symbol.py` for a fresh one.
+   - **drop / edit a fact**: edit that fact's line in `$RUN/ledger_final.md`, then `python3 $SKILL/regen_symbol.py $RUN <voice> <symbol>`.
+   - **add a fact**: ask *correction or your-own-note?* Correction → `python3 $SKILL/stubify_fact.py $RUN "<fact>"`, act on the verdict (confirmed → append the stub to `ledger_final.md` + `regen_symbol.py`; contradicted → raise suspicion, do not block; unverifiable+needs_source → ask for a URL/desc; else trust). Your-own-note → ask initials, add `# NOTE(<initials>): <verbatim>` at the symbol (offer to voice it or keep verbatim).
+   - **write it myself**: replace that symbol's docstring with the human's exact text (in-session `Edit`; then `tics.py` + AST check).
+   - After any ledger edit: `python3 $SKILL/drift_check.py $RUN <voice> <symbol> "<what changed>"`; if it flags sure-stale symbols, offer to regen those too (never block).
+8. **Apply (in-session):** when the human approves, confirm via `AskUserQuestion`, then write the finished file onto the working tree (`cp $RUN/FINAL_<voice>.py <target.py>` — uncommitted, reversible) so they review the diff in their editor. **Never `git add`/`git commit`.**
 
 The conceptual phases (what each does + the invariants):
 
@@ -67,29 +75,50 @@ Launch one `claude -p` that runs the **writer workflow** (`writers_wf.js`): the 
 - **Must-carry** = any NON-DERIVABLE fact in the final ledger (a domain constraint, author intent — typically the comment-derived facts the human kept). For each symbol the judge confirms every must-carry fact that pertains to it is present in the chosen candidate. (Definition is generic — derived from the ledger, NOT a fixed trap list.)
 - **Success:** one merged candidate; code AST-identical; must-carry facts present; no cruft leak; no lifted ledger phrasing.
 
-### Step 5 — Verify
-Cold-reader pass per merged candidate: fabrication check, tic-density at human level (not zero), cruft-leak (no copyright/author/tracker-ref or wrong stale claim), no-lift. Flag anything for the human.
-- **Success:** each candidate is correct, clean, and reads in its voice.
+### Step 5 — Verify (mechanical detect + clean-room polish)
+Phase 2 runs `polish.py` on the merged file: `tics.py` deterministically detects the absolute mechanical-ban violations (banned sentence-openers `The`/`That`/`This`/…, em-dashes, semicolons, the words `canonical`/`shape`) in docstrings/comments, and a clean-room `claude -p` minimally rewrites only the offending sentences (meaning + voice intact), looping until the detector is clean (max 3) and reverting any pass that altered executable code. Generators drift on "no exceptions" style rules, so this backstop is what makes the bans actually hold.
+- **Success:** zero mechanical-ban violations in the finished file; code AST-identical; voice intact.
 
 ### Step 6 — Reattach (mechanical, in-session)
 Run `reattach.py` to ride the **preserve lane** back onto each finished file: headers (copyright/author/license) to the top, live directives/TODOs (`# noqa`, `TODO(TICKET)`) back to their original line. A writer never rewords these.
 - **Success:** preserved lines present verbatim; nothing else changed; code still byte-identical.
 
-### Step 7 — Report + apply (human gate)
-Run `render_report.py` to build `report.html`: an **independent** plain-English summary of the file (written from the code, not the comments — so the human can check the comments against a description they did not write), the validated ledger, per-symbol before/after docstrings, and the consolidation rationale. Surface it with `SendUserFile` and a `file://` line. After the human approves, confirm, then write the finished file onto the working tree (uncommitted) so they review the diff in their editor. Do not commit.
-- **Success:** `report.html` rendered and surfaced; on the human's confirm the finished file landed in the working tree (uncommitted), or they declined and nothing changed.
+### Step 7 — Report (in-session)
+Run `render_report.py` to build `report.html`: an **independent** plain-English summary of the file (written from the code, not the comments — so the human can check the comments against a description they did not write), the validated ledger, per-symbol before/after docstrings, and the consolidation rationale. Surface it with `SendUserFile` and a `file://` line.
+- **Success:** `report.html` rendered and surfaced.
+
+### Step 8 — Refine (optional human loop, in-session)
+From the report the human can refine any symbol; loop until satisfied, re-rendering after each change. Per pick:
+- **roll the dice** — a different take. Cheap: `splice_symbol.py` cycles the cached candidates `runs/run-1..4.py` for that symbol (its docstring + comments swap, code guaranteed unchanged). Once the four are exhausted, `regen_symbol.py` generates fresh.
+- **drop / edit a fact** — edit `ledger_final.md`, then `regen_symbol.py <symbol>` (re-runs the writer against the edited ledger and splices only that symbol back; every other symbol stays as the human had it).
+- **add a fact** — ask *correction or your-own-note?*. A **correction** goes through `stubify_fact.py` (validates against the code: confirmed → append stub + regen; contradicted → raise suspicion, never block; unverifiable+checkable → ask for a source; otherwise trust). A **your-own-note** is kept verbatim as `# NOTE(<initials>): …` at the symbol (ask initials; offer to voice it or keep verbatim) — the comment lens re-harvests it on a later run.
+- **write it myself** — replace that symbol's docstring with the human's exact words.
+- After any **ledger** edit, `drift_check.py` looks for OTHER symbols the change made sure-stale and offers to regen those too (never blocks the single-symbol intent).
+Every regeneration re-runs `polish.py`, and `splice_symbol.py` guards code byte-identity, so no edit can drift the code.
+- **Success:** the human is satisfied with every symbol; code still AST-identical; zero mechanical-ban violations.
+
+### Step 9 — Apply (human gate)
+When the human approves, confirm, then write the finished file onto the working tree (uncommitted) so they review the diff in their editor. Do not commit.
+- **Success:** on the human's confirm the finished file landed in the working tree (uncommitted), or they declined and nothing changed.
 
 ## Done when
-A finished commented file exists for the chosen voice, with: executable code byte-identical to the original, every ledger fact correct against the code and the correctness-critical ones stated explicitly, must-carry domain facts present, preserve lane reattached verbatim, no cruft leak, voice intact — surfaced via `report.html` (independent summary + ledger + before/after + rationale), and either written to the working tree on the human's confirm or left for them, with nothing committed automatically.
+A finished commented file exists for the chosen voice, with: executable code byte-identical to the original, every ledger fact correct against the code and the correctness-critical ones stated explicitly, must-carry domain facts present, preserve lane reattached verbatim, zero mechanical-ban violations, voice intact — surfaced via `report.html` (independent summary + ledger + before/after + rationale), optionally refined per symbol through the Step 8 loop, and either written to the working tree on the human's confirm or left for them, with nothing committed automatically.
 
 ## Reference files
+- `preflight.py` — Step 0 check: `claude` CLI on PATH + runnable + which install/version/user it resolves to (every phase shells out to `claude -p`). Imported by every driver as a guard.
+- `regen_batch.py` — library-mode speedup: bounded-parallel runner for the gate-free phases (phase 1 grounding across files, then phase 2 writing across rooms); keep concurrency low (2-3).
 - `strip.py` — mechanical comment/docstring stripper (line surgery, not `ast.unparse`).
 - `reattach.py` — mechanical preserve-and-reattach.
 - `voices.json` — voice registry (data; add voices here).
 - `triage_wf.js` — triage workflow (3 code lenses + comment lens + ledger-writer + **validator/converge loop**; telegraphic-stub + no-invented-examples + comment-facts-are-non-code-derivable rules). The fixture-agnostic validator (per-fact correctness + explicitness of correctness-critical fact classes; NO trap list / NO file-specific knowledge) is folded in as a stage and drives the ledger-writer re-run loop.
 - `writers_wf.js` — writer fan-out + per-symbol consolidation + an independent code summarizer (`summary.json`).
+- `tics.py` / `polish.py` — Step 5 verify: `tics.py` deterministically detects mechanical-ban violations (banned openers, em-dashes, semicolons, `canonical`/`shape`) in docstrings/comments; `polish.py` runs the clean-room fix loop with a code-identity guard.
 - `render_report.py` — mechanical HTML report (no LLM): independent summary + validated ledger + per-symbol before/after + consolidation rationale. Code/correctness-first.
 - `gen_voice_previews.py` / `voice_preview_wf.js` — render every voice against one fixed no-code subject and cache the samples into `voices.json` `previews` for the pick menu. Re-run after adding a voice.
+- `splice_symbol.py` — refinement-loop primitive: swap one symbol's docstring+comments from another version (a cached candidate or a fresh regen), guarding executable code byte-identical.
+- `regen_symbol.py` — refinement loop: regenerate one symbol against the edited ledger and splice only it back (every other symbol stays as the human had it), then re-polish.
+- `stubify_fact.py` — refinement loop: validate a human-supplied fact against the code and turn it into a telegraphic stub (confirmed / contradicted / unverifiable + needs_source).
+- `drift_check.py` — refinement loop: after a ledger edit, flag OTHER symbols the change made sure-stale (conservative; sure-only).
 - `regen_phase0.py` / `library_triage.md` — library-aware mode: `regen_phase0.py` strips a library subtree and runs the broad library-triage prompt as one clean-room `claude -p`, emitting `LIBRARY_FACTS.md` (domain + cross-file contracts + glossary) that rides into each per-file room — the lenses, writers, and consolidation judge all consult it (deferring to it for cross-file facts, emitting them only where a file's code touches them).
 
 ## Patterns to avoid

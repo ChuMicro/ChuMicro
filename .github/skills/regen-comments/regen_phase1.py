@@ -25,6 +25,7 @@ import sys
 SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from strip import extract_header  # noqa: E402  (always-on mechanical header preservation)
+from preflight import require_claude  # noqa: E402
 
 
 def claude_p_workflow(rundir, wf_name):
@@ -47,6 +48,7 @@ def _stage(wf_src, rundir, **subs):
 
 
 def main():
+    require_claude()
     args = sys.argv[1:]
     with_comments = "--without-comment-triage" not in args  # comment-triage is ON by default
     lib = args[args.index("--lib") + 1] if "--lib" in args else None
