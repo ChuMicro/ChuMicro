@@ -38,8 +38,10 @@ const PREAMBLE =
   + 'about-N-hours-or-days).\n\n'
   + 'CROSS-FILE CONTEXT: if a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, consult it for the '
   + 'library contracts, domain, and shared glossary to interpret cross-file references (what a shared type '
-  + 'or term means, what contract this file implements or uses). The per-file CODE remains the source of '
-  + 'truth for THIS file. Do not import other files internal facts.\n\n'
+  + 'or term means, what contract this file implements or uses). DEFER to it: do NOT re-surface a fact the '
+  + 'library ledger already states. Record only facts SPECIFIC to this file, or this file\'s specific '
+  + 'APPLICATION of a library contract. The per-file CODE remains the source of truth for THIS file. Do not '
+  + 'import other files\' internal facts.\n\n'
   + 'CODE: ' + STRIPPED + '\n\n'
 
 const FINDING = {

@@ -48,7 +48,7 @@ function genPrompt(n) {
   return 'You will add docstrings and comments to a Python file. Follow this discipline exactly:\n\n' + DISC + '\n'
     + '## Your voice\n\n' + VOICE_PARA + '\n\n'
     + 'Read the nuance ledger at ' + LEDGER + ' for which facts matter (do not copy its wording, pull only the concrete data) and the code at ' + FILE + '. '
-    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, consult it for cross-file context: what shared terms mean and what contract this file implements or uses, so your comments use the library vocabulary correctly and note the contract this file fulfills. The per-file code and ledger remain the source of truth for this file. '
+    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, treat it as a correctness and vocabulary reference: use the right shared terms and do not contradict a library contract. Do NOT restate library-wide facts the code here does not touch. A contract or glossary term belongs in a comment only where a symbol in THIS file actually uses or implements it. The per-file code and ledger remain the source of truth for this file. '
     + 'Add docstrings and comments only. Every line of executable code stays byte-identical. Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
 }
 
@@ -62,6 +62,10 @@ function consolPrompt() {
   return 'You are a PER-SYMBOL consolidation judge (fixture-agnostic — no trap list, no knowledge of this '
     + 'file). You have ' + PASSES + ' candidate commented versions of the SAME file, one voice: ' + runs + '. '
     + 'Plus the stripped code ' + FILE + ' and the nuance ledger ' + LEDGER + '.\n\n'
+    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it as a correctness/vocabulary '
+    + 'reference: prefer a candidate that uses shared terms correctly and does not contradict a library '
+    + 'contract, and do NOT reward a candidate that dumps library-wide facts where this file\'s code does '
+    + 'not touch them.\n\n'
     + 'Produce ONE merged file. FOR EACH SYMBOL separately (the module docstring, each class, each method, '
     + 'each function), take the docstring AND that symbol\'s inline comments from whichever candidate '
     + 'documented THAT symbol best: most correct against the code, carrying any MUST-CARRY ledger fact (a '
