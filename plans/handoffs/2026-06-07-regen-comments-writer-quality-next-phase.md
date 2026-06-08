@@ -591,22 +591,27 @@ omission ACCEPTED (a docstring can skip the demo script).
   ("what the file does in the real world / purpose + non-obvious behavior") introduces-not-catalogs on its own;
   the cold-reader block was redundant. Dropped from genPrompt (the stand-alone clause, separate, kept).
   `[[summarizer-framing-introduces-cold-reader-block-redundant]]`.
-- **cut_cruft VALIDATED (decision pending)**: on the converged writer it cut 4 REAL dups (incl. the
-  QualityFlags-popcount + ApiVersion-drift restates the user dislikes), DELETION-ONLY (diff-confirmed, no
-  reword). BUT it is an LLM call = the ~8-min sink, and its deletion-only is PROMPT-guarded only -- the code
-  fingerprint protects executable code, NOT docstring/comment content, so a reword would go uncaught. OPTIONS:
-  drop (speed+simplicity, minor redundancy ships) / HARDEN (LLM reports spans, code deletes+verifies -> kills
-  rewrite risk, keeps value) / keep. User leaning unclear; my lean = harden. `[[cut-cruft-adds-value-but-is-an-unguarded-llm-sink]]`.
+- **cut_cruft DROPPED (user decision)**: it DID add value -- on the converged writer it cut 4 REAL dups
+  (incl. the QualityFlags-popcount + ApiVersion-drift restates), DELETION-ONLY (diff-confirmed). BUT it is an
+  LLM call = the ~8-min sink, and its deletion-only is PROMPT-guarded only (the code fingerprint protects
+  executable code, not docstring/comment content). HARDENING was considered but still needs an LLM pass (the
+  dups are semantic paraphrases -> no fast mechanical dedup), so it kills the rewrite risk but NOT the 8 min --
+  and 8 min to delete a rare duplicate sentence is not worth it. So DROPPED: unwired from regen_phase2
+  (pipeline is now copy -> polish -> reattach), progress tick removed, `git rm cut_cruft.py`. Speed win +
+  rewrite risk gone; the writer's state-once + don't-restate handle most dups, the rare slip is minor cosmetic
+  redundancy caught in the report review. `[[cut-cruft-dropped-llm-dedup-not-worth-8min]]`.
 - **LIBRARY SIDE VERIFIED**: regen_phase0/library_triage/regen_batch have no stale terms; regen_batch phase2
   passes <voice> (voiceless plain works); regen_phase1 --lib copies LIBRARY_FACTS.md into each per-file room
   (line 70) so the converged writer's lean library line finds it; SKILL.md library descriptions aligned to the
   de-restricted "use it for cross-file context and shared vocabulary".
 
 ### STATE (current)
-Committed: **62920dcf** -> **b9a4a5ee** -> **55c6764c** (voiceless fold). UNCOMMITTED (about to commit):
-`writers_wf.js` (cold-reader block dropped, round24-validated), `SKILL.md` (2 library-description lines
-aligned). Protected/untouched: CLAUDE.md, .idea, heartbeat.py. Harness: `.scratch/regen-comments/
-writer-quality/round{6..24}.py + render*.py + report*.html + rooms{6..24}`. NEXT: commit the cold-reader-drop +
-library-doc; the USER is running the skill cold (the real-world integration check). DEFERRED: the cut_cruft
-drop/harden/keep decision; trait-cluster voice personas (user may supply descriptions); #5 speed (cut_cruft is
-the main remaining sink).
+Committed: **62920dcf** -> **b9a4a5ee** (spine + selector) -> **55c6764c** (voiceless fold) -> **45bb423b**
+(cold-reader drop + library docs). UNCOMMITTED (about to commit): `regen_phase2.py` + `progress_watch.py`
+(cut_cruft unwired) + `cut_cruft.py` DELETED. Protected/untouched: CLAUDE.md, .idea, heartbeat.py. Harness:
+`.scratch/regen-comments/writer-quality/round{6..24}.py + render*.py + report*.html + rooms{6..24}`. NEXT:
+commit the cut_cruft drop; the USER is running the skill cold (real-world integration check). #5 SPEED largely
+ADDRESSED -- cut_cruft (the ~8-min sink) is gone, so phase 2 is now 4 parallel writer passes + 1 selector + a
+mechanical copy/polish/reattach. DEFERRED: trait-cluster voice personas (user may supply descriptions like the
+elon one). The whole writer-quality arc (tasks #6/#7/#8, the summarizer-beats-writer problem) is CONVERGED and
+shipped.
