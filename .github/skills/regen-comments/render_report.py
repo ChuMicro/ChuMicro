@@ -6,7 +6,8 @@ Builds report.html from a finished run room so the human can judge CORRECTNESS, 
      so the reader has a higher-level description to check the comments against;
   2. the validated ledger (ledger.json) + the validator verdict (validation.json);
   3. per-symbol BEFORE/AFTER docstrings (original target vs the finished file);
-  4. the consolidation rationale (picks.json) + the ledger facts that pertain to each symbol.
+  4. the selection rationale (pick.json) — which whole writer pass was chosen and why — plus the ledger
+     facts that pertain to each symbol.
 
 Code/correctness-first by design: voice is the least of what this surfaces. The finished file itself is the
 deliverable the human applies; this report is the why behind it.
@@ -82,21 +83,21 @@ def main():
     summary = _load(os.path.join(rundir, "summary.json"), {"module_summary": "", "symbols": []})
     ledger = _load(os.path.join(rundir, "ledger.json"), [])
     val = _load(os.path.join(rundir, "validation.json"), {})
-    picks_raw = _load(os.path.join(rundir, "picks.json"), [])
-    picks = picks_raw.get("picks", []) if isinstance(picks_raw, dict) else picks_raw
+    pick = _load(os.path.join(rundir, "pick.json"), {})
+    if not isinstance(pick, dict):
+        pick = {}
+    winner = pick.get("winner")
+    why = pick.get("why", "")
+    concern = pick.get("concern", "")
+    runs_dir = os.path.join(rundir, "runs")
+    n_passes = len([f for f in os.listdir(runs_dir)
+                    if f.startswith("run-") and f.endswith(".py")]) if os.path.isdir(runs_dir) else 0
     libfacts = os.path.join(rundir, "LIBRARY_FACTS.md")
     has_lib = os.path.exists(libfacts)
 
     before = _symbols(original)
     after = _symbols(final)
     purpose = {s["symbol"]: s["purpose"] for s in summary.get("symbols", [])}
-    pick = {}
-    for p in picks:
-        sym = p.get("symbol", "")
-        pick[sym] = p
-        pick[_short(sym)] = p  # also index by short name for loose matching
-        if "module" in sym.lower():
-            pick["<module>"] = p  # judges label this "module docstring"; map to the module row
 
     verdict_ok = not (val.get("any_wrong") or val.get("any_underspecified"))
     badge = ("ledger validated clean" if verdict_ok else "validator flagged issues — see facts")
@@ -109,12 +110,10 @@ def main():
         doc_before = before.get(qual, {}).get("doc")
         pur = purpose.get(qual) or purpose.get(_short(qual)) or ""
         facts = _facts_for(qual, ledger)
-        pk = pick.get(qual) or pick.get(_short(qual))
         fact_html = "".join(
             f"<li><code>{_esc(f.get('stub'))}</code> "
             f"<span class='meta'>({_esc(f.get('confidence'))}, {_esc(','.join(f.get('source_lenses', [])))})</span></li>"
             for f in facts) or "<li class='none'>none mapped to this symbol</li>"
-        why = f"<div class='why'><b>pick:</b> {_esc(pk['why'])} <span class='meta'>(pass {pk['winner']})</span></div>" if pk else ""
         rows.append(f"""
         <div class="sym">
           <h3>{_esc(qual)}</h3>
@@ -124,8 +123,8 @@ def main():
             <div class="col"><div class="lbl">before</div><pre>{_esc(doc_before) or '<span class=none>(no docstring)</span>'}</pre></div>
             <div class="col"><div class="lbl">after</div><pre>{_esc(doc_after) or '<span class=none>(no docstring)</span>'}</pre></div>
           </div>
-          <details><summary>ledger facts + rationale</summary>
-            <ul class="facts">{fact_html}</ul>{why}
+          <details><summary>ledger facts</summary>
+            <ul class="facts">{fact_html}</ul>
           </details>
         </div>""")
 
@@ -133,6 +132,11 @@ def main():
         f"<tr><td><code>{_esc(f.get('stub'))}</code></td><td>{_esc(f.get('sites'))}</td>"
         f"<td>{_esc(','.join(f.get('source_lenses', [])))}</td><td class='c-{_esc(f.get('confidence'))}'>{_esc(f.get('confidence'))}</td></tr>"
         for f in ledger) or "<tr><td colspan=4 class=none>empty ledger</td></tr>"
+
+    concern_html = f"<div class='concern'>⚠ selector concern: {_esc(concern)}</div>" if concern else ""
+    sel_html = (f"<div class='card sel'><b>Selected writer pass {_esc(winner)}"
+                + (f" of {n_passes}" if n_passes else "")
+                + f"</b> — {_esc(why)}{concern_html}</div>") if winner is not None else ""
 
     doc = f"""<!doctype html><html><head><meta charset="utf-8">
 <title>regen-comments report — {_esc(os.path.basename(original))}</title>
@@ -161,6 +165,7 @@ def main():
  details{{margin-top:6px}} summary{{cursor:pointer;color:#5a6472;font-size:12px}}
  .facts{{margin:8px 0;padding-left:18px}} .facts .meta{{color:#8a93a0}}
  .why{{margin-top:6px;color:#33405a}}
+ .sel{{color:#33405a}} .concern{{margin-top:8px;color:#9a4a10;font-weight:600}}
 </style></head><body><div class="wrap">
  <h1>regen-comments — <code>{_esc(os.path.basename(original))}</code></h1>
  <div class="sub">voice: <b>{_esc(voice)}</b> · <span class="badge {badge_cls}">{_esc(badge)}</span>{' · library-aware' if has_lib else ''}</div>
@@ -170,6 +175,8 @@ def main():
    <p>{_esc(summary.get('module_summary'))}</p>
    <ul>{''.join(f"<li><code>{_esc(s['symbol'])}</code> — {_esc(s['purpose'])}</li>" for s in summary.get('symbols', [])) or '<li class=none>no symbol summaries</li>'}</ul>
  </div>
+
+ {sel_html}
 
  <details class="card ledger"><summary><b>Validated ledger</b> — {len(ledger)} facts (click to expand)</summary>
    <table><tr><th>fact (telegraphic stub)</th><th>sites</th><th>lenses</th><th>conf</th></tr>{ledger_rows}</table>

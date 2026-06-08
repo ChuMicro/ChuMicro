@@ -313,3 +313,224 @@ This session's skill edits are **UNCOMMITTED** (working tree): writers_wf.js, tr
 voices.json, + NEW progress_watch.py. The last good production run (FINAL_elon.py, T7-correct) was NOT applied
 (test fixture). Harness: `.scratch/regen-comments/writer-quality/{round4,round5,render4}.py + report4.html`,
 `.scratch/regen-comments/ledger-regression/`.
+(SUPERSEDED: the redesign above was committed as **62920dcf** at session end; see the next section for the
+post-commit work and the current uncommitted set.)
+
+## 2026-06-08 SESSION cont. — #1 DONE (selector), auto-progress, opening #2/#3. KEEP THIS UPDATED AS WE WORK.
+
+Continues the redesign session above. Status of the 5 open directions:
+
+### #1 DONE — the judge is now a best-of-4 voice SELECTOR, not a rewriter
+- `writers_wf.js`: `consolPrompt`→`selectPrompt`. The judge READS all 4 complete passes + code + ledger and
+  returns `{winner, why, concern}` to `pick.json`. It NEVER edits / merges / rewrites.
+- **VOICE-PRIMARY** by user steer: "the judge needs to pick the best voiced... the best flowing comments win,
+  not the most technically correct yet hard to read or compressed into comma-ridden sentences." So criterion
+  (1) = voice/flow (a dense/comma-ridden/compressed file LOSES even when more complete); (2) = correctness as
+  a SECONDARY sanity floor (avoid flatly false / backwards), NOT a completeness gate. Residual concern rides
+  in pick.json → surfaces in the report. `[[selector-is-voice-primary-correctness-is-a-floor]]`.
+- `regen_phase2.py`: reads pick.json, **Python-copies** `runs/run-{winner}.py` → `merged.py`. The copy (not
+  the agent) makes merged.py byte-identical to one pass — kills the rewrite-an-inversion risk by construction.
+- `render_report.py`: consumes the single-object pick.json; shows a "Selected writer pass N of M — why" banner
+  + ⚠ concern callout; per-symbol rationale dropped. `progress_watch.py` ticks pick.json.
+- SKILL.md: all "per-symbol consolidation" → "best-of-4 voice selector"; Step 4 rewritten (voice-primary +
+  "the writers carry the facts, not the selector"); the inverted patterns-to-avoid line flipped. Per-symbol
+  consolidation is now a DEFERRED future option (user: "we could do per symbol... at a later date").
+- TRADEOFF accepted: no per-symbol cherry-pick; each writer pass must carry quality. Correctness is secured
+  UPSTREAM (every writer folds the ledger; the picker already chose the facts). `[[best-of-4-not-per-symbol]]`.
+
+### Auto-progress — DONE (NOT one of the 5; the old "looks stalled" aside, now automatic)
+User: "the orchestrator can send the claude -p call to background and monitor/watch on its own... i didn't
+mean to make it hard to use by not deploying it automatically." SKILL.md invariant 8 rewritten: the
+orchestrator launches each phase with `Bash(run_in_background:true)` and arms a `Monitor` on
+`progress_watch.py $RUN` (each artifact = one chat event; Monitor ends when FINAL lands; the phase-task exit
+is the done/crash signal). No 2nd terminal. progress_watch.py unchanged logically (already flush=True +
+self-terminating); docstring updated. `[[progress-via-background-phase-plus-monitor]]`.
+
+### #5 speed — PARTIAL (the big sink is gone)
+The selector killed the ~4-5 min per-symbol REWRITE (the serial-judgment sink). STILL UNTOUCHED: fewer than 4
+writer passes, folding cut+polish into the writer workflow, trimming the validator re-run loop.
+
+### #2 + #3 — OPENING NOW (the writer-as-summarizer cluster)
+User thesis (2026-06-08): **"'thin summary' is wrong in general. The SUMMARY is where the BULK should be —
+that way the body may not even be necessary, and the Args can be tight instead."** This collapses #2 (summary
+carries the facts) and #3 (writer closer to the summarizer) into ONE move: make the summary the center of
+gravity (flowing prose carrying behavior + the facts + any trap), body OPTIONAL (often unnecessary), Args
+TIGHT (identify the param, do not re-explain behavior the summary already covered). #4 (summarizer+ledger →
+docstring) is the limit case. PLAN: draft a "summary-is-the-bulk" discipline arm; **tight** fan-out (user:
+"not too wide") vs the current discipline on the quality_ranking fixture (the PickResult fragmentation the
+user saw); fold if it flows without losing facts. `[[summary-is-the-bulk-body-optional-args-tight]]`.
+
+### #2/#3 ROUND 6 RESULT (2026-06-08, `.scratch/regen-comments/writer-quality/round6.py`, rooms6)
+Tight bake-off: CUR (current "say it plainly" + STEP1 "one to two sentences") vs SUM (summary-is-the-bulk
+disc + STEP1 "put the substance in the summary") × {elon, cutler} × n=3 on quality_ranking, code+ledger held
+constant. Char split (summ/body/args); reading is the judge (`round6.py show`).
+- **SUM reliably TIGHTENS the Args** for both voices (elon args 1435→984, cutler 1953→979). Directly fixes
+  the "defer the meat to a long Args" complaint. `[[summary-is-bulk-tightens-args]]`.
+- **SUM pulls the bulk INTO the summary for cutler (2/3 runs), partially for elon.** cutler/SUM summ char
+  846→3028: run-2/run-3 open PickResult with ONE flowing paragraph carrying the disable_extension meat + tight
+  Args = the user's thesis realized, reads like the summarizer. elon KEEPS a summary-line + one focused body
+  paragraph (summ flat ~800, body up) — Args tight but the meat sits in the body, not the summary line. VOICE
+  VARIANCE: cutler fuses into the summary; elon writes a topic sentence then a paragraph.
+  `[[sum-fuses-for-cutler-elon-keeps-a-focused-body]]`.
+- **No fact loss, no inversion.** Every SUM PickResult / _resolve_mixed read kept disable_extension referring
+  to the LOSER / rejected rival (T7 NOT inverted); popcount / inclusive-threshold / cross-major-meaningless /
+  signed-drift / name-oversells traps all carried. SUM MOVED the bulk, did not grow it (chars ~flat).
+- **Coinage n=3-noisy as ever** (elon 2.7→6.3, cutler 9.7→6.3); not weighted.
+VERDICT: SUM is a win — tightens Args + pulls the meat up, no fact/correctness cost, reads ≥ CUR. Plan: fold
+it, tuned to lead with a real one-sentence summary that already carries the core (not a thin label) and
+continue into the explanation without forcing a body section. OPEN Q (user): push elon to FUSE too, or accept
+elon's focused-body shape? Then fold into writers_wf.js discipline()+genPrompt and re-validate on heartbeat.
+
+### CRITICAL — user read the round6 outputs and the WRITER IS STILL WORSE THAN THE SUMMARIZER (2026-06-08)
+User compared the summarizer's MODULE summary (loved: "very smooth flowing, zero tics, paragraph-like, starts
+strong finishes with nuance") to elon/SUM run-1's module summary ("honestly horrible... no better than before
+we started this skill... back at square 1... something is drastically wrong"). Side by side:
+- SUMMARIZER: "This module ranks and chooses between two components based on a quality score (a bitmask of
+  three boolean quality flags) and their API version numbers, with special handling for components that
+  provide an optional extension API." -> NAMES the dimensions, gestures at the nuance, STOPS. High altitude.
+- elon/SUM: "Pick the stronger... report whether a beaten extension should be turned off. The rule splits on
+  extensions: when exactly one side carries one, a base-API minor-version lead decides the winner, otherwise
+  the side with more quality bits set wins." -> "The rule" (abstract-subject tic, too soon), COLON-SPLICE
+  (bad flow, summarizer never does it), coined "base-API minor-version lead", crams the whole BRANCH into the
+  module line.
+DIAGNOSIS — three of OUR OWN choices conspire, the summarizer has none of them:
+1. **elon voice** (terse/"simplest form") -> crams + leads imperative; summarizer just describes.
+2. **summary-is-the-bulk is WRONG ALTITUDE for module/class** -> "put the substance in the summary" made it
+   haul the mechanism up. It HELPED a leaf (PickResult) but HURTS module/class. `[[summary-is-bulk-is-leaf-only-wrong-for-module-class]]`.
+3. **ledger over-spend at altitude** -> feels obligated to spend drift/popcount even in the module line.
+KEY ASYMMETRY: the summarizer nails it RELIABLY with ONE sentence + no ledger; the writer needs 4 passes + a
+selector and its BEST pass only TIES the summarizer while its worst is horrible. This is the decisive evidence
+for **#4: make the SUMMARIZER the spine** (summarizer prose -> ledger-correct pass [it has the T7 gap: never
+says WHOSE extension is disabled] -> light shape to docstring format + tight Args + voice as a feather).
+`[[writer-cannot-reliably-beat-summarizer-make-summarizer-the-spine]]`. The round6 SUM fold is ON HOLD pending
+this pivot decision (its Args-tightening is still good; its module/class altitude push must be scoped to leaves
+or dropped). PENDING USER DECISION: pivot to #4 now, vs first patch the two writer bugs (altitude + elon).
+
+### THE ROOT-CAUSE PRINCIPLE (user, 2026-06-08) — write for the COLD SEQUENTIAL READER, not an LLM
+Second elon/CUR module example: "Compare two software components and return which one to keep. Carries the
+data model, the versions, quality flags, and components, plus the ranking that produces the verdict." User:
+"carries the X where X hasn't been described yet... the comments are written as if the reader reads the whole
+file at the same time like an LLM does. THEY DON'T." THIS IS THE SYSTEMIC BUG. The writer (an LLM) holds the
+whole file in context, so it REFERENCES things ("the versions, quality flags, components") as already-known. A
+human reads top-to-bottom and hits the module docstring FIRST, before ever seeing QualityFlags / ApiVersion /
+Component. The summarizer WINS because its framing ("explain in plain English what the code does" to a fresh
+reader) makes it INTRODUCE / DESCRIBE each concept ("a quality score, a bitmask of three boolean quality
+flags") instead of name-dropping it. PRINCIPLE: each comment is met COLD, in file order; the reader has seen
+only what is ABOVE it. Introduce a thing the first time you mention it; never reference it as already-known.
+This GENERALIZES the one rule we already have ("the reader has not read the Args yet") to the whole file.
+`[[write-for-the-cold-sequential-reader-introduce-before-reference]]`. This is the SECOND summarizer key (first
+= fewer burdens): the summarizer is FRAMED for the cold reader; the writer is framed as a knower annotating for
+a knower. Both keys say the same thing -> make the summarizer the generator (#4).
+
+### ROUND 7 — SUMMARIZER-SPINE WORKS (2026-06-08, `round7.py`, rooms7). THE PIVOT IS VALIDATED.
+Built the #4 generator: a writer framed to explain the file to a FIRST-TIME reader (cold-reader rule baked in:
+introduce before you reference), ledger ONLY to correct/add traps, the heavy discipline block + voice DROPPED.
+Two arms × n=3 on quality_ranking: SPINE (voiceless) and SPINEV (spine + a feather of elon, clarity > brevity).
+- **The cold-reader bug is FIXED.** Old elon module catalogued ("Carries the data model, the versions, quality
+  flags, and components"). SPINE module INTRODUCES: "Each component carries a set of quality bits, a base API
+  version, and an optional extension API version. The comparison takes one of two routes. When exactly one...
+  offers an extension, the choice turns on how far apart their base versions have drifted. Otherwise the winner
+  is the one with the stronger quality and version profile." Reads like the summarizer — describes the parts
+  before leaning on them. All 6 runs introduce, none catalog. `[[cold-reader-framing-fixes-the-catalog-bug]]`.
+- **No tics**: no "The rule" abstract-subject opener, no colon-splice cramming. Module summaries flow.
+- **Correctness HELD across all 6**: T7 NOT inverted (every PickResult says disable points at the LOSER, e.g.
+  "the flag always points at the loser, never the winner"); popcount, cross-major-meaningless, signed-drift,
+  name-oversells (T6), passive-object all carried. The cold-reader framing cost no correctness. (Soft spot: the
+  "max misnames the trip point" naming nuance comes through as "the configured threshold/gap" — present but not
+  spotlit; low-vitality, selector/refine can catch.)
+- **A feather of voice SURVIVES.** SPINEV stayed clean (no cram/tic regression) — e.g. "Pick the better of two
+  software components and say whether to switch off an extension." So light voice on the spine is viable;
+  validate voiceless-first then layer it. `[[light-voice-survives-on-the-spine]]`.
+- Residual: MODULE altitude varies (run-1 carries the two routes; run-3 / SPINEV-run3 stay leaner, closer to
+  the summarizer's restraint) — tunable, and the selector picks the best-reading whole file anyway.
+VERDICT: **this is the new writer.** It fixes #2 (summary carries the meat), #3 (writer = summarizer), #4
+(summarizer + ledger + light format), AND the root cold-reader bug, with correctness intact. NEXT: replace
+writers_wf.js genPrompt + discipline() with the spine prompt (port round7's COLD_READER + STEP1 + STEP2 +
+FORMAT, foreign examples only); keep voice as the optional feather (VOICE_PARA -> a light clarity-first line,
+not the heavy persona); re-validate on heartbeat (the clean canary — must not bloat) + a kvstore backend.
+`[[summarizer-spine-is-the-writer]]`. Report6/round6 SUM is SUPERSEDED by this (its Args-tightening is already
+in the spine FORMAT).
+
+### ROUND 8 — module/class ALTITUDE tuned (2026-06-08, `round8.py`, rooms8). Voiceless SPINE2, n=3.
+Sharpened STEP 1: module/class GESTURE at a split and leave the mechanism to the method, but KEEP a naming
+trap up high. Result: SPINE2 modules introduce the parts + keep the name-oversells trap with less route-walking
+than round7 run-1 (e.g. "A component here bundles a name, a set of quality flags, a required base API version,
+and an optional extension API version... Despite the 'quality' naming, the flags do not always decide the
+winner..."). Good enough to fold; the class docstring is the better long-term home for the name trap (tunable).
+
+### ROUND 9 — ISOLATE THE VOICE VARIABLE (user caught the confound) + soul swings (`round9.py`, rooms9)
+User: "i dont know if taking the voice out of the spine is what really fixed the spine... that could be checked
+unless you are confident." CORRECT — round7 changed 3 things at once (ADDED cold-reader, DROPPED discipline,
+DROPPED voice); "voice removal fixed it" was never isolated. I am confident the cold-reader RULE does real work
+(targets the exact bug; vanished in all 6 round7 runs) and SPINEV (light feather) stayed clean, but the FULL
+voice on the spine was untested. round9 holds cold-reader + ledger + format CONSTANT and varies ONLY voice:
+NONE (control) / full_elon (old thin disposition — does the catalog/cram bug return?) / rich_elon (elon as a
+PERSON, the "badly described voice" fix) / wild_vet (vivid, for range). n=2. ANSWERS both the confound AND the
+voice side-channel ("does voice fight the cold-reader clarity, or can we have both?"). `[[isolate-voice-on-the-spine]]`.
+NOTE: chose voice-BAKED-INTO-GENERATION over a voicing-pass (round9.py's first draft) because the bake-in
+isolates the variable; a voicing-pass would have hidden the question by locking clarity first.
+
+### ROUND 9 RESULT — confound RESOLVED + soul confirmed (BIG). (rooms9; render9 -> report9.html)
+- **THE COLD-READER FRAMING fixed the spine, NOT removing voice.** full_elon = the EXACT old elon disposition
+  baked into the cold-reader spine. It STILL introduces-not-catalogs ("Every component carries a set of
+  quality marks, a base API version, and maybe an optional extension API version..."). Same voice that wrote
+  "Carries the data model, the versions, quality flags" before -> clean now. So dropping voice was NEVER
+  necessary; we can keep it. I had implied voice-removal was the fix; it was not. `[[cold-reader-not-voice-removal-fixed-the-spine]]`.
+- **"Badly described voice" confirmed.** full_elon (thin disposition) reads NEUTRAL/competent, no soul. A
+  character sketch reads like a person: rich_elon "Strip the module down and it is one thing: a comparator...
+  The rule runs against intuition... Two names here oversell." wild_vet "the wrinkle worth bracing for...
+  here is where it bites... its name hides a catch." `[[thin-disposition-no-soul-character-sketch-has-soul]]`.
+- **Voice costs nothing on correctness OR clarity.** T7 (disable points at the LOSER, never chosen) held in
+  EVERY arm including both voiced ones; all arms introduce-not-catalog. Voice is orthogonal to the spine's wins.
+- **BONUS: characterful voices surfaced MORE traps.** Only wild_vet + rich_elon run-2 explicitly nailed the
+  INCLUSIVE-THRESHOLD gotcha ("the check is >= and therefore inclusive: at the default of 3, a drift of
+  exactly 3 trips") that the voiceless runs left as "reaches the threshold." A vivid voice's "here's where it
+  bites" instinct PULLS the gotcha into the light. Soul and informativeness REINFORCE, not trade off.
+  `[[characterful-voice-surfaces-more-traps]]`.
+- One transient FAIL (rich_elon run-1, claude -p hiccup); other 3 voiced cells fine.
+IMPLICATION: the architecture is settled -> spine (cold-reader + ledger-correct + altitude) gives clarity +
+correctness; a RICH character sketch (not a thin disposition) gives soul; they stack. FOLD PLAN UPDATE: keep
+voice in the skill, but upgrade voices.json personas from thin dispositions to character sketches (moves,
+attitude, cadence, permission to have an opinion; FOREIGN examples only). The spine prompt carries the
+cold-reader rule; VOICE_PARA carries the rich character; clarity-yields-if-voice-would-cram clause keeps the
+floor. NEXT: (a) port spine into writers_wf.js genPrompt+discipline (+ re-add LIBRARY_FACTS branch), (b)
+rewrite voices.json personas as character sketches, (c) re-validate on heartbeat + a kvstore backend.
+
+### ROUND 10 — HEARTBEAT CANARY passed (2026-06-08, `round10.py`, rooms10). spine + rich_elon, n=3.
+Ran spine+rich_elon (and voiceless NONE) on heartbeat, the clean simple file. NO BLOAT: docstrings stay tight
+and proportionate. SOUL present without over-explaining: "Strip it down and it is one number against a
+deadline", "The name promises an active emitter. It is not one. There is no thread, no callback", "One thing
+that will bite you: the first deadline is anchored to a reading the clock takes at construction". Surfaces the
+not-an-emitter design gap (the comment the user prized) MORE vividly than NONE, and carries clock-domain /
+wrap-safe / inclusive-boundary / drift / reset-no-validation, all correct. Spine+voice validated on BOTH the
+hard trap file (round9) and the clean canary. `[[spine-plus-rich-elon-no-bloat-on-clean-file]]`.
+
+### FOLD LANDED (2026-06-08) — the spine is now the production writer
+- **`writers_wf.js`**: removed `discipline()`+`DISC`; `genPrompt` rewritten to the validated SPINE (cold-reader
+  framing -> VOICE_BLOCK injecting VOICE_PARA with the clarity-yields clause -> STEP1 altitude [module/class
+  gesture + keep naming trap; method=mechanism] -> STEP2 ledger-correct + re-added LIBRARY_FACTS branch ->
+  FORMAT [summary carries it, body only when earned, Args tight, mechanical bans]). Foreign examples only.
+  Fixed the `dfoes`->`does` typo in summaryPrompt. Parses clean. Selector/summarizer/phases unchanged.
+- **voices.json: UNTOUCHED** (user: postpone persona rewrites; full_elon "wasn't bad"; enrich for more soul
+  later). So the DEFAULT ships with the thin elon disposition for now = clean+correct+cold-reader but less soul
+  than rich_elon; soul-enrichment of the personas is the deferred follow-up.
+- **VOICE IN ALL PATHS confirmed** (user's one invariant): genPrompt injects VOICE_PARA; `regen_symbol.py`
+  re-runs `writers_wf.js` (inherits spine+voice); `tighten_symbol.py` prompt explicitly "keeps the voice";
+  `splice_symbol.py` is mechanical. SKILL.md has NO stale discipline language (describes writer at the "4
+  passes + selector" level, still accurate) -> no SKILL.md change needed.
+- NOT YET DONE: integrated end-to-end validation of the FULL phase-2 pipeline (spine genPrompt -> selector ->
+  cut_cruft -> polish -> reattach) in one clean-room run; and a checkpoint commit. The pieces are each
+  validated (rounds 7-10); the integrated run is the remaining check.
+
+### DEFERRED follow-ups (after this milestone)
+- Enrich voices.json personas from thin dispositions -> character sketches (validated pattern: rich_elon; do
+  the menu voices then the rest, FOREIGN examples, validate each by eye). The lever for "more soul."
+- #5 speed: still untouched beyond the selector (fewer than 4 passes, fold cut+polish into the workflow, trim
+  validator loop).
+
+### STATE (current)
+Committed: **62920dcf** (the subtractive redesign). UNCOMMITTED working tree (THIS session): `writers_wf.js`
+(selector + SPINE fold + typo), `regen_phase2.py`, `render_report.py`, `progress_watch.py`, `SKILL.md`,
+`regen_phase0.py`, `cut_cruft.py`. Protected/untouched as always: CLAUDE.md, .idea, heartbeat.py. Experiment
+harness in `.scratch/regen-comments/writer-quality/{round6..10}.py, render6/7/9.py, report6/7/9.html, rooms6..10`.
+NEXT: integrated phase-2 validation run (clean-room, on a fixture room that has ledger_final.md) -> then commit.

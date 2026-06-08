@@ -9,7 +9,7 @@ clean-room `claude -p` from the libroom. Output: `<libroom>/LIBRARY_FACTS.md` â€
 contracts + glossary, the same telegraphic ledger shape as the per-file ledger, just at library scope.
 
 The orchestrator runs this ONCE when the target is a directory, then passes the result into each per-file
-phase 1 via `--lib`, so the per-file lenses, writers, and consolidation judge all consult it (the per-file
+phase 1 via `--lib`, so the per-file lenses, writers, and selector all consult it (the per-file
 code stays the source of truth for that file).
 
 Usage: regen_phase0.py <library_dir> <libroom>
