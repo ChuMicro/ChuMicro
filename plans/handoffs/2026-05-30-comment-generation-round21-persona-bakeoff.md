@@ -1565,14 +1565,17 @@ behavior-backbone + combos):
   ONLY derivable-POSITIVE single-method facts (the `period_ms<=0` guard, write-site tracing). The cull already
   does ~this; **minimal overshot. The CULL (8) is the production ledger level, not minimal (4).**
 
-**ROUND 3** (DONE): arm B = long-summary, NO separate body section, cull ledger + backbone + reroll;
-comparator = round-2 C. **Result: B ≈ C, no tightening** — B = 1952 anno vs C = 1892 (B marginally LARGER,
-within noise), both 4/4 present+correct, both 100% bf, restate 2.4 vs 2.2. **The body was never the bloat:**
-told "no body, put nuance in the summary," the writer just writes a LONGER summary (same sentences, minus the
-blank line) — the format split was cosmetic, the content is real/earned. Confirms the user's "the cull bodies
-aren't that bad." Arm A (two-phase convert) stays PARKED (round-2 C proved one-pass docstrings are fine).
-BONUS: **the verify→reroll net FIRED and RECOVERED** (run-5: 2 attempts, dropped a must-carry on draft 1, the
-judge caught it, re-roll → missing=[]). Net validated end-to-end, not just on paper.
+**ROUND 3** (DONE — NEGATIVE RESULT, no-body REJECTED): arm B = long-summary, NO separate body section, cull
+ledger + backbone + reroll; comparator = round-2 C. On CHARS it looked like a wash (B = 1952 vs C = 1892, both
+4/4, both 100% bf) — but **the user's eye caught a VOICE REGRESSION the chars metric hid** (`[[metrics-are-surface]]`
+again): with no body as a release valve, the writer CRAMS multiple facts into one dense, comma-heavy, comma-
+SPLICED run-on (B run-5: "...Despite the name there is no beat and no signal sent, it only answers... Drive it
+with one clock: the constructor takes its first reading..., so every now_ms... or the first interval is
+meaningless."). Round-2 C (body allowed) breaks the same facts into clean separate sentences. **This reproduces
+`[[no-body-incompatible]]` experimentally — exactly the user's long-standing call ("no-body forces drop or
+comma-heavy"). The body is the release valve; REJECT no-body.** Arm A (two-phase convert) stays PARKED.
+BONUS: the verify→reroll net FIRED and RECOVERED (run-5: 2 attempts, dropped a must-carry on draft 1, judge
+caught it, re-roll → missing=[]). Net validated end-to-end.
 
 **PRODUCTION DESIGN — CONVERGED (validated over 3 rounds; next = a BRANCH fold, do NOT churn the working skill):**
 - **Ledger-writer → cull level:** keep cross-method + non-derivable + ABSENCE facts; drop derivable-POSITIVE
