@@ -1514,3 +1514,73 @@ walk) and reported back to the builder session for debugging.
 - **Plan:** dedicated WRITER exp rounds + a before/after test harness (heartbeat, kvstore backends), OFF the
   skill (skill is built + working — don't churn it). Fold a proven improvement back into `writers_wf.js` only
   after an exp round validates it.
+
+---
+
+## SESSION 2026-06-07 (cont. 2) — WRITER-QUALITY EXPERIMENT (rounds 1–3)
+
+**STATUS: IN PROGRESS.** Production design converging fast; nothing folded into the skill yet (validate
+first, then a branch — do NOT churn the working skill). Round 3 running at time of writing.
+
+**Harness** (`.scratch/regen-comments/writer-quality/`, OFF the skill): clean-room `claude -p` from /tmp —
+**CLAUDE.md is 127 bytes / NON-empty this session (carries the project-secret canary), so in-session Agent/
+Workflow agents WOULD be contaminated; shelling out to /tmp is mandatory.** Files: `harness.py` (round-1
+8-arm matrix), `round2.py` (minimal-vs-cull + reroll), `round3.py` (no-body), `prompts.py` (all disciplines,
+every example FOREIGN to heartbeat per `[[agent-examples-must-be-neutral]]`), `render*.py` → `report*.html`.
+Fixture = `heartbeat.py`; frozen 14-fact ledger reused from `/tmp/regen-cr/heartbeat-1/ledger_final.md`. The
+JUDGE is fixture-aware INSTRUMENTATION (knows the must-carry list), never shipped (exp9 pattern). Metrics:
+deterministic anno-chars + a structured judge (behavior-first, restatement, noise, must-carry present+correct);
+n=5; only countable metrics get A/B'd (`[[run-noise-swamps-rule-effect]]`).
+
+**The 4 heartbeat must-carry (all user-confirmed vital):** mc1 timebase (caller `now_ms` must share clock+unit
+with the provider `ticks_ms` construction samples, else first interval garbage), mc2 wrap-safe diff (not plain
+subtraction), mc3 drift/no-catch-up (fire re-anchors to poll instant), mc4 inclusive boundary (elapsed == period
+fires). **Reference band:** clean target (committed, `commenter-casual-friendly`) = **729 anno chars but only
+2/4 must-carry** (tight BECAUSE incomplete — it dropped timebase + inclusive); over-long (the elon complaint) =
+**3619 / 4-of-4**.
+
+**ROUND 1** (8-arm factorial: baseline / ledger-cull / cut-pass / controlled-body / no-voice-first /
+behavior-backbone + combos):
+- All arms land 2000–2800 chars, all 4/4 (except F backbone×full = 3.8). KEY: a tightness FLOOR exists, set by
+  FACT-COUNT — carrying 4/4 + document-every-param ≈ 2000 chars; the clean target's 729 only carries 2/4.
+  "Tight AND complete at 729" does not exist; the lever for tightness is fact-count.
+- Overturned: behavior-first was already HIGH in single-pass (baseline 84%). The mechanism-first summaries in
+  `FINAL_elon.py` were the CONSOLIDATED output → framing damage may be partly the CONSOLIDATION step, not
+  generation. (Open: check the consolidation judge for mechanism-first picks.)
+- Overturned: controlled-body (D) did NOT leak — tightest arm (2017), 0 noise, lowest restatement. Disposition
+  holds where prohibition leaks (the may30 "rules leak" prior was about PROHIBITIONS). `[[controlled-body-disposition-doesnt-leak]]`.
+- backbone → 100% behavior-first (G/H); cull held 4/4 (8-fact cull not too aggressive).
+
+**ROUND 2** (minimal-4 vs cull-8 ledger, both backbone + controlled-body + reroll, reroll held constant):
+- M minimal = 1558 chars, C cull = 1892, both 100% bf, both **4/4 present AND correct**. Reroll never fired
+  (attempts 1.0) — net validated as cheap insurance but NOT stress-tested (no real drop to recover yet).
+- **THE FINDING (user's eye caught it, metrics missed it — `[[metrics-are-surface]]`): C (cull) READS BETTER
+  than M (minimal).** Mechanism, quantified across 5 runs each: the writer RE-DERIVES *positive* facts from the
+  code (ticks duck-type 4/5, default-clock 5/5) but NOT *absence* facts (reset-no-validation **0/5** vs C 4/5;
+  gate-sends-nothing **0/5** vs C 3/5). Absence is invisible to a reader scanning what the code DOES; only the
+  ledger can carry it. Minimal silently deleted the two most useful contracts → tighter but THINNER. So
+  "minimal is tighter" was partly "minimal is less complete," and the chars metric rewarded the loss.
+- **REFINED LEDGER-WRITER POLICY (sharper than round-29's "cross-method only"):** keep (a) cross-method facts,
+  (b) non-derivable contracts, (c) ABSENCE / negative facts (no-validation, sends-nothing, not-enforced); drop
+  ONLY derivable-POSITIVE single-method facts (the `period_ms<=0` guard, write-site tracing). The cull already
+  does ~this; **minimal overshot. The CULL (8) is the production ledger level, not minimal (4).**
+
+**ROUND 3** (RUNNING): arm B = long-summary, NO separate body section (= the clean target's actual shape:
+summary + Args + Raises), on the cull ledger + backbone + reroll; comparator = round-2 C (reused, not re-run).
+Tests whether collapsing the body tightens toward ~729 WITHOUT losing the absence facts. Arm A (two-phase
+voiced-prose→convert) is PARKED — round-2 C proved the voice writes good docstrings in one pass, so A solves a
+non-problem; revive only if B shows the voice fighting the shape.
+
+**PRODUCTION DESIGN (converging; validate round 3, then a BRANCH, do not churn the skill):** cull-level
+ledger-writer (cross-method + non-derivable + absence; drop derivable-positive) + behavior-backbone writer
+(summary from code first, ledger as a thin must-carry overlay) + controlled-body discipline (disposition,
+"say it once, in its tightest form") + verify→reroll net (judge must-carry present+correct; re-flag the missing
+one in the ledger and re-roll, max 3). This addresses #6/#7/#8 together.
+
+**New pointers:** `[[writer-rederives-positive-not-absence-facts]]` (writer recovers what the code DOES, never
+what it DOESN'T — so the ledger MUST carry absence facts), `[[clean-target-is-tight-because-incomplete]]`
+(729-char target carries only 2/4; tightness floor is set by fact-count), `[[ledger-stub-inflates-writer-treatment]]`
+(a fact handed as a stub gets fuller treatment than the same fact self-derived; minimal ledger → terser → tighter),
+`[[controlled-body-disposition-doesnt-leak]]`, `[[summarizer-beats-writer-because-free-and-code-only]]` (the
+independent summarizer reads cleaner because it has code-only input + one job + no docstring format; the backbone
+writer ports that framing).
