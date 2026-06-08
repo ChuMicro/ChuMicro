@@ -528,9 +528,64 @@ hard trap file (round9) and the clean canary. `[[spine-plus-rich-elon-no-bloat-o
 - #5 speed: still untouched beyond the selector (fewer than 4 passes, fold cut+polish into the workflow, trim
   validator loop).
 
+(The spine fold above was committed as **b9a4a5ee**. Then a long prompt-purge + voice exploration followed.)
+
+### ROUNDS 11-23 — the PROMPT-PURGE + the VOICE question (2026-06-08). Converged.
+After committing the spine (b9a4a5ee), the user ran a series of close reads that drove the writer prompt from
+the spine down to a lean, summarizer-aligned form and settled voice. Each is a one-prompt-edit experiment
+(`.scratch/.../round11..23.py`, rooms11..23), on quality_ranking unless noted.
+
+PROMPT-PURGE (every "rule" I had added that the SUMMARIZER never needed turned out to hurt):
+- **round11**: feed the summarizer's draft to the writer -> it inherited completeness (mentions __main__) +
+  the coherent pick sentence. Proved "build on the summarizer, don't re-derive beside it".
+- **round12** (voiced-summarizer -> separate format step): phase B FAILED + phase A ballooned into a chatty
+  essay -> splitting prose from format BACKFIRES; format-awareness is a useful container. `[[format-awareness-contains-the-prose]]`.
+- **round13** (lean single agent, single-step): reached the summarizer -> the TWO-STEP was the disease, not the
+  writer. `[[two-step-was-the-disease]]`.
+- User cuts, each validated: TWO-STEP wrong (read code+ledger TOGETHER, one pass) `[[absorb-then-write]]`;
+  "be clear and true / do not perform a style" is cruft; "The SUMMARY carries the explanation" is an AI-tic;
+  verbose Args over-instructs; "byte-identical" is cruft (agent knows + AST-check enforces); LIBRARY
+  restrictions distrust a trusted ledger. ALL removed. META-LESSON:
+  `[[stop-instructing-the-agent-on-what-it-already-does]]` -- a rule earns its place only if it fixes a failure
+  we still see.
+- **round14/16** (summarizer-aligned): "purpose and any non-obvious behavior" is PURPOSE-FIRST; my "put the
+  mechanism on the methods" leaned mechanical -> dropped. `[[purpose-first-not-mechanism-first]]`.
+- **round19/20/21** (body length): 19 sprawls (fact-per-sentence), 20 over-weaves (run-ons), 21 = the middle,
+  1-2 CLEAN sentences by carrying FEWER facts not weaving more. `[[body-is-a-fact-count-not-a-weave-dial]]`.
+- **round22/23 (INLINE COMMENTS -- the breakthrough)**: line-level mechanics (cross-major, inclusive, signed,
+  popcount, None->(0,0)) RELOCATE to `#` one-liners ABOVE their line, keeping the docstring tight AND every
+  fact (relocated, not dropped); T7 on the `return ...True` line. round23 added DON'T-RESTATE: the popcount
+  lives at _rank_key's line (where it is USED), so QualityFlags shrinks to one line and stops re-listing its
+  members. `[[docstring-is-contract-inline-hash-is-line-mechanics]]`, `[[comment-the-non-obvious-never-restate-self-evident]]`.
+
+THE VOICE QUESTION (settled): rich-character SKETCH -> THEATRICAL "contestant mode" (two go in, one comes out;
+referee; the front door); bare NAME "Elon Musk" -> AI-PERFORMANCE tics ("here is the part that matters",
+fragment-for-emphasis) -- the model performs a celebrity, not the person; trait-CLUSTER persona (round18:
+qualities, not name/scenario) -> light genuine character, no theatrics, no tics. VOICELESS (round15/16) reads
+STRAIGHT and PROFESSIONAL like the summarizer. CONCLUSION: voice-by-instruction structurally imports AI-tics;
+the cleanest output is VOICELESS -> **voiceless default, voices opt-in**, trait-clusters the right spec
+(deferred). `[[voiceless-is-the-default-voice-imports-ai-tics]]`, `[[trait-cluster-beats-name-and-sketch]]`.
+Also: cold-reader framing (NOT voice removal) fixed the spine (round9 full_elon stayed clean); __main__
+omission ACCEPTED (a docstring can skip the demo script).
+
+### VOICELESS FOLD LANDED (2026-06-08) — the converged writer is in the skill
+- **`writers_wf.js` genPrompt** rewritten: cold-reader rule -> CONDITIONAL voice block (VOICE_PARA empty ->
+  voiceless; non-empty -> persona that yields to clarity) -> read code+ledger TOGETHER (one pass) ->
+  summarizer-aligned explain (purpose + contract, 1-2 sentence body) -> don't-restate self-evident ->
+  line-gotchas as `#` comments ABOVE their line -> lean LIBRARY line -> stand-alone -> bans. Dropped: two-step,
+  "be clear and true", "SUMMARY carries the explanation", verbose Args, byte-identical, LIBRARY restrictions,
+  directive-verbatim. Selector reworded "VOICE AND FLOW" -> "HOW THE COMMENTS READ" (voiceless-friendly).
+- **voices.json**: added `"plain": ""` (empty -> voiceless via the conditional), `"default": "plain"`; 7 named
+  voices UNTOUCHED (opt-in, thin dispositions for now); added a `plain` voiceless preview.
+- **SKILL.md**: voice menu -> default `plain` (voiceless), voices optional (4 spots); Step 4 rewritten to the
+  converged writer (tight docstring + inline `#` mechanics + voiceless default + reads-best selector); Passes +
+  Done-when updated.
+
 ### STATE (current)
-Committed: **62920dcf** (the subtractive redesign). UNCOMMITTED working tree (THIS session): `writers_wf.js`
-(selector + SPINE fold + typo), `regen_phase2.py`, `render_report.py`, `progress_watch.py`, `SKILL.md`,
-`regen_phase0.py`, `cut_cruft.py`. Protected/untouched as always: CLAUDE.md, .idea, heartbeat.py. Experiment
-harness in `.scratch/regen-comments/writer-quality/{round6..10}.py, render6/7/9.py, report6/7/9.html, rooms6..10`.
-NEXT: integrated phase-2 validation run (clean-room, on a fixture room that has ledger_final.md) -> then commit.
+Committed: **62920dcf** (subtractive redesign) -> **b9a4a5ee** (spine + selector + auto-progress). UNCOMMITTED
+(THIS session): `writers_wf.js` (voiceless converged genPrompt + selector reword), `voices.json` (plain
+default), `SKILL.md` (voice menu + Step 4). Protected/untouched: CLAUDE.md, .idea, heartbeat.py. Harness:
+`.scratch/regen-comments/writer-quality/round{6..23}.py + render*.py + report*.html + rooms{6..23}`. NEXT:
+confirm the integrated phase-2 validation (quality_ranking, voice=plain) is clean -> commit the voiceless fold.
+DEFERRED: trait-cluster voice personas (user may supply descriptions like the elon one); #5 speed (cut_cruft is
+the ~7-min sink; could fold cut+polish into the workflow / trim passes).

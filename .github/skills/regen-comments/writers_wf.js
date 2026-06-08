@@ -1,5 +1,5 @@
 // regen-comments WRITER PHASE (production, fixture-agnostic). Run inside ONE `claude -p` from the run
-// room. One voice, PASSES summarizer-spine writer passes (clean-room: stripped code + final ledger only), then a GENERIC
+// room. PASSES writer passes (clean-room: stripped code + final ledger only; voiceless by default, voice optional), then a GENERIC
 // best-of-N SELECTOR that reads all N complete files and picks the single best one BY NUMBER. The
 // selector never edits, merges, or rewrites — phase 2 copies the chosen file verbatim, so the output is
 // byte-identical to one writer's pass by construction. No trap list, no fixture knowledge. Orchestrator
@@ -8,8 +8,8 @@
 
 export const meta = {
   name: 'regen-write',
-  description: 'One voice x N passes, then pick the single best whole file, clean-room. Fixture-agnostic.',
-  phases: [{ title: 'Generate', detail: 'N passes, one voice' }, { title: 'Select', detail: 'best of N whole files' }],
+  description: 'N passes (voiceless default, voice optional), then pick the single best whole file, clean-room. Fixture-agnostic.',
+  phases: [{ title: 'Generate', detail: 'N passes' }, { title: 'Select', detail: 'best of N whole files' }],
 }
 
 const RUNDIR = '__RUNDIR__'
@@ -20,12 +20,20 @@ const VOICE_PARA = "__VOICE_PARA__"
 
 const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { path: { type: 'string' } }, required: ['path'] }
 
-// The writer is the SUMMARIZER-SPINE (validated rounds 7-10): it explains the file to a FIRST-TIME reader
-// (introduce a thing before referencing it, so no cataloging of names the reader has not met yet), uses the
-// ledger ONLY to correct the plain read and add the non-derivable traps, pitches a module/class high and
-// methods at the mechanism, and carries the voice as a layer that yields to clarity. Voice (VOICE_PARA) rides
-// in every pass. Examples here are FOREIGN on purpose (deadline / registry / cache) — never fixture-derived.
+// The writer (converged rounds 7-23): it explains the file to a FIRST-TIME reader (introduce a thing before
+// referencing it, so no cataloging of names the reader has not met yet), reads code + ledger TOGETHER in one
+// pass (no two-step), keeps the DOCSTRING tight (purpose + the caller's contract, a one-or-two-sentence body
+// at most), and puts a LINE-LEVEL gotcha as a `#` comment on its own line ABOVE the line it concerns. It
+// comments only the non-obvious (never restates self-evident code like enum members), states each fact once,
+// and stands alone (no pointers to other symbols). Voice is OPTIONAL: VOICE_PARA empty -> voiceless (the
+// default, reads cleanest); non-empty -> a trait-cluster persona layered on, yielding to clarity. Examples
+// here are FOREIGN on purpose (deadline / registry / cache) — never fixture-derived.
 function genPrompt(n) {
+  const voiceBlock = VOICE_PARA.trim()
+    ? ('Write in the following voice. Let it shape your word choice and rhythm, but the first-time reader\'s '
+       + 'understanding always wins: if the voice would cram or obscure, the voice yields.\n\nTHE VOICE: '
+       + VOICE_PARA + '\n\n')
+    : ''
   return 'You are explaining a Python file to an engineer who is reading it for the FIRST TIME, top to '
     + 'bottom. This is the thing that matters most: when they reach any docstring they have read only the '
     + 'code ABOVE it, never the whole file at once. So the first time you mention a class, a field, or an '
@@ -33,43 +41,29 @@ function genPrompt(n) {
     + 'reader has not met it yet. Write "a deadline, measured in milliseconds", not "the deadline field"; '
     + 'describe "a registry that maps names to handlers", do not just say "the registry". Introduce, do not '
     + 'catalog the file\'s contents by name.\n\n'
-    + 'Write in the following voice. Let it shape your word choice, your rhythm, and what you choose to '
-    + 'emphasize. But the first-time reader\'s understanding always wins: if the voice would cram, obscure, '
-    + 'or make you reference something not yet introduced, the voice yields. Clarity first, personality on '
-    + 'top of it.\n\nTHE VOICE: ' + VOICE_PARA + '\n\n'
-    + 'WORK IN TWO STEPS. STEP 1: Read ONLY the code at ' + FILE + '. For each symbol, the module, each '
-    + 'class, and each function or method, write a clear, flowing explanation the way you would say it out '
-    + 'loud to that first-time reader. Pitch each at its own altitude:\n'
-    + '- A MODULE or CLASS says what the thing is and what it is for, and names the parts or dimensions it '
-    + 'works with by describing them, not by listing their names. When the real work splits into cases or '
-    + 'runs a multi-step rule, only GESTURE at that in a few words (for example "with a separate fast path '
-    + 'for already-cached entries") and leave the actual mechanism to the method that implements it. Do not '
-    + 'walk the branching logic in a module or class summary. The one detail worth keeping up here is a TRAP '
-    + 'that corrects a wrong reading, such as a name that promises more than the code delivers.\n'
-    + '- A METHOD or FUNCTION says what the caller gets or what changes, and this is where the real '
-    + 'mechanism and its traps belong.\n'
-    + 'Explain in plain, natural English. Do not strain and do not perform a style, just be clear and true.\n\n'
-    + 'STEP 2: Now read the nuance ledger at ' + LEDGER + '. It holds ONLY the non-derivable traps, the '
-    + 'things a plain reading gets wrong or cannot see. Correct your explanation wherever the ledger shows '
-    + 'it was wrong, and fold in any trap a first-time reader would need, in your own plain words. Do not '
-    + 'copy the ledger\'s wording, pull only the fact. '
-    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, treat it as a correctness and '
-    + 'vocabulary reference: use the right shared terms and do not contradict a library contract. Do NOT '
-    + 'restate library-wide facts the code here does not touch. A contract or glossary term belongs in a '
-    + 'comment only where a symbol in THIS file actually uses or implements it.\n\n'
-    + 'Then turn each explanation into a docstring:\n'
-    + '- The SUMMARY carries the explanation. Most symbols need nothing more than a clear summary.\n'
-    + '- Reach for a body paragraph only when a real fact genuinely cannot sit in the summary, and keep it '
-    + 'to a sentence or two.\n'
-    + '- `Args:` for every parameter, named tightly: what it is in a few words, not a re-explanation of what '
-    + 'the summary already said. Then `Returns:` / `Raises:` only where they add a constraint the name and '
-    + 'type do not. A boolean return needs no `Returns:`.\n'
-    + '- Enum members are not parameters: never give an enum an `Args:` block or invent a meaning for a '
-    + 'member from its name.\n'
-    + '- No em-dashes, no semicolons, and never the words `canonical` or `shape`. Wrap code expressions in '
-    + 'double backticks. No diagrams or tables. Keep every line to 100 characters or fewer.\n'
-    + '- Add docstrings and comments only. Every line of executable code stays byte-for-byte identical, and '
-    + 'keep any directive line (`# noqa`, `# type: ignore`, `# pragma:`) verbatim.\n\n'
+    + voiceBlock
+    + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
+    + 'non-obvious behavior a plain reading of the code misses, read it as part of understanding the '
+    + 'code.\n\n'
+    + 'Then explain what the code does. For the module, what the file does in the real world. For each '
+    + 'class, function, and method, its purpose and the contract a caller needs, in a clear summary and at '
+    + 'most a one or two sentence body. Keep the docstring tight. Comment only what a reader cannot already '
+    + 'see in the code: never restate self-evident names or values, such as re-listing an enum\'s members '
+    + 'when their names already say what they are. For something like that, add only the non-obvious part, '
+    + 'or nothing if there is none.\n\n'
+    + 'Put a LINE-LEVEL gotcha as a short `#` comment on its OWN LINE ABOVE the line it concerns, not '
+    + 'trailing it. A subtle implementation detail, like a boundary that is inclusive, a value compared one '
+    + 'way and not another, or a stand-in substitution, belongs as a comment right at that code line where a '
+    + 'reader meets it. Comment only the genuinely non-obvious lines, never narrate ordinary code. State '
+    + 'each fact once, in one place, the docstring or a comment, never both.\n\n'
+    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it for cross-file context and '
+    + 'shared vocabulary.\n\n'
+    + 'Each comment stands on its own, so say what a symbol does in plain terms rather than pointing the '
+    + 'reader to other symbols by name or to its caller. Do not invent, state only what the code and the '
+    + 'ledger support.\n\n'
+    + 'Write each docstring with Args and Returns (or Raises) for the functions and methods that have them. '
+    + 'No em-dashes or semicolons or the words `canonical` or `shape`. Wrap code expressions in double '
+    + 'backticks and keep lines to 100 characters. Add docstrings and comments only.\n\n'
     + 'Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
 }
 
@@ -88,8 +82,8 @@ function selectPrompt() {
     + 'Candidates (number: path):\n' + runs + '\n\n'
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it as a vocabulary reference: '
     + 'prefer a file that uses the shared terms correctly.\n\n'
-    + 'YOUR PRIMARY JOB IS VOICE AND FLOW. Pick the file whose comments READ BEST — the clearest, most '
-    + 'natural, best-voiced prose, the one an engineer would most want to read. Plain flowing sentences win. '
+    + 'YOUR PRIMARY JOB IS HOW THE COMMENTS READ. Pick the file whose comments READ BEST — the clearest, '
+    + 'most natural prose, the one an engineer would most want to read. Plain flowing sentences win. '
     + 'Do NOT reward a file for being more thorough, more precise, or carrying more facts when it reads '
     + 'worse: a dense, comma-ridden, compressed, or enumerated file LOSES to a clean flowing one even when '
     + 'the dense one is more complete. Readability is the goal.\n\n'
