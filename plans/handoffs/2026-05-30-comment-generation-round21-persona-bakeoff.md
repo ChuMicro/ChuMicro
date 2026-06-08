@@ -1613,3 +1613,16 @@ no-echo+no-coinage, informative from the cull KEEPING cross-method+non-derivable
 "not-an-emitter" trap is the informative half earning its keep). Detail in the focused doc
 `2026-06-07-regen-comments-writer-quality-next-phase.md`. NEXT: user runs `/regen-comments` cold (heartbeat +
 a kvstore backend). `[[docstring-must-be-both-clean-and-informative]]`.
+
+**2026-06-08 update (see the focused doc's "2026-06-08 SESSION" section for full detail):** the recurring
+"comments worse than the summary" was largely **the wrong default voice** -- the good experiments ran `elon`,
+the skill had defaulted to `cutler` (clinical, enumerates). **Default changed cutler->elon.** A subtractive
+redesign landed UNCOMMITTED (ledger->traps-only, discipline "Say it once"->"Say it plainly" 1-2 sentences,
+dropped "Write correct English", genPrompt->summarizer-mode+correct-the-read, judge simplified, prompt tics
+cleaned). Production run on `quality_ranking.py` fixed the T7 inversion and flows. KEY findings: the
+summarizer reads clean because it carries FEWER burdens, not more rules (`[[summarizer-key-is-fewer-burdens
+-not-more-rules]]`); the consolidation judge REWRITES some symbols and its picks.json lies
+(`[[consolidation-judge-rewrites-and-its-picks-json-lies]]`); the coinage metric is n=3-noisy and the writer
+coins regardless of the ledger. NOT CONVERGED -- open: judge should pick-only (maybe best-of-4-whole-files),
+summary must be a proper summary not deferred to body/Args, test writers even closer to the summarizer,
+maybe summarizer+ledger->docstring.
