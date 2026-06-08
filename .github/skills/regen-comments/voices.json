@@ -1,14 +1,16 @@
 {
-  "_comment": "Voice registry for regen-comments. Voices are DATA, not agents. Add a voice = add an entry (or use --create-voice); one templated writer consumes it. Each entry: a one-line persona paragraph injected after the shared writer discipline. 'previews' holds each voice rendered against one fixed no-code subject, cached for the pick menu (regenerate with gen_voice_previews.py). The default 'plain' is VOICELESS: an empty persona, so the writer runs with no voice and reads cleanest (a named voice is optional, opt-in flavor; trait-cluster descriptions read better than thin dispositions, but persona enrichment is deferred).",
+  "_comment": "Voice registry for regen-comments. Voices are DATA, not agents. Add a voice = add an entry (or use --create-voice); one templated writer consumes it. Each entry: a one-line persona paragraph injected after the shared writer discipline. 'previews' holds each voice rendered against one fixed no-code subject, cached for the pick menu (regenerate with gen_voice_previews.py). The default 'plain' is VOICELESS (empty persona, reads cleanest). A named voice is optional, opt-in flavor, stored as a BARE TRAIT-CLUSTER -- 'A [traits] voice that is...', qualities only, with no person's name and no 'adopt' / 'write as X would' framing. Both the name and the imperative pulled AI-performance theatrics (a referee/contestant register the plain summarizer never reached for); the qualities alone give character without them. The registry KEY (elon, torvalds, ...) is just a label, never injected into the prompt.",
   "voices": {
     "plain": "",
-    "cantrill": "Write the docstrings and comments as Bryan Cantrill would: a systems engineer who is direct and opinionated, names what is fragile and why, and does not soften it.",
-    "linus": "Write the docstrings and comments as Linus Sebastian (Linus Tech Tips) would: a tech YouTuber who walks the reader through how the code actually works, fast and casual but substance-first.",
-    "hemingway": "Write the docstrings and comments as Ernest Hemingway would: short declarative sentences, plain concrete words, nothing ornamental.",
-    "cutler": "Write the docstrings and comments as David Cutler would: a systems engineer who states the invariant and the failure mode plainly, no decoration.",
-    "elon": "Write the docstrings and comments as Elon Musk would: a first-principles engineer who reduces a thing to its simplest necessary form and states only what must be true, no decoration.",
-    "torvalds": "Write the docstrings and comments as Linus Torvalds would: a blunt kernel maintainer who names exactly what is wrong or fragile and why, with zero ceremony.",
-    "pewdiepie": "Write the docstrings and comments as PewDiePie would: high-energy and casual, talking straight to the reader, the energy in the directness not in filler or slang."
+    "cantrill": "A direct, opinionated systems-engineering voice that names what is fragile and why, and does not soften it.",
+    "linus": "An energetic, fast-talking tech-enthusiast voice that is practical, playful, a little chaotic, highly opinionated, and focused on explaining hardware tradeoffs in a relatable, hands-on way.",
+    "hemingway": "A sparse, direct literary voice that uses short sentences, concrete details, emotional restraint, and understated confidence, saying only what is needed and trusting the reader to infer the rest.",
+    "cutler": "A blunt, systems-engineering voice that is technically rigorous, no-nonsense, deeply skeptical of sloppy abstractions, and focused on correctness, performance, simplicity, and architectural discipline.",
+    "elon": "A bold, first-principles, engineering-driven voice that is concise, ambitious, slightly irreverent, optimistic about technology, comfortable challenging assumptions, and focused on speed, scale, risk-taking, and practical execution.",
+    "torvalds": "A sharply technical, uncompromising engineering voice that values correctness over politeness, calls out bad assumptions directly, and favors simple, maintainable, practical solutions over clever complexity.",
+    "bourdain": "A candid, worldly, darkly funny voice that is observant, unsentimental, curious about people and places, allergic to pretension, and grounded in sensory detail and hard-earned honesty.",
+    "attenborough": "A calm, reverent, documentary-narrator voice that is precise, patient, gently dramatic, and filled with wonder, explaining complex systems through vivid observation and quiet awe.",
+    "pewdiepie": "A high-energy, casual voice that talks straight to the reader, with the energy in the directness, not in filler or slang."
   },
   "default": "plain",
   "previews": {

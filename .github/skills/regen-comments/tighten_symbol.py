@@ -3,8 +3,8 @@
 
 A blunt body-drop is destructive — it discards must-carry facts (e.g. a by-reference safety note the human
 kept in the picker). This instead runs a clean-room `claude -p` that rewrites only the target symbol's
-docstring shorter and denser: it keeps the one-line summary, the Args/Returns/Raises sections, the voice, and
-EVERY ledger fact that pertains to the symbol, cutting only wordy body prose that merely restates. It splices
+docstring shorter and denser: it keeps the lead sentence, the Args/Returns/Raises sections, the voice, and
+EVERY ledger fact that pertains to the symbol, cutting only wordy prose that merely restates. It splices
 just that symbol back (code-identity guarded), re-polishes, and prints a KEPT/DROPPED fact report so the
 orchestrator can push back before Apply if a kept fact would be lost.
 
@@ -31,9 +31,10 @@ def main():
     prompt = (
         "Read ./FINAL_" + voice + ".py and the nuance ledger ./ledger_final.md. Produce a copy of the file "
         "where ONLY the symbol " + qual + " has its docstring TIGHTENED, written to ./tightened.py.\n"
-        "Tighten = shorter and denser. KEEP: the one-line summary, the Args/Returns/Raises sections, the "
-        "voice, and EVERY ledger fact that pertains to " + qual + " (including non-derivable / domain facts). "
-        "CUT only wordy body prose that just restates the summary or the Args. Do NOT add facts. Do NOT "
+        "Tighten = shorter and denser. KEEP: the lead sentence (and any sentence carrying a non-obvious "
+        "fact), the Args/Returns/Raises sections, the voice, and EVERY ledger fact that pertains to " + qual
+        + " (including non-derivable / domain facts). CUT only wordy prose that merely restates the lead "
+        "sentence or the Args, or padding about what the code does NOT do. Do NOT add facts. Do NOT "
         "change any executable code or any other symbol -- copy them verbatim.\n"
         "Also write ./tighten_report.txt with two labelled lists: 'KEPT:' (the facts you preserved) and "
         "'DROPPED:' (anything you could NOT keep while shortening -- empty if none). Reply DONE after both "

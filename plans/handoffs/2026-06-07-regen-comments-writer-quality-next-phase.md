@@ -625,12 +625,54 @@ into ordinary words. `[[tightness-breeds-jargon]]`.
   never reach for a denser word; FOREIGN cache/memoization example); aligned "the contract a caller needs" ->
   the summarizer's "its purpose and any non-obvious behavior". `[[plain-english-register-kills-jargon]]`.
 
+### 2026-06-08 (cont.) — verify-code bug, de-named voices, selector floor, round27 (kill summary/body)
+A cold user run surfaced four things; addressed in order:
+- **BUG: invariant-4 verification had no recipe.** Invariant 4 said "verify with an AST-equality check (strip
+  docstrings, compare)" but bundled no helper, so the orchestrator improvised: it fed `strip.py` and read its
+  stdout as the stripped code. `strip.py` writes to a file and prints only `stripped X -> Y`, so the capture
+  came back empty -> false mismatch (it recovered by hand-rolling an AST check). FIX: added **`verify_code.py
+  <orig> <final>`** -- parses both, drops every docstring node from both trees, compares `ast.dump` with line
+  numbers excluded (added docstrings shift lines but don't register), and compiles the finished file. Exit 0 /
+  `CODE IDENTICAL` = pass; CHANGED prints the first differing construct. Tested green on the real run + a
+  negative control (renamed `pick` -> caught, exit 1). Wired into invariant 4, runbook step 5 (verify before
+  the report), and the scripts inventory; invariant 4 now explicitly warns off the `strip.py`-stdout trap.
+  `[[verify-code-helper-not-hand-rolled]]`.
+- **VOICES de-named.** User: "remove the persons name and the 'adopt' bit." All persona texts in voices.json
+  converted from "Name: Adopt a [traits] voice..." to a **bare trait-cluster** ("A [traits] voice that is...")
+  -- the registry KEY (elon, torvalds) stays as a label but is never injected. The two old-format voices
+  (cantrill, pewdiepie) converted the same way (their trait clauses survived the de-naming). Rationale: the
+  elon name+description tic-check showed the NAME pulled "head-to-head referee" theatrics in 2/4 passes; the
+  bare qualities gave character without the bare-name AI-performance register (round18 finding). `_comment`
+  updated. NOTE: `previews` are now mildly stale vs the de-named text (offered to regen via gen_voice_previews).
+  `[[voices-bare-trait-cluster-no-name-no-adopt]]`.
+- **SELECTOR floor tightened (user: "you can adjust the selector").** The elon run's selector picked the run
+  that BOTH performed (referee metaphor) AND garbled T7 ("its (nonexistent) extension is marked off"), over a
+  plainer correct sibling. Two edits to selectPrompt: (1) "reading best means plain clarity, NOT performance --
+  a file that reaches for a showy metaphor or performs reads WORSE than a plainer sibling, even in the same
+  voice"; (2) the correctness floor now rejects a statement **garbled into something that cannot hold together
+  / contradicts itself**, not only one that is flatly false/backwards. SKILL.md Step 4 selector description
+  synced. (User said DON'T tone the persona yet -- only the name+adopt removal + selector.)
+  `[[selector-plain-clarity-not-performance + reject-garbled-not-just-backwards]]`.
+- **round27 — KILL the summary+body split (writer-specific rule the summarizer lacks).** User saw the writer
+  lose to the summarizer AGAIN on QualityRanking: summarizer led with the 3 decision factors in ONE sentence;
+  writer wrote a thin lead + a BODY of negations ("does not sort or score... does not change, save, announce").
+  Diagnosis: "clear summary AND a short body" is a TWO-SLOT structure the summarizer doesn't have -- it splits
+  attention, the lead goes thin and the body fills with the easiest material (negative space). FOLDED into
+  genPrompt: docstring = a **short plain-prose PARAGRAPH** like the summarizer (substantive lead sentence with
+  the factors it does it by + an optional non-obvious sentence; NO separate body to fill; do not pad with what
+  it does NOT do; Args/Returns kept to simple descriptions since the paragraph carries the meat). Writer header
+  comment + SKILL.md Step 4 synced. round27.py runs the exact new voiceless prompt n=3 vs the summarizer bar --
+  RESULT PENDING (generation running). `[[kill-summary-body-split-paragraph-like-summarizer]]`.
+
 ### STATE (current)
 Committed: **62920dcf** -> **b9a4a5ee** (spine+selector) -> **55c6764c** (voiceless fold) -> **45bb423b**
-(cold-reader drop + library docs) -> **22643cfc** (cut_cruft dropped). UNCOMMITTED (about to commit):
-`writers_wf.js` (plain-English register + anti-jargon + drop-"tight" + purpose/non-obvious wording). Protected:
-CLAUDE.md, .idea, heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..26}.py + render*.py +
-report*.html + rooms{6..26}`. The whole writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is
-CONVERGED and shipped; phase 2 = 4 parallel writer passes + selector + mechanical copy/polish/reattach.
-DEFERRED: trait-cluster voice personas (user may supply descriptions like the elon one). USER is running the
-skill cold (real-world check).
+(cold-reader drop + library docs) -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register +
+anti-jargon + drop-"tight"). UNCOMMITTED (this session, pending round27 confirmation before commit):
+`verify_code.py` (new), `SKILL.md` (invariant 4 + runbook step 5 + scripts inventory + Step 4 selector/paragraph
+sync), `voices.json` (de-named bare trait-clusters), `writers_wf.js` (selector plain-clarity-not-performance +
+reject-garbled floor; genPrompt kill summary/body -> paragraph; header comment). Protected: CLAUDE.md, .idea,
+heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..27}.py + render*.py + report*.html +
+rooms{6..27}`. The writer-quality arc (tasks #6/#7/#8) is converged; round27 is the latest refinement (paragraph
+docstring). Phase 2 = 4 parallel writer passes + selector + mechanical copy/polish/reattach.
+DEFERRED: regen `previews` for the de-named voices; cantrill/pewdiepie now de-named too. USER ran the skill cold
+(real-world check) and discarded; that run is preserved at /tmp/regen-cr/quality_ranking-1/.
