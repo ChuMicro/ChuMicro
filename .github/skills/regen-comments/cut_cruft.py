@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Post-consolidation DEDUP pass: delete a fact stated twice, never a fact stated once (clean-room).
+"""Post-selection DEDUP pass: delete a fact stated twice, never a fact stated once (clean-room).
 
 A fact sometimes survives in two places -- spelled out in a class docstring AND again in a method, or
 echoed within one docstring. This removes the later copy and keeps the single clearest statement at the most

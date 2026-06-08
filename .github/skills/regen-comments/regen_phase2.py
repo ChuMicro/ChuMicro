@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""regen-comments — PHASE 2 (write + consolidate + reattach). Runs AFTER the in-session picker has written
+"""regen-comments — PHASE 2 (write + select + reattach). Runs AFTER the in-session picker has written
 `<rundir>/ledger_final.md`.
 
-Runs the writer workflow (the chosen voice, 4 passes + per-symbol consolidation) as ONE clean-room
-`claude -p` from the run room, then mechanically reattaches the preserve lane. Produces the finished file.
+Runs the writer workflow (the chosen voice, 4 passes + a best-of-4 voice selector) as ONE clean-room
+`claude -p` from the run room, copies the selected pass to merged.py, then mechanically reattaches the
+preserve lane. Produces the finished file.
 
 Usage: regen_phase2.py <rundir> <voice_key>
 Precondition: <rundir>/ledger_final.md exists (assembled by the orchestrator after the picker).
@@ -41,15 +42,27 @@ def main():
         sys.exit(f"unknown voice '{voice}'. Known: {', '.join(voices)} (or add via --create-voice).")
     os.makedirs(os.path.join(rundir, "runs"), exist_ok=True)
 
-    # writer workflow: chosen voice, 4 passes + per-symbol consolidation
+    # writer workflow: chosen voice, 4 passes + best-of-N selector (the selector only emits a winner number)
     src = open(os.path.join(SKILL, "writers_wf.js")).read()
     src = src.replace("__RUNDIR__", rundir).replace("__VOICE_PARA__", voices[voice])
     open(os.path.join(rundir, "writers_wf.js"), "w").write(src)
     claude_p_workflow(rundir, "writers_wf.js")
 
+    # The selector picked one whole file by number; copy it here in Python. The copy — not the agent — makes
+    # merged.py byte-identical to the chosen pass, so no agent rewrite can slip a reworded inversion through.
+    pick_path = os.path.join(rundir, "pick.json")
+    if not os.path.exists(pick_path):
+        sys.exit("writer phase produced no pick.json — check the run room.")
+    pick = json.load(open(pick_path))
+    winner = pick.get("winner")
+    win_file = os.path.join(rundir, "runs", f"run-{winner}.py")
+    if not isinstance(winner, int) or not os.path.exists(win_file):
+        sys.exit(f"selector returned an invalid winner ({winner!r}); no runs/run-{winner}.py to copy.")
     merged = os.path.join(rundir, "merged.py")
-    if not os.path.exists(merged):
-        sys.exit("writer phase produced no merged.py — check the run room.")
+    shutil.copy(win_file, merged)
+    print(f"  selected run-{winner}: {pick.get('why', '')}")
+    if pick.get("concern"):
+        print(f"  selector concern: {pick['concern']}")
     # dedup pass (deletion-only, ledger-aware, AST-guarded) — removes a fact stated twice (class+method echo,
     # or within one docstring), never a fact stated once; does not reword/split (fluency is the writer's job)
     subprocess.run([sys.executable, os.path.join(SKILL, "cut_cruft.py"), rundir, merged], check=True)

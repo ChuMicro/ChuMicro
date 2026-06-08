@@ -1,14 +1,15 @@
 // regen-comments WRITER PHASE (production, fixture-agnostic). Run inside ONE `claude -p` from the run
-// room. One voice, PASSES writer passes (clean-room: stripped code + final ledger only), then a GENERIC
-// per-symbol consolidation judge (best docstring+comments per module/class/method/function across the
-// passes -> one merged file). No trap list, no fixture knowledge. Orchestrator substitutes __RUNDIR__,
-// __VOICE_PARA__. Reads __RUNDIR__/{stripped.py, ledger_final.md}; writes __RUNDIR__/{runs/run-N.py,
-// merged.py, picks.json}.
+// room. One voice, PASSES summarizer-spine writer passes (clean-room: stripped code + final ledger only), then a GENERIC
+// best-of-N SELECTOR that reads all N complete files and picks the single best one BY NUMBER. The
+// selector never edits, merges, or rewrites — phase 2 copies the chosen file verbatim, so the output is
+// byte-identical to one writer's pass by construction. No trap list, no fixture knowledge. Orchestrator
+// substitutes __RUNDIR__, __VOICE_PARA__. Reads __RUNDIR__/{stripped.py, ledger_final.md}; writes
+// __RUNDIR__/{runs/run-N.py, pick.json, summary.json}.
 
 export const meta = {
   name: 'regen-write',
-  description: 'One voice x N passes + per-symbol consolidation, clean-room. Fixture-agnostic.',
-  phases: [{ title: 'Generate', detail: 'N passes, one voice' }, { title: 'Consolidate', detail: 'best per symbol -> merged' }],
+  description: 'One voice x N passes, then pick the single best whole file, clean-room. Fixture-agnostic.',
+  phases: [{ title: 'Generate', detail: 'N passes, one voice' }, { title: 'Select', detail: 'best of N whole files' }],
 }
 
 const RUNDIR = '__RUNDIR__'
@@ -17,73 +18,91 @@ const LEDGER = RUNDIR + '/ledger_final.md'
 const PASSES = 4
 const VOICE_PARA = "__VOICE_PARA__"
 
-function discipline() {
-  let s = 'Your voice comes first. Where a STYLE rule below would flatten your natural voice, keep the voice and break the rule. Otherwise follow them all. EXCEPTION: these mechanical bans are ABSOLUTE and are never broken for voice: no em-dashes, no semicolons, and never the words `canonical` or `shape`.\n\n'
-  s += '## Document every parameter\n\nEvery public parameter gets an `Args:` entry describing the input. Never skip one even if it looks obvious.\n'
-    + '- Enum members are not parameters. Never give an enum an `Args:` block, and never invent a meaning for each member from its name. If the code gives a member no behavior beyond its value, say only what is true, usually just that the names label the bits and the code counts how many are set.\n\n'
-  s += '## Say it plainly\n\n'
-    + 'Explain each symbol the way you would to another engineer reading the code cold, in one to two '
-    + 'plain sentences. A METHOD or FUNCTION says what a caller GETS or what CHANGES. A CLASS or MODULE '
-    + 'says what the thing IS or is for. Reach for a body paragraph only when a real fact has nowhere '
-    + 'else to live, like a trap, a contract the caller must honor, or a boundary, and keep it to a '
-    + 'sentence or two. State each fact once, at the one symbol it belongs to, and do not restate the '
-    + 'summary in the body or the Args.\n\n'
-  s += '## Format\n\n- Open a module file with a one to two sentence module docstring for the file as a whole.\n'
-    + '- Every class and every public function gets a docstring. A one sentence summary is enough for a simple one. Give a class its OWN angle, do not just repeat the module docstring on it.\n'
-    + '- Readers of the summary and body have not read the Args yet. Describe a parameter used in them, do not just reference it.\n'
-    + '- `Args:` for every parameter, then `Returns:` / `Raises:` where they state a constraint the name and type do not. A boolean return needs no `Returns:`. Say what True or False mean when not obvious.\n'
-    + '- Section order is always summary, body, `Args:`, `Returns:`, `Raises:`.\n'
-    + '- Wrap code expressions in double backticks. No diagrams or tables. Describe a transition in sentences or bullets with arrows.\n'
-    + '- Keep all lines to 100 chars or fewer.\n\n'
-  s += '## Hard rules\n\n- Executable code stays identical, byte for byte. Add docstrings and comments only.\n'
-    + '- Keep every directive line verbatim (`# noqa` / `# type: ignore` / `# pragma:` etc.).\n'
-    + '- Never invent. State only what the code does. A name is a hint, not a fact. If you cannot derive a claim from the code and the ledger does not carry it, leave it out.\n'
-    + '- Every comment stands alone. No "see ``X``", no pointer to another symbol or module, no other package or runtime named for contrast. No license or header lines.\n\n'
-  return s
-}
-const DISC = discipline()
 const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { path: { type: 'string' } }, required: ['path'] }
 
+// The writer is the SUMMARIZER-SPINE (validated rounds 7-10): it explains the file to a FIRST-TIME reader
+// (introduce a thing before referencing it, so no cataloging of names the reader has not met yet), uses the
+// ledger ONLY to correct the plain read and add the non-derivable traps, pitches a module/class high and
+// methods at the mechanism, and carries the voice as a layer that yields to clarity. Voice (VOICE_PARA) rides
+// in every pass. Examples here are FOREIGN on purpose (deadline / registry / cache) — never fixture-derived.
 function genPrompt(n) {
-  return 'You will add docstrings and comments to a Python file. Follow this discipline exactly:\n\n' + DISC + '\n'
-    + '## Your voice\n\n' + VOICE_PARA + '\n\n'
-    + 'WORK IN TWO STEPS. STEP 1: Read ONLY the code at ' + FILE + '. Write the plainest true explanation of each symbol, the way you would explain it to another engineer reading the code cold, in one to two sentences. A method or function says what a caller gets or what changes. A class or module says what it is or is for. Do not open the ledger yet and do not strain for your voice yet, just get it clear, true, and natural. '
-    + 'STEP 2: Now read the nuance ledger at ' + LEDGER + '. It holds ONLY the non-derivable facts, the traps a plain reading gets wrong or cannot see. Fold each relevant one into the symbol it belongs to, and correct your plain explanation where the ledger shows it was wrong, since a plain read often mistakes which thing a returned flag refers to. Let your voice come through as you do this. Do not copy the ledger\'s wording, pull only the fact. '
-    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, treat it as a correctness and vocabulary reference: use the right shared terms and do not contradict a library contract. Do NOT restate library-wide facts the code here does not touch. A contract or glossary term belongs in a comment only where a symbol in THIS file actually uses or implements it. The per-file code and ledger remain the source of truth for this file. '
-    + 'Add docstrings and comments only. Every line of executable code stays identical, byte for byte. Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
+  return 'You are explaining a Python file to an engineer who is reading it for the FIRST TIME, top to '
+    + 'bottom. This is the thing that matters most: when they reach any docstring they have read only the '
+    + 'code ABOVE it, never the whole file at once. So the first time you mention a class, a field, or an '
+    + 'idea, DESCRIBE what it is in the same breath. Never refer to something as already known when the '
+    + 'reader has not met it yet. Write "a deadline, measured in milliseconds", not "the deadline field"; '
+    + 'describe "a registry that maps names to handlers", do not just say "the registry". Introduce, do not '
+    + 'catalog the file\'s contents by name.\n\n'
+    + 'Write in the following voice. Let it shape your word choice, your rhythm, and what you choose to '
+    + 'emphasize. But the first-time reader\'s understanding always wins: if the voice would cram, obscure, '
+    + 'or make you reference something not yet introduced, the voice yields. Clarity first, personality on '
+    + 'top of it.\n\nTHE VOICE: ' + VOICE_PARA + '\n\n'
+    + 'WORK IN TWO STEPS. STEP 1: Read ONLY the code at ' + FILE + '. For each symbol, the module, each '
+    + 'class, and each function or method, write a clear, flowing explanation the way you would say it out '
+    + 'loud to that first-time reader. Pitch each at its own altitude:\n'
+    + '- A MODULE or CLASS says what the thing is and what it is for, and names the parts or dimensions it '
+    + 'works with by describing them, not by listing their names. When the real work splits into cases or '
+    + 'runs a multi-step rule, only GESTURE at that in a few words (for example "with a separate fast path '
+    + 'for already-cached entries") and leave the actual mechanism to the method that implements it. Do not '
+    + 'walk the branching logic in a module or class summary. The one detail worth keeping up here is a TRAP '
+    + 'that corrects a wrong reading, such as a name that promises more than the code delivers.\n'
+    + '- A METHOD or FUNCTION says what the caller gets or what changes, and this is where the real '
+    + 'mechanism and its traps belong.\n'
+    + 'Explain in plain, natural English. Do not strain and do not perform a style, just be clear and true.\n\n'
+    + 'STEP 2: Now read the nuance ledger at ' + LEDGER + '. It holds ONLY the non-derivable traps, the '
+    + 'things a plain reading gets wrong or cannot see. Correct your explanation wherever the ledger shows '
+    + 'it was wrong, and fold in any trap a first-time reader would need, in your own plain words. Do not '
+    + 'copy the ledger\'s wording, pull only the fact. '
+    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, treat it as a correctness and '
+    + 'vocabulary reference: use the right shared terms and do not contradict a library contract. Do NOT '
+    + 'restate library-wide facts the code here does not touch. A contract or glossary term belongs in a '
+    + 'comment only where a symbol in THIS file actually uses or implements it.\n\n'
+    + 'Then turn each explanation into a docstring:\n'
+    + '- The SUMMARY carries the explanation. Most symbols need nothing more than a clear summary.\n'
+    + '- Reach for a body paragraph only when a real fact genuinely cannot sit in the summary, and keep it '
+    + 'to a sentence or two.\n'
+    + '- `Args:` for every parameter, named tightly: what it is in a few words, not a re-explanation of what '
+    + 'the summary already said. Then `Returns:` / `Raises:` only where they add a constraint the name and '
+    + 'type do not. A boolean return needs no `Returns:`.\n'
+    + '- Enum members are not parameters: never give an enum an `Args:` block or invent a meaning for a '
+    + 'member from its name.\n'
+    + '- No em-dashes, no semicolons, and never the words `canonical` or `shape`. Wrap code expressions in '
+    + 'double backticks. No diagrams or tables. Keep every line to 100 characters or fewer.\n'
+    + '- Add docstrings and comments only. Every line of executable code stays byte-for-byte identical, and '
+    + 'keep any directive line (`# noqa`, `# type: ignore`, `# pragma:`) verbatim.\n\n'
+    + 'Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
 }
 
-const CONSOL_SCHEMA = {
+const SELECT_SCHEMA = {
   type: 'object', additionalProperties: false,
-  properties: { merged_path: { type: 'string' }, picks: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { symbol: { type: 'string' }, winner: { type: 'integer' }, why: { type: 'string' } }, required: ['symbol', 'winner', 'why'] } } },
-  required: ['merged_path', 'picks'],
+  properties: { winner: { type: 'integer' }, why: { type: 'string' }, concern: { type: 'string' } },
+  required: ['winner', 'why', 'concern'],
 }
-function consolPrompt() {
-  const runs = Array.from({ length: PASSES }, (_, i) => RUNDIR + '/runs/run-' + (i + 1) + '.py').join(' , ')
-  return 'You are a PER-SYMBOL consolidation judge (fixture-agnostic — no trap list, no knowledge of this '
-    + 'file). You have ' + PASSES + ' candidate commented versions of the SAME file, one voice: ' + runs + '. '
-    + 'Plus the stripped code ' + FILE + ' and the nuance ledger ' + LEDGER + '.\n\n'
-    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it as a correctness/vocabulary '
-    + 'reference: prefer a candidate that uses shared terms correctly and does not contradict a library '
-    + 'contract, and do NOT reward a candidate that dumps library-wide facts where this file\'s code does '
-    + 'not touch them.\n\n'
-    + 'Produce ONE merged file. FOR EACH SYMBOL separately (the module docstring, each class, each method, '
-    + 'each function), take the docstring AND that symbol\'s inline comments from whichever candidate reads '
-    + 'best for THAT symbol. Judge by READING, not by counting. Two things matter, in order: '
-    + '(1) CORRECT, a hard gate: reject any candidate that states something false, OR inverts or '
-    + 'misattributes a referent, INCLUDING in the summary\'s first sentence (for example a summary that says '
-    + 'the winner\'s field is acted on when the winner has no such field). The module and class summaries '
-    + 'must not contradict a method docstring; when a summary compresses a fact it must stay true. '
-    + '(2) READS BEST AS A WHOLE: among correct candidates, pick the one you would most want to read, the '
-    + 'one that explains the symbol clearly and naturally in the voice in one to two plain sentences, '
-    + 'without parroting the ledger\'s wording or listing every fact. Do NOT reward a candidate for carrying '
-    + 'MORE facts. As a BACKSTOP on top of these two: do not pick a candidate that DROPS a genuine '
-    + 'non-derivable trap (an inversion, a cross-method referent, an absence, a boundary); a derivable or '
-    + 'low-vitality fact being dropped is fine. State each fact once, at the one symbol it belongs to; never '
-    + 'repeat a fact across a class docstring and its method. Mix freely across candidates.\n'
-    + 'Keep every line of EXECUTABLE CODE byte-identical to ' + FILE + '. Add only docstrings and comments.\n\n'
-    + 'Write the merged file to ' + RUNDIR + '/merged.py and a per-symbol rationale to ' + RUNDIR
-    + '/picks.json. Return merged_path = the merged file and picks = [{symbol, winner, why}]. Reply only after both files are written.'
+function selectPrompt() {
+  const runs = Array.from({ length: PASSES }, (_, i) => '  ' + (i + 1) + ': ' + RUNDIR + '/runs/run-' + (i + 1) + '.py').join('\n')
+  return 'You are a SELECTOR (fixture-agnostic — no trap list, no prior knowledge of this file). '
+    + PASSES + ' candidate commented versions of the SAME file were written in one voice, each a COMPLETE '
+    + 'file. Read all of them, plus the stripped code ' + FILE + ' and the nuance ledger ' + LEDGER + ' for '
+    + 'context. Pick the ONE best complete file by its number. You do NOT edit, merge, rewrite, or combine '
+    + 'files — you only choose one. The chosen file is taken exactly as written.\n\n'
+    + 'Candidates (number: path):\n' + runs + '\n\n'
+    + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it as a vocabulary reference: '
+    + 'prefer a file that uses the shared terms correctly.\n\n'
+    + 'YOUR PRIMARY JOB IS VOICE AND FLOW. Pick the file whose comments READ BEST — the clearest, most '
+    + 'natural, best-voiced prose, the one an engineer would most want to read. Plain flowing sentences win. '
+    + 'Do NOT reward a file for being more thorough, more precise, or carrying more facts when it reads '
+    + 'worse: a dense, comma-ridden, compressed, or enumerated file LOSES to a clean flowing one even when '
+    + 'the dense one is more complete. Readability is the goal.\n\n'
+    + 'Correctness is a SECONDARY sanity check, not your main goal and NOT a completeness test. Among the '
+    + 'well-written files, only avoid one that says something flatly false or backwards — a comment that '
+    + 'states the opposite of what the code does, or pins a result on the wrong thing, misleads the reader '
+    + 'and should not win on flow alone. But do NOT punish a fluent file for leaving out a minor detail or '
+    + 'being less exhaustive: a readable file with a small gap beats a clunky complete one. When two files '
+    + 'read about equally well, prefer the one that gets the non-derivable traps right.\n\n'
+    + 'Write {winner, why, concern} to ' + RUNDIR + '/pick.json — winner = the chosen number from 1 to '
+    + PASSES + ', why = one or two sentences on why it reads best, concern = any correctness issue you '
+    + 'noticed in the chosen file (so a human can double-check it), or "" if none. Return the same object. '
+    + 'Do not write any other file. Reply only after pick.json is written.'
 }
 
 // Independent summarizer: plain-English purpose per symbol, read from the CODE only (never the generated
@@ -115,6 +134,6 @@ const genTasks = Array.from({ length: PASSES }, (_, i) => i + 1).map((n) => () =
   agent(genPrompt(n), { label: 'gen#' + n, phase: 'Generate', model: 'opus', agentType: 'general-purpose', schema: GEN_SCHEMA }))
 genTasks.push(() => agent(summaryPrompt(), { label: 'summarize', phase: 'Generate', model: 'opus', agentType: 'general-purpose', schema: SUMMARY_SCHEMA }))
 await parallel(genTasks)
-phase('Consolidate')
-const merged = await agent(consolPrompt(), { label: 'consolidate', phase: 'Consolidate', model: 'opus', agentType: 'general-purpose', schema: CONSOL_SCHEMA })
-return merged
+phase('Select')
+const pick = await agent(selectPrompt(), { label: 'select', phase: 'Select', model: 'opus', agentType: 'general-purpose', schema: SELECT_SCHEMA })
+return pick
