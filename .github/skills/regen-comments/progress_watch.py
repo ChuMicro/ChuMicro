@@ -34,7 +34,6 @@ STEPS = [
     ("summary.json", "independent summarizer"),
     ("pick.json", "selector picked best of N files"),
     ("merged.py", "chosen file copied"),
-    ("cut_report.txt", "cut / dedup"),
     ("FINAL_*.py", "DONE: final file ready"),
 ]
 
