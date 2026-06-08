@@ -18,12 +18,22 @@ const PASSES = 4
 const VOICE_PARA = "__VOICE_PARA__"
 
 function discipline() {
-  let s = 'Your voice comes first. Where a STYLE rule below would flatten your natural voice, keep the voice and break the rule. Otherwise follow them all. EXCEPTION -- these mechanical bans are ABSOLUTE and are never broken for voice: no em-dashes, no semicolons, and never the words `canonical` or `shape`.\n\n'
+  let s = 'Your voice comes first. Where a STYLE rule below would flatten your natural voice, keep the voice and break the rule. Otherwise follow them all.\n\n'
   s += '## Document every parameter\n\nEvery public parameter gets an `Args:` entry describing the input. Never skip one even if it looks obvious.\n'
     + '- Enum members are not parameters. Never give an enum an `Args:` block, and never invent a per-member meaning from its name. If the code gives a member no behavior beyond its value, say only what is true, usually just that the names label the bits and the code counts how many are set.\n\n'
+  s += '## Say it once, in its tightest form\n\n'
+    + 'You write the comment a reader needs and then you stop. Three habits define you.\n'
+    + '- Lead with behavior. A summary says what a caller GETS or what CHANGES, not the internal steps that '
+    + 'produce it. "Returns the decoded frame, reading more bytes when the buffer is short" beats "Reads '
+    + 'bytes, decodes them, and returns the frame".\n'
+    + '- A body is a rare tool. Reach for it only when a fact has nowhere else to live (a contract the caller '
+    + 'must honor, a trap, an inversion, a boundary), and then carry it in as few sentences as it honestly '
+    + 'takes, usually one. Never narrate the steps, never restate the summary. The body is the release valve '
+    + 'that keeps the summary from cramming -- use it, but only for an earned fact.\n'
+    + '- Each fact appears once, in its tightest words. If the summary said it, the `Args:` does not repeat it. '
+    + 'A longer docstring is not a more careful one.\n\n'
   s += '## Format\n\n- Open a module file with a one to two sentence module docstring for the file as a whole.\n'
-    + '- Summary: behavior first, what the thing does, not where it lives. Take as few sentences as honestly carry it. No padding.\n'
-    + '- Body: include one ONLY when it carries a fact or nuance the summary cannot. Never restate the summary at length. If the summary is enough, skip the body.\n'
+    + '- Every class and every public function gets a docstring. A one-line summary is enough for a simple one. Give a class its OWN angle, do not just repeat the module docstring on it.\n'
     + '- Readers of the summary and body have not read the Args yet. Describe a parameter used in them, do not just reference it.\n'
     + '- `Args:` for every parameter, then `Returns:` / `Raises:` where they state a constraint the name and type do not. A boolean return needs no `Returns:`; say what True/False mean when not obvious.\n'
     + '- Section order is always summary, body, `Args:`, `Returns:`, `Raises:`.\n'
@@ -36,6 +46,9 @@ function discipline() {
   s += '## Write correct English\n\n- No em-dashes. A period between two independent clauses, a colon before a list, a comma for a brief aside.\n'
     + '- No semicolons. Two thoughts are two sentences.\n'
     + '- Two words are banned outright: `canonical` and `shape`, in any form, no exceptions.\n'
+    + '- Do not coin a hyphenated compound noun where a plain word works. Prefer "a queue" over "a '
+    + 'drain-when-full queue", "a cache" over "a read-through-cache thing". Established compound modifiers '
+    + '(read-only, thread-safe, fixed-size) are fine, but do not invent a new hyphenated label for a thing.\n'
     + '- Never drop a code identifier or quoted string into a boilerplate frame. No "``X`` is the entry point", no error string restated word for word.\n'
     + '- Let the writing breathe. Vary how sentences open and how they are built, so a file does not read like one filled-in template.\n\n'
   return s
@@ -46,7 +59,8 @@ const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { 
 function genPrompt(n) {
   return 'You will add docstrings and comments to a Python file. Follow this discipline exactly:\n\n' + DISC + '\n'
     + '## Your voice\n\n' + VOICE_PARA + '\n\n'
-    + 'Read the nuance ledger at ' + LEDGER + ' for which facts matter (do not copy its wording, pull only the concrete data) and the code at ' + FILE + '. '
+    + 'WORK IN TWO STEPS. STEP 1: Read ONLY the code at ' + FILE + '. For each symbol decide, from a caller\'s point of view, what they GET or what CHANGES when they use it -- that caller\'s-eye sentence IS your summary. Do not look at the ledger yet, and never let internal mechanism lead a summary. '
+    + 'STEP 2: Now read the nuance ledger at ' + LEDGER + ' and fold in ONLY the facts a reader could not get from the code on its face, as a tight body sentence or an `Args:`/`Raises:` note. Do not let the ledger reword your summaries back into mechanism. Do not copy its wording, pull only the concrete data. '
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, treat it as a correctness and vocabulary reference: use the right shared terms and do not contradict a library contract. Do NOT restate library-wide facts the code here does not touch. A contract or glossary term belongs in a comment only where a symbol in THIS file actually uses or implements it. The per-file code and ledger remain the source of truth for this file. '
     + 'Add docstrings and comments only. Every line of executable code stays byte-identical. Write the marked-up file to ' + RUNDIR + '/runs/run-' + n + '.py. After writing, reply DONE.'
 }
