@@ -50,6 +50,9 @@ def main():
     merged = os.path.join(rundir, "merged.py")
     if not os.path.exists(merged):
         sys.exit("writer phase produced no merged.py — check the run room.")
+    # dedup pass (deletion-only, ledger-aware, AST-guarded) — removes a fact stated twice (class+method echo,
+    # or within one docstring), never a fact stated once; does not reword/split (fluency is the writer's job)
+    subprocess.run([sys.executable, os.path.join(SKILL, "cut_cruft.py"), rundir, merged], check=True)
     # Step 5 (verify): enforce the mechanical tic bans before reattach (no-op when already clean)
     subprocess.run([sys.executable, os.path.join(SKILL, "polish.py"), rundir, merged], check=True)
     final = os.path.join(rundir, f"FINAL_{voice}.py")

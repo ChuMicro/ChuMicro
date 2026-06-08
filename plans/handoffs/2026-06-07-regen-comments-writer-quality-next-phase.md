@@ -178,3 +178,33 @@ no callback, so nothing to "beat") -- that is the informative half earning its k
   heartbeat tokens; the only `drift` hits left are generic English / the drift_check tool's own domain term.
   LESSON REINFORCED: the neutrality test is "does any example MIRROR a specific fact in the file under test",
   not "are the identifiers renamed".
+
+## POST-COLD-RUN REFINEMENTS (2026-06-07) — #1 altitude, #2 fluency, cut rescoped to dedup. ALL VALIDATED.
+
+User ran the skill cold (cutler, comment-triage ON), liked it, asked for cold analysis. Three refinements,
+each self-validated by running the skill on heartbeat:
+
+- **#1 ALTITUDE (writers_wf.js).** Behavior-first is METHOD-level. A CLASS/MODULE summary says what the thing
+  IS or is FOR, not a forced action verb (user: "not everything should be behavior first... reads better than
+  periodic-gate-driven-heartbeat whatnots"). genPrompt STEP 1 + the "Lead with behavior" bullet now split
+  method (behavior) vs class/module (what-it-is). Validated: class summaries came out "An interval gate" /
+  "A deadline tracker" -- what-it-is, NOT degraded. `[[behavior-first-is-method-level]]`.
+- **#2 FLUENCY (writers_wf.js), NOT a cut.** The "that latency accumulates as drift" cruft was a WORDING
+  problem, not a delete/split one: the drift point is REAL (timing is approximate because it depends on WHEN
+  the caller polls). Neither culling nor splitting-into-sentences is right -- the consequence must be WOVEN
+  into the clause it follows from. Added a "weave related facts, do not pile them" habit (connective
+  so/because/which; no comma-pile; no choppy fragments). Validated: final run wrote it woven -- "the baseline
+  is advanced to now_ms itself... so a late or jittered call pushes the next deadline forward and drift
+  accumulates". `[[fluency-is-a-writer-job-not-a-cut]]`.
+- **CUT RESCOPED to DEDUP (cut_cruft.py).** Built first as cull/de-splice; BOTH proved wrong (de-splice ->
+  choppy fragments + broke a parallel list into "Not forced to zero."; cull -> would delete a real fact).
+  Rescoped to its only unambiguously-safe job: delete a fact STATED TWICE (class+method echo, or within one
+  docstring), keep the clearest copy. Protects parallel lists + distinct-fact sentences (even long/comma-heavy
+  ones -- fluent rewriting is the writer's job), never deletes a once-stated fact, AST-guarded. Serves #6.
+  Wired in regen_phase2 between consolidation and polish. `[[cut-stage-is-dedup-not-reword]]`.
+
+FINAL SELF-TEST (heartbeat, --without-comment-triage, cutler): class/module = what-it-is; methods
+behavior-first; drift/timebase/wrap-safe/reset-consequence all WOVEN with connectives; dedup no-op; code
+AST-identical; polish clean first pass. Both clean AND informative. Minor residue (refine-level, not bugs):
+an inline `_last_beat_ms` comment carries write-site tracing (mild over-inform); one mild module-body
+comma-splice. SKILL IS READY for cold use; next user cold run on a kvstore backend confirms generalization.
