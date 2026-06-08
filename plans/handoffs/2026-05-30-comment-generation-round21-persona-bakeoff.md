@@ -1602,3 +1602,14 @@ what it DOESN'T — so the ledger MUST carry absence facts), `[[clean-target-is-
 `[[controlled-body-disposition-doesnt-leak]]`, `[[summarizer-beats-writer-because-free-and-code-only]]` (the
 independent summarizer reads cleaner because it has code-only input + one job + no docstring format; the backbone
 writer ports that framing).
+
+**FOLD LANDED IN THE SKILL (2026-06-07), direct to `main` working tree, self-test validated.** triage_wf.js
+(cull policy + descriptive-stub + conceptual-dedup + no-coinage + class-name capability-trap nudge),
+writers_wf.js (backbone two-step + controlled-body "say it once" + class-docstring rule + no-coinage; removed
+the voice-first EXCEPTION clause), reroll dropped (4-pass+consolidation gate already covers it). Conceptual
+dedup checked for NEGATION (none -- nuances + sites preserved) and WRONG-SPOT (none). GOVERNING PRINCIPLE
+recorded: **a docstring must be BOTH clean AND informative** -- clean voice from backbone+controlled-body+
+no-echo+no-coinage, informative from the cull KEEPING cross-method+non-derivable+ABSENCE facts (the
+"not-an-emitter" trap is the informative half earning its keep). Detail in the focused doc
+`2026-06-07-regen-comments-writer-quality-next-phase.md`. NEXT: user runs `/regen-comments` cold (heartbeat +
+a kvstore backend). `[[docstring-must-be-both-clean-and-informative]]`.

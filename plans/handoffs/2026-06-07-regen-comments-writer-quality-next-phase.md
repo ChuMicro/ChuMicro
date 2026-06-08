@@ -134,3 +134,47 @@ ledger-writer (cross-method + non-derivable + absence; drop derivable-positive) 
 (summary from code first) + controlled-body discipline ("say it once") + writer-side verify→reroll loop.
 FOLD TARGETS: `triage_wf.js` ledger-writer prompt, `writers_wf.js` discipline+genPrompt, `regen_phase2.py`
 reroll loop. Validate on heartbeat + a kvstore backend before merge.
+
+---
+
+## GOVERNING PRINCIPLE (user, 2026-06-07): a docstring must be BOTH clean AND informative
+
+Not one or the other. The independent summarizer reads CLEAN but under-informative; the old writer was
+informative but voice-unclean. The target is both: summary-clean VOICE carrying the surprising/non-derivable
+FACTS. The two halves are built by different levers and must not trade off against each other:
+- CLEAN voice <- behavior-backbone (summary from code first) + controlled-body ("say it once", body is the
+  release valve) + no ledger-echo (stub descriptive facts) + no coined hyphen-labels.
+- INFORMATIVE <- the cull KEEPS the interesting facts (cross-method + non-derivable + ABSENCE, e.g.
+  "Heartbeat is passive, it cannot emit / has no callback") and drops only the boring derivable-positive
+  ones. Culling is NOT a tax on informativeness -- it removes padding, never a surprising fact.
+The user valued the "not-an-emitter" comment precisely because it surfaced a real design gap (Heartbeat has
+no callback, so nothing to "beat") -- that is the informative half earning its keep. `[[docstring-must-be-both-clean-and-informative]]`.
+
+## FOLD LANDED IN SKILL (2026-06-07) -- direct edits to `main` working tree (no branch; git is the revert net)
+
+- `triage_wf.js` ledger-writer: "keep every fact" -> CULL policy (drop derivable-positive single-method;
+  keep cross-method + non-derivable + ABSENCE; gate KEEP on caller-consequence). STUB STYLE extended to
+  DESCRIPTIVE phrases (not just mechanism) so adjective phrases are not pasted. CONCEPTUAL dedup (merge
+  same-concept facts, preserve every nuance + all sites, never drop / never merge different-consequence).
+  Plain-words / no coined hyphen-label rule. Naming lens nudged to ALWAYS check the CLASS/MODULE name's
+  capability-promise (emit/fire/beat/schedule/notify) vs what the code can do -> reliably surfaces the
+  not-emitter trap.
+- `writers_wf.js`: genPrompt -> behavior-backbone two-step (summary from code first). Discipline Summary/Body
+  bullets -> "say it once" controlled-body (body ALLOWED). Removed the voice-first EXCEPTION clause (bans
+  stay in "Write correct English" + mechanical tics.py/polish.py). Added: every class/function gets a
+  docstring (own angle, no module-repeat). Added: do not coin hyphenated compound nouns.
+- Reroll loop NOT added: redundant with the existing 4-pass + consolidation must-carry+correct gate.
+- VALIDATED via self-test on heartbeat (clean-room phase1+phase2): ledger 14-fat -> ~9 culled, echo killed,
+  coinage gone, class docstring present, code AST-identical. Conceptual dedup checked for the user's two
+  failure modes: NO negation (every lens fact preserved + nuance kept), NO wrong-spot (placement correct).
+  One soft spot is PRE-EXISTING lens variance (naming lens occasionally misses the class-name trap; the
+  nudge above targets it). NEXT: user runs `/regen-comments` cold on heartbeat + a kvstore backend.
+- CONTAMINATION SCRUB (user caught it, 2026-06-07): my first pass reverse-engineered the new prompt EXAMPLES
+  from the heartbeat facts (`beat` / `poll-only` / `poll-driven gate`, `"not a health status"` / `"not
+  asserted"`, `no validation` / `sends nothing` / `no catch-up` / `never replayed`, `time-base split`) -- the
+  exact `[[agent-examples-must-be-neutral]]` mistake the project burned on twice. Scrubbed every twin in
+  triage_wf.js to genuinely foreign mechanisms (ring buffer drop-oldest, file handle never closed, cache,
+  state machine, best-effort/set-but-never-read). grep-verified: .js/.py/.md prompt strings carry ZERO
+  heartbeat tokens; the only `drift` hits left are generic English / the drift_check tool's own domain term.
+  LESSON REINFORCED: the neutrality test is "does any example MIRROR a specific fact in the file under test",
+  not "are the identifiers renamed".
