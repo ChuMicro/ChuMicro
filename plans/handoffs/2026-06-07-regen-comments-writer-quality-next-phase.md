@@ -208,3 +208,108 @@ behavior-first; drift/timebase/wrap-safe/reset-consequence all WOVEN with connec
 AST-identical; polish clean first pass. Both clean AND informative. Minor residue (refine-level, not bugs):
 an inline `_last_beat_ms` comment carries write-site tracing (mild over-inform); one mild module-body
 comma-splice. SKILL IS READY for cold use; next user cold run on a kvstore backend confirms generalization.
+
+## 2026-06-08 SESSION — the bug was the wrong VOICE; subtractive redesign; judge is a rewriter. NOT DONE.
+
+**Headline:** the recurring "comments worse than the summary / voice keeps degrading" was largely **the
+default voice**. The good experiments (report2) ran **elon**; the skill had silently defaulted to **cutler**
+(commit fd43f72f, "voices default->cutler"). elon WEAVES and SELECTS; cutler ("states the invariant plainly")
+ENUMERATES on fact-dense symbols. **Default changed cutler->elon** (SKILL.md + voices.json). Most of the
+coinage/compression chasing was downstream of being on the wrong voice. `[[voice-was-the-bug-elon-not-cutler]]`.
+
+### Ledger-regression test (validated the cull is not a regression; off-heartbeat)
+Ran the production pipeline on `.scratch/regen-comments/voice-test/quality_ranking.py` (the known 7-trap
+baseline fixture; answer key + grades in `.scratch/regen-comments/ledger-regression/`). Result: **7/7 traps
+carried, T7 not inverted, validator-clean, 23->15 facts** (the hard cull dropped derivable bookkeeping without
+dropping a trap). Independent grader agreed. One soft spot: **T6 (QualityRanking-ignores-quality-on-mixed-path)
+came through mechanism-only**, traced to **naming-lens run-to-run variance**, NOT the cull.
+
+### Experiment rounds (`.scratch/regen-comments/writer-quality/round4.py`, `round5.py`, `render4.py`)
+- **round4** (discipline arms A/B/C/D/E/L x heartbeat+quality_ranking x cutler/linus/elon, n=3, ledger+code+
+  voice held constant): sharp coinage rule cut coinage (A 2.7 -> D 0.3 on qr) BUT **A>L for both cutler and
+  elon** -- the "Say it once" block AIDS selectivity; the lean dropped it and the writer re-stated facts.
+  **E≈A** -- reverting the altitude/fluency accretion is NOT the voice-killer.
+- **round5** (ledger-lean: arm L x current-vs-leaned-ledger): **REFUTED "coinage is ledger-fed"** -- leaning
+  the ledger barely moved cutler (3.7->2.0), made linus worse (3.0->3.7); the writer **coins its OWN**
+  compounds regardless of the ledger. AND exposed the **coinage metric as n=3-noisy** (identical config:
+  1.0 in round4 vs 3.7 in round5, a 3.7x swing). The round-4 arm-coinage rankings were largely noise.
+  `[[coinage-metric-noisy-and-writer-generated-not-ledger-fed]]`.
+
+### The summarizer KEY (task #7, pinned)
+The independent summarizer is repeatedly tic-free and well-flowed, better than the writer even with few rules.
+The KEY is what it LACKS: ONE job ("explain in plain English what the code does"), **no format scaffolding,
+no ledger to fold, no voice to perform, no tic-list to self-police**. **Tics come from CONSTRAINT, not the
+absence of rules** -- format-fitting fragments prose, fact-cramming forces enumeration, tic-self-policing
+stiffens. Our "Write correct English" never BOUGHT cleanliness; it patched tics the other burdens created.
+CAVEAT: the summarizer is **NOT a correctness oracle** -- code-only it has the SAME T7 surface-inversion; its
+value is clarity/structure, and the ledger's job is to fix what it gets wrong.
+`[[summarizer-key-is-fewer-burdens-not-more-rules]]`.
+
+### Consolidation voice-lean rebalance OVERSHOT
+A mid-session "LEAN HARD on voice" judge rebalance made the first elon production run **pick the INVERTED
+run-3 module summary over the correct run-4**. Correctness must gate the SUMMARY's referent, not just trust a
+detailed docstring elsewhere. Fixed in the redesign. `[[voice-lean-judge-can-ship-a-compressed-inversion]]`.
+
+### SUBTRACTIVE REDESIGN LANDED (2026-06-08, UNCOMMITTED working tree)
+User thesis: we over-engineered (rules + judgment); absolute correctness isn't reachable; judges are bad at
+soul; mechanical is anti-soul; SUBTRACT, keep only what guards facts. Edits:
+- **default voice cutler->elon** (SKILL.md menu default + list order; voices.json `"default"`).
+- **ledger -> TRAPS ONLY** (triage_wf.js): the writer reads the code and writes a plain correct explanation
+  FIRST, then the ledger fixes what the plain read got WRONG + adds what code can't show. KEEP only inversion
+  / cross-method / absence / non-derivable-contract; DROP everything a plain read gets right (the cramming fuel).
+- **discipline: "Say it once" four-habits -> "Say it plainly"** (writers_wf.js): explain to another engineer
+  in **one to two plain sentences** (user spec), method=behavior, class/module=what-it-is, body only for a
+  trap, each fact once. Brevity from an OUTPUT SPEC like the summarizer's, not a rule pile.
+- **dropped the entire "Write correct English" section** (writers_wf.js): EXCEPTION line + polish.py still
+  hold the 4 hard bans (em-dash/semicolon/canonical/shape); the soft rules were anti-soul self-policing.
+- **genPrompt -> summarizer-mode** (writers_wf.js): STEP 1 = "write the plainest true explanation... the way
+  you would explain it to another engineer reading the code cold... do not open the ledger yet, do not strain
+  for your voice yet"; STEP 2 = fold ONLY the traps and CORRECT the plain read where the ledger shows it wrong
+  (the T7 fix), voice comes through, format last.
+- **consolidation judge SIMPLIFIED** (writers_wf.js): correct-gate (incl. summary-referent + module-not-
+  contradict-method) -> reads-best-whole (read don't count; 1-2 sentences; don't reward more facts) -> trap-
+  backstop. Dropped the mechanical sub-criteria (shortest, restatement-count).
+- **tic cleanup of the prompt's OWN tics** (writers_wf.js): the prompt used `--` 8x while banning em-dashes,
+  plus semicolons + coined compounds; cleaned. `[[clean-the-prompts-own-tics]]`.
+- **EXCEPTION clause restored** (user-endorsed hard-floor anchor).
+
+### Production run result (quality_ranking, elon, the redesign) — BEST YET
+T7 inversion **GONE** (PickResult: "drop the extension on the rejected extended rival, not on the winner, which
+has no extension" -- 3 defenses held: traps-only ledger has it right + genPrompt correct-the-read + judge
+summary-referent gate). T6 **nailed**. `_rank_key` **woven**, not flat-enumerated. Code AST-identical, runs
+`bravo True / alpha False`. Residue: the `__main__` stray positional fact survived the traps-only cull as an
+inline comment (innocuous).
+
+### THE JUDGE IS A REWRITER, NOT A SELECTOR (key finding)
+Diffed merged vs the 4 passes: the consolidation judge **rewrote** PickResult + _resolve_mixed (those phrases
+in NO candidate) while **lifting** QualityRanking (run-4) + _rank_key (run-2) verbatim. **picks.json LIES** --
+claims winner=run1/run3 for the symbols it actually rewrote. So the audit trail is unreliable, the rewording
+is unvalidated new text (a fresh failure surface -- how a compressed inversion can ship), and it is part of
+why consolidation takes ~4-5 min. `[[consolidation-judge-rewrites-and-its-picks-json-lies]]`.
+
+### STILL OPEN — user direction (2026-06-08), NOT DONE / NOT CONVERGED
+1. **Judge should ONLY pick the best comment (by voice) + merge** -- not read all the code/ledger/4-files and
+   rework ("it's already been done"). Consider **picking the best of 4 WHOLE FILES** instead of per-symbol
+   moving-things-around -- simplifies hugely + removes the rewrite risk + most of the consolidation time.
+2. **The SUMMARY must be a PROPER summary** -- include the key facts inline (mention behavior/args in the
+   summary), NOT a thin summary deferring the meat to body/Args. The PickResult example was thin-summary +
+   body + long-Args vs the summarizer's one flowing paragraph. The writer still fragments.
+3. **Writer still has MORE rules than the summarizer** -- test writers MUCH CLOSER to the summarizer.
+4. **Consider: summarizer output -> docstring format** (the summarizer then needs the ledger added). Task #7
+   taken to its end: summarizer + ledger + format = the writer.
+5. **Speed**: pipeline is ~16 Opus calls/file (lenses+ledger+validator+retries, then 4 writers+summarizer+
+   consolidation+cut+polish), all opus, serial judgment the sink. Slowness IS the over-engineering as latency.
+   Levers: fewer writer passes, fold cut+polish into the writer workflow, trim the validator re-run loop.
+
+### Progress tooling (the "looks stalled" aside) — LANDED
+- **Tier 1**: SKILL.md invariant 8 -- orchestrator announces what's launching + ~duration before each blocking
+  phase + prints the watch command.
+- **Tier 2 (file-watch)**: NEW `progress_watch.py <rundir>` -- polls the run room, ticks each artifact as it
+  lands (the artifacts ARE progress; no stream parsing). Fixed a stdout block-buffering bug (flush=True).
+- stream-json (`--output-format stream-json`) exists for true-stdout but NOT built (user: don't go too deep).
+
+### STATE
+This session's skill edits are **UNCOMMITTED** (working tree): writers_wf.js, triage_wf.js, SKILL.md,
+voices.json, + NEW progress_watch.py. The last good production run (FINAL_elon.py, T7-correct) was NOT applied
+(test fixture). Harness: `.scratch/regen-comments/writer-quality/{round4,round5,render4}.py + report4.html`,
+`.scratch/regen-comments/ledger-regression/`.
