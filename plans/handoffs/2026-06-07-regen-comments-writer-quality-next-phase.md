@@ -605,13 +605,32 @@ omission ACCEPTED (a docstring can skip the demo script).
   (line 70) so the converged writer's lean library line finds it; SKILL.md library descriptions aligned to the
   de-restricted "use it for cross-file context and shared vocabulary".
 
+### PLAIN-WORDS (round25/26, 2026-06-08) — jargon fix + a purge that REFUTED itself
+User flagged the writer opening with a jargon LABEL ("Pairwise comparator") where the summarizer opens plain
+("Defines a small decision engine that chooses the better of two"). Root cause: "tight / contract" pressure
+makes the writer COMPRESS into dense technical nouns; the summarizer's "plain English / real world" relaxes
+into ordinary words. `[[tightness-breeds-jargon]]`.
+- **round25** (plain-English register + anti-jargon clause + DROPPED the word "tight"): jargon GONE, plain
+  enterable openings ("Pick the better of two software components"), bodies smooth ~2-3 plain sentences (the
+  count did not force compression once "tight" was gone). The class even rendered the name-oversells trap in
+  plain English ("Despite the name this does not sort or score a collection").
+- **round26** (strip ALL accreted patches to test the user's "if the summarizer doesn't need it, why does the
+  writer?"): REFUTED the redundancy guess. Without anti-jargon -> "Pairwise comparator" returns in all 3 class
+  docstrings; without don't-restate -> QualityFlags re-lists members (1/3); without stand-alone -> _resolve_mixed
+  back-refs return (3/3). Cataloging stayed clean (framing handles it; cold-reader rightly dropped). So the
+  writer's docstring context DOES need these three patches the summarizer doesn't -- KEPT.
+  `[[test-removal-dont-assume-some-patches-earn-their-keep]]`.
+- FOLDED into writers_wf.js genPrompt: dropped "Keep the docstring tight"; added "explain in plain English, the
+  way you'd explain to a colleague" + the anti-jargon clause (prefer plain description over a technical label,
+  never reach for a denser word; FOREIGN cache/memoization example); aligned "the contract a caller needs" ->
+  the summarizer's "its purpose and any non-obvious behavior". `[[plain-english-register-kills-jargon]]`.
+
 ### STATE (current)
-Committed: **62920dcf** -> **b9a4a5ee** (spine + selector) -> **55c6764c** (voiceless fold) -> **45bb423b**
-(cold-reader drop + library docs). UNCOMMITTED (about to commit): `regen_phase2.py` + `progress_watch.py`
-(cut_cruft unwired) + `cut_cruft.py` DELETED. Protected/untouched: CLAUDE.md, .idea, heartbeat.py. Harness:
-`.scratch/regen-comments/writer-quality/round{6..24}.py + render*.py + report*.html + rooms{6..24}`. NEXT:
-commit the cut_cruft drop; the USER is running the skill cold (real-world integration check). #5 SPEED largely
-ADDRESSED -- cut_cruft (the ~8-min sink) is gone, so phase 2 is now 4 parallel writer passes + 1 selector + a
-mechanical copy/polish/reattach. DEFERRED: trait-cluster voice personas (user may supply descriptions like the
-elon one). The whole writer-quality arc (tasks #6/#7/#8, the summarizer-beats-writer problem) is CONVERGED and
-shipped.
+Committed: **62920dcf** -> **b9a4a5ee** (spine+selector) -> **55c6764c** (voiceless fold) -> **45bb423b**
+(cold-reader drop + library docs) -> **22643cfc** (cut_cruft dropped). UNCOMMITTED (about to commit):
+`writers_wf.js` (plain-English register + anti-jargon + drop-"tight" + purpose/non-obvious wording). Protected:
+CLAUDE.md, .idea, heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..26}.py + render*.py +
+report*.html + rooms{6..26}`. The whole writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is
+CONVERGED and shipped; phase 2 = 4 parallel writer passes + selector + mechanical copy/polish/reattach.
+DEFERRED: trait-cluster voice personas (user may supply descriptions like the elon one). USER is running the
+skill cold (real-world check).
