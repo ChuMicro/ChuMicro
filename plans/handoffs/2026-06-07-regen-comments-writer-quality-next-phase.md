@@ -661,18 +661,43 @@ A cold user run surfaced four things; addressed in order:
   genPrompt: docstring = a **short plain-prose PARAGRAPH** like the summarizer (substantive lead sentence with
   the factors it does it by + an optional non-obvious sentence; NO separate body to fill; do not pad with what
   it does NOT do; Args/Returns kept to simple descriptions since the paragraph carries the meat). Writer header
-  comment + SKILL.md Step 4 synced. round27.py runs the exact new voiceless prompt n=3 vs the summarizer bar --
-  RESULT PENDING (generation running). `[[kill-summary-body-split-paragraph-like-summarizer]]`.
+  comment + SKILL.md Step 4 synced. round27 RESULT: module + every method now read like the summarizer (the
+  split is gone); the CLASS docstring was the lone holdout. `[[kill-summary-body-split-paragraph-like-summarizer]]`.
+- **round28 — class roll-up + one-clause trap (user option 1) + ledger plain-words.** The class holdout: its only
+  class-level ledger fact is the name-oversells negation, so the writer led with "not a list ranker" instead of
+  the positive factors; the summarizer wins there by ROLLING UP the method logic + skipping the trap. genPrompt:
+  a CLASS docstring rolls its methods' factors into the lead like a summary, and a name-oversells trap renders as
+  ONE plain clause (not a comma-pile). User's jargon insight folded into the LEDGER-WRITER (triage_wf.js): plain
+  words inside telegraphic fragments (un-copyability is the fragment, not dense vocab). RESULT (full pipeline,
+  qr-r28): class now rolls up + one-clause trap + plain ("a single pair at a time", not "pairwise"); popcount ->
+  "how many bits set", set-ranking -> "list/collection ranking". Ironically the summarizer leaked "pairwise", the
+  writer did not. `[[class-rollup-plus-one-clause-trap + ledger-plain-words]]`.
+- **round29 — exclusive docstring/inline DIVISION (fixes the bloated bodies).** User: "still getting bodies even
+  though we arent asking for it." Diagnosis: the bodies were not padding (every one mapped to a kept trap) but
+  DOUBLE-STATED -- the same line mechanics sat in the docstring body AND as inline `#` comments, violating
+  state-once. FOLDED into genPrompt: the docstring is the CALLER-EYE view (purpose + contract); line-level
+  mechanics (inclusive boundary, sign, stand-in substitution) ride ONLY as inline `#` comments; each fact in
+  exactly one place. Also strengthened the ledger rule generally (prefer a plain phrase over ANY technical word;
+  a signed value states its direction in words, not a bare subtraction). RESULT (qr-r29): method bodies shrank to
+  contract-level, mechanics inline-only (no dup); directional phrasing fixed ("positive = no-ext ahead"; clean
+  lead, no "led"); the SELECTOR floor caught a fresh garble -- it rejected run-3 ("misleadingly says the flag
+  describes the chosen component") and picked run-2 (correct T7). "pairwise" STILL sticky in the ledger (no
+  general rule removed it) but never leaks. CLASS body is the largest remaining body (the option-1 rollup, by
+  design). `[[docstring-inline-division-fixes-double-stating]]`.
+- **DECISION (user): SHIP the current approach.** The writer is PUSHED to the summarizer's bar while carrying the
+  traps; the summarizer stays the report's independent reference, NOT seeded in as the docstring spine (the
+  "summarizer-as-spine" prototype was offered and declined -- seeding risks pasting a trap-blind sentence + narrows
+  voice). The summarizer reads clean only because it omits the ledger; it is the BAR, not the documenter.
 
 ### STATE (current)
-Committed: **62920dcf** -> **b9a4a5ee** (spine+selector) -> **55c6764c** (voiceless fold) -> **45bb423b**
-(cold-reader drop + library docs) -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register +
-anti-jargon + drop-"tight"). UNCOMMITTED (this session, pending round27 confirmation before commit):
-`verify_code.py` (new), `SKILL.md` (invariant 4 + runbook step 5 + scripts inventory + Step 4 selector/paragraph
-sync), `voices.json` (de-named bare trait-clusters), `writers_wf.js` (selector plain-clarity-not-performance +
-reject-garbled floor; genPrompt kill summary/body -> paragraph; header comment). Protected: CLAUDE.md, .idea,
-heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..27}.py + render*.py + report*.html +
-rooms{6..27}`. The writer-quality arc (tasks #6/#7/#8) is converged; round27 is the latest refinement (paragraph
-docstring). Phase 2 = 4 parallel writer passes + selector + mechanical copy/polish/reattach.
-DEFERRED: regen `previews` for the de-named voices; cantrill/pewdiepie now de-named too. USER ran the skill cold
-(real-world check) and discarded; that run is preserved at /tmp/regen-cr/quality_ranking-1/.
+Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
+drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
+plain ledger; round27/28 folded) -> **[round29 commit]** (exclusive docstring/inline division + ledger general
+strengthen + regenerated previews). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md,
+.idea/chumicro.iml, heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..29}.py + r28_run.sh +
+r29_run.sh + render*.py + report*.html + rooms{6..29}`; validated rooms /tmp/regen-cr/qr-r28, qr-r29.
+The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED and shipped: writer reads like the
+summarizer at the contract level, traps as inline comments, class rolls up, selector rejects garbled traps,
+verify_code guards code-identity. Phase 2 = 4 parallel writer passes + selector + mechanical copy/polish/reattach.
+OPEN/MINOR: "pairwise" sticky in the ledger (never leaks); the option-1 CLASS rollup is the largest body (user
+can dial back to a terse class later if desired); previews regenerated for all 10 de-named voices.
