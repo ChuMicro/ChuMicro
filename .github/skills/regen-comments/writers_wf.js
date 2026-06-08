@@ -24,13 +24,15 @@ const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { 
 // world; each symbol's purpose + non-obvious behavior" -- which introduces-not-catalogs on its own, so the
 // explicit cold-reader block was DROPPED as redundant (round24 confirmed no cataloging without it). Reads code
 // + ledger TOGETHER in one pass (no two-step). Round27 collapsed the old summary+body split that the summarizer
-// never had: the DOCSTRING is now a short plain-prose PARAGRAPH like the summarizer writes -- a substantive lead
-// sentence (what it does + the factors it does it by) plus an optional non-obvious sentence, no separate body to
-// fill with negative-space padding, Args/Returns kept to simple descriptions. Puts a LINE-LEVEL gotcha as a `#`
-// comment on its own line ABOVE the line it concerns. Comments only the non-obvious (never restates self-evident
-// code like enum members), states each fact once, stands alone (no pointers to other symbols). Voice is
-// OPTIONAL: VOICE_PARA empty -> voiceless (the default, reads cleanest); non-empty -> a persona layered on,
-// yielding to clarity.
+// never had: the DOCSTRING is a short plain-prose PARAGRAPH like the summarizer writes -- a substantive lead
+// sentence (what it does + the factors it does it by) plus an optional caller-contract sentence, Args/Returns
+// kept simple. Round29 made the docstring/inline DIVISION exclusive: the docstring is the caller-eye view
+// (purpose + contract), line-level implementation mechanics (an inclusive boundary, a sign, a stand-in
+// substitution) ride ONLY as inline `#` comments ABOVE their line, and each fact lives in exactly ONE place --
+// fixing the double-stating where the body restated what the inline comments already said. Comments only the
+// non-obvious (never restates self-evident code like enum members), stands alone (no pointers to other
+// symbols). Voice is OPTIONAL: VOICE_PARA empty -> voiceless (the default, reads cleanest); non-empty -> a
+// persona layered on, yielding to clarity.
 function genPrompt(n) {
   const voiceBlock = VOICE_PARA.trim()
     ? (VOICE_PARA + ' Let this shape your word choice and rhythm, but the first-time reader\'s understanding '
@@ -43,11 +45,14 @@ function genPrompt(n) {
     + 'Then explain what the code does, in plain English, the way you would explain it to a colleague. For '
     + 'the module, what the file does in the real world. For each class, function, and method, write the '
     + 'docstring as a short paragraph of plain prose: lead with ONE sentence saying what the thing does and, '
-    + 'where it fits naturally, the main factors or rules it does it by, then add another sentence only for a '
-    + 'genuinely non-obvious behavior. For a CLASS, roll the work of its methods up into that lead the way a '
-    + 'good summary does, saying what it decides and the factors it decides by, rather than leading with one '
-    + 'narrow local fact. There is no thin summary line plus a separate body to fill. If nothing non-obvious '
-    + 'remains, that one sentence is the whole docstring. When a real fact is that the code does NOT do '
+    + 'where it fits naturally, the main factors or rules it does it by, then add a sentence only for a '
+    + 'non-obvious behavior a CALLER must know to use it right, like what the result means or a contract to '
+    + 'honor, NOT for how a particular line computes. The docstring is the caller-eye view, purpose and '
+    + 'contract, so line-level implementation mechanics stay OUT of it and ride as inline `#` comments '
+    + 'instead (see below). For a CLASS, roll the work of its methods up into that lead the way a good '
+    + 'summary does, saying what it decides and the factors it decides by, rather than leading with one '
+    + 'narrow local fact. If nothing non-obvious remains for a caller, the lead sentence is the whole '
+    + 'docstring. When a real fact is that the code does NOT do '
     + 'something its name suggests, lead with what it positively does, then give the not-this as ONE plain '
     + 'clause, never a pile of negations. Do not restate the lead sentence in other words to fill space, a '
     + 'single accurate sentence beats a thin one plus filler. Use plain, ordinary words and lead with a '
@@ -61,7 +66,8 @@ function genPrompt(n) {
     + 'trailing it. A subtle implementation detail, like a boundary that is inclusive, a value compared one '
     + 'way and not another, or a stand-in substitution, belongs as a comment right at that code line where a '
     + 'reader meets it. Comment only the genuinely non-obvious lines, never narrate ordinary code. State '
-    + 'each fact once, in one place, the docstring or a comment, never both.\n\n'
+    + 'each fact in exactly ONE place: a caller-facing contract in the docstring, a line-level mechanic as '
+    + 'an inline comment, the same fact never in both.\n\n'
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it for cross-file context and '
     + 'shared vocabulary.\n\n'
     + 'Each comment stands on its own, so say what a symbol does in plain terms rather than pointing the '
