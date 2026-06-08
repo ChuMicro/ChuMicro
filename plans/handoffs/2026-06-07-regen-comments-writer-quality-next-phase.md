@@ -119,9 +119,12 @@ must-carry/behavior-first/restatement judge). Full detail in the running handoff
   summarizer's mode: code-only, one job, no format), ledger folded in as a thin must-carry overlay → 100%
   behavior-first. The mechanism-first summaries were partly a CONSOLIDATION-step artifact (single-pass scored
   84% bf). `[[summarizer-beats-writer-because-free-and-code-only]]`.
-- **Controlled-body disposition holds (does not leak); collapsing the body is a wash.** Round 3 (no-body) ≈
-  round 2 (with body) — the body was never the bloat, it is earned content; "no body" just makes a longer
-  summary. Keep the existing body. `[[controlled-body-disposition-doesnt-leak]]`.
+- **Controlled-body disposition holds (does not leak). NO-BODY is REJECTED — it regresses the voice.** Round 3
+  (no-body) was ~equal to round 2 (body) on CHARS but the user caught a voice regression the metric hid: with
+  no body as a release valve the writer CRAMS facts into comma-heavy, comma-spliced run-ons. Reproduces
+  `[[no-body-incompatible]]` (the user's long-standing call). **Keep the body — it is the release valve.**
+  `[[controlled-body-disposition-doesnt-leak]]`, `[[metrics-are-surface]]` (chars missed the cram; the human eye
+  caught it — voice/soul stays human-judged).
 - **Clean target (729 chars) is tight only because INCOMPLETE (2/4 must-carry).** ~1900 carrying 4/4 at 100%
   bf is the real floor for tight-AND-complete and is what the user wants (keeps the timebase). `[[clean-target-is-tight-because-incomplete]]`.
 - **verify→reroll net VALIDATED** (fired + recovered a dropped must-carry in round-3 run-5).
