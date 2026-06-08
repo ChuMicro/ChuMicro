@@ -1565,17 +1565,32 @@ behavior-backbone + combos):
   ONLY derivable-POSITIVE single-method facts (the `period_ms<=0` guard, write-site tracing). The cull already
   does ~this; **minimal overshot. The CULL (8) is the production ledger level, not minimal (4).**
 
-**ROUND 3** (RUNNING): arm B = long-summary, NO separate body section (= the clean target's actual shape:
-summary + Args + Raises), on the cull ledger + backbone + reroll; comparator = round-2 C (reused, not re-run).
-Tests whether collapsing the body tightens toward ~729 WITHOUT losing the absence facts. Arm A (two-phase
-voiced-prose→convert) is PARKED — round-2 C proved the voice writes good docstrings in one pass, so A solves a
-non-problem; revive only if B shows the voice fighting the shape.
+**ROUND 3** (DONE): arm B = long-summary, NO separate body section, cull ledger + backbone + reroll;
+comparator = round-2 C. **Result: B ≈ C, no tightening** — B = 1952 anno vs C = 1892 (B marginally LARGER,
+within noise), both 4/4 present+correct, both 100% bf, restate 2.4 vs 2.2. **The body was never the bloat:**
+told "no body, put nuance in the summary," the writer just writes a LONGER summary (same sentences, minus the
+blank line) — the format split was cosmetic, the content is real/earned. Confirms the user's "the cull bodies
+aren't that bad." Arm A (two-phase convert) stays PARKED (round-2 C proved one-pass docstrings are fine).
+BONUS: **the verify→reroll net FIRED and RECOVERED** (run-5: 2 attempts, dropped a must-carry on draft 1, the
+judge caught it, re-roll → missing=[]). Net validated end-to-end, not just on paper.
 
-**PRODUCTION DESIGN (converging; validate round 3, then a BRANCH, do not churn the skill):** cull-level
-ledger-writer (cross-method + non-derivable + absence; drop derivable-positive) + behavior-backbone writer
-(summary from code first, ledger as a thin must-carry overlay) + controlled-body discipline (disposition,
-"say it once, in its tightest form") + verify→reroll net (judge must-carry present+correct; re-flag the missing
-one in the ledger and re-roll, max 3). This addresses #6/#7/#8 together.
+**PRODUCTION DESIGN — CONVERGED (validated over 3 rounds; next = a BRANCH fold, do NOT churn the working skill):**
+- **Ledger-writer → cull level:** keep cross-method + non-derivable + ABSENCE facts; drop derivable-POSITIVE
+  single-method facts. (Minimal-4 overshot — loses absence facts the writer can't re-derive.)
+- **Writer → behavior-backbone + controlled-body:** summary from the code first, ledger as a thin must-carry
+  overlay, "say it once in its tightest form", an earned body is fine (round 3: removing it does not help).
+- **verify→reroll net:** judge must-carry present+correct, re-flag the missing one and re-roll (max 3). FIRED+
+  recovered in round 3.
+- **Target shape:** ~1900 anno chars carrying 4/4 must-carry at 100% behavior-first and COMPLETE — vs the 3619
+  over-long complaint (fixed) and the 729 clean target (tight only because it carries 2/4). ~1900 is the real
+  floor for "tight AND complete"; it keeps the timebase contract the clean target dropped. Addresses #6/#7/#8.
+
+**NEXT:** fold the converged design into the skill on a BRANCH — `triage_wf.js` ledger-writer prompt (cull
+policy: + absence facts, drop derivable-positive), `writers_wf.js` (backbone two-step + controlled-body "say
+it once" + no-body-vs-body is a wash so keep the existing body), and a writer-side verify→reroll loop in
+`regen_phase2.py` (judge must-carry present+correct, re-roll with the missing fact re-flagged). Validate on
+heartbeat + a kvstore backend before merge. Experiment artifacts: `.scratch/regen-comments/writer-quality/`
+(harness.py / round2.py / round3.py / prompts.py / render*.py, report*.html, rooms*/).
 
 **New pointers:** `[[writer-rederives-positive-not-absence-facts]]` (writer recovers what the code DOES, never
 what it DOESN'T — so the ledger MUST carry absence facts), `[[clean-target-is-tight-because-incomplete]]`

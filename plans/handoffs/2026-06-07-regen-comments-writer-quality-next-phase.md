@@ -99,3 +99,35 @@ Fixture-agnostic skill (no T7/Cep25/quality_ranking/exp tokens). Never commit/`g
 keeps it emptied to disable @AGENTS.md). Never commit `.idea`. `claude -p` from /tmp = the clean room;
 `--permission-mode acceptEdits` (not bypassPermissions). macOS has no `timeout`. Push-back (invariant 7) on
 lossy/bad-data/risky/out-of-directive requests.
+
+---
+
+## EXPERIMENT RESULT — CONVERGED (2026-06-07). Harness: `.scratch/regen-comments/writer-quality/`
+
+Three controlled rounds on `heartbeat.py` (clean-room `claude -p`, n=5, deterministic anno-chars + a structured
+must-carry/behavior-first/restatement judge). Full detail in the running handoff
+(`2026-05-30-...round21-persona-bakeoff.md`, SESSION 2026-06-07 cont. 2). Headlines:
+
+- **#8 over-fact-bounding — SOLVED by the ledger, not the writer.** A fact handed to the writer as a ledger stub
+  gets a FULLER treatment than the same fact the writer self-derives, so trimming the ledger trims the output
+  (over-long 3619 → ~1900 anno chars). `[[ledger-stub-inflates-writer-treatment]]`.
+- **The cull is the right ledger level; "minimal" overshot.** The writer RE-DERIVES positive facts (what the
+  code does) but NOT ABSENCE facts (what it does not — no-validation, sends-nothing). Minimal-4 silently
+  dropped the absence contracts (reset-no-validation 0/5 vs cull 4/5). **Refined cull policy: keep cross-method
+  + non-derivable + ABSENCE; drop only derivable-positive single-method facts.** `[[writer-rederives-positive-not-absence-facts]]`.
+- **#7 summarizer-beats-writer — SOLVED by behavior-backbone.** Summary derived from the CODE first (the
+  summarizer's mode: code-only, one job, no format), ledger folded in as a thin must-carry overlay → 100%
+  behavior-first. The mechanism-first summaries were partly a CONSOLIDATION-step artifact (single-pass scored
+  84% bf). `[[summarizer-beats-writer-because-free-and-code-only]]`.
+- **Controlled-body disposition holds (does not leak); collapsing the body is a wash.** Round 3 (no-body) ≈
+  round 2 (with body) — the body was never the bloat, it is earned content; "no body" just makes a longer
+  summary. Keep the existing body. `[[controlled-body-disposition-doesnt-leak]]`.
+- **Clean target (729 chars) is tight only because INCOMPLETE (2/4 must-carry).** ~1900 carrying 4/4 at 100%
+  bf is the real floor for tight-AND-complete and is what the user wants (keeps the timebase). `[[clean-target-is-tight-because-incomplete]]`.
+- **verify→reroll net VALIDATED** (fired + recovered a dropped must-carry in round-3 run-5).
+
+**PRODUCTION DESIGN (validated, ready to fold on a BRANCH — do not churn the working skill):** cull-level
+ledger-writer (cross-method + non-derivable + absence; drop derivable-positive) + behavior-backbone writer
+(summary from code first) + controlled-body discipline ("say it once") + writer-side verify→reroll loop.
+FOLD TARGETS: `triage_wf.js` ledger-writer prompt, `writers_wf.js` discipline+genPrompt, `regen_phase2.py`
+reroll loop. Validate on heartbeat + a kvstore backend before merge.
