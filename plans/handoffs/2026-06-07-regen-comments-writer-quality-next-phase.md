@@ -692,7 +692,7 @@ A cold user run surfaced four things; addressed in order:
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
-plain ledger; round27/28 folded) -> **[round29 commit]** (exclusive docstring/inline division + ledger general
+plain ledger; round27/28 folded) -> **25030a55** (exclusive docstring/inline division + ledger general
 strengthen + regenerated previews). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md,
 .idea/chumicro.iml, heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..29}.py + r28_run.sh +
 r29_run.sh + render*.py + report*.html + rooms{6..29}`; validated rooms /tmp/regen-cr/qr-r28, qr-r29.
