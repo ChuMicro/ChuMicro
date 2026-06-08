@@ -581,11 +581,32 @@ omission ACCEPTED (a docstring can skip the demo script).
   converged writer (tight docstring + inline `#` mechanics + voiceless default + reads-best selector); Passes +
   Done-when updated.
 
+### POST-FOLD (2026-06-08) — voiceless fold committed + validated; cold-reader dropped; library verified
+- **Voiceless fold committed: `55c6764c`** (writers_wf.js converged genPrompt + voiceless `plain` default +
+  SKILL.md). VALIDATED end-to-end: integrated phase-2 on quality_ranking voice=plain -> AST-identical, runs
+  `bravo True / alpha False`, selector picked run-3 on readability (concern ""), cut deletion-only, polish
+  clean. The full pipeline works with the converged voiceless writer.
+- **round24: COLD-READER BLOCK DROPPED** (user: "why does the agent need all this?"). Tested the converged
+  writer MINUS the cold-reader paragraph: 3/3 still INTRODUCE, zero cataloging. The summarizer-aligned framing
+  ("what the file does in the real world / purpose + non-obvious behavior") introduces-not-catalogs on its own;
+  the cold-reader block was redundant. Dropped from genPrompt (the stand-alone clause, separate, kept).
+  `[[summarizer-framing-introduces-cold-reader-block-redundant]]`.
+- **cut_cruft VALIDATED (decision pending)**: on the converged writer it cut 4 REAL dups (incl. the
+  QualityFlags-popcount + ApiVersion-drift restates the user dislikes), DELETION-ONLY (diff-confirmed, no
+  reword). BUT it is an LLM call = the ~8-min sink, and its deletion-only is PROMPT-guarded only -- the code
+  fingerprint protects executable code, NOT docstring/comment content, so a reword would go uncaught. OPTIONS:
+  drop (speed+simplicity, minor redundancy ships) / HARDEN (LLM reports spans, code deletes+verifies -> kills
+  rewrite risk, keeps value) / keep. User leaning unclear; my lean = harden. `[[cut-cruft-adds-value-but-is-an-unguarded-llm-sink]]`.
+- **LIBRARY SIDE VERIFIED**: regen_phase0/library_triage/regen_batch have no stale terms; regen_batch phase2
+  passes <voice> (voiceless plain works); regen_phase1 --lib copies LIBRARY_FACTS.md into each per-file room
+  (line 70) so the converged writer's lean library line finds it; SKILL.md library descriptions aligned to the
+  de-restricted "use it for cross-file context and shared vocabulary".
+
 ### STATE (current)
-Committed: **62920dcf** (subtractive redesign) -> **b9a4a5ee** (spine + selector + auto-progress). UNCOMMITTED
-(THIS session): `writers_wf.js` (voiceless converged genPrompt + selector reword), `voices.json` (plain
-default), `SKILL.md` (voice menu + Step 4). Protected/untouched: CLAUDE.md, .idea, heartbeat.py. Harness:
-`.scratch/regen-comments/writer-quality/round{6..23}.py + render*.py + report*.html + rooms{6..23}`. NEXT:
-confirm the integrated phase-2 validation (quality_ranking, voice=plain) is clean -> commit the voiceless fold.
-DEFERRED: trait-cluster voice personas (user may supply descriptions like the elon one); #5 speed (cut_cruft is
-the ~7-min sink; could fold cut+polish into the workflow / trim passes).
+Committed: **62920dcf** -> **b9a4a5ee** -> **55c6764c** (voiceless fold). UNCOMMITTED (about to commit):
+`writers_wf.js` (cold-reader block dropped, round24-validated), `SKILL.md` (2 library-description lines
+aligned). Protected/untouched: CLAUDE.md, .idea, heartbeat.py. Harness: `.scratch/regen-comments/
+writer-quality/round{6..24}.py + render*.py + report*.html + rooms{6..24}`. NEXT: commit the cold-reader-drop +
+library-doc; the USER is running the skill cold (the real-world integration check). DEFERRED: the cut_cruft
+drop/harden/keep decision; trait-cluster voice personas (user may supply descriptions); #5 speed (cut_cruft is
+the main remaining sink).

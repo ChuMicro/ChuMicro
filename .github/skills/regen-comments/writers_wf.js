@@ -20,28 +20,21 @@ const VOICE_PARA = "__VOICE_PARA__"
 
 const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { path: { type: 'string' } }, required: ['path'] }
 
-// The writer (converged rounds 7-23): it explains the file to a FIRST-TIME reader (introduce a thing before
-// referencing it, so no cataloging of names the reader has not met yet), reads code + ledger TOGETHER in one
-// pass (no two-step), keeps the DOCSTRING tight (purpose + the caller's contract, a one-or-two-sentence body
-// at most), and puts a LINE-LEVEL gotcha as a `#` comment on its own line ABOVE the line it concerns. It
-// comments only the non-obvious (never restates self-evident code like enum members), states each fact once,
-// and stands alone (no pointers to other symbols). Voice is OPTIONAL: VOICE_PARA empty -> voiceless (the
-// default, reads cleanest); non-empty -> a trait-cluster persona layered on, yielding to clarity. Examples
-// here are FOREIGN on purpose (deadline / registry / cache) — never fixture-derived.
+// The writer (converged rounds 7-24): the SUMMARIZER's own framing -- "explain what the file does in the real
+// world; each symbol's purpose + non-obvious behavior" -- which introduces-not-catalogs on its own, so the
+// explicit cold-reader block was DROPPED as redundant (round24 confirmed no cataloging without it). Reads code
+// + ledger TOGETHER in one pass (no two-step), keeps the DOCSTRING tight (purpose + the caller's contract, a
+// one-or-two-sentence body), and puts a LINE-LEVEL gotcha as a `#` comment on its own line ABOVE the line it
+// concerns. Comments only the non-obvious (never restates self-evident code like enum members), states each
+// fact once, stands alone (no pointers to other symbols). Voice is OPTIONAL: VOICE_PARA empty -> voiceless
+// (the default, reads cleanest); non-empty -> a persona layered on, yielding to clarity.
 function genPrompt(n) {
   const voiceBlock = VOICE_PARA.trim()
     ? ('Write in the following voice. Let it shape your word choice and rhythm, but the first-time reader\'s '
        + 'understanding always wins: if the voice would cram or obscure, the voice yields.\n\nTHE VOICE: '
        + VOICE_PARA + '\n\n')
     : ''
-  return 'You are explaining a Python file to an engineer who is reading it for the FIRST TIME, top to '
-    + 'bottom. This is the thing that matters most: when they reach any docstring they have read only the '
-    + 'code ABOVE it, never the whole file at once. So the first time you mention a class, a field, or an '
-    + 'idea, DESCRIBE what it is in the same breath. Never refer to something as already known when the '
-    + 'reader has not met it yet. Write "a deadline, measured in milliseconds", not "the deadline field"; '
-    + 'describe "a registry that maps names to handlers", do not just say "the registry". Introduce, do not '
-    + 'catalog the file\'s contents by name.\n\n'
-    + voiceBlock
+  return voiceBlock
     + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
     + 'non-obvious behavior a plain reading of the code misses, read it as part of understanding the '
     + 'code.\n\n'

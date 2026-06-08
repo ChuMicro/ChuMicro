@@ -60,7 +60,7 @@ The conceptual phases (what each does + the invariants):
 - **Success:** a single voice is fixed; stripped code parses and runs identically to the original.
 
 ### Step 0b — Library triage (library-aware mode, when the target is a directory)
-When the target is a directory, run `regen_phase0.py` ONCE before the per-file loop: it strips the library source (clean-room — library facts come from code behavior, not comments), lays it under `lib/`, and runs the broad library triage (`library_triage.md`) as one `claude -p` → `LIBRARY_FACTS.md` (domain + cross-file contracts + glossary; same telegraphic ledger shape, at library scope). Every per-file room then gets this file: the per-file lenses **defer** to it (never re-surface a fact it already states, recording only file-specific facts or this file's application of a contract), and the writers + selector treat it as a **vocabulary reference**, emitting a library fact only where a symbol in that file touches it.
+When the target is a directory, run `regen_phase0.py` ONCE before the per-file loop: it strips the library source (clean-room — library facts come from code behavior, not comments), lays it under `lib/`, and runs the broad library triage (`library_triage.md`) as one `claude -p` → `LIBRARY_FACTS.md` (domain + cross-file contracts + glossary; same telegraphic ledger shape, at library scope). Every per-file room then gets this file: the per-file lenses **defer** to it (never re-surface a fact it already states, recording only file-specific facts or this file's application of a contract), and the writers + selector use it for **cross-file context and shared vocabulary**.
 - **Success:** `LIBRARY_FACTS.md` carries the cross-file contracts + glossary as telegraphic facts; a single-file run skips this step entirely.
 
 ### Step 1 — Triage + validate (one `claude -p` from `/tmp`)
@@ -134,7 +134,7 @@ A separate mode that adds a voice to `voices.json`; it does not regenerate any f
 - `tighten_symbol.py` — refinement loop: shorten one symbol's docstring WITHOUT losing facts (keeps summary + Args/Returns/Raises + every ledger fact; cuts wordy body prose), splices only it back, and prints a KEPT/DROPPED report for the push-back. The sanctioned alternative to a lossy raw body-drop.
 - `stubify_fact.py` — refinement loop: validate a human-supplied fact against the code and turn it into a telegraphic stub (confirmed / contradicted / unverifiable + needs_source).
 - `drift_check.py` — refinement loop: after a ledger edit, flag OTHER symbols the change made sure-stale (conservative; sure-only).
-- `regen_phase0.py` / `library_triage.md` — library-aware mode: `regen_phase0.py` strips a library subtree and runs the broad library-triage prompt as one clean-room `claude -p`, emitting `LIBRARY_FACTS.md` (domain + cross-file contracts + glossary) that rides into each per-file room — the lenses, writers, and selector all consult it (deferring to it for cross-file facts, emitting them only where a file's code touches them).
+- `regen_phase0.py` / `library_triage.md` — library-aware mode: `regen_phase0.py` strips a library subtree and runs the broad library-triage prompt as one clean-room `claude -p`, emitting `LIBRARY_FACTS.md` (domain + cross-file contracts + glossary) that rides into each per-file room — the lenses defer to it for cross-file facts, and the writers + selector use it for cross-file context and shared vocabulary.
 
 ## Patterns to avoid
 - Running any code-reading agent via the in-session Workflow tool (poison risk + no file isolation) — always `claude -p` from `/tmp`.
