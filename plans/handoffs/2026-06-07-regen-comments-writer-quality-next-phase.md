@@ -735,6 +735,34 @@ rejecting "stochastic" hand-waving.
   the new richest selector): clean, 0 flags, code identical, and it FILLED the previously-empty QualityFlags
   docstring (the richest selector fixed the under-writing). `[[voice-forward-replace-register-richest-selector]]`.
 
+### 2026-06-09 — REAL-RUN FEEDBACK: gate bug fixes + round33 voiceless flowing nudge
+User ran the SHIPPED skill twice on `quality_ranking.py` and reported: (a) `AskUserQuestion` errored mid-run
+at two gates; (b) the gates were "worded different sometimes"; (c) ledger count varied 15 vs 18; (d) comments
+good but "sometimes degrade weirdly" (over-compress); proposed two default-voice rules.
+- **GATE BUG FIXES (`5789abad`).** Root cause: the runbook described the human gates in PROSE, so the
+  orchestrator rebuilt `AskUserQuestion` calls each run and sometimes broke the tool's **2-4 option cap**. The
+  voice menu listed 5 options (>4) -> rejected; the keep/drop picker built one option per questionable fact, so
+  **1 fact -> 1 option (<2) errored** and 5+ would have blown the ceiling. Fixes: voice gate is now an
+  **in-session numbered TEXT menu** built from voices.json (type a number/key; no cap, fixed wording);
+  picker **sized to the count** (0 skip / 1 single-select Keep-Drop / 2-4 multi-select / 5+ numbered text
+  list, type the drops); invariant 2 now carries the hard limits (2-4 opts, header <=12, no preview on
+  multi-select). `[[askuserquestion-gates-honor-the-2-4-cap-or-use-a-text-menu]]`.
+- **round33 (`c03b5497`, `round33.py` + rooms33 + report_r33_default_rules.html).** Tested the user's two
+  proposed rules vs lean control on qr-ship, n=3, voiceless. **Opener ban as a fenced Hard rules section**
+  (round32a had tried it INLINE): the hard framing WAS obeyed (0 forbidden openers across 6 runs) but gave no
+  readability gain and one contortion -- the lean prompt already avoids that cadence. Confirms round32a's "no
+  benefit" with the framing ruled out as the cause. **NOT shipped.** **Flowing-summary clause** (weave a
+  non-obvious behavior into a smooth summary instead of over-compressing into a thin body): trims the
+  degrade-weirdly tail -- control under-wrote `_resolve_mixed`/`_rank_key` bodies (collapsed into `Returns:`),
+  all 3 flowing runs kept full bodies; legibility + correctness held. **SHIPPED VOICELESS-ONLY** -- on a voiced
+  run "write in plain sentences" fights the voice-forward "FULLY in that voice", so the voiced path is
+  unchanged (no voice flattened, no re-confirm). User: "lets ship 1 unless it doesnt help baseline" -> judged a
+  modest baseline help, shipped. Candidates: /tmp/regen-cr/CANDIDATE_flowing.py + CANDIDATE_flowing+ban.py.
+  `[[round33-flowing-voiceless-ship-opener-ban-dead-again]]`.
+- **Ledger 15-vs-18 variance: NOT chased.** The count moves in the low/med tail the picker absorbs; the
+  high-confidence core (load-bearing traps) is stable run-to-run. Tightening the raw count = raising the
+  ledger-writer's recordable-fact bar, a separate triage-side thread, deferred unless the user asks.
+
 ### STATE (current)
 Committed: ... -> **22643cfc** (cut_cruft dropped) -> **c96fbfcf** (plain-English register + anti-jargon +
 drop-"tight") -> **f8804a6c** (verify_code helper + de-named voices + selector floor + paragraph docstrings +
@@ -742,12 +770,18 @@ plain ledger; round27/28 folded) -> **25030a55** (exclusive docstring/inline div
 strengthen + regenerated previews) -> **72ca1fa0** (LEAN 238-word writer +
 ledger citation fix + flag_legibility.py + render_report legibility section + regen_phase2 flagger call +
 SKILL.md) -> **a9b1212b** (writers_wf.js: voice replaces register + runs free +
-richest-not-flattest selector; SKILL.md Step 4 synced + de-duped). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
+richest-not-flattest selector; SKILL.md Step 4 synced + de-duped) -> **5789abad** (gate fixes: voice TEXT
+menu + picker sized to fact count + invariant-2 hard limits) -> **c03b5497** (round33 voiceless flowing-summary
+nudge; writers_wf.js + SKILL.md Step 4). Protected and NEVER committed (pre-existing working-tree mods): CLAUDE.md, .idea/chumicro.iml,
 heartbeat.py. Harness: `.scratch/regen-comments/writer-quality/round{6..31}.py + *_run.sh + render*.py +
 report*.html + rooms{6..31}`; validated rooms /tmp/regen-cr/{qr-r28,qr-r29,qr-fixB,qr-ht}; key report
 report_r31_lean_vs_bloated.html. The writer-quality arc (tasks #6/#7/#8, summarizer-beats-writer) is CONVERGED
 and shipped: the writer is now a LEAN 238-word prompt that reads as well as the summarizer with all traps intact;
 the ledger citation fix keeps behavioral facts off data records; flag_legibility nets the rare convoluted roll;
 verify_code guards code-identity. Phase 2 = 4 parallel writer passes + selector + copy/polish/reattach + flagger.
-NEXT (user, after ship): a fresh experiment round on 4 style angles (no the/this/that opener; warmth; synonym
-variety; plain-but-not-dull). OPEN/MINOR: "pairwise" sticky in the ledger (never leaks to the docstring).
+NEXT: nothing pending after the 2026-06-09 gate fixes + round33 flowing nudge (both shipped). OPEN/MINOR:
+(1) ledger 15-vs-18 count variance -- deferred (raise the ledger-writer's recordable-fact bar; triage-side);
+(2) the flowing nudge is VOICELESS-ONLY -- extending it to voices needs a reworded clause (drop "plain") + a
+voiced on/off test so it cannot flatten a voice; (3) "pairwise" sticky in the ledger (never leaks to the
+docstring). The 4-style-angles experiment the prior NEXT named is DONE (round32a rejected all four; round33
+re-tested the opener ban as a hard-rules section and rejected it again).
