@@ -28,21 +28,31 @@ const GEN_SCHEMA = { type: 'object', additionalProperties: false, properties: { 
 // mechanic -- an inclusive boundary, a sign, a stand-in substitution -- rides ONLY as an inline `#` comment)
 // plus the three round26-proven extras (anti-jargon, don't-restate-self-evident, no back-refs). Two siblings
 // carry what the lean prompt drops: the triage_wf.js citation fix keeps a behavioral fact off a data record at
-// the source, and flag_legibility.py flags the rare convoluted roll for the human. Voice is OPTIONAL:
-// VOICE_PARA empty -> voiceless (the default, reads cleanest); non-empty -> a persona layered on.
+// the source, and flag_legibility.py flags the rare convoluted roll for the human. Voice is OPTIONAL and
+// round32 made it FORWARD: VOICE_PARA empty -> the plain-English register (the default); non-empty -> the
+// voice REPLACES that register and runs free (no "yields to clarity" restraint), the one limit being a clear,
+// usable docstring. The SELECTOR picks the RICHEST, best-worded pass, not the flattest (flat is wrong);
+// legibility is its only floor, correctness its secondary one -- a garbled or backwards pass still loses.
 function genPrompt(n) {
-  const voiceBlock = VOICE_PARA.trim()
-    ? (VOICE_PARA + ' Let this shape your word choice and rhythm, but the first-time reader\'s understanding '
-       + 'always wins: if the voice would cram or obscure or pull you toward jargon, the voice yields.\n\n')
+  const voiced = VOICE_PARA.trim()
+  const voiceBlock = voiced
+    ? (VOICE_PARA + ' Write the docstrings and comments FULLY in that voice -- let it come through in word '
+       + 'choice, rhythm, and attitude, do not hold it back. The one limit is that each docstring stays a '
+       + 'clear, usable docstring a caller could rely on, never garbled or obscure.\n\n')
     : ''
+  const register = voiced ? 'in that voice' : 'in plain English'
+  const wordChoice = voiced
+    ? 'Keep it clear and do not let dense jargon slip in to sound precise (say "a cache that remembers what '
+      + 'it already computed", not "a memoization layer"). '
+    : 'Use plain, ordinary words, not a denser technical label (say "a cache that remembers what it already '
+      + 'computed", not "a memoization layer"). '
   return voiceBlock
     + 'Read the code at ' + FILE + ' and the nuance ledger at ' + LEDGER + ' together. The ledger holds the '
     + 'non-obvious behavior a plain reading of the code misses.\n\n'
-    + 'Explain in plain English what the code does. For the module, what the file does in the real world. For '
+    + 'Explain ' + register + ' what the code does. For the module, what the file does in the real world. For '
     + 'each class, function, and method, its purpose and any non-obvious behavior: what it does and the '
-    + 'contract a caller relies on, not how a particular line computes. Use plain, ordinary words, not a '
-    + 'denser technical label (say "a cache that remembers what it already computed", not "a memoization '
-    + 'layer"). Do not restate what the code already shows, like an enum\'s members when their names already '
+    + 'contract a caller relies on, not how a particular line computes. ' + wordChoice + 'Do not restate '
+    + 'what the code already shows, like an enum\'s members when their names already '
     + 'say it, do not point the reader to other symbols by name, and do not invent.\n\n'
     + 'A line-level mechanic, such as an inclusive boundary, a value compared one way and not another, or a '
     + 'stand-in substitution, rides as a short `#` comment on its own line above that line, not in the '
@@ -70,23 +80,19 @@ function selectPrompt() {
     + 'Candidates (number: path):\n' + runs + '\n\n'
     + 'If a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it as a vocabulary reference: '
     + 'prefer a file that uses the shared terms correctly.\n\n'
-    + 'YOUR PRIMARY JOB IS HOW THE COMMENTS READ. Pick the file whose comments READ BEST — the clearest, '
-    + 'most natural prose, the one an engineer would most want to read. Plain flowing sentences win. '
-    + 'Do NOT reward a file for being more thorough, more precise, or carrying more facts when it reads '
-    + 'worse: a dense, comma-ridden, compressed, or enumerated file LOSES to a clean flowing one even when '
-    + 'the dense one is more complete. And reading best means plain clarity, NOT performance: a file that '
-    + 'reaches for a showy metaphor, narrates with flourish, or performs for the reader instead of plainly '
-    + 'saying what the code does reads WORSE than a plainer sibling, even one in the same voice. A voice '
-    + 'earns its place by making the explanation land, never by drawing attention to itself.\n\n'
-    + 'Correctness is a SECONDARY sanity check, not your main goal and NOT a completeness test. Among the '
-    + 'well-written files, reject one that MISLEADS about what the code does: a comment that states the '
-    + 'opposite of the code, pins a result on the wrong thing, or garbles a non-obvious behavior into a '
-    + 'statement that does not hold together. A sentence can flow and still be wrong this way — read it '
-    + 'closely and it describes something that cannot be true, or contradicts itself. That is a defect, not '
-    + 'a style win, and must not beat a plainer sibling that states the same fact clearly. But do NOT punish '
-    + 'a fluent file for leaving out a minor detail or being less exhaustive: a readable file with a small '
-    + 'gap beats a clunky complete one. When two files read about equally well, prefer the one that gets the '
-    + 'non-derivable traps right.\n\n'
+    + 'YOUR PRIMARY JOB IS HOW THE COMMENTS READ. Pick the file whose comments are the RICHEST and '
+    + 'best-worded -- the most alive, vivid, and characterful, the one a reader would actually enjoy. Do NOT '
+    + 'pick the flattest or most bare option because it feels safe: flat is wrong, richness wins. A file with '
+    + 'character, varied wording, and well-turned sentences beats a thin, generic one. The ONLY floor is '
+    + 'legibility: every sentence must still read clearly as a proper docstring a caller could use. A '
+    + 'sentence that is garbled, so dense or comma-ridden it confuses, or contorted past being understood is '
+    + 'not rich, it is broken, and it loses -- but a vivid metaphor or a strong turn of phrase that reads '
+    + 'clearly IS richness, and it wins.\n\n'
+    + 'Correctness is a SECONDARY sanity check, not a completeness test. Among the well-written files, reject '
+    + 'one that MISLEADS about what the code does: a comment that states the opposite of the code, pins a '
+    + 'result on the wrong thing, or garbles a non-obvious behavior into a statement that cannot hold '
+    + 'together. But do NOT punish a rich file for leaving out a minor detail. When two files read about '
+    + 'equally well, prefer the one that gets the non-derivable traps right.\n\n'
     + 'Write {winner, why, concern} to ' + RUNDIR + '/pick.json — winner = the chosen number from 1 to '
     + PASSES + ', why = one or two sentences on why it reads best, concern = any correctness issue you '
     + 'noticed in the chosen file (so a human can double-check it), or "" if none. Return the same object. '
