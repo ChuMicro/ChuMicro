@@ -23,6 +23,9 @@ const RUNDIR = '__RUNDIR__'
 const STRIPPED = RUNDIR + '/stripped.py'
 const COMMENTED = RUNDIR + '/commented.py'
 const EXP = RUNDIR
+// GENRE selects the triage aim: 'code' (default) runs the 3 trap lenses + ledger-writer + validator loop
+// below; 'test' / 'functional_test' / 'example' run the lighter genre triage (genreLedgerPrompt) instead.
+const GENRE = '__GENRE__'
 
 // ---------- 3 CODE LENSES (fragment-preamble triage prompts) ----------
 const PREAMBLE =
@@ -259,7 +262,88 @@ function buildFeedback(v) {
   return wrong.concat(under).join('\n')
 }
 
+// ---------- GENRE TRIAGE (test / functional_test / example) ----------
+// A test file has no caller-contract traps to converge on, and an example is annotated, not trap-hunted --
+// so the genre path skips the 3 trap lenses and the 4x re-run loop. ONE genre-ledger agent writes the same
+// ledger.json + ledger_provisional.md shape (so the picker + phase 2 are unchanged), the comment lens still
+// runs for the preserve lane, and a single validate pass checks each fact against the code.
+function genreLedgerPrompt(genre) {
+  const common =
+    '\n\nRecord each fact as a TELEGRAPHIC FRAGMENT (symbols, arrows ->, shorthand), never a grammatical '
+    + 'sentence a writer could paste. For each fact give stub, sites (the symbol or line it attaches to), '
+    + 'source_lenses set to ["' + genre + '"], and confidence (high unless genuinely unsure).\n'
+    + 'CROSS-FILE: if a library ledger exists at ' + RUNDIR + '/LIBRARY_FACTS.md, use it to name the subject '
+    + 'under test or the library API the example uses, but do not re-derive its facts.'
+  const tail =
+    '\n\nWrite the ledger as a terse markdown stub list (one `- ` line per fact, sites in parens) to '
+    + EXP + '/ledger_provisional.md, AND the SAME facts as pretty JSON {facts:[{stub, sites, source_lenses, '
+    + 'confidence}], domain_purpose, ledger_path} to ' + EXP + '/ledger.json. Set ledger_path to the .md and '
+    + 'return the structured object.'
+  if (genre === 'example') {
+    return 'You are preparing a writer that will DENSELY document a Python EXAMPLE file -- tutorial code a '
+      + 'reader copies to learn the library. The file has NO comments; the CODE is the only source of truth. '
+      + 'CODE: ' + STRIPPED + '\n\n'
+      + 'Produce a DENSE annotation plan:\n'
+      + '- ONE module fact: what the example DEMONSTRATES, in user-intent terms (a verb-led idea, e.g. '
+      + '`pack+unpack a settings dict`). sites=<module>.\n'
+      + '- A USE-CASE fact (when a reader reaches for this pattern) and, when not obvious, a HOW-TO-RUN fact '
+      + '(what to import, how to run it). sites=<module>.\n'
+      + '- For NEARLY EVERY meaningful line -- each import, assignment, call, and print -- ONE fact giving '
+      + 'WHAT the line does (its real effect in the demo, not its syntax) AND WHY it is in the example (the '
+      + 'teaching point, why a caller would do it this way). sites=<that line>. '
+      + 'GOOD: `int keys -> 1 byte each vs multi-byte string keys; why: max compactness`. '
+      + 'BAD: `builds a dict` (syntax restatement, teaches nothing). Skip only a truly trivial line.\n'
+      + 'Aim to annotate nearly every line -- denser than ordinary code. Do NOT invent example output. '
+      + 'Set domain_purpose to what the example demonstrates.' + common + tail
+  }
+  const altitude = genre === 'functional_test'
+    ? 'These are FUNCTIONAL / end-to-end tests: state each claim at SCENARIO altitude -- the behavior '
+      + 'exercised against the real runtime, device, or socket, not a unit assertion.\n'
+    : ''
+  return 'You are preparing a writer that will docstring a Python TEST file. The file has NO comments; the '
+    + 'CODE is the only source of truth. CODE: ' + STRIPPED + '\n\n' + altitude
+    + 'Produce a claim ledger:\n'
+    + '- ONE module fact: what the file tests (subject + area). If the file declares cross-runtime markers '
+    + '(a `__chumicro_runtimes__`, a harness import, pytest), add a fact noting the runtimes. sites=<module>.\n'
+    + '- For EACH test function: ONE fact = the CLAIM it verifies, stated as the SUBJECT UNDER TEST doing '
+    + 'the asserted behavior in DOMAIN terms (e.g. `ticks_diff -> plain gap for a forward diff`), NOT the '
+    + 'test mechanism (fakes, the assert order, raises()). sites=<the test function>.\n'
+    + '- For any SETUP VALUE whose meaning is non-obvious (a magic number, an off-by-one such as advancing '
+    + 'to one tick before a period), ONE fact = value -> its domain meaning, sites=<that line>, so the '
+    + 'writer can add a one-line above comment. Skip obvious setup.\n'
+    + 'Do NOT restate assert mechanics. Do NOT produce Args/Returns facts (test functions have none). '
+    + 'Set domain_purpose to what the file tests.' + common + tail
+}
+const genreValidatePrompt =
+  'You validate a ledger against the CODE. You have no prior knowledge of this file -- reason only from the '
+  + 'code.\n\nCODE: ' + STRIPPED + '\nLEDGER: ' + EXP + '/ledger_provisional.md\n\n'
+  + 'For EACH ledger fact, verify it is TRUE against the code (record correct + a short note; quote the code '
+  + 'site when wrong). For a TEST file a CLAIM is true when the test really asserts that behavior of that '
+  + 'subject -- mark it wrong if it misreads what the test checks. For an EXAMPLE an annotation is true when '
+  + 'it correctly states what that line does -- mark it wrong if it misdescribes the effect. A '
+  + 'comment-derived fact that is not in the code is NOT wrong merely for being absent. Set any_wrong if any '
+  + 'fact is wrong; set any_underspecified to false (genre facts carry no correctness-critical inversion '
+  + 'class). Write JSON {facts, underspecified: [], any_wrong, any_underspecified, verdict} to '
+  + EXP + '/validation.json. After writing, reply DONE.'
+
 // ---------- run ----------
+if (GENRE === 'test' || GENRE === 'functional_test' || GENRE === 'example') {
+  phase('Lenses')
+  const [ledger, commentRes] = await parallel([
+    () => agent(genreLedgerPrompt(GENRE), { label: 'genre-ledger:' + GENRE, phase: 'Ledger', model: 'opus', agentType: 'general-purpose', schema: LEDGER_OUT }),
+    () => agent(commentPrompt, { label: 'lens:comments', phase: 'Lenses', model: 'opus', agentType: 'general-purpose', schema: COMMENT_OUT }),
+  ])
+  const comment = commentRes || { ledger: [], preserve: [], discard: [] }
+  phase('Validate')
+  const validation = await agent(genreValidatePrompt, { label: 'validate', phase: 'Validate', model: 'opus', agentType: 'general-purpose', schema: VALIDATE_OUT })
+  const facts = (ledger && ledger.facts) || []
+  const questionable = facts.filter((f) => f.confidence === 'low' || f.confidence === 'med')
+  const converged = !validation.any_wrong
+  log('genre triage (' + GENRE + ') done: ' + facts.length + ' facts, ' + (converged ? 'validated clean' : 'validator flagged a fact for the human'))
+  return { facts, domain_purpose: (ledger && ledger.domain_purpose) || '', ledger_path: (ledger && ledger.ledger_path) || (EXP + '/ledger_provisional.md'), preserve: comment.preserve || [], discard: comment.discard || [], questionable, converged, attempts: 1 }
+}
+
+// CODE path (default): 3 trap lenses + comment lens -> ledger-writer -> validator/converge loop
 phase('Lenses')
 const lensResults = await parallel([
   ...CODE_LENSES.map((l) => () => agent(codeLensPrompt(l), { label: 'lens:' + l.key, phase: 'Lenses', model: 'opus', agentType: 'general-purpose', schema: LENS_OUT }).then((r) => ({ kind: 'code', r }))),

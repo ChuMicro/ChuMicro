@@ -26,6 +26,7 @@ SKILL = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SKILL)
 from strip import extract_header  # noqa: E402  (always-on mechanical header preservation)
 from preflight import require_claude  # noqa: E402
+from genre import detect_genre, GENRES  # noqa: E402
 
 
 def claude_p_workflow(rundir, wf_name):
@@ -52,10 +53,23 @@ def main():
     args = sys.argv[1:]
     with_comments = "--without-comment-triage" not in args  # comment-triage is ON by default
     lib = args[args.index("--lib") + 1] if "--lib" in args else None
-    pos = [a for i, a in enumerate(args)
-           if not a.startswith("--") and (lib is None or a != lib)]
+    kind = args[args.index("--kind") + 1] if "--kind" in args else None
+    flag_vals = {v for v in (lib, kind) if v is not None}
+    pos = [a for a in args if not a.startswith("--") and a not in flag_vals]
     target, rundir = pos[0], pos[1]
+    # genre selects the triage aim + writer shape; default by path convention, override with --kind
+    genre = kind or detect_genre(target)
+    if genre not in GENRES:
+        sys.exit(f"unknown --kind '{genre}'. Known: {', '.join(GENRES)}.")
     rundir = os.path.abspath(rundir)
+    # Freshness guard: phase 1 must start in a fresh room. A room already holding a prior run's outputs
+    # (phase1.json or a FINAL_*.py) means two runs collided or a stale dir is being reused -- both poison
+    # the result. Allocate a fresh room with rooms.py instead of reusing one.
+    if os.path.isdir(rundir):
+        existing = os.listdir(rundir)
+        if "phase1.json" in existing or any(f.startswith("FINAL_") for f in existing):
+            sys.exit(f"run room {rundir} already holds a prior run's artifacts; allocate a FRESH room "
+                     f"(RUN=$(python3 {SKILL}/rooms.py new <slug>)) so parallel or stale runs can't collide.")
     os.makedirs(os.path.join(rundir, "findings"), exist_ok=True)
 
     # 0. strip (mechanical)
@@ -71,7 +85,7 @@ def main():
 
     # 1. triage workflow (3 code lenses + comment lens + ledger-writer + validate/converge loop), one
     #    clean-room claude -p. The validator and its ledger-writer-retry loop live inside the workflow.
-    _stage("triage_wf.js", rundir, __RUNDIR__=rundir)
+    _stage("triage_wf.js", rundir, __RUNDIR__=rundir, __GENRE__=genre)
     claude_p_workflow(rundir, "triage_wf.js")
 
     # 3. collect for the picker
@@ -96,13 +110,13 @@ def main():
     # picker too involved. Low/med comment-derived facts still surface (they ARE low/med).
     questionable = [f for f in ledger if f.get("confidence") in ("low", "med")]
     needs_user = bool(val.get("any_wrong") or val.get("any_underspecified"))
-    json.dump({"questionable": questionable, "validation": val, "needs_user": needs_user,
+    json.dump({"genre": genre, "questionable": questionable, "validation": val, "needs_user": needs_user,
                "ledger_provisional": os.path.join(rundir, "ledger_provisional.md"),
                "preserve_json": os.path.join(rundir, "preserve.json")},
               open(os.path.join(rundir, "phase1.json"), "w"), indent=2)
 
     print("=== PHASE 1 COMPLETE ===")
-    print(f"  rundir: {rundir}")
+    print(f"  rundir: {rundir}   genre: {genre}")
     print(f"  ledger facts: {len(ledger)}   preserve lane: {len(preserve)}")
     print(f"  validator: any_wrong={val.get('any_wrong')} any_underspecified={val.get('any_underspecified')}")
     if needs_user:
